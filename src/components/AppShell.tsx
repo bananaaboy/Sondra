@@ -7,14 +7,13 @@
  * a file, and the claim that the file is not going anywhere.
  */
 
-import { useEffect, useState } from 'react'
 
 import { useFilePicker } from '../hooks/useIngest'
 import { IN_DESKTOP_APP, WINDOWS_SETUP } from '../lib/desktop'
 import type { ThemeChoice } from '../lib/theme'
-import { onServiceConnection, serviceConnection } from '../lib/serviceState'
 import { useSession } from '../state/store'
 import { SessionMenu } from './AssetList'
+import { GetAppButton } from './GetApp'
 import { PanelTabs } from './PanelTabs'
 import { ThemeToggle } from './ThemeToggle'
 import { Button } from './ui/primitives'
@@ -101,82 +100,6 @@ export function OpenFileButton({
   )
 }
 
-/** Explains the privacy claim on demand, without occupying the page for it. */
-function PrivacyChip() {
-  const [open, setOpen] = useState(false)
-  /**
-   * Whether a service is currently connected.
-   *
-   * It changes what this badge is entitled to claim. With nothing connected
-   * the one exception is the built-in downloader, which is what „1 Ausnahme"
-   * counts. Once somebody has wired up an extraction service, addresses go to
-   * that as well — a second place, and one the badge has no business implying
-   * away by still looking like the all-clear.
-   */
-  const [service, setService] = useState(() => serviceConnection().endpoint)
-  useEffect(() => onServiceConnection((state) => setService(state.endpoint)), [])
-  const connected = Boolean(service)
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        title={connected ? `Ein Dienst ist verbunden: ${service}` : undefined}
-        /* `panel-cool` is the tint this design set aside for exactly one job —
-           saying that something is not running locally. This is that one job,
-           and it is why no new colour was needed. Measured on it: APCA Lc 85.8
-           light, 75.3 dark. */
-        className={`press flex items-center gap-[8px] rounded-nav px-[12px] py-[8px] text-small text-ink ${
-          connected ? 'bg-panel-cool hover:bg-panel-mid' : 'bg-panel-soft hover:bg-panel-mid'
-        }`}
-      >
-        {/* Filled while everything is local; hollow once something is not, so
-            the state is readable without reading. */}
-        <span
-          className={`h-[8px] w-[8px] rounded-pill ${connected ? 'ring-2 ring-inset ring-ink' : 'bg-ink'}`}
-          aria-hidden
-        />
-        {/* On a phone the claim shortens, it does not disappear — this is the
-            one place the promise is made. */}
-        <span className="hidden sm:inline">
-          {connected ? 'Dienst verbunden · 2 Ausnahmen' : 'Lokal · 1 Ausnahme'}
-        </span>
-        <span className="sm:hidden">{connected ? 'Dienst' : 'Lokal'}</span>
-      </button>
-
-      {open ? (
-        <div className="rise elevate-lift absolute right-0 top-[calc(100%+9px)] z-20 w-[min(340px,calc(100vw-32px))] rounded-card bg-raised p-[20px] text-small leading-[1.55] text-prose/85 ring-1 ring-inset ring-line">
-          <p className="mb-[12px] font-semibold text-ink">Wo Ihre Dateien bleiben</p>
-          <p className="mb-[12px]">
-            Der Server liefert einmal HTML, JavaScript und WebAssembly aus. Danach rechnet nur noch
-            Ihr Gerät. Es gibt keinen Upload-Endpunkt, keine Datenbank und keine Speicherung über das
-            Schließen des Tabs hinaus.
-          </p>
-          <p className="mb-[12px] text-muted">
-            Die eine Ausnahme ist „Herunterladen“. Ein Browser darf eine Datei nicht von einer
-            fremden Seite holen, also übernimmt das ein kleiner Dienst dieser Seite: er bekommt die
-            Adresse, die Sie eingeben, und reicht die Datei durch. Ihre eigenen Dateien sieht er nie,
-            und gespeichert wird dort nichts.
-          </p>
-          {connected ? (
-            <p className="mb-[12px] text-muted">
-              Dazu ist gerade ein Extraktionsdienst verbunden: <span className="value text-ink">{service}</span>.
-              Adressen, die Sie im Downloader eingeben, gehen auch dorthin. Ihre eigenen Dateien
-              nicht — die verlassen diesen Tab weiterhin nicht.
-            </p>
-          ) : null}
-          <p className="text-muted">
-            Wer auch das nicht möchte, startet yt-dlp auf dem eigenen Rechner. Der Downloader zeigt
-            unter „Mehr Wege“, wie. Dann geht wirklich alles hier.
-          </p>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 /**
  * The one band of chrome above a tool.
  *
@@ -191,6 +114,10 @@ function PrivacyChip() {
  * „Installieren" and the search button are gone from here on request. The
  * browser still offers installation in its own menu; the search lives on the
  * start page, and Strg/Cmd + K still opens the command palette anywhere.
+ *
+ * The privacy chip („Lokal · 1 Ausnahme") went the same way: that everything is
+ * local is the premise by now, and the exception is said where it happens. Its
+ * place is the app download, which inside the app itself is not shown.
  */
 export function Header({
   themeChoice,
@@ -206,7 +133,7 @@ export function Header({
         <Logo />
         <div className="flex min-w-0 items-center gap-[4px] sm:gap-[8px]">
           <SessionMenu />
-          <PrivacyChip />
+          <GetAppButton />
           <ThemeToggle choice={themeChoice} onChange={onThemeChange} />
         </div>
       </div>
@@ -261,6 +188,9 @@ export function Footer() {
         )}
         <a className={footerLink} href="./datenschutz.html">
           Datenschutz
+        </a>
+        <a className={footerLink} href="./lizenz.html">
+          Lizenz
         </a>
       </p>
     </footer>

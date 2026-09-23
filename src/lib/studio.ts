@@ -44,6 +44,7 @@ import {
   resolveMedia,
   type LocalJob,
   type ServiceItem,
+  type ServiceSettings,
 } from './service'
 import { serviceConnection } from './serviceState'
 
@@ -223,14 +224,36 @@ function fromServiceItems(items: ServiceItem[], fallbackTitle: string): StudioRe
  * panel has to make on the visitor's behalf. Showing them is what the panel
  * already did for YouTube's formats, so it costs nothing here.
  */
+/**
+ * The choices made in the service settings — mode, quality, audio format.
+ *
+ * The address field is now the only way to load through a connected service,
+ * so it has to honour them; the separate button that used to was the only
+ * thing that did.
+ */
+function storedServiceChoices(): Partial<ServiceSettings> {
+  try {
+    const raw = localStorage.getItem('sondra:service') ?? localStorage.getItem('lizge:service')
+    if (!raw) return {}
+    const { downloadMode, videoQuality, audioFormat } = JSON.parse(raw) as Partial<ServiceSettings>
+    return {
+      ...(downloadMode ? { downloadMode } : {}),
+      ...(videoQuality ? { videoQuality } : {}),
+      ...(audioFormat ? { audioFormat } : {}),
+    }
+  } catch {
+    return {}
+  }
+}
+
 export async function resolveViaService(url: string, signal?: AbortSignal): Promise<StudioResult> {
   const connected = serviceConnection()
   if (connected.endpoint) {
     try {
       const outcome = await resolveMedia(
         url,
-        { ...DEFAULT_SERVICE, endpoint: connected.endpoint },
-        null,
+        { ...DEFAULT_SERVICE, ...storedServiceChoices(), endpoint: connected.endpoint },
+        connected.apiKey,
         signal,
       )
       if (outcome.kind === 'file') return fromServiceItems([outcome.item], url)

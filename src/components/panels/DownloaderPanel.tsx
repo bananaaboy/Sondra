@@ -33,16 +33,30 @@ import { AdvancedDownloader } from './DownloaderAdvanced'
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The one place where Sondra is not local, said loudly.
+ *
+ * The header used to carry this as a chip on every screen. That it is local
+ * everywhere else goes without saying; the exception belongs where it happens,
+ * big enough that nobody pastes an address without having read it.
+ */
 function NotLocalNotice() {
   return (
-    <div className="rounded-card bg-panel-cool p-[16px] ring-1 ring-inset ring-ink/20">
-      <p className="flex items-center gap-[8px] text-small font-semibold text-ink">
-        <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+    <div role="note" className="rounded-card bg-panel-cool p-[20px] ring-2 ring-inset ring-ink sm:p-[24px]">
+      <p className="flex items-start gap-[12px] text-ink">
+        <svg viewBox="0 0 16 16" className="mt-[2px] h-6 w-6 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M8 1.6l6.2 10.8H1.8zM8 6.2v3.1M8 11.2h.01" />
         </svg>
-        Dieses eine Werkzeug läuft nicht auf Ihrem Gerät
+        <span className="flex flex-col gap-[2px]">
+          <span className="text-body font-bold leading-[1.3] sm:text-[1.25rem]">
+            Achtung: Herunterladen läuft nicht lokal
+          </span>
+          <span className="text-small text-prose">
+            Das ist das einzige Werkzeug, das Ihr Gerät verlässt. Alle anderen rechnen nur hier.
+          </span>
+        </span>
       </p>
-      <ul className="mt-[8px] flex list-disc flex-col gap-[4px] pl-[16px] text-small leading-[1.5] text-prose/85">
+      <ul className="mt-[12px] flex list-disc flex-col gap-[4px] pl-[52px] text-small leading-[1.5] text-prose">
         <li>
           Die Adresse, die Sie einfügen, geht an einen Dienst dieser Seite. Er schlägt dort nach und
           holt die Datei. Ihre eigenen Dateien sieht er nie.
