@@ -4,7 +4,8 @@
  *   npm run build:desktop            →   release/Sondra-Setup-<version>.exe  (on Windows)
  *   npm run build:desktop -- --dir   →   release/<platform>-unpacked/        (any OS, for testing)
  *
- * The installer installs per user (no admin rights), shows LIZENZ.txt before
+ * The installer installs for all users (one UAC prompt; `/S` runs it without
+ * any UI, as the Microsoft Store requires), shows LIZENZ.txt before
  * installing, and adds a start-menu entry and a desktop shortcut. An NSIS
  * installer needs a Windows build machine (or wine); `.github/workflows/
  * desktop.yml` builds it on windows-latest and test-starts the installed app.
@@ -83,7 +84,9 @@ fs.writeFileSync(
       productName: 'Sondra',
       version: root.version,
       description: 'Ton, Video und Bilder bearbeiten — lokal auf diesem Rechner.',
-      author: 'Sondra',
+      // Windows shows this as the publisher in Apps & Features, and the
+      // Microsoft Store checks it against the publisher name of the account.
+      author: 'Lizge',
       main: 'main.cjs',
     },
     null,

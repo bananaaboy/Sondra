@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lizenz · Sondra</title>
+    <meta name="description" content="Unter welcher Lizenz Sondra steht und welche Bausteine anderer Projekte darin stecken." />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./fonts.css" />
+    <script>
+      /* The theme the app remembers, before the first paint. */
+      try {
+        var choice = localStorage.getItem('sondra:theme')
+        if (choice === 'light' || choice === 'dark') document.documentElement.setAttribute('data-theme', choice)
+      } catch (e) {}
+    </script>
+    <style>
+      /* The app's own tokens (src/styles/theme.css), for a page that stands
+         outside the app bundle so it has a fixed address. */
+      :root {
+        color-scheme: light;
+        --canvas: #f4f3ee;
+        --ink: #0f3e1c;
+        --prose: #1b231d;
+        --muted: #5d6c61;
+        --line: #d5d4c9;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          color-scheme: dark;
+          --canvas: #090d0b;
+          --ink: #9ce0ad;
+          --prose: #e0e8e2;
+          --muted: #a7bbab;
+          --line: #525f55;
+        }
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --canvas: #090d0b;
+        --ink: #9ce0ad;
+        --prose: #e0e8e2;
+        --muted: #a7bbab;
+        --line: #525f55;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--prose);
+        font: 400 16px/1.6 'Public Sans', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
+      @media (min-width: 640px) { main { padding: 64px 24px 96px; } }
+
+      a { color: var(--ink); text-underline-offset: 3px; }
+      a:hover { text-decoration: none; }
+      a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+      .back { font-size: 14px; }
+      h1 { color: var(--ink); font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; margin: 24px 0 8px; }
+      .stand { color: var(--muted); font-size: 14px; margin: 0 0 32px; }
+      .kurz { font-size: 18px; line-height: 1.55; margin: 0 0 8px; }
+
+      section { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 32px; }
+      h2 { color: var(--ink); font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+      h3 { font-size: 16px; margin: 20px 0 6px; }
+      p, ul { margin: 0 0 12px; }
+      ul { padding-left: 20px; }
+      li { margin-bottom: 6px; }
+      code, .value { font-family: 'Courier Prime', ui-monospace, monospace; font-size: 15px; }
+      pre {
+        font-family: 'Courier Prime', ui-monospace, monospace;
+        font-size: 14px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        margin: 0 0 12px;
+      }
+      table { border-collapse: collapse; width: 100%; font-size: 15px; }
+      th, td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
+      th { color: var(--ink); font-weight: 600; }
+      td:last-child, th:last-child { padding-right: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="./">Zurück zu Sondra</a>
+
+      <h1>Lizenz</h1>
+      <p class="stand">Stand: 23. September 2026 · gilt für die Website und die Windows-App</p>
+
+      <p class="kurz">
+        Sondra ist freie Software unter der MIT-Lizenz. Sie dürfen es verwenden, kopieren, verändern und
+        weitergeben, auch kommerziell, solange der Lizenzhinweis mitkommt.
+      </p>
+      <p>
+        Der Quelltext liegt auf <a href="https://github.com/bananaaboy/Lizge">GitHub</a>. Bausteine anderer
+        Projekte behalten ihre eigenen Lizenzen; sie stehen unten.
+      </p>
+
+      <section>
+        <h2>MIT-Lizenz</h2>
+        <p>Der verbindliche Text ist der englische Originalwortlaut:</p>
+        <pre>MIT License
+
+Copyright (c) 2026 Lizge Navajeetharan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</pre>
+      </section>
+
+      <section>
+        <h2>Bausteine anderer Projekte</h2>
+        <table>
+          <thead>
+            <tr><th>Baustein</th><th>Wofür</th><th>Lizenz</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>FFmpeg (ffmpeg.wasm-Core)</td><td>Umwandeln, Video, Zusammenfügen</td><td>GPL-2.0 oder neuer</td></tr>
+            <tr><td>@ffmpeg/ffmpeg, @ffmpeg/util</td><td>Anbindung an FFmpeg</td><td>MIT</td></tr>
+            <tr><td>ONNX Runtime Web</td><td>eigenes Trennmodell</td><td>MIT</td></tr>
+            <tr><td>wavesurfer.js</td><td>Wellenformen</td><td>BSD-3-Clause</td></tr>
+            <tr><td>Tone.js</td><td>Wiedergabe im Sampler</td><td>MIT</td></tr>
+            <tr><td>React, React DOM</td><td>Oberfläche</td><td>MIT</td></tr>
+            <tr><td>zustand</td><td>Sitzung</td><td>MIT</td></tr>
+            <tr><td>youtubei.js</td><td>Dienst zum Herunterladen</td><td>MIT</td></tr>
+            <tr><td>Public Sans, Courier Prime, Cormorant Garamond</td><td>Schriften</td><td>SIL Open Font License 1.1</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top: 16px">
+          Der FFmpeg-Core wird unverändert aus dem npm-Paket <code>@ffmpeg/core</code> ausgeliefert; sein
+          Quelltext steht unter <a href="https://github.com/ffmpegwasm/ffmpeg.wasm">github.com/ffmpegwasm/ffmpeg.wasm</a>.
+          Die Windows-App legt die vollständigen Lizenztexte im Installationsordner unter <code>lizenzen</code> ab.
+        </p>
+      </section>
+
+      <section>
+        <h2>Ohne Gewähr</h2>
+        <p>
+          Sondra wird bereitgestellt, wie es ist. Für das Herunterladen gilt zusätzlich: laden Sie nur, was Sie
+          laden dürfen; Kopierschutz wird nicht umgangen. Was mit Ihren Daten geschieht, steht im
+          <a href="./datenschutz.html">Datenschutz</a>.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

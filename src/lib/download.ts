@@ -89,10 +89,11 @@ function emptyTransferError(byteLength: number, url: string): TransferError {
       : `Von ${host} kamen nur ${byteLength} Bytes — das ist keine abspielbare Datei.`
   return new TransferError(
     'empty',
-    `${what} Bei YouTube heisst das fast immer, dass der Abruf des Videos abgelehnt ` +
-      'wurde. Meist hilft: eine andere Qualität wählen, ein anderes Format wählen, ' +
-      'oder es in ein paar Minuten noch einmal versuchen. Bleibt es dabei, hilft ein ' +
-      'Neustart des Dienstes — dann holt er sich einen frischen Zugang.',
+    `${what} Bei YouTube heisst das fast immer, dass YouTube den Abruf abgelehnt hat. ` +
+      'Manchmal hilft eine andere Qualität oder ein zweiter Versuch in ein paar Minuten. ' +
+      'Bleibt es dabei, ist der Dienst YouTube gegenüber veraltet: cobalt auf den neuesten ' +
+      'Stand bringen, oder unter „Optionen“ den Weg über yt-dlp nehmen — yt-dlp wird fast ' +
+      'täglich nachgeführt (vorher „yt-dlp -U“).',
   )
 }
 
@@ -234,7 +235,15 @@ export function parseM3u8(text: string, baseUrl: string): HlsPlaylist {
   let encrypted = false
   let pendingVariant: Omit<HlsVariant, 'url'> | null = null
 
-  const resolve = (reference: string) => new URL(reference, baseUrl).href
+  // A line that is not an address is skipped, not fatal: one bad line must not
+  // turn into "Failed to construct 'URL'" for the whole download.
+  const resolve = (reference: string): string | null => {
+    try {
+      return new URL(reference, baseUrl).href
+    } catch {
+      return null
+    }
+  }
 
   for (const line of lines) {
     if (!line) continue
@@ -257,17 +266,20 @@ export function parseM3u8(text: string, baseUrl: string): HlsPlaylist {
     if (line.startsWith('#EXT-X-MAP:')) {
       // Initialisation segment for fragmented MP4 — it has to lead the stream.
       const uri = line.match(/URI="([^"]+)"/)?.[1]
-      if (uri) segments.push(resolve(uri))
+      const resolved = uri ? resolve(uri) : null
+      if (resolved) segments.push(resolved)
       continue
     }
 
     if (line.startsWith('#')) continue
 
+    const resolved = resolve(line)
+    if (!resolved) continue
     if (pendingVariant) {
-      variants.push({ ...pendingVariant, url: resolve(line) })
+      variants.push({ ...pendingVariant, url: resolved })
       pendingVariant = null
     } else {
-      segments.push(resolve(line))
+      segments.push(resolved)
     }
   }
 
@@ -290,6 +302,51 @@ export async function fetchPlaylist(url: string, signal?: AbortSignal): Promise<
     throw new TransferError('http', `Playlist nicht abrufbar (${response.status}).`)
   }
   return parseM3u8(await response.text(), response.url || url)
+}
+
+/** True when the bytes start like an M3U8 playlist (BOM and blank lines aside). */
+function looksLikePlaylist(bytes: Uint8Array): boolean {
+  const head = new TextDecoder().decode(bytes.subarray(0, 64)).replace(/^\uFEFF/, '').trimStart()
+  return head.startsWith('#EXTM3U')
+}
+
+/**
+ * A tunnel announced as HLS, fetched whichever way it really is.
+ *
+ * cobalt means the flag literally: the tunnel is a playlist, the segments come
+ * after. The yt-dlp bridge marks YouTube's HLS formats the same way but hands
+ * over what yt-dlp has already assembled — the media itself. Read as a
+ * playlist, megabytes of video became thousands of "segment addresses", and
+ * the first one that did not parse ended the download with "Failed to
+ * construct 'URL': Invalid URL". So the answer is looked at before it is
+ * believed.
+ */
+export async function fetchHlsTunnel(
+  url: string,
+  onProgress?: (loaded: number, total: number | null) => void,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  let response: Response
+  try {
+    response = await fetchLocalAware(url, { signal, credentials: 'omit' })
+  } catch (error) {
+    throw describeFetchFailure(error, url)
+  }
+  if (!response.ok) {
+    const explained = await explainErrorBody(response)
+    throw new TransferError('http', explained ?? `Server antwortete mit ${response.status} ${response.statusText}.`)
+  }
+
+  const bytes = await readWithProgress(response, (p) => onProgress?.(p.receivedBytes, p.totalBytes), signal)
+  if (!looksLikePlaylist(bytes)) {
+    if (bytes.byteLength < MIN_MEDIA_BYTES) throw emptyTransferError(bytes.byteLength, url)
+    return bytes
+  }
+
+  const playlist = parseM3u8(new TextDecoder().decode(bytes), response.url || url)
+  // Segment counts say nothing about bytes, so progress counts up without a
+  // ceiling rather than inventing one.
+  return fetchHlsSegments(playlist, (_done, _total, received) => onProgress?.(received, null), signal)
 }
 
 /**

@@ -337,7 +337,7 @@ export function Home() {
         <section className="flex flex-col items-start gap-[16px] rounded-card bg-panel-soft p-[20px] sm:flex-row sm:items-center sm:justify-between sm:p-[24px]">
           <div className="flex flex-col gap-[4px]">
             <h2 className="text-body font-semibold text-ink">Sondra als Windows-App</h2>
-            <p className="text-small text-prose">Eigenes Fenster, läuft ohne Browser, ohne Administratorrechte.</p>
+            <p className="text-small text-prose">Eigenes Fenster, läuft ohne Browser, rechnet auf Ihrem Rechner.</p>
           </div>
           <a
             href={WINDOWS_SETUP}

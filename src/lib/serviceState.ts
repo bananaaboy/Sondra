@@ -22,13 +22,29 @@ export interface ServiceConnection {
   searching: boolean
   /** The feature is switched on at all. */
   enabled: boolean
+  /**
+   * The service's Api-Key, if it wants one. Held here, in memory, so the
+   * address field can use it too — and never written anywhere: a credential
+   * in localStorage outlives the tab and is readable by anything on the origin.
+   */
+  apiKey: string | null
 }
 
 type Handler = (state: ServiceConnection) => void
 
 const handlers = new Set<Handler>()
 
-let state: ServiceConnection = { endpoint: null, info: null, searching: false, enabled: false }
+/**
+ * On from the start when this page is served from the visitor's own machine —
+ * the desktop app, or the page the yt-dlp bridge hands out. Whoever runs Sondra
+ * locally has already set it up on purpose, and a service on this machine is
+ * the one they started; asking again on every load only added a step. A page
+ * from the internet still starts with it off.
+ */
+const servedLocally =
+  typeof window !== 'undefined' && /^(?:localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname)
+
+let state: ServiceConnection = { endpoint: null, info: null, searching: false, enabled: servedLocally, apiKey: null }
 
 export function serviceConnection(): ServiceConnection {
   return state

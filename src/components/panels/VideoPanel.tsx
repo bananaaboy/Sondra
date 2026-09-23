@@ -19,16 +19,19 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
+import { getAudioContext, resumeAudioContext } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
 import { loadFfmpeg, onFfmpegProgress, probeMedia, runFfmpeg, sanitize } from '../../lib/ffmpegClient'
 import { formatBytes, formatTimecode } from '../../lib/format'
 import {
   DEFAULT_VIDEO_OPS,
+  VIDEO_LOOKS,
   VIDEO_PRESETS,
   buildAudioExtraction,
   buildAudioReplacement,
   buildFrameGrab,
   buildVideoJob,
+  previewFilter,
   type BuiltJob,
   type VideoContainer,
   type VideoOps,
@@ -47,8 +50,10 @@ import {
 } from '../editor/CropOverlay'
 import { ChoiceRow, EditorShell, IconButton, ToolHeading, type EditorTool } from '../editor/EditorShell'
 import {
+  IconColor,
   IconCrop,
   IconExport,
+  IconFade,
   IconHarvest,
   IconSize,
   IconSound,
@@ -58,7 +63,7 @@ import {
 } from '../editor/icons'
 import { Button, Notice, Progress, Select, Slider, Toggle } from '../ui/primitives'
 
-type ToolId = 'trim' | 'crop' | 'transform' | 'size' | 'speed' | 'audio' | 'harvest' | 'export'
+type ToolId = 'trim' | 'crop' | 'transform' | 'look' | 'fade' | 'size' | 'speed' | 'audio' | 'harvest' | 'export'
 
 interface Outcome {
   name: string
@@ -99,6 +104,8 @@ function Timeline({
   start,
   end,
   position,
+  fadeIn = 0,
+  fadeOut = 0,
   onChange,
   onSeek,
 }: {
@@ -106,6 +113,9 @@ function Timeline({
   start: number
   end: number
   position: number
+  /** Source seconds the picture spends fading, at the head and at the tail. */
+  fadeIn?: number
+  fadeOut?: number
   onChange: (next: { start: number; end: number }) => void
   onSeek: (seconds: number) => void
 }) {
@@ -157,6 +167,25 @@ function Timeline({
           className="absolute inset-y-0 border-y-2 border-ink/40 bg-ink/5"
           style={{ left: `${percent(start)}%`, width: `${Math.max(0, percent(end) - percent(start))}%` }}
         />
+
+        {/* The fades as ramps, the way an editing suite draws them: the
+            shaded corner is the part that is still dark. */}
+        {fadeIn > 0 || fadeOut > 0 ? (
+          <svg aria-hidden viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+            {fadeIn > 0 ? (
+              <>
+                <polygon points={`${percent(start)},0 ${percent(start)},100 ${percent(Math.min(end, start + fadeIn))},0`} className="fill-ink" fillOpacity={0.28} />
+                <line x1={percent(start)} y1={100} x2={percent(Math.min(end, start + fadeIn))} y2={0} className="stroke-ink" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+              </>
+            ) : null}
+            {fadeOut > 0 ? (
+              <>
+                <polygon points={`${percent(end)},0 ${percent(end)},100 ${percent(Math.max(start, end - fadeOut))},0`} className="fill-ink" fillOpacity={0.28} />
+                <line x1={percent(end)} y1={100} x2={percent(Math.max(start, end - fadeOut))} y2={0} className="stroke-ink" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+              </>
+            ) : null}
+          </svg>
+        ) : null}
 
         {(['start', 'end'] as const).map((side) => (
           <div
@@ -303,6 +332,63 @@ export function VideoPanel() {
   const cropping = tool === 'crop'
   const selectionEnd = ops.end > 0 ? ops.end : duration
 
+  /* -- live preview of fades and sound ------------------------------------- */
+
+  // The veil follows the video's own clock every frame — `timeupdate` comes
+  // four times a second, and a fade previewed at four frames a second is a
+  // slideshow.
+  const veilRef = useRef<HTMLDivElement>(null)
+  const headFade = (ops.reverse ? ops.fadeOut : ops.fadeIn) * ops.speed
+  const tailFade = (ops.reverse ? ops.fadeIn : ops.fadeOut) * ops.speed
+  useEffect(() => {
+    const veil = veilRef.current
+    if (!veil) return
+    if (headFade <= 0 && tailFade <= 0) {
+      veil.style.opacity = '0'
+      return
+    }
+    let frame = 0
+    const paint = () => {
+      const at = videoRef.current?.currentTime ?? 0
+      let dark = 0
+      if (headFade > 0 && at < ops.start + headFade) dark = Math.max(dark, 1 - Math.max(0, at - ops.start) / headFade)
+      if (tailFade > 0 && at > selectionEnd - tailFade) dark = Math.max(dark, 1 - Math.max(0, selectionEnd - at) / tailFade)
+      veil.style.opacity = String(Math.min(1, Math.max(0, dark)))
+      frame = requestAnimationFrame(paint)
+    }
+    paint()
+    return () => cancelAnimationFrame(frame)
+  }, [headFade, tailFade, ops.start, selectionEnd, sourceUrl])
+
+  // Mute and level are heard in the preview as they are set. Above 0 dB the
+  // element cannot go, so the picture's sound is routed through a gain node
+  // the first time a boost is asked for.
+  const boostRef = useRef<GainNode | null>(null)
+  useEffect(() => {
+    const node = videoRef.current
+    if (!node) return
+    node.muted = ops.mute
+    const gain = 10 ** (ops.volumeDb / 20)
+    if (gain > 1 && !boostRef.current) {
+      try {
+        const context = getAudioContext()
+        const source = context.createMediaElementSource(node)
+        const boost = context.createGain()
+        source.connect(boost).connect(context.destination)
+        boostRef.current = boost
+        void resumeAudioContext()
+      } catch {
+        /* this element is already routed, or the browser declines */
+      }
+    }
+    if (boostRef.current) {
+      node.volume = 1
+      boostRef.current.gain.value = gain
+    } else {
+      node.volume = Math.min(1, gain)
+    }
+  }, [ops.mute, ops.volumeDb, sourceUrl])
+
   /* -- playback ------------------------------------------------------------- */
   const seek = (seconds: number) => {
     setPosition(seconds)
@@ -419,14 +505,21 @@ export function VideoPanel() {
     )
   }
 
-  const touched = ops.crop !== null || ops.rotate !== 0 || ops.flipH || ops.flipV || ops.speed !== 1 || ops.mute
+  const lookTouched =
+    ops.brightness !== 0 || ops.contrast !== 1 || ops.saturation !== 1 || ops.look !== 'none' || ops.sharpen || ops.denoise || ops.stabilize
+  const fadeTouched = ops.fadeIn > 0 || ops.fadeOut > 0
+  const soundTouched = ops.mute || ops.volumeDb !== 0 || ops.loudnorm
+  const touched =
+    ops.crop !== null || ops.rotate !== 0 || ops.flipH || ops.flipV || ops.speed !== 1 || ops.reverse || lookTouched || fadeTouched || soundTouched
   const tools: EditorTool[] = [
     { id: 'trim', label: 'Schneiden', icon: IconTrim, touched: ops.start > 0 || (ops.end > 0 && ops.end < duration - 0.05) },
     { id: 'crop', label: 'Ausschnitt', icon: IconCrop, touched: ops.crop !== null },
     { id: 'transform', label: 'Drehen', icon: IconTransform, touched: ops.rotate !== 0 || ops.flipH || ops.flipV },
+    { id: 'look', label: 'Bild', icon: IconColor, touched: lookTouched },
+    { id: 'fade', label: 'Blenden', icon: IconFade, touched: fadeTouched },
     { id: 'size', label: 'Größe', icon: IconSize },
-    { id: 'speed', label: 'Tempo', icon: IconSpeed, touched: ops.speed !== 1 },
-    { id: 'audio', label: 'Ton', icon: IconSound, touched: ops.mute },
+    { id: 'speed', label: 'Tempo', icon: IconSpeed, touched: ops.speed !== 1 || ops.reverse },
+    { id: 'audio', label: 'Ton', icon: IconSound, touched: soundTouched },
     { id: 'harvest', label: 'Ernten', icon: IconHarvest },
     { id: 'export', label: 'Fertig', icon: IconExport },
   ]
@@ -512,8 +605,14 @@ export function VideoPanel() {
                   transform: `translate(-50%, -50%) rotate(${ops.rotate}deg) scale(${ops.flipH ? -1 : 1}, ${
                     ops.flipV ? -1 : 1
                   })`,
+                  // Colour is previewed the same way: the browser's filter is
+                  // close to FFmpeg's, and it answers while the slider moves.
+                  filter: previewFilter(ops),
                 }}
               />
+              {/* The fade, previewed: black over the picture, as dark as the
+                  output will be at this moment of the clip. */}
+              <div ref={veilRef} aria-hidden className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: 0 }} />
               {cropping && display.width > 0 ? (
                 <CropOverlay
                   rect={ops.crop ?? FULL_RECT}
@@ -561,6 +660,10 @@ export function VideoPanel() {
             start={ops.start}
             end={selectionEnd}
             position={position}
+            // Reversing runs before the fades, so a reversed clip fades in
+            // from what is the end of the source.
+            fadeIn={(ops.reverse ? ops.fadeOut : ops.fadeIn) * ops.speed}
+            fadeOut={(ops.reverse ? ops.fadeIn : ops.fadeOut) * ops.speed}
             onChange={({ start, end }) => patch({ start, end })}
             onSeek={seek}
           />
@@ -786,6 +889,51 @@ function VideoInspector({
     )
   }
 
+  if (tool === 'look') {
+    const signed = (value: number) => `${value > 0 ? '+' : ''}${Math.round(value * 100)} %`
+    return (
+      <>
+        <ToolHeading title="Bild" hint="Helligkeit, Farbe und Schärfe. Die Vorschau zeigt es sofort." />
+        <Slider label="Helligkeit" min={-0.3} max={0.3} step={0.01} value={ops.brightness}
+          display={signed(ops.brightness / 0.3)} onChange={(event) => patch({ brightness: Number(event.target.value) })} />
+        <Slider label="Kontrast" min={0.5} max={1.8} step={0.01} value={ops.contrast}
+          display={signed(ops.contrast - 1)} onChange={(event) => patch({ contrast: Number(event.target.value) })} />
+        <Slider label="Sättigung" min={0} max={2.5} step={0.01} value={ops.saturation}
+          display={signed(ops.saturation - 1)} onChange={(event) => patch({ saturation: Number(event.target.value) })} />
+        <ToolHeading title="Look" hint="Kommt nach den Reglern dazu." />
+        <ChoiceRow value={ops.look} columns={3} onChange={(value) => patch({ look: value })} options={VIDEO_LOOKS.map((entry) => ({ value: entry.id, label: entry.label }))} />
+        <div className="h-px bg-line" />
+        <Toggle label="Schärfen" hint="Für leicht weiche Handyaufnahmen." checked={ops.sharpen} onChange={(value) => patch({ sharpen: value })} />
+        <Toggle label="Bildrauschen mindern" hint="Für dunkle Aufnahmen mit Griesel." checked={ops.denoise} onChange={(value) => patch({ denoise: value })} />
+        <Toggle label="Verwackeln ausgleichen" hint="Beruhigt Aufnahmen aus der Hand. Rechnet merklich länger." checked={ops.stabilize} onChange={(value) => patch({ stabilize: value })} />
+        {ops.brightness !== 0 || ops.contrast !== 1 || ops.saturation !== 1 || ops.look !== 'none' || ops.sharpen || ops.denoise || ops.stabilize ? (
+          <Button size="sm" variant="ghost" onClick={() => patch({ brightness: 0, contrast: 1, saturation: 1, look: 'none', sharpen: false, denoise: false, stabilize: false })}>
+            Bild zurücksetzen
+          </Button>
+        ) : null}
+      </>
+    )
+  }
+
+  if (tool === 'fade') {
+    const clipLength = duration > 0 ? (selectionEnd - ops.start) / ops.speed : 0
+    const most = Math.max(0.5, Math.min(10, clipLength / 2))
+    return (
+      <>
+        <ToolHeading title="Blenden" hint="Bild aus Schwarz, Ton aus der Stille — und am Ende wieder hinein." />
+        <Slider label="Einblenden" min={0} max={most} step={0.1} value={Math.min(ops.fadeIn, most)}
+          display={ops.fadeIn > 0 ? `${ops.fadeIn.toFixed(1).replace('.', ',')} s` : 'aus'}
+          onChange={(event) => patch({ fadeIn: Number(event.target.value) })} />
+        <Slider label="Ausblenden" min={0} max={most} step={0.1} value={Math.min(ops.fadeOut, most)}
+          display={ops.fadeOut > 0 ? `${ops.fadeOut.toFixed(1).replace('.', ',')} s` : 'aus'}
+          onChange={(event) => patch({ fadeOut: Number(event.target.value) })} />
+        <p className="text-small leading-[1.45] text-muted">
+          Gemessen am fertigen Clip, also nach Schnitt und Tempo.
+        </p>
+      </>
+    )
+  }
+
   if (tool === 'size') {
     return (
       <>
@@ -841,6 +989,16 @@ function VideoInspector({
           {duration > 0 ? formatTimecode((selectionEnd - ops.start) / ops.speed) : '—'}
           <span className="mt-[4px] block text-muted">Länge danach</span>
         </div>
+        <Toggle
+          label="Rückwärts abspielen"
+          hint={
+            duration > 90
+              ? 'Braucht das ganze Stück im Speicher — bei langen Videos erst kürzen.'
+              : 'Bild und Ton laufen von hinten nach vorn.'
+          }
+          checked={ops.reverse}
+          onChange={(value) => patch({ reverse: value })}
+        />
       </>
     )
   }
@@ -855,6 +1013,19 @@ function VideoInspector({
           checked={ops.mute}
           onChange={(value) => patch({ mute: value })}
         />
+        {!ops.mute ? (
+          <>
+            <Slider label="Lautstärke" min={-20} max={20} step={0.5} value={ops.volumeDb}
+              display={ops.volumeDb === 0 ? 'unverändert' : `${ops.volumeDb > 0 ? '+' : ''}${ops.volumeDb.toFixed(1).replace('.', ',')} dB`}
+              onChange={(event) => patch({ volumeDb: Number(event.target.value) })} />
+            <Toggle
+              label="Lautheit angleichen"
+              hint="Auf −16 LUFS, wie YouTube, Instagram und die meisten Podcasts es abspielen."
+              checked={ops.loudnorm}
+              onChange={(value) => patch({ loudnorm: value })}
+            />
+          </>
+        ) : null}
         <div className="h-px bg-line" />
         <ToolHeading title="Ton ersetzen" hint="Bild wird kopiert, nur der Ton wird neu geschrieben." />
         {audioAssets.length === 0 ? (

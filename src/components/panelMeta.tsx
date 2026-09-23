@@ -62,14 +62,14 @@ export const PANELS: PanelMeta[] = [
     id: 'audio',
     slug: 'ton',
     label: 'Ton',
-    summary: 'Schneiden, blenden, Pegel, Stille entfernen, Tonhöhe, Tempo',
+    summary: 'Schneiden, einfügen, Filter, Rauschen, Hall, Tonhöhe, Tempo',
     icon: <path d="M1.8 8h1.8l1.6-4.6 2.4 9.2 2-6.2 1.2 3.4h3" />,
   },
   {
     id: 'video',
     slug: 'video',
     label: 'Video',
-    summary: 'Schneiden, drehen, Ausschnitt, Tempo, Ton herauslösen',
+    summary: 'Schneiden, drehen, Farbe, Blenden, Tempo, Ton',
     icon: <path d="M1.8 4.2h8.6v7.6H1.8zM10.4 7l3.8-2.2v6.4L10.4 9z" />,
   },
   {
@@ -97,7 +97,7 @@ export const PANELS: PanelMeta[] = [
     id: 'sampler',
     slug: 'zerschneiden',
     label: 'Zerschneiden',
-    summary: 'In einzelne Schläge zerlegen und auf Tasten legen',
+    summary: 'In Schläge zerlegen, auf Pads legen und einen Beat daraus bauen',
     icon: <path d="M3.4 2.8l7.4 9.2M12.6 2.8L5.2 12M4.3 13.2a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM11.7 13.2a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />,
   },
   {
@@ -106,6 +106,13 @@ export const PANELS: PanelMeta[] = [
     label: 'Tonart',
     summary: 'Tonart, Tempo, Akkorde und die Melodie als MIDI',
     icon: <path d="M6 11.6V3.4l7-1.2v8.2M6 11.6a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0zM13 10.4a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0z" />,
+  },
+  {
+    id: 'mic',
+    slug: 'mikrofon',
+    label: 'Mikrofon',
+    summary: 'Testen, Geräte wählen und für Podcast, Stream oder Musik einstellen',
+    icon: <path d="M8 2.2a2 2 0 012 2v3.6a2 2 0 01-4 0V4.2a2 2 0 012-2zM4.2 7.6a3.8 3.8 0 007.6 0M8 11.4v2.4M5.8 13.8h4.4" />,
   },
 ]
 

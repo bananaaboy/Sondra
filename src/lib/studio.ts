@@ -34,7 +34,7 @@
  * instant.
  */
 
-import { fetchHlsSegments, fetchMedia, fetchPlaylist } from './download'
+import { fetchHlsTunnel, fetchMedia } from './download'
 import { loadFfmpeg, runFfmpeg } from './ffmpegClient'
 import { sanitizeFilename, withExtension } from './format'
 import {
@@ -44,6 +44,7 @@ import {
   resolveMedia,
   type LocalJob,
   type ServiceItem,
+  type ServiceSettings,
 } from './service'
 import { serviceConnection } from './serviceState'
 
@@ -129,16 +130,9 @@ export async function finishLocalJob(
     onNote?.(`Teil ${index + 1} von ${job.tunnels.length} wird geholt`)
     let bytes: Uint8Array
     if (job.isHls) {
-      // The tunnel is a playlist, not a file; pull its segments first.
-      const playlist = await fetchPlaylist(tunnel, signal)
-      bytes = await fetchHlsSegments(
-        playlist,
-        // Segment counts say nothing about bytes, and a byte total for an
-        // HLS stream is not known until the last one lands — so progress here
-        // counts up without a ceiling rather than inventing one.
-        (_segmentsDone, _segmentsTotal, received) => onProgress?.({ loaded: received, total: null }),
-        signal,
-      )
+      // Usually a playlist whose segments follow; from the yt-dlp bridge, the
+      // assembled media itself. `fetchHlsTunnel` tells the two apart.
+      bytes = await fetchHlsTunnel(tunnel, (loaded, total) => onProgress?.({ loaded, total }), signal)
     } else {
       bytes = (
         await fetchMedia(
@@ -230,14 +224,36 @@ function fromServiceItems(items: ServiceItem[], fallbackTitle: string): StudioRe
  * panel has to make on the visitor's behalf. Showing them is what the panel
  * already did for YouTube's formats, so it costs nothing here.
  */
+/**
+ * The choices made in the service settings — mode, quality, audio format.
+ *
+ * The address field is now the only way to load through a connected service,
+ * so it has to honour them; the separate button that used to was the only
+ * thing that did.
+ */
+function storedServiceChoices(): Partial<ServiceSettings> {
+  try {
+    const raw = localStorage.getItem('sondra:service') ?? localStorage.getItem('lizge:service')
+    if (!raw) return {}
+    const { downloadMode, videoQuality, audioFormat } = JSON.parse(raw) as Partial<ServiceSettings>
+    return {
+      ...(downloadMode ? { downloadMode } : {}),
+      ...(videoQuality ? { videoQuality } : {}),
+      ...(audioFormat ? { audioFormat } : {}),
+    }
+  } catch {
+    return {}
+  }
+}
+
 export async function resolveViaService(url: string, signal?: AbortSignal): Promise<StudioResult> {
   const connected = serviceConnection()
   if (connected.endpoint) {
     try {
       const outcome = await resolveMedia(
         url,
-        { ...DEFAULT_SERVICE, endpoint: connected.endpoint },
-        null,
+        { ...DEFAULT_SERVICE, ...storedServiceChoices(), endpoint: connected.endpoint },
+        connected.apiKey,
         signal,
       )
       if (outcome.kind === 'file') return fromServiceItems([outcome.item], url)

@@ -278,8 +278,9 @@ widerspricht beiden mit Absicht.
 - **Minze** (`{colors.panel-mid}`) und **Kräftige Minze**
   (`{colors.panel-strong}`): die zweite Tönungsstufe und die Textmarkierung.
 - **Kühle Minze** (`{colors.panel-cool}`): reserviert für den einen Hinweis,
-  dass etwas nicht lokal läuft. Der einzige kühle Ton im hellen Thema, damit er
-  sich nicht in die Reihe der übrigen Tönungen einsortiert.
+  dass etwas nicht lokal läuft — die Warnung oben im Downloader, mit 2 px
+  Ring in Tinte und fetter Überschrift. Der einzige kühle Ton im hellen Thema,
+  damit er sich nicht in die Reihe der übrigen Tönungen einsortiert.
 - **Prosa** (`{colors.prose}`): Fliesstext und Beschriftungen.
 - **Gedämpft** (`{colors.muted}`): Sekundärtext, Hinweise, Einheiten.
 - **Nicht zutreffend** (`{colors.faint}`): ein Verfahren, das auf die geöffnete
@@ -458,7 +459,7 @@ Welt vom 20.9. war durchgehend eckig; beim Umbau der Startseite hiess es
 - **`card` (16 px):** Kacheln, getönte Blöcke (`mint`, `sage`, `slate`), die
   Ablagefläche, das Windows-Feld, Popover, Formatliste, Editorrahmen.
 - **`nav` (10 px):** Knöpfe, Eingabefelder, Auswahllisten, Chips, der
-  Lokal-Chip, Symbolknöpfe. Etwas enger, damit ein Knopf in einem Block
+  Download-Knopf, Symbolknöpfe. Etwas enger, damit ein Knopf in einem Block
   konzentrisch sitzt; die Optionen in einer Segment-Schale nehmen 7 px.
 - **`pill` (999 px):** Filterpillen auf der Startseite, das Suchfeld dort,
   Schalterkörper und -knauf, der Griff des Schiebereglers, Zustandspunkte.
@@ -468,7 +469,7 @@ Reiter-Unterstrich. Der Fokusring folgt der Rundung des Elements.
 
 **Zeitflächen bleiben eckig** (ebenfalls auf Wunsch, 23.9.2026): die
 Zeitleiste im Video-Editor, jede Wellenform (Ton-Editor, Lautstärke, Player,
-Zerschneiden), die Klavierrolle der Tonart-Ansicht und die Editorbühne. Eine
+Zerschneiden), die Klavierrollen (Tonart-Ansicht und Pad im Pattern) und die Editorbühne. Eine
 Fläche, auf der eine Zeitachse oder ein Bild vermessen wird, beginnt und endet
 an einer Kante; eine Rundung schnitte ihr die ersten und letzten Millisekunden
 optisch ab. Die Bedienelemente daneben bleiben gerundet.
@@ -577,8 +578,15 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   trägt ein 5-px-Quadrat oben rechts. Unter 1024 px waagerecht.
 - **Kopfzeile:** klebt oben, schwerere Linie nach unten, Grund `canvas/95` mit
   Unschärfe. Links die Wortmarke, rechts drei ruhige Bedienelemente: das
-  Dateimenü, der Lokal-Chip — als einziges getönt, weil er eine Zusage trägt —
-  und ein einzelner Themenknopf, der durch System, Hell und Dunkel schaltet.
+  Dateimenü, „App herunterladen" — als einziges getönt — und ein einzelner
+  Themenknopf, der durch System, Hell und Dunkel schaltet. Der Download-Knopf
+  öffnet ein natives `<dialog>` (Schattenstufe, Hintergrund abgedunkelt): der
+  Microsoft Store als ausgegraute Zeile, die bei Hover, Fokus und Antippen
+  „Bald verfügbar" sagt — bewusst `aria-disabled` statt `disabled`, weil ein
+  deaktivierter Knopf in mehreren Browsern gar keinen Hover bekommt —, darunter
+  das Setup (.exe). In der App entfällt er. Den Lokal-Chip („Lokal · 1
+  Ausnahme") gibt es seit dem 23.9. nicht mehr; die Ausnahme sagt der
+  Downloader selbst, laut.
   „Installieren" und der Suchknopf sind auf Wunsch entfallen; gesucht wird auf
   der Startseite, und Strg/Cmd + K öffnet die Befehlspalette weiterhin überall.
 - **Dateimenü** (`SessionMenu` in `AssetList.tsx`): nennt die Datei, an der
@@ -590,6 +598,40 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Datei". Die Werkzeuge sind dadurch einspaltig oder behalten nur ihre eigene
   Seitenspalte. Das Menü trägt die eine Schattenstufe; auf dem Handy liegt es
   fest unter der Kopfzeile über die volle Breite.
+- **Pattern** (`StepSequencer`): das Channel-Rack-Raster unter den Pads. Eine
+  Zeile je Pad mit „M" (stumm) und dem Padnamen, der das Pad anspielt; 16
+  oder 32 Zellen zu 24 × 28 px mit 5 px Rundung, in Vierergruppen abwechselnd
+  `panel-mid` und `panel-soft`, eine gesetzte Zelle ist Tinte, der Laufpunkt
+  ein 2-px-Ring. Auf dem Handy scrollt das Raster seitlich, statt die Zellen
+  unter Daumengrösse zu drücken. Das Notensymbol neben dem Padnamen öffnet
+  die **Klavierrolle** des Pads darunter: zwei Oktaven um die Tonhöhe des
+  Pads (die Mitte ist C4), eine Spalte je Schritt, eckig als Zeitfläche.
+  Klicken setzt, Ziehen verlängert oder verschiebt, ein Klick auf einen Ton
+  nimmt ihn weg — ohne Rechtsklick, den Trackpad und Handy nicht haben. Ein
+  Pad ist entweder gestept oder gerollt, wie ein Kanal in FL Studio; gerollt
+  zeigt seine Zeile die Töne in klein.
+- **Ein gezogener Bereich ist eine Frage** (Zerschneiden): er erscheint
+  dunkler getönt mit „Auswahl hören", „Als Pad anlegen" und „Verwerfen",
+  und wird erst auf Bestätigung ein Pad. Ein verirrter Zug hinterliess vorher
+  ein Pad. Pads löschen: im Pad-Block oder mit Entf.
+- **Einstellen heisst hören** (Ton-Editor): jeder Klang-Block ist ein
+  Schalter, ein bewegter Regler schaltet ihn ein, und die Wiedergabe läuft
+  durch dieselbe Web-Audio-Kette (`lib/liveSound.ts`), die „Übernehmen" danach
+  offline rendert — was zu hören war, steht in der Datei. Eine Leiste unter
+  der Welle sagt in einem Satz, was gerade zu hören ist, mit Vorher/Nachher.
+  Tempo und Tonhöhe hört man live über einen körnigeren Schieber; übernommen
+  rechnet der Phasenvocoder, und der Hinweis sagt das.
+- **Blenden sind zu sehen, bevor sie da sind:** im Ton-Editor als Kurve über
+  der Welle (der leiser werdende Teil verschleiert in der Farbe des Grunds),
+  beim Überfahren von „Hier einblenden/ausblenden" über der Auswahl; im
+  Video-Editor als Rampe auf der Zeitleiste und als Schwarz über dem Bild, das
+  dem Abspielkopf Bild für Bild folgt.
+- **Pegelanzeige** (Mikrofon): flacher Balken ohne Rundung — eine Zeitfläche
+  im Sinn der Regel oben —, Tinte auf `panel-soft`, die letzten 6 dB als
+  `panel-mid` markiert statt rot, Spitzenhalter als 2-px-Strich, Werte in
+  Mono darunter.
+- **Auswahlkarten** („Wofür?" beim Mikrofon): Knöpfe mit `role="radio"` im
+  Kartenraster, `rounded-card`, gewählt gefüllte Tinte, sonst `panel-soft`.
 - **Keine toten Bedienelemente.** Was ohne Voraussetzung nichts tut, steht
   nicht ausgegraut da, sondern erscheint mit der Voraussetzung: die Schnitte
   mit einer Auswahl, „Alle Dateien umwandeln" ab der zweiten Datei, „Stille
@@ -604,11 +646,10 @@ Schirms, bevor das Werkzeug seine Überschrift zeigte. Jetzt 211 px (25 %).
 
 Die Kopfzeile brach um, weil Wortmarke (101 px) und Bedienelemente (243 px)
 mit Abstand und Rand auf 410 px kamen. Enger gesetzte Abstände, ein knapperer
-Themenschalter und ein kürzerer Chip bringen sie auf eine Zeile.
+Themenschalter und ein kürzerer Knopf bringen sie auf eine Zeile.
 
-**Gekürzt wird der Text, nicht die Zusage.** Der Chip sagt auf dem Handy
-„Lokal" statt „Lokal · 1 Ausnahme" — die Zählung steht im Popover, das die
-Ausnahme ohnehin erklärt. Die Sitzungsleiste sagt „1 Datei · 0.0 MB" statt
+**Gekürzt wird der Text, nicht die Aussage.** Der Download-Knopf sagt auf dem
+Handy „App" statt „App herunterladen". Die Sitzungsleiste sagt „1 Datei · 0.0 MB" statt
 „… im Arbeitsspeicher dieses Tabs · nichts davon wurde gesendet": was dort
 wegfällt, weiss die Leserin bereits, denn sie sieht genau diesen Tab an. Ab
 `sm` steht wieder der volle Wortlaut.

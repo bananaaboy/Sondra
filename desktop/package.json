@@ -1,9 +1,9 @@
 {
   "name": "sondra-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Sondra als Windows-App: eigenes Fenster, Installer, läuft lokal.",
-  "author": "Sondra",
+  "author": "Lizge",
   "devDependencies": {
     "@vercel/blob": "2.8.0",
     "electron": "44.4.4",
@@ -12,7 +12,7 @@
   "build": {
     "appId": "ch.lizge.sondra",
     "productName": "Sondra",
-    "copyright": "Sondra",
+    "copyright": "© 2026 Lizge Navajeetharan",
     "directories": {
       "app": ".stage",
       "buildResources": ".build",
@@ -52,19 +52,20 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": false,
-      "allowElevation": false,
+      "perMachine": true,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "license": ".build/LIZENZ.txt",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Sondra",
-      "uninstallDisplayName": "Sondra",
+      "uninstallDisplayName": "Sondra - Multimedia",
       "installerLanguages": [
         "de_DE"
       ],
       "language": "1031",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "include": "installer.nsh"
     },
     "linux": {
       "target": "dir"

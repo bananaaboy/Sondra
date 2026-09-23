@@ -45,19 +45,15 @@ import {
   findLocalInstance,
   isLoopback,
   probeService,
-  resolveMedia,
   localNetworkPermission,
   pageIsLocal,
   requestLocalAccess,
   LOCAL_SERVICE_DISCLAIMER,
   SERVICE_DISCLAIMER,
-  ServiceError,
   watchForInstance,
   type AudioFormat,
   type DownloadMode,
-  type LocalJob,
   type ServiceInfo,
-  type ServiceItem,
   type ServiceSettings,
   type VideoQuality,
 } from '../../lib/service'
@@ -92,8 +88,6 @@ import {
 } from '../../lib/selfhost'
 import { detectPlatform } from '../../lib/platform'
 import { serviceConnection, setServiceConnection } from '../../lib/serviceState'
-import { finishLocalJob } from '../../lib/studio'
-import { holdScreenAwake } from '../../lib/wakeLock'
 import { kindFromMime, useSession } from '../../state/store'
 import {
   ArrowRight,
@@ -111,7 +105,7 @@ import {
   Toggle,
 } from '../ui/primitives'
 
-type Mode = 'direct' | 'hls' | 'service'
+type Mode = 'direct' | 'hls'
 
 const SERVICE_STORAGE_KEY = 'sondra:service'
 
@@ -187,8 +181,9 @@ export function AdvancedDownloader({ url }: { url: string }) {
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  // Off on every load. Opting into sending an address to a third party is a
-  // decision worth making deliberately, not one to inherit from last week.
+  // Off on every load of a page from the internet: opting into sending an
+  // address to a third party is a decision worth making deliberately. On when
+  // the page is served from this machine — see `serviceState`.
   //
   // Switching tabs is not a new load, though. This panel unmounts when another
   // one is shown, and starting from scratch on the way back threw away a live
@@ -202,8 +197,10 @@ export function AdvancedDownloader({ url }: { url: string }) {
     const live = serviceConnection().endpoint
     return live ? { ...stored, endpoint: live } : stored
   })
-  const [apiKey, setApiKey] = useState('')
-  const [items, setItems] = useState<ServiceItem[] | null>(null)
+  const [apiKey, setApiKey] = useState(() => serviceConnection().apiKey ?? '')
+  // The address field loads through the service too, so it needs the key —
+  // in memory only, like here.
+  useEffect(() => setServiceConnection({ apiKey: apiKey || null }), [apiKey])
   const [serviceInfo, setServiceInfo] = useState<ServiceInfo | null>(() => serviceConnection().info)
   const [checking, setChecking] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -228,8 +225,6 @@ export function AdvancedDownloader({ url }: { url: string }) {
 
   /** The last hand-run check, kept verbatim so it can be read or pasted. */
   const [probe, setProbe] = useState<string | null>(null)
-  /** How many fruitless sweeps the watcher has made, to know when to speak up. */
-  const [sweeps, setSweeps] = useState(0)
   /** The guided setup is watching for an instance to come up. */
   const [waiting, setWaiting] = useState(false)
   const waitRef = useRef<AbortController | null>(null)
@@ -265,14 +260,13 @@ export function AdvancedDownloader({ url }: { url: string }) {
 
   const detectedHls = /\.m3u8(\?|$)/i.test(url.trim())
   const detectedPortal = isPortalUrl(url)
-  const autoMode: Mode = detectedHls ? 'hls' : detectedPortal && serviceEnabled ? 'service' : 'direct'
+  const autoMode: Mode = detectedHls ? 'hls' : 'direct'
   const effectiveMode: Mode = modeOverride ?? autoMode
 
   const reset = () => {
     setError(null)
     setPlaylist(null)
     setVariantUrl('')
-    setItems(null)
     setFetched(null)
   }
 
@@ -415,112 +409,6 @@ export function AdvancedDownloader({ url }: { url: string }) {
     }
   }
 
-  /** Fetches one already-resolved item into the session. */
-  const pullItem = async (item: ServiceItem, signal: AbortSignal) => {
-    setNote('Datei wird geholt')
-    const media = await fetchMedia(item.url, setProgress, signal)
-    const name = sanitizeFilename(item.filename || media.filename)
-    const mime = media.contentType ?? 'application/octet-stream'
-    addAsset({
-      name,
-      bytes: media.bytes,
-      mime,
-      sizeBytes: media.bytes.byteLength,
-      kind: kindFromMime(media.contentType ?? '', name),
-      audio: null,
-      durationSeconds: null,
-      origin: 'download',
-    })
-    setFetched({ name, bytes: media.bytes, mime })
-    log('dienst', `${name} geladen (${formatBytes(media.bytes.byteLength)}) — über einen fremden Server`)
-  }
-
-  /**
-   * Finishes a `local-processing` job.
-   *
-   * The instance hands over the raw parts — YouTube above 360p keeps video and
-   * audio in separate streams — and expects the client to combine them. FFmpeg
-   * is already here, so the finished file is assembled on this machine and the
-   * instance never sees it.
-   */
-  const runLocalJob = async (job: LocalJob, signal: AbortSignal) => {
-    const { bytes, name, mime } = await finishLocalJob(job, {
-      onNote: setNote,
-      onProgress: (p) =>
-        setProgress({
-          receivedBytes: p.loaded,
-          totalBytes: p.total,
-          fraction: p.total ? p.loaded / p.total : null,
-          bytesPerSecond: 0,
-        }),
-      signal,
-    })
-    setProgress(null)
-
-    addAsset({
-      name,
-      bytes,
-      mime,
-      sizeBytes: bytes.byteLength,
-      kind: kindFromMime(mime, name),
-      audio: null,
-      durationSeconds: null,
-      origin: 'download',
-    })
-    setFetched({ name, bytes, mime })
-    log('dienst', `${name} lokal zusammengefügt (${formatBytes(bytes.byteLength)})`)
-  }
-
-  /** Ask the service what it has, then finish the job it describes. */
-  const runService = async (item?: ServiceItem) => {
-    const target = url.trim()
-    if (!target) return
-    const controller = new AbortController()
-    abortRef.current = controller
-    const releaseWakeLock = await holdScreenAwake()
-    setBusy(true)
-    if (!item) reset()
-    else setError(null)
-
-    try {
-      if (item) {
-        await pullItem(item, controller.signal)
-        setItems(null)
-        return
-      }
-
-      setNote('Dienst wird gefragt')
-      const result = await resolveMedia(target, service, apiKey || null, controller.signal)
-
-      if (result.kind === 'picker') {
-        // A post with several attachments: let the user pick rather than guess.
-        setItems(result.items)
-        log('dienst', `${result.items.length} Medien gefunden`)
-        return
-      }
-
-      if (result.kind === 'local') {
-        await runLocalJob(result.job, controller.signal)
-        return
-      }
-
-      await pullItem(result.item, controller.signal)
-    } catch (failure) {
-      if (failure instanceof ServiceError) {
-        setError(failure.message)
-        log('dienst', failure.message, 'error')
-      } else {
-        handleFailure(failure, 'dienst')
-      }
-    } finally {
-      releaseWakeLock()
-      setBusy(false)
-      setProgress(null)
-      setNote(null)
-      abortRef.current = null
-    }
-  }
-
   /** Takes an instance into use and remembers where it was. */
   const adopt = (endpoint: string, info: ServiceInfo) => {
     updateService({ endpoint })
@@ -636,7 +524,6 @@ export function AdvancedDownloader({ url }: { url: string }) {
    */
   useEffect(() => {
     if (!serviceEnabled || connected || waiting) return
-    setSweeps(0)
     setServiceConnection({ searching: true })
     const controller = new AbortController()
     let stopped = false
@@ -651,7 +538,6 @@ export function AdvancedDownloader({ url }: { url: string }) {
           }
           return
         }
-        if (!stopped) setSweeps((count) => count + 1)
         await new Promise((resolve) => setTimeout(resolve, 4000))
       }
     }
@@ -774,7 +660,6 @@ export function AdvancedDownloader({ url }: { url: string }) {
     stopWaiting()
     setServiceEnabled(false)
     setServiceInfo(null)
-    setItems(null)
     setError(null)
     setModeOverride(null)
     setServiceConnection({ endpoint: null, info: null, searching: false, enabled: false })
@@ -819,24 +704,21 @@ export function AdvancedDownloader({ url }: { url: string }) {
       hint: 'Ein Stream in vielen kleinen Teilen. Wird hier zu einer MP4 zusammengesetzt.',
       disabled: false,
     },
-    {
-      id: 'service',
-      label: 'Portal',
-      hint: serviceEnabled
-        ? 'YouTube und ähnliche Seiten. Läuft über einen fremden Server.'
-        : 'Für YouTube und ähnliche Seiten — unten einschalten.',
-      disabled: !serviceEnabled,
-    },
   ]
 
-  const canStart = Boolean(url.trim()) && (effectiveMode !== 'service' || Boolean(service.endpoint))
+  // A portal address has one way in, and it is the field at the top: it asks
+  // the connected service first and finishes whatever that service hands back.
+  // The button that used to sit here did the same with fewer fallbacks.
+  const portalOnly = detectedPortal && effectiveMode === 'direct'
+  const canStart = Boolean(url.trim()) && !portalOnly
 
-  const pathNote =
-    detectedPortal && effectiveMode !== 'service'
-      ? serviceEnabled
-        ? 'YouTube und ähnliche Seiten lassen den Browser nicht direkt heran — hier „Portal“ wählen.'
-        : 'Für diese Adresse braucht es den Dienst — unten einschalten.'
-      : PATHS.find((path) => path.id === effectiveMode)?.hint
+  const pathNote = portalOnly
+    ? connected
+      ? 'YouTube und ähnliche Seiten lädt das Feld oben — „Nachsehen“ fragt den verbundenen Dienst.'
+      : serviceEnabled
+        ? 'YouTube und ähnliche Seiten lädt das Feld oben. Mit einem verbundenen Dienst in voller Auflösung.'
+        : 'YouTube und ähnliche Seiten lädt das Feld oben. Für volle Auflösung unten einschalten.'
+    : PATHS.find((path) => path.id === effectiveMode)?.hint
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-[16px]">
@@ -898,12 +780,7 @@ export function AdvancedDownloader({ url }: { url: string }) {
             )}
 
             <div className="flex flex-wrap items-center gap-[8px] sm:ml-auto">
-              {effectiveMode === 'service' ? (
-                <Button size="sm" onClick={() => runService()} disabled={busy || !canStart}>
-                  {busy ? 'Lädt…' : 'Über den Dienst laden'}
-                  {!busy ? <ArrowRight /> : null}
-                </Button>
-              ) : effectiveMode === 'hls' ? (
+              {portalOnly ? null : effectiveMode === 'hls' ? (
                 <Button size="sm" onClick={playlist ? downloadHls : inspectPlaylist} disabled={busy || !canStart}>
                   {busy ? 'Lädt…' : playlist ? 'Stream laden' : 'Playlist lesen'}
                   {!busy ? <ArrowRight /> : null}
@@ -925,9 +802,6 @@ export function AdvancedDownloader({ url }: { url: string }) {
 
           <p className="-mt-[8px] text-small leading-[1.45] text-muted">
             {pathNote}
-            {effectiveMode === 'service' && !service.endpoint
-              ? ' Erst eine Adresse für den Dienst hinterlegen.'
-              : ''}
           </p>
 
           {/* ---- path-specific extras, only when they apply ----------------- */}
@@ -957,23 +831,6 @@ export function AdvancedDownloader({ url }: { url: string }) {
               <Badge tone="forest">{playlist.segments.length} Segmente</Badge>
               {playlist.encrypted ? <Badge>verschlüsselt</Badge> : null}
             </div>
-          ) : null}
-
-          {items ? (
-            <ul className="flex flex-col gap-[4px]">
-              {items.map((item) => (
-                <li
-                  key={item.url}
-                  className="flex flex-wrap items-center gap-[8px] rounded-nav bg-panel-soft px-[16px] py-[8px]"
-                >
-                  <span className="min-w-0 flex-1 truncate text-small text-ink">{item.filename}</span>
-                  <Badge>{item.kind}</Badge>
-                  <Button size="sm" onClick={() => runService(item)} disabled={busy}>
-                    Holen
-                  </Button>
-                </li>
-              ))}
-            </ul>
           ) : null}
 
           {busy || progress ? (
@@ -1078,44 +935,6 @@ export function AdvancedDownloader({ url }: { url: string }) {
                   </Button>
                 ) : null}
               </div>
-
-              {!connected && sweeps >= 7 ? (
-                <Notice tone="warn" title="Es antwortet nichts auf diesem Rechner">
-                  {pageIsLocal() ? (
-                    <>
-                      Läuft der Dienst wirklich, und auf Port {DEFAULT_PORT}? Im Fenster, in dem Sie
-                      ihn gestartet haben, muss <span className="font-mono">port: {DEFAULT_PORT}</span>{' '}
-                      stehen und es darf nicht geschlossen sein.
-                    </>
-                  ) : (
-                    <>
-                      Läuft der Dienst, liegt es nicht an ihm. Diese Seite kommt aus dem Netz und
-                      greift auf Ihren eigenen Rechner zu — das sperren Browser, teils mit einer
-                      Rückfrage, teils ohne. „Zugriff erlauben“ stellt die Frage, falls Ihrer sie
-                      kennt.
-                      <span className="mt-[8px] block border-t border-line pt-[8px]">
-                        Sicher geht es anders herum: Holen Sie Sondra auf diesen Rechner, statt den
-                        Rechner von außen anzusprechen. Der Spiegel ist eine Datei, ein Befehl, und
-                        danach gibt es keine Sperre mehr, weil es keine Grenze mehr zu überschreiten
-                        gibt.
-                      </span>
-                      <span className="mt-[12px] flex flex-wrap items-center gap-[8px]">
-                        <Button size="sm" onClick={saveMirror}>
-                          Spiegel herunterladen
-                        </Button>
-                        <code className="rounded-nav bg-panel-soft px-[8px] py-[4px] font-mono text-micro text-prose">
-                          node sondra-spiegel.mjs
-                        </code>
-                      </span>
-                      <span className="mt-[8px] block text-muted">
-                        Danach <code className="font-mono">localhost:{MIRROR_PORT}</code> öffnen
-                        statt dieser Adresse. Es ist dieselbe Seite, nur von Ihrem Rechner
-                        ausgeliefert.
-                      </span>
-                    </>
-                  )}
-                </Notice>
-              ) : null}
 
               <div className="flex flex-wrap items-center gap-[8px]">
                 <Button size="sm" variant="quiet" onClick={() => setSetupDialog(true)}>

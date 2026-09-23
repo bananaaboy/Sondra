@@ -84,6 +84,23 @@ export function SessionMenu() {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
+  /**
+   * A file just arrived — from a download, an editor's „In die Sitzung", a
+   * bounce. The menu blinks and a short note says which, so the answer to
+   * „did it work?" appears where the file now is, on whichever tab.
+   */
+  const [arrived, setArrived] = useState<string | null>(null)
+  const knownCount = useRef(assets.length)
+  useEffect(() => {
+    const before = knownCount.current
+    knownCount.current = assets.length
+    if (assets.length <= before) return
+    const newest = assets[assets.length - 1]
+    setArrived(newest?.name ?? '')
+    const timer = window.setTimeout(() => setArrived(null), 2400)
+    return () => window.clearTimeout(timer)
+  }, [assets])
+
   // Closes on a click anywhere else and on Escape, like every other popover.
   useEffect(() => {
     if (!open) return
@@ -113,13 +130,18 @@ export function SessionMenu() {
   return (
     <div ref={rootRef} className="relative">
       {picker.input}
+      <span className="sr-only" role="status" aria-live="polite">
+        {arrived ? `${arrived} ist jetzt in der Sitzung` : ''}
+      </span>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-haspopup="dialog"
         title="Dateien dieser Sitzung"
-        className="press flex max-w-[15rem] items-center gap-[8px] rounded-nav px-[8px] py-[8px] text-small text-ink hover:bg-panel-soft"
+        className={`press flex max-w-[15rem] items-center gap-[8px] rounded-nav px-[8px] py-[8px] text-small text-ink hover:bg-panel-soft ${
+          arrived !== null ? 'arrive' : ''
+        }`}
       >
         <FileIcon />
         {/* The name is what is being worked on; on a phone the header has
@@ -137,6 +159,15 @@ export function SessionMenu() {
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
+
+      {arrived !== null && !open ? (
+        <span
+          aria-hidden
+          className="rise pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[260px] truncate rounded-nav bg-ink px-[10px] py-[6px] text-micro font-semibold text-on-ink"
+        >
+          In der Sitzung: {arrived}
+        </span>
+      ) : null}
 
       {open ? (
         <div

@@ -33,16 +33,30 @@ import { AdvancedDownloader } from './DownloaderAdvanced'
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The one place where Sondra is not local, said loudly.
+ *
+ * The header used to carry this as a chip on every screen. That it is local
+ * everywhere else goes without saying; the exception belongs where it happens,
+ * big enough that nobody pastes an address without having read it.
+ */
 function NotLocalNotice() {
   return (
-    <div className="rounded-card bg-panel-cool p-[16px] ring-1 ring-inset ring-ink/20">
-      <p className="flex items-center gap-[8px] text-small font-semibold text-ink">
-        <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+    <div role="note" className="rounded-card bg-panel-cool p-[20px] ring-2 ring-inset ring-ink sm:p-[24px]">
+      <p className="flex items-start gap-[12px] text-ink">
+        <svg viewBox="0 0 16 16" className="mt-[2px] h-6 w-6 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M8 1.6l6.2 10.8H1.8zM8 6.2v3.1M8 11.2h.01" />
         </svg>
-        Dieses eine Werkzeug läuft nicht auf Ihrem Gerät
+        <span className="flex flex-col gap-[2px]">
+          <span className="text-body font-bold leading-[1.3] sm:text-[1.25rem]">
+            Achtung: Herunterladen läuft nicht lokal
+          </span>
+          <span className="text-small text-prose">
+            Das ist das einzige Werkzeug, das Ihr Gerät verlässt. Alle anderen rechnen nur hier.
+          </span>
+        </span>
       </p>
-      <ul className="mt-[8px] flex list-disc flex-col gap-[4px] pl-[16px] text-small leading-[1.5] text-prose/85">
+      <ul className="mt-[12px] flex list-disc flex-col gap-[4px] pl-[52px] text-small leading-[1.5] text-prose">
         <li>
           Die Adresse, die Sie einfügen, geht an einen Dienst dieser Seite. Er schlägt dort nach und
           holt die Datei. Ihre eigenen Dateien sieht er nie.
@@ -72,6 +86,8 @@ export function DownloaderPanel() {
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [progress, setProgress] = useState<{ loaded: number; total: number | null } | null>(null)
+  /** What the last „Laden“ put into the session, so it can still be saved. */
+  const [taken, setTaken] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -85,6 +101,7 @@ export function DownloaderPanel() {
     setLooking(true)
     setError(null)
     setResult(null)
+    setTaken(null)
     try {
       const found = await resolveViaService(target, controller.signal)
       setResult(found)
@@ -108,6 +125,7 @@ export function DownloaderPanel() {
     abortRef.current = controller
     setBusy(stream.label)
     setError(null)
+    setTaken(null)
     setProgress({ loaded: 0, total: stream.bytes })
     try {
       const bytes = await downloadStream(stream, {
@@ -126,9 +144,10 @@ export function DownloaderPanel() {
         origin: 'download',
       })
       log('holen', `${name} geladen (${formatBytes(bytes.byteLength)})`)
-      // Straight to disk as well: most people want the file, and the ones who
-      // only wanted to work on it here have it in the session either way.
-      saveBytes(bytes, name, stream.mime)
+      // Into the session only. Saving to disk is one click on the line below
+      // and in the file menu — a download that also started a browser
+      // download was one file too many for anyone who only wanted to edit it.
+      setTaken({ name, bytes, mime: stream.mime })
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
       const studio = cause instanceof StudioError ? cause : null
@@ -259,6 +278,19 @@ export function DownloaderPanel() {
               </div>
             ))}
           </div>
+
+          {taken && !busy ? (
+            <div className="rise mt-[16px] flex flex-wrap items-center gap-[12px] border-t border-line pt-[12px]" role="status">
+              <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-pill bg-ink" />
+              <p className="min-w-0 flex-1 text-small text-ink">
+                <span className="value">{taken.name}</span> ist in der Sitzung —{' '}
+                <span className="text-muted">oben im Dateimenü, bereit für jedes Werkzeug.</span>
+              </p>
+              <Button size="sm" variant="quiet" onClick={() => saveBytes(taken.bytes, taken.name, taken.mime)}>
+                Auch speichern
+              </Button>
+            </div>
+          ) : null}
 
           {busy ? (
             <div className="mt-[16px] flex flex-col gap-[8px]">

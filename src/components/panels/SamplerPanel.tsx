@@ -37,6 +37,8 @@ import { beatGrid, estimateTempo, snapToZeroCrossing, type TempoEstimate } from 
 import { readPalette, withAlpha, type ResolvedTheme } from '../../lib/theme'
 import { encodeWav, type AudioData } from '../../lib/wav'
 import { renderSliceInWorker } from '../../lib/workerClient'
+import { SLICE_DEFAULTS, startVoice, type PlayMode, type Slice, type Voice } from '../../lib/pattern'
+import { StepSequencer } from './StepSequencer'
 import { createZip } from '../../lib/zip'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { useActiveAsset, useSession } from '../../state/store'
@@ -56,17 +58,6 @@ import {
   Toggle,
 } from '../ui/primitives'
 
-type PlayMode = 'oneshot' | 'gate' | 'loop'
-
-interface Slice {
-  id: string
-  start: number
-  end: number
-  semitones: number
-  gainDb: number
-  reverse: boolean
-  mode: PlayMode
-}
 
 /** Four rows of four, in the order they sit on the keyboard. */
 const PAD_KEYS = ['1', '2', '3', '4', 'q', 'w', 'e', 'r', 'a', 's', 'd', 'f', 'y', 'x', 'c', 'v']
@@ -132,6 +123,7 @@ const MODE_LABELS: Record<PlayMode, string> = {
 export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   const asset = useActiveAsset()
   const addAsset = useSession((state) => state.addAsset)
+  const setActiveAsset = useSession((state) => state.setActiveAsset)
   const log = useSession((state) => state.log)
   const { audio, decode, status } = useDecodedAudio(asset)
 
@@ -142,11 +134,20 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   /** Built once so a reversed pad can play without re-rendering anything. */
   const reversedRef = useRef<AudioBuffer | null>(null)
   /** Live voices per pad, for choking and for gate release. */
-  const voicesRef = useRef(new Map<number, AudioBufferSourceNode[]>())
+  const voicesRef = useRef(new Map<number, Voice[]>())
   /** Set below; the wavesurfer effect is created before `triggerPad` exists. */
   const triggerRef = useRef<((sliceId: string) => void) | null>(null)
 
   const [slices, setSlices] = useState<Slice[]>([])
+  /**
+   * A range dragged on the waveform that is not a pad yet. It becomes one
+   * only when confirmed — a stray drag used to leave a pad behind.
+   */
+  const [pending, setPending] = useState<{ id: string; start: number; end: number } | null>(null)
+  const pendingRef = useRef<string | null>(null)
+  /** True while the chop buttons lay out regions, which are pads at once. */
+  const cuttingRef = useRef(false)
+  const [wavePlaying, setWavePlaying] = useState(false)
   const [activeSlice, setActiveSlice] = useState<string | null>(null)
   const [playing, setPlaying] = useState<number[]>([])
 
@@ -229,18 +230,17 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
         const previous = new Map(current.map((slice) => [slice.id, slice]))
         return regions
           .getRegions()
+          .filter((region) => region.id !== pendingRef.current)
           .map((region) => {
             const existing = previous.get(region.id)
             // Dragging a region must not reset the pad's own settings.
             return existing
               ? { ...existing, start: region.start, end: region.end }
               : {
+                  ...SLICE_DEFAULTS,
                   id: region.id,
                   start: region.start,
                   end: region.end,
-                  semitones: 0,
-                  gainDb: 0,
-                  reverse: false,
                   mode: defaultMode,
                 }
           })
@@ -248,11 +248,41 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
       })
     }
 
-    regions.on('region-created', sync)
-    regions.on('region-updated', sync)
-    regions.on('region-removed', sync)
+    const pendingColor = withAlpha(palette.ink, 0.28)
+    regions.on('region-created', (region: Region) => {
+      if (!cuttingRef.current) {
+        // Dragged by hand: held back until „Als Pad anlegen“. A new drag
+        // replaces the previous one that was never confirmed.
+        const previous = pendingRef.current
+        if (previous) regions.getRegions().find((entry) => entry.id === previous)?.remove()
+        pendingRef.current = region.id
+        region.setOptions({ color: pendingColor, start: region.start, end: region.end })
+        setPending({ id: region.id, start: region.start, end: region.end })
+        return
+      }
+      sync()
+    })
+    regions.on('region-updated', (region: Region) => {
+      if (region.id === pendingRef.current) setPending({ id: region.id, start: region.start, end: region.end })
+      else sync()
+    })
+    regions.on('region-removed', (region: Region) => {
+      if (region.id === pendingRef.current) {
+        pendingRef.current = null
+        setPending(null)
+      } else {
+        sync()
+      }
+    })
+    wave.on('play', () => setWavePlaying(true))
+    wave.on('pause', () => setWavePlaying(false))
+    wave.on('finish', () => setWavePlaying(false))
     regions.on('region-clicked', (region: Region, event: MouseEvent) => {
       event.stopPropagation()
+      if (region.id === pendingRef.current) {
+        triggerRef.current?.(region.id)
+        return
+      }
       setActiveSlice(region.id)
       // Selecting without playing makes the waveform feel dead; a click on a
       // slice should sound, the same as hitting its pad.
@@ -268,6 +298,9 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
       setSlices([])
       setActiveSlice(null)
       setWaveReady(false)
+      setPending(null)
+      pendingRef.current = null
+      setWavePlaying(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audio])
@@ -304,13 +337,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   const stopPad = useCallback((index: number) => {
     const voices = voicesRef.current.get(index)
     if (!voices) return
-    for (const voice of voices) {
-      try {
-        voice.stop()
-      } catch {
-        /* already ended */
-      }
-    }
+    for (const voice of voices) voice.stop()
     voicesRef.current.delete(index)
     setPlaying((current) => current.filter((pad) => pad !== index))
   }, [])
@@ -320,52 +347,39 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   }, [stopPad])
 
   const triggerPad = useCallback(
-    (index: number) => {
-      const slice = slices[index]
+    (index: number, semitone = 0) => {
+      const pad = slices[index]
       const buffer = bufferRef.current
-      if (!slice || !buffer) return
+      if (!pad || !buffer) return
+      const slice = semitone === 0 ? pad : { ...pad, semitones: pad.semitones + semitone }
 
       const context = getAudioContext()
       if (context.state === 'suspended') {
         // A click is a user gesture, so this is allowed — but it resolves
         // asynchronously, and starting a node before it does produces silence.
-        void resumeAudioContext().then(() => triggerRef.current?.(slice.id))
+        void resumeAudioContext().then(() => triggerPad(index, semitone))
         return
       }
 
       if (choke) stopPad(index)
-      const source = context.createBufferSource()
-      // Reverse plays from a pre-built mirrored buffer, so the offsets flip too.
-      const reversed = slice.reverse && reversedRef.current
-      source.buffer = reversed ? reversedRef.current : buffer
-      const total = buffer.duration
-      const start = reversed ? total - slice.end : slice.start
-      const length = slice.end - slice.start
-
-      source.playbackRate.value = 2 ** (slice.semitones / 12)
-      if (slice.mode === 'loop') {
-        source.loop = true
-        source.loopStart = start
-        source.loopEnd = start + length
-      }
-
-      const gain = context.createGain()
-      gain.gain.value = dbToGain(slice.gainDb)
-      source.connect(gain).connect(context.destination)
-
-      // The third argument bounds the note in buffer seconds. Scheduling a
-      // separate stop() against `currentTime` looks equivalent but is not: on a
-      // context that has not resumed yet the clock is frozen at zero, so the
-      // stop time can already be in the past by the time sound starts.
-      source.start(0, start, slice.mode === 'loop' ? undefined : length)
+      // The same voice the pattern and the bounce use: pitch, level, pan and
+      // envelope sound identical under a finger and in the exported beat.
+      const voice = startVoice(
+        context,
+        context.destination,
+        slice,
+        { forward: buffer, reversed: reversedRef.current },
+        context.currentTime,
+      )
+      const source = voice.source
 
       const voices = voicesRef.current.get(index) ?? []
-      voices.push(source)
+      voices.push(voice)
       voicesRef.current.set(index, voices)
       setPlaying((current) => (current.includes(index) ? current : [...current, index]))
 
       source.onended = () => {
-        const live = (voicesRef.current.get(index) ?? []).filter((voice) => voice !== source)
+        const live = (voicesRef.current.get(index) ?? []).filter((entry) => entry.source !== source)
         if (live.length > 0) voicesRef.current.set(index, live)
         else {
           voicesRef.current.delete(index)
@@ -377,14 +391,73 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   )
 
   // Kept in a ref so the wavesurfer effect and the resume path can reach it.
+  /** Plays the dragged range once, as it would sound as a new pad. */
+  const playPending = useCallback(() => {
+    const buffer = bufferRef.current
+    if (!pending || !buffer) return
+    const context = getAudioContext()
+    if (context.state === 'suspended') {
+      void resumeAudioContext().then(() => playPending())
+      return
+    }
+    stopPad(-1)
+    const voice = startVoice(
+      context,
+      context.destination,
+      { ...SLICE_DEFAULTS, id: pending.id, start: pending.start, end: pending.end, mode: 'oneshot' },
+      { forward: buffer, reversed: reversedRef.current },
+      context.currentTime,
+    )
+    voicesRef.current.set(-1, [voice])
+  }, [pending, stopPad])
+
+  const confirmPending = () => {
+    const region = regionsRef.current?.getRegions().find((entry) => entry.id === pendingRef.current)
+    if (!region) return
+    pendingRef.current = null
+    setPending(null)
+    region.setOptions({ color: withAlpha(readPalette().ink, 0.1), start: region.start, end: region.end })
+    setSlices((current) =>
+      [...current, { ...SLICE_DEFAULTS, id: region.id, start: region.start, end: region.end, mode: defaultMode }].sort(
+        (a, b) => a.start - b.start,
+      ),
+    )
+    setActiveSlice(region.id)
+    log('sampler', `Pad aus ${(region.end - region.start).toFixed(2)} s angelegt`)
+  }
+
+  const discardPending = () => {
+    regionsRef.current?.getRegions().find((entry) => entry.id === pendingRef.current)?.remove()
+  }
+
+  /** Takes a pad away, with its region; the pattern forgets its row. */
+  const deletePad = (id: string) => {
+    const index = slices.findIndex((slice) => slice.id === id)
+    if (index >= 0) stopPad(index)
+    regionsRef.current?.getRegions().find((entry) => entry.id === id)?.remove()
+    setActiveSlice(null)
+    log('sampler', `Pad ${index + 1} gelöscht`)
+  }
+
   useEffect(() => {
     triggerRef.current = (sliceId: string) => {
+      if (sliceId === pendingRef.current) {
+        playPending()
+        return
+      }
       const index = slices.findIndex((slice) => slice.id === sliceId)
       if (index >= 0) triggerPad(index)
     }
-  }, [slices, triggerPad])
+  }, [slices, triggerPad, playPending])
 
   /* --- keyboard ----------------------------------------------------------- */
+  const confirmRef = useRef(confirmPending)
+  confirmRef.current = confirmPending
+  const deleteRef = useRef(deletePad)
+  deleteRef.current = deletePad
+  const activeRef = useRef(activeSlice)
+  activeRef.current = activeSlice
+
   useEffect(() => {
     const held = new Set<string>()
 
@@ -396,6 +469,17 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
       if (event.key === ' ') {
         event.preventDefault()
         stopAll()
+        waveRef.current?.pause()
+        return
+      }
+      if (event.key === 'Enter' && pendingRef.current) {
+        event.preventDefault()
+        confirmRef.current()
+        return
+      }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && activeRef.current) {
+        event.preventDefault()
+        deleteRef.current(activeRef.current)
         return
       }
       const key = event.key.toLowerCase()
@@ -434,6 +518,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
       const cuts = snap ? points.map((at) => snapToZeroCrossing(audio, at)) : points
       const unique = [...new Set(cuts.map((at) => Math.max(0, Math.min(duration, at))))].sort((a, b) => a - b)
 
+      cuttingRef.current = true
       regions.clearRegions()
       const palette = readPalette()
       let made = 0
@@ -444,6 +529,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
         regions.addRegion({ start, end, color: withAlpha(palette.ink, 0.1), drag: true, resize: true })
         made += 1
       })
+      cuttingRef.current = false
       log('sampler', `${label}: ${made} Slices${snap ? ', an Nulldurchgänge gerastet' : ''}`)
     },
     [audio, duration, log, snap],
@@ -486,6 +572,9 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
         gainDb: selected.gainDb,
         reverse: selected.reverse,
         mode: selected.mode,
+        pan: selected.pan,
+        attackMs: selected.attackMs,
+        releaseMs: selected.releaseMs,
       })),
     )
     log('sampler', 'Einstellungen des gewählten Pads auf alle übertragen')
@@ -521,6 +610,19 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
           sampleRate: piece.sampleRate,
         }
       }
+
+      // The pad's own envelope, on top of the anti-click blend.
+      if (slice.attackMs > 0 || slice.releaseMs > 0) piece = applyFades(piece, slice.attackMs / 1000, slice.releaseMs / 1000)
+      if (slice.pan !== 0) {
+        // Equal-power pan; a mono chop becomes stereo so it has somewhere to go.
+        const angle = ((slice.pan + 1) * Math.PI) / 4
+        const left = piece.channels[0]
+        const right = piece.channels[1] ?? piece.channels[0]
+        piece = {
+          channels: [left.map((value) => value * Math.cos(angle) * Math.SQRT2), right.map((value) => value * Math.sin(angle) * Math.SQRT2)],
+          sampleRate: piece.sampleRate,
+        }
+      }
       return piece
     },
     [audio, fadeMs, normalize, preserveDuration],
@@ -528,14 +630,47 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
 
   const baseName = asset?.name.replace(/\.[^.]+$/, '') ?? 'sample'
 
-  const exportOne = async (slice: Slice, index: number) => {
+  const sliceName = (index: number) => `${baseName}_${String(index + 1).padStart(2, '0')}.wav`
+
+  /**
+   * Puts rendered chops into the session without leaving the source.
+   *
+   * `addAsset` makes each new file the active one. Here that would swap the
+   * track being chopped for its last chop — the pads would rebuild on half a
+   * second of audio, and every other tool would quietly work on that half
+   * second too. So the source stays active, and the chops are simply there.
+   */
+  const addToSession = (pieces: { name: string; piece: AudioData; bytes: Uint8Array }[]) => {
+    const sourceId = asset?.id ?? null
+    for (const { name, piece, bytes } of pieces) {
+      addAsset({
+        name,
+        bytes,
+        mime: 'audio/wav',
+        sizeBytes: bytes.byteLength,
+        kind: 'audio',
+        audio: piece,
+        durationSeconds: (piece.channels[0]?.length ?? 0) / piece.sampleRate,
+        origin: 'derived',
+      })
+    }
+    if (sourceId) setActiveAsset(sourceId)
+  }
+
+  const exportOne = async (slice: Slice, index: number, destination: 'file' | 'session') => {
     setRendering(true)
     try {
       const piece = await buildSlice(slice)
       if (!piece) return
-      const name = `${baseName}_${String(index + 1).padStart(2, '0')}.wav`
-      saveBytes(encodeWav(piece, 24), name, 'audio/wav')
-      log('sampler', `${name} exportiert`)
+      const name = sliceName(index)
+      const bytes = encodeWav(piece, 24)
+      if (destination === 'session') {
+        addToSession([{ name, piece, bytes }])
+        log('sampler', `${name} in die Sitzung übernommen`)
+      } else {
+        saveBytes(bytes, name, 'audio/wav')
+        log('sampler', `${name} exportiert`)
+      }
     } finally {
       setRendering(false)
       setProgress(null)
@@ -544,33 +679,24 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
 
   const renderAll = async (destination: 'session' | 'zip') => {
     setRendering(true)
-    const files: { name: string; data: Uint8Array }[] = []
+    const files: { name: string; piece: AudioData; bytes: Uint8Array }[] = []
     try {
       for (const [index, slice] of slices.entries()) {
         const piece = await buildSlice(slice)
         if (!piece) continue
-        const bytes = encodeWav(piece, 24)
-        const name = `${baseName}_${String(index + 1).padStart(2, '0')}.wav`
-        if (destination === 'zip') {
-          files.push({ name: `${baseName}/${name}`, data: bytes })
-        } else {
-          addAsset({
-            name,
-            bytes,
-            mime: 'audio/wav',
-            sizeBytes: bytes.byteLength,
-            kind: 'audio',
-            audio: piece,
-            durationSeconds: (piece.channels[0]?.length ?? 0) / piece.sampleRate,
-            origin: 'derived',
-          })
-        }
+        files.push({ name: sliceName(index), piece, bytes: encodeWav(piece, 24) })
       }
-      if (destination === 'zip' && files.length > 0) {
-        saveBytes(createZip(files), `${baseName}-chops.zip`, 'application/zip')
+      if (files.length === 0) return
+      if (destination === 'zip') {
+        saveBytes(
+          createZip(files.map(({ name, bytes }) => ({ name: `${baseName}/${name}`, data: bytes }))),
+          `${baseName}-chops.zip`,
+          'application/zip',
+        )
         log('sampler', `${files.length} Chops als ZIP gespeichert`)
-      } else if (destination === 'session') {
-        log('sampler', `${slices.length} Chops in die Sitzung übernommen`)
+      } else {
+        addToSession(files)
+        log('sampler', `${files.length} Chops in die Sitzung übernommen`)
       }
     } finally {
       setRendering(false)
@@ -586,7 +712,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
         <Card tone="keylime" size="compact">
           <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[4px]">
             <span className="text-small text-muted">
-              Ziehen für einen eigenen Bereich, Tasten 1–4 · Q–R · A–F · Y–V zum Spielen.
+              Ziehen wählt einen Bereich, „Als Pad anlegen“ macht ihn zum Pad. Tasten 1–4 · Q–R · A–F · Y–V spielen.
             </span>
           </div>
 
@@ -604,6 +730,25 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
                   </p>
                 ) : null}
               </div>
+
+              {/* A dragged range is a question, not a pad yet. */}
+              {pending ? (
+                <div className="mt-[8px] flex flex-wrap items-center gap-[8px] border-l-2 border-ink pl-[12px]">
+                  <span className="value text-small text-ink">
+                    {formatTimecode(pending.start)} – {formatTimecode(pending.end)} · {(pending.end - pending.start).toFixed(2)} s
+                  </span>
+                  <Button size="sm" variant="quiet" onClick={playPending}>
+                    Auswahl hören
+                  </Button>
+                  <Button size="sm" onClick={confirmPending}>
+                    Als Pad anlegen
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={discardPending}>
+                    Verwerfen
+                  </Button>
+                  <span className="text-small text-muted">Eingabetaste legt an</span>
+                </div>
+              ) : null}
 
               {/* ---- chop controls ------------------------------------------ */}
               <div className="mt-[16px] grid gap-[12px] sm:grid-cols-3">
@@ -698,10 +843,20 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
               </div>
 
               <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
+                <Button size="sm" variant="quiet" disabled={!waveReady} onClick={() => void waveRef.current?.playPause()}>
+                  {wavePlaying ? 'Pause' : 'Alles hören'}
+                </Button>
                 <Button size="sm" variant="ghost" onClick={() => regionsRef.current?.clearRegions()}>
                   Leeren
                 </Button>
-                <Button size="sm" variant="ghost" onClick={stopAll}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    stopAll()
+                    waveRef.current?.pause()
+                  }}
+                >
                   Stopp (Leertaste)
                 </Button>
                 <label className="ml-auto flex items-center gap-[8px] text-small text-muted">
@@ -778,17 +933,29 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
               })}
             </div>
 
+            {/* The chosen pad comes first: what was cut is what goes on. All
+                chops at once is a pack, and a pack belongs in a ZIP — only a
+                handful are offered for the session, never a few hundred. */}
             <div className="mt-[16px] flex flex-wrap gap-[8px]">
-              <Button size="sm" variant="quiet" onClick={() => renderAll('session')} disabled={rendering}>
-                {rendering ? 'Rendert…' : 'In die Sitzung'}
-              </Button>
-              <Button size="sm" variant="quiet" onClick={() => renderAll('zip')} disabled={rendering}>
-                Alle als ZIP
-              </Button>
               {selected ? (
-                <Button size="sm" onClick={() => exportOne(selected, selectedIndex)} disabled={rendering}>
-                  Pad {selectedIndex + 1} als WAV
-                  <ArrowRight />
+                <>
+                  <Button size="sm" onClick={() => exportOne(selected, selectedIndex, 'file')} disabled={rendering}>
+                    Pad {selectedIndex + 1} als WAV
+                    <ArrowRight />
+                  </Button>
+                  <Button size="sm" variant="quiet" onClick={() => exportOne(selected, selectedIndex, 'session')} disabled={rendering}>
+                    Pad {selectedIndex + 1} in die Sitzung
+                  </Button>
+                </>
+              ) : (
+                <span className="self-center text-small text-muted">Pad antippen, um ihn einzeln zu speichern.</span>
+              )}
+              <Button size="sm" variant="quiet" onClick={() => renderAll('zip')} disabled={rendering}>
+                {rendering ? 'Rendert…' : `Alle ${slices.length} als ZIP`}
+              </Button>
+              {slices.length <= MAX_PADS ? (
+                <Button size="sm" variant="quiet" onClick={() => renderAll('session')} disabled={rendering}>
+                  Alle {slices.length} in die Sitzung
                 </Button>
               ) : null}
             </div>
@@ -801,10 +968,32 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
           </Card>
         ) : null}
 
+        {/* ---- pattern ------------------------------------------------------ */}
+        {slices.length > 0 ? (
+          <StepSequencer
+            slices={slices}
+            buffers={() => (bufferRef.current ? { forward: bufferRef.current, reversed: reversedRef.current } : null)}
+            initialBpm={bpm}
+            choke={choke}
+            baseName={baseName}
+            onPreviewPad={(index, semitone) => {
+              if (!slices[index]) return
+              // A key auditioned in the roll only sounds; selecting the pad
+              // would redraw the panels around the roll mid-gesture.
+              if (semitone === undefined) setActiveSlice(slices[index].id)
+              triggerPad(index, semitone)
+            }}
+            onBounce={(pattern, name) => {
+              addToSession([{ name, piece: pattern, bytes: encodeWav(pattern, 24) }])
+              log('sampler', `${name} in die Sitzung übernommen`)
+            }}
+          />
+        ) : null}
+
         {audio && slices.length === 0 ? (
           <Notice title="Noch nichts zerschnitten">
-            Wählen Sie oben ein Verfahren, oder ziehen Sie mit der Maus über die Wellenform, um einen
-            Bereich von Hand aufzuziehen.
+            Wählen Sie oben ein Verfahren, oder ziehen Sie mit der Maus über die Wellenform und legen
+            den Bereich dann als Pad an.
           </Notice>
         ) : null}
       </div>
@@ -824,6 +1013,17 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
               </button>
             ) : null}
           </div>
+
+          {selected ? (
+            <div className="mt-[12px] flex flex-wrap gap-[8px]">
+              <Button size="sm" variant="quiet" onClick={() => triggerPad(selectedIndex)}>
+                Anhören
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => deletePad(selected.id)} title="Entf">
+                Pad löschen
+              </Button>
+            </div>
+          ) : null}
 
           {selected ? (
             <div className="mt-[12px] flex flex-col gap-[16px]">
@@ -850,6 +1050,35 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
                 value={selected.gainDb}
                 onChange={(event) => updateSlice(selected.id, { gainDb: Number(event.target.value) })}
               />
+              <Slider
+                label="Panorama"
+                display={selected.pan === 0 ? 'Mitte' : `${Math.round(Math.abs(selected.pan) * 100)} % ${selected.pan < 0 ? 'links' : 'rechts'}`}
+                min={-1}
+                max={1}
+                step={0.05}
+                value={selected.pan}
+                onChange={(event) => updateSlice(selected.id, { pan: Number(event.target.value) })}
+              />
+              <div className="grid grid-cols-2 gap-[12px]">
+                <Slider
+                  label="Anschwellen"
+                  display={`${selected.attackMs} ms`}
+                  min={0}
+                  max={500}
+                  step={5}
+                  value={selected.attackMs}
+                  onChange={(event) => updateSlice(selected.id, { attackMs: Number(event.target.value) })}
+                />
+                <Slider
+                  label="Ausklingen"
+                  display={`${selected.releaseMs} ms`}
+                  min={0}
+                  max={1000}
+                  step={10}
+                  value={selected.releaseMs}
+                  onChange={(event) => updateSlice(selected.id, { releaseMs: Number(event.target.value) })}
+                />
+              </div>
               <Field label="Verhalten">
                 <Select
                   value={selected.mode}

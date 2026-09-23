@@ -156,6 +156,53 @@ const sizeLabel = (format) => {
  * The full-quality path is yt-dlp on the visitor's own machine, and the panel
  * offers it right next to this.
  */
+/**
+ * Deciphered addresses, per warm instance.
+ *
+ * A googlevideo address is bound to the IP that asked for it (`ip` is in its
+ * `sparams`). On a serverless platform the call that resolves and the calls
+ * that stream are separate invocations, often on separate machines with
+ * separate egress addresses — and YouTube answers such a mismatched request
+ * with 403. So a token carries the video and the itag, and whichever instance
+ * streams looks the address up itself. This map saves it doing that for every
+ * 4-MB chunk; it lives exactly as long as the instance, and therefore as long
+ * as the IP the addresses in it belong to.
+ */
+const deciphered = new Map()
+const DECIPHERED_TTL_MS = 60 * 60 * 1000
+
+async function decipheredUrl(yt, format) {
+  try {
+    return (await format.decipher(yt.session.player)) || null
+  } catch {
+    // SABR-only, or a signature this player script cannot solve. Either way
+    // there is no address, so there is nothing to offer.
+    return null
+  }
+}
+
+/**
+ * The address of one YouTube stream, valid for this instance's IP.
+ *
+ * `fresh` skips the cache — for when the cached address was just refused.
+ */
+export async function youtubeStreamUrl(id, itag, { fresh = false } = {}) {
+  const key = `${id}:${itag}`
+  const cached = deciphered.get(key)
+  if (!fresh && cached && Date.now() - cached.at < DECIPHERED_TTL_MS) return cached.url
+
+  const yt = await youtube()
+  const info = await yt.getBasicInfo(id)
+  const data = info.streaming_data
+  const format = [...(data?.formats ?? []), ...(data?.adaptive_formats ?? [])].find(
+    (candidate) => String(candidate.itag) === String(itag),
+  )
+  const url = format ? await decipheredUrl(yt, format) : null
+  if (url) deciphered.set(key, { url, at: Date.now() })
+  else deciphered.delete(key)
+  return url
+}
+
 export async function resolveYoutube(id) {
   const yt = await youtube()
   const info = await yt.getBasicInfo(id)
@@ -173,15 +220,10 @@ export async function resolveYoutube(id) {
 
   const streams = []
   for (const format of all) {
-    let url = null
-    try {
-      url = await format.decipher(yt.session.player)
-    } catch {
-      // SABR-only, or a signature this player script cannot solve. Either way
-      // there is no address, so there is nothing to offer.
-      continue
-    }
+    const url = await decipheredUrl(yt, format)
     if (!url) continue
+    // If the stream calls land on this same instance, they need not ask again.
+    deciphered.set(`${id}:${format.itag}`, { url, at: Date.now() })
     streams.push({
       id: String(format.itag),
       label: sizeLabel(format),
@@ -192,7 +234,9 @@ export async function resolveYoutube(id) {
       ext: format.mime_type?.includes('webm') ? 'webm' : format.has_video ? 'mp4' : 'm4a',
       mime: format.mime_type?.split(';')[0] ?? 'application/octet-stream',
       bytes: format.content_length ? Number(format.content_length) : null,
-      token: sign(url),
+      // `u` stays in for the direct path; `yt` and `itag` let the streaming
+      // instance fetch an address bound to its own IP (see above).
+      token: sign(url, { yt: id, itag: String(format.itag) }),
     })
   }
 

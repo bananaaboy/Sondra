@@ -14,7 +14,8 @@ import {
   findFormat,
   OUTPUT_FORMATS,
   previewCommand,
-  SAMPLE_RATES,
+  rateFor,
+  sampleRatesFor,
   VIDEO_PRESETS,
 } from '../../lib/convert'
 import { saveBytes } from '../../lib/download'
@@ -788,7 +789,7 @@ export function ConverterPanel() {
                 {targetHasAudio ? (
                 <Field label="Abtastrate">
                   <Select
-                    value={String(settings.sampleRate)}
+                    value={String(rateFor(format, settings.sampleRate))}
                     onChange={(event) =>
                       setConvert({
                         sampleRate: event.target.value === 'source' ? 'source' : Number(event.target.value),
@@ -796,7 +797,7 @@ export function ConverterPanel() {
                     }
                   >
                     <option value="source">Wie Quelle</option>
-                    {SAMPLE_RATES.map((rate) => (
+                    {sampleRatesFor(format).map((rate) => (
                       <option key={rate} value={rate}>
                         {rate / 1000} kHz
                       </option>

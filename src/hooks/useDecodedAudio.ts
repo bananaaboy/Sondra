@@ -7,7 +7,7 @@
  * telling the user which path ran.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { decodeWithBrowser } from '../lib/audio'
 import { decodeToWav } from '../lib/ffmpegClient'
@@ -25,6 +25,17 @@ export interface DecodeState {
   decode: () => Promise<AudioData | null>
 }
 
+/**
+ * Decodes in progress, shared by every hook instance.
+ *
+ * A per-instance guard was not enough: the header's file menu and the open
+ * tool both decode the same file, and each finished with its own copy. The
+ * second copy replaced the first in the session, and the audio editor took
+ * that as a new file — resetting itself and dropping whatever had just been
+ * cut. One decode per asset, whoever asks.
+ */
+const pending = new Map<string, Promise<AudioData | null>>()
+
 export function useDecodedAudio(asset: Asset | null): DecodeState {
   const updateAsset = useSession((state) => state.updateAsset)
   const log = useSession((state) => state.log)
@@ -32,20 +43,22 @@ export function useDecodedAudio(asset: Asset | null): DecodeState {
   const [status, setStatus] = useState<DecodeStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [via, setVia] = useState<'browser' | 'ffmpeg' | null>(null)
-  // Guards against two panels decoding the same asset at once.
-  const inFlight = useRef<Promise<AudioData | null> | null>(null)
-
   useEffect(() => {
-    inFlight.current = null
     setError(null)
     setVia(null)
-    setStatus(asset?.audio ? 'ready' : 'idle')
+    setStatus(asset?.audio ? 'ready' : asset && pending.has(asset.id) ? 'decoding' : 'idle')
   }, [asset?.id, asset?.audio])
 
   const decode = useCallback(async (): Promise<AudioData | null> => {
     if (!asset) return null
     if (asset.audio) return asset.audio
-    if (inFlight.current) return inFlight.current
+    const running = pending.get(asset.id)
+    if (running) {
+      setStatus('decoding')
+      const audio = await running
+      setStatus(audio ? 'ready' : 'error')
+      return audio
+    }
 
     const task = (async () => {
       setStatus('decoding')
@@ -77,11 +90,11 @@ export function useDecodedAudio(asset: Asset | null): DecodeState {
         log('decode', `${asset.name}: ${message}`, 'error')
         return null
       } finally {
-        inFlight.current = null
+        pending.delete(asset.id)
       }
     })()
 
-    inFlight.current = task
+    pending.set(asset.id, task)
     return task
   }, [asset, log, updateAsset])
 

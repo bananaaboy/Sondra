@@ -411,7 +411,10 @@ select option {
    `rise` is how anything new arrives — a panel after a tab click, a result
    after a computation. `pop` is for a figure that was just calculated and
    wants to be noticed once. `sweep` fills a bar. `breathe` marks a process
-   that is running but cannot report progress.
+   that is running but cannot report progress. `arrive` is the one exception
+   to „opacity and transform only": the file menu in the header blinks three
+   times when a file lands in the session, so a download or a „In die Sitzung"
+   is answered where the file now lives.
 
    Everything here is opacity and transform only, so none of it forces layout,
    and the reduced-motion block above already neutralises all of it.
@@ -620,4 +623,30 @@ table,
    tighter so the chosen one sits concentric with it. */
 [role='radiogroup'].rounded-nav > button {
   border-radius: 7px;
+}
+
+/* --- a file arrived in the session ------------------------------------------ */
+@keyframes sondra-arrive {
+  0%,
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    background-color: var(--color-panel-mid);
+    box-shadow: 0 0 0 2px var(--color-ink);
+  }
+}
+
+.arrive {
+  animation: sondra-arrive 0.6s ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No blinking; a steady mark for the same time says the same thing. */
+  .arrive {
+    animation: none;
+    background-color: var(--color-panel-mid);
+    box-shadow: 0 0 0 2px var(--color-ink);
+  }
 }
