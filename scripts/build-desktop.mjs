@@ -74,6 +74,8 @@ await build({
   outfile: path.join(STAGE, 'main.cjs'),
   logLevel: 'warning',
 })
+// The preload runs sandboxed and may only require 'electron': copied as is.
+fs.copyFileSync('desktop/preload.cjs', path.join(STAGE, 'preload.cjs'))
 
 const root = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 fs.writeFileSync(

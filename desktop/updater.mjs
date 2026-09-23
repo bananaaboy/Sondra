@@ -4,8 +4,9 @@
  * electron-updater reads `latest.yml` from the newest GitHub release, which
  * the Desktop workflow uploads next to the installer. A newer version is
  * downloaded in the background and checked against the SHA-512 in that file;
- * nothing interrupts work while it happens. Once it is there, one question:
- * restart now, or later — "later" installs it when Sondra is closed anyway.
+ * nothing interrupts work while it happens. The page shows where it stands —
+ * a control in the header, where the website offers the app — and installs
+ * on a click there. Left alone, the update goes in when Sondra is closed.
  *
  * Sondra installs for all users, so the update asks Windows for permission
  * the same way the setup did.
@@ -18,7 +19,36 @@ const { autoUpdater } = electronUpdater
 const FIRST_CHECK_MS = 20_000
 const EVERY_MS = 6 * 60 * 60 * 1000
 
-export function startUpdates({ log, dialog, window }) {
+/**
+ * Registers the page's questions and, when `enabled`, starts checking.
+ *
+ * States: off (not the installed Windows app, or a test run) · idle ·
+ * checking · current · downloading (percent) · ready (version) · error.
+ */
+export function setupUpdates({ log, ipcMain, window, version, enabled }) {
+  let state = { status: enabled ? 'idle' : 'off', version }
+  const publish = (next) => {
+    state = { ...next, version }
+    window()?.webContents.send('sondra:update', state)
+  }
+
+  ipcMain.handle('sondra:update-state', () => state)
+  ipcMain.handle('sondra:update-check', () => {
+    if (!enabled) return state
+    if (state.status !== 'downloading' && state.status !== 'ready') void check()
+    return state
+  })
+  ipcMain.handle('sondra:update-install', () => {
+    if (state.status !== 'ready') return false
+    log(`Update ${state.next}: Neustart auf Wunsch`)
+    // Silent: no installer pages, just the Windows permission prompt, and
+    // Sondra opens again afterwards.
+    setImmediate(() => autoUpdater.quitAndInstall(true, true))
+    return true
+  })
+
+  if (!enabled) return
+
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.logger = {
@@ -28,36 +58,28 @@ export function startUpdates({ log, dialog, window }) {
     error: (message) => log(`Update: ${message}`),
   }
 
-  autoUpdater.on('update-available', (info) => log(`Update ${info.version} gefunden, wird geladen`))
-  autoUpdater.on('update-not-available', (info) => log(`Keine neuere Fassung (neueste: ${info.version})`))
-  autoUpdater.on('error', (failure) => log(`Update nicht möglich: ${failure?.message ?? failure}`))
-
-  let asked = false
-  autoUpdater.on('update-downloaded', async (info) => {
+  autoUpdater.on('checking-for-update', () => {
+    if (state.status !== 'downloading' && state.status !== 'ready') publish({ status: 'checking' })
+  })
+  autoUpdater.on('update-available', (info) => {
+    log(`Update ${info.version} gefunden, wird geladen`)
+    publish({ status: 'downloading', next: info.version, percent: 0 })
+  })
+  autoUpdater.on('download-progress', (progress) => {
+    if (state.status === 'downloading') publish({ ...state, percent: Math.round(progress.percent ?? 0) })
+  })
+  autoUpdater.on('update-not-available', (info) => {
+    log(`Keine neuere Fassung (neueste: ${info.version})`)
+    publish({ status: 'current' })
+  })
+  autoUpdater.on('update-downloaded', (info) => {
     log(`Update ${info.version} geladen und geprüft`)
-    if (asked) return
-    asked = true
-    const parent = window()
-    const options = {
-      type: 'info',
-      title: 'Sondra',
-      message: `Sondra ${info.version} ist bereit.`,
-      detail:
-        'Jetzt neu starten und aktualisieren? Mit „Später“ wird die neue Fassung installiert, ' +
-        'wenn Sie Sondra das nächste Mal schliessen. Offene Dateien der Sitzung gehen beim ' +
-        'Neustart verloren — vorher speichern, was Sie behalten wollen.',
-      buttons: ['Jetzt neu starten', 'Später'],
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true,
-    }
-    const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
-    if (response === 0) {
-      log(`Update ${info.version}: Neustart`)
-      // Silent: no installer pages, just the Windows permission prompt, and
-      // Sondra opens again afterwards.
-      autoUpdater.quitAndInstall(true, true)
-    }
+    publish({ status: 'ready', next: info.version })
+  })
+  autoUpdater.on('error', (failure) => {
+    const message = String(failure?.message ?? failure).split('\n')[0].slice(0, 200)
+    log(`Update nicht möglich: ${message}`)
+    if (state.status !== 'ready') publish({ status: 'error', message })
   })
 
   const check = () =>

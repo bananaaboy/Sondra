@@ -143,7 +143,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   electron-updater, GitHub-Releases von `bananaaboy/Sondra`). Sie liest
   `latest.yml` aus dem neuesten Release; der Desktop-Workflow lädt die Datei
   mit dem Setup hoch und bricht ab, wenn sie fehlt. Ein Release ohne
-  `latest.yml` ist für installierte Apps unsichtbar. Neue Version: `version`
+  `latest.yml` ist für installierte Apps unsichtbar. In der App sitzt an der
+  Stelle von „App herunterladen" der Update-Knopf (`AppUpdate.tsx`, über
+  `desktop/preload.cjs`): „Nach Updates suchen", Fortschritt beim Laden,
+  „Auf x.y.z aktualisieren", wenn es bereit ist; nicht gedrängt, beim
+  Schliessen wird ohnehin installiert. Neue Version: `version`
   in `package.json` und `desktop/package.json` erhöhen, dann den Workflow mit
   „release“ starten.
 - Umgebungsvariablen der Bereitstellung:
