@@ -89,10 +89,11 @@ function emptyTransferError(byteLength: number, url: string): TransferError {
       : `Von ${host} kamen nur ${byteLength} Bytes — das ist keine abspielbare Datei.`
   return new TransferError(
     'empty',
-    `${what} Bei YouTube heisst das fast immer, dass der Abruf des Videos abgelehnt ` +
-      'wurde. Meist hilft: eine andere Qualität wählen, ein anderes Format wählen, ' +
-      'oder es in ein paar Minuten noch einmal versuchen. Bleibt es dabei, hilft ein ' +
-      'Neustart des Dienstes — dann holt er sich einen frischen Zugang.',
+    `${what} Bei YouTube heisst das fast immer, dass YouTube den Abruf abgelehnt hat. ` +
+      'Manchmal hilft eine andere Qualität oder ein zweiter Versuch in ein paar Minuten. ' +
+      'Bleibt es dabei, ist der Dienst YouTube gegenüber veraltet: cobalt auf den neuesten ' +
+      'Stand bringen, oder unter „Optionen“ den Weg über yt-dlp nehmen — yt-dlp wird fast ' +
+      'täglich nachgeführt (vorher „yt-dlp -U“).',
   )
 }
 

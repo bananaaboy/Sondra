@@ -132,6 +132,7 @@ const MODE_LABELS: Record<PlayMode, string> = {
 export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   const asset = useActiveAsset()
   const addAsset = useSession((state) => state.addAsset)
+  const setActiveAsset = useSession((state) => state.setActiveAsset)
   const log = useSession((state) => state.log)
   const { audio, decode, status } = useDecodedAudio(asset)
 
@@ -528,14 +529,47 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
 
   const baseName = asset?.name.replace(/\.[^.]+$/, '') ?? 'sample'
 
-  const exportOne = async (slice: Slice, index: number) => {
+  const sliceName = (index: number) => `${baseName}_${String(index + 1).padStart(2, '0')}.wav`
+
+  /**
+   * Puts rendered chops into the session without leaving the source.
+   *
+   * `addAsset` makes each new file the active one. Here that would swap the
+   * track being chopped for its last chop — the pads would rebuild on half a
+   * second of audio, and every other tool would quietly work on that half
+   * second too. So the source stays active, and the chops are simply there.
+   */
+  const addToSession = (pieces: { name: string; piece: AudioData; bytes: Uint8Array }[]) => {
+    const sourceId = asset?.id ?? null
+    for (const { name, piece, bytes } of pieces) {
+      addAsset({
+        name,
+        bytes,
+        mime: 'audio/wav',
+        sizeBytes: bytes.byteLength,
+        kind: 'audio',
+        audio: piece,
+        durationSeconds: (piece.channels[0]?.length ?? 0) / piece.sampleRate,
+        origin: 'derived',
+      })
+    }
+    if (sourceId) setActiveAsset(sourceId)
+  }
+
+  const exportOne = async (slice: Slice, index: number, destination: 'file' | 'session') => {
     setRendering(true)
     try {
       const piece = await buildSlice(slice)
       if (!piece) return
-      const name = `${baseName}_${String(index + 1).padStart(2, '0')}.wav`
-      saveBytes(encodeWav(piece, 24), name, 'audio/wav')
-      log('sampler', `${name} exportiert`)
+      const name = sliceName(index)
+      const bytes = encodeWav(piece, 24)
+      if (destination === 'session') {
+        addToSession([{ name, piece, bytes }])
+        log('sampler', `${name} in die Sitzung übernommen`)
+      } else {
+        saveBytes(bytes, name, 'audio/wav')
+        log('sampler', `${name} exportiert`)
+      }
     } finally {
       setRendering(false)
       setProgress(null)
@@ -544,33 +578,24 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
 
   const renderAll = async (destination: 'session' | 'zip') => {
     setRendering(true)
-    const files: { name: string; data: Uint8Array }[] = []
+    const files: { name: string; piece: AudioData; bytes: Uint8Array }[] = []
     try {
       for (const [index, slice] of slices.entries()) {
         const piece = await buildSlice(slice)
         if (!piece) continue
-        const bytes = encodeWav(piece, 24)
-        const name = `${baseName}_${String(index + 1).padStart(2, '0')}.wav`
-        if (destination === 'zip') {
-          files.push({ name: `${baseName}/${name}`, data: bytes })
-        } else {
-          addAsset({
-            name,
-            bytes,
-            mime: 'audio/wav',
-            sizeBytes: bytes.byteLength,
-            kind: 'audio',
-            audio: piece,
-            durationSeconds: (piece.channels[0]?.length ?? 0) / piece.sampleRate,
-            origin: 'derived',
-          })
-        }
+        files.push({ name: sliceName(index), piece, bytes: encodeWav(piece, 24) })
       }
-      if (destination === 'zip' && files.length > 0) {
-        saveBytes(createZip(files), `${baseName}-chops.zip`, 'application/zip')
+      if (files.length === 0) return
+      if (destination === 'zip') {
+        saveBytes(
+          createZip(files.map(({ name, bytes }) => ({ name: `${baseName}/${name}`, data: bytes }))),
+          `${baseName}-chops.zip`,
+          'application/zip',
+        )
         log('sampler', `${files.length} Chops als ZIP gespeichert`)
-      } else if (destination === 'session') {
-        log('sampler', `${slices.length} Chops in die Sitzung übernommen`)
+      } else {
+        addToSession(files)
+        log('sampler', `${files.length} Chops in die Sitzung übernommen`)
       }
     } finally {
       setRendering(false)
@@ -778,17 +803,29 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
               })}
             </div>
 
+            {/* The chosen pad comes first: what was cut is what goes on. All
+                chops at once is a pack, and a pack belongs in a ZIP — only a
+                handful are offered for the session, never a few hundred. */}
             <div className="mt-[16px] flex flex-wrap gap-[8px]">
-              <Button size="sm" variant="quiet" onClick={() => renderAll('session')} disabled={rendering}>
-                {rendering ? 'Rendert…' : 'In die Sitzung'}
-              </Button>
-              <Button size="sm" variant="quiet" onClick={() => renderAll('zip')} disabled={rendering}>
-                Alle als ZIP
-              </Button>
               {selected ? (
-                <Button size="sm" onClick={() => exportOne(selected, selectedIndex)} disabled={rendering}>
-                  Pad {selectedIndex + 1} als WAV
-                  <ArrowRight />
+                <>
+                  <Button size="sm" onClick={() => exportOne(selected, selectedIndex, 'file')} disabled={rendering}>
+                    Pad {selectedIndex + 1} als WAV
+                    <ArrowRight />
+                  </Button>
+                  <Button size="sm" variant="quiet" onClick={() => exportOne(selected, selectedIndex, 'session')} disabled={rendering}>
+                    Pad {selectedIndex + 1} in die Sitzung
+                  </Button>
+                </>
+              ) : (
+                <span className="self-center text-small text-muted">Pad antippen, um ihn einzeln zu speichern.</span>
+              )}
+              <Button size="sm" variant="quiet" onClick={() => renderAll('zip')} disabled={rendering}>
+                {rendering ? 'Rendert…' : `Alle ${slices.length} als ZIP`}
+              </Button>
+              {slices.length <= MAX_PADS ? (
+                <Button size="sm" variant="quiet" onClick={() => renderAll('session')} disabled={rendering}>
+                  Alle {slices.length} in die Sitzung
                 </Button>
               ) : null}
             </div>
