@@ -165,6 +165,33 @@ export const ACTIONS: ToolAction[] = [
     kinds: ['video'],
     keywords: ['gif', 'animation', 'schleife', 'loop'],
   },
+  {
+    id: 'video-look',
+    panel: 'video',
+    group: 'video',
+    label: 'Farbe und Bild verbessern',
+    hint: 'Helligkeit, Kontrast, Looks, schärfen, entrauschen, stabilisieren',
+    kinds: ['video'],
+    keywords: ['farbe', 'color', 'helligkeit', 'kontrast', 'sättigung', 'schwarzweiss', 'sepia', 'filter', 'schärfen', 'stabilisieren', 'verwackelt', 'rauschen'],
+  },
+  {
+    id: 'video-fade',
+    panel: 'video',
+    group: 'video',
+    label: 'Ein- und ausblenden',
+    hint: 'Aus Schwarz und zurück, Ton mit',
+    kinds: ['video'],
+    keywords: ['blende', 'fade', 'schwarz', 'übergang', 'intro', 'outro'],
+  },
+  {
+    id: 'video-sound',
+    panel: 'video',
+    group: 'video',
+    label: 'Ton im Video anpassen',
+    hint: 'Lauter, leiser, Lautheit angleichen, rückwärts',
+    kinds: ['video'],
+    keywords: ['lautstärke', 'volume', 'loudnorm', 'lautheit', 'rückwärts', 'reverse'],
+  },
 
   /* -- images --------------------------------------------------------------- */
   {

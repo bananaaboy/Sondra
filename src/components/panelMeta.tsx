@@ -69,7 +69,7 @@ export const PANELS: PanelMeta[] = [
     id: 'video',
     slug: 'video',
     label: 'Video',
-    summary: 'Schneiden, drehen, Ausschnitt, Tempo, Ton herauslösen',
+    summary: 'Schneiden, drehen, Farbe, Blenden, Tempo, Ton',
     icon: <path d="M1.8 4.2h8.6v7.6H1.8zM10.4 7l3.8-2.2v6.4L10.4 9z" />,
   },
   {

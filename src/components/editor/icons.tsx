@@ -38,6 +38,12 @@ export const IconSharpen = (
   </EditorIcon>
 )
 
+export const IconFade = (
+  <EditorIcon>
+    <path d="M2.5 15.5L7.5 5h5l5 10.5M2.5 15.5h15" />
+  </EditorIcon>
+)
+
 export const IconExport = (
   <EditorIcon>
     <path d="M10 13V2.8m0 0L6.5 6.3M10 2.8l3.5 3.5M3 12.5v3a1.5 1.5 0 001.5 1.5h11a1.5 1.5 0 001.5-1.5v-3" />

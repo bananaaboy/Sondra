@@ -46,6 +46,48 @@ export interface VideoOps {
   mute: boolean
   container: VideoContainer
   preset: string
+  /** Picture. Brightness is added (−0.3…0.3), contrast and saturation multiply. */
+  brightness: number
+  contrast: number
+  saturation: number
+  look: VideoLook
+  sharpen: boolean
+  denoise: boolean
+  stabilize: boolean
+  /** Seconds of the finished clip, picture and sound together. */
+  fadeIn: number
+  fadeOut: number
+  /** Sound level change in dB. */
+  volumeDb: number
+  /** Bring the sound to −16 LUFS, the level most platforms play at. */
+  loudnorm: boolean
+  reverse: boolean
+}
+
+export type VideoLook = 'none' | 'mono' | 'sepia' | 'vivid' | 'warm' | 'cool'
+
+export const VIDEO_LOOKS: { id: VideoLook; label: string }[] = [
+  { id: 'none', label: 'Ohne' },
+  { id: 'mono', label: 'Schwarzweiss' },
+  { id: 'sepia', label: 'Sepia' },
+  { id: 'vivid', label: 'Lebendig' },
+  { id: 'warm', label: 'Warm' },
+  { id: 'cool', label: 'Kühl' },
+]
+
+/** The same look for the preview, as a CSS filter — close, not identical. */
+export function previewFilter(ops: VideoOps): string {
+  const parts = [
+    `brightness(${(1 + ops.brightness * 1.6).toFixed(3)})`,
+    `contrast(${ops.contrast.toFixed(3)})`,
+    `saturate(${ops.saturation.toFixed(3)})`,
+  ]
+  if (ops.look === 'mono') parts.push('grayscale(1)')
+  if (ops.look === 'sepia') parts.push('sepia(0.85)')
+  if (ops.look === 'vivid') parts.push('saturate(1.35) contrast(1.08)')
+  if (ops.look === 'warm') parts.push('sepia(0.18) saturate(1.1)')
+  if (ops.look === 'cool') parts.push('hue-rotate(-8deg) saturate(0.95) brightness(1.02)')
+  return parts.join(' ')
 }
 
 export const DEFAULT_VIDEO_OPS: VideoOps = {
@@ -59,6 +101,45 @@ export const DEFAULT_VIDEO_OPS: VideoOps = {
   mute: false,
   container: 'mp4',
   preset: '1080p',
+  brightness: 0,
+  contrast: 1,
+  saturation: 1,
+  look: 'none',
+  sharpen: false,
+  denoise: false,
+  stabilize: false,
+  fadeIn: 0,
+  fadeOut: 0,
+  volumeDb: 0,
+  loudnorm: false,
+  reverse: false,
+}
+
+/** Whether anything in the picture or sound settings asks for re-encoding. */
+function touchesContent(ops: VideoOps): boolean {
+  return (
+    ops.brightness !== 0 ||
+    ops.contrast !== 1 ||
+    ops.saturation !== 1 ||
+    ops.look !== 'none' ||
+    ops.sharpen ||
+    ops.denoise ||
+    ops.stabilize ||
+    ops.fadeIn > 0 ||
+    ops.fadeOut > 0 ||
+    ops.volumeDb !== 0 ||
+    ops.loudnorm ||
+    ops.reverse
+  )
+}
+
+const LOOK_FILTER: Record<VideoLook, string | null> = {
+  none: null,
+  mono: 'hue=s=0',
+  sepia: 'colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131',
+  vivid: 'eq=saturation=1.35:contrast=1.08',
+  warm: 'colorbalance=rs=.08:gs=.02:bs=-.08:rm=.06:bm=-.06',
+  cool: 'colorbalance=rs=-.06:bs=.08:rm=-.04:bm=.06',
 }
 
 export function findPreset(id: string): VideoPreset {
@@ -113,11 +194,16 @@ export function buildVideoJob(
   const preset = findPreset(ops.preset)
   const args: string[] = ['-i', input]
 
-  if (ops.start > 0) args.push('-ss', ops.start.toFixed(3))
   const end = ops.end > 0 ? ops.end : duration
-  if (end > ops.start && end < duration - 0.001) args.push('-to', end.toFixed(3))
+  const trimmed = ops.start > 0 || (ops.end > 0 && ops.end < duration - 0.001)
+  /** Length of the kept part in the source's own time, before any speed change. */
+  const span = Math.max(0.01, end - ops.start)
 
   const filters: string[] = []
+  if (ops.reverse) filters.push('reverse')
+  // Stabilising looks at the whole frame, so it runs before anything is cut
+  // away or scaled down.
+  if (ops.stabilize) filters.push('deshake')
   // Straighten first, crop second. That is the order people work in — you fix
   // a sideways clip and then decide what to keep — and it is the order the
   // editor's crop overlay draws in, so the rectangle on screen and the
@@ -149,10 +235,44 @@ export function buildVideoJob(
     // Odd heights have no valid 4:2:0 chroma plane.
     filters.push(`scale=-2:${Math.max(2, Math.round(height / 2) * 2)}`)
   }
+  if (ops.denoise) filters.push('hqdn3d=3:2:4:3')
+  if (ops.brightness !== 0 || ops.contrast !== 1 || ops.saturation !== 1) {
+    filters.push(
+      `eq=brightness=${ops.brightness.toFixed(3)}:contrast=${ops.contrast.toFixed(3)}:saturation=${ops.saturation.toFixed(3)}`,
+    )
+  }
+  const look = LOOK_FILTER[ops.look]
+  if (look) filters.push(look)
+  if (ops.sharpen) filters.push('unsharp=5:5:0.8:3:3:0')
+  // Fades are timed on the kept part, which the trim below has already moved
+  // to start at zero, and before the speed change — hence the multiplication.
+  if (ops.fadeIn > 0) filters.push(`fade=t=in:st=0:d=${(ops.fadeIn * ops.speed).toFixed(3)}`)
+  if (ops.fadeOut > 0) {
+    const length = Math.min(span, ops.fadeOut * ops.speed)
+    filters.push(`fade=t=out:st=${Math.max(0, span - length).toFixed(3)}:d=${length.toFixed(3)}`)
+  }
   if (ops.speed !== 1) filters.push(`setpts=${(1 / ops.speed).toFixed(5)}*PTS`)
 
-  const trimmed = ops.start > 0 || (ops.end > 0 && ops.end < duration - 0.001)
-  const untouched = filters.length === 0 && ops.speed === 1
+  const untouched = filters.length === 0 && ops.speed === 1 && !touchesContent(ops)
+
+  // A plain cut can copy the streams, and that path seeks with -ss/-to. The
+  // moment anything is re-encoded, the cut becomes a trim filter at the head of
+  // the graph instead: equally frame-exact, and it resets the clock to zero, so
+  // fades, reversing and speed all work on the kept part and not on the file.
+  const cutArgs = trimmed ? ['-ss', ops.start.toFixed(3), ...(end < duration - 0.001 ? ['-to', end.toFixed(3)] : [])] : []
+  if (trimmed) filters.unshift(`trim=start=${ops.start.toFixed(3)}:end=${end.toFixed(3)}`, 'setpts=PTS-STARTPTS')
+
+  const audioFilters: string[] = []
+  if (trimmed) audioFilters.push(`atrim=start=${ops.start.toFixed(3)}:end=${end.toFixed(3)}`, 'asetpts=PTS-STARTPTS')
+  if (ops.reverse) audioFilters.push('areverse')
+  if (ops.fadeIn > 0) audioFilters.push(`afade=t=in:st=0:d=${(ops.fadeIn * ops.speed).toFixed(3)}`)
+  if (ops.fadeOut > 0) {
+    const length = Math.min(span, ops.fadeOut * ops.speed)
+    audioFilters.push(`afade=t=out:st=${Math.max(0, span - length).toFixed(3)}:d=${length.toFixed(3)}`)
+  }
+  if (ops.volumeDb !== 0) audioFilters.push(`volume=${ops.volumeDb.toFixed(1)}dB`)
+  if (ops.speed !== 1) audioFilters.push(...tempoChain(ops.speed))
+  if (ops.loudnorm) audioFilters.push('loudnorm=I=-16:TP=-1.5:LRA=11')
 
   if (ops.container === 'gif') {
     // One palette for the whole clip, generated from the clip itself: the
@@ -165,25 +285,25 @@ export function buildVideoJob(
     return { args, extension: 'gif', mime: 'image/gif', copyOnly: false }
   }
 
+  // Nothing but a cut: copy the streams instead of re-encoding them. Minutes
+  // become seconds, and the picture is bit-for-bit the original.
+  if (ops.container === 'mp4' && untouched && trimmed && !ops.mute) {
+    args.push(...cutArgs, '-c', 'copy', '-avoid_negative_ts', 'make_zero')
+    return { args, extension: 'mp4', mime: 'video/mp4', copyOnly: true }
+  }
+
   if (filters.length > 0) args.push('-vf', filters.join(','))
 
   if (ops.mute) {
     args.push('-an')
-  } else if (ops.speed !== 1) {
-    args.push('-filter:a', tempoChain(ops.speed).join(','))
+  } else if (audioFilters.length > 0) {
+    args.push('-filter:a', audioFilters.join(','))
   }
 
   if (ops.container === 'webm') {
     args.push('-c:v', 'libvpx-vp9', '-crf', String(preset.crf + 8), '-b:v', '0', '-row-mt', '1')
     if (!ops.mute) args.push('-c:a', 'libopus', '-b:a', '128k')
     return { args, extension: 'webm', mime: 'video/webm', copyOnly: false }
-  }
-
-  // Nothing but a cut: copy the streams instead of re-encoding them. Minutes
-  // become seconds, and the picture is bit-for-bit the original.
-  if (untouched && trimmed && !ops.mute) {
-    args.push('-c', 'copy', '-avoid_negative_ts', 'make_zero')
-    return { args, extension: 'mp4', mime: 'video/mp4', copyOnly: true }
   }
 
   // `medium`, not `veryfast`, and this is measured rather than taste. With
