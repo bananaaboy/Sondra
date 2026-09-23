@@ -37,6 +37,8 @@ import { beatGrid, estimateTempo, snapToZeroCrossing, type TempoEstimate } from 
 import { readPalette, withAlpha, type ResolvedTheme } from '../../lib/theme'
 import { encodeWav, type AudioData } from '../../lib/wav'
 import { renderSliceInWorker } from '../../lib/workerClient'
+import { SLICE_DEFAULTS, startVoice, type PlayMode, type Slice, type Voice } from '../../lib/pattern'
+import { StepSequencer } from './StepSequencer'
 import { createZip } from '../../lib/zip'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { useActiveAsset, useSession } from '../../state/store'
@@ -56,17 +58,6 @@ import {
   Toggle,
 } from '../ui/primitives'
 
-type PlayMode = 'oneshot' | 'gate' | 'loop'
-
-interface Slice {
-  id: string
-  start: number
-  end: number
-  semitones: number
-  gainDb: number
-  reverse: boolean
-  mode: PlayMode
-}
 
 /** Four rows of four, in the order they sit on the keyboard. */
 const PAD_KEYS = ['1', '2', '3', '4', 'q', 'w', 'e', 'r', 'a', 's', 'd', 'f', 'y', 'x', 'c', 'v']
@@ -143,7 +134,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   /** Built once so a reversed pad can play without re-rendering anything. */
   const reversedRef = useRef<AudioBuffer | null>(null)
   /** Live voices per pad, for choking and for gate release. */
-  const voicesRef = useRef(new Map<number, AudioBufferSourceNode[]>())
+  const voicesRef = useRef(new Map<number, Voice[]>())
   /** Set below; the wavesurfer effect is created before `triggerPad` exists. */
   const triggerRef = useRef<((sliceId: string) => void) | null>(null)
 
@@ -236,12 +227,10 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
             return existing
               ? { ...existing, start: region.start, end: region.end }
               : {
+                  ...SLICE_DEFAULTS,
                   id: region.id,
                   start: region.start,
                   end: region.end,
-                  semitones: 0,
-                  gainDb: 0,
-                  reverse: false,
                   mode: defaultMode,
                 }
           })
@@ -305,13 +294,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   const stopPad = useCallback((index: number) => {
     const voices = voicesRef.current.get(index)
     if (!voices) return
-    for (const voice of voices) {
-      try {
-        voice.stop()
-      } catch {
-        /* already ended */
-      }
-    }
+    for (const voice of voices) voice.stop()
     voicesRef.current.delete(index)
     setPlaying((current) => current.filter((pad) => pad !== index))
   }, [])
@@ -335,38 +318,24 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
       }
 
       if (choke) stopPad(index)
-      const source = context.createBufferSource()
-      // Reverse plays from a pre-built mirrored buffer, so the offsets flip too.
-      const reversed = slice.reverse && reversedRef.current
-      source.buffer = reversed ? reversedRef.current : buffer
-      const total = buffer.duration
-      const start = reversed ? total - slice.end : slice.start
-      const length = slice.end - slice.start
-
-      source.playbackRate.value = 2 ** (slice.semitones / 12)
-      if (slice.mode === 'loop') {
-        source.loop = true
-        source.loopStart = start
-        source.loopEnd = start + length
-      }
-
-      const gain = context.createGain()
-      gain.gain.value = dbToGain(slice.gainDb)
-      source.connect(gain).connect(context.destination)
-
-      // The third argument bounds the note in buffer seconds. Scheduling a
-      // separate stop() against `currentTime` looks equivalent but is not: on a
-      // context that has not resumed yet the clock is frozen at zero, so the
-      // stop time can already be in the past by the time sound starts.
-      source.start(0, start, slice.mode === 'loop' ? undefined : length)
+      // The same voice the pattern and the bounce use: pitch, level, pan and
+      // envelope sound identical under a finger and in the exported beat.
+      const voice = startVoice(
+        context,
+        context.destination,
+        slice,
+        { forward: buffer, reversed: reversedRef.current },
+        context.currentTime,
+      )
+      const source = voice.source
 
       const voices = voicesRef.current.get(index) ?? []
-      voices.push(source)
+      voices.push(voice)
       voicesRef.current.set(index, voices)
       setPlaying((current) => (current.includes(index) ? current : [...current, index]))
 
       source.onended = () => {
-        const live = (voicesRef.current.get(index) ?? []).filter((voice) => voice !== source)
+        const live = (voicesRef.current.get(index) ?? []).filter((entry) => entry.source !== source)
         if (live.length > 0) voicesRef.current.set(index, live)
         else {
           voicesRef.current.delete(index)
@@ -487,6 +456,9 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
         gainDb: selected.gainDb,
         reverse: selected.reverse,
         mode: selected.mode,
+        pan: selected.pan,
+        attackMs: selected.attackMs,
+        releaseMs: selected.releaseMs,
       })),
     )
     log('sampler', 'Einstellungen des gewählten Pads auf alle übertragen')
@@ -519,6 +491,19 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
             for (let i = 0; i < channel.length; i += 1) out[i] = clamp(channel[i] * gain, -1, 1)
             return out
           }),
+          sampleRate: piece.sampleRate,
+        }
+      }
+
+      // The pad's own envelope, on top of the anti-click blend.
+      if (slice.attackMs > 0 || slice.releaseMs > 0) piece = applyFades(piece, slice.attackMs / 1000, slice.releaseMs / 1000)
+      if (slice.pan !== 0) {
+        // Equal-power pan; a mono chop becomes stereo so it has somewhere to go.
+        const angle = ((slice.pan + 1) * Math.PI) / 4
+        const left = piece.channels[0]
+        const right = piece.channels[1] ?? piece.channels[0]
+        piece = {
+          channels: [left.map((value) => value * Math.cos(angle) * Math.SQRT2), right.map((value) => value * Math.sin(angle) * Math.SQRT2)],
           sampleRate: piece.sampleRate,
         }
       }
@@ -838,6 +823,26 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
           </Card>
         ) : null}
 
+        {/* ---- pattern ------------------------------------------------------ */}
+        {slices.length > 0 ? (
+          <StepSequencer
+            slices={slices}
+            buffers={() => (bufferRef.current ? { forward: bufferRef.current, reversed: reversedRef.current } : null)}
+            initialBpm={bpm}
+            choke={choke}
+            baseName={baseName}
+            onPreviewPad={(index) => {
+              if (!slices[index]) return
+              setActiveSlice(slices[index].id)
+              triggerPad(index)
+            }}
+            onBounce={(pattern, name) => {
+              addToSession([{ name, piece: pattern, bytes: encodeWav(pattern, 24) }])
+              log('sampler', `${name} in die Sitzung übernommen`)
+            }}
+          />
+        ) : null}
+
         {audio && slices.length === 0 ? (
           <Notice title="Noch nichts zerschnitten">
             Wählen Sie oben ein Verfahren, oder ziehen Sie mit der Maus über die Wellenform, um einen
@@ -887,6 +892,35 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
                 value={selected.gainDb}
                 onChange={(event) => updateSlice(selected.id, { gainDb: Number(event.target.value) })}
               />
+              <Slider
+                label="Panorama"
+                display={selected.pan === 0 ? 'Mitte' : `${Math.round(Math.abs(selected.pan) * 100)} % ${selected.pan < 0 ? 'links' : 'rechts'}`}
+                min={-1}
+                max={1}
+                step={0.05}
+                value={selected.pan}
+                onChange={(event) => updateSlice(selected.id, { pan: Number(event.target.value) })}
+              />
+              <div className="grid grid-cols-2 gap-[12px]">
+                <Slider
+                  label="Anschwellen"
+                  display={`${selected.attackMs} ms`}
+                  min={0}
+                  max={500}
+                  step={5}
+                  value={selected.attackMs}
+                  onChange={(event) => updateSlice(selected.id, { attackMs: Number(event.target.value) })}
+                />
+                <Slider
+                  label="Ausklingen"
+                  display={`${selected.releaseMs} ms`}
+                  min={0}
+                  max={1000}
+                  step={10}
+                  value={selected.releaseMs}
+                  onChange={(event) => updateSlice(selected.id, { releaseMs: Number(event.target.value) })}
+                />
+              </div>
               <Field label="Verhalten">
                 <Select
                   value={selected.mode}

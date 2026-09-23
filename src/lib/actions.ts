@@ -406,6 +406,15 @@ export const ACTIONS: ToolAction[] = [
     keywords: ['chop', 'slice', 'zerschneiden', 'sampler', 'pads', 'beat', 'break', 'schnipsel'],
   },
   {
+    id: 'pattern',
+    panel: 'sampler',
+    group: 'musik',
+    label: 'Beat bauen',
+    hint: 'Step-Sequencer über die Pads, als WAV oder MIDI',
+    kinds: ['audio'],
+    keywords: ['beat', 'pattern', 'sequencer', 'step', 'drum', 'fl studio', 'channel rack', 'loop', 'midi', 'swing'],
+  },
+  {
     id: 'key',
     panel: 'harmony',
     group: 'musik',

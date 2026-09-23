@@ -97,7 +97,7 @@ export const PANELS: PanelMeta[] = [
     id: 'sampler',
     slug: 'zerschneiden',
     label: 'Zerschneiden',
-    summary: 'In einzelne Schläge zerlegen und auf Tasten legen',
+    summary: 'In Schläge zerlegen, auf Pads legen und einen Beat daraus bauen',
     icon: <path d="M3.4 2.8l7.4 9.2M12.6 2.8L5.2 12M4.3 13.2a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM11.7 13.2a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />,
   },
   {
