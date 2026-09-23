@@ -80,7 +80,12 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
   „App herunterladen" mit einem Auswahlfenster (Microsoft Store ausgegraut mit
   „Bald verfügbar" bei Hover, daneben das Setup); in der App selbst entfällt
-  er. Die Palette hat kein Rot, und sie braucht keins.
+  er. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
+  Prämisse der Warnung nicht:** dort startet `desktop/downloader.mjs` einen
+  eigenen yt-dlp-Dienst auf 127.0.0.1:9000, und statt der Warnung steht ein
+  ruhiger Block auf `panel-soft`, der den Haftungssatz wörtlich behält. Der
+  Dienst hat keine eigenen Extraktoren (anders als das Brücken-Skript), holt
+  yt-dlp nur nach Nachfrage und antwortet nur der App-Seite.
 - **Der Downloader hat einen Weg für Portale: das Feld oben.** Es fragt einen
   verbundenen Dienst zuerst und übernimmt dessen Einstellungen. Wird die Seite
   lokal ausgeliefert (App, Brücke), ist der Schalter für externe Downloader von

@@ -22,10 +22,13 @@ import path from 'node:path'
 
 import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } from 'electron'
 
+import { startDownloader } from './downloader.mjs'
 import { startServer } from './server.mjs'
 
 const PORT = 47199
 const SMOKE = process.env.SONDRA_SMOKE
+/** Tests answer the app's questions in advance: `yes` or `no`. */
+const ANSWER = process.env.SONDRA_ASK
 
 /**
  * One Sondra at a time: a second start brings the first window forward
@@ -137,6 +140,64 @@ function keepInside(contents, origin) {
   })
 }
 
+/**
+ * The downloader service's two questions, as native dialogs: a web page can
+ * cause one to appear but cannot answer it. One at a time.
+ */
+let asking = Promise.resolve()
+function askOnce(options, answers) {
+  const next = asking.then(async () => {
+    if (ANSWER) return ANSWER === 'yes' ? answers[0] : null
+    const { response } = window
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options)
+    return answers[response] ?? null
+  })
+  asking = next.catch(() => null)
+  return next
+}
+
+const questions = {
+  install: () =>
+    askOnce(
+      {
+        type: 'question',
+        title: 'Sondra',
+        message: 'yt-dlp laden?',
+        detail:
+          'Zum Herunterladen von Videoportalen braucht Sondra yt-dlp, ein freies Programm ' +
+          '(github.com/yt-dlp/yt-dlp). Sondra lädt die offizielle Fassung einmal von dort, prüft ' +
+          'sie gegen die veröffentlichte Prüfsumme und legt sie in ihren eigenen Ordner. Danach ' +
+          'hält sie sich einmal pro Woche selbst aktuell.\n\n' +
+          'Laden Sie nur herunter, was Sie herunterladen dürfen.',
+        buttons: ['yt-dlp laden', 'Abbrechen'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      },
+      [true, false],
+    ).then(Boolean),
+  // Tests never hand over a browser's sign-in, whatever they answer otherwise.
+  signIn: () =>
+    ANSWER ? Promise.resolve(null) : askOnce(
+      {
+        type: 'question',
+        title: 'Sondra',
+        message: 'YouTube verlangt für dieses Video eine Anmeldung.',
+        detail:
+          'Sondra kann die Anmeldung aus einem Browser auf diesem Rechner übernehmen, in dem Sie ' +
+          'bei YouTube angemeldet sind. Sie geht nur an YouTube und verlässt diesen Rechner sonst ' +
+          'nicht. Am zuverlässigsten klappt es mit Firefox; bei Chrome und Edge verhindert Windows ' +
+          'das Auslesen oft.',
+        buttons: ['Firefox', 'Edge', 'Chrome', 'Nicht jetzt'],
+        defaultId: 0,
+        cancelId: 3,
+        noLink: true,
+      },
+      ['firefox', 'edge', 'chrome', null],
+    ),
+}
+
 /** Settle `promise`, or give up waiting after `ms` — whichever comes first. */
 function within(promise, ms) {
   return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve('timeout'), ms))])
@@ -183,15 +244,23 @@ async function open() {
   // this window and the local server. This build does not ship it; whatever a
   // previous install registered — and the ~90 MB it cached — goes here. Not
   // worth a hang, though: after a few seconds the start goes on without it.
-  try {
-    const cleared = await within(
-      session.defaultSession.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }),
-      4000,
-    )
-    if (cleared === 'timeout') log('Service Worker entfernen dauert zu lange, weiter ohne.')
-    else log('Alte Service Worker entfernt')
-  } catch (failure) {
-    log(`Service Worker nicht entfernt: ${failure?.message ?? failure}`)
+  // Once is enough; a marker keeps every later start from doing it again.
+  const swDone = path.join(app.getPath('userData'), 'service-worker-entfernt')
+  if (!fs.existsSync(swDone)) {
+    try {
+      const cleared = await within(
+        session.defaultSession.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }),
+        4000,
+      )
+      if (cleared === 'timeout') log('Service Worker entfernen dauert zu lange, weiter ohne.')
+      else {
+        log('Alte Service Worker entfernt')
+        fs.mkdirSync(path.dirname(swDone), { recursive: true })
+        fs.writeFileSync(swDone, '')
+      }
+    } catch (failure) {
+      log(`Service Worker nicht entfernt: ${failure?.message ?? failure}`)
+    }
   }
 
   // Plain files next to the app archive (see scripts/build-desktop.mjs).
@@ -199,6 +268,18 @@ async function open() {
   const { url } = await startServer({ root, port: PORT, onError: (message) => log(`Server: ${message}`) })
   const origin = url.replace(/\/$/, '')
   log(`Server auf ${url}`)
+
+  // The service the downloader talks to — started here, so nobody has to run
+  // a script for it. Waited for only briefly — opening a port is instant, and
+  // the page looks for the service again whenever it was not there yet.
+  if (process.env.SONDRA_DOWNLOADER !== 'off') {
+    await within(
+      startDownloader({ dataDir: app.getPath('userData'), origin, log: (message) => log(message), ask: questions }).then(
+        (service) => log(service ? `Dienst zum Herunterladen auf ${service.url}` : 'Port 9000 belegt: die Seite nutzt den Dienst, der dort läuft.'),
+      ),
+      1500,
+    )
+  }
 
   // Permissions (microphone, clipboard, notifications) only for Sondra's own
   // page, never for anything it might end up framing.

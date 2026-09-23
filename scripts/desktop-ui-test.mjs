@@ -71,7 +71,8 @@ beatWav(wav)
 
 const app = spawn(executable, [`--remote-debugging-port=${PORT}`, '--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'], {
   stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...process.env, SONDRA_SMOKE: '' },
+  // SONDRA_ASK answers the app's own questions: yes, fetch yt-dlp.
+  env: { ...process.env, SONDRA_SMOKE: '', SONDRA_ASK: 'yes' },
 })
 app.stdout.on('data', () => {})
 app.stderr.on('data', () => {})
@@ -359,7 +360,7 @@ try {
 
   await step('Herunterladen: direkte Adresse', async () => {
     await go('herunterladen')
-    await page.getByLabel('Adresse zum Herunterladen').fill('https://www.lizge.ch/icon-512.png')
+    await page.getByLabel('Adresse zum Herunterladen').fill('https://www.sondra.lizge.ch/icon-512.png')
     await page.getByRole('button', { name: 'Nachsehen' }).click()
     const before = await sessionCount()
     await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 60_000 })
@@ -375,7 +376,32 @@ try {
     return 'icon-512.png geladen'
   })
 
-  await step('Herunterladen: YouTube (360p, nur Hinweis)', async () => {
+  await step('Herunterladen: Dienst der App mit yt-dlp', async () => {
+    await go('herunterladen')
+    await page.getByLabel('Adresse zum Herunterladen').fill('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4')
+    await page.getByRole('button', { name: 'Nachsehen' }).click()
+    const before = await sessionCount()
+    await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 120_000 })
+    await page.waitForFunction(
+      (count) => {
+        const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
+        const extra = text.match(/\+(\d+)/)
+        return (extra ? Number(extra[1]) + 1 : 1) > count
+      },
+      before,
+      { timeout: 120_000 },
+    )
+    const logFile =
+      process.platform === 'win32'
+        ? path.join(process.env.APPDATA ?? '', 'Sondra', 'sondra.log')
+        : path.join(os.homedir(), '.config', 'Sondra', 'sondra.log')
+    const lines = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8').split('\n') : []
+    const ytdlp = lines.filter((line) => /yt-dlp \d{4}\./.test(line)).pop()
+    if (!ytdlp) throw new Error('Im Protokoll steht kein gefundenes yt-dlp.')
+    return `flower.mp4 in der Sitzung · ${ytdlp.replace(/^.*ms {2}/, '').slice(0, 60)}`
+  })
+
+  await step('Herunterladen: YouTube (nur Hinweis)', async () => {
     await go('herunterladen')
     await page.getByLabel('Adresse zum Herunterladen').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
     await page.getByRole('button', { name: 'Nachsehen' }).click()

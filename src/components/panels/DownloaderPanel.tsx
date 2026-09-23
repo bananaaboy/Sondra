@@ -17,6 +17,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { IN_DESKTOP_APP } from '../../lib/desktop'
 import { saveBytes } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
 import {
@@ -27,6 +28,7 @@ import {
   type StudioResult,
   type StudioStream,
 } from '../../lib/studio'
+import { serviceConnection } from '../../lib/serviceState'
 import { kindFromMime, useSession } from '../../state/store'
 import { Button, Card, Notice, Progress, Reveal, TextInput } from '../ui/primitives'
 import { AdvancedDownloader } from './DownloaderAdvanced'
@@ -68,6 +70,31 @@ function NotLocalNotice() {
         <li>
           Das Ganze läuft über einen Proxy, und ich hafte dafür absolut nicht. Laden Sie nur
           herunter, was Sie herunterladen dürfen. Kopierschutz wird hier nicht umgangen.
+        </li>
+      </ul>
+    </div>
+  )
+}
+
+/**
+ * The same place in the app, where the premise above is not true: the app
+ * runs the service itself, on this machine, so nothing here goes through a
+ * server of the site. Not `panel-cool`, which says "not local" and would be
+ * wrong here — but the liability sentence stays, word for word.
+ */
+function AppNotice() {
+  return (
+    <div role="note" className="rounded-card bg-panel-soft p-[20px] sm:p-[24px]">
+      <p className="text-body font-bold leading-[1.3] text-ink sm:text-[1.25rem]">Herunterladen läuft über diesen Rechner</p>
+      <ul className="mt-[12px] flex list-disc flex-col gap-[4px] pl-[20px] text-small leading-[1.5] text-prose">
+        <li>
+          Sondra fragt die Seite selbst, mit yt-dlp auf diesem Rechner. Kein fremder Server ist
+          dazwischen; die Seite, von der Sie laden, sieht diesen Rechner.
+        </li>
+        <li>Die Datei landet in der Sitzung; alles Weitere passiert hier.</li>
+        <li>
+          Ich hafte dafür absolut nicht. Laden Sie nur herunter, was Sie herunterladen dürfen.
+          Kopierschutz wird hier nicht umgangen.
         </li>
       </ul>
     </div>
@@ -168,7 +195,7 @@ export function DownloaderPanel() {
       <Card tone="cream">
         <h2 className="display-md mt-[8px] mb-[12px]">Ein Video oder Lied von einer Adresse</h2>
 
-        <NotLocalNotice />
+        {IN_DESKTOP_APP ? <AppNotice /> : <NotLocalNotice />}
 
         <form
           className="mt-[16px] flex flex-col gap-[8px] sm:flex-row"
@@ -205,6 +232,13 @@ export function DownloaderPanel() {
             stays in full — that one is binding — and the result names the
             path that answered, so the explanation can wait a click. */}
         <Reveal label="Welche Wege probiert werden" className="mt-[12px]">
+          {IN_DESKTOP_APP ? (
+            <p className="mb-[8px] text-small leading-[1.5] text-muted">
+              In der App fragt Sondra zuerst ihren eigenen Dienst: yt-dlp auf diesem Rechner, in voller
+              Auflösung und für die Portale, die yt-dlp kennt. Beim ersten Mal fragt sie, ob yt-dlp
+              geladen werden soll. Geht das nicht, bleiben die Wege unten.
+            </p>
+          ) : null}
           <p className="text-small leading-[1.5] text-muted">
             Der Dienst versucht drei Wege in dieser Reihenfolge: einen Anbieter, falls für diese
             Installation einer hinterlegt ist; sonst YouTube direkt, was einem Server nur die Fassung
@@ -218,7 +252,7 @@ export function DownloaderPanel() {
       {error ? (
         <Notice tone="error" title="Hat nicht geklappt">
           <p>{error.message}</p>
-          {error.code === 'youtube.sabr' || error.code === 'no-extractor' || error.code === 'youtube.signin' ? (
+          {!IN_DESKTOP_APP && (error.code === 'youtube.sabr' || error.code === 'no-extractor' || error.code === 'youtube.signin') ? (
             <p className="mt-[8px]">
               Unter <span className="text-ink">Mehr Wege</span> steht, wie Sie yt-dlp auf Ihrem
               Rechner starten. Das ist eine Datei und ein Doppelklick, und danach geht alles: volle
@@ -249,7 +283,9 @@ export function DownloaderPanel() {
                   on offer, and it decides who saw the address. */}
               <p className="mt-[8px] text-small text-muted">
                 {result.source === 'service'
-                  ? 'Über den Dienst, den Sie verbunden haben'
+                  ? serviceConnection().info?.version.includes('in Sondra')
+                    ? 'Über yt-dlp auf diesem Rechner'
+                    : 'Über den Dienst, den Sie verbunden haben'
                   : result.source === 'provider'
                     ? 'Über den hinterlegten Anbieter'
                     : result.source === 'youtube'

@@ -280,7 +280,9 @@ widerspricht beiden mit Absicht.
 - **Kühle Minze** (`{colors.panel-cool}`): reserviert für den einen Hinweis,
   dass etwas nicht lokal läuft — die Warnung oben im Downloader, mit 2 px
   Ring in Tinte und fetter Überschrift. Der einzige kühle Ton im hellen Thema,
-  damit er sich nicht in die Reihe der übrigen Tönungen einsortiert.
+  damit er sich nicht in die Reihe der übrigen Tönungen einsortiert. In der
+  App, wo der Dienst auf dem eigenen Rechner läuft, fällt die Warnung weg; dort
+  steht ein Block auf `panel-soft` mit demselben Haftungssatz.
 - **Prosa** (`{colors.prose}`): Fliesstext und Beschriftungen.
 - **Gedämpft** (`{colors.muted}`): Sekundärtext, Hinweise, Einheiten.
 - **Nicht zutreffend** (`{colors.faint}`): ein Verfahren, das auf die geöffnete
