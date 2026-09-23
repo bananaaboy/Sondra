@@ -29,6 +29,23 @@ import {
   resampleAudio,
   setChannels,
 } from '../../lib/edit'
+import {
+  compressAudio,
+  copyRange,
+  duplicateRange,
+  echo,
+  fadeRange,
+  highpassFilter,
+  insertAt,
+  insertSilence,
+  learnNoise,
+  lowpassFilter,
+  muteRange,
+  processRange,
+  removeNoise,
+  reverb,
+  shelfEq,
+} from '../../lib/effects'
 import { formatBytes, formatTimecode } from '../../lib/format'
 import { pitchShift, stretchAudio } from '../../lib/timestretch'
 import { encodeWav, type AudioData, type WavBitDepth } from '../../lib/wav'
@@ -76,6 +93,26 @@ export function AudioEditorPanel() {
   const [tempo, setTempo] = useState(1)
   const [bitDepth, setBitDepth] = useState<WavBitDepth>(24)
   const [joinWith, setJoinWith] = useState('')
+  /** What „Kopieren“ or „Ausschneiden“ put aside, for „Einfügen“. */
+  const [clipboard, setClipboard] = useState<AudioData | null>(null)
+  /** The stretch of time the waveform shows; null is all of it. */
+  const [view, setView] = useState<{ start: number; end: number } | null>(null)
+  const [loop, setLoop] = useState(false)
+  const [silenceLength, setSilenceLength] = useState(1)
+  // Sound shaping.
+  const [highpassHz, setHighpassHz] = useState(80)
+  const [lowpassHz, setLowpassHz] = useState(12000)
+  const [bassDb, setBassDb] = useState(0)
+  const [trebleDb, setTrebleDb] = useState(0)
+  const [compThreshold, setCompThreshold] = useState(-24)
+  const [compRatio, setCompRatio] = useState(3)
+  const [noise, setNoise] = useState<Float32Array | null>(null)
+  const [noiseCut, setNoiseCut] = useState(12)
+  const [echoDelay, setEchoDelay] = useState(300)
+  const [echoFeedback, setEchoFeedback] = useState(0.35)
+  const [echoMix, setEchoMix] = useState(0.4)
+  const [roomSeconds, setRoomSeconds] = useState(1.6)
+  const [roomMix, setRoomMix] = useState(0.3)
   const frameRef = useRef<HTMLDivElement>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
   const rafRef = useRef<number | null>(null)
@@ -96,6 +133,8 @@ export function AudioEditorPanel() {
     setHistory([])
     setFuture([])
     setSelection(null)
+    setView(null)
+    setNoise(null)
     setError(null)
   }, [decoded, asset?.id])
 
@@ -112,20 +151,23 @@ export function AudioEditorPanel() {
    * and without the gap the button never gets to show that it was pressed.
    */
   const apply = useCallback(
-    async (label: string, operation: (audio: AudioData) => AudioData) => {
+    async (label: string, operation: (audio: AudioData) => AudioData | Promise<AudioData>) => {
       if (!current) return
       setBusy(label)
       setError(null)
       await new Promise((resolve) => setTimeout(resolve, 16))
       try {
-        const next = operation(current)
+        const next = await operation(current)
         if (frameCount(next) === 0) throw new Error('Das hätte nichts übrig gelassen.')
         setHistory((stack) => [...stack.slice(-19), { audio: current, label }])
         setFuture([])
         // A selection is a pair of timestamps, and an operation that changes
         // the length moves everything after it. Keeping the old marks would
         // leave a highlight pointing at material that is no longer there.
-        if (frameCount(next) !== frameCount(current)) setSelection(null)
+        if (frameCount(next) !== frameCount(current)) {
+          setSelection(null)
+          setView(null)
+        }
         setCurrent(next)
         log('ton', `${label} — ${formatTimecode(durationOf(next))}, Spitze ${peakDb(next).toFixed(1)} dBFS`)
       } catch (failure) {
@@ -157,14 +199,26 @@ export function AudioEditorPanel() {
     })
   }, [current])
 
+  // The clipboard handlers change with every render; the listener reads the
+  // current ones through this ref instead of being re-attached each time.
+  const shortcutsRef = useRef<Record<'c' | 'x' | 'v', () => boolean>>({ c: () => false, x: () => false, v: () => false })
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return
+      if (!(event.metaKey || event.ctrlKey)) return
       const target = event.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
-      event.preventDefault()
-      if (event.shiftKey) redo()
-      else undo()
+      const key = event.key.toLowerCase()
+      if (key === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) redo()
+        else undo()
+      } else if (key === 'c' || key === 'x' || key === 'v') {
+        // Only when there is audio to act on — otherwise the page's own copy
+        // and paste stay untouched.
+        const handler = shortcutsRef.current[key]
+        if (handler && handler()) event.preventDefault()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -189,34 +243,90 @@ export function AudioEditorPanel() {
     const source = context.createBufferSource()
     source.buffer = toAudioBuffer(current, context)
     source.connect(context.destination)
-    source.start(0, from, Math.max(0.01, until - from))
+    const length = Math.max(0.01, until - from)
+    if (loop) {
+      // Round and round until „Stopp“ — the way a cut is judged in a DAW.
+      source.loop = true
+      source.loopStart = from
+      source.loopEnd = until
+      source.start(0, from)
+    } else {
+      source.start(0, from, length)
+    }
     sourceRef.current = source
     const startedAt = context.currentTime
     const follow = () => {
-      const at = from + (context.currentTime - startedAt)
-      if (at >= until) return stop()
-      setPosition(at)
+      const elapsed = context.currentTime - startedAt
+      if (!loop && elapsed >= length) return stop()
+      setPosition(from + (loop ? elapsed % length : elapsed))
       rafRef.current = requestAnimationFrame(follow)
     }
     follow()
     source.onended = () => {
       if (sourceRef.current === source) stop()
     }
-  }, [current, hasSelection, span.start, span.end, duration, stop])
+  }, [current, hasSelection, span.start, span.end, duration, stop, loop])
 
   useEffect(() => stop, [stop])
 
   /* -- selecting ----------------------------------------------------------- */
 
+  // What the waveform shows. Zoomed in, it is a slice of the file, and every
+  // position on it is offset by where that slice starts.
+  const viewStart = view ? Math.min(view.start, duration) : 0
+  const viewEnd = view ? Math.min(view.end, duration) : duration
+  const shown = useMemo(
+    () => (current && view ? sliceAudio(current, viewStart, viewEnd) : current),
+    [current, view, viewStart, viewEnd],
+  )
+
   const secondsAt = (clientX: number) => {
     const box = frameRef.current?.getBoundingClientRect()
     if (!box || duration <= 0) return 0
-    return Math.min(duration, Math.max(0, ((clientX - box.left) / box.width) * duration))
+    const fraction = Math.min(1, Math.max(0, (clientX - box.left) / box.width))
+    return viewStart + fraction * (viewEnd - viewStart)
   }
 
   const live = dragging
     ? { start: Math.min(dragging.start, dragging.end), end: Math.max(dragging.start, dragging.end) }
     : selection
+  const liveInView =
+    live && live.end > viewStart && live.start < viewEnd
+      ? { start: Math.max(live.start, viewStart) - viewStart, end: Math.min(live.end, viewEnd) - viewStart }
+      : null
+  const positionInView = position !== null && position >= viewStart && position <= viewEnd ? position - viewStart : null
+
+  /** Runs an effect on the selection if there is one, otherwise on everything. */
+  const shape = (label: string, fn: (audio: AudioData) => AudioData | Promise<AudioData>) =>
+    void apply(hasSelection ? `${label} (Ausschnitt)` : label, (audio) =>
+      hasSelection ? processRange(audio, span.start, span.end, fn) : fn(audio),
+    )
+
+  const copySelection = () => {
+    if (!current || !hasSelection) return
+    setClipboard(copyRange(current, span.start, span.end))
+    log('ton', `${(span.end - span.start).toFixed(2)} s kopiert`)
+  }
+  const cutSelection = () => {
+    if (!current || !hasSelection) return
+    setClipboard(copyRange(current, span.start, span.end))
+    void apply('Ausgeschnitten', (audio) => cutRange(audio, span.start, span.end))
+  }
+  const paste = () => {
+    if (!clipboard) return
+    // Into the selection's place if there is one; otherwise where the playhead
+    // stopped, or at the end.
+    const at = hasSelection ? span.start : (position ?? duration)
+    void apply(`${durationOf(clipboard).toFixed(2)} s eingefügt`, (audio) =>
+      insertAt(hasSelection ? cutRange(audio, span.start, span.end) : audio, at, clipboard),
+    )
+  }
+  const textSelected = () => (window.getSelection()?.toString() ?? '').length > 0
+  shortcutsRef.current = {
+    c: () => (hasSelection && !textSelected() ? (copySelection(), true) : false),
+    x: () => (hasSelection && !textSelected() ? (cutSelection(), true) : false),
+    v: () => (clipboard ? (paste(), true) : false),
+  }
 
   /* -- output --------------------------------------------------------------- */
 
@@ -298,7 +408,7 @@ export function AudioEditorPanel() {
             }}
             className="mt-[16px] cursor-text touch-none bg-panel-soft p-[12px] select-none"
           >
-            <Waveform audio={current} height={130} position={position} selection={live} />
+            <Waveform audio={shown} height={130} position={positionInView} selection={liveInView} />
           </div>
 
           <div className="mt-[8px] flex flex-wrap items-center gap-[8px]">
@@ -308,6 +418,28 @@ export function AudioEditorPanel() {
             <Button size="sm" variant="quiet" onClick={stop}>
               Stopp
             </Button>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={loop}
+              onClick={() => {
+                stop()
+                setLoop((value) => !value)
+              }}
+              className={`press rounded-pill px-[12px] py-[6px] text-small ${loop ? 'bg-ink text-on-ink' : 'bg-panel-soft text-ink hover:bg-panel-mid'}`}
+            >
+              Schleife
+            </button>
+            {hasSelection && !(view && Math.abs(view.start - span.start) < 1e-3 && Math.abs(view.end - span.end) < 1e-3) ? (
+              <Button size="sm" variant="ghost" onClick={() => setView({ start: span.start, end: span.end })}>
+                Auf Auswahl zoomen
+              </Button>
+            ) : null}
+            {view ? (
+              <Button size="sm" variant="ghost" onClick={() => setView(null)}>
+                Ganz zeigen
+              </Button>
+            ) : null}
             <span className="value text-small text-muted">
               {hasSelection
                 ? `${formatTimecode(span.start)} – ${formatTimecode(span.end)} · ${(span.end - span.start).toFixed(2)} s`
@@ -344,7 +476,34 @@ export function AudioEditorPanel() {
                   onClick={() => void apply('Ausschnitt entfernt', (a) => cutRange(a, span.start, span.end))}>
                   Ausschnitt herausschneiden
                 </Button>
+                <Button size="sm" variant="quiet" disabled={busy !== null} onClick={copySelection} title="Strg/Cmd + C">
+                  Kopieren
+                </Button>
+                <Button size="sm" variant="quiet" disabled={busy !== null} onClick={cutSelection} title="Strg/Cmd + X">
+                  Ausschneiden
+                </Button>
+                <Button size="sm" variant="quiet" disabled={busy !== null}
+                  onClick={() => void apply('Ausschnitt verdoppelt', (a) => duplicateRange(a, span.start, span.end))}>
+                  Verdoppeln
+                </Button>
+                <Button size="sm" variant="quiet" disabled={busy !== null}
+                  onClick={() => void apply('Ausschnitt stumm', (a) => muteRange(a, span.start, span.end))}>
+                  Stumm
+                </Button>
+                <Button size="sm" variant="quiet" disabled={busy !== null}
+                  onClick={() => void apply('Über den Ausschnitt eingeblendet', (a) => fadeRange(a, span.start, span.end, 'in'))}>
+                  Hier einblenden
+                </Button>
+                <Button size="sm" variant="quiet" disabled={busy !== null}
+                  onClick={() => void apply('Über den Ausschnitt ausgeblendet', (a) => fadeRange(a, span.start, span.end, 'out'))}>
+                  Hier ausblenden
+                </Button>
               </>
+            ) : null}
+            {clipboard ? (
+              <Button size="sm" variant="quiet" disabled={busy !== null} onClick={paste} title="Strg/Cmd + V">
+                {hasSelection ? 'Auswahl ersetzen' : 'Einfügen'} ({durationOf(clipboard).toFixed(1)} s)
+              </Button>
             ) : null}
             <Button size="sm" variant="quiet" disabled={busy !== null}
               onClick={() => void apply('Umgekehrt', reverseAudio)}>
@@ -423,6 +582,162 @@ export function AudioEditorPanel() {
               </Button>
             </div>
           )}
+
+          {/* -- a pause, put in ------------------------------------------------ */}
+          <div className="mt-[16px] flex flex-wrap items-center gap-[8px] border-t border-line pt-[16px]">
+            <span className="text-small text-prose">Stille einfügen</span>
+            <Select
+              value={silenceLength}
+              onChange={(event) => setSilenceLength(Number(event.target.value))}
+              aria-label="Länge der Stille"
+              className="w-auto! py-[6px] text-small"
+            >
+              {[0.25, 0.5, 1, 2, 5].map((value) => (
+                <option key={value} value={value}>
+                  {value.toString().replace('.', ',')} s
+                </option>
+              ))}
+            </Select>
+            <Button size="sm" variant="quiet" disabled={busy !== null}
+              onClick={() => {
+                const at = hasSelection ? span.start : (position ?? duration)
+                void apply(`${silenceLength} s Stille eingefügt`, (a) => insertSilence(a, at, silenceLength))
+              }}>
+              {hasSelection ? 'Am Auswahlbeginn' : position !== null ? 'An der Abspielstelle' : 'Am Ende'}
+            </Button>
+          </div>
+
+          {/* -- sound: filters, dynamics, noise, space --------------------------- */}
+          <Reveal label={`Klang: Filter, Bass und Höhen, Kompressor, Rauschen, Echo, Hall${hasSelection ? ' — gilt für den Ausschnitt' : ''}`} className="mt-[16px]">
+            <div className="grid gap-[20px] rounded-card bg-panel-soft p-[16px] sm:grid-cols-2">
+              <div className="flex flex-col gap-[8px]">
+                <Slider label="Tiefen entfernen unter" display={`${highpassHz} Hz`}
+                  min={20} max={400} step={5} value={highpassHz}
+                  onChange={(event) => setHighpassHz(Number(event.target.value))} />
+                <div>
+                  <Button size="sm" variant="quiet" disabled={busy !== null}
+                    onClick={() => shape(`Tiefen unter ${highpassHz} Hz entfernt`, (a) => highpassFilter(a, highpassHz))}>
+                    Tiefen entfernen
+                  </Button>
+                </div>
+                <p className="text-small leading-[1.45] text-muted">Rumpeln, Trittschall, Brummen. Für Stimme 80–120 Hz.</p>
+              </div>
+
+              <div className="flex flex-col gap-[8px]">
+                <Slider label="Höhen entfernen über" display={`${(lowpassHz / 1000).toFixed(1).replace('.', ',')} kHz`}
+                  min={1000} max={20000} step={250} value={lowpassHz}
+                  onChange={(event) => setLowpassHz(Number(event.target.value))} />
+                <div>
+                  <Button size="sm" variant="quiet" disabled={busy !== null}
+                    onClick={() => shape(`Höhen über ${(lowpassHz / 1000).toFixed(1)} kHz entfernt`, (a) => lowpassFilter(a, lowpassHz))}>
+                    Höhen entfernen
+                  </Button>
+                </div>
+                <p className="text-small leading-[1.45] text-muted">Zischen und Rauschen oben, oder der Klang „durchs Telefon“.</p>
+              </div>
+
+              <div className="flex flex-col gap-[8px]">
+                <div className="grid grid-cols-2 gap-[12px]">
+                  <Slider label="Bass" display={`${bassDb > 0 ? '+' : ''}${bassDb} dB`}
+                    min={-12} max={12} step={1} value={bassDb}
+                    onChange={(event) => setBassDb(Number(event.target.value))} />
+                  <Slider label="Höhen" display={`${trebleDb > 0 ? '+' : ''}${trebleDb} dB`}
+                    min={-12} max={12} step={1} value={trebleDb}
+                    onChange={(event) => setTrebleDb(Number(event.target.value))} />
+                </div>
+                <div>
+                  <Button size="sm" variant="quiet" disabled={busy !== null || (bassDb === 0 && trebleDb === 0)}
+                    onClick={() => shape(`Bass ${bassDb > 0 ? '+' : ''}${bassDb} dB, Höhen ${trebleDb > 0 ? '+' : ''}${trebleDb} dB`, (a) => shelfEq(a, bassDb, trebleDb))}>
+                    Klang anpassen
+                  </Button>
+                </div>
+                <p className="text-small leading-[1.45] text-muted">Kuhschwanz-Filter bei 120 Hz und 6 kHz.</p>
+              </div>
+
+              <div className="flex flex-col gap-[8px]">
+                <div className="grid grid-cols-2 gap-[12px]">
+                  <Slider label="Ab" display={`${compThreshold} dBFS`}
+                    min={-50} max={-3} step={1} value={compThreshold}
+                    onChange={(event) => setCompThreshold(Number(event.target.value))} />
+                  <Slider label="Verhältnis" display={`${compRatio}:1`}
+                    min={1.5} max={10} step={0.5} value={compRatio}
+                    onChange={(event) => setCompRatio(Number(event.target.value))} />
+                </div>
+                <div>
+                  <Button size="sm" variant="quiet" disabled={busy !== null}
+                    onClick={() => shape(`Kompressor ${compRatio}:1 ab ${compThreshold} dBFS`, (a) => compressAudio(a, compThreshold, compRatio).audio)}>
+                    Komprimieren
+                  </Button>
+                </div>
+                <p className="text-small leading-[1.45] text-muted">Laute Stellen zurücknehmen, leise näher heran; gleicht die Lautheit danach etwas aus.</p>
+              </div>
+
+              <div className="flex flex-col gap-[8px] sm:col-span-2">
+                <p className="text-small text-prose">Rauschen entfernen</p>
+                <p className="text-small leading-[1.45] text-muted">
+                  {noise
+                    ? 'Rauschprofil gelernt. Jetzt die ganze Aufnahme — oder einen Ausschnitt — davon befreien.'
+                    : 'Erst eine Stelle auswählen, an der nur das Rauschen zu hören ist, und daraus lernen.'}
+                </p>
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  <Button size="sm" variant="quiet" disabled={busy !== null || !hasSelection}
+                    onClick={() => {
+                      if (!current) return
+                      setNoise(learnNoise(copyRange(current, span.start, span.end)))
+                      log('ton', `Rauschprofil aus ${(span.end - span.start).toFixed(2)} s gelernt`)
+                    }}>
+                    Rauschprofil aus der Auswahl
+                  </Button>
+                  {noise ? (
+                    <>
+                      <Select value={noiseCut} onChange={(event) => setNoiseCut(Number(event.target.value))}
+                        aria-label="Stärke" className="w-auto! py-[6px] text-small">
+                        {[6, 12, 18, 24].map((value) => (
+                          <option key={value} value={value}>bis {value} dB</option>
+                        ))}
+                      </Select>
+                      <Button size="sm" disabled={busy !== null}
+                        onClick={() => shape(`Rauschen um bis zu ${noiseCut} dB gesenkt`, (a) => removeNoise(a, noise, noiseCut))}>
+                        Rauschen entfernen
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-[8px]">
+                <div className="grid grid-cols-3 gap-[12px]">
+                  <Slider label="Abstand" display={`${echoDelay} ms`} min={40} max={1200} step={10} value={echoDelay}
+                    onChange={(event) => setEchoDelay(Number(event.target.value))} />
+                  <Slider label="Wiederholen" display={`${Math.round(echoFeedback * 100)} %`} min={0} max={0.85} step={0.05} value={echoFeedback}
+                    onChange={(event) => setEchoFeedback(Number(event.target.value))} />
+                  <Slider label="Anteil" display={`${Math.round(echoMix * 100)} %`} min={0.05} max={1} step={0.05} value={echoMix}
+                    onChange={(event) => setEchoMix(Number(event.target.value))} />
+                </div>
+                <div>
+                  <Button size="sm" variant="quiet" disabled={busy !== null}
+                    onClick={() => shape(`Echo ${echoDelay} ms`, (a) => echo(a, echoDelay, echoFeedback, echoMix, !hasSelection))}>
+                    Echo
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-[8px]">
+                <div className="grid grid-cols-2 gap-[12px]">
+                  <Slider label="Raumgrösse" display={`${roomSeconds.toFixed(1).replace('.', ',')} s`} min={0.3} max={5} step={0.1} value={roomSeconds}
+                    onChange={(event) => setRoomSeconds(Number(event.target.value))} />
+                  <Slider label="Anteil" display={`${Math.round(roomMix * 100)} %`} min={0.05} max={1} step={0.05} value={roomMix}
+                    onChange={(event) => setRoomMix(Number(event.target.value))} />
+                </div>
+                <div>
+                  <Button size="sm" variant="quiet" disabled={busy !== null}
+                    onClick={() => shape(`Hall ${roomSeconds.toFixed(1)} s`, (a) => reverb(a, roomSeconds, roomMix, !hasSelection))}>
+                    Hall
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Reveal>
 
           {/* -- the expert half ------------------------------------------------ */}
           <Reveal label="Tonhöhe, Tempo, Kanäle und Abtastrate" className="mt-[16px]">
@@ -505,7 +820,7 @@ export function AudioEditorPanel() {
               value={bitDepth}
               onChange={(event) => setBitDepth(Number(event.target.value) as WavBitDepth)}
               aria-label="Bittiefe"
-              className="w-auto py-[8px] text-small"
+              className="w-auto! py-[8px] text-small"
             >
               <option value={16}>16 bit</option>
               <option value={24}>24 bit</option>

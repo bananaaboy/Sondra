@@ -312,7 +312,7 @@ export function noiseProfile(noise: Float32Array): Float32Array {
  * neighbouring bins and over time, which is what keeps the leftover from
  * turning into the chirping "musical noise" of a naive subtraction.
  */
-function reduceNoise(input: Float32Array, profile: Float32Array, maxCutDb: number): Samples {
+export function reduceNoise(input: Float32Array, profile: Float32Array, maxCutDb: number): Samples {
   const spec = stft(input, NR_FFT, NR_HOP)
   const floor = dbToGain(-maxCutDb)
   const oversubtract = 2

@@ -62,7 +62,7 @@ export const PANELS: PanelMeta[] = [
     id: 'audio',
     slug: 'ton',
     label: 'Ton',
-    summary: 'Schneiden, blenden, Pegel, Stille entfernen, Tonhöhe, Tempo',
+    summary: 'Schneiden, einfügen, Filter, Rauschen, Hall, Tonhöhe, Tempo',
     icon: <path d="M1.8 8h1.8l1.6-4.6 2.4 9.2 2-6.2 1.2 3.4h3" />,
   },
   {
