@@ -13,7 +13,9 @@
  *
  * The app is started with a DevTools port and reached over CDP, so the thing
  * under test is the real binary with its own server, not a browser tab.
- * Needs `playwright-core` (no browser download; it only speaks CDP).
+ * Needs `playwright-core` (no browser download; it only speaks CDP). The
+ * microphone step uses Chromium's fake capture device, so it runs on machines
+ * without a microphone too.
  */
 
 import { spawn } from 'node:child_process'
@@ -67,7 +69,7 @@ beatWav(wav)
 
 /* -- start the app with a DevTools port --------------------------------------- */
 
-const app = spawn(executable, [`--remote-debugging-port=${PORT}`, '--no-sandbox'], {
+const app = spawn(executable, [`--remote-debugging-port=${PORT}`, '--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'], {
   stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...process.env, SONDRA_SMOKE: '' },
 })
@@ -108,7 +110,7 @@ const mainText = async () => (await main().innerText()).replace(/\s+/g, ' ')
 
 /** Files in the session, read from the header's file menu button. */
 async function sessionCount() {
-  const button = page.locator('header button[aria-haspopup="dialog"]')
+  const button = page.locator('header button[title="Dateien dieser Sitzung"]')
   if (!(await button.count())) return 0
   const text = await button.innerText()
   const extra = text.match(/\+(\d+)/)
@@ -136,6 +138,7 @@ async function openFile(file) {
 }
 
 async function dragAcross(locator, from, to) {
+  await locator.scrollIntoViewIfNeeded()
   const box = await locator.boundingBox()
   if (!box) throw new Error('Wellenform nicht sichtbar.')
   await page.mouse.move(box.x + box.width * from, box.y + box.height / 2)
@@ -200,9 +203,20 @@ try {
     return `${before} → ${after} Dateien`
   })
 
+  await step('Ton: Hall und Rauschentfernung', async () => {
+    await page.locator('main summary', { hasText: 'Klang: Filter' }).click()
+    await page.getByRole('button', { name: 'Hall', exact: true }).click()
+    await waitForText(/Hall [\d.]+ s/, 30_000)
+    await dragAcross(main().locator('canvas').first(), 0.0, 0.05)
+    await page.getByRole('button', { name: 'Rauschprofil aus der Auswahl' }).click()
+    await page.getByRole('button', { name: 'Rauschen entfernen', exact: true }).click()
+    await waitForText(/Rauschen um bis zu \d+ dB gesenkt/, 30_000)
+    return 'Hall und Rauschentfernung im Verlauf'
+  })
+
   await step('Zerschneiden: ein Pad in die Sitzung', async () => {
     // Back to the original, eight seconds long.
-    await page.locator('header button[aria-haspopup="dialog"]').click()
+    await page.locator('header button[title="Dateien dieser Sitzung"]').click()
     await page.getByRole('dialog').getByText('beat.wav', { exact: true }).click()
     await page.keyboard.press('Escape')
     await go('zerschneiden')
@@ -217,6 +231,24 @@ try {
     const after = await sessionCount()
     if (after !== before + 1) throw new Error(`${pads} Pads: ${before} → ${after} Dateien, erwartet +1.`)
     return `${pads} Pads, genau ein Pad übernommen`
+  })
+
+  await step('Zerschneiden: Beat bauen und als WAV übernehmen', async () => {
+    await page.getByRole('button', { name: 'Grundbeat vorschlagen' }).click()
+    const steps = await page.locator('button[aria-pressed="true"][aria-label^="Pad"]').count()
+    if (steps === 0) throw new Error('Keine Schritte gesetzt.')
+    const before = await sessionCount()
+    await page.getByRole('button', { name: 'In die Sitzung', exact: true }).click()
+    await page.waitForFunction(
+      (count) => {
+        const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
+        const extra = text.match(/\+(\d+)/)
+        return (extra ? Number(extra[1]) + 1 : 1) > count
+      },
+      before,
+      { timeout: 30_000 },
+    )
+    return `${steps} Schritte, Pattern gerendert`
   })
 
   await step('Tonart: analysieren', async () => {
@@ -283,10 +315,31 @@ try {
     await go('video')
     await page.locator('input[type=file]').first().setInputFiles(clip)
     await page.waitForTimeout(3000)
+    // A look and a fade on top, so the new filters go through FFmpeg too.
+    await main().getByRole('tab', { name: 'Bild', exact: true }).first().click()
+    await page.getByRole('button', { name: 'Sepia', exact: true }).first().click()
     await page.getByRole('button', { name: 'Fertigstellen' }).first().click()
     await page.getByRole('button', { name: 'Jetzt rechnen' }).click()
     await waitForText(/Ergebnis .*\.mp4/, 180_000)
     return (await mainText()).match(/Ergebnis (\S+\.mp4 [\d.]+ [KM]B)/)?.[1] ?? 'MP4 fertig'
+  })
+
+  await step('Mikrofon: einschalten und für Podcast einstellen', async () => {
+    await go('mikrofon')
+    await page.getByRole('button', { name: 'Mikrofon einschalten' }).click()
+    await page.getByRole('button', { name: 'Mikrofon ausschalten' }).waitFor({ timeout: 20_000 })
+    await page.getByRole('radio', { name: /Podcast/ }).click()
+    await page.getByRole('button', { name: /einstellen$/ }).click()
+    await page.waitForFunction(
+      () => /Was gemacht wurde|Hat nicht geklappt/.test(document.querySelector('main')?.innerText ?? ''),
+      null,
+      { timeout: 60_000 },
+    )
+    const text = await mainText()
+    if (text.includes('Hat nicht geklappt')) throw new Error(text.match(/Hat nicht geklappt (.{0,160})/)?.[1] ?? 'fehlgeschlagen')
+    const snr = text.match(/Abstand Stimme zu Hintergrund je grösser, desto klarer ([^ ]+ → [^ ]+)/)?.[1]
+    await page.getByRole('button', { name: 'Mikrofon ausschalten' }).click()
+    return `Abstand ${snr ?? '?'} dB, ${text.match(/Was gemacht wurde/) ? 'Bericht da' : ''}`
   })
 
   await step('Herunterladen: direkte Adresse', async () => {
@@ -297,7 +350,7 @@ try {
     await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 60_000 })
     await page.waitForFunction(
       (count) => {
-        const text = document.querySelector('header button[aria-haspopup="dialog"]')?.textContent ?? ''
+        const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
         const extra = text.match(/\+(\d+)/)
         return (extra ? Number(extra[1]) + 1 : 1) > count
       },
@@ -323,7 +376,7 @@ try {
     await page.getByRole('button', { name: 'Laden' }).first().click()
     await page.waitForFunction(
       (count) => {
-        const text = document.querySelector('header button[aria-haspopup="dialog"]')?.textContent ?? ''
+        const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
         const extra = text.match(/\+(\d+)/)
         return (extra ? Number(extra[1]) + 1 : 1) > count || /Hat nicht geklappt/.test(document.querySelector('main')?.innerText ?? '')
       },

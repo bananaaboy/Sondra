@@ -150,7 +150,7 @@ gebraucht wird, muss es beschafft werden, nicht ausgedacht.
 ## Product Principles
 
 1. **Sag, wo die Dateien bleiben — besonders wenn die Antwort unbequem ist.**
-   Die eine Ausnahme wird gezählt und benannt, bevor jemand tippt.
+   Die eine Ausnahme wird benannt, gross und bevor jemand tippt.
 2. **Benenne das Ergebnis, nicht die Technik.** Wer mit einer Aufnahme und
    einer Frage ankommt, kennt das Fachwort noch nicht.
 3. **Zeigen statt behaupten.** Grössen werden gemessen, nicht geschätzt;

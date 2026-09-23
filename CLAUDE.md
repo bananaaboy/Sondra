@@ -44,7 +44,7 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
 - **Klartext, kein Amtston.** Überschriften heissen, was sie sind —
   „Werkzeuge", nicht „Verfügbare Verfahren". Sie-Form und nüchterner Ton
   bleiben; Behördendeutsch war nie dasselbe wie Sachlichkeit.
-- **Werkzeuge sind Kacheln.** Die dreissig Werkzeuge stehen als Kachelfeld,
+- **Werkzeuge sind Kacheln.** Die rund vierzig Werkzeuge stehen als Kachelfeld,
   nach Gruppen geordnet und über ein Feld filterbar — ausdrücklich so
   gewünscht. Eine getönte Fläche gibt der Kachel ihre Kante, kein Rahmen und
   kein Schatten. Zweispaltig ab der kleinsten Breite; die Reiterleiste ist auf
@@ -62,7 +62,7 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   als ihre zweite Zeile, die Sitzung einen Klick hinter dem Dateinamen. Keine
   ausgegrauten Knöpfe für Fälle, die gerade nicht bestehen; sie erscheinen mit
   ihrer Voraussetzung. Auf kleinen Breiten kürzt sich der Text, nicht die
-  Zusage (der Chip sagt „Lokal"). Ausblenden über einen Wrapper, nicht mit
+  Aussage (der Download-Knopf sagt „App"). Ausblenden über einen Wrapper, nicht mit
   `hidden` auf einem `Button`: dessen eigenes `inline-flex` gewinnt.
 - **Nichts steht vor der Seite.** FFmpeg lädt im Hintergrund, nie hinter einem
   Ladebildschirm. Ein Werkzeug, das wartet, zeigt das Warten bei sich.
@@ -74,10 +74,22 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Dateinamen, Timecodes. Nie Mono als Kostüm für „technisch". Cormorant lebt
   für genau ein Wort weiter: die Wortmarke ist eine bindende Zusage.
 - **`panel-cool` ist für genau eine Aussage da:** hier läuft etwas nicht
-  lokal. Der Chip in der Kopfzeile trägt sie, sobald ein Extraktionsdienst
-  verbunden ist — dann zählt er zwei Ausnahmen statt einer und das Zeichen
-  wird hohl statt gefüllt. Die Palette hat kein Rot, und sie braucht keins:
-  gemessen Lc 85.8 hell und 75.3 dunkel.
+  lokal. Seit dem 23.9. trägt sie nur noch die fette Warnung im Downloader
+  („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte). Den Lokal-Chip
+  in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
+  Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
+  „App herunterladen" mit einem Auswahlfenster (Microsoft Store ausgegraut mit
+  „Bald verfügbar" bei Hover, daneben das Setup); in der App selbst entfällt
+  er. Die Palette hat kein Rot, und sie braucht keins.
+- **Der Downloader hat einen Weg für Portale: das Feld oben.** Es fragt einen
+  verbundenen Dienst zuerst und übernimmt dessen Einstellungen. Wird die Seite
+  lokal ausgeliefert (App, Brücke), ist der Schalter für externe Downloader von
+  Anfang an an. Kein Spiegel-Hinweis, der nach einer Weile aufpoppt.
+- **Was gerechnet wurde, wird als Schritt mit Werten berichtet.** Das
+  Mikrofon-Werkzeug zeigt nach dem Einstellen jede Stufe (Hochpass, Brummen,
+  Rauschminderung, Gate, Kompressor, Lautheit) mit den Zahlen, die sie benutzt
+  hat, und vorher/nachher zum Umschalten. Ein Mikrofon wird roh geöffnet und
+  beim Verlassen des Werkzeugs freigegeben.
 - **Was automatisch gewählt wird, wird gesagt, nicht gefragt.** Der
   Downloader nannte den Weg automatisch und stellte daneben drei Knöpfe zur
   Handauswahl. Jetzt steht der gewählte Weg als Satz da, die Handauswahl ist

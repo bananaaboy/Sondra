@@ -15,15 +15,16 @@ eine eigene Adresse; der Start ist die blanke Wurzel.
 
 | Werkzeug | Adresse | |
 |---|---|---|
-| **Herunterladen** | `#herunterladen` | Direkte Links, Freigabe-Links, HLS-Playlisten, YouTube (progressive Spur) und — mit Anbieter — weitere Portale |
+| **Herunterladen** | `#herunterladen` | Direkte Links, Freigabe-Links, HLS-Playlisten, YouTube (progressive Spur) und — mit Anbieter oder eigenem Dienst — weitere Portale |
 | **Umwandeln** | `#umwandeln` | Ton und Video in andere Formate; die Ziele richten sich nach der Quelle, Stapel als ZIP |
-| **Ton** | `#ton` | Schneiden an der Wellenform, Blenden, Pegel, Stille, Tonhöhe, Tempo, Kanäle |
-| **Video** | `#video` | Schneiden an der Zeitleiste, Ausschnitt, Drehen, Tempo, Ton herauslösen, GIF |
+| **Ton** | `#ton` | Schneiden an der Wellenform, Kopieren/Einfügen/Verdoppeln, Stille einfügen, Zoom und Schleife; Filter, Bass/Höhen, Kompressor, Rauschentfernung aus einem Rauschprofil, Echo, Hall; Pegel, Blenden, Tonhöhe, Tempo, Kanäle |
+| **Video** | `#video` | Schneiden an der Zeitleiste, Ausschnitt, Drehen; Bild (Helligkeit, Kontrast, Sättigung, Looks, schärfen, entrauschen, stabilisieren), Blenden, Lautstärke und Lautheit, Tempo, rückwärts, Ton herauslösen, GIF |
 | **Bilder** | `#bilder` | Skalieren, zuschneiden, Farbe, umwandeln, Stapel als ZIP |
 | **Spuren trennen** | `#spuren-trennen` | Gesang, Schlagzeug, Bass, Übriges — ohne Modell-Download |
 | **Lautstärke** | `#lautstaerke` | EBU R128 / ITU-R BS.1770-4 mit True-Peak-Grenze |
-| **Zerschneiden** | `#zerschneiden` | Schnitte an Anschlägen oder im Tempo-Raster, 16 Pads, Sample-Pack |
+| **Zerschneiden** | `#zerschneiden` | Schnitte an Anschlägen oder im Tempo-Raster, 16 Pads mit Tonhöhe, Pegel, Panorama und Hüllkurve, Step-Sequencer (Tempo, Swing, 16/32 Schritte) als loopbare WAV oder MIDI, Sample-Pack |
 | **Tonart** | `#tonart` | Tempo, Tonart mit Camelot-Code, Akkordverlauf, Melodie als MIDI |
+| **Mikrofon** | `#mikrofon` | Ein- und Ausgang wählen, Pegelanzeige, Mithören, Probe; Einstellen für Podcast, Streaming, Videocall, Gesang oder Instrument mit Bericht jedes Schritts und Vorher/Nachher |
 
 Die Startseite zeigt ohne Datei nur, was die Seite kann, und den Knopf, der
 sie startet. Mit Datei fragt sie, was damit passieren soll, und bietet die
@@ -62,11 +63,14 @@ baut einmal und startet `npm run dev:service`.
    Erscheinungsbild (`sondra:theme`), ein selbst eingetragener
    Extraktionsdienst (`sondra:service`, ohne API-Schlüssel) und eigene
    Instanzen (`sondra:instances`).
-3. **Die Ausnahme ist sichtbar und wird gezählt.** Der Chip in der Kopfzeile
-   sagt „Lokal · 1 Ausnahme". Die Ausnahme ist das Herunterladen: dort geht
-   die eingegebene Adresse an den kleinen Dienst dieser Seite, der die Datei
-   durchreicht. Eigene Dateien sieht er nie, gespeichert wird dort nichts. Ist
-   zusätzlich ein Extraktionsdienst verbunden, zählt der Chip zwei Ausnahmen.
+3. **Die Ausnahme steht, wo sie passiert.** Das Herunterladen ist das einzige
+   Werkzeug, das das Gerät verlässt: die eingegebene Adresse geht an den
+   kleinen Dienst dieser Seite, der die Datei durchreicht. Eigene Dateien sieht
+   er nie, gespeichert wird dort nichts. Das sagt eine fette Warnung oben im
+   Downloader, bevor jemand tippt.
+4. **Das Mikrofon bleibt im Tab.** Es wird nur auf Knopfdruck geöffnet, roh
+   (ohne die Filter des Browsers), und beim Verlassen des Werkzeugs wieder
+   freigegeben. Aufnahmen liegen nur im Arbeitsspeicher.
 
 Die Datenschutzerklärung steht in
 [`public/datenschutz.html`](public/datenschutz.html), live unter
@@ -103,6 +107,15 @@ Gerät).
 | `SONDRA_PROVIDER_URL` | optional: ein cobalt-kompatibler Anbieter; wird zuerst gefragt und bringt volle Auflösung und weitere Portale |
 | `SONDRA_PROVIDER_KEY` | optional: dessen `Api-Key`, falls verlangt |
 
+Mit einem eigenen Dienst (cobalt oder die yt-dlp-Brücke auf dem eigenen
+Rechner) geht es über dasselbe Feld: „Nachsehen" fragt ihn zuerst und nimmt
+seine Einstellungen für Qualität und Nur-Ton. Wird die Seite lokal
+ausgeliefert — in der Windows-App oder über die Brücke —, ist der Schalter für
+externe Downloader von Anfang an an und Sondra sucht den Dienst auf
+`localhost:9000` von selbst. Teile, die ein Dienst als HLS ankündigt, aber
+schon fertig zusammengesetzt schickt (die Brücke tut das bei YouTube), werden
+erkannt und direkt genommen.
+
 Kein Anbieter ist fest verdrahtet. Eine fremde Instanz im Quelltext würde jede
 eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
 
@@ -114,7 +127,9 @@ steht im Panel, bevor man etwas eintippt.
 
 Sondra gibt es auch als installierte Windows-App: eigenes Fenster statt
 Browser, Eintrag im Startmenü, Verknüpfung auf dem Desktop, Deinstallation
-über die Windows-Einstellungen. Das Setup installiert für alle Benutzer
+über die Windows-Einstellungen. Oben auf der Website öffnet „App
+herunterladen" die Auswahl zwischen Microsoft Store (noch ausgegraut, „Bald
+verfügbar") und Setup. Das Setup installiert für alle Benutzer
 unter „Programme“ (eine UAC-Abfrage), läuft mit `/S` ganz ohne Oberfläche,
 wie es der Microsoft Store verlangt, und zeigt sonst vorher `LIZENZ.txt`. In
 „Apps & Features“ steht es als „Sondra - Multimedia“ von „Lizge“ — beides
@@ -137,7 +152,13 @@ die Website ausliefert, ohne Bereitstellungsdateien, Service Worker und
   `node scripts/build-desktop.mjs --dir` den entpackten App-Ordner;
   `npm run desktop` startet nur den Server und öffnet ihn im Browser.
 - **GitHub Actions → „Desktop":** baut auf Windows, installiert still,
-  startet die installierte App zweimal und lädt das Setup als Artefakt hoch.
+  prüft den Eintrag in Apps & Features, startet die installierte App zweimal
+  und klickt sie dann mit `scripts/desktop-ui-test.mjs` durch — jedes
+  Werkzeug mit einer echten Datei, das Mikrofon mit Chromiums Testgerät. Die
+  Bildschirmfotos landen als Artefakt „Bildschirmfotos“.
+- **GitHub Actions → „Desktop testen":** lädt eine veröffentlichte Setup-Datei
+  herunter (Blob-Adresse oder neuestes Release), installiert sie und klickt
+  sie ebenso durch.
   Von Hand gestartet, veröffentlicht die Option `release` ein Release
   `v<Version>` mit `Sondra-Setup.exe`, und die Option `store` legt das Setup
   zusätzlich auf Vercel Blob (Secret `BLOB_READ_WRITE_TOKEN`) — eine
@@ -336,10 +357,11 @@ scripts/             Build der App, lokaler Dienst, Prüfskripte
 src/
   components/        Kopfzeile, Startseite, Reiter, Sitzungsmenü, Wellenform
     editor/          gemeinsame Editor-Hülle und Zuschnitt
-    panels/          die neun Werkzeuge
+    panels/          die zehn Werkzeuge, dazu der Step-Sequencer
     ui/              Grundbausteine (Button, Notice, Reveal …)
   hooks/             Routing, Dateiaufnahme, Dekodierung, Theme
-  lib/               Rechenverfahren, FFmpeg-Client, Downloader-Client
+  lib/               Rechenverfahren, Effekte, Mikrofon-Kalibrierung, Pattern,
+                     FFmpeg-Client, Downloader-Client
   state/             Sitzung (zustand, nur im Speicher)
   styles/            Tokens und Theme
 .github/workflows/   Build und Release der Windows-App

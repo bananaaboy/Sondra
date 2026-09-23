@@ -181,7 +181,10 @@ export function measureTakes(noise: Float32Array, speech: Float32Array, rate: nu
   const quiet = noise.subarray(Math.min(skip, noise.length))
   const noiseLevels = frameLevels(quiet, rate)
   // The median frame: a single cough in the silent take does not set the floor.
-  const noiseFloorDb = percentile(noiseLevels, 0.5)
+  // No real microphone is quieter than −120 dBFS; a device that delivers
+  // digital zero between sounds (virtual cables, test devices) would otherwise
+  // report a gap of 190 dB.
+  const noiseFloorDb = Math.max(-120, percentile(noiseLevels, 0.5))
 
   const speechLevels = frameLevels(speech.subarray(Math.min(skip, speech.length)), rate)
   const loudest = percentile(speechLevels, 0.98)

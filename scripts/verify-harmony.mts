@@ -61,10 +61,12 @@ function progression(tonic: number, mode: 'dur' | 'moll', seconds = 8) {
 
 console.log('\nKey estimation')
 for (const [tonic, mode, expected] of [
-  [0, 'dur', 'C-dur'],
-  [7, 'dur', 'G-dur'],
-  [9, 'moll', 'A-moll'],
-  [2, 'moll', 'D-moll'],
+  // The label capitalises the mode as the noun it is ("C-Dur") since the
+  // interface overhaul; these expectations had kept the old spelling.
+  [0, 'dur', 'C-Dur'],
+  [7, 'dur', 'G-Dur'],
+  [9, 'moll', 'A-Moll'],
+  [2, 'moll', 'D-Moll'],
 ] as const) {
   const estimate = estimateKey(chromagram(progression(tonic, mode)))
   const ok = estimate.label === expected
