@@ -34,7 +34,7 @@
  * instant.
  */
 
-import { fetchHlsSegments, fetchMedia, fetchPlaylist } from './download'
+import { fetchHlsTunnel, fetchMedia } from './download'
 import { loadFfmpeg, runFfmpeg } from './ffmpegClient'
 import { sanitizeFilename, withExtension } from './format'
 import {
@@ -129,16 +129,9 @@ export async function finishLocalJob(
     onNote?.(`Teil ${index + 1} von ${job.tunnels.length} wird geholt`)
     let bytes: Uint8Array
     if (job.isHls) {
-      // The tunnel is a playlist, not a file; pull its segments first.
-      const playlist = await fetchPlaylist(tunnel, signal)
-      bytes = await fetchHlsSegments(
-        playlist,
-        // Segment counts say nothing about bytes, and a byte total for an
-        // HLS stream is not known until the last one lands — so progress here
-        // counts up without a ceiling rather than inventing one.
-        (_segmentsDone, _segmentsTotal, received) => onProgress?.({ loaded: received, total: null }),
-        signal,
-      )
+      // Usually a playlist whose segments follow; from the yt-dlp bridge, the
+      // assembled media itself. `fetchHlsTunnel` tells the two apart.
+      bytes = await fetchHlsTunnel(tunnel, (loaded, total) => onProgress?.({ loaded, total }), signal)
     } else {
       bytes = (
         await fetchMedia(

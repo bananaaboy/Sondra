@@ -1,7 +1,7 @@
 {
   "name": "sondra-desktop",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Sondra als Windows-App: eigenes Fenster, Installer, läuft lokal.",
   "author": "Lizge",
   "devDependencies": {

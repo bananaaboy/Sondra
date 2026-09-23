@@ -103,10 +103,25 @@ jobs:
           }
           Write-Host 'Installiert, gestartet, Sondra im eigenen Fenster geladen.'
 
+      # The smoke test above proves the window opens; this one opens a file
+      # and presses the buttons in every tool of the installed app.
+      - name: Click through the installed app
+        shell: pwsh
+        run: |
+          npm i --no-save --no-package-lock --ignore-scripts playwright-core@1.56.1
+          node scripts/desktop-ui-test.mjs (Join-Path $env:ProgramFiles 'Sondra\Sondra.exe') ui-shots
+
       - name: Show the app's log
         if: always()
         shell: pwsh
         run: Get-Content (Join-Path $env:APPDATA 'Sondra\sondra.log') -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Bildschirmfotos
+          path: ui-shots
+          retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:

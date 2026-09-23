@@ -1,0 +1,64 @@
+# Downloads a published Windows setup, installs it silently and clicks through
+# the installed app: the file people and the Microsoft Store actually get, not
+# a fresh build of it. Started by hand (Actions → "Desktop testen").
+#
+# The same UI test also runs in "Desktop" right after each build.
+
+name: Desktop testen
+
+on:
+  workflow_dispatch:
+    inputs:
+      setup_url:
+        description: 'Adresse der Setup-Datei (leer = neuestes GitHub-Release)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Only the CDP client; the app under test brings its own Chromium.
+      - run: npm i --no-save --no-package-lock --ignore-scripts playwright-core@1.56.1
+
+      - name: Download and install silently
+        shell: pwsh
+        env:
+          SETUP_URL: ${{ inputs.setup_url }}
+        run: |
+          $url = if ($env:SETUP_URL) { $env:SETUP_URL } else { 'https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe' }
+          Write-Host "Setup: $url"
+          $setup = Join-Path $env:RUNNER_TEMP 'Sondra-Setup.exe'
+          Invoke-WebRequest -Uri $url -OutFile $setup
+          Write-Host ("{0:N1} MB" -f ((Get-Item $setup).Length / 1MB))
+          Start-Process -FilePath $setup -ArgumentList '/S' -Wait
+
+          $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
+            Where-Object { $_.DisplayName -eq 'Sondra - Multimedia' }
+          if (-not $entry) { throw 'Kein Eintrag "Sondra - Multimedia" in Apps & Features.' }
+          $entry | Select-Object DisplayName, Publisher, DisplayVersion, InstallLocation, QuietUninstallString | Format-List
+          Start-Sleep -Seconds 3
+          Get-Process Sondra -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      - name: Click through the installed app
+        shell: pwsh
+        run: node scripts/desktop-ui-test.mjs (Join-Path $env:ProgramFiles 'Sondra\Sondra.exe') ui-shots
+
+      - name: Show the app's log
+        if: always()
+        shell: pwsh
+        run: Get-Content (Join-Path $env:APPDATA 'Sondra\sondra.log') -ErrorAction SilentlyContinue
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Bildschirmfotos
+          path: ui-shots
+          retention-days: 14
