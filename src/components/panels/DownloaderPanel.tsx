@@ -86,6 +86,8 @@ export function DownloaderPanel() {
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [progress, setProgress] = useState<{ loaded: number; total: number | null } | null>(null)
+  /** What the last „Laden“ put into the session, so it can still be saved. */
+  const [taken, setTaken] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -99,6 +101,7 @@ export function DownloaderPanel() {
     setLooking(true)
     setError(null)
     setResult(null)
+    setTaken(null)
     try {
       const found = await resolveViaService(target, controller.signal)
       setResult(found)
@@ -122,6 +125,7 @@ export function DownloaderPanel() {
     abortRef.current = controller
     setBusy(stream.label)
     setError(null)
+    setTaken(null)
     setProgress({ loaded: 0, total: stream.bytes })
     try {
       const bytes = await downloadStream(stream, {
@@ -140,9 +144,10 @@ export function DownloaderPanel() {
         origin: 'download',
       })
       log('holen', `${name} geladen (${formatBytes(bytes.byteLength)})`)
-      // Straight to disk as well: most people want the file, and the ones who
-      // only wanted to work on it here have it in the session either way.
-      saveBytes(bytes, name, stream.mime)
+      // Into the session only. Saving to disk is one click on the line below
+      // and in the file menu — a download that also started a browser
+      // download was one file too many for anyone who only wanted to edit it.
+      setTaken({ name, bytes, mime: stream.mime })
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
       const studio = cause instanceof StudioError ? cause : null
@@ -273,6 +278,19 @@ export function DownloaderPanel() {
               </div>
             ))}
           </div>
+
+          {taken && !busy ? (
+            <div className="rise mt-[16px] flex flex-wrap items-center gap-[12px] border-t border-line pt-[12px]" role="status">
+              <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-pill bg-ink" />
+              <p className="min-w-0 flex-1 text-small text-ink">
+                <span className="value">{taken.name}</span> ist in der Sitzung —{' '}
+                <span className="text-muted">oben im Dateimenü, bereit für jedes Werkzeug.</span>
+              </p>
+              <Button size="sm" variant="quiet" onClick={() => saveBytes(taken.bytes, taken.name, taken.mime)}>
+                Auch speichern
+              </Button>
+            </div>
+          ) : null}
 
           {busy ? (
             <div className="mt-[16px] flex flex-col gap-[8px]">
