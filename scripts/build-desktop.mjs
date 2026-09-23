@@ -132,7 +132,8 @@ for (const [name, file] of [
 
 step(onlyDir ? 'App-Ordner bauen' : 'Installer bauen')
 const builder = path.join(DESKTOP, 'node_modules/electron-builder/cli.js')
-// Never publish from the build: the workflow publishes the tested installer,
-// together with the latest.yml the updater reads.
-const args = [...(onlyDir ? ['--dir'] : ['--win', 'nsis', '--x64']), '--publish', 'never']
+const args = onlyDir ? ['--dir'] : ['--win', 'nsis', '--x64']
+// Never publish from the build — once, a second flag turns it into a list
+// that electron-builder no longer reads as "never". The workflow publishes
+// the tested installer, together with the latest.yml the updater reads.
 execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
