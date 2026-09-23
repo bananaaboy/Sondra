@@ -2,7 +2,7 @@
 
 Ein Medienstudio im Browser, das nichts hochlädt. Der Server liefert HTML,
 JavaScript und WebAssembly aus — danach rechnet ausschliesslich der Rechner des
-Besuchers. Live unter [lizge.ch](https://www.lizge.ch), als Windows-App über
+Besuchers. Live unter [sondra.lizge.ch](https://www.sondra.lizge.ch), als Windows-App über
 die [Releases](https://github.com/bananaaboy/Lizge/releases/latest).
 
 Vite 7 · React 19 · TypeScript · Tailwind v4 · zustand · FFmpeg als
@@ -74,7 +74,7 @@ baut einmal und startet `npm run dev:service`.
 
 Die Datenschutzerklärung steht in
 [`public/datenschutz.html`](public/datenschutz.html), live unter
-[lizge.ch/datenschutz.html](https://www.lizge.ch/datenschutz.html).
+[sondra.lizge.ch/datenschutz.html](https://www.sondra.lizge.ch/datenschutz.html).
 
 ## Der Downloader
 

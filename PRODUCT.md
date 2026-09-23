@@ -17,7 +17,7 @@ web
 
 ## Users
 
-Öffentlich, für Fremde. lizge.ch steht offen im Netz und wird von Leuten
+Öffentlich, für Fremde. sondra.lizge.ch steht offen im Netz und wird von Leuten
 benutzt, die niemand kennt und denen niemand etwas erklären kann.
 
 Primär: **Musikerinnen und Musiker, die selbst produzieren** (vom Nutzer am
@@ -66,7 +66,7 @@ MIDI, in Schnipsel zerlegen und auf Tasten legen.
 - **Eine Sitzung ist ein Tab.** Dateien werden hineingezogen oder geöffnet,
   Ergebnisse gespeichert oder in die Sitzung übernommen. Nichts überdauert das
   Schliessen; das ist Absicht und wird so gesagt.
-- **Bereitgestellt auf Vercel** unter `www.lizge.ch`. Die zwei
+- **Bereitgestellt auf Vercel** unter `www.sondra.lizge.ch`. Die zwei
   Serverfunktionen unter `api/` sind der einzige Teil, der nicht im Tab läuft.
 - **Optionaler Anbieter** über `SONDRA_PROVIDER_URL`, serverseitig hinterlegt.
 - **Optionale lokale Brücke:** wer volle Auflösung will, startet yt-dlp auf dem
@@ -111,7 +111,7 @@ Deshalb steht im Downloader, **welcher Weg geantwortet hat**: das entscheidet
 
 ## Brand Commitments
 
-- Das Produkt heisst **Sondra**. `lizge.ch` ist nur die Adresse, unter der es
+- Das Produkt heisst **Sondra**. `sondra.lizge.ch` ist nur die Adresse, unter der es
   liegt, und bleibt es; der Repository-Name „Lizge" ist Altlast. Überall in der
   Oberfläche heisst es Sondra.
 - **Der Haftungshinweis beim Downloader ist verbindlich** und muss sichtbar

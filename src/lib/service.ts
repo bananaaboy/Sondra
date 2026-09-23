@@ -16,6 +16,8 @@
  * they nor this project controls.
  */
 
+import { IN_DESKTOP_APP } from './desktop'
+
 export type DownloadMode = 'auto' | 'audio' | 'mute'
 export type VideoQuality = 'max' | '2160' | '1440' | '1080' | '720' | '480' | '360'
 export type AudioFormat = 'best' | 'mp3' | 'opus' | 'wav'
@@ -119,6 +121,19 @@ export function explain(code: string | null): string {
   if (code.includes('content.too_long')) return 'Das Video überschreitet die Längenbegrenzung des Dienstes.'
   // Die beiden Codes der yt-dlp-Brücke. Beide haben eine konkrete Abhilfe, und
   // die gehört in die Meldung — sonst steht dort nur, dass es nicht ging.
+  // In the app, the service is the app's own and asks its questions itself.
+  if (IN_DESKTOP_APP && code.includes('ytdlp.signin')) {
+    return (
+      'YouTube verlangt für dieses Video eine Anmeldung. Beim nächsten Versuch fragt Sondra, aus ' +
+      'welchem Browser sie kommen soll — dort müssen Sie bei YouTube angemeldet sein.'
+    )
+  }
+  if (IN_DESKTOP_APP && code.includes('ytdlp.missing')) {
+    return (
+      'Ohne yt-dlp geht dieser Weg nicht. Beim nächsten Versuch fragt Sondra noch einmal, ob es ' +
+      'geladen werden soll; es braucht dafür eine Internetverbindung zu github.com.'
+    )
+  }
   if (code.includes('ytdlp.signin')) {
     return (
       'YouTube verlangt für dieses Video eine Anmeldung („bestätigen, dass Sie kein Bot sind"). ' +

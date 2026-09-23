@@ -2,7 +2,7 @@
 
 Die Datenschutzerklärung von Sondra steht in
 [`public/datenschutz.html`](public/datenschutz.html) und ist veröffentlicht unter
-**https://lizge.ch/datenschutz.html**. Sie gilt für die Website und die
+**https://www.sondra.lizge.ch/datenschutz.html**. Sie gilt für die Website und die
 Windows-App.
 
 Sie ist die einzige Fassung. Eine zweite Kopie hier driftete ab: Die vorige

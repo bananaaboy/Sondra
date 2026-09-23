@@ -160,7 +160,7 @@ jobs:
 
           Das Setup ist nicht signiert. Windows SmartScreen kann beim ersten Start warnen („Weitere Informationen“ → „Trotzdem ausführen“), und die intelligente App-Steuerung blockiert unsignierte Setups ganz.
 
-          Datenschutz: https://lizge.ch/datenschutz.html
+          Datenschutz: https://www.sondra.lizge.ch/datenschutz.html
           "@
           # On a manual run the tag does not exist yet; --target creates it on
           # exactly the commit that was just built and tested.

@@ -18,6 +18,16 @@ Windows-SmartScreen
   wurde durch Windows geschützt“ zeigen: „Weitere Informationen“ und dann
   „Trotzdem ausführen“.
 
+Herunterladen von Videoportalen
+  Sondra startet dafür selbst einen Dienst auf diesem Rechner
+  (127.0.0.1:9000), der yt-dlp benutzt. Ist yt-dlp noch nicht da, fragt
+  Sondra beim ersten Mal, ob die offizielle Fassung von
+  github.com/yt-dlp/yt-dlp geladen werden soll; sie wird gegen die
+  veröffentlichte Prüfsumme geprüft, liegt danach in %APPDATA%\Sondra und
+  aktualisiert sich einmal pro Woche. Verlangt YouTube eine Anmeldung, fragt
+  Sondra, aus welchem Browser sie kommen soll. Läuft auf Port 9000 schon ein
+  eigener Dienst, benutzt Sondra diesen.
+
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra - Multimedia →
   Deinstallieren.
