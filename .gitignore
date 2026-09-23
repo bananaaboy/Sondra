@@ -24,6 +24,7 @@ dist-ssr
 
 # Desktop build output (npm run build:desktop)
 release/
+.store-assets/
 desktop/node_modules/
 desktop/.stage/
 desktop/.build/
