@@ -107,6 +107,13 @@ export const PANELS: PanelMeta[] = [
     summary: 'Tonart, Tempo, Akkorde und die Melodie als MIDI',
     icon: <path d="M6 11.6V3.4l7-1.2v8.2M6 11.6a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0zM13 10.4a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0z" />,
   },
+  {
+    id: 'mic',
+    slug: 'mikrofon',
+    label: 'Mikrofon',
+    summary: 'Testen, Geräte wählen und für Podcast, Stream oder Musik einstellen',
+    icon: <path d="M8 2.2a2 2 0 012 2v3.6a2 2 0 01-4 0V4.2a2 2 0 012-2zM4.2 7.6a3.8 3.8 0 007.6 0M8 11.4v2.4M5.8 13.8h4.4" />,
+  },
 ]
 
 export function ToolIcon({ children }: { children: ReactNode }) {

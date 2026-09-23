@@ -12,6 +12,7 @@ import type { ResolvedTheme } from '../lib/theme'
 import { useSession } from '../state/store'
 import { ConverterPanel } from './panels/ConverterPanel'
 import { HarmonyPanel } from './panels/HarmonyPanel'
+import { MicPanel } from './panels/MicPanel'
 import { DownloaderPanel } from './panels/DownloaderPanel'
 import { NormalizePanel } from './panels/NormalizePanel'
 import { SamplerPanel } from './panels/SamplerPanel'
@@ -248,7 +249,8 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     panel === 'downloader' ||
     panel === 'video' ||
     panel === 'images' ||
-    panel === 'audio'
+    panel === 'audio' ||
+    panel === 'mic'
 
   return (
     <section id="studio" className="shell flex flex-col gap-[16px] pb-[16px] pt-[24px] sm:pt-[32px]">
@@ -270,6 +272,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
             {panel === 'normalize' ? <NormalizePanel /> : null}
             {panel === 'sampler' ? <SamplerPanel theme={theme} /> : null}
             {panel === 'harmony' ? <HarmonyPanel /> : null}
+            {panel === 'mic' ? <MicPanel /> : null}
           </>
         )}
       </div>

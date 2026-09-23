@@ -58,6 +58,7 @@ export type PanelId =
   | 'normalize'
   | 'sampler'
   | 'harmony'
+  | 'mic'
 
 interface SessionState {
   assets: Asset[]

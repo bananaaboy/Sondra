@@ -52,6 +52,26 @@ export const ACTIONS: ToolAction[] = [
     keywords: ['download', 'youtube', 'url', 'link', 'herunterladen', 'import', 'holen', 'stream'],
   },
 
+  /* -- the microphone -------------------------------------------------------- */
+  {
+    id: 'mic-test',
+    panel: 'mic',
+    group: 'ton',
+    label: 'Mikrofon testen',
+    hint: 'Pegel, Ein- und Ausgang, Probe anhören',
+    kinds: [],
+    keywords: ['mikrofon', 'mic', 'microphone', 'test', 'pegel', 'eingang', 'ausgang', 'headset', 'aufnahme'],
+  },
+  {
+    id: 'mic-calibrate',
+    panel: 'mic',
+    group: 'ton',
+    label: 'Mikrofon einstellen',
+    hint: 'Rauschen weg, Stimme klar — für Podcast, Stream, Musik',
+    kinds: [],
+    keywords: ['kalibrieren', 'rauschen', 'noise', 'podcast', 'streaming', 'obs', 'discord', 'videocall', 'gate', 'filter'],
+  },
+
   /* -- converting ----------------------------------------------------------- */
   {
     id: 'convert-audio',
