@@ -83,7 +83,9 @@ fs.writeFileSync(
       productName: 'Sondra',
       version: root.version,
       description: 'Ton, Video und Bilder bearbeiten — lokal auf diesem Rechner.',
-      author: 'Sondra',
+      // Windows shows this as the publisher in Apps & Features, and the
+      // Microsoft Store checks it against the publisher name of the account.
+      author: 'Lizge',
       main: 'main.cjs',
     },
     null,

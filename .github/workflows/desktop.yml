@@ -66,9 +66,19 @@ jobs:
           if (-not $setup) { throw 'Kein Setup gebaut.' }
           Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
 
-          $app = Join-Path $env:LOCALAPPDATA 'Programs\Sondra\Sondra.exe'
+          $app = Join-Path $env:ProgramFiles 'Sondra\Sondra.exe'
           if (-not (Test-Path $app)) { throw "Nicht installiert: $app fehlt." }
-          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\Sondra\LIZENZ.txt'))) { throw 'LIZENZ.txt fehlt im Installationsordner.' }
+          if (-not (Test-Path (Join-Path $env:ProgramFiles 'Sondra\LIZENZ.txt'))) { throw 'LIZENZ.txt fehlt im Installationsordner.' }
+
+          # What the Microsoft Store looks for after a silent install: an entry
+          # in Apps & Features, machine-wide, with the reserved product name
+          # and the account's publisher name.
+          $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
+            Where-Object { $_.DisplayName -eq 'Sondra - Multimedia' }
+          if (-not $entry) { throw 'Kein Eintrag „Sondra - Multimedia“ in Apps & Features (HKLM).' }
+          if ($entry.Publisher -ne 'Lizge') { throw "Herausgeber ist „$($entry.Publisher)“, erwartet „Lizge“." }
+          if (-not $entry.QuietUninstallString) { throw 'Keine stille Deinstallation eingetragen.' }
+          $entry | Select-Object DisplayName, Publisher, DisplayVersion, InstallLocation, QuietUninstallString | Format-List
 
           # Twice: the second start runs against the profile the first one left
           # behind, which is where a start that works once and then fails lives.
@@ -127,7 +137,7 @@ jobs:
           $notes = @"
           Sondra für Windows, Version $version.
 
-          **Installieren:** Sondra-Setup.exe herunterladen und ausführen. Sondra installiert sich nur für das eigene Benutzerkonto, ohne Administratorrechte, und legt einen Eintrag im Startmenü und eine Verknüpfung auf dem Desktop an.
+          **Installieren:** Sondra-Setup.exe herunterladen und ausführen. Sondra installiert sich für alle Benutzer unter „Programme“ (eine Windows-Abfrage) und legt einen Eintrag im Startmenü und eine Verknüpfung auf dem Desktop an.
 
           **Stille Installation:** ``Sondra-Setup-$version.exe /S``
 

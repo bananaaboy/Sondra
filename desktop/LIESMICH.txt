@@ -1,10 +1,13 @@
 SONDRA FÜR WINDOWS
 
 Installieren
-  Sondra-Setup-<Version>.exe doppelklicken, Lizenz bestätigen, Ordner
-  wählen, fertig. Keine Administratorrechte nötig: Sondra installiert sich
-  nur für Ihr Benutzerkonto. Danach steht Sondra im Startmenü und auf dem
-  Desktop.
+  Sondra-Setup-<Version>.exe doppelklicken, die Windows-Abfrage bestätigen,
+  Lizenz bestätigen, Ordner wählen, fertig. Sondra installiert sich für alle
+  Benutzer dieses Rechners unter „Programme“. Danach steht Sondra im
+  Startmenü und auf dem Desktop.
+
+Stille Installation
+  Sondra-Setup-<Version>.exe /S
 
 Starten
   Sondra öffnet sich in einem eigenen Fenster, ohne Browser. Fenster
@@ -16,7 +19,8 @@ Windows-SmartScreen
   „Trotzdem ausführen“.
 
 Entfernen
-  Einstellungen → Apps → Installierte Apps → Sondra → Deinstallieren.
+  Einstellungen → Apps → Installierte Apps → Sondra - Multimedia →
+  Deinstallieren.
 
 Aktualisieren
   Das neuere Setup einfach darüber installieren.

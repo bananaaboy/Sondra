@@ -114,9 +114,11 @@ steht im Panel, bevor man etwas eintippt.
 
 Sondra gibt es auch als installierte Windows-App: eigenes Fenster statt
 Browser, Eintrag im Startmenü, Verknüpfung auf dem Desktop, Deinstallation
-über die Windows-Einstellungen. Das Setup installiert nur für das eigene
-Benutzerkonto, braucht keine Administratorrechte und zeigt vorher
-`LIZENZ.txt`.
+über die Windows-Einstellungen. Das Setup installiert für alle Benutzer
+unter „Programme“ (eine UAC-Abfrage), läuft mit `/S` ganz ohne Oberfläche,
+wie es der Microsoft Store verlangt, und zeigt sonst vorher `LIZENZ.txt`. In
+„Apps & Features“ steht es als „Sondra - Multimedia“ von „Lizge“ — beides
+muss mit dem Eintrag im Partner Center übereinstimmen.
 
 `desktop/electron.mjs` öffnet ein Fenster auf `desktop/server.mjs`, der die
 Seite und die Funktionen unter `api/` nur auf `127.0.0.1` ausliefert — mit
