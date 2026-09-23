@@ -194,7 +194,8 @@ components:
 > in [PRODUCT.md](PRODUCT.md) und [CLAUDE.md](CLAUDE.md). Die **Tokens im
 > Frontmatter sind normativ** — die Prosa sagt, wo und warum sie gelten, und
 > wiederholt keinen Wert. Die Werte oben sind das helle Thema; die dunkle
-> Umrechnung liegt Token für Token in `.impeccable/design.json`.
+> Umrechnung liegt Token für Token in der Sidecar-Datei (`npm`-Skript
+> `scripts/build-design-sidecar.mjs`).
 >
 > Aufgenommen aus dem gebauten Stand, nicht aus dem Vorhaben. Quellen:
 > `src/styles/theme.css`, `src/components/ui/primitives.tsx`, `public/fonts.css`
@@ -371,8 +372,7 @@ sondern eine nicht getroffene Entscheidung.
 
 **Die Kein-Anzeigeschnitt-Regel.** Überschriften sind dieselbe Grotesk, nur
 grösser und schwerer. Ein Prüfschein hat keine Anzeigeschrift, und die, die
-diese App hatte, steht auf jeder Liste von Schriften, nach denen ein Modell
-greift, ohne hinzusehen.
+diese App hatte, ist die Schrift, nach der jede Allerwelts-Vorlage greift.
 
 **Die Ein-Wort-Regel.** Cormorant Garamond lädt als eigene Familie
 `Sondra Wordmark` und setzt genau ein Wort. Sie ist nirgendwo sonst erlaubt —

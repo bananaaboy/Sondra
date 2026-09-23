@@ -426,7 +426,7 @@ const design = {
       },
       {
         name: 'Die Kein-Anzeigeschnitt-Regel',
-        body: 'Überschriften sind dieselbe Grotesk, nur grösser und schwerer. Ein nüchternes Werkzeug hat keine Anzeigeschrift, und die, die diese App hatte, steht auf jeder Liste von Schriften, nach denen ein Modell greift, ohne hinzusehen.',
+        body: 'Überschriften sind dieselbe Grotesk, nur grösser und schwerer. Ein nüchternes Werkzeug hat keine Anzeigeschrift, und die, die diese App hatte, ist die Schrift, nach der jede Allerwelts-Vorlage greift.',
         section: 'typography',
       },
       {

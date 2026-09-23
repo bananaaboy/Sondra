@@ -11,12 +11,12 @@ dist-ssr
 # TypeScript incremental build state
 *.tsbuildinfo
 
-# Persönliche Harness-Einstellungen. Der Impeccable-Hook darin zeigt auf einen
-# absoluten Pfad dieses Rechners und wäre auf jedem anderen kaputt.
+# Persönliche Editor-Einstellungen. Ein Hook darin zeigt auf einen absoluten
+# Pfad dieses Rechners und wäre auf jedem anderen kaputt.
 .claude/settings.local.json
 
-# Impeccable working files. The surface brief under .impeccable/surfaces/ is
-# durable strategy and is committed; the rest is per-run evidence.
+# Design tool working files. The surface brief under surfaces/ is durable
+# strategy and is committed; the rest is per-run evidence.
 .impeccable/review/
 .impeccable/mocks/
 .impeccable/build/

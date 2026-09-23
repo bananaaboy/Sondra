@@ -85,8 +85,8 @@
   /* What the machine entered onto it: values, names, timecodes. */
   --font-value: 'Courier Prime', ui-monospace, 'SF Mono', Menlo, monospace;
   /* Headings are the form's own face, set larger. A certificate has no
-     display face, and the serif this replaced is on every list of faces a
-     model reaches for without looking. */
+     display face, and the serif this replaced is the one every generic
+     template reaches for. */
   --font-display: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Courier Prime', ui-monospace, 'SF Mono', Menlo, monospace;
   /* One word, one face. The wordmark is a brand commitment and did not change
