@@ -469,7 +469,7 @@ Reiter-Unterstrich. Der Fokusring folgt der Rundung des Elements.
 
 **Zeitflächen bleiben eckig** (ebenfalls auf Wunsch, 23.9.2026): die
 Zeitleiste im Video-Editor, jede Wellenform (Ton-Editor, Lautstärke, Player,
-Zerschneiden), die Klavierrolle der Tonart-Ansicht und die Editorbühne. Eine
+Zerschneiden), die Klavierrollen (Tonart-Ansicht und Pad im Pattern) und die Editorbühne. Eine
 Fläche, auf der eine Zeitachse oder ein Bild vermessen wird, beginnt und endet
 an einer Kante; eine Rundung schnitte ihr die ersten und letzten Millisekunden
 optisch ab. Die Bedienelemente daneben bleiben gerundet.
@@ -603,7 +603,29 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   oder 32 Zellen zu 24 × 28 px mit 5 px Rundung, in Vierergruppen abwechselnd
   `panel-mid` und `panel-soft`, eine gesetzte Zelle ist Tinte, der Laufpunkt
   ein 2-px-Ring. Auf dem Handy scrollt das Raster seitlich, statt die Zellen
-  unter Daumengrösse zu drücken.
+  unter Daumengrösse zu drücken. Das Notensymbol neben dem Padnamen öffnet
+  die **Klavierrolle** des Pads darunter: zwei Oktaven um die Tonhöhe des
+  Pads (die Mitte ist C4), eine Spalte je Schritt, eckig als Zeitfläche.
+  Klicken setzt, Ziehen verlängert oder verschiebt, ein Klick auf einen Ton
+  nimmt ihn weg — ohne Rechtsklick, den Trackpad und Handy nicht haben. Ein
+  Pad ist entweder gestept oder gerollt, wie ein Kanal in FL Studio; gerollt
+  zeigt seine Zeile die Töne in klein.
+- **Ein gezogener Bereich ist eine Frage** (Zerschneiden): er erscheint
+  dunkler getönt mit „Auswahl hören", „Als Pad anlegen" und „Verwerfen",
+  und wird erst auf Bestätigung ein Pad. Ein verirrter Zug hinterliess vorher
+  ein Pad. Pads löschen: im Pad-Block oder mit Entf.
+- **Einstellen heisst hören** (Ton-Editor): jeder Klang-Block ist ein
+  Schalter, ein bewegter Regler schaltet ihn ein, und die Wiedergabe läuft
+  durch dieselbe Web-Audio-Kette (`lib/liveSound.ts`), die „Übernehmen" danach
+  offline rendert — was zu hören war, steht in der Datei. Eine Leiste unter
+  der Welle sagt in einem Satz, was gerade zu hören ist, mit Vorher/Nachher.
+  Tempo und Tonhöhe hört man live über einen körnigeren Schieber; übernommen
+  rechnet der Phasenvocoder, und der Hinweis sagt das.
+- **Blenden sind zu sehen, bevor sie da sind:** im Ton-Editor als Kurve über
+  der Welle (der leiser werdende Teil verschleiert in der Farbe des Grunds),
+  beim Überfahren von „Hier einblenden/ausblenden" über der Auswahl; im
+  Video-Editor als Rampe auf der Zeitleiste und als Schwarz über dem Bild, das
+  dem Abspielkopf Bild für Bild folgt.
 - **Pegelanzeige** (Mikrofon): flacher Balken ohne Rundung — eine Zeitfläche
   im Sinn der Regel oben —, Tinte auf `panel-soft`, die letzten 6 dB als
   `panel-mid` markiert statt rot, Spitzenhalter als 2-px-Strich, Werte in

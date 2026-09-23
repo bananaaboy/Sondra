@@ -203,15 +203,17 @@ try {
     return `${before} → ${after} Dateien`
   })
 
-  await step('Ton: Hall und Rauschentfernung', async () => {
+  await step('Ton: Hall und Rauschentfernung live, dann übernommen', async () => {
     await page.locator('main summary', { hasText: 'Klang: Filter' }).click()
-    await page.getByRole('button', { name: 'Hall', exact: true }).click()
-    await waitForText(/Hall [\d.]+ s/, 30_000)
+    await page.getByRole('switch', { name: /^Hall/ }).click()
+    await waitForText(/Live zu hören: .*Hall/, 10_000)
     await dragAcross(main().locator('canvas').first(), 0.0, 0.05)
     await page.getByRole('button', { name: 'Rauschprofil aus der Auswahl' }).click()
-    await page.getByRole('button', { name: 'Rauschen entfernen', exact: true }).click()
-    await waitForText(/Rauschen um bis zu \d+ dB gesenkt/, 30_000)
-    return 'Hall und Rauschentfernung im Verlauf'
+    await waitForText(/Rauschen bis \d+ dB leiser/, 10_000)
+    await page.waitForFunction(() => !/wird gerechnet/.test(document.querySelector('main')?.innerText ?? ''), null, { timeout: 30_000 })
+    await page.getByRole('button', { name: 'Übernehmen', exact: true }).click()
+    await page.waitForFunction(() => /Hall [\d,]+ s/.test(document.querySelector('aside')?.innerText ?? ''), null, { timeout: 30_000 })
+    return 'live gehört, Hall und Rauschen im Verlauf'
   })
 
   await step('Zerschneiden: ein Pad in die Sitzung', async () => {
@@ -249,6 +251,19 @@ try {
       { timeout: 30_000 },
     )
     return `${steps} Schritte, Pattern gerendert`
+  })
+
+  await step('Zerschneiden: Klavierrolle für ein Pad', async () => {
+    await page.getByRole('button', { name: 'Klavierrolle für Pad 1', exact: true }).click()
+    const grid = page.getByRole('grid', { name: 'Klavierrolle' })
+    await grid.evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'instant' }))
+    const box = await grid.boundingBox()
+    const key = await page.locator('button[title="Tonhöhe des Pads"]').boundingBox()
+    const before = await page.locator('[aria-label*="Schritt"][aria-label$="lang"]').count()
+    await page.mouse.click(box.x + (box.width / 16) * 2.5, key.y + key.height / 2 - key.height * 4)
+    const notes = await page.locator('[aria-label*="Schritt"][aria-label$="lang"]').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))
+    if (notes.length !== before + 1 || !notes.some((label) => label.startsWith('E4, Schritt 3'))) throw new Error(`Töne: ${notes.join(' | ')}`)
+    return `${notes.length} Töne, E4 auf Schritt 3 gesetzt`
   })
 
   await step('Tonart: analysieren', async () => {

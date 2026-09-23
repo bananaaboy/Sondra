@@ -130,6 +130,15 @@ export function startVoice(
 /* Patterns                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/** One note in a pad's piano roll. */
+export interface RollNote {
+  step: number
+  /** In steps; the pad sounds for exactly this long. */
+  length: number
+  /** Relative to the pad's own pitch. */
+  semitone: number
+}
+
 export interface Pattern {
   steps: number
   bpm: number
@@ -137,7 +146,31 @@ export interface Pattern {
   swing: number
   /** Slice id → which steps are on. */
   cells: Record<string, boolean[]>
+  /**
+   * Slice id → its piano roll. A pad with an entry here plays its notes and
+   * not its steps — as in FL Studio, where a channel is either stepped or
+   * rolled, never both at once.
+   */
+  notes: Record<string, RollNote[]>
   muted: Record<string, boolean>
+}
+
+export const hasRoll = (pattern: Pattern, id: string) => pattern.notes[id] !== undefined
+
+/** The steps of a pad, as notes at its own pitch — how a roll starts out. */
+export function cellsToNotes(cells: boolean[] | undefined): RollNote[] {
+  return (cells ?? []).flatMap((on, step) => (on ? [{ step, length: 1, semitone: 0 }] : []))
+}
+
+/** Longer or shorter pattern: a second bar repeats the first, a shorter one keeps the start. */
+export function resizeNotes(notes: RollNote[], from: number, to: number): RollNote[] {
+  const kept = notes.filter((note) => note.step < to).map((note) => ({ ...note, length: Math.min(note.length, to - note.step) }))
+  if (to <= from) return kept
+  const copies: RollNote[] = []
+  for (let offset = from; offset < to; offset += from) {
+    for (const note of notes) if (note.step + offset < to) copies.push({ ...note, step: note.step + offset })
+  }
+  return [...kept, ...copies]
 }
 
 export const stepSeconds = (bpm: number) => 60 / bpm / 4
@@ -148,12 +181,42 @@ export function stepTime(index: number, bpm: number, swing: number): number {
   return index * step + (index % 2 === 1 ? swing * step : 0)
 }
 
+export interface Hit {
+  /** The pad as this hit plays it: a roll note carries its pitch in here. */
+  slice: Slice
+  row: number
+  step: number
+  at: number
+  hold: number
+  /** Which voice this hit replaces when pads choke: the row, or row and note. */
+  voice: string
+}
+
 /** The hits of one pass, in order, with how long each may ring. */
-export function patternHits(slices: Slice[], pattern: Pattern): { slice: Slice; row: number; step: number; at: number; hold: number }[] {
+export function patternHits(slices: Slice[], pattern: Pattern): Hit[] {
   const length = pattern.steps * stepSeconds(pattern.bpm)
-  const hits: { slice: Slice; row: number; step: number; at: number; hold: number }[] = []
+  const hits: Hit[] = []
   slices.forEach((slice, row) => {
     if (pattern.muted[slice.id]) return
+    const roll = pattern.notes[slice.id]
+    if (roll) {
+      // A roll note sounds as long as it is drawn — a key held on a piano.
+      // Loops keep looping for that long; everything else becomes a gate.
+      for (const note of roll) {
+        if (note.step >= pattern.steps) continue
+        const at = stepTime(note.step, pattern.bpm, pattern.swing)
+        const end = note.step + note.length >= pattern.steps ? length : stepTime(note.step + note.length, pattern.bpm, pattern.swing)
+        hits.push({
+          slice: { ...slice, semitones: slice.semitones + note.semitone, mode: slice.mode === 'loop' ? 'loop' : 'gate' },
+          row,
+          step: note.step,
+          at,
+          hold: Math.max(0.01, end - at),
+          voice: `${row}:${note.semitone}`,
+        })
+      }
+      return
+    }
     const cells = pattern.cells[slice.id] ?? []
     const on = cells.map((value, step) => (value ? step : -1)).filter((step) => step >= 0 && step < pattern.steps)
     on.forEach((step, index) => {
@@ -161,7 +224,7 @@ export function patternHits(slices: Slice[], pattern: Pattern): { slice: Slice; 
       // A gate lasts one step; a loop until the row's next hit (wrapping).
       const next = index + 1 < on.length ? stepTime(on[index + 1], pattern.bpm, pattern.swing) : length + stepTime(on[0], pattern.bpm, pattern.swing)
       const hold = slice.mode === 'gate' ? stepSeconds(pattern.bpm) : next - at
-      hits.push({ slice, row, step, at, hold })
+      hits.push({ slice, row, step, at, hold, voice: String(row) })
     })
   })
   return hits.sort((a, b) => a.at - b.at)
@@ -184,13 +247,13 @@ export async function bouncePattern(
   const frames = Math.ceil((passSeconds * loops + tailSeconds) * rate)
   const context = new OfflineAudioContext(2, frames, rate)
   const hits = patternHits(slices, pattern)
-  const lastVoice = new Map<number, Voice>()
+  const lastVoice = new Map<string, Voice>()
   for (let pass = 0; pass < loops; pass += 1) {
     for (const hit of hits) {
       const when = pass * passSeconds + hit.at
-      if (choke) lastVoice.get(hit.row)?.stop(when)
+      if (choke) lastVoice.get(hit.voice)?.stop(when)
       const voice = startVoice(context, context.destination, hit.slice, buffers, when, hit.slice.mode === 'oneshot' ? undefined : hit.hold)
-      lastVoice.set(hit.row, voice)
+      lastVoice.set(hit.voice, voice)
     }
   }
   const rendered = fromAudioBuffer(await context.startRendering())
@@ -206,8 +269,9 @@ export async function bouncePattern(
 }
 
 /**
- * The pattern as MIDI: one note per row, from C1 up — the layout drum racks
- * and FL Studio's FPC expect — one step long.
+ * The pattern as MIDI: one note per stepped row, from C1 up — the layout drum
+ * racks and FL Studio's FPC expect — one step long. Rolled pads are melodies
+ * and keep their notes, around C4 for the pad's own pitch.
  */
 export function patternToMidi(slices: Slice[], pattern: Pattern, loops = 1): Uint8Array<ArrayBuffer> {
   const hits = patternHits(slices, pattern)
@@ -216,7 +280,13 @@ export function patternToMidi(slices: Slice[], pattern: Pattern, loops = 1): Uin
   for (let pass = 0; pass < loops; pass += 1) {
     for (const hit of hits) {
       const start = pass * passSeconds + hit.at
-      notes.push({ midi: 36 + hit.row, startSeconds: start, endSeconds: start + stepSeconds(pattern.bpm) * 0.9, velocity: 100 })
+      const rolled = hasRoll(pattern, slices[hit.row].id)
+      notes.push({
+        midi: rolled ? 60 + hit.slice.semitones - slices[hit.row].semitones : 36 + hit.row,
+        startSeconds: start,
+        endSeconds: start + (rolled ? hit.hold : stepSeconds(pattern.bpm) * 0.9),
+        velocity: 100,
+      })
     }
   }
   return writeMidi(notes, { bpm: pattern.bpm, trackName: 'Sondra Pattern' })

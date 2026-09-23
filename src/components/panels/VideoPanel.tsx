@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
+import { getAudioContext, resumeAudioContext } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
 import { loadFfmpeg, onFfmpegProgress, probeMedia, runFfmpeg, sanitize } from '../../lib/ffmpegClient'
 import { formatBytes, formatTimecode } from '../../lib/format'
@@ -103,6 +104,8 @@ function Timeline({
   start,
   end,
   position,
+  fadeIn = 0,
+  fadeOut = 0,
   onChange,
   onSeek,
 }: {
@@ -110,6 +113,9 @@ function Timeline({
   start: number
   end: number
   position: number
+  /** Source seconds the picture spends fading, at the head and at the tail. */
+  fadeIn?: number
+  fadeOut?: number
   onChange: (next: { start: number; end: number }) => void
   onSeek: (seconds: number) => void
 }) {
@@ -161,6 +167,25 @@ function Timeline({
           className="absolute inset-y-0 border-y-2 border-ink/40 bg-ink/5"
           style={{ left: `${percent(start)}%`, width: `${Math.max(0, percent(end) - percent(start))}%` }}
         />
+
+        {/* The fades as ramps, the way an editing suite draws them: the
+            shaded corner is the part that is still dark. */}
+        {fadeIn > 0 || fadeOut > 0 ? (
+          <svg aria-hidden viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+            {fadeIn > 0 ? (
+              <>
+                <polygon points={`${percent(start)},0 ${percent(start)},100 ${percent(Math.min(end, start + fadeIn))},0`} className="fill-ink" fillOpacity={0.28} />
+                <line x1={percent(start)} y1={100} x2={percent(Math.min(end, start + fadeIn))} y2={0} className="stroke-ink" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+              </>
+            ) : null}
+            {fadeOut > 0 ? (
+              <>
+                <polygon points={`${percent(end)},0 ${percent(end)},100 ${percent(Math.max(start, end - fadeOut))},0`} className="fill-ink" fillOpacity={0.28} />
+                <line x1={percent(end)} y1={100} x2={percent(Math.max(start, end - fadeOut))} y2={0} className="stroke-ink" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+              </>
+            ) : null}
+          </svg>
+        ) : null}
 
         {(['start', 'end'] as const).map((side) => (
           <div
@@ -306,6 +331,63 @@ export function VideoPanel() {
 
   const cropping = tool === 'crop'
   const selectionEnd = ops.end > 0 ? ops.end : duration
+
+  /* -- live preview of fades and sound ------------------------------------- */
+
+  // The veil follows the video's own clock every frame — `timeupdate` comes
+  // four times a second, and a fade previewed at four frames a second is a
+  // slideshow.
+  const veilRef = useRef<HTMLDivElement>(null)
+  const headFade = (ops.reverse ? ops.fadeOut : ops.fadeIn) * ops.speed
+  const tailFade = (ops.reverse ? ops.fadeIn : ops.fadeOut) * ops.speed
+  useEffect(() => {
+    const veil = veilRef.current
+    if (!veil) return
+    if (headFade <= 0 && tailFade <= 0) {
+      veil.style.opacity = '0'
+      return
+    }
+    let frame = 0
+    const paint = () => {
+      const at = videoRef.current?.currentTime ?? 0
+      let dark = 0
+      if (headFade > 0 && at < ops.start + headFade) dark = Math.max(dark, 1 - Math.max(0, at - ops.start) / headFade)
+      if (tailFade > 0 && at > selectionEnd - tailFade) dark = Math.max(dark, 1 - Math.max(0, selectionEnd - at) / tailFade)
+      veil.style.opacity = String(Math.min(1, Math.max(0, dark)))
+      frame = requestAnimationFrame(paint)
+    }
+    paint()
+    return () => cancelAnimationFrame(frame)
+  }, [headFade, tailFade, ops.start, selectionEnd, sourceUrl])
+
+  // Mute and level are heard in the preview as they are set. Above 0 dB the
+  // element cannot go, so the picture's sound is routed through a gain node
+  // the first time a boost is asked for.
+  const boostRef = useRef<GainNode | null>(null)
+  useEffect(() => {
+    const node = videoRef.current
+    if (!node) return
+    node.muted = ops.mute
+    const gain = 10 ** (ops.volumeDb / 20)
+    if (gain > 1 && !boostRef.current) {
+      try {
+        const context = getAudioContext()
+        const source = context.createMediaElementSource(node)
+        const boost = context.createGain()
+        source.connect(boost).connect(context.destination)
+        boostRef.current = boost
+        void resumeAudioContext()
+      } catch {
+        /* this element is already routed, or the browser declines */
+      }
+    }
+    if (boostRef.current) {
+      node.volume = 1
+      boostRef.current.gain.value = gain
+    } else {
+      node.volume = Math.min(1, gain)
+    }
+  }, [ops.mute, ops.volumeDb, sourceUrl])
 
   /* -- playback ------------------------------------------------------------- */
   const seek = (seconds: number) => {
@@ -528,6 +610,9 @@ export function VideoPanel() {
                   filter: previewFilter(ops),
                 }}
               />
+              {/* The fade, previewed: black over the picture, as dark as the
+                  output will be at this moment of the clip. */}
+              <div ref={veilRef} aria-hidden className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: 0 }} />
               {cropping && display.width > 0 ? (
                 <CropOverlay
                   rect={ops.crop ?? FULL_RECT}
@@ -575,6 +660,10 @@ export function VideoPanel() {
             start={ops.start}
             end={selectionEnd}
             position={position}
+            // Reversing runs before the fades, so a reversed clip fades in
+            // from what is the end of the source.
+            fadeIn={(ops.reverse ? ops.fadeOut : ops.fadeIn) * ops.speed}
+            fadeOut={(ops.reverse ? ops.fadeIn : ops.fadeOut) * ops.speed}
             onChange={({ start, end }) => patch({ start, end })}
             onSeek={seek}
           />

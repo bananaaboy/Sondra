@@ -94,6 +94,11 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Downloader nannte den Weg automatisch und stellte daneben drei Knöpfe zur
   Handauswahl. Jetzt steht der gewählte Weg als Satz da, die Handauswahl ist
   ein Klick dahinter. Weggenommen wird dabei nichts.
+- **Einstellen heisst hören.** Im Ton-Editor ist jeder Effekt ein Schalter,
+  ein Regler schaltet ihn ein, und die Wiedergabe läuft durch dieselbe Kette,
+  die „Übernehmen" offline rendert. Blenden stehen als Kurve bzw. Rampe da,
+  bevor sie gerechnet sind. Im Zerschneiden wird ein gezogener Bereich erst
+  auf Bestätigung ein Pad.
 - **Zustand ist eine Marke am Rand,** kein Kasten: `Notice` annotiert mit
   `●` und `!`, statt den Hinweis einzurahmen.
 - **Jedes Werkzeug hat eine Adresse.** `#umwandeln`, `#tonart`,
