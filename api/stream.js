@@ -62,6 +62,19 @@ export default async function handler(request, response) {
       if (target) upstream = await fetch(target, { headers, redirect: 'follow' })
     }
 
+    // Passed through, a refusal from the media host looked exactly like this
+    // endpoint's own "token expired" 403, and the panel said the link had run
+    // out when YouTube had simply turned this machine away.
+    if (upstream.status === 403) {
+      response.status(502).json({
+        error: 'refused',
+        message: claim.yt
+          ? 'YouTube hat die Übertragung an diesen Rechner abgelehnt. Über „Optionen" mit yt-dlp auf dem eigenen Gerät geht es meist trotzdem.'
+          : 'Die Quelle hat die Übertragung abgelehnt (403).',
+      })
+      return
+    }
+
     response.status(upstream.status)
     for (const header of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'last-modified']) {
       const value = upstream.headers.get(header)
