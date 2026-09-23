@@ -1,956 +1,179 @@
 # Sondra
 
-Ein Medienstudio, das öffentlich im Internet steht und trotzdem nichts hochlädt.
-Der Server liefert HTML, JavaScript und WebAssembly aus — danach rechnet
-ausschließlich der Rechner des Besuchers.
+Ein Medienstudio im Browser, das nichts hochlädt. Der Server liefert HTML,
+JavaScript und WebAssembly aus — danach rechnet ausschliesslich der Rechner des
+Besuchers. Live unter [lizge.ch](https://www.lizge.ch), als Windows-App über
+die [Releases](https://github.com/bananaaboy/Lizge/releases/latest).
 
-Die Reiter heißen nach dem Ergebnis, nicht nach dem Verfahren — wer mit einer
-Aufnahme und einer Frage ankommt, kennt die Fachwörter noch nicht, und eine
-Reiterleiste ist der schlechteste Ort, um sie zu lernen.
+Vite 7 · React 19 · TypeScript · Tailwind v4 · zustand · FFmpeg als
+WebAssembly.
 
-| Reiter | | |
+## Was es kann
+
+Die Werkzeuge heissen nach dem Ergebnis, nicht nach dem Verfahren. Jedes hat
+eine eigene Adresse; der Start ist die blanke Wurzel.
+
+| Werkzeug | Adresse | |
 |---|---|---|
-| **Herunterladen** | Downloader | Direkte Links, HLS-Playlisten und — auf Wunsch — Portale |
-| **Umwandeln** | Konverter | FFmpeg als WebAssembly, Ton und Video; die Ziele richten sich nach der Quelle |
-| **Ton** | — | Schneiden an der Wellenform, Blenden, Pegel, Stille, Tonhöhe, Tempo, Kanäle |
-| **Video** | — | Schneiden an der Zeitleiste, Ausschnitt, Drehen, Tempo, Ton herauslösen, GIF |
-| **Bilder** | — | Skalieren, zuschneiden, Farbe, umwandeln, Stapel als ZIP |
-| **Spuren trennen** | Spurentrennung | Gesang, Schlagzeug, Bass, Übriges — ohne Modell-Download |
-| **Lautstärke** | Lautheit | Vollständiges EBU R128 / ITU-R BS.1770-4 mit True-Peak-Grenze |
-| **Zerschneiden** | Chopper | Schnitte an Anschlägen oder im Tempo-Raster, 16 Pads, Sample-Pack |
-| **Tonart** | Harmonie | Tonart mit Camelot-Code, Akkordverlauf, Melodie als MIDI |
+| **Herunterladen** | `#herunterladen` | Direkte Links, Freigabe-Links, HLS-Playlisten, YouTube (progressive Spur) und — mit Anbieter — weitere Portale |
+| **Umwandeln** | `#umwandeln` | Ton und Video in andere Formate; die Ziele richten sich nach der Quelle, Stapel als ZIP |
+| **Ton** | `#ton` | Schneiden an der Wellenform, Blenden, Pegel, Stille, Tonhöhe, Tempo, Kanäle |
+| **Video** | `#video` | Schneiden an der Zeitleiste, Ausschnitt, Drehen, Tempo, Ton herauslösen, GIF |
+| **Bilder** | `#bilder` | Skalieren, zuschneiden, Farbe, umwandeln, Stapel als ZIP |
+| **Spuren trennen** | `#spuren-trennen` | Gesang, Schlagzeug, Bass, Übriges — ohne Modell-Download |
+| **Lautstärke** | `#lautstaerke` | EBU R128 / ITU-R BS.1770-4 mit True-Peak-Grenze |
+| **Zerschneiden** | `#zerschneiden` | Schnitte an Anschlägen oder im Tempo-Raster, 16 Pads, Sample-Pack |
+| **Tonart** | `#tonart` | Tempo, Tonart mit Camelot-Code, Akkordverlauf, Melodie als MIDI |
 
-Das Tonart-Panel hat zwei Ansichten: „Einfach“ zeigt Tempo, Tonart und
-Camelot-Code und sonst nichts, „Detail“ zusätzlich Akkorde, Tonklassen, die
-Melodie und alle Einstellungen. Einfach überspringt die Tonhöhenverfolgung, den
-teuren Teil, weil sie dort ohnehin nicht gezeigt wird — und sagt das auch, statt
-im Detailmodus „keine Melodie gefunden“ für etwas zu melden, das nie gesucht
-wurde.
+Die Startseite zeigt ohne Datei nur, was die Seite kann, und den Knopf, der
+sie startet. Mit Datei fragt sie, was damit passieren soll, und bietet die
+passenden Werkzeuge an. Darunter stehen alle Werkzeuge als Kacheln, nach
+Gruppen filterbar und durchsuchbar.
 
-Dazu: helles und dunkles Erscheinungsbild, Stapelverarbeitung mit ZIP-Ausgabe,
-Installation als PWA und vollständiger Offline-Betrieb.
-
-Überall, wo etwas bearbeitet wurde, lässt es sich anhören — und wo es ein Vorher
-gibt, im direkten Umschalten dagegen. Der Umschalter hält die Abspielposition,
-denn anders lässt sich ein Pegeleingriff oder eine Spurentrennung nicht
-beurteilen.
+Die geöffneten Dateien liegen hinter dem Dateinamen in der Kopfzeile: dort
+wechseln, abspielen, speichern, entfernen, weitere öffnen oder alles
+verwerfen. Überall, wo etwas bearbeitet wurde, lässt es sich anhören, und wo
+es ein Vorher gibt, im direkten Umschalten dagegen — bei gehaltener
+Abspielposition.
 
 ## Schnellstart
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # statisches Bündel in dist/
-npm run preview  # dist/ mit den richtigen Headern ausliefern
-
+npm run dev              # http://localhost:5173
+npm run build            # statisches Bündel in dist/
+npm run preview          # dist/ mit den Isolations-Headern ausliefern
+npm run dev:service      # dist/ zusammen mit den Funktionen unter api/
 npm run typecheck        # TypeScript ohne Emit
-npm run verify            # Lautheit und Timing prüfen
+npm run verify           # Lautheit, Tempo, Harmonie und Auflösung prüfen
 ```
 
-`dist/` ist ein Ordner mit statischen Dateien. Es gibt keine Laufzeit, keine
-Datenbank, keinen API-Endpunkt.
+`vite preview` kennt `api/` nicht. Wer den Downloader lokal durchspielen will,
+baut einmal und startet `npm run dev:service`.
 
-## Warum das wirklich lokal ist
-
-Drei Dinge machen die Behauptung überprüfbar:
+## Was lokal bleibt
 
 1. **Keine fremden Ursprünge.** Schriften, WASM-Module und Skripte liegen im
    eigenen Bündel. Kein CDN, keine Google Fonts, kein Analytics. Der
    Netzwerk-Tab bleibt nach dem Laden still.
-2. **Kein Speicher.** Medien liegen ausschließlich im Heap des Tabs — kein
-   `localStorage`, keine IndexedDB, keine Cookies. Tab schließen ist die
-   Löschtaste.
-3. **Die einzige Ausnahme ist sichtbar** — und wird gezählt. Das Abzeichen im
-   Kopf sagt „Lokal · 1 Ausnahme", und die Ausnahme ist „Herunterladen": dort
-   geht die eingegebene Adresse an einen kleinen Dienst dieser Seite, der die
-   Datei durchreicht. Eigene Dateien sieht er nie, gespeichert wird dort
-   nichts, und das Feld darüber sagt es in drei Sätzen, bevor man etwas
-   eintippt.
+2. **Medien nur im Arbeitsspeicher.** Dateien liegen ausschliesslich im Heap
+   des Tabs — keine IndexedDB, keine Cookies. Tab schliessen ist die
+   Löschtaste. Im `localStorage` stehen nur drei Einstellungen: das
+   Erscheinungsbild (`sondra:theme`), ein selbst eingetragener
+   Extraktionsdienst (`sondra:service`, ohne API-Schlüssel) und eigene
+   Instanzen (`sondra:instances`).
+3. **Die Ausnahme ist sichtbar und wird gezählt.** Der Chip in der Kopfzeile
+   sagt „Lokal · 1 Ausnahme". Die Ausnahme ist das Herunterladen: dort geht
+   die eingegebene Adresse an den kleinen Dienst dieser Seite, der die Datei
+   durchreicht. Eigene Dateien sieht er nie, gespeichert wird dort nichts. Ist
+   zusätzlich ein Extraktionsdienst verbunden, zählt der Chip zwei Ausnahmen.
 
-## Projektstruktur
-
-```
-Sondra/
-├── index.html                     Einstieg; registriert den Isolations-Service-Worker
-├── vite.config.ts                 Build, COOP/COEP im Entwicklungsserver
-├── vercel.json                    Header für Vercel
-├── scripts/
-│   ├── verify-loudness.mts        Kalibrierungstest gegen BS.1770-4
-│   ├── verify-tempo.mts           Tempoerkennung, Raster, Nulldurchgänge
-│   └── verify-harmony.mts         Tonart, Tonhöhe, MIDI-Datei
-├── public/
-│   ├── _headers                   Header für Netlify und Cloudflare Pages
-│   ├── staticwebapp.config.json   Header für Azure Static Web Apps
-│   ├── coi-serviceworker.js       Isolations-Header und Offline-Cache
-│   ├── manifest.webmanifest       PWA-Manifest
-│   ├── fonts.css, fonts/          Selbst gehostete Schriften
-│   └── favicon.svg, icon-*.png
-└── src/
-    ├── main.tsx, App.tsx
-    ├── styles/theme.css           Designsystem als Tailwind-v4-Theme
-    ├── lib/
-    │   ├── ffmpegClient.ts        FFmpeg-WASM-Anbindung  ← siehe unten
-    │   ├── service.ts             Extraktions-Dienst (YouTube und Co.)
-    │   ├── theme.ts               Hell/Dunkel/System
-    │   ├── zip.ts                 ZIP-Schreiber ohne Abhängigkeit
-    │   ├── wakeLock.ts            Bildschirm wach halten
-    │   ├── convert.ts             Ausgabeformate und Argumentbau
-    │   ├── download.ts            Fetch mit Fortschritt, HLS, Speichern
-    │   ├── fft.ts                 FFT, STFT, ISTFT mit WOLA
-    │   ├── loudness.ts            BS.1770-4: K-Bewertung, Gating, True Peak
-    │   ├── separation.ts          HPSS und Mittenkohärenz → vier Masken
-    │   ├── onnx.ts                Optionaler Modell-Läufer (WebGPU/WASM)
-    │   ├── timestretch.ts         Phasenvocoder, Resampler
-    │   ├── onsets.ts              Transientenerkennung über Spektralfluss
-    │   ├── tempo.ts               Tempo, Beat-Raster, Nulldurchgänge
-    │   ├── chroma.ts              Tonklassenprofil
-    │   ├── key.ts                 Tonart und Akkorde
-    │   ├── pitch.ts               YIN-Tonhöhenverfolgung, Notenbildung
-    │   ├── midi.ts                Standard-MIDI-Datei
-    │   ├── audio.ts               Web-Audio-Brücke, Schnittoperationen
-    │   ├── wav.ts                 RIFF-Leser und -Schreiber
-    │   ├── workerClient.ts        Promise-Fassade über die Worker
-    │   └── capabilities.ts        Laufzeiterkennung
-    ├── workers/
-    │   ├── protocol.ts            Nachrichtenverträge
-    │   ├── loudness.worker.ts
-    │   ├── stems.worker.ts
-    │   └── sampler.worker.ts
-    ├── components/
-    │   ├── Landing.tsx, Dashboard.tsx, Waveform.tsx, FileDrop.tsx, AssetList.tsx
-    │   ├── panels/                Die fünf Werkzeuge
-    │   └── ui/primitives.tsx      Buttons, Karten, Regler, Kennzahlen
-    ├── hooks/useDecodedAudio.ts
-    └── state/store.ts             Sitzungszustand (nur im Speicher)
-```
-
-## FFmpeg WASM richtig einbinden
-
-Das ist der Teil, an dem die meisten Integrationen scheitern. Vier Punkte.
-
-### 1. Die drei URLs
-
-`@ffmpeg/ffmpeg` ist nur ein RPC-Client. `new FFmpeg()` liefert eine Hülle,
-`load()` startet einen eigenen Web Worker und übergibt ihm drei Adressen:
-
-```ts
-await ffmpeg.load({
-  classWorkerURL: absolute(classWorkerUrl), // der RPC-Worker selbst
-  coreURL:        absolute(coreUrl),        // Emscripten-Glue-Code
-  wasmURL:        absolute(coreWasmUrl),    // das übersetzte FFmpeg
-  ...(multiThreaded ? { workerURL: absolute(coreMtWorkerUrl) } : {}),
-})
-```
-
-Die Adressen müssen **absolut** sein: der Worker löst relative Pfade gegen
-seinen eigenen Skriptort auf, nicht gegen die Seite.
-
-### 2. Assets aus dem eigenen Bündel statt vom CDN
-
-Fast alle Beispiele holen den Core per `toBlobURL` von unpkg. Damit meldet sich
-jeder Besucher bei einem Dritten an. Stattdessen sind beide Cores Abhängigkeiten,
-und Vites `?url` macht gehashte Assets vom eigenen Ursprung daraus:
-
-```ts
-import coreUrl         from '@ffmpeg/core?url'
-import coreWasmUrl     from '@ffmpeg/core/wasm?url'
-import coreMtUrl       from '@ffmpeg/core-mt?url'
-import coreMtWasmUrl   from '@ffmpeg/core-mt/wasm?url'
-import coreMtWorkerUrl from '@ffmpeg/core-mt/worker?url'
-import classWorkerUrl  from '@ffmpeg/ffmpeg/worker?url'
-```
-
-Wichtig sind die Export-Pfade des Pakets (`@ffmpeg/core/wasm`), nicht die
-Dateipfade darunter. Dazu gehört in `vite.config.ts`:
-
-```ts
-optimizeDeps: { exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util', 'onnxruntime-web'] }
-```
-
-Ohne diese Zeile schreibt das Pre-Bundling die Adressen um, die diese Pakete zur
-Laufzeit selbst auflösen, und der Core lädt nicht.
-
-Zwei weitere Fallstricke, beide beim Testen aufgefallen:
-
-- **`classWorkerURL` nicht setzen.** Als `?url`-Asset landet `worker.js` mit
-  unaufgelösten relativen Importen im Bündel und stirbt beim ersten Import.
-  Ohne die Option greift die Bibliothek auf `new URL('./worker.js',
-  import.meta.url)` zurück, und Vite bündelt den Worker korrekt.
-- **`assetsInlineLimit: 0`.** `ffmpeg-core.worker.js` ist klein genug, dass Vite
-  es standardmäßig als `data:`-URI einbettet. Ein aus einer Data-URL erzeugter
-  Worker bekommt einen undurchsichtigen Ursprung und darf den Core nicht mehr
-  importieren — der Ladevorgang schlägt dann ohne nützliche Fehlermeldung fehl.
-
-### 3. Mehrfädig nur bei Cross-Origin-Isolation
-
-`@ffmpeg/core-mt` ist um ein Mehrfaches schneller, braucht dafür aber pthreads
-und damit `SharedArrayBuffer`. Den gibt der Browser nur isolierten Dokumenten:
-
-```
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: credentialless
-```
-
-`credentialless` statt `require-corp`, damit der Downloader weiterhin an fremde
-Medien kommt, die keinen CORP-Header senden.
-
-Die Header stehen für den Entwicklungsserver in `vite.config.ts`, für Netlify
-und Cloudflare in `public/_headers`, für Vercel in `vercel.json` und für Azure in
-`public/staticwebapp.config.json`. Wo sich gar keine Header setzen lassen —
-GitHub Pages etwa —, ergänzt `public/coi-serviceworker.js` sie im Service Worker.
-
-Fehlt die Isolation trotzdem, lädt `capabilities.ts` den einfädigen Core. Die
-Anwendung funktioniert vollständig, nur langsamer. Die Kachel „Dieser Browser“
-im Studio zeigt, welcher Weg gerade aktiv ist.
-
-### 4. Eingaben kopieren, bevor FFmpeg sie bekommt
-
-`writeFile` legt den ArrayBuffer des Aufrufers in die Transfer-Liste. Nach dem
-Schreiben ist der Puffer also *detached* — die Datei in der Sitzung wäre eine
-leere Hülle und ließe sich danach weder erneut umwandeln noch dekodieren noch
-abspielen. `runFfmpeg()` übergibt deshalb eine Kopie. Das kostet einmal Speicher
-und erspart einen Fehler, der erst beim zweiten Durchlauf auffällt.
-
-### 5. MEMFS aufräumen
-
-Jeder Lauf schreibt seine Eingaben in ein In-Memory-Dateisystem und liest die
-Ausgaben zurück. `runFfmpeg()` löscht beides im `finally`-Zweig — sonst wächst
-der Heap über eine lange Sitzung mit jeder Datei weiter.
-
-Abbrechen geht nur über `terminate()`: ein laufender Core lässt sich nicht
-unterbrechen. Der nächste Aufruf lädt ihn transparent neu.
+Die Datenschutzerklärung steht in
+[`public/datenschutz.html`](public/datenschutz.html), live unter
+[lizge.ch/datenschutz.html](https://www.lizge.ch/datenschutz.html).
 
 ## Der Downloader
 
-Ein Panel, drei Wege. Direkter Link, HLS-Playlist und Portal-Adresse sind aus
-Sicht des Nutzers dieselbe Aufgabe — Adresse einfügen, Datei bekommen —, also
-teilen sie sich ein Adressfeld und einen Knopf. Der Weg ergibt sich aus der
-Adresse; drei Chips zeigen, welcher gewählt wurde, und erlauben, ihn zu
-überschreiben.
+Der Browser allein kommt an die meisten Portale nicht heran (CORS). Deshalb
+gibt es zwei kleine Funktionen:
 
-Die Reihenfolge ist bewusst: erst alles zum Laden, dann die Zusatzoptionen für
-Portale, und ganz unten deren Bedingungen. Wer die Funktion einschaltet, füllt
-zuerst Felder aus; der Hinweistext steht unter den Eingaben, auf die er sich
-bezieht, nicht davor. Geschlossen misst die Karte rund 325 px, mit
-aufgeklappten Portal-Optionen rund 675 px — beides passt ohne Scrollen.
+- `api/resolve.js` schlägt nach, was hinter einer Adresse liegt, und
+  **signiert** die gefundenen Adressen (HMAC, kurze Gültigkeit).
+- `api/stream.js` prüft die Signatur und reicht die Bytes durch — nur
+  `https`, nie in private Adressbereiche, damit der Endpunkt kein SSRF-Loch
+  ist.
 
-Zeigt eine Adresse auf ein Portal, sagt der Hinweis unter den Chips genau das —
-auch dann, wenn jemand von Hand auf „Direkter Link“ stellt. Ein Weg, den der
-Browser nicht gehen kann, wird nicht als gangbar dargestellt.
+Der Browser holt in 4-MB-Stücken mit `Range`. Das hält jeden Aufruf unter dem
+Zeitlimit einer Serverless-Funktion, macht den Fortschritt exakt und das
+Abbrechen sofort wirksam.
 
-### YouTube und andere Portale
+Welcher Weg geantwortet hat, steht beim Ergebnis: „Über den hinterlegten
+Anbieter", „YouTube direkt" oder „Direkte Datei-Adresse". YouTube liefert an
+einen Server nur die progressive Spur (Bild und Ton in einer Datei, in der
+Regel 360p); die hohen Auflösungen laufen über SABR und haben keine abrufbare
+Adresse. Volle Auflösung gibt es über einen hinterlegten Anbieter oder über
+die Wege unter „Optionen" im Panel (eigener Dienst, yt-dlp auf dem eigenen
+Gerät).
 
-Direkt geht das nicht, und das ist keine Nachlässigkeit: Portale liefern ihre
-Medien ohne `Access-Control-Allow-Origin` aus, der Browser lässt eine fremde
-Seite deshalb nicht an die Daten. Möglich wird es nur mit einem Server als
-Zwischenstation — und der sieht die angefragte Adresse und die IP des Nutzers.
+### Umgebungsvariablen der Bereitstellung
 
-Deshalb ist die Funktion **standardmäßig aus** und muss in jeder Sitzung neu
-eingeschaltet werden. Solange sie aus ist, gibt es keinen Codepfad, der eine
-Adresse nach außen gibt. Wird sie eingeschaltet, steht der Hinweis dauerhaft im
-Panel: was übertragen wird, an wen, und dass die Nutzung auf eigenes Risiko
-erfolgt.
-
-### FFmpeg lädt im Hintergrund, nicht vor der Seite
-
-Der Kern ist rund 31 MB. Ihn erst beim ersten Umwandeln zu holen hieße, dass die
-erste echte Handlung einer Sitzung eine halbe Minute stünde; ihn *vor* der Seite
-zu holen hieß etwas Schlimmeres. Genau das tat diese App bis zum 20.9.2026: ein
-`BootGate` hielt die ganze Oberfläche hinter einem Ladebalken, auch die zwei
-Drittel, die FFmpeg nie anfassen — die Seite zu besuchen hieß, einem Balken
-zuzusehen. Der Nutzer hat es abgeräumt, zu Recht.
-
-Jetzt wird der Kern beim Öffnen geholt, aber **hinter** der Seite. Die
-Oberfläche steht nach rund 180 ms, mit oder ohne FFmpeg. Nichts geht dabei
-verloren: jedes Panel wartet ohnehin selbst mit `await loadFfmpeg()` und zeigt
-dabei seinen eigenen Laufzustand, ein Werkzeug also, das vor dem Kern gedrückt
-wird, meldet das Warten dort, wo gewartet wird. Der Stand steht unter „Unter
-der Haube", samt Knopf zum Nachladen.
-
-Zwei Dinge halten das Warten ehrlich:
-
-* **Echte Bytes statt eines Kreisels.** Die `.wasm` wird hier mit einem
-  Stream-Reader geholt und dem Worker als Blob übergeben — ein Download, echte
-  Zahlen. `content-length` zählt allerdings die Bytes auf der Leitung, der
-  Reader die entpackten; bei komprimierter Auslieferung sind das für diese Datei
-  rund drei zu eins. Die Länge wird deshalb nur ohne `content-encoding`
-  geglaubt und verworfen, sobald der entpackte Strom sie überholt. Dann läuft
-  der Balken unbestimmt weiter, statt bei einem Drittel vollzulaufen und zu
-  lügen.
-* **Ein Fehlschlag ist keine verschlossene Tür.** Spurentrennung, Lautheit,
-  Chopper und Harmonie rühren FFmpeg nie an. Scheitert das Laden, merkt die
-  Seite es gar nicht; scheitert es dort, wo es gebraucht wird, steht der Grund
-  im Werkzeug. Nachgemessen mit blockiertem Kern: die Seite steht nach 182 ms
-  und „Spuren trennen" öffnet normal.
-
-Beim zweiten Besuch liegt der Kern im Zwischenspeicher des Service Workers, er
-ist also sofort da.
-
-### Eine Frage, einmal beantwortet
-
-Fünf Panels beantworteten dieselbe Frage — „noch keine Datei" — fünfmal, und
-jedes davon zweimal auf einem Bildschirm: ein Ablagebereich in der Mitte, ein
-zweiter in der Seitenspalte, darunter die Bibliothek mit „Noch nichts geladen".
-Drumherum Einstellungen für Material, das es nicht gab: Blendenlängen,
-Modellwahl, Zielformate, alles zu entscheiden, bevor die Datei existierte, auf
-die es sich bezieht.
-
-Jetzt wird die Frage einmal beantwortet, im Dashboard, und das Panel rendert
-überhaupt erst, wenn es etwas zu zeigen hat. Der Downloader ist ausgenommen: er
-ist kein Werkzeug, das eine Datei braucht, sondern einer der beiden Wege, an
-eine zu kommen — und der zweite Weg steht als Satz darunter.
-
-Dasselbe Prinzip nach innen:
-
-* **Erklärungen hinter ein Wort.** Wie FFmpeg rechnet, wie die Trennung
-  funktioniert, wie gemessen wird — vier Zeilen Verfahrensbeschreibung standen
-  jeweils zwischen der Überschrift und dem Knopf, für den man gekommen war.
-* **Feineinstellungen eingeklappt.** Mittenschärfe, Maskenhärte, Auflösung,
-  Medianfenster bei den Spuren; Zielwert, Grenze und Spitzenbehandlung bei der
-  Lautheit. Vorgaben, die meistens passen, und ein Knopf davor.
-* **Die Datei einmal benennen.** Die Bibliothek zeigt Name, Größe, Dauer,
-  Abtastrate und einen Player. Eine zweite Karte daneben, die einen Teil davon
-  wiederholte, ist weg.
-
-Gemessen: leerer Zustand in allen fünf Werkzeug-Tabs identisch bei 955 px, mit
-Datei zwischen 832 px und 1406 px. Bei 400 px Breite kein seitlicher Überlauf,
-im Dunkelmodus kein Text auf gleichfarbigem Grund.
-
-### Der Downloader passt auf einen Bildschirm
-
-Eingeschaltet war der Tab 2270 Pixel hoch — knapp drei Bildschirme, und das
-Adressfeld, also das Einzige, was bei jeder Nutzung gebraucht wird, stand ganz
-oben, während der Rest der Seite Einrichtungstexte waren. Jetzt sind es 949
-Pixel.
-
-Was sich geändert hat, ist nicht das Kürzen von Texten, sondern wo sie stehen:
-
-* **Die Einrichtung liegt in einem Dialog.** Sie wird einmal gelesen und danach
-  nie wieder, also gehört sie hinter eine Tür statt dauerhaft zwischen das
-  Adressfeld und alles andere. Der Dialog baut auf dem nativen
-  `<dialog>`-Element auf, damit Fokusfalle, Escape und Hintergrund nicht
-  schlecht nachgebaut werden müssen.
-* **Auf der Seite bleiben zwei Zeilen:** was gerade gilt, und ein Knopf hinein.
-* **Die Leiste „Dieser Browser" ist eine Zeile Chips** statt sechs Kennzahlen mit
-  je einem Satz. Die Sätze stehen hinter „Was heißt das?" und im Tooltip.
-* **Keine Tür hinter der Tür.** Im Dialog war noch eine Klapp-Ebene und ein
-  Absatz, der vor dem Eingabefeld stand; die Ebene ist weg, der Absatz liegt
-  unter „Warum gibt es nichts Leichteres?".
-
-Bei 400 Pixeln Breite läuft nichts seitlich über, und der Dialog passt hinein.
-
-Bleibt es dabei gesperrt, sagt die Prüfung jetzt, woran es liegt, statt es zu
-vermuten: Chrome legt die Erlaubnis wie jede andere offen, also lässt sie sich
-abfragen. `erteilt` und trotzdem nichts heißt, der Dienst läuft wirklich nicht.
-`verweigert` heißt, es wurde einmal Nein gesagt und der Browser fragt nicht
-wieder — dann hilft nur das Schloss in der Adresszeile. `noch nicht erteilt`
-heißt, die Frage steht aus.
-
-Und eine Frage kommt nur auf einen Klick hin. Ein Wächter auf dem Zeitgeber hat
-keine Nutzeraktion hinter sich, also kann er keine Abfrage auslösen — deshalb
-gibt es **Zugriff erlauben**. Das ist das eine, was auf einer gehosteten Seite
-von Hand passieren muss; danach läuft wieder alles von selbst.
-
-### Der Fehler war ein Wort
-
-Die Anfrage darf ansagen, wohin sie geht, und der Browser prüft die Ansage gegen
-den tatsächlichen Landeplatz. Es gibt drei Räume: `loopback` ist dieser Rechner,
-`local` ist das Netz, in dem er steht, `public` der Rest. Hier stand `local` für
-eine Adresse auf `127.0.0.1` — und eine falsche Ansage wird nicht ignoriert. Sie
-fällt durch die Prüfung, und die Anfrage stirbt, ohne dass überhaupt gefragt
-wird.
-
-Genau das war das Bild: Erlaubnis vorhanden, Erlaubnis nicht verweigert, keine
-Abfrage, tote Anfrage. Von einer gehosteten Seite aus gegen alle vier Werte
-gemessen:
-
-| Ansage | Ziel `127.0.0.1:9000` |
+| Variable | Wofür |
 |---|---|
-| keine | geht durch |
-| `loopback` | geht durch |
-| `local` | scheitert |
-| `private` | scheitert |
-| `public` | scheitert |
-
-Also `loopback` für diesen Rechner, `local` für alles andere Lokale, und wenn
-der erste Wert scheitert, bekommt der zweite eine Chance — ein Name kann in
-beide Räume auflösen. Danach verbindet sich die gehostete Seite von selbst.
-
-### Der Spiegel: die Seite auf den eigenen Rechner holen
-
-Alles Bisherige streitet mit dem Browser darüber, ob eine Seite aus dem Netz
-`localhost` anfassen darf. Der Spiegel beendet den Streit, indem er die Seite auf
-`localhost` stellt. Dann liegen Seite und Dienst im selben Adressraum: keine
-Erlaubnis greift, keine Vorabfrage ist nötig, und es verhält sich in Browsern
-gleich, die von alldem nie etwas umgesetzt haben.
-
-Er ist eine Durchreiche, keine Kopie: jede Anfrage wird von der Seite geholt und
-weitergegeben, man sieht also immer den aktuellen Stand. Zwei Kopfzeilen kommen
-dazu, die den mehrfädigen FFmpeg-Kern freischalten — ohne sie liefe die App
-zwar, nur langsamer, und das an einen Umweg zu verlieren wäre ein schlechter
-Tausch. Inhaltskodierung und -länge fallen weg, weil der Rumpf im Vorbeigehen
-entpackt wird und die alten Angaben ihn nicht mehr beschreiben.
-
-Die heruntergeladene Datei trägt die Adresse der Seite, von der sie stammt,
-bereits in sich. Ein Befehl, dann `localhost:8787` öffnen statt der Website.
-
-Gemessen, im Browser durch den Spiegel hindurch: Seite lädt, gilt als lokal,
-`crossOriginIsolated` und `SharedArrayBuffer` stehen, Service Worker
-kontrolliert, kein Erlaubnis-Knopf mehr nötig, Verbindung zum Dienst nach 1,8
-Sekunden ohne einen einzigen Klick, und eine Datei komplett durchgeladen.
-
-### Die Brücke, für Browser ohne diese Abfrage
-
-Ältere Browser kennen die Erlaubnis nicht. Dort galt die ältere Regelung: nicht
-der Besucher, sondern der *Dienst* muss für die Anfrage bürgen. Eine Anfrage aus
-dem Netz an eine private Adresse löst eine Vorabfrage mit
-`Access-Control-Request-Private-Network` aus, und nur eine Antwort mit
-`Access-Control-Allow-Private-Network: true` lässt die eigentliche Anfrage
-folgen. cobalt sendet die Kopfzeile nicht und hat auch keinen Grund dazu, also
-muss etwas davor es tun.
-
-Mehr ist die Brücke nicht: keine 60 Zeilen Node, keine Abhängigkeiten, hört nur
-auf der Loopback-Schnittstelle. Sie beantwortet die Vorabfrage selbst und reicht
-alles andere unverändert durch — bis auf die CORS-Kopfzeilen, die ersetzt statt
-ergänzt werden, weil zwei Werte für eine Kopfzeile vom Browser verworfen werden.
-
-Sie läuft auf Port 9001, und der steht in der Kandidatenliste *vor* den übrigen:
-wer sie gestartet hat, hat die Adresse, die von einer gehosteten Seite aus
-tatsächlich funktioniert, und sie zuerst zu prüfen spart zwei aussichtslose
-Versuche. Einzutragen ist nichts.
-
-Geprüft mit echter Vorabfrage: 204 mit allen nötigen Kopfzeilen, echte Anfrage
-mit unverändertem Rumpf und genau einem Satz CORS-Kopfzeilen, und in der App
-selbst gefunden, verbunden und eine Datei durchgeladen.
-
-### Wenn die Seite gehostet ist, der Dienst aber zu Hause läuft
-
-Die Prüfung hat den Fall dann auch geliefert: Seite auf `https://www.lizge.ch`,
-Dienst auf `http://localhost:9000`. Das ist kein Fehler im Dienst, sondern eine
-Sperre des Browsers. Eine Seite aus dem Netz, die auf `localhost` zugreift, hat
-die Form eines Angriffs auf den Router im selben Haus, also verlangt Chrome seit
-Version 141 dafür die ausdrückliche Erlaubnis des Besuchers — und eine
-HTTPS-Seite, die `http://` anfragt, wäre zusätzlich als Mixed Content
-abgewiesen worden.
-
-Der Ausweg steht in derselben Spezifikation: `targetAddressSpace: 'local'` sagt
-einer Anfrage an, wohin sie geht. Erst das erlaubt dem Browser, die Frage dem
-Besucher zu stellen, statt die Anfrage stumm fallen zu lassen — und eine erteilte
-Erlaubnis hebt die Mixed-Content-Abweisung gleich mit auf.
-
-Wichtig ist die Reihenfolge, und die ist nicht geraten: **erst normal, dann mit
-Kennzeichnung.** Die Angabe wird gegen den tatsächlichen Landeplatz geprüft,
-also lässt ein „local" für eine Adresse, die sich als Loopback herausstellt, eine
-Anfrage scheitern, die sonst durchgegangen wäre. Genau das ist im Versuch
-passiert, mit einer Seite unter eigenem Hostnamen, der auf 127.0.0.1 zeigt: neun
-gekennzeichnete Anfragen, keine Verbindung. Als Nachschlag statt als Vorgabe
-verbinden sich beide Fälle wieder.
-
-Zu prüfen bleibt, was hier nicht prüfbar war: Ob die Erlaubnisabfrage auf einer
-echt öffentlichen Adresse erscheint, lässt sich in einer Umgebung ohne
-öffentliche IP nicht feststellen. Getestet ist, dass die Kennzeichnung gesetzt
-wird, wo sie hingehört, und dass sie nichts kaputt macht, wo sie nicht hingehört.
-
-### Ein Befehl startet beides
-
-Der Spiegel war ein zweiter Schritt, und ein zweiter Schritt ist einer zu viel.
-Er steckt jetzt im Einrichtungsbefehl selbst: `sondra-start.mjs` fährt den Dienst
-hoch **und** liefert Sondra von demselben Rechner aus. Danach liegen Seite und
-Dienst auf einer Maschine, es gibt keine Grenze zu überschreiten, und niemand
-muss etwas erlauben.
-
-Die Datei liegt als statisches Asset auf der Seite, wird von den Befehlen und von
-beiden Skripten geholt und existiert genau einmal — der Spiegel war vorher im
-Browser erzeugter Text, was eine zweite Umsetzung derselben Sache gewesen wäre.
-Auf einer lokal geöffneten Seite entfällt sie ganz: dort bringt sie nichts, also
-endet der Befehl wie bisher mit `pnpm start`.
-
-Beim Einbauen wäre fast ein stiller Fehler entstanden: die Skript-Erzeuger
-bekamen die Adresse zunächst nicht als Parameter, und `origin` hätte sich
-klaglos auf die globale DOM-Variable bezogen — ein echter Wert, der plausibel
-aussieht und überall außerhalb eines Browsers falsch ist.
-
-Gemessen, mit dem echten Dienst statt einem Attrappen-Server: ein Aufruf, cobalt
-11.7.1 auf 9000 und die Seite auf 8787 mit den Isolations-Kopfzeilen. Im Browser
-darüber geöffnet gilt sie als lokal, `crossOriginIsolated` steht, kein
-Erlaubnis-Knopf erscheint, die Verbindung steht nach 8 ms — und ein echter
-YouTube-Download lief durch: 84 MB, 1080p.
-
-### Der Ton-Editor, und warum er klein war
-
-Schneiden, blenden, Pegel, Stille entfernen, umkehren, transponieren, dehnen,
-Mono/Stereo, Abtastrate — das klingt nach viel und war wenig Arbeit, weil die
-Rechnerei längst dalag: `sliceAudio`, `applyFades`, `reverseAudio`,
-`pitchShift`, `stretchAudio` und `resampleByRatio` gab es für den Sampler und
-die Tonart-Erkennung. Gefehlt hat die unglamouröse Hälfte, und die steht jetzt
-in `src/lib/edit.ts`: Pegel, Stille, Aneinanderhängen, Kanäle, Abtastrate.
-
-Zwei Entscheidungen darin sind keine Geschmacksfrage:
-
-* **Stille wird auf einem 20-ms-Fenster gemessen, nicht pro Abtastwert.** Ein
-  einzelner Nulldurchgang ist keine Stille, und ein Gate, das das glaubt,
-  klappert. An den Rändern bleiben 50 ms stehen — schneidet man exakt an der
-  Schwelle, fehlt das Ausklingen davor und der Atemzug danach, und es klingt
-  zusammengestückelt.
-* **Nichts wird verändert, alles wird neu gebaut.** Der Verlauf hält die
-  vorherigen Fassungen, Strg/Cmd + Z nimmt zurück, und die Datei in der
-  Sitzung wird nie angefasst.
-
-Geprüft mit echtem Ton, vor der Oberfläche: −6 dB ergibt exakt −6, das
-Normalisieren landet auf −0,30 dBFS, eine eingebaute Sekunde Stille wird als
-0,00–1,00 s erkannt und lässt 7,1 s von 8 s übrig, das Aneinanderhängen mit
-0,2 s Blende ergibt 15,8 s statt 16, und WAV überlebt den Hin- und Rückweg in
-16, 24 und 32 bit.
-
-### Die Suche gruppiert jetzt
-
-Dreißig Fähigkeiten in einer Spalte sind eine Wand. Unter fünf Überschriften
-sind sie ein Menü — und die Gruppe, die zur geöffneten Datei passt, steht
-oben, sodass „was kann ich damit machen" zuerst beantwortet wird.
-
-Eine Auszeichnung ist dabei rausgeflogen: jede Zeile trug „passt zur
-Auswahl", weil bei einer Tondatei eben fast alles passt. Eine Markierung, die
-für alles gilt, sagt nichts. Die wenigen Zeilen, die *nicht* passen, sind
-jetzt leicht abgedunkelt — dieselbe Auskunft, dreißig Wörter weniger.
-
-### Von einem Audiowerkzeug zu einer Werkstatt
-
-Bilder und Video sind dazugekommen, und mit ihnen eine Frage, die vorher nicht
-gestellt werden musste: woher weiß jemand, was das Programm kann? Bei sechs
-Reitern liest man sie; bei vielen mehr wächst die Leiste in ein Menü hinein.
-
-Die Antwort ist, die Werkzeuge zu Daten zu machen. `src/lib/actions.ts` ist eine
-Liste dessen, was Sondra kann — je Eintrag ein Ergebnis in Alltagssprache, die
-Dateiarten, auf die es passt, und die Wörter, die Leute tatsächlich tippen,
-deutsche wie englische. Aus derselben Liste speisen sich drei Dinge: die
-Aktionen, die eine ausgewählte Datei an sich selbst anzeigt, die Suche, und die
-Befehlspalette auf Strg/Cmd + K. Ein Eintrag mehr macht eine Fähigkeit überall
-gleichzeitig auffindbar; eine zweite Stelle zum Nachtragen gibt es nicht.
-
-**Bilder laufen ohne WebAssembly.** Gemessen, bevor es gebaut wurde: die
-Zeichenfläche des Browsers schreibt PNG, JPEG und WebP nativ. Für ein
-Bildschirmfoto dreißig Megabyte FFmpeg zu laden wäre absurd, also tut es das
-nicht — skalieren, zuschneiden, drehen, Helligkeit, Kontrast, Sättigung,
-Weichzeichnen laufen sofort. Geschärft wird mit einem eigenen 3×3-Durchgang,
-weil die Zeichenfläche dafür keinen Filter hat. AVIF kann sie nicht schreiben,
-und das steht so da, statt heimlich ein PNG zu liefern.
-
-**Video läuft über FFmpeg, in einem Durchgang.** Schnitt, Ausschnitt, Drehung,
-Skalierung und Tempo sind alle Filter, und Filter lassen sich verketten — fünf
-Durchgänge wären fünf Mal dekodieren und kodieren. Ein Schnitt, der sonst
-nichts verlangt, kopiert die Spuren statt sie neu zu rechnen.
-
-Drei Fehler, die beim Bauen sichtbar wurden und alle drei nichts mit Video zu
-tun hatten:
-
-* **Der Kern verträgt nur einen Auftrag.** Die Seitenleiste dekodiert den Ton
-  der ausgewählten Datei, um eine Wellenform zu zeichnen. Startet ein Panel
-  währenddessen einen Lauf, überlappen sich zwei `exec`-Aufrufe auf einer
-  Instanz, und sie stirbt mit „null function or function signature mismatch" —
-  einem Fehler, der nichts benennt und auf den falschen Auftrag zeigt. Jetzt
-  stehen alle Aufrufe in einer Schlange.
-* **`-preset veryfast` ist in diesem WASM-Build kaputt.** Dieselbe
-  Argumentliste läuft durch ein natives FFmpeg sauber durch; im Browser stirbt
-  sie sofort. Mit `-preset medium` ist derselbe Auftrag in zehn Sekunden fertig.
-  Der Konverter bietet `veryfast` in seinem eigenen Menü an und stürzt damit
-  nicht ab — kommt aber auch nach sieben Minuten nicht zurück.
-* **Ein Selektor mit `filter` baut bei jedem Lesen ein neues Array.** Der Store
-  vergleicht Ergebnisse über Identität, also sah jedes Rendern wie eine
-  Änderung aus. React bricht das mit „maximum update depth exceeded" ab.
-
-Und eine Lücke, die vorher keine war: Wenn der Browser ein Video nicht abspielen
-kann — bei H.264 ist das eine Lizenzfrage, kein Fehler in der Datei —, meldet er
-eine Länge von null und sonst nichts. Jede Bedienung, die eine Länge braucht,
-säße dann grau da. Jetzt fragt FFmpeg nach, und daneben steht, warum es kein
-Bild gibt.
-
-### Warum es ohne Einrichtung nicht geht
-
-Die Frage kam mehrfach, also steht hier die Messung statt einer Meinung.
-
-Ein Browser kann YouTube nicht selbst abrufen, und zwar an zwei Stellen:
-`youtubei`, die Schnittstelle, die die Adressen der Datenströme liefert, gibt
-für fremde Herkünfte kein CORS frei — und `googlevideo.com`, wo die Daten
-liegen, ebenfalls nicht. Beides sind Entscheidungen von YouTube, keine Lücken
-im Programm. Dazwischen muss etwas stehen, das kein Browser ist.
-
-Bleibt: eine fremde Instanz. Geprüft am 18.9.2026:
-
-| | |
-|---|---|
-| `api.cobalt.tools` | erreichbar, CORS offen — aber **kein YouTube** in der Dienstliste, dazu `error.api.auth.jwt.missing`, also ein Bot-Check |
-| `instances.cobalt.best` | kein DNS |
-| `instances.hyper.lol` | kein DNS |
-
-Die Verzeichnisse offener Instanzen, aus denen man früher eine hätte
-aussuchen können, existieren nicht mehr.
-
-Damit bleiben genau zwei ehrliche Möglichkeiten, und beide kosten etwas:
-
-1. **Etwas läuft auf dem Rechner des Nutzers.** Kostet eine Einrichtung, dafür
-   sieht kein Dritter die Adressen. Das ist der Weg, den Sondra geht — und er
-   ist jetzt eine Datei und ein Doppelklick statt vier Befehlen.
-2. **Etwas läuft auf dem Server der Seite.** Kostet die Zusage, dass nichts
-   übertragen wird, dazu Betriebskosten und die Verantwortung für das, was
-   Besucher damit abrufen. Und es funktioniert schlecht: YouTube misstraut
-   Adressen aus Rechenzentren. Gemessen von genau so einer Adresse aus ging
-   **1 von 10** Videos durch; yt-dlp bekam dort „Sign in to confirm you're not
-   a bot". Ein Knopf, der meistens nicht funktioniert, ist schlechter als
-   einer, der einmal Einrichtung verlangt.
-
-Deshalb ist der kurze Weg kurz geworden, statt zu verschwinden:
-`sondra-youtube.cmd` unter Windows ist eine Datei, die per Doppelklick läuft —
-bewusst `.cmd` und nicht PowerShell, weil ein `.ps1` beim Doppelklick im
-Editor landet, solange die Ausführungsrichtlinie nicht geändert wurde. Die
-Datei holt yt-dlp, holt die Brücke, startet beides und öffnet den Browser.
-Node.js ist das Einzige, was sie nicht selbst holen kann; fehlt es, sagt sie
-das und öffnet die richtige Seite.
-
-Und wer gar nichts starten will, benutzt yt-dlp allein und zieht die fertige
-Datei ins Fenster. Für einmalige Sachen ist das der kürzeste Weg überhaupt.
-
-### yt-dlp ist jetzt der Hauptweg
-
-cobalt bleibt vollständig erhalten — wer schon eine Instanz betreibt, ändert
-nichts. Aber die Empfehlung ist yt-dlp, weil der Weg dorthin kürzer ist (eine
-Programmdatei statt Paketmanager und Quelltext) und weil yt-dlp mehr Umwege
-kennt, wenn YouTube zumacht.
-
-Zwei Dinge waren dabei zu korrigieren, und beide waren Reste aus der Zeit, als
-cobalt die einzige Umsetzung war:
-
-* **Die App schrieb „cobalt" fest vor die Version.** Verbunden mit der Brücke
-  stand da „cobalt yt-dlp 2026.08.19 · Sondra-Brücke". Der Dienst nennt sich
-  in seiner Versionsangabe selbst; das Präfix ist weg.
-* **Der Warnhinweis behauptete einen fremden Betreiber.** Läuft der Dienst auf
-  demselben Rechner, gibt es keinen — und einen Hinweis zu zeigen, der
-  nachweislich nicht stimmt, erzieht dazu, auch den zu überlesen, der stimmt.
-  Jetzt steht bei einer Adresse auf `localhost` das Zutreffende da: kein
-  fremder Server dazwischen, aber YouTube sieht die Anfrage und damit die
-  IP-Adresse, so wie beim Ansehen auch. Die Haftungszeile steht in beiden
-  Fassungen und ist an keine Bedingung geknüpft.
-
-### Derselbe Dienst, aber mit yt-dlp
-
-cobalt spricht YouTube über `youtubei.js` an, also über YouTubes eigene
-App-Schnittstelle. Das ist ein Weg, und wenn YouTube ihn sperrt, gibt es keinen
-zweiten. yt-dlp kennt viele, und vor allem kennt es einen, der hilft, wenn die
-Sperre auf der IP-Adresse liegt: die Anmeldung aus einem Browser auf demselben
-Rechner.
-
-yt-dlp ist allerdings ein *Befehl*, kein Dienst — es hat keine Schnittstelle,
-die eine Webseite ansprechen könnte, und eine Webseite darf auch kein Programm
-starten. `sondra-ytdlp.mjs` ist das fehlende Stück dazwischen: nach außen
-spricht es genau das Protokoll, das Sondra ohnehin kann, nach innen ruft es
-yt-dlp auf. Am Client musste dafür nichts geändert werden.
-
-```
-curl -L -o yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
-chmod +x yt-dlp
-curl -O https://ihre-seite.example/sondra-ytdlp.mjs
-node sondra-ytdlp.mjs https://ihre-seite.example
-```
-
-Das ist weniger als der cobalt-Weg, nicht mehr: eine Programmdatei statt
-Paketmanager, Quelltext und 200 MB `node_modules`. Und es braucht kein ffmpeg,
-weil die Brücke nichts zusammenfügt — Bild und Ton gehen getrennt als zwei
-Tunnel an Sondra, und das FFmpeg in der Seite setzt sie zusammen. Genau der
-`local-processing`-Pfad, den cobalt ohnehin benutzt.
-
-Grenzen, die dieser Weg hat und nicht verschweigt:
-
-* **Bis 1080p.** Darüber liefert YouTube nur noch VP9 und AV1, und die lassen
-  sich nicht verlustfrei in einen MP4-Container kopieren. Neu kodieren würde aus
-  Sekunden Minuten machen, also endet die Formatwahl bei H.264.
-* **Der Bot-Check bleibt ein Bot-Check.** Wenn YouTube der IP-Adresse nicht
-  traut, hilft nur eine Anmeldung: `--cookies firefox` am Ende des Befehls liest
-  die Sitzung aus einem lokal installierten Browser. Das heißt aber auch, dass
-  der Abruf als Sie geschieht, angemeldet und dem Konto zurechenbar — deshalb
-  steht es als Extrazeile da und nicht im Standardbefehl.
-
-Beim Bauen lief mir derselbe Fehler über den Weg, den ich eine Woche zuvor im
-Client behoben hatte: die Brücke schickte `200 OK`, bevor klar war, ob auch nur
-ein Byte kommt. Scheitert der Abruf danach, bleibt nur der Verbindungsabbruch,
-und der Empfänger sieht eine leere Datei statt eines Grundes — die 9-Byte-Datei
-noch einmal, eine Ebene tiefer. Die Kopfzeilen warten jetzt auf das erste Byte;
-kommt keines, geht ein richtiger Fehler mit Code heraus, und `fetchMedia` liest
-ihn aus, statt „Server antwortete mit 502" zu melden.
-
-Gemessen, aus einem leeren Ordner und mit genau den vier Befehlen aus dem
-Dialog: yt-dlp 2026.08.19 geholt, Brücke auf 9000, Seite auf 8787, Download im
-Browser durchgelaufen — 84 426 490 Bytes, 1080p, zusammengefügt von Sondras
-FFmpeg. Alle vier Modi geprüft (Ton, Ton als MP3, ohne Ton, Bild und Ton), dazu
-die Fehlerwege: Unsinn-Adresse, leere Adresse, fehlendes yt-dlp und das
-gesperrte Video, das den Anmelde-Hinweis auslöst. cobalt lief unverändert
-weiter.
-
-### Was auf einer gehosteten Seite wirklich hilft
-
-Drei Anläufe lang war die Erlaubnis fürs lokale Netzwerk die Empfehlung. Auf der
-echten Seite hat sie dreimal nicht funktioniert: Chrome meldet sie als
-verfügbar, meldet sie als nicht verweigert, und fragt trotzdem nicht — auch nicht
-aus einem frischen Klick heraus, mit korrekt angesagtem Adressraum.
-
-Zwei Verdächtige wurden dabei ausgeschlossen, nicht vermutet:
-
-* **Mixed Content ist es nicht.** Gemessen von einer echten HTTPS-Seite gegen
-  `http://localhost:9000`: geht durch, mit und ohne Ansage. Chrome behandelt
-  `localhost` als vertrauenswürdig, die Regel greift dort gar nicht.
-* **Der falsche Adressraum war ein echter Fehler, aber nicht der letzte.**
-  `loopback` statt `local` reparierte den Fall von einer HTTP-Seite aus; von der
-  echten Seite bleibt die Anfrage tot.
-
-Deshalb steht jetzt der Spiegel an erster Stelle, wenn nichts antwortet, und die
-Erlaubnis nur noch als Nebensatz. Der Spiegel hängt von keiner Browserfunktion
-ab: er liefert die Seite von demselben Rechner aus, auf dem der Dienst läuft, und
-zwischen zwei Dingen auf einer Maschine gibt es keine Grenze, die jemand erlauben
-müsste. Erneut durch ihn hindurch gemessen: gilt als lokal, Isolation steht,
-verbunden nach 1,8 Sekunden ohne einen Klick, Datei komplett geladen.
-
-Eine Empfehlung, die dreimal nicht getragen hat, ein viertes Mal zu wiederholen,
-wäre Rat ohne Beleg.
-
-### Ein Knopf, nicht zwei
-
-Prüfen und Erlauben waren getrennt, und die Prüfung endete mit „drücken Sie jetzt
-den anderen Knopf". Das ist eine Anweisung, keine Lösung — und schlimmer: die
-Erlaubnisanfrage hatte damit nicht mehr den Klick hinter sich, den eine Abfrage
-braucht. Ein Browser stellt die Frage nur als Antwort auf eine echte Interaktion,
-also muss die auslösende Anfrage das Erste sein, was auf den Klick folgt, nicht
-das Zweite nach einem Fehlschlag.
-
-Auf einer gehosteten Seite heißt der Knopf deshalb „Verbinden und Zugriff
-erlauben" und stellt die Anfrage sofort; lokal heißt er „Jetzt prüfen" und lässt
-die Erlaubnis weg, die dort nichts zu tun hat.
-
-Zwei Kleinigkeiten aus demselben Durchgang: Die Anfrage brach nach acht Sekunden
-ab — währenddessen steht der Erlaubnis-Dialog auf dem Schirm und will gelesen
-werden, acht Sekunden sind eine plausible Bedenkzeit, und das Abbrechen hätte
-genau die Anfrage gekillt, für die die Antwort gedacht war. Jetzt zwei Minuten.
-Und der Bericht kürzte jede Fehlermeldung auf den ersten Satz, indem er am ersten
-Punkt trennte — was aus `127.0.0.1:9000` ein „127." machte und eine abgeschnittene
-Adresse als Ursache meldete.
-
-### „Jetzt prüfen": der Fehler im Klartext
-
-Der Wächter arbeitet leise, was richtig ist, solange er irgendwann Erfolg hat.
-Hat er nie welchen, sagt das Schweigen nichts, und mehr als „es verbindet nicht"
-lässt sich dann nicht berichten. Neben dem Zustand steht deshalb **Jetzt
-prüfen**: probiert jede lokale Adresse einmal und schreibt hin, was
-zurückkam — welche Adresse, welche Antwort, und von wo diese Seite selbst
-ausgeliefert wird. Das Letzte entscheidet, ob der Fehler beim Dienst liegt oder
-beim Browser, und lässt sich als Text weitergeben.
-
-Dabei kam gleich ein irreführender Fall heraus: `host.docker.internal` wurde mit
-„muss über HTTPS erreichbar sein" abgewiesen — eine wahre Aussage über eine
-Regel, die hier nicht gilt, also die nutzloseste Sorte Fehlermeldung. Docker
-Desktop leitet den Namen auf den Host zurück, er zählt jetzt als lokal.
-
-### Woran man sieht, ob es verbunden ist
-
-Die Antwort steht jetzt in der Leiste „Dieser Browser", unter **Dienst**, neben
-Isolation, Kernen und FFmpeg: `aus`, `wird gesucht` oder `verbunden` samt
-Adresse und ob YouTube dabei ist. Die Leiste liegt unter jedem Tab, also
-beantwortet sie die Frage überall und ohne Umweg.
-
-Vorher stand sie nur im Downloader, hinter dem eingeschalteten Regler, halb
-unten in einer Karte — das ist keine Antwort, das ist eine Schnitzeljagd. Die
-Verbindung lag dazu in der Zustandsverwaltung genau dieses Panels, was einen
-zweiten Fehler nach sich zog: Beim Wechsel auf einen anderen Tab wurde das Panel
-abgeräumt, die Verbindung ging verloren und die Leiste meldete trotzdem weiter
-„verbunden". Beide lesen jetzt denselben Zustand (`lib/serviceState.ts`), und
-der überlebt den Tabwechsel.
-
-„Trennen" schaltet die Funktion mit ab. Sonst fände der Wächter dieselbe Instanz
-vier Sekunden später wieder, und das meint niemand, der auf „Trennen" drückt.
-
-Der frühere Ablauf schaute einmal nach, wenn der Schalter umgelegt wurde, und
-gab dann auf — genau verkehrt herum. Der übliche Fall ist: einschalten,
-weggehen, den Dienst starten, zurückkommen. Die Seite hatte da längst
-aufgehört zu suchen, und nichts sagte einem das.
-
-Jetzt wartet die Seite. Solange die Funktion an ist und nichts geantwortet hat,
-schaut sie alle vier Sekunden nach und verbindet sich von selbst; eine
-abgelehnte Verbindung auf localhost kostet nichts. Gemessen: 2,3 Sekunden vom
-Start des Dienstes bis zum verbundenen Zustand, ohne einen Klick. Die Statuszeile
-sagt das auch, statt es zu verschweigen.
-
-Bleibt es still, meldet sich die Seite nach rund 25 Sekunden — Schweigen, das
-sich nicht erklärt, ist schlimmer als eine Vermutung. Was sie dann sagt, hängt
-davon ab, woher sie selbst kommt:
-
-* **Sondra lokal geöffnet.** Dann ist die naheliegende Erklärung die richtige:
-  läuft der Dienst wirklich, und steht in seinem Fenster `port: 9000`?
-* **Sondra aus dem Netz geöffnet.** Dann ist sie es meistens nicht. Browser
-  lassen eine Seite aus dem Netz nicht ohne Weiteres auf Adressen im eigenen
-  Rechner zugreifen, und von der Seite aus sieht diese Sperre exakt so aus wie
-  „da läuft nichts". Genau weil hier die naheliegende Diagnose die falsche ist,
-  wird sie benannt: Zugriff aufs lokale Netzwerk erlauben, wenn der Browser
-  fragt, sonst Sondra selbst lokal öffnen.
-
-Diese Unterscheidung steht auch schon vorab unter der Frage nach Node und Git,
-damit sie nicht erst nach einer halben Minute Suchen auftaucht.
-
-### Warum es keinen Weg ohne Server gibt
-
-Die Frage stellt sich zwangsläufig: Geht YouTube nicht auch ohne, dass man
-irgendetwas einrichtet oder installiert? Nachgeprüft lautet die Antwort nein,
-und zwar aus drei unabhängigen Gründen:
-
-* **Der Browser selbst kommt nicht heran.** `*.googlevideo.com`, wo die
-  Videodaten liegen, gibt CORS nur für `youtube.com` frei. Selbst mit der
-  fertigen Stream-Adresse in der Hand darf eine fremde Seite die Bytes nicht
-  lesen. Damit scheidet jede reine Browser-Lösung aus, egal wie clever.
-* **Die Verzeichnisse offener Instanzen sind weg.** `instances.cobalt.best` und
-  `instances.hyper.lol` haben keine DNS-Einträge mehr, abgeschaltet, nachdem
-  automatisierte Abrufe die Betreiber leergesaugt hatten.
-* **Der offizielle Dienst führt YouTube nicht mehr.** `api.cobalt.tools`
-  antwortet (11.7.1, CORS offen), listet YouTube aber nicht unter seinen
-  Diensten und verlangt zusätzlich eine Bot-Prüfung.
-
-Auch Cloud-Hosting hilft nicht: YouTube sperrt die IP-Bereiche von
-Rechenzentren, woran die frühere öffentliche Instanz gestorben ist. Ein
-Ein-Klick-Deployment wäre einfach und würde trotzdem nichts laden.
-
-Es bleibt also: Holen muss ein Server, und den betreibt entweder jemand, den
-man kennt, oder man selbst. Beides steht im Panel, das Eingabefeld für eine
-fremde Adresse zuerst.
-
-### Der Weg zurück: Datei hinein, egal woher
-
-Woher die Datei auch kommt — aus irgendeinem Programm, von einem anderen
-Rechner, aus einer Nachricht —, der Rückweg ist absichtlich kurz, denn daran
-scheitert es sonst:
-
-* **Ziehen.** Eine Datei irgendwo ins Fenster fallen lassen genügt; ein
-  Drop-Ziel, das man treffen muss, ist eine Abgabe auf jede einzelne Nutzung.
-* **Öffnen mit.** Ist Sondra als App installiert, trägt es sich über
-  `file_handlers` beim Betriebssystem als Öffner für Audio- und Videodateien
-  ein. Aus dem Dateimanager heraus landet die Datei direkt in der Sitzung.
-* **Teilen.** Auf dem Handy nimmt ein `share_target` die Datei aus dem
-  Teilen-Menü entgegen. Weil ein Teilen als POST ankommt und eine Seite den
-  Rumpf nach der Navigation nicht mehr lesen kann, nimmt der Service Worker die
-  Dateien heraus, legt sie kurz ab und leitet weiter — die App sammelt sie ein
-  und räumt das Regal wieder leer.
-
-### Eine Instanz für den eigenen Rechner
-
-Dieser Weg steht in der Oberfläche offen unter „Eigenen Dienst betreiben",
-mit zwei Möglichkeiten: **Ohne Docker** (Vorgabe) und **Mit Docker**. Docker
-setzt unter Windows WSL2 und damit eine virtuelle Maschine voraus, und dieser
-Stapel hat offene Fehler, an denen man nicht vorbeikommt — etwa
-`Wsl/Service/…/MountDisk/HCS/ERROR_NOT_SUPPORTED`, wo WSL seine eigene
-Systemplatte nicht mehr einhängt. Der Node-Weg kennt diese Fehlerklasse nicht.
-
-Innerhalb von „Ohne Docker" steht eine Frage statt einer Annahme: **Was ist auf
-diesem Rechner schon da?** Zwei Schalter, Node.js und Git, beide anfangs aus.
-Die Befehle darunter sind dann die für diesen Rechner und keine anderen — die
-Liste lässt sich von oben bis unten einfügen, ohne dass jemand herausfinden
-muss, welche Hälfte ihn betrifft.
-
-| Node.js | Git | Was die Anleitung zeigt |
-|---|---|---|
-| fehlt | fehlt | Node installieren, dann Archiv, Stub, Start |
-| da | fehlt | Archiv, Stub, Start |
-| fehlt | da | Node installieren, dann klonen und starten |
-| da | da | klonen und starten |
-
-Für das Installieren von Node gibt es nur dort einen Befehl, wo die Vermutung
-trägt: `winget` unter Windows, `brew` unter macOS. Linux hat ein Dutzend
-Paketverwaltungen und keine sichere Annahme, also steht dort ein Hinweis mit
-Link statt eines Befehls, der falsch sein könnte. Git wird nie installiert —
-fehlt es, kommt der Quelltext als Archiv, und das ist ohnehin der kürzere Weg.
-
-Eine Eigenheit, die sich nur durch Ausführen zeigt: **der Dienst startet nicht
-außerhalb eines git-Ordners.** Er sucht von seinem Arbeitsverzeichnis aufwärts
-nach `.git` und bricht mit `no git repository root found` ab — nicht weil er git
-benutzt, sondern weil er daraus Fassung, Branch und Remote für seine eigene
-Auskunft liest (`packages/version-info`). Drei Textdateien genügen ihm:
-`.git/HEAD`, `.git/logs/HEAD`, `.git/config`. Der Weg ohne Git schreibt genau
-die, und braucht dafür kein git.
-
-Zwei weitere Fallen, ebenfalls beim Ausführen gefunden und in den Skripten
-berücksichtigt: `corepack` fragt vor dem Nachladen nach und bliebe im Skript
-hängen, deshalb `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`; und PowerShell wertet in
-einfachen Anführungszeichen keine Escapes aus, weshalb die drei Dateien dort
-über wörtliche Here-Strings geschrieben werden statt über `` `n ``.
-
-Geprüft wurde das nicht auf dem Papier: Das erzeugte Skript wurde unverändert
-ausgeführt, holt das Archiv, legt den Stub an, installiert mit dem festgelegten
-pnpm 9.6.0 und startet cobalt 11.7.1 — und Sondra hat sich anschließend damit
-verbunden. Die eigene Instanz führt dabei **21 Dienste einschließlich YouTube**
-und verlangt keine Bot-Prüfung, im Gegensatz zum offiziellen Endpunkt.
-
-Eine eigene Instanz lädt von YouTube meist problemlos, weil sie von der eigenen
-Leitung aus anfragt statt von einer, die dort bekannt ist.
-
-Es ist **keine Standard-Instanz hinterlegt**. Eine mitgelieferte Adresse würde
-die Anfragen aller Nutzer still an eine Maschine schicken, die weder sie noch
-dieses Projekt kontrolliert. Stattdessen tragen Nutzer eine eigene oder eine
-ihnen bekannte cobalt-kompatible Instanz ein. Die Adresse wird lokal
-gespeichert, ein etwaiger Zugangsschlüssel bewusst **nicht** — ein Schlüssel in
-`localStorage` überlebt die Absicht, mit der er eingegeben wurde.
-
-Alles andere bleibt unberührt: Konvertierung, Spurentrennung, Lautheit und
-Sampler rechnen weiterhin ausschließlich lokal.
-
-## Hell und dunkel
-
-Drei Zustände statt zwei: hell, dunkel und „System“, das dem Betriebssystem
-folgt und ihm auch später noch folgt. Nur die ausdrücklichen Entscheidungen
-schreiben ein Attribut an `<html>`; „System“ lässt die Media Query in
-`theme.css` entscheiden.
-
-Farben heißen nach ihrer Rolle, nicht nach ihrem Ton — `canvas` statt
-`cream-paper` —, weil genau der Ton sich zwischen den Themes ändert. Tailwind
-gibt jede Farbklasse als `var(--color-…)` aus, sodass ein Theme-Wechsel die
-Variablen neu belegt und nichts an den Komponenten anfasst. Ein kurzes Skript im
-`<head>` setzt das Attribut vor dem ersten Paint, damit niemand kurz das falsche
-Theme sieht.
-
-Wellenformen zeichnen auf Canvas und in Wavesurfer mit echten Farbwerten. Die
-werden zur Laufzeit aus dem Cascade gelesen; beim Wechsel wird Wavesurfer
-umgefärbt statt neu aufgebaut, sonst wären alle gesetzten Bereiche weg.
-
-## Offline und Installation
-
-Der Service Worker hat zwei Aufgaben: die Isolations-Header (siehe oben) und den
-Offline-Cache. Antworten vom eigenen Ursprung werden beim Abruf mitgeschrieben
-und bei fehlendem Netz aus dem Cache bedient — auch der 32 MB große FFmpeg-Core.
-Ab dem zweiten Besuch braucht die Anwendung kein Netz mehr. Fremde Ursprünge
-werden nie zwischengespeichert; der Verkehr des Extraktions-Dienstes läuft
-unverändert durch.
-
-Über das Manifest lässt sich Sondra installieren. Der Knopf erscheint nur, wenn
-der Browser ihn anbietet.
+| `SONDRA_SECRET` | signiert die Adressen, die der Proxy weiterreicht |
+| `SONDRA_PROVIDER_URL` | optional: ein cobalt-kompatibler Anbieter; wird zuerst gefragt und bringt volle Auflösung und weitere Portale |
+| `SONDRA_PROVIDER_KEY` | optional: dessen `Api-Key`, falls verlangt |
+
+Kein Anbieter ist fest verdrahtet. Eine fremde Instanz im Quelltext würde jede
+eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
+
+Geladen wird nur, was man laden darf: AES-verschlüsselte HLS-Streams werden
+abgelehnt, Kopierschutz wird nicht umgangen. Der Hinweis zur Verantwortung
+steht im Panel, bevor man etwas eintippt.
 
 ## Als Windows-App
 
 Sondra gibt es auch als installierte Windows-App: eigenes Fenster statt
 Browser, Eintrag im Startmenü, Verknüpfung auf dem Desktop, Deinstallation
 über die Windows-Einstellungen. Das Setup installiert nur für das eigene
-Benutzerkonto und braucht deshalb keine Administratorrechte; vor der
-Installation zeigt es `LIZENZ.txt`.
+Benutzerkonto, braucht keine Administratorrechte und zeigt vorher
+`LIZENZ.txt`.
 
-Gebaut wird es mit Electron: `desktop/electron.mjs` öffnet ein Fenster auf
-`desktop/server.mjs`, der die Seite und die beiden Funktionen unter `api/`
-nur auf `127.0.0.1` ausliefert — mit denselben Isolations-Headern wie die
-Website, damit FFmpeg mehrfädig rechnet. Electron steht in
-`desktop/package.json`, nicht im Wurzelpaket, damit die Installation auf
-Vercel keinen Browser herunterlädt, den sie nie startet.
+`desktop/electron.mjs` öffnet ein Fenster auf `desktop/server.mjs`, der die
+Seite und die Funktionen unter `api/` nur auf `127.0.0.1` ausliefert — mit
+denselben Isolations-Headern wie die Website, damit FFmpeg mehrfädig rechnet.
+Electron steht nur in `desktop/package.json`, damit die Installation auf
+Vercel keinen Browser herunterlädt, den sie nie startet. Die App liefert, was
+die Website ausliefert, ohne Bereitstellungsdateien, Service Worker und
+`sondra-ytdlp.mjs`.
 
-- **Fertiges Setup:** GitHub → Actions → „Desktop“ → Artefakt
-  `Sondra-Setup`. Der Workflow baut auf Windows, installiert still, startet
-  die installierte App und prüft, dass die Seite isoliert geladen ist.
-- **Selbst bauen (Windows):** `npm ci --prefix desktop`, dann
+- **Herunterladen:** [Sondra-Setup.exe](https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe)
+  aus dem neuesten Release. Das Setup ist nicht signiert; Windows fragt beim
+  ersten Start nach.
+- **Selbst bauen (Windows):** einmal `npm ci --prefix desktop`, dann
   `npm run build:desktop` → `release/Sondra-Setup-<Version>.exe`.
-- **Zum Ausprobieren auf jedem System:** `node scripts/build-desktop.mjs --dir`
-  nach `npm run build` baut den entpackten App-Ordner; `npm run desktop`
-  startet nur den Server und öffnet ihn im Browser.
+- **Ausprobieren auf jedem System:** nach `npm run build` baut
+  `node scripts/build-desktop.mjs --dir` den entpackten App-Ordner;
+  `npm run desktop` startet nur den Server und öffnet ihn im Browser.
+- **GitHub Actions → „Desktop":** baut auf Windows, installiert still,
+  startet die installierte App zweimal und lädt das Setup als Artefakt hoch.
+  Von Hand gestartet, veröffentlicht die Option `release` ein Release
+  `v<Version>` mit `Sondra-Setup.exe`, und die Option `store` legt das Setup
+  zusätzlich auf Vercel Blob (Secret `BLOB_READ_WRITE_TOKEN`) — eine
+  Paket-URL ohne Umleitung, wie sie der Microsoft Store verlangt.
 
-Die App liefert, was die Website ausliefert, ohne die Bereitstellungsdateien
-und ohne `sondra-ytdlp.mjs`; die Brücke startet sie nicht. Im Repository
-bleibt sie unverändert.
+Die App schreibt ein Protokoll nach `%APPDATA%\Sondra\sondra.log`.
+
+## FFmpeg im Browser
+
+`@ffmpeg/ffmpeg` ist nur ein RPC-Client; `load()` startet einen Worker und
+übergibt ihm die Adressen von Core und WASM. Was dabei zählt:
+
+- **Alles aus dem eigenen Bündel.** Beide Cores sind Abhängigkeiten und werden
+  über Vites `?url` als gehashte Assets eingebunden, nicht per `toBlobURL` von
+  einem CDN. Die Adressen müssen absolut sein, weil der Worker relative Pfade
+  gegen seinen eigenen Ort auflöst.
+- **`optimizeDeps.exclude`** für `@ffmpeg/ffmpeg`, `@ffmpeg/util` und
+  `onnxruntime-web` — sonst schreibt das Pre-Bundling Adressen um, die diese
+  Pakete zur Laufzeit selbst auflösen.
+- **`classWorkerURL` nicht setzen** und **`assetsInlineLimit: 0`.** Ein
+  eingebetteter Worker aus einer `data:`-URL bekommt einen undurchsichtigen
+  Ursprung und darf den Core nicht importieren.
+- **Mehrfädig nur isoliert.** `@ffmpeg/core-mt` braucht `SharedArrayBuffer`,
+  also `Cross-Origin-Opener-Policy: same-origin` und
+  `Cross-Origin-Embedder-Policy: credentialless` (`credentialless`, damit
+  fremde Medien ohne CORP-Header ladbar bleiben). Die Header stehen in
+  `vite.config.ts`, `vercel.json`, `public/_headers` und
+  `public/staticwebapp.config.json`; wo sich keine Header setzen lassen,
+  ergänzt `public/coi-serviceworker.js` sie. Fehlt die Isolation trotzdem,
+  lädt `capabilities.ts` den einfädigen Core.
+- **Eingaben kopieren.** `writeFile` überträgt den ArrayBuffer; ohne Kopie wäre
+  die Datei in der Sitzung danach leer.
+- **MEMFS aufräumen.** `runFfmpeg()` löscht Ein- und Ausgaben im `finally`,
+  sonst wächst der Heap mit jeder Datei. Abbrechen geht nur über
+  `terminate()`; der nächste Aufruf lädt den Core neu.
+
+FFmpeg lädt im Hintergrund, nie hinter einem Ladebildschirm. Ein Werkzeug, das
+wartet, zeigt das Warten bei sich.
 
 ## Die Rechenverfahren
 
@@ -966,7 +189,7 @@ nach Tech 3342 aus 3-Sekunden-Blöcken.
 
 Der True-Peak-Messer tastet vierfach über eine Polyphasen-FIR über. Zwei Details
 entscheiden über die Genauigkeit: eine ungerade Zahl von Koeffizienten je Phase,
-sodass Phase 0 die Identität ist, und Stille statt Randwiederholung außerhalb des
+sodass Phase 0 die Identität ist, und Stille statt Randwiederholung ausserhalb des
 Puffers — hält man stattdessen den Randwert, klingelt der Filter gegen ein
 künstliches Plateau und meldet bei hohen Frequenzen bis zu 3 dB zu viel. So
 bleibt der Fehler über das ganze Band unter 0,3 dB.
@@ -1029,7 +252,7 @@ Die Verfolgung ist bewusst einstimmig. Ein mehrstimmiger Transkriptor braucht
 ein trainiertes Modell und einen entsprechenden Download; eine einzelne Linie —
 Bass, Hook, Gesang — ist ohnehin das, was man heraushören will. Auf einem vollen
 Mix findet er die auffälligste Stimme statt der gewünschten, deshalb steht im
-Panel der Hinweis, vorher im Reiter „Spuren“ zu trennen.
+Panel der Hinweis, vorher unter „Spuren trennen“ zu trennen.
 
 **Akkorde** werden über dieselben Tonklassen gegen Dreiklang-Vorlagen
 abgeglichen. Dabei gibt es eine Falle: eine einzelne Note buchstabiert mit ihren
@@ -1045,7 +268,7 @@ Beides rechnet lokal, ohne Modell und ohne Download.
 ## Eigenes Trennmodell verwenden
 
 Sondra liefert keine Modellgewichte mit; ein Demucs-Export wiegt Hunderte
-Megabyte, die sonst jeder Besuch mitlädt. Im Panel „Spuren“ lässt sich eine
+Megabyte, die sonst jeder Besuch mitlädt. Unter „Spuren trennen“ lässt sich eine
 `.onnx`-Datei wählen. Der Läufer liest Rang und Form der Ein- und Ausgabe aus
 den Session-Metadaten und wählt danach:
 
@@ -1057,190 +280,79 @@ den Session-Metadaten und wählt danach:
 WebGPU wird zuerst versucht, WASM ist der Rückfall. Die ONNX-Laufzeit wird
 dynamisch importiert — wer die Funktion nie benutzt, lädt sie nie.
 
+## Hell und dunkel
+
+Drei Zustände statt zwei: hell, dunkel und „System“, das dem Betriebssystem
+folgt und ihm auch später noch folgt. Nur die ausdrücklichen Entscheidungen
+schreiben ein Attribut an `<html>`; „System“ lässt die Media Query in
+`theme.css` entscheiden.
+
+Farben heissen nach ihrer Rolle, nicht nach ihrem Ton — `canvas` statt
+`cream-paper` —, weil genau der Ton sich zwischen den Themes ändert. Tailwind
+gibt jede Farbklasse als `var(--color-…)` aus, sodass ein Theme-Wechsel die
+Variablen neu belegt und nichts an den Komponenten anfasst. Ein kurzes Skript im
+`<head>` setzt das Attribut vor dem ersten Paint, damit niemand kurz das falsche
+Theme sieht.
+
+Wellenformen zeichnen auf Canvas und in Wavesurfer mit echten Farbwerten. Die
+werden zur Laufzeit aus dem Cascade gelesen; beim Wechsel wird Wavesurfer
+umgefärbt statt neu aufgebaut, sonst wären alle gesetzten Bereiche weg.
+## Offline
+
+Der Service Worker setzt auf der Website die Isolations-Header und hält einen
+Offline-Cache: Antworten vom eigenen Ursprung werden beim Abruf mitgeschrieben
+und ohne Netz aus dem Cache bedient, auch der FFmpeg-Core. Ab dem zweiten
+Besuch braucht die Seite kein Netz mehr. Fremde Ursprünge werden nie
+zwischengespeichert. Über das Manifest lässt sich Sondra aus dem Browsermenü
+als App installieren.
+
 ## Bekannte Grenzen
 
-- **Portale mit CORS-Sperre** (YouTube und ähnliche) lassen sich nur über den
-  ausdrücklich einzuschaltenden Extraktions-Dienst laden — und dann nicht mehr
-  lokal. Ohne eigene Instanz funktioniert die Funktion nicht.
+- **YouTube ohne Anbieter** liefert in der Regel nur 360p, manche Videos gar
+  nicht. Volle Auflösung braucht `SONDRA_PROVIDER_URL` oder einen eigenen Weg
+  unter „Optionen".
 - **AES-verschlüsselte HLS-Streams** werden abgelehnt. Sondra lädt keine
   Schlüssel und umgeht keinen Kopierschutz.
-- **Die eingebaute Spurentrennung erreicht kein Demucs.** Sie ist gut genug für
+- **Die eingebaute Spurentrennung erreicht kein Demucs.** Sie reicht für
   Karaoke, Remix-Vorarbeit und das Herauslösen von Schlagzeug.
-- **Mono-Material** liefert schlechtere Trennung: ohne Stereobild fehlt die
-  Mitteninformation, aus der sich der Gesang ableiten ließe.
-- **Das Bündel ist groß.** Beide FFmpeg-Cores und die ONNX-Laufzeit summieren
-  sich auf rund 90 MB in `dist/`. Geladen wird davon nur, was benutzt wird — ein
-  Besuch, der bloß die Seite ansieht, holt unter 400 KB.
+- **Mono-Material** trennt sich schlechter: ohne Stereobild fehlt die
+  Mitteninformation, aus der sich der Gesang ableiten liesse.
+- **Das Bündel ist gross.** Beide FFmpeg-Cores und die ONNX-Laufzeit ergeben
+  rund 90 MB in `dist/`. Geladen wird nur, was benutzt wird — wer bloss die
+  Seite ansieht, holt unter 400 KB.
+- **Das Windows-Setup ist nicht signiert.** SmartScreen fragt nach, und Smart
+  App Control kann es blockieren.
 
-## Lizenz und Herkunft
-
-FFmpeg (WebAssembly-Portierung: ffmpeg.wasm), ONNX Runtime Web, Wavesurfer.js
-und Tone.js sind quelloffene Projekte unter ihren jeweiligen Lizenzen. Die
-Schriften Cormorant Garamond und Inter stehen unter der SIL Open Font License
-und liegen als Latin-Teilmenge im Repository.
-
-
----
-
-## Editoren statt Formulare, Kacheln statt Reiter
-
-Drei Sätze aus einer Rückmeldung, die zusammen die Hälfte der App betrafen:
-das Bearbeiten von Bildern sei „sehr umständlich", beim Video „genau gleich",
-und der Downloader solle neu — nicht mehr lokal, dafür mit einer klaren
-Warnung. Dazu: ein Kacheldesign zum Auswählen.
-
-### Warum die beiden Werkzeuge umständlich waren
-
-Beide waren Formulare. Oben eine Vorschau, darunter in einer Spalte jede
-Einstellung, die es gibt — Größe, Format, Qualität, Drehung, Farbe,
-Geschwindigkeit, Ausschnitt —, alle gleichzeitig sichtbar, unabhängig davon,
-was man gerade tut. Das hat zwei Folgen, und beide sind teuer:
-
-* **Das Bild wandert weg.** Ein Regler, der etwas am Bild ändert, steht
-  zwangsläufig unter dem Bild. Nach zwei Reglern ist das Bild aus dem
-  sichtbaren Bereich gescrollt, und jede Prüfung des Ergebnisses kostet einen
-  Weg nach oben und wieder zurück.
-* **Alles ist gleich wichtig.** Wer zuschneiden will, sieht zwanzig Regler, von
-  denen einer dazugehört.
-
-Der Ausschnitt war zusätzlich kein Rechteck, sondern eine Geste: man zog einen
-neuen auf, jedes Mal von vorn. Eine Kante um zehn Pixel zu verschieben hieß,
-die anderen drei zu verlieren.
-
-### Die Form, auf die alle Editoren zulaufen
+## Projektstruktur
 
 ```
-┌──────────────────────────────────────────────────┐
-│ Datei · was sie ist          ↺ ↻ ⟳     Speichern │
-├────┬────────────────────────────────┬────────────┤
-│ We │                                │ nur die    │
-│ rk │            Bühne               │ Regler für │
-│ ze │                                │ dieses     │
-│ ug │                                │ Werkzeug   │
-├────┴────────────────────────────────┴────────────┤
-│ Status                                           │
-└──────────────────────────────────────────────────┘
+api/                 Funktionen des Downloaders (resolve, stream, _shared)
+desktop/             Windows-App: Electron-Fenster, lokaler Server, Setup-Texte
+public/              statische Dateien: Schriften, Icons, Manifest,
+                     Service Worker, Datenschutzerklärung
+scripts/             Build der App, lokaler Dienst, Prüfskripte
+src/
+  components/        Kopfzeile, Startseite, Reiter, Sitzungsmenü, Wellenform
+    editor/          gemeinsame Editor-Hülle und Zuschnitt
+    panels/          die neun Werkzeuge
+    ui/              Grundbausteine (Button, Notice, Reveal …)
+  hooks/             Routing, Dateiaufnahme, Dekodierung, Theme
+  lib/               Rechenverfahren, FFmpeg-Client, Downloader-Client
+  state/             Sitzung (zustand, nur im Speicher)
+  styles/            Tokens und Theme
+.github/workflows/   Build und Release der Windows-App
 ```
 
-Die Bühne bewegt sich nie und scrollt nie. Links steht, was man tut; rechts
-stehen die Regler dafür und sonst nichts. Die übrigen dreißig Einstellungen
-gibt es weiterhin — sie sind einen Klick entfernt statt eines Scrollvorgangs.
-Unter `lg` wird die Leiste zu einer Reihe von Chips unter der Bühne und die
-Regler rutschen darunter; die Reihenfolge bleibt: sehen, wählen, einstellen.
+Produktgrundlagen stehen in [PRODUCT.md](PRODUCT.md), die gestalterischen
+Entscheidungen in [DESIGN.md](DESIGN.md).
 
-`EditorShell` ist dieselbe Datei für Bild und Video, `CropOverlay` dasselbe
-Rechteck mit acht Griffen und einem ziehbaren Inneren.
+## Lizenz
 
-### Zwei Fehler, die erst die Direktmanipulation sichtbar gemacht hat
+Sondra steht unter der [MIT-Lizenz](LICENSE).
 
-**Der Zug wurde zum Verschieben.** Solange der Ausschnitt noch das ganze Bild
-ist, liegt sein Inneres über der gesamten Fläche — und das Innere fing den Zug
-als „verschieben" ab, was bei einem vollflächigen Rechteck nichts tut. Es sah
-aus, als reagierte das Ziehen gar nicht. Jetzt reicht das Innere die Geste
-weiter, solange es nichts zu verschieben gibt.
-
-**Drehen warf den Ausschnitt weg.** Vertretbar — das Rechteck galt für einen
-Rahmen, den es nicht mehr gibt — aber niemand will das: man rückt ein Foto
-gerade und stellt fest, dass der Ausschnitt verschwunden ist. Weil das
-Rechteck in Bruchteilen gespeichert ist, ist Mitdrehen Arithmetik in vier
-Zeilen (`rotateRect`, `mirrorRect`).
-
-Dazu kam eine Reihenfolge-Entscheidung: **erst geraderücken, dann
-zuschneiden.** Vorher lief der Ausschnitt zuerst, sodass eine 16:9-Auswahl auf
-einem Hochkantvideo als 9:16 herauskam. Jetzt gilt die Reihenfolge in
-`image.ts`, in der Filterkette von `video.ts` und im Overlay gleichermaßen —
-was auf dem Bildschirm zu sehen ist, ist auch das, was FFmpeg bekommt.
-
-Und die Vorschau ist nicht länger ein zweiter, ähnlich aussehender Rechenweg:
-`paintImage` malt für den Bildschirm und für die Datei, nur mit einer Grenze
-für die Auflösung. Eine Vorschau mit eigenem Code ist eine Vorschau, die
-irgendwann lügt.
-
-### Der Start ist jetzt eine Frage
-
-Die App öffnete auf dem Downloader — der erste Satz an einen neuen Besucher
-war damit „füge einen Link ein", eine vernünftige Antwort auf genau eines von
-dreißig Dingen. Der Rest lag hinter einer Reiterleiste, die auf einem Laptop
-seitlich scrollt.
-
-Jetzt steht dort „Was möchten Sie machen?", darunter ein Suchfeld und alle
-Werkzeuge als Kacheln, nach Themen gruppiert, mit den zwei Wegen hinein ganz
-oben. Gespeist wird das aus `lib/actions.ts`, derselben Liste, aus der schon
-die Suche und die Befehlspalette lesen — eine neue Fähigkeit dort einzutragen
-macht sie überall auffindbar.
-
-Eine Kachel für ein Werkzeug, das zu keiner offenen Datei passt, wird leicht
-abgeblendet — **aber nur, wenn überhaupt eine Datei offen ist.** Bei leerer
-Sitzung ist alles gleichermaßen unbenutzbar, und die ganze Seite grau zu
-färben sagt nichts und macht sie schlechter lesbar.
-
-### Der Downloader, serverseitig — und was dabei wirklich geht
-
-Die frühere Messung („1 von 10 aus dem Rechenzentrum") stand im Weg, also
-wurde sie nachgeprüft, und sie stimmt weiterhin — aber nur für yt-dlp:
-
-| Weg (Rechenzentrums-IP, 18.9.2026) | Ergebnis |
-|---|---|
-| yt-dlp: Adressen auflösen | geht (52 Formate mit URL) |
-| yt-dlp: Datei holen | **„Sign in to confirm you're not a bot"** |
-| youtubei.js: auflösen | geht, für alle geprüften Videos |
-| youtubei.js: progressive Spur holen | **geht** — HTTP 206, echte Bytes |
-| youtubei.js: hohe Auflösungen | keine Adresse vorhanden — SABR |
-| dasselbe, mit gültigem PoToken | unverändert keine Adresse |
-
-Das Ergebnis ist unbequem und deshalb ausdrücklich: YouTube liefert an einen
-Server nur noch die *progressive* Spur — Bild und Ton in einer Datei, in der
-Regel 360p — und manche Videos nicht einmal die. Die hohen Auflösungen laufen
-über SABR, ein ausgehandeltes Protokoll, das gar keine abrufbare Adresse hat.
-Ein PoToken ändert daran nichts; er wurde erzeugt und gemessen, nicht
-vermutet.
-
-Also macht der eingebaute Dienst genau das, was er kann, und sagt den Rest:
-
-* `api/resolve.js` schlägt nach und **signiert** die gefundenen Adressen
-  (HMAC, kurze Gültigkeit).
-* `api/stream.js` prüft die Signatur und reicht die Bytes durch — nur `https`,
-  nie in private Adressbereiche, damit der Endpunkt kein SSRF-Loch ist.
-* Der Browser holt in **4-MB-Stücken** mit `Range`. Das ist nicht Feinschliff,
-  sondern die Bedingung dafür, dass es überhaupt geht: eine Funktion auf so
-  einer Plattform hat ein Zeitlimit von etwa einer Minute, ein langes Video
-  wäre in einem Aufruf nie fertig. Nebenbei wird der Fortschritt exakt und
-  Abbrechen sofort wirksam.
-
-Gemessen im Browser gegen den echten Dienst: **11 829 048 Bytes** durch, in
-Stücken, mit Fortschritt.
-
-Der vollständige Downloader — eigene Instanz, yt-dlp auf dem eigenen Gerät,
-Cookies, Playlists, volle Auflösung — ist unverändert da, nur nicht mehr die
-Eingangstür: er steht unter „Mehr Wege". Und wo der Dienst nicht weiterkommt,
-sagt die Fehlermeldung genau das und zeigt auf diesen Weg.
-
-### Was der Dienst braucht
-
-`SONDRA_SECRET` in der Umgebung der Bereitstellung. Damit werden die
-weitergereichten Adressen signiert; ohne die Variable greift eine Konstante,
-die genau so viel wert ist, wie sie kostet. Die Zulassungsliste im Proxy ist
-der eigentliche Zaun, die Signatur hält Gelegenheitsnutzung ab.
-
-Dazu, optional, ein **Anbieter** — und das ist der Weg an der 360p-Grenze
-vorbei:
-
-| Variable | Wofür |
-|---|---|
-| `SONDRA_PROVIDER_URL` | ein cobalt-kompatibler Endpunkt |
-| `SONDRA_PROVIDER_KEY` | dessen `Api-Key`, falls verlangt |
-
-Ist einer hinterlegt, fragt `api/resolve.js` ihn **zuerst**: er bringt volle
-Auflösung und die Portale, für die es hier keinen Extraktor gibt. Erst wenn er
-fehlt oder nichts findet, kommen die beiden eingebauten Wege dran. Welcher Weg
-geantwortet hat, steht beim Ergebnis im Panel — „Über den hinterlegten
-Anbieter", „YouTube direkt", „Direkte Datei-Adresse" —, weil das über die
-Auflösung entscheidet und darüber, wer die Adresse gesehen hat.
-
-Fest verdrahtet wird keiner. Eine fremde Instanz im Quelltext würde jede
-eingegebene Adresse an Dritte schicken, die sich niemand ausgesucht hat, und
-sie wäre an dem Tag kaputt, an dem diese Instanz abgeschaltet wird.
-
-Lokal ausprobieren lässt sich beides mit `npm run build && npm run
-dev:service` — `vite preview` kennt `api/` nicht, also liefert ein kleines
-Skript beides auf einem Port aus.
+Mitgelieferte und eingebundene Fremdprojekte behalten ihre eigenen Lizenzen:
+FFmpeg (über ffmpeg.wasm, GPL), ONNX Runtime Web, Wavesurfer.js, Tone.js,
+youtubei.js, React und zustand. Die Schriften Public Sans, Courier Prime und
+Cormorant Garamond stehen unter der SIL Open Font License und liegen als
+Teilmengen im Repository. Die Windows-App legt die Lizenztexte unter
+`lizenzen/` in ihren Installationsordner.
