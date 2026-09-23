@@ -84,13 +84,20 @@ export function AudioEditorPanel() {
     if (asset && !decoded && status === 'idle') void decode()
   }, [asset, decoded, status, decode])
 
+  // Starts over only for a different file. The same file arriving again —
+  // decoded a second time, or its entry updated in the session — must not
+  // throw away the edits made on it.
+  const loadedFor = useRef<string | null>(null)
   useEffect(() => {
+    const id = decoded ? (asset?.id ?? null) : null
+    if (id !== null && id === loadedFor.current) return
+    loadedFor.current = id
     setCurrent(decoded ?? null)
     setHistory([])
     setFuture([])
     setSelection(null)
     setError(null)
-  }, [decoded])
+  }, [decoded, asset?.id])
 
   const duration = current ? durationOf(current) : 0
   const span = selection ?? { start: 0, end: duration }
