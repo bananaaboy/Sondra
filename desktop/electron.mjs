@@ -314,6 +314,8 @@ async function open() {
   })
   contents.on('console-message', (event) => {
     if (event.level === 'error') log(`Seite: ${event.message}`)
+    // The page's own notes for this log — sound, for one.
+    else if (event.message.startsWith('[Sondra] ')) log(event.message.slice(9))
   })
 
   if (SMOKE) {
