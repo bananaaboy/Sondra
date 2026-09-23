@@ -101,8 +101,8 @@ function emptyTransferError(byteLength: number, url: string): TransferError {
 async function explainErrorBody(response: Response): Promise<string | null> {
   if (!response.headers.get('content-type')?.includes('json')) return null
   try {
-    const body = (await response.json()) as { error?: { code?: string } }
-    return body.error?.code ? explain(body.error.code) : null
+    const body = (await response.json()) as { error?: { code?: string; detail?: string } }
+    return body.error?.code ? explain(body.error.code, body.error.detail) : null
   } catch {
     return null
   }
