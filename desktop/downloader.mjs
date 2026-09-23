@@ -19,10 +19,12 @@
  * project's GitHub releases, checks it against the published SHA-256, and
  * keeps it in the app's data folder.
  *
- * Only the app's own page may use it. Everything on the machine can reach
- * 127.0.0.1, including every website open in a browser; a service that
- * answered all of them would let any page use this machine, and the browser
- * sign-in it may hold, to fetch things.
+ * Only Sondra may use it: the app's own page, and Sondra's website in a
+ * browser on this machine — so the website gets full resolution too while the
+ * app is running. Everything on the machine can reach 127.0.0.1, including
+ * every other website open in a browser; a service that answered all of them
+ * would let any page use this machine, and the browser sign-in it may hold,
+ * to fetch things.
  */
 
 import http from 'node:http'
@@ -36,6 +38,9 @@ const ASSET = { win32: 'yt-dlp.exe', darwin: 'yt-dlp_macos', linux: 'yt-dlp_linu
 const OWN_NAME = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
 const UPDATE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
 const JOB_TTL_MS = 30 * 60 * 1000
+
+/** Sondra's website, the one page besides the app that may use the service. */
+const SITE_ORIGINS = ['https://www.sondra.lizge.ch', 'https://sondra.lizge.ch']
 
 /** Sites yt-dlp handles well, for the page's list; yt-dlp decides the rest. */
 const SERVICES = [
@@ -408,13 +413,13 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
   }
 
   const server = http.createServer(async (req, res) => {
-    // Only the app's page. A request without an Origin is not from a web page.
+    // Only Sondra. A request without an Origin is not from a web page.
     const from = req.headers.origin
-    if (from && from !== origin) {
+    if (from && from !== origin && !SITE_ORIGINS.includes(from)) {
       res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
-      return res.end('Dieser Dienst gehört zur Sondra-App und antwortet nur ihr.')
+      return res.end('Dieser Dienst gehört zu Sondra und antwortet nur Sondra.')
     }
-    const cors = { 'access-control-allow-origin': origin, vary: 'Origin' }
+    const cors = { 'access-control-allow-origin': from || origin, vary: 'Origin' }
     const url = new URL(req.url ?? '/', `http://localhost:${port}`)
 
     if (req.method === 'OPTIONS') {
@@ -423,6 +428,9 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         'access-control-allow-methods': 'GET, POST, OPTIONS',
         'access-control-allow-headers': 'content-type, authorization, accept',
         'access-control-max-age': '86400',
+        // A page from the internet asking a service on this machine: Chrome
+        // wants the service to say it expects that.
+        ...(req.headers['access-control-request-private-network'] ? { 'access-control-allow-private-network': 'true' } : {}),
       })
       return res.end()
     }

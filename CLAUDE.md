@@ -85,7 +85,8 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   eigenen yt-dlp-Dienst auf 127.0.0.1:9000, und statt der Warnung steht ein
   ruhiger Block auf `panel-soft`, der den Haftungssatz wörtlich behält. Der
   Dienst hat keine eigenen Extraktoren (anders als das Brücken-Skript), holt
-  yt-dlp nur nach Nachfrage und antwortet nur der App-Seite.
+  yt-dlp nur nach Nachfrage und antwortet nur Sondra: der App-Seite und
+  sondra.lizge.ch.
 - **Der Downloader hat einen Weg für Portale: das Feld oben.** Es fragt einen
   verbundenen Dienst zuerst und übernimmt dessen Einstellungen. Wird die Seite
   lokal ausgeliefert (App, Brücke), ist der Schalter für externe Downloader von
@@ -136,6 +137,13 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `release/`); vorher einmal `npm ci --prefix desktop`. Quelle in `desktop/`,
   Electron steht bewusst nur in `desktop/package.json`. `release/` wird nicht
   eingecheckt.
+- **Die App aktualisiert sich selbst** (`desktop/updater.mjs`,
+  electron-updater, GitHub-Releases von `bananaaboy/Sondra`). Sie liest
+  `latest.yml` aus dem neuesten Release; der Desktop-Workflow lädt die Datei
+  mit dem Setup hoch und bricht ab, wenn sie fehlt. Ein Release ohne
+  `latest.yml` ist für installierte Apps unsichtbar. Neue Version: `version`
+  in `package.json` und `desktop/package.json` erhöhen, dann den Workflow mit
+  „release“ starten.
 - Umgebungsvariablen der Bereitstellung:
   - `SONDRA_SECRET` — signiert die Adressen, die der Proxy weiterreicht.
   - `SONDRA_PROVIDER_URL` — ein cobalt-kompatibler Anbieter. Ist einer

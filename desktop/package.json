@@ -1,13 +1,14 @@
 {
   "name": "sondra-desktop",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Sondra als Windows-App: eigenes Fenster, Installer, läuft lokal.",
   "author": "Lizge",
   "devDependencies": {
     "@vercel/blob": "2.8.0",
     "electron": "44.4.4",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "electron-updater": "6.8.9"
   },
   "build": {
     "appId": "ch.lizge.sondra",
@@ -69,6 +70,14 @@
     },
     "linux": {
       "target": "dir"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "bananaaboy",
+        "repo": "Sondra",
+        "releaseType": "release"
+      }
+    ]
   }
 }

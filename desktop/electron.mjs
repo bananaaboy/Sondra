@@ -24,6 +24,7 @@ import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } from 'e
 
 import { startDownloader } from './downloader.mjs'
 import { startServer } from './server.mjs'
+import { startUpdates } from './updater.mjs'
 
 const PORT = 47199
 const SMOKE = process.env.SONDRA_SMOKE
@@ -344,6 +345,12 @@ async function open() {
   }
 
   await load()
+
+  // Updates only for the installed Windows app, and never in a test run —
+  // a test must not replace the build it is testing.
+  if (app.isPackaged && process.platform === 'win32' && !SMOKE && !ANSWER && process.env.SONDRA_UPDATES !== 'off') {
+    startUpdates({ log, dialog, window: () => window })
+  }
 }
 
 app.setAppUserModelId('ch.lizge.sondra')

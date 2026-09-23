@@ -126,7 +126,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Sondra-Setup
-          path: release/Sondra-Setup-*.exe
+          path: |
+            release/Sondra-Setup-*.exe
+            release/latest.yml
           retention-days: 30
 
       - name: Publish the release
@@ -158,13 +160,20 @@ jobs:
 
           **Stille Installation:** ``Sondra-Setup-$version.exe /S``
 
+          **Aktualisieren:** Ab 1.0.7 sucht Sondra selbst nach neuen Fassungen, lädt sie im Hintergrund und fragt, ob sie jetzt neu starten soll.
+
           Das Setup ist nicht signiert. Windows SmartScreen kann beim ersten Start warnen („Weitere Informationen“ → „Trotzdem ausführen“), und die intelligente App-Steuerung blockiert unsignierte Setups ganz.
 
           Datenschutz: https://www.sondra.lizge.ch/datenschutz.html
           "@
           # On a manual run the tag does not exist yet; --target creates it on
           # exactly the commit that was just built and tested.
-          gh release create $tag $setup.FullName release\Sondra-Setup.exe `
+          # latest.yml is what the installed app's updater reads; it names the
+          # versioned installer and its SHA-512. The blockmap lets the updater
+          # fetch only the parts that changed.
+          $extra = @('release\latest.yml', "$($setup.FullName).blockmap") | Where-Object { Test-Path $_ }
+          if (-not (Test-Path 'release\latest.yml')) { throw 'latest.yml fehlt: ohne sie findet die App kein Update.' }
+          gh release create $tag $setup.FullName release\Sondra-Setup.exe @extra `
             --target $env:GITHUB_SHA --title "Sondra $version" --notes $notes
 
       # The Microsoft Store refuses an installer URL that redirects, and every
