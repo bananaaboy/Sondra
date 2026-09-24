@@ -130,6 +130,23 @@ export async function probe(target) {
   return ranged
 }
 
+/**
+ * The address that actually answered a redirecting probe.
+ *
+ * File hosts commonly put an opaque sharing address in front of the real
+ * object. `fetch` follows that chain, but the response headers describe the
+ * last address, not the share address that started it. In particular an
+ * octet-stream without a Content-Disposition name can only be identified by
+ * the extension on that final address.
+ */
+export function finalUrlFrom(probed, fallback) {
+  try {
+    return new URL(probed.url || fallback.toString())
+  } catch {
+    return fallback
+  }
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
     response.status(405).json({ error: 'method', message: 'Nur POST.' })
@@ -212,9 +229,14 @@ export default async function handler(request, response) {
    */
   try {
     const probed = await probe(target)
+    // Keep the resolved URL, rather than sending the browser through the
+    // share-page redirects again. Besides preserving a direct download, this
+    // lets the media check and the file name use the extension at the end of
+    // the redirect chain.
+    const mediaTarget = allowedTarget(finalUrlFrom(probed, target).toString())
     const type = probed.headers.get('content-type') ?? ''
     const disposition = probed.headers.get('content-disposition') ?? ''
-    if (!probed.ok || !looksLikeMedia(type, target, disposition)) {
+    if (!mediaTarget || !probed.ok || !looksLikeMedia(type, mediaTarget, disposition)) {
       response.status(422).json({
         error: 'no-extractor',
         message:
@@ -227,7 +249,7 @@ export default async function handler(request, response) {
       return
     }
     const length = sizeFrom(probed.headers)
-    const name = nameFrom(target, disposition)
+    const name = nameFrom(mediaTarget, disposition)
     response.status(200).json({
       source: 'direct',
       kind: 'direct',
@@ -246,7 +268,7 @@ export default async function handler(request, response) {
           ext: name.includes('.') ? (name.split('.').pop() ?? 'bin') : 'bin',
           mime: type.split(';')[0],
           bytes: length,
-          token: sign(target.toString()),
+          token: sign(mediaTarget.toString()),
         },
       ],
     })
