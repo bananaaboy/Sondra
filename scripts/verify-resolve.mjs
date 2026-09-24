@@ -20,7 +20,7 @@
 
 import http from 'node:http'
 
-import { filenameFrom, looksLikeMedia, nameFrom, probe, sizeFrom } from '../api/resolve.js'
+import { filenameFrom, finalUrlFrom, looksLikeMedia, nameFrom, playerLinksFrom, probe, sizeFrom } from '../api/resolve.js'
 
 let failures = 0
 
@@ -81,6 +81,19 @@ const server = http.createServer((request, response) => {
     }, BODY.subarray(0, 1))
   }
 
+  // An opaque share URL whose final media URL is the only place the extension
+  // appears. This is the shape used by short-link file hosts.
+  if (path === '/e/token') {
+    response.writeHead(302, { location: '/objects/recording.mp4' })
+    return response.end()
+  }
+  if (path === '/objects/recording.mp4') {
+    return send(200, {
+      'content-type': 'application/octet-stream',
+      'content-length': String(BODY.length),
+    }, request.method === 'HEAD' ? '' : BODY)
+  }
+
   // And a page, which must keep being recognised as a page.
   if (path === '/seite') return send(200, { 'content-type': 'text/html; charset=utf-8' }, '<html></html>')
 
@@ -136,6 +149,26 @@ const presigned = await probe(new URL(`${base}/presigned`))
 check('vorsigniert: gilt als Datei', looksLikeMedia(presigned.headers.get('content-type') ?? '', new URL(`${base}/presigned`), presigned.headers.get('content-disposition') ?? ''), true)
 check('vorsigniert: Name', nameFrom(new URL(`${base}/presigned`), presigned.headers.get('content-disposition') ?? ''), '352.jfif')
 check('vorsigniert: Grösse', sizeFrom(presigned.headers), 94_234)
+
+const redirected = await probe(new URL(`${base}/e/token`))
+const finalUrl = finalUrlFrom(redirected, new URL(`${base}/e/token`))
+check('Weiterleitung: endgültige Adresse', finalUrl.pathname, '/objects/recording.mp4')
+check(
+  'Weiterleitung: Medienendung der endgültigen Adresse',
+  looksLikeMedia(redirected.headers.get('content-type') ?? '', finalUrl, ''),
+  true,
+)
+check('Weiterleitung: Name von endgültiger Adresse', nameFrom(finalUrl, ''), 'recording.mp4')
+
+const players = playerLinksFrom(`
+  <iframe src="https://jamesbornmain.com/e/first_2"></iframe>
+  <script>const again = 'https:\\/\\/jamesbornmain.com\\/e\\/first_2';</script>
+  <script>const next = 'https://jamesbornmain.com/e/second-3?x=1&amp;y=2';</script>
+  <a href="https://example.test/e/ignored">ignored</a>
+`)
+check('Player: doppelte Adresse nur einmal', players.length, 2)
+check('Player: normale Adresse', players[0]?.toString(), 'https://jamesbornmain.com/e/first_2')
+check('Player: escapte Adresse und HTML-Parameter', players[1]?.toString(), 'https://jamesbornmain.com/e/second-3?x=1&y=2')
 
 const page = await probe(new URL(`${base}/seite`))
 check('Seite wird weiterhin erkannt', looksLikeMedia(page.headers.get('content-type') ?? '', new URL(`${base}/seite`), ''), false)

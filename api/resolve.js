@@ -37,6 +37,8 @@ const MEDIA_APPLICATION =
 /** Extensions that make `application/octet-stream` believable. */
 const MEDIA_EXTENSION =
   /\.(?:mp3|wav|flac|ogg|oga|opus|m4a|aac|aiff?|wma|mp4|m4v|webm|mkv|mov|avi|ts|flv|mpe?g|3gp|jpe?g|png|gif|webp|avif|bmp|tiff?|heic|m3u8|mpd)$/i
+const PLAYER_LINK = /https?:\/\/(?:www\.)?jamesbornmain\.com\/e\/[a-z0-9_-]+(?:[?#][^\s"'<>]*)?/gi
+const MAX_PLAYER_LINKS = 12
 
 export function looksLikeMedia(type, url, disposition) {
   if (MEDIA.test(type)) return true
@@ -130,6 +132,95 @@ export async function probe(target) {
   return ranged
 }
 
+/**
+ * The address that actually answered a redirecting probe.
+ *
+ * File hosts commonly put an opaque sharing address in front of the real
+ * object. `fetch` follows that chain, but the response headers describe the
+ * last address, not the share address that started it. In particular an
+ * octet-stream without a Content-Disposition name can only be identified by
+ * the extension on that final address.
+ */
+export function finalUrlFrom(probed, fallback) {
+  try {
+    return new URL(probed.url || fallback.toString())
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Player addresses embedded in an HTML page.
+ *
+ * A few pages put the actual player address in an iframe or a JavaScript
+ * value, sometimes with the slashes escaped. These are deliberately limited
+ * to the media host and deduplicated: this is a hand-off to the same direct
+ * file probe below, not a general web crawler.
+ */
+export function playerLinksFrom(html) {
+  const text = String(html).replaceAll('\\/', '/').replaceAll('&amp;', '&')
+  const links = []
+  for (const match of text.matchAll(PLAYER_LINK)) {
+    try {
+      const link = new URL(match[0])
+      if (!links.some((known) => known.toString() === link.toString())) links.push(link)
+      if (links.length === MAX_PLAYER_LINKS) break
+    } catch {
+      // A malformed value in a page is not a reason to reject its other links.
+    }
+  }
+  return links
+}
+
+/** Read only enough HTML to find embedded player addresses. */
+async function htmlFrom(page, limit = 524_288) {
+  if (!page.body) return ''
+  const reader = page.body.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  let received = 0
+  try {
+    while (received < limit) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const part = value.subarray(0, limit - received)
+      received += part.byteLength
+      text += decoder.decode(part, { stream: received < limit })
+    }
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+  return text + decoder.decode()
+}
+
+async function playerLinksAt(target) {
+  const page = await fetch(target, {
+    method: 'GET',
+    redirect: 'follow',
+    headers: { Range: 'bytes=0-524287' },
+  })
+  const type = page.headers.get('content-type') ?? ''
+  if (!page.ok || !/^text\/html\b/i.test(type)) return []
+  return playerLinksFrom(await htmlFrom(page))
+}
+
+function directStream(target, type, disposition, id = 'direct') {
+  const name = nameFrom(target, disposition)
+  return {
+    id,
+    label: id === 'direct' ? 'Datei laden' : `Datei laden ${Number(id.split('-').pop()) + 1}`,
+    hasVideo: type.startsWith('video/'),
+    hasAudio: /^(?:audio|video)\/|^application\/ogg/i.test(type),
+    width: null,
+    height: null,
+    ext: name.includes('.') ? (name.split('.').pop() ?? 'bin') : 'bin',
+    mime: type.split(';')[0],
+    bytes: null,
+    token: sign(target.toString()),
+    name,
+  }
+}
+
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
     response.status(405).json({ error: 'method', message: 'Nur POST.' })
@@ -207,49 +298,72 @@ export default async function handler(request, response) {
    * the CORS header that would allow it, which is the entire reason this
    * endpoint exists. So the question "is there a file here" is asked from the
    * server, with a HEAD, and if the answer is yes the address is signed and
-   * handed back. There is no page scraping here and there will not be: that is
-   * what yt-dlp is for, and yt-dlp belongs on the visitor's own machine.
+   * handed back. An HTML answer gets one small, host-limited pass for embedded
+   * player addresses; general page extraction remains the job of yt-dlp on the
+   * visitor's own machine.
    */
   try {
     const probed = await probe(target)
+    // Keep the resolved URL, rather than sending the browser through the
+    // share-page redirects again. Besides preserving a direct download, this
+    // lets the media check and the file name use the extension at the end of
+    // the redirect chain.
+    const mediaTarget = allowedTarget(finalUrlFrom(probed, target).toString())
     const type = probed.headers.get('content-type') ?? ''
     const disposition = probed.headers.get('content-disposition') ?? ''
-    if (!probed.ok || !looksLikeMedia(type, target, disposition)) {
-      response.status(422).json({
-        error: 'no-extractor',
-        message:
-          'Unter dieser Adresse liegt keine Mediendatei, sondern eine Webseite. Ohne Anbieter kann ' +
-          'der eingebaute Dienst nur YouTube und direkte Datei-Adressen; für alles andere braucht ' +
-          'es einen Anbieter (SONDRA_PROVIDER_URL) oder yt-dlp auf dem eigenen Gerät. Bei einem ' +
-          'Freigabe-Link einer Cloud hilft oft die Adresse, die direkt die Datei liefert — meist ' +
-          'dieselbe mit „/download“ am Ende oder aus dem Herunterladen-Knopf der Cloud kopiert.',
+    if (mediaTarget && probed.ok && looksLikeMedia(type, mediaTarget, disposition)) {
+      const { name, ...stream } = directStream(mediaTarget, type, disposition)
+      response.status(200).json({
+        source: 'direct',
+        kind: 'direct',
+        title: name,
+        author: target.hostname,
+        durationSeconds: null,
+        thumbnail: null,
+        streams: [{ ...stream, bytes: sizeFrom(probed.headers) }],
       })
       return
     }
-    const length = sizeFrom(probed.headers)
-    const name = nameFrom(target, disposition)
-    response.status(200).json({
-      source: 'direct',
-      kind: 'direct',
-      title: name,
-      author: target.hostname,
-      durationSeconds: null,
-      thumbnail: null,
-      streams: [
-        {
-          id: 'direct',
-          label: 'Datei laden',
-          hasVideo: type.startsWith('video/'),
-          hasAudio: /^(?:audio|video)\/|^application\/ogg/i.test(type),
-          width: null,
-          height: null,
-          ext: name.includes('.') ? (name.split('.').pop() ?? 'bin') : 'bin',
-          mime: type.split(';')[0],
-          bytes: length,
-          token: sign(target.toString()),
-        },
-      ],
+
+    // A portal page may contain several player addresses. Probe every one and
+    // show every address that resolves to a real media file; a page that only
+    // contains players or scripts is never offered as if it were a download.
+    const playerStreams = []
+    if (probed.ok && /^text\/html\b/i.test(type)) {
+      for (const [index, player] of (await playerLinksAt(target)).entries()) {
+        const playerProbe = await probe(player)
+        const playerTarget = allowedTarget(finalUrlFrom(playerProbe, player).toString())
+        const playerType = playerProbe.headers.get('content-type') ?? ''
+        const playerDisposition = playerProbe.headers.get('content-disposition') ?? ''
+        if (playerTarget && playerProbe.ok && looksLikeMedia(playerType, playerTarget, playerDisposition)) {
+          const { name: _name, ...stream } = directStream(playerTarget, playerType, playerDisposition, `player-${index}`)
+          playerStreams.push({ ...stream, bytes: sizeFrom(playerProbe.headers) })
+        }
+      }
+    }
+    if (playerStreams.length > 0) {
+      response.status(200).json({
+        source: 'direct',
+        kind: 'direct',
+        title: 'Gefundene Mediendateien',
+        author: target.hostname,
+        durationSeconds: null,
+        thumbnail: null,
+        streams: playerStreams,
+      })
+      return
+    }
+
+    response.status(422).json({
+      error: 'no-extractor',
+      message:
+        'Unter dieser Adresse liegt keine Mediendatei, sondern eine Webseite. Ohne Anbieter kann ' +
+        'der eingebaute Dienst nur YouTube und direkte Datei-Adressen; für alles andere braucht ' +
+        'es einen Anbieter (SONDRA_PROVIDER_URL) oder yt-dlp auf dem eigenen Gerät. Bei einem ' +
+        'Freigabe-Link einer Cloud hilft oft die Adresse, die direkt die Datei liefert — meist ' +
+        'dieselbe mit „/download“ am Ende oder aus dem Herunterladen-Knopf der Cloud kopiert.',
     })
+    return
   } catch (failure) {
     response.status(502).json({
       error: 'unreachable',
