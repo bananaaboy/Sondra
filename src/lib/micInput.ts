@@ -11,7 +11,7 @@
  * floats — no compression in between, nothing leaves the tab.
  */
 
-import { getAudioContext, resumeAudioContext } from './audio'
+import { getAudioContext, pinOutput, resumeAudioContext } from './audio'
 
 export interface DeviceLists {
   inputs: MediaDeviceInfo[]
@@ -37,6 +37,8 @@ export function outputSelectable(): boolean {
 export async function setOutputDevice(deviceId: string): Promise<void> {
   const context = getAudioContext() as SinkContext
   if (context.setSinkId) await context.setSinkId(deviceId === 'default' ? '' : deviceId)
+  // A device picked by hand is kept when others come and go.
+  pinOutput(deviceId !== 'default' && deviceId !== '')
 }
 
 /** What went wrong opening the microphone, said so it can be acted on. */

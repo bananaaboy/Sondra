@@ -13,6 +13,7 @@ import { IN_DESKTOP_APP, WINDOWS_SETUP } from '../lib/desktop'
 import type { ThemeChoice } from '../lib/theme'
 import { useSession } from '../state/store'
 import { SessionMenu } from './AssetList'
+import { AppUpdateButton } from './AppUpdate'
 import { GetAppButton } from './GetApp'
 import { PanelTabs } from './PanelTabs'
 import { ThemeToggle } from './ThemeToggle'
@@ -134,6 +135,7 @@ export function Header({
         <div className="flex min-w-0 items-center gap-[4px] sm:gap-[8px]">
           <SessionMenu />
           <GetAppButton />
+          <AppUpdateButton />
           <ThemeToggle choice={themeChoice} onChange={onThemeChange} />
         </div>
       </div>

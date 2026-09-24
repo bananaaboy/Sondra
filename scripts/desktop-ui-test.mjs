@@ -170,6 +170,16 @@ try {
     return `Titel „${await page.title()}"`
   })
 
+  await step('Kopfzeile: Version und Update aus der App', async () => {
+    // The preload bridge answers: in a test run the updater is off and the
+    // header says only the version, taken from the app itself.
+    const version = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+    await page.waitForFunction((v) => (document.querySelector('header')?.innerText ?? '').includes(v), version, { timeout: 15_000 })
+    const bridge = await page.evaluate(() => typeof window.sondraApp?.updateState)
+    if (bridge !== 'function') throw new Error('Die App-Brücke fehlt.')
+    return `Version ${version} in der Kopfzeile`
+  })
+
   await step('Datei öffnen', async () => {
     await openFile(wav)
     const count = await sessionCount()

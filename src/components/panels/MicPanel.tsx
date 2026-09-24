@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { decodeWithBrowser } from '../../lib/audio'
+import { decodeWithBrowser, playTestTone } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
 import { calibrate, PURPOSES, profileFor, type CalibrationResult, type MicPurpose } from '../../lib/micCalibrate'
 import {
@@ -125,6 +125,8 @@ export function MicPanel() {
   const [devices, setDevices] = useState<DeviceLists>({ inputs: [], outputs: [] })
   const [inputId, setInputId] = useState('')
   const [outputId, setOutputId] = useState('default')
+  /** What the test tone found: the state of Sondra's sound, in numbers. */
+  const [toneReport, setToneReport] = useState<string | null>(null)
   const [monitor, setMonitor] = useState(false)
 
   const [probe, setProbe] = useState<AudioData | null>(null)
@@ -315,12 +317,18 @@ export function MicPanel() {
           Brummen heraus und zeigt genau, was es getan hat.
         </p>
         <p className="text-small text-muted">Die Aufnahmen bleiben in diesem Tab. Nichts wird gesendet.</p>
-        <div>
+        <div className="flex flex-wrap items-center gap-[8px]">
           <Button onClick={() => void open()} disabled={opening}>
             {opening ? 'Wird geöffnet…' : 'Mikrofon einschalten'}
             {!opening ? <ArrowRight /> : null}
           </Button>
+          {/* The other direction needs no microphone: does Sondra's sound
+              come out at all, and where. */}
+          <Button variant="quiet" onClick={() => void playTestTone().then(setToneReport)}>
+            Ausgang testen
+          </Button>
         </div>
+        {toneReport ? <p className="value text-small text-muted">{toneReport}</p> : null}
         {error ? (
           <Notice tone="error" title="Das Mikrofon liess sich nicht öffnen">
             {error}
@@ -388,6 +396,12 @@ export function MicPanel() {
               ))}
             </Select>
           </Field>
+          <div className="flex items-end gap-[8px] sm:col-span-2">
+            <Button size="sm" variant="quiet" onClick={() => void playTestTone().then(setToneReport)}>
+              Ausgang testen
+            </Button>
+            {toneReport ? <span className="value pb-[6px] text-small text-muted">{toneReport}</span> : null}
+          </div>
         </div>
 
         <LevelMeter analyser={session.analyser} />

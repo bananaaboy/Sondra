@@ -74,6 +74,8 @@ await build({
   outfile: path.join(STAGE, 'main.cjs'),
   logLevel: 'warning',
 })
+// The preload runs sandboxed and may only require 'electron': copied as is.
+fs.copyFileSync('desktop/preload.cjs', path.join(STAGE, 'preload.cjs'))
 
 const root = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 fs.writeFileSync(
@@ -133,4 +135,7 @@ for (const [name, file] of [
 step(onlyDir ? 'App-Ordner bauen' : 'Installer bauen')
 const builder = path.join(DESKTOP, 'node_modules/electron-builder/cli.js')
 const args = onlyDir ? ['--dir'] : ['--win', 'nsis', '--x64']
+// Never publish from the build — once, a second flag turns it into a list
+// that electron-builder no longer reads as "never". The workflow publishes
+// the tested installer, together with the latest.yml the updater reads.
 execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })

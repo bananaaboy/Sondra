@@ -78,14 +78,17 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte). Den Lokal-Chip
   in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
-  „App herunterladen" mit einem Auswahlfenster (Microsoft Store ausgegraut mit
-  „Bald verfügbar" bei Hover, daneben das Setup); in der App selbst entfällt
-  er. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
+  „App herunterladen" mit einem Auswahlfenster: zuerst „Als App aus dem
+  Browser" (Edge/Chrome-Installation über `lib/install.ts` — der einzige Weg,
+  den die intelligente App-Steuerung nicht blockiert, solange das Setup
+  unsigniert ist), dann Microsoft Store ausgegraut mit „Bald verfügbar" bei
+  Hover, dann das Setup; in der App selbst entfällt er. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
   Prämisse der Warnung nicht:** dort startet `desktop/downloader.mjs` einen
   eigenen yt-dlp-Dienst auf 127.0.0.1:9000, und statt der Warnung steht ein
   ruhiger Block auf `panel-soft`, der den Haftungssatz wörtlich behält. Der
   Dienst hat keine eigenen Extraktoren (anders als das Brücken-Skript), holt
-  yt-dlp nur nach Nachfrage und antwortet nur der App-Seite.
+  yt-dlp nur nach Nachfrage und antwortet nur Sondra: der App-Seite und
+  sondra.lizge.ch.
 - **Der Downloader hat einen Weg für Portale: das Feld oben.** Es fragt einen
   verbundenen Dienst zuerst und übernimmt dessen Einstellungen. Wird die Seite
   lokal ausgeliefert (App, Brücke), ist der Schalter für externe Downloader von
@@ -136,6 +139,17 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `release/`); vorher einmal `npm ci --prefix desktop`. Quelle in `desktop/`,
   Electron steht bewusst nur in `desktop/package.json`. `release/` wird nicht
   eingecheckt.
+- **Die App aktualisiert sich selbst** (`desktop/updater.mjs`,
+  electron-updater, GitHub-Releases von `bananaaboy/Sondra`). Sie liest
+  `latest.yml` aus dem neuesten Release; der Desktop-Workflow lädt die Datei
+  mit dem Setup hoch und bricht ab, wenn sie fehlt. Ein Release ohne
+  `latest.yml` ist für installierte Apps unsichtbar. In der App sitzt an der
+  Stelle von „App herunterladen" der Update-Knopf (`AppUpdate.tsx`, über
+  `desktop/preload.cjs`): „Nach Updates suchen", Fortschritt beim Laden,
+  „Auf x.y.z aktualisieren", wenn es bereit ist; nicht gedrängt, beim
+  Schliessen wird ohnehin installiert. Neue Version: `version`
+  in `package.json` und `desktop/package.json` erhöhen, dann den Workflow mit
+  „release“ starten.
 - Umgebungsvariablen der Bereitstellung:
   - `SONDRA_SECRET` — signiert die Adressen, die der Proxy weiterreicht.
   - `SONDRA_PROVIDER_URL` — ein cobalt-kompatibler Anbieter. Ist einer

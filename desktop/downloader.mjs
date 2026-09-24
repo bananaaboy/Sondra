@@ -19,10 +19,12 @@
  * project's GitHub releases, checks it against the published SHA-256, and
  * keeps it in the app's data folder.
  *
- * Only the app's own page may use it. Everything on the machine can reach
- * 127.0.0.1, including every website open in a browser; a service that
- * answered all of them would let any page use this machine, and the browser
- * sign-in it may hold, to fetch things.
+ * Only Sondra may use it: the app's own page, and Sondra's website in a
+ * browser on this machine — so the website gets full resolution too while the
+ * app is running. Everything on the machine can reach 127.0.0.1, including
+ * every other website open in a browser; a service that answered all of them
+ * would let any page use this machine, and the browser sign-in it may hold,
+ * to fetch things.
  */
 
 import http from 'node:http'
@@ -37,6 +39,9 @@ const OWN_NAME = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
 const UPDATE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
 const JOB_TTL_MS = 30 * 60 * 1000
 
+/** Sondra's website, the one page besides the app that may use the service. */
+const SITE_ORIGINS = ['https://www.sondra.lizge.ch', 'https://sondra.lizge.ch']
+
 /** Sites yt-dlp handles well, for the page's list; yt-dlp decides the rest. */
 const SERVICES = [
   'youtube', 'soundcloud', 'bandcamp', 'vimeo', 'twitch', 'twitter', 'tiktok', 'instagram',
@@ -47,6 +52,15 @@ const SERVICES = [
 /* -- choosing formats (the same rules as the bridge) ------------------------ */
 
 const MIME = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', m4a: 'audio/mp4', mp3: 'audio/mpeg', ogg: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac' }
+/** yt-dlp's own last error line, for the page to show when no code fits. */
+const detailOf = (stderr) =>
+  (stderr.trim().split('\n').filter((line) => /error/i.test(line)).pop() ?? stderr.trim().split('\n').pop() ?? '')
+    .replace(/^ERROR:\s*/, '')
+    .replace(/\s*(See|Also see)\s+https?:\/\/\S+.*$/i, '')
+    .slice(0, 240)
+
+const failure = (stderr) => ({ status: 'error', error: { code: errorCode(stderr), detail: detailOf(stderr) } })
+
 const mimeOf = (format) => MIME[String(format.ext ?? '').toLowerCase()] ?? 'application/octet-stream'
 
 const heightOf = (format) => format.height ?? 0
@@ -82,6 +96,15 @@ function pickProgressive(formats, maxHeight) {
 /** yt-dlp's plain-text complaints, as the codes the page can explain. */
 function errorCode(stderr) {
   const text = stderr.toLowerCase()
+  // The browser sign-in could not be read: Chrome and Edge lock their cookie
+  // store while open and encrypt it against other programs.
+  if (text.includes('cookie') && /could not copy|failed to decrypt|dpapi|could not find|permission denied|unable to open|locked|no such file/.test(text)) {
+    return 'error.api.ytdlp.cookies'
+  }
+  // The site changed faster than this yt-dlp: a newer one usually knows.
+  if (/nsig extraction failed|signature extraction failed|please update|latest version|unable to extract (initial )?player|requested format is not available/.test(text)) {
+    return 'error.api.ytdlp.outdated'
+  }
   if (text.includes('not a bot') || text.includes('sign in to confirm') || text.includes('403') || text.includes('forbidden')) {
     return 'error.api.ytdlp.signin'
   }
@@ -192,18 +215,38 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     } catch {
       return
     }
-    void run(ownCopy, ['-U'], { timeoutMs: 180_000 }).then((result) => {
+    void update()
+  }
+
+  let updating = null
+  let updatedThisSession = false
+
+  /**
+   * Brings the own copy up to date; true when there is now a newer one to
+   * try. Once per session — a site that still fails after that is not a
+   * question of the version.
+   */
+  function update() {
+    if (updatedThisSession || !found || found.bin !== ownCopy) return Promise.resolve(false)
+    updating ??= (async () => {
+      const before = found?.version
+      const result = await run(ownCopy, ['-U'], { timeoutMs: 180_000 })
+      updatedThisSession = true
       log(`yt-dlp aktualisieren: ${result.code === 0 ? 'fertig' : `Code ${result.code}`}`)
-      if (result.code === 0) {
-        try {
-          const now = new Date()
-          fs.utimesSync(ownCopy, now, now)
-        } catch {
-          /* checked again next week */
-        }
-        found = null
+      if (result.code !== 0) return false
+      try {
+        const now = new Date()
+        fs.utimesSync(ownCopy, now, now)
+      } catch {
+        /* checked again next week */
       }
+      found = null
+      const after = await locate()
+      return Boolean(after && after.version !== before)
+    })().finally(() => {
+      updating = null
     })
+    return updating
   }
 
   let installing = null
@@ -278,6 +321,17 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     if (!tool) return { status: 'error', error: { code: 'error.api.ytdlp.missing' } }
 
     let result = await probe(tool.bin, target)
+
+    // A sign-in that cannot be read is forgotten, and the video tried without.
+    if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.cookies') {
+      log(`Anmeldung aus ${readSettings().cookies} nicht lesbar: ${detailOf(result.stderr)}`)
+      writeSettings({ cookies: null })
+      result = await probe(tool.bin, target)
+    }
+    // Too old for the site: update once, then try again.
+    if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.outdated' && (await update())) {
+      result = await probe(tool.bin, target)
+    }
     if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.signin') {
       // A sign-in that was chosen and still does not do: ask again next time.
       if (readSettings().cookies) {
@@ -291,8 +345,8 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       }
     }
     if (result.code !== 0) {
-      log(`yt-dlp: ${result.stderr.trim().split('\n').pop()?.slice(0, 200) ?? result.code}`)
-      return { status: 'error', error: { code: errorCode(result.stderr) } }
+      log(`yt-dlp: ${detailOf(result.stderr) || result.code}`)
+      return failure(result.stderr)
     }
 
     let info
@@ -366,40 +420,68 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
    * for the first byte: once "200" is out, a failure can only show as a cut
    * connection, and the page would see an empty file instead of a reason.
    */
+  /**
+   * A format picked by what it is rather than by its number — for when the
+   * site hands out different numbers on the second request than on the first.
+   */
+  function looseSelector(format) {
+    const h = heightOf(format)
+    if (isAudioOnly(format)) return 'ba[ext=m4a]/ba'
+    if (isVideoOnly(format)) return h ? `bv*[height=${h}][vcodec^=avc1]/bv*[height<=${h}]/bv*` : 'bv*'
+    return h ? `b[height<=${h}]/b` : 'b'
+  }
+
   function tunnel(job, res, cors) {
     const size = Number(job.format.filesize) || 0
-    const headers = { 'content-type': job.mime, 'cache-control': 'no-store', ...cors, 'access-control-expose-headers': 'Estimated-Content-Length' }
-    if (size > 0) headers['content-length'] = String(size)
-    else if (job.format.filesize_approx) headers['estimated-content-length'] = String(job.format.filesize_approx)
+    let cancelled = false
+    let child = null
+    res.on('close', () => {
+      cancelled = true
+      child?.kill()
+    })
 
-    const child = spawn(
-      job.bin,
-      ['-f', String(job.format.format_id), '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...cookieArgs(), '--', job.url],
-      { windowsHide: true },
-    )
-    let sent = 0
-    let started = false
-    let complaints = ''
-    child.stdout.on('data', (chunk) => {
-      if (!started) {
-        started = true
-        res.writeHead(200, headers)
-      }
-      sent += chunk.length
-      if (!res.write(chunk)) child.stdout.pause()
-    })
-    res.on('drain', () => child.stdout.resume())
-    child.stderr.on('data', (chunk) => (complaints += chunk))
-    child.on('close', () => {
-      if (!started) return send(res, 502, { status: 'error', error: { code: errorCode(complaints) } }, cors)
-      if (size > 0 && sent !== size) res.destroy()
-      else res.end()
-    })
-    child.on('error', () => {
-      if (!started) return send(res, 502, { status: 'error', error: { code: 'error.api.ytdlp.missing' } }, cors)
-      res.destroy()
-    })
-    res.on('close', () => child.kill())
+    const attempt = (selector, exact) => {
+      const headers = { 'content-type': job.mime, 'cache-control': 'no-store', ...cors, 'access-control-expose-headers': 'Estimated-Content-Length' }
+      // The exact size only for the exact format — a wrong length breaks the
+      // transfer in the browser.
+      if (exact && size > 0) headers['content-length'] = String(size)
+      else if (job.format.filesize_approx) headers['estimated-content-length'] = String(job.format.filesize_approx)
+
+      child = spawn(
+        job.bin,
+        ['-f', selector, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...cookieArgs(), '--', job.url],
+        { windowsHide: true },
+      )
+      let sent = 0
+      let started = false
+      let complaints = ''
+      child.stdout.on('data', (chunk) => {
+        if (!started) {
+          started = true
+          res.writeHead(200, headers)
+        }
+        sent += chunk.length
+        if (!res.write(chunk)) child.stdout.pause()
+      })
+      res.on('drain', () => child?.stdout.resume())
+      child.stderr.on('data', (chunk) => (complaints += chunk))
+      child.on('close', () => {
+        if (cancelled) return
+        if (!started) {
+          log(`yt-dlp (Übertragung, ${selector}): ${detailOf(complaints) || 'keine Daten'}`)
+          if (exact) return attempt(looseSelector(job.format), false)
+          return send(res, 502, failure(complaints), cors)
+        }
+        if (exact && size > 0 && sent !== size) res.destroy()
+        else res.end()
+      })
+      child.on('error', () => {
+        if (!started) return send(res, 502, { status: 'error', error: { code: 'error.api.ytdlp.missing' } }, cors)
+        res.destroy()
+      })
+    }
+
+    attempt(String(job.format.format_id), true)
   }
 
   function send(res, status, body, cors) {
@@ -408,13 +490,13 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
   }
 
   const server = http.createServer(async (req, res) => {
-    // Only the app's page. A request without an Origin is not from a web page.
+    // Only Sondra. A request without an Origin is not from a web page.
     const from = req.headers.origin
-    if (from && from !== origin) {
+    if (from && from !== origin && !SITE_ORIGINS.includes(from)) {
       res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
-      return res.end('Dieser Dienst gehört zur Sondra-App und antwortet nur ihr.')
+      return res.end('Dieser Dienst gehört zu Sondra und antwortet nur Sondra.')
     }
-    const cors = { 'access-control-allow-origin': origin, vary: 'Origin' }
+    const cors = { 'access-control-allow-origin': from || origin, vary: 'Origin' }
     const url = new URL(req.url ?? '/', `http://localhost:${port}`)
 
     if (req.method === 'OPTIONS') {
@@ -423,6 +505,9 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         'access-control-allow-methods': 'GET, POST, OPTIONS',
         'access-control-allow-headers': 'content-type, authorization, accept',
         'access-control-max-age': '86400',
+        // A page from the internet asking a service on this machine: Chrome
+        // wants the service to say it expects that.
+        ...(req.headers['access-control-request-private-network'] ? { 'access-control-allow-private-network': 'true' } : {}),
       })
       return res.end()
     }
