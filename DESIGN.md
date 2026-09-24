@@ -623,9 +623,12 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   der Welle sagt in einem Satz, was gerade zu hören ist, mit Vorher/Nachher.
   Tempo und Tonhöhe hört man live über einen körnigeren Schieber; übernommen
   rechnet der Phasenvocoder, und der Hinweis sagt das.
-- **Blenden sind zu sehen, bevor sie da sind:** im Ton-Editor als Kurve über
-  der Welle (der leiser werdende Teil verschleiert in der Farbe des Grunds),
-  beim Überfahren von „Hier einblenden/ausblenden" über der Auswahl; im
+- **Blenden sind zu sehen, bevor sie da sind:** im Ton-Editor in der Welle
+  selbst — die Säulen werden mit derselben Gleichleistungs-Kurve kleiner, die
+  der Ton bekommt, was die Blende wegnimmt, bleibt als schwache Spur stehen,
+  und eine Haarlinie folgt der Kurve. Kein Schleier über der alten Welle: der
+  las sich als Kasten und zeigte nicht, was zu hören sein wird. Ebenso beim
+  Überfahren von „Hier einblenden/ausblenden" über der Auswahl; im
   Video-Editor als Rampe auf der Zeitleiste und als Schwarz über dem Bild, das
   dem Abspielkopf Bild für Bild folgt.
 - **Pegelanzeige** (Mikrofon): flacher Balken ohne Rundung — eine Zeitfläche

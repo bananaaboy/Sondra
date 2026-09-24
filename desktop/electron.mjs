@@ -103,14 +103,26 @@ app.on('second-instance', () => {
 
 /**
  * A GPU process that keeps dying leaves a window that paints nothing and then
- * closes. When it happens, the next start runs without hardware acceleration;
+ * closes. When it happens, the next starts run without hardware acceleration;
  * the page is 2D and the maths runs on the CPU either way.
+ *
+ * For a day, not for good. The marker used to stay forever, so one crash —
+ * a driver update, a resume from sleep — left every later start drawing in
+ * software, and the whole app felt slow for a reason nobody could see.
  */
 const NO_GPU = () => path.join(app.getPath('userData'), 'ohne-gpu')
+const NO_GPU_FOR_MS = 24 * 60 * 60 * 1000
+let withoutGpu = false
 try {
-  if (fs.existsSync(NO_GPU())) app.disableHardwareAcceleration()
+  const since = fs.statSync(NO_GPU()).mtimeMs
+  if (Date.now() - since < NO_GPU_FOR_MS) {
+    app.disableHardwareAcceleration()
+    withoutGpu = true
+  } else {
+    fs.rmSync(NO_GPU(), { force: true })
+  }
 } catch {
-  // No data folder yet: first start.
+  // No marker, or no data folder yet: first start.
 }
 
 app.on('child-process-gone', (_event, details) => {
@@ -207,6 +219,7 @@ function within(promise, ms) {
 async function open() {
   trimLog()
   log(`Start ${app.getVersion()} · ${process.platform} ${process.arch} · Electron ${process.versions.electron}`)
+  if (withoutGpu) log('Ohne Grafikbeschleunigung, weil die GPU in den letzten 24 Stunden abgestürzt ist.')
 
   // The default menu is English and mostly developer tools; the page carries
   // its own navigation.

@@ -35,12 +35,13 @@ Entfernen
   Deinstallieren.
 
 Aktualisieren
-  Ab 1.0.7 sucht Sondra beim Start und dann alle sechs Stunden selbst nach
-  einer neueren Fassung, lädt sie im Hintergrund und prüft sie. Danach fragt
-  Sondra, ob sie jetzt neu starten soll; mit „Später“ wird beim nächsten
+  Sondra sucht kurz nach dem Start und dann alle sechs Stunden selbst nach
+  einer neueren Fassung, lädt sie im Hintergrund und prüft sie. Oben rechts
+  steht dann „Auf x.y.z aktualisieren“; ohne Klick wird beim nächsten
   Schliessen installiert. Windows fragt dabei einmal nach der Erlaubnis, wie
-  beim Setup. Von Hand geht es weiterhin: das neuere Setup darüber
-  installieren.
+  beim Setup. Klappt das nicht, steht dort „Update nicht möglich“ mit dem
+  Grund und daneben „Setup laden“: das neuere Setup einfach darüber
+  installieren. Jeder Schritt des Updates steht im Protokoll.
 
 Wenn etwas nicht geht
   Sondra schreibt ein Protokoll nach %APPDATA%\Sondra\sondra.log (in die

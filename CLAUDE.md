@@ -104,8 +104,8 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   ein Klick dahinter. Weggenommen wird dabei nichts.
 - **Einstellen heisst hören.** Im Ton-Editor ist jeder Effekt ein Schalter,
   ein Regler schaltet ihn ein, und die Wiedergabe läuft durch dieselbe Kette,
-  die „Übernehmen" offline rendert. Blenden stehen als Kurve bzw. Rampe da,
-  bevor sie gerechnet sind. Im Zerschneiden wird ein gezogener Bereich erst
+  die „Übernehmen" offline rendert. Blenden stehen in der Welle selbst bzw.
+  als Rampe da, bevor sie gerechnet sind. Im Zerschneiden wird ein gezogener Bereich erst
   auf Bestätigung ein Pad.
 - **Zustand ist eine Marke am Rand,** kein Kasten: `Notice` annotiert mit
   `●` und `!`, statt den Hinweis einzurahmen.
@@ -147,7 +147,12 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Stelle von „App herunterladen" der Update-Knopf (`AppUpdate.tsx`, über
   `desktop/preload.cjs`): „Nach Updates suchen", Fortschritt beim Laden,
   „Auf x.y.z aktualisieren", wenn es bereit ist; nicht gedrängt, beim
-  Schliessen wird ohnehin installiert. Neue Version: `version`
+  Schliessen wird ohnehin installiert. Scheitert es, steht „Update nicht
+  möglich" sichtbar da, mit „Setup laden" daneben — nie nur im Tooltip.
+  `nsis.packElevateHelper` bleibt gesetzt: nur dann steht
+  `isAdminRightsRequired` in `latest.yml`, und das Update geht bei der
+  Installation für alle Benutzer direkt über elevate.exe. Alles, was der
+  Updater sagt, steht in `sondra.log`. Neue Version: `version`
   in `package.json` und `desktop/package.json` erhöhen, dann den Workflow mit
   „release“ starten.
 - Umgebungsvariablen der Bereitstellung:

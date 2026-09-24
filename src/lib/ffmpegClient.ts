@@ -103,13 +103,22 @@ function setBoot(patch: Partial<FfmpegBoot>): void {
 }
 
 /**
- * Fetches a URL while reporting how much has arrived, and hands back a blob URL.
+ * Fetches a URL while reporting how much has arrived, and hands back the URL
+ * the core should load from.
+ *
+ * Where the server lets the browser keep the file (the hashed assets are
+ * cached for a year, here and in the app), that is the plain URL: the worker's
+ * own fetch then comes out of the cache, and the browser can keep the
+ * *compiled* module too. A blob URL is never cached, so every start compiled
+ * thirty megabytes of WebAssembly again. Otherwise it is a blob of the bytes
+ * just read, so they do not cross the network twice.
  *
  * Falls back to the plain URL where the body cannot be streamed; the core still
  * loads, the bar just cannot say how far along it is.
  */
 async function fetchWithProgress(url: string): Promise<string> {
-  const response = await fetch(url, { credentials: 'omit' })
+  // Same credentials mode as the core's own fetch, so both read one cache entry.
+  const response = await fetch(url, { credentials: 'same-origin' })
   if (!response.ok) throw new Error(`${url} antwortete mit ${response.status}`)
 
   // `content-length` counts the bytes on the wire, while the reader hands over
@@ -121,6 +130,7 @@ async function fetchWithProgress(url: string): Promise<string> {
   const declared = Number(response.headers.get('content-length'))
   const encoded = (response.headers.get('content-encoding') ?? '').trim() !== ''
   let totalBytes = !encoded && Number.isFinite(declared) && declared > 0 ? declared : null
+  const cacheable = /max-age=[1-9]/.test(response.headers.get('cache-control') ?? '')
 
   const reader = response.body?.getReader()
   if (!reader) return url
@@ -129,15 +139,24 @@ async function fetchWithProgress(url: string): Promise<string> {
 
   const chunks: Uint8Array[] = []
   let received = 0
+  let reportedAt = 0
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
-    chunks.push(value)
+    if (!cacheable) chunks.push(value)
     received += value.byteLength
     if (totalBytes !== null && received > totalBytes) totalBytes = null
-    setBoot({ receivedBytes: received, totalBytes })
+    // A few times a second is a moving bar; every chunk was hundreds of
+    // renders while the page was still starting.
+    const now = performance.now()
+    if (now - reportedAt > 100) {
+      reportedAt = now
+      setBoot({ receivedBytes: received, totalBytes })
+    }
   }
+  setBoot({ receivedBytes: received, totalBytes })
 
+  if (cacheable) return url
   return URL.createObjectURL(new Blob(chunks as BlobPart[], { type: 'application/wasm' }))
 }
 
@@ -278,6 +297,12 @@ export interface RunOptions {
   /** The argument list, exactly as it would follow `ffmpeg` on a command line. */
   args: string[]
   signal?: AbortSignal
+  /**
+   * The inputs belong to this run alone and may be handed to the worker
+   * as they are — detached afterwards, not copied first. For bytes that were
+   * fetched only to be merged, the copy was a second full file in memory.
+   */
+  consumeInput?: boolean
 }
 
 export interface RunResult {
@@ -316,7 +341,7 @@ export function runFfmpeg(options: RunOptions): Promise<RunResult> {
   return enqueue(() => runFfmpegNow(options))
 }
 
-async function runFfmpegNow({ input, output, args, signal }: RunOptions): Promise<RunResult> {
+async function runFfmpegNow({ input, output, args, signal, consumeInput = false }: RunOptions): Promise<RunResult> {
   const ffmpeg = await loadFfmpeg()
   const logs: string[] = []
   const stopLogging = onFfmpegLog((line) => {
@@ -338,7 +363,7 @@ async function runFfmpegNow({ input, output, args, signal }: RunOptions): Promis
       // detaches it — the session asset would be an empty husk afterwards and
       // could never be converted, decoded or re-used again. The copy is the
       // price of keeping the input intact.
-      await ffmpeg.writeFile(name, bytes.slice())
+      await ffmpeg.writeFile(name, consumeInput ? bytes : bytes.slice())
     }
 
     const code = await ffmpeg.exec(args)

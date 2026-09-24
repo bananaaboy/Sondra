@@ -55,8 +55,7 @@ import { encodeWav, type AudioData, type WavBitDepth } from '../../lib/wav'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { useActiveAssetOfKind, useAssetsOfKind, useSession } from '../../state/store'
 import { FileDrop } from '../FileDrop'
-import { Waveform } from '../Waveform'
-import { FadeOverlay, type FadeShape } from '../editor/FadeOverlay'
+import { Waveform, type WaveFade } from '../Waveform'
 import {
   ArrowRight,
   Button,
@@ -479,7 +478,7 @@ export function AudioEditorPanel() {
 
   // The fades as they will fall: the file's own ends while the fade switch is
   // on, and the selection while a pointer rests on one of its fade buttons.
-  const fadeShapes: FadeShape[] = []
+  const fadeShapes: WaveFade[] = []
   if (fading && !compare) {
     const lead = Math.min(fadeIn, duration)
     if (lead > 0) fadeShapes.push({ from: 0, to: lead, direction: 'in' })
@@ -487,6 +486,11 @@ export function AudioEditorPanel() {
     if (tail > 0) fadeShapes.push({ from: duration - tail, to: duration, direction: 'out' })
   }
   if (fadeHover && hasSelection) fadeShapes.push({ from: span.start, to: span.end, direction: fadeHover })
+  // The waveform draws the view, so the fades move into its time.
+  const fadesInView = useMemo(
+    () => fadeShapes.map((fade) => ({ ...fade, from: fade.from - viewStart, to: fade.to - viewStart })),
+    [fadeShapes.map((fade) => `${fade.direction}${fade.from}-${fade.to}`).join(','), viewStart],
+  )
 
   const copySelection = () => {
     if (!current || !hasSelection) return
@@ -594,8 +598,7 @@ export function AudioEditorPanel() {
             }}
             className="relative mt-[16px] cursor-text touch-none bg-panel-soft p-[12px] select-none"
           >
-            <Waveform audio={shown} height={130} position={positionInView} selection={liveInView} />
-            <FadeOverlay fades={fadeShapes} viewStart={viewStart} viewEnd={viewEnd} />
+            <Waveform audio={shown} height={130} position={positionInView} selection={liveInView} fades={fadesInView} />
           </div>
 
           {/* -- what is heard live, and writing it in ------------------------ */}

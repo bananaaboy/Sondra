@@ -108,6 +108,17 @@ async function explainErrorBody(response: Response): Promise<string | null> {
   }
 }
 
+/**
+ * How often a transfer tells the page how far it is. A local service delivers
+ * a chunk every few hundred microseconds; reporting each one re-rendered the
+ * page thousands of times a second, and that — not the network — was what
+ * made the window stutter while a download ran.
+ */
+const PROGRESS_EVERY_MS = 100
+
+/** Largest declared length reserved up front (1.5 GB). */
+const MAX_PREALLOCATE = 1_500_000_000
+
 /** Reads a response body, reporting progress as the bytes arrive. */
 async function readWithProgress(
   response: Response,
@@ -123,11 +134,19 @@ async function readWithProgress(
     return new Uint8Array(buffer)
   }
 
+  // With a declared length the bytes go straight to their place. Collecting
+  // chunks and joining them at the end held the file twice and copied all of
+  // it in one blocking step — right when the download looked finished.
+  // A declared size is only trusted up to what a tab can hold; beyond it the
+  // bytes are collected as before and the browser says when memory runs out.
+  const placeable = totalBytes !== null && Number.isSafeInteger(totalBytes) && totalBytes > 0 && totalBytes <= MAX_PREALLOCATE
+  let target = placeable ? new Uint8Array(totalBytes) : null
   const chunks: Uint8Array[] = []
   let receivedBytes = 0
   let windowStart = performance.now()
   let windowBytes = 0
   let bytesPerSecond = 0
+  let reportedAt = 0
 
   for (;;) {
     if (signal?.aborted) {
@@ -136,7 +155,16 @@ async function readWithProgress(
     }
     const { done, value } = await reader.read()
     if (done) break
-    chunks.push(value)
+    if (target && receivedBytes + value.byteLength <= target.byteLength) {
+      target.set(value, receivedBytes)
+    } else {
+      // More than was declared: keep what is placed and collect the rest.
+      if (target) {
+        chunks.push(target.subarray(0, receivedBytes))
+        target = null
+      }
+      chunks.push(value)
+    }
     receivedBytes += value.byteLength
     windowBytes += value.byteLength
 
@@ -147,14 +175,25 @@ async function readWithProgress(
       windowBytes = 0
     }
 
-    onProgress?.({
-      receivedBytes,
-      totalBytes,
-      fraction: totalBytes ? Math.min(1, receivedBytes / totalBytes) : null,
-      bytesPerSecond,
-    })
+    if (now - reportedAt >= PROGRESS_EVERY_MS) {
+      reportedAt = now
+      onProgress?.({
+        receivedBytes,
+        totalBytes,
+        fraction: totalBytes ? Math.min(1, receivedBytes / totalBytes) : null,
+        bytesPerSecond,
+      })
+    }
   }
 
+  onProgress?.({
+    receivedBytes,
+    totalBytes,
+    fraction: totalBytes ? Math.min(1, receivedBytes / totalBytes) : null,
+    bytesPerSecond,
+  })
+
+  if (target) return receivedBytes === target.byteLength ? target : target.subarray(0, receivedBytes)
   const result = new Uint8Array(receivedBytes)
   let offset = 0
   for (const chunk of chunks) {
@@ -419,8 +458,11 @@ export async function fetchHlsSegments(
 
 /** Hands bytes to the browser's download machinery. */
 export function saveBytes(bytes: Uint8Array, filename: string, mime = 'application/octet-stream'): void {
-  const view = bytes.slice()
-  const blob = new Blob([view.buffer as ArrayBuffer], { type: mime })
+  // A Blob copies what it is given anyway; copying first as well cost a
+  // second full file for nothing. Only memory shared with a worker has to be
+  // copied out, because a Blob will not take it.
+  const view = bytes.buffer instanceof ArrayBuffer ? (bytes as Uint8Array<ArrayBuffer>) : bytes.slice()
+  const blob = new Blob([view], { type: mime })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -471,6 +513,7 @@ export async function streamToDisk(
     let windowStart = performance.now()
     let windowBytes = 0
     let bytesPerSecond = 0
+    let reportedAt = 0
 
     for (;;) {
       if (signal?.aborted) {
@@ -489,12 +532,15 @@ export async function streamToDisk(
         windowStart = now
         windowBytes = 0
       }
-      onProgress?.({
-        receivedBytes,
-        totalBytes,
-        fraction: totalBytes ? Math.min(1, receivedBytes / totalBytes) : null,
-        bytesPerSecond,
-      })
+      if (now - reportedAt >= PROGRESS_EVERY_MS) {
+        reportedAt = now
+        onProgress?.({
+          receivedBytes,
+          totalBytes,
+          fraction: totalBytes ? Math.min(1, receivedBytes / totalBytes) : null,
+          bytesPerSecond,
+        })
+      }
     }
 
     // An empty body means the far end gave up after the headers. Closing the
