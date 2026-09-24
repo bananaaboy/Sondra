@@ -65,7 +65,16 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Aussage (der Download-Knopf sagt „App"). Ausblenden über einen Wrapper, nicht mit
   `hidden` auf einem `Button`: dessen eigenes `inline-flex` gewinnt.
 - **Nichts steht vor der Seite.** FFmpeg lädt im Hintergrund, nie hinter einem
-  Ladebildschirm. Ein Werkzeug, das wartet, zeigt das Warten bei sich.
+  Ladebildschirm. Ein Werkzeug, das wartet, zeigt das Warten bei sich. Jedes
+  Werkzeug ist ein eigener Chunk (`React.lazy` in `Dashboard.tsx`) und wird
+  erst beim Öffnen geholt, der Rest im Leerlauf; ein neues Panel gehört in
+  `TOOLS` dort, nicht als statischer Import.
+- **Die Sitzung bleibt auf dem Gerät,** auf ausdrücklichen Wunsch vom
+  24.9.2026 (`lib/sessionStore.ts`, IndexedDB). Beim Start wird die letzte
+  angeboten („Letzte Sitzung: Wiederherstellen / Verwerfen“), nie still
+  geladen. Der Schalter „Sitzung auf diesem Gerät behalten“ im Dateimenü
+  löscht beim Abschalten alles — die alte Regel „Schliessen ist die
+  Löschtaste“ für geteilte Rechner. Dekodierter Ton wird nicht gespeichert.
 - **Der Einstieg zeigt die nächste Handlung,** nicht den Zustand der leeren
   Sitzung. Ohne Datei steht dort, was die Seite kann und der Knopf, der sie
   startet — kein Formular mit leeren Feldern.
@@ -109,6 +118,15 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   auf Bestätigung ein Pad.
 - **Zustand ist eine Marke am Rand,** kein Kasten: `Notice` annotiert mit
   `●` und `!`, statt den Hinweis einzurahmen.
+- **Untertitel laufen mit Whisper im Browser** (`workers/transcribe.worker.ts`,
+  transformers.js). Das Modell kommt beim ersten Gebrauch von Hugging Face und
+  wird dort gesagt, wo es passiert; die ONNX-Laufzeit ist mitgebaut, nicht vom
+  CDN. `onnxruntime-node` und `sharp` sind über `overrides` durch leere Pakete
+  in `stubs/` ersetzt — die Browser-Fassung braucht sie nie, und ihr
+  Installationsskript scheitert in Umgebungen ohne freien Download.
+  Eingebrannt wird mit im Browser gezeichneten Bildern je Untertitel, nicht
+  mit libass: das stürzt in diesem FFmpeg-Build ab. x264 immer mit
+  `-preset medium`; `veryfast` stürzt ebenso ab.
 - **Jedes Werkzeug hat eine Adresse.** `#umwandeln`, `#tonart`,
   `#spuren-trennen` — die Slugs stehen in `panelMeta.tsx`, das Routing in
   `usePanelRoute`. Der Start ist die blanke Wurzel. Ein neues Panel ohne Slug
@@ -132,9 +150,17 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
 ## Betrieb
 
 - `npm run dev` · `npm run build` · `npm run typecheck`
+- Offline: `public/coi-serviceworker.js` hält nach einem Besuch alle Dateien
+  aus `offline.json` (ein Vite-Plugin schreibt die Liste beim Build) und
+  löscht, was frühere Fassungen im Cache liessen. WebAssembly-Kerne nur bei
+  Gebrauch.
 - `npm run dev:service` serviert `dist/` zusammen mit den Funktionen unter
   `api/`, was `vite preview` nicht kann — nötig, um den Downloader lokal
   durchzuspielen.
+- **„Öffnen mit Sondra“**: `desktop/installer.nsh` trägt Sondra nur unter
+  `OpenWithProgids` ein, nie als Standard (der Workflow prüft das). Dateien
+  aus der Befehlszeile oder vom zweiten Start reicht `electron.mjs` über
+  `server.mjs` (`/geoeffnet/<token>`, einmal abrufbar) an die Seite.
 - `npm run build:desktop` baut die Windows-App (Electron, NSIS-Setup nach
   `release/`); vorher einmal `npm ci --prefix desktop`. Quelle in `desktop/`,
   Electron steht bewusst nur in `desktop/package.json`. `release/` wird nicht

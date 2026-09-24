@@ -303,6 +303,8 @@ export interface RunOptions {
    * fetched only to be merged, the copy was a second full file in memory.
    */
   consumeInput?: boolean
+  /** Folders to create before the inputs are written, e.g. `fonts` for libass. */
+  folders?: string[]
 }
 
 export interface RunResult {
@@ -341,7 +343,7 @@ export function runFfmpeg(options: RunOptions): Promise<RunResult> {
   return enqueue(() => runFfmpegNow(options))
 }
 
-async function runFfmpegNow({ input, output, args, signal, consumeInput = false }: RunOptions): Promise<RunResult> {
+async function runFfmpegNow({ input, output, args, signal, consumeInput = false, folders = [] }: RunOptions): Promise<RunResult> {
   const ffmpeg = await loadFfmpeg()
   const logs: string[] = []
   const stopLogging = onFfmpegLog((line) => {
@@ -358,6 +360,9 @@ async function runFfmpegNow({ input, output, args, signal, consumeInput = false 
 
   const written = Object.keys(input)
   try {
+    for (const folder of folders) {
+      await ffmpeg.createDir(folder).catch(() => undefined) // already there from an earlier run
+    }
     for (const [name, bytes] of Object.entries(input)) {
       // `writeFile` puts the caller's ArrayBuffer in the transfer list, which
       // detaches it — the session asset would be an empty husk afterwards and
@@ -366,7 +371,18 @@ async function runFfmpegNow({ input, output, args, signal, consumeInput = false 
       await ffmpeg.writeFile(name, consumeInput ? bytes : bytes.slice())
     }
 
-    const code = await ffmpeg.exec(args)
+    let code: number
+    try {
+      code = await ffmpeg.exec(args)
+    } catch (failure) {
+      if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+      // A crash inside the core arrives as whatever the WebAssembly runtime
+      // threw — sometimes not even an Error. What FFmpeg printed last is the
+      // only useful part, and the core is reloaded, as after a failed exit.
+      await unloadFfmpeg().catch(() => undefined)
+      const reason = failure instanceof Error ? failure.message : String(failure)
+      throw new Error(`FFmpeg ist abgestürzt (${reason}).\n${logs.slice(-8).join('\n')}`)
+    }
     if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
     if (code !== 0) {
       // A non-zero exit usually means ffmpeg called exit(), and exit() takes
@@ -398,6 +414,24 @@ async function runFfmpegNow({ input, output, args, signal, consumeInput = false 
         }
       }
     }
+  }
+}
+
+/**
+ * Width, height and length of a video, as FFmpeg reads them — the browser's
+ * own player cannot open every container, and some builds none with H.264.
+ */
+export async function probeVideo(bytes: Uint8Array, name: string): Promise<{ width: number; height: number; duration: number }> {
+  const extension = (name.split('.').pop() ?? 'mp4').toLowerCase()
+  const input = `probe.${extension}`
+  const { logs } = await runFfmpeg({ input: { [input]: bytes }, output: [], args: ['-i', input, '-map', '0:v:0', '-frames:v', '1', '-f', 'null', '-'] })
+  const text = logs.join('\n')
+  const size = text.match(/Video:[^\n]*?(\d{2,5})x(\d{2,5})/)
+  const time = text.match(/Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/)
+  return {
+    width: size ? Number(size[1]) : 0,
+    height: size ? Number(size[2]) : 0,
+    duration: time ? Number(time[1]) * 3600 + Number(time[2]) * 60 + Number(time[3]) : 0,
   }
 }
 

@@ -1,10 +1,10 @@
 /**
  * Shared session state.
  *
- * Deliberately in-memory only. Nothing here is persisted to localStorage,
- * IndexedDB or anywhere else: closing the tab is the delete button, and there is
- * no leftover state for a later visitor to a shared machine to find. The one
- * exception is the small settings slice, which holds no media at all.
+ * In memory here; `hooks/useKeptSession` mirrors the files into IndexedDB on
+ * this device and offers them back after a restart, unless the person has
+ * switched that off („Sitzung auf diesem Gerät behalten“) — then closing the
+ * tab is the delete button again, as it was for anyone on a shared machine.
  */
 
 import { create } from 'zustand'
@@ -59,6 +59,7 @@ export type PanelId =
   | 'sampler'
   | 'harmony'
   | 'mic'
+  | 'subtitles'
 
 interface SessionState {
   assets: Asset[]

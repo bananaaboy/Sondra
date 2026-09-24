@@ -72,6 +72,26 @@ export const ACTIONS: ToolAction[] = [
     keywords: ['kalibrieren', 'rauschen', 'noise', 'podcast', 'streaming', 'obs', 'discord', 'videocall', 'gate', 'filter'],
   },
 
+  /* -- speech ---------------------------------------------------------------- */
+  {
+    id: 'transcript',
+    panel: 'subtitles',
+    group: 'ton',
+    label: 'Gesprochenes als Text',
+    hint: 'Interview, Sprachnachricht oder Podcast abschreiben lassen',
+    kinds: ['audio', 'video'],
+    keywords: ['transkript', 'transcript', 'transkribieren', 'sprache', 'text', 'whisper', 'diktat', 'abschreiben', 'speech'],
+  },
+  {
+    id: 'subtitles',
+    panel: 'subtitles',
+    group: 'video',
+    label: 'Untertitel erstellen',
+    hint: 'Als SRT-Datei, als Spur im Video oder ins Bild gebrannt',
+    kinds: ['video'],
+    keywords: ['untertitel', 'subtitles', 'srt', 'vtt', 'captions', 'einbrennen', 'burn', 'reels', 'tiktok'],
+  },
+
   /* -- converting ----------------------------------------------------------- */
   {
     id: 'convert-audio',

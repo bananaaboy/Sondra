@@ -411,6 +411,44 @@ try {
     return `flower.mp4 in der Sitzung · ${ytdlp.replace(/^.*ms {2}/, '').slice(0, 60)}`
   })
 
+  await step('Öffnen mit Sondra: Datei an die laufende App', async () => {
+    // What Windows does for „Öffnen mit“ or a file dropped on the icon: start
+    // the executable with the path. The running app takes it over.
+    const opened = path.join(work, 'geoeffnet.wav')
+    fs.copyFileSync(wav, opened)
+    const before = await sessionCount()
+    const second = spawn(executable, ['--no-sandbox', opened], { stdio: 'ignore', env: { ...process.env, SONDRA_SMOKE: '' } })
+    await new Promise((resolve) => second.once('exit', resolve))
+    await page.waitForFunction(
+      (count) => {
+        const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
+        const extra = text.match(/\+(\d+)/)
+        return (extra ? Number(extra[1]) + 1 : 1) > count && text.includes('geoeffnet.wav')
+      },
+      before,
+      { timeout: 20_000 },
+    )
+    return `geoeffnet.wav in der Sitzung (${before} → ${await sessionCount()} Dateien)`
+  })
+
+  await step('Untertitel: Sprache erkennen, SRT', async () => {
+    // Needs the network twice: the sample, and the model on first use.
+    // SONDRA_UI_OHNE_NETZ skips it where Chromium cannot reach Hugging Face.
+    if (process.env.SONDRA_UI_OHNE_NETZ) return 'übersprungen (SONDRA_UI_OHNE_NETZ)'
+    const speech = path.join(work, 'jfk.wav')
+    const sample = await fetch('https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav')
+    if (!sample.ok) throw new Error(`Sprachprobe nicht geladen: ${sample.status}`)
+    fs.writeFileSync(speech, Buffer.from(await sample.arrayBuffer()))
+    await openFile(speech)
+    await go('untertitel')
+    await page.locator('main select').first().selectOption('en')
+    await page.getByRole('button', { name: 'Text erkennen' }).click()
+    await page.getByRole('button', { name: 'Als SRT speichern' }).waitFor({ timeout: 240_000 })
+    const text = (await page.locator('main textarea').evaluateAll((areas) => areas.map((area) => area.value).join(' '))).toLowerCase()
+    if (!/ask not what your country/.test(text)) throw new Error(`Erkannt: „${text.slice(0, 120)}“`)
+    return `„${text.slice(0, 60)}…“`
+  })
+
   await step('Herunterladen: YouTube (nur Hinweis)', async () => {
     await go('herunterladen')
     await page.getByLabel('Adresse zum Herunterladen').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
@@ -438,6 +476,25 @@ try {
       return `Laden abgelehnt: ${(await mainText()).match(/Hat nicht geklappt (.{0,120})/)?.[1]}`
     }
     return 'Video geladen'
+  })
+
+  await step('Sitzung: nach dem Neuladen wiederherstellen', async () => {
+    const before = await sessionCount()
+    // Written a moment behind the session; the file menu says when it is done.
+    await page.locator('header button[title="Dateien dieser Sitzung"]').click()
+    await page.getByText('auf diesem Gerät gespeichert,').waitFor({ timeout: 120_000 })
+    await page.keyboard.press('Escape')
+    await page.reload()
+    await page.getByRole('region', { name: 'Letzte Sitzung' }).waitFor({ timeout: 15_000 })
+    await page.getByRole('button', { name: 'Wiederherstellen', exact: true }).click()
+    await page.waitForFunction((count) => {
+      const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
+      const extra = text.match(/\+(\d+)/)
+      return (extra ? Number(extra[1]) + 1 : text ? 1 : 0) >= count
+    }, before, { timeout: 60_000 }).catch(async () => {
+      throw new Error(`${before} Dateien vorher, ${await sessionCount()} wiederhergestellt`)
+    })
+    return `${before} Dateien nach dem Neuladen wieder da`
   })
 } catch (error) {
   results.push({ name: 'Ablauf', ok: false, detail: String(error?.message ?? error), ms: 0 })

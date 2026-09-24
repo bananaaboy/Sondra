@@ -240,8 +240,8 @@ export function Home() {
           <div className="flex max-w-[40em] flex-col gap-[12px]">
             <h2 className="display-md sm:display-lg">Ton, Video und Bilder bearbeiten</h2>
             <p className="text-body leading-[1.55] text-prose">
-              Alles rechnet in diesem Tab. Ihre Dateien werden nirgendwohin hochgeladen, und mit dem
-              Schließen des Tabs ist alles weg.
+              Alles rechnet auf diesem Gerät. Ihre Dateien werden nirgendwohin hochgeladen, und die Sitzung
+              bleibt hier, bis Sie sie verwerfen.
             </p>
           </div>
           <WayIn onOpen={picker.open} busy={picker.busy} />

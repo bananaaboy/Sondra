@@ -34,6 +34,18 @@ Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra - Multimedia →
   Deinstallieren.
 
+Öffnen mit Sondra
+  Rechtsklick auf eine Ton-, Video- oder Bilddatei → „Öffnen mit“ → Sondra,
+  oder die Datei auf das Sondra-Symbol ziehen. Das Setup trägt Sondra nur in
+  „Öffnen mit“ ein und macht sich für keine Dateiart zum Standard. Läuft
+  Sondra schon, kommt die Datei in die offene Sitzung.
+
+Sitzung
+  Die Dateien der Sitzung bleiben auf diesem Rechner gespeichert und werden
+  nach dem Schliessen oder einem Update wieder angeboten („Letzte Sitzung:
+  Wiederherstellen“). Abschalten lässt sich das unter dem Dateinamen oben
+  rechts; dabei wird das Gespeicherte gelöscht.
+
 Aktualisieren
   Sondra sucht kurz nach dem Start und dann alle sechs Stunden selbst nach
   einer neueren Fassung, lädt sie im Hintergrund und prüft sie. Oben rechts

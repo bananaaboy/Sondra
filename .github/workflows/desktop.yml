@@ -82,6 +82,15 @@ jobs:
           if (-not $entry.InstallLocation) { throw 'InstallLocation fehlt im Eintrag.' }
           $entry | Select-Object DisplayName, Publisher, DisplayVersion, InstallLocation, QuietUninstallString | Format-List
 
+          # Open with: Sondra listed for media files, and no default taken over.
+          $progids = Get-ItemProperty 'HKLM:\Software\Classes\.mp3\OpenWithProgids' -ErrorAction SilentlyContinue
+          if (-not ($progids.PSObject.Properties.Name -contains 'Sondra.Datei')) { throw 'Sondra fehlt unter Oeffnen mit fuer .mp3.' }
+          $command = (Get-ItemProperty 'HKLM:\Software\Classes\Sondra.Datei\shell\open\command').'(default)'
+          if ($command -notlike '*Sondra.exe*%1*') { throw "Befehl fuer Oeffnen mit: $command" }
+          $default = (Get-ItemProperty 'HKLM:\Software\Classes\.mp3' -ErrorAction SilentlyContinue).'(default)'
+          if ($default -eq 'Sondra.Datei') { throw 'Das Setup hat sich zum Standard fuer .mp3 gemacht.' }
+          Write-Host "Oeffnen mit: $command"
+
           # Twice: the second start runs against the profile the first one left
           # behind, which is where a start that works once and then fails lives.
           $report = Join-Path $env:RUNNER_TEMP 'smoke.json'

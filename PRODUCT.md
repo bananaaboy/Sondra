@@ -42,7 +42,9 @@ mitnehmen. Gelungen ist es, wenn jemand mit einem Vorhaben kommt und mit einer
 fertigen Datei geht, ohne etwas installiert oder hochgeladen zu haben.
 
 Was es nicht ist: keine DAW, kein Mehrspur-Schnitt, kein Projektformat. Eine
-Sitzung ist ein Tab, und das Schliessen des Tabs ist die Löschtaste.
+Sitzung ist ein Tab. Ihre Dateien bleiben auf dem Gerät (IndexedDB) und werden
+beim nächsten Start angeboten, nicht geladen; wer das abschaltet, hat wieder die
+alte Regel: das Schliessen des Tabs ist die Löschtaste.
 
 ## Positioning
 
@@ -63,9 +65,14 @@ MIDI, in Schnipsel zerlegen und auf Tasten legen.
 
 ## Operating Context
 
-- **Eine Sitzung ist ein Tab.** Dateien werden hineingezogen oder geöffnet,
-  Ergebnisse gespeichert oder in die Sitzung übernommen. Nichts überdauert das
-  Schliessen; das ist Absicht und wird so gesagt.
+- **Eine Sitzung ist ein Tab.** Dateien werden hineingezogen, geöffnet oder
+  unter Windows „mit Sondra geöffnet“, Ergebnisse gespeichert oder in die
+  Sitzung übernommen. Seit dem 24.9.2026 überdauert die Sitzung das Schliessen
+  und ein Update auf dem Gerät, auf ausdrücklichen Wunsch — mit einem Schalter
+  „Sitzung auf diesem Gerät behalten“ für geteilte Rechner, der auch löscht.
+- **Offline nutzbar** nach einem Besuch: der Service Worker hält jedes
+  Werkzeug der aktuellen Fassung (`offline.json`), nur das Herunterladen
+  braucht das Netz und sagt das.
 - **Bereitgestellt auf Vercel** unter `www.sondra.lizge.ch`. Die zwei
   Serverfunktionen unter `api/` sind der einzige Teil, der nicht im Tab läuft.
 - **Optionaler Anbieter** über `SONDRA_PROVIDER_URL`, serverseitig hinterlegt.
@@ -80,7 +87,10 @@ MIDI, in Schnipsel zerlegen und auf Tasten legen.
 Gesetzt, nicht verhandelbar, mehrere davon ausdrücklich so gewünscht:
 
 - **Es wird nichts hochgeladen.** Kein Upload-Endpunkt, keine Datenbank, kein
-  `localStorage` für Medien.
+  `localStorage` für Medien. Die Sitzung liegt in IndexedDB auf dem Gerät und
+  nirgends sonst. Das einzige, was von aussen kommt, ohne dass jemand eine
+  Adresse eintippt, ist das Whisper-Modell für Untertitel: beim ersten Gebrauch
+  von Hugging Face, nur die Modelldateien, die Aufnahme bleibt hier.
 - **Nur rechtlich zulässige Downloads. Keine DRM-Umgehung.**
 - **Keine fremde Instanz fest verdrahtet.** Ein Anbieter wird über die
   Umgebungsvariable hinterlegt oder gar nicht. Sonst gingen alle eingegebenen

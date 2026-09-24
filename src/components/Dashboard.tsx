@@ -3,25 +3,72 @@
  * away underneath it.
  */
 
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 
 import { detectCapabilities, hasWebGpuAdapter, suggestedThreads } from '../lib/capabilities'
 import { onServiceConnection, serviceConnection, type ServiceConnection } from '../lib/serviceState'
 import { loadFfmpeg, onFfmpegStatus, type FfmpegStatus } from '../lib/ffmpegClient'
 import type { ResolvedTheme } from '../lib/theme'
 import { useSession } from '../state/store'
-import { ConverterPanel } from './panels/ConverterPanel'
-import { HarmonyPanel } from './panels/HarmonyPanel'
-import { MicPanel } from './panels/MicPanel'
-import { DownloaderPanel } from './panels/DownloaderPanel'
-import { NormalizePanel } from './panels/NormalizePanel'
-import { SamplerPanel } from './panels/SamplerPanel'
-import { StemsPanel } from './panels/StemsPanel'
-import { VideoPanel } from './panels/VideoPanel'
-import { ImagePanel } from './panels/ImagePanel'
-import { AudioEditorPanel } from './panels/AudioEditorPanel'
+/*
+ * Each tool is its own chunk, fetched when it is opened. The start screen used
+ * to wait for all eleven — some 620 KB of script, parsed before the first
+ * tile could be drawn. Once the page has settled the rest come down in the
+ * background, so opening a tool later does not wait on the network either.
+ */
+const TOOLS = {
+  downloader: () => import('./panels/DownloaderPanel').then((m) => ({ default: m.DownloaderPanel })),
+  converter: () => import('./panels/ConverterPanel').then((m) => ({ default: m.ConverterPanel })),
+  audio: () => import('./panels/AudioEditorPanel').then((m) => ({ default: m.AudioEditorPanel })),
+  video: () => import('./panels/VideoPanel').then((m) => ({ default: m.VideoPanel })),
+  images: () => import('./panels/ImagePanel').then((m) => ({ default: m.ImagePanel })),
+  stems: () => import('./panels/StemsPanel').then((m) => ({ default: m.StemsPanel })),
+  normalize: () => import('./panels/NormalizePanel').then((m) => ({ default: m.NormalizePanel })),
+  sampler: () => import('./panels/SamplerPanel').then((m) => ({ default: m.SamplerPanel })),
+  harmony: () => import('./panels/HarmonyPanel').then((m) => ({ default: m.HarmonyPanel })),
+  mic: () => import('./panels/MicPanel').then((m) => ({ default: m.MicPanel })),
+  subtitles: () => import('./panels/SubtitlesPanel').then((m) => ({ default: m.SubtitlesPanel })),
+} satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType }>>
+
+const DownloaderPanel = lazy(TOOLS.downloader)
+const ConverterPanel = lazy(TOOLS.converter)
+const AudioEditorPanel = lazy(TOOLS.audio)
+const VideoPanel = lazy(TOOLS.video)
+const ImagePanel = lazy(TOOLS.images)
+const StemsPanel = lazy(TOOLS.stems)
+const NormalizePanel = lazy(TOOLS.normalize)
+const SamplerPanel = lazy(TOOLS.sampler)
+const HarmonyPanel = lazy(TOOLS.harmony)
+const MicPanel = lazy(TOOLS.mic)
+const SubtitlesPanel = lazy(TOOLS.subtitles)
+
+/** Fetches every tool's chunk once the page is idle. */
+function usePrefetchTools() {
+  useEffect(() => {
+    const load = () => Object.values(TOOLS).forEach((get) => void get().catch(() => undefined))
+    let idle: number | null = null
+    const timer = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(load, { timeout: 4000 })
+      else load()
+    }, 1500)
+    return () => {
+      window.clearTimeout(timer)
+      if (idle !== null) window.cancelIdleCallback(idle)
+    }
+  }, [])
+}
+
+/** What stands in a tool's place for the moment its chunk is on its way. */
+function ToolLoading() {
+  return (
+    <p role="status" className="py-[24px] text-small text-muted">
+      Werkzeug wird geladen …
+    </p>
+  )
+}
 import { FileDrop } from './FileDrop'
 import { Home } from './Home'
+import { RestoreOffer } from './RestoreOffer'
 import { PANELS } from './panelMeta'
 import { Button, Card } from './ui/primitives'
 
@@ -211,7 +258,7 @@ function NothingLoaded({ label, summary }: { label: string; summary: string }) {
             {summary}
           </h2>
           <p className="mt-[8px] text-body leading-[1.55] text-prose/85">
-            Dafür braucht es erst eine Datei. Alles, was Sie hinzufügen, bleibt in diesem Tab.
+            Dafür braucht es erst eine Datei. Alles, was Sie hinzufügen, bleibt auf diesem Gerät.
           </p>
         </div>
 
@@ -237,6 +284,7 @@ function NothingLoaded({ label, summary }: { label: string; summary: string }) {
 /* -------------------------------------------------------------------------- */
 
 export function Dashboard({ theme }: { theme: ResolvedTheme }) {
+  usePrefetchTools()
   const panel = useSession((state) => state.panel)
   const hasAssets = useSession((state) => state.assets.length > 0)
   const current = PANELS.find((entry) => entry.id === panel)
@@ -254,6 +302,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
 
   return (
     <section id="studio" className="shell flex flex-col gap-[16px] pb-[16px] pt-[24px] sm:pt-[32px]">
+      <RestoreOffer />
 
       {/* Keyed on the panel so every switch replays the entrance rather than
           swapping content in place, which reads as a jump. */}
@@ -261,7 +310,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
         {!ready ? (
           <NothingLoaded label={current?.label ?? ''} summary={current?.summary ?? ''} />
         ) : (
-          <>
+          <Suspense fallback={<ToolLoading />}>
             {panel === 'start' ? <Home /> : null}
             {panel === 'downloader' ? <DownloaderPanel /> : null}
             {panel === 'converter' ? <ConverterPanel /> : null}
@@ -273,7 +322,8 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
             {panel === 'sampler' ? <SamplerPanel theme={theme} /> : null}
             {panel === 'harmony' ? <HarmonyPanel /> : null}
             {panel === 'mic' ? <MicPanel /> : null}
-          </>
+            {panel === 'subtitles' ? <SubtitlesPanel /> : null}
+          </Suspense>
         )}
       </div>
 

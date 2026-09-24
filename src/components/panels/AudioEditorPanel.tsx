@@ -460,6 +460,42 @@ export function AudioEditorPanel() {
     [current, view, viewStart, viewEnd],
   )
 
+  // The wheel over the waveform zooms around the pointer; with Shift (or a
+  // sideways swipe) it moves the view along. A native listener, because React
+  // registers wheel handlers as passive and the page would scroll as well.
+  const wheelRef = useRef({ duration, viewStart, viewEnd })
+  wheelRef.current = { duration, viewStart, viewEnd }
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!frame) return
+    const onWheel = (event: WheelEvent) => {
+      const { duration: total, viewStart: start, viewEnd: end } = wheelRef.current
+      if (total <= 0) return
+      event.preventDefault()
+      const box = frame.getBoundingClientRect()
+      const fraction = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width))
+      const span = end - start
+      const sideways = event.shiftKey ? event.deltaY : event.deltaX
+      if (Math.abs(sideways) > Math.abs(event.shiftKey ? 0 : event.deltaY)) {
+        if (span >= total) return
+        const shift = (sideways / box.width) * span
+        const nextStart = Math.min(total - span, Math.max(0, start + shift))
+        setView({ start: nextStart, end: nextStart + span })
+        return
+      }
+      const at = start + fraction * span
+      const nextSpan = Math.min(total, Math.max(0.05, span * Math.exp(event.deltaY * 0.0015)))
+      if (nextSpan >= total * 0.999) {
+        setView(null)
+        return
+      }
+      const nextStart = Math.min(total - nextSpan, Math.max(0, at - fraction * nextSpan))
+      setView({ start: nextStart, end: nextStart + nextSpan })
+    }
+    frame.addEventListener('wheel', onWheel, { passive: false })
+    return () => frame.removeEventListener('wheel', onWheel)
+  }, [current])
+
   const secondsAt = (clientX: number) => {
     const box = frameRef.current?.getBoundingClientRect()
     if (!box || duration <= 0) return 0

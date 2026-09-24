@@ -15,12 +15,11 @@
 
 import { useEffect, useState } from 'react'
 
-import { APP_BRIDGE, type UpdateState } from '../lib/desktop'
+import { APP_BRIDGE, WINDOWS_SETUP, type UpdateState } from '../lib/desktop'
+import { keepSession } from '../lib/sessionStore'
 
 const BASE = 'press flex items-center gap-[8px] rounded-nav px-[12px] py-[8px] text-small'
 
-/** The newest setup, for when the updater cannot do it by itself. */
-const LATEST_SETUP = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe'
 
 function RefreshIcon() {
   return (
@@ -64,7 +63,9 @@ export function AppUpdateButton() {
         type="button"
         onClick={() => {
           const ok = window.confirm(
-            `Sondra startet neu und installiert ${state.next}. Dateien der Sitzung, die Sie nicht gespeichert haben, gehen dabei verloren. Jetzt aktualisieren?`,
+            keepSession()
+              ? `Sondra startet neu und installiert ${state.next}. Die Dateien der Sitzung sind gespeichert und werden danach wieder angeboten. Jetzt aktualisieren?`
+              : `Sondra startet neu und installiert ${state.next}. Die Sitzung wird nicht behalten — Dateien, die Sie nicht gespeichert haben, gehen verloren. Jetzt aktualisieren?`,
           )
           if (ok) void bridge.installUpdate()
         }}
@@ -105,7 +106,7 @@ export function AppUpdateButton() {
           <span className="sm:hidden">Erneut</span>
         </button>
         <a
-          href={LATEST_SETUP}
+          href={WINDOWS_SETUP}
           target="_blank"
           rel="noreferrer"
           className="press rounded-nav px-[8px] py-[8px] text-small text-ink underline underline-offset-4 hover:bg-panel-soft"

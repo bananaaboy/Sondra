@@ -1,7 +1,7 @@
 {
   "name": "sondra",
   "private": true,
-  "version": "1.0.11",
+  "version": "1.0.12",
   "license": "MIT",
   "type": "module",
   "description": "Sondra — a fully client-side media studio. Download, convert, separate, normalize and sample audio entirely in the browser.",
@@ -24,6 +24,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "@huggingface/transformers": "^4.3.0",
     "onnxruntime-web": "^1.22.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -42,5 +43,9 @@
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3",
     "vite": "^7.0.0"
+  },
+  "overrides": {
+    "onnxruntime-node": "file:./stubs/onnxruntime-node",
+    "sharp": "file:./stubs/sharp"
   }
 }

@@ -36,6 +36,21 @@ export interface DecodeState {
  */
 const pending = new Map<string, Promise<AudioData | null>>()
 
+/**
+ * Decodes one asset outside any component — for batches, which walk through
+ * files no panel has open. Browser first, FFmpeg for what it refuses. The
+ * result is not stored on the asset: ten decoded tracks would hold several
+ * times the session's size in memory for nothing.
+ */
+export async function decodeAssetAudio(asset: Asset): Promise<AudioData> {
+  if (asset.audio) return asset.audio
+  try {
+    return await decodeWithBrowser(asset.bytes.slice().buffer as ArrayBuffer)
+  } catch {
+    return decodeWav(await decodeToWav(asset.bytes, asset.name))
+  }
+}
+
 export function useDecodedAudio(asset: Asset | null): DecodeState {
   const updateAsset = useSession((state) => state.updateAsset)
   const log = useSession((state) => state.log)

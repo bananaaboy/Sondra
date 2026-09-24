@@ -14,7 +14,9 @@ import { LOUDNESS_PRESETS, type GainPlan, type LoudnessReport } from '../../lib/
 import { encodeWav } from '../../lib/wav'
 import { measureLoudnessInWorker, normalizeInWorker } from '../../lib/workerClient'
 import { withExtension } from '../../lib/format'
-import { useDecodedAudio } from '../../hooks/useDecodedAudio'
+import { decodeAssetAudio, useDecodedAudio } from '../../hooks/useDecodedAudio'
+import { createZip } from '../../lib/zip'
+import { BatchFiles, useBatchSelection } from '../BatchFiles'
 import { useActiveAsset, useSession } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
 import { FileDrop } from '../FileDrop'
@@ -35,6 +37,19 @@ import {
 } from '../ui/primitives'
 
 /** Horizontal LUFS gauge: measured value against the target. */
+const BATCH_KINDS = ['audio', 'video'] as const
+
+interface BatchRow {
+  id: string
+  name: string
+  state: 'pending' | 'running' | 'done' | 'error'
+  before?: number
+  after?: number
+  message?: string
+}
+
+const ROW_MARK: Record<BatchRow['state'], string> = { pending: '·', running: '●', done: '✓', error: '!' }
+
 function LoudnessGauge({ report, target }: { report: LoudnessReport; target: number }) {
   const low = -40
   const high = 0
@@ -97,6 +112,54 @@ export function NormalizePanel() {
   const [processed, setProcessed] = useState<import('../../lib/wav').AudioData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  const [batch, setBatch] = useState(false)
+  const selection = useBatchSelection(BATCH_KINDS)
+  const [rows, setRows] = useState<BatchRow[] | null>(null)
+  const [archive, setArchive] = useState<Uint8Array<ArrayBuffer> | null>(null)
+
+  /** Measures and normalises every ticked file in turn; one ZIP of WAVs. */
+  const normalizeBatch = async () => {
+    const chosen = selection.selected
+    if (chosen.length === 0) return
+    const controller = new AbortController()
+    abortRef.current = controller
+    setBusy('normalizing')
+    setError(null)
+    setArchive(null)
+    setRows(chosen.map((entry) => ({ id: entry.id, name: entry.name, state: 'pending' })))
+    const mark = (id: string, patch: Partial<BatchRow>) =>
+      setRows((current) => current?.map((row) => (row.id === id ? { ...row, ...patch } : row)) ?? null)
+    const produced: { name: string; data: Uint8Array }[] = []
+    try {
+      for (const [index, entry] of chosen.entries()) {
+        if (controller.signal.aborted) break
+        mark(entry.id, { state: 'running' })
+        setNote(`${index + 1} von ${chosen.length}: ${entry.name}`)
+        try {
+          const decoded = await decodeAssetAudio(entry)
+          const outcome = await normalizeInWorker(decoded, settings, (fraction) => setProgress(fraction), controller.signal)
+          produced.push({ name: withExtension(entry.name, 'wav'), data: encodeWav(outcome.audio, 24) })
+          mark(entry.id, { state: 'done', before: outcome.before.integratedLufs, after: outcome.after.integratedLufs })
+        } catch (failure) {
+          if (controller.signal.aborted) break
+          // One file the decoder refuses should not stop the other nine.
+          const message = failure instanceof Error ? failure.message.split('\n')[0] : String(failure)
+          mark(entry.id, { state: 'error', message })
+          log('normalisierung', `${entry.name}: ${message}`, 'error')
+        }
+      }
+      if (produced.length > 0) {
+        setArchive(createZip(produced))
+        log('normalisierung', `${produced.length} von ${chosen.length} Dateien normalisiert`)
+      }
+    } finally {
+      setBusy('idle')
+      setProgress(null)
+      setNote(null)
+      abortRef.current = null
+    }
+  }
 
   const reset = () => {
     setAfter(null)
@@ -312,14 +375,39 @@ export function NormalizePanel() {
                 </details>
               </div>
 
+              <div className="mt-[20px] flex flex-col gap-[12px]">
+                <Toggle
+                  label="Mehrere Dateien auf einmal"
+                  hint="Jede gewählte Datei auf denselben Zielwert bringen, Ergebnis als ZIP mit WAV-Dateien."
+                  checked={batch}
+                  onChange={(value) => {
+                    setBatch(value)
+                    setRows(null)
+                    setArchive(null)
+                  }}
+                />
+                {batch ? <BatchFiles selection={selection} disabled={running} /> : null}
+              </div>
+
               <div className="mt-[28px] flex flex-wrap items-center gap-[12px]">
-                <Button onClick={normalize} disabled={running}>
-                  {busy === 'normalizing' ? 'Läuft…' : 'Messen und normalisieren'}
-                  {!running ? <ArrowRight /> : null}
-                </Button>
-                <Button variant="quiet" onClick={measure} disabled={running}>
-                  {busy === 'measuring' ? 'Wird gemessen…' : 'Nur messen'}
-                </Button>
+                {batch ? (
+                  <Button onClick={() => void normalizeBatch()} disabled={running || selection.selected.length === 0}>
+                    {running
+                      ? 'Läuft…'
+                      : `${selection.selected.length} ${selection.selected.length === 1 ? 'Datei' : 'Dateien'} normalisieren`}
+                    {!running ? <ArrowRight /> : null}
+                  </Button>
+                ) : (
+                  <>
+                    <Button onClick={normalize} disabled={running}>
+                      {busy === 'normalizing' ? 'Läuft…' : 'Messen und normalisieren'}
+                      {!running ? <ArrowRight /> : null}
+                    </Button>
+                    <Button variant="quiet" onClick={measure} disabled={running}>
+                      {busy === 'measuring' ? 'Wird gemessen…' : 'Nur messen'}
+                    </Button>
+                  </>
+                )}
                 {running ? (
                   <Button variant="ghost" onClick={() => abortRef.current?.abort()}>
                     Abbrechen
@@ -342,7 +430,42 @@ export function NormalizePanel() {
           </Notice>
         ) : null}
 
-        {before ? (
+        {batch && rows ? (
+          <Card tone="slate">
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <SectionHead>Stapel</SectionHead>
+              <span className="value text-small text-muted">
+                {rows.filter((row) => row.state === 'done').length} von {rows.length} fertig
+              </span>
+            </div>
+            <ul className="mt-[16px] flex flex-col">
+              {rows.map((row) => (
+                <li key={row.id} className="flex flex-wrap items-baseline gap-x-[12px] gap-y-[2px] border-t border-line py-[8px] first:border-t-0">
+                  <span aria-hidden className={`value w-[14px] shrink-0 text-center text-small ${row.state === 'running' ? 'pulse-dot text-ink' : 'text-muted'}`}>
+                    {ROW_MARK[row.state]}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-small text-prose">{row.name}</span>
+                  {row.before !== undefined && row.after !== undefined ? (
+                    <span className="value shrink-0 text-small text-ink">
+                      {formatLufs(row.before)} → {formatLufs(row.after)}
+                    </span>
+                  ) : null}
+                  {row.message ? <span className="w-full pl-[26px] text-small text-muted">{row.message}</span> : null}
+                </li>
+              ))}
+            </ul>
+            {archive ? (
+              <div className="mt-[20px]">
+                <Button onClick={() => saveBytes(archive, `sondra-normalisiert-${rows.length}.zip`, 'application/zip')}>
+                  Alle als ZIP speichern
+                  <ArrowRight />
+                </Button>
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {!batch && before ? (
           <Card tone="slate">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <SectionHead>{after ? 'Vorher' : 'Messung'}</SectionHead>
@@ -357,7 +480,7 @@ export function NormalizePanel() {
           </Card>
         ) : null}
 
-        {after && plan ? (
+        {!batch && after && plan ? (
           <Card tone="sage">
             <SectionHead>Nachher</SectionHead>
             <div className="mt-[16px]">

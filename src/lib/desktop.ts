@@ -27,8 +27,18 @@ export interface UpdateState {
   message?: string
 }
 
+/** A file Windows opened with Sondra, fetchable once from the app's server. */
+export interface OpenedFile {
+  name: string
+  size: number | null
+  url: string
+}
+
 /** What the app's preload hands the page (desktop/preload.cjs); absent elsewhere. */
 export interface AppBridge {
+  /** Missing in apps older than 1.0.12. */
+  takeOpenedFiles?: () => Promise<OpenedFile[]>
+  onOpenedFiles?: (callback: (files: OpenedFile[]) => void) => () => void
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   installUpdate: () => Promise<boolean>

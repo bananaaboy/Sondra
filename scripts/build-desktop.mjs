@@ -123,6 +123,7 @@ const licences = path.join(RESOURCES, 'lizenzen')
 fs.cpSync('desktop/lizenzen', licences, { recursive: true })
 for (const [name, file] of [
   ['react.txt', 'node_modules/react/LICENSE'],
+  ['transformers.js.txt', 'node_modules/@huggingface/transformers/LICENSE'],
   ['tone.txt', 'node_modules/tone/LICENSE.md'],
   ['wavesurfer.js.txt', 'node_modules/wavesurfer.js/LICENSE'],
   ['zustand.txt', 'node_modules/zustand/LICENSE'],

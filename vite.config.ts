@@ -36,11 +36,36 @@ function crossOriginIsolation(): Plugin {
   }
 }
 
+/**
+ * `offline.json`: every file this build put under assets/. The service worker
+ * reads it to keep the whole app — every tool, not only the ones opened on the
+ * first visit — and to drop what earlier builds left in its cache. The
+ * WebAssembly cores are listed apart: they are cached when a device first
+ * uses one, not all three up front.
+ */
+function offlineList(): Plugin {
+  return {
+    name: 'sondra:offline-list',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const files = Object.keys(bundle).filter((name) => name.startsWith('assets/') && !name.endsWith('.map'))
+      this.emitFile({
+        type: 'asset',
+        fileName: 'offline.json',
+        source: JSON.stringify({
+          keep: files.filter((name) => !name.endsWith('.wasm')),
+          onDemand: files.filter((name) => name.endsWith('.wasm')),
+        }),
+      })
+    },
+  }
+}
+
 export default defineConfig({
   // Relative base so the static build runs from any path, including
   // project sub-paths such as https://user.github.io/sondra/.
   base: './',
-  plugins: [react(), tailwindcss(), crossOriginIsolation()],
+  plugins: [react(), tailwindcss(), crossOriginIsolation(), offlineList()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

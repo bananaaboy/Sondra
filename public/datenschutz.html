@@ -78,7 +78,7 @@
       <a class="back" href="./">Zurück zu Sondra</a>
 
       <h1>Datenschutz</h1>
-      <p class="stand">Stand: 23. September 2026 · gilt für die Website und die Windows-App</p>
+      <p class="stand">Stand: 24. September 2026 · gilt für die Website und die Windows-App</p>
 
       <p class="kurz">
         Sondra bearbeitet Ihre Dateien auf Ihrem Gerät. Nichts davon wird zu uns hochgeladen. Es gibt keine
@@ -102,10 +102,16 @@
         <h2>Was auf Ihrem Gerät bleibt</h2>
         <p>
           Alles, was Sie öffnen, umwandeln, schneiden, trennen oder messen, wird im Browser beziehungsweise in
-          der App auf Ihrem Gerät gerechnet. Die Dateien liegen nur im Arbeitsspeicher und sind weg, sobald Sie
-          den Tab oder die App schliessen.
+          der App auf Ihrem Gerät gerechnet.
         </p>
-        <p>Im Speicher Ihres Browsers (localStorage) legt Sondra nur Einstellungen ab:</p>
+        <p>
+          Die Dateien Ihrer Sitzung speichert Sondra im Speicher Ihres Browsers auf diesem Gerät (IndexedDB),
+          damit sie nach dem Schliessen oder einem Update wieder angeboten werden können. Sie werden nicht
+          gesendet. Unter dem Dateinamen oben rechts lässt sich das mit „Sitzung auf diesem Gerät behalten“
+          abschalten; dabei wird alles Gespeicherte gelöscht, und die Dateien sind wieder weg, sobald Sie den Tab
+          oder die App schliessen. Auf einem fremden oder geteilten Rechner sollten Sie das tun.
+        </p>
+        <p>Im Speicher Ihres Browsers (localStorage) legt Sondra ausserdem nur Einstellungen ab:</p>
         <ul>
           <li><code>sondra:theme</code>: ob Sie das helle oder dunkle Aussehen gewählt haben.</li>
           <li>
@@ -116,6 +122,8 @@
             <code>sondra:instances</code>: bis zu sechs Adressen solcher Dienste, die schon einmal
             geantwortet haben, damit Sie sie wieder auswählen können.
           </li>
+          <li><code>sondra:sitzung-behalten</code>: ob die Sitzung auf diesem Gerät behalten wird.</li>
+          <li><code>sondra:sprache</code>, <code>sondra:sprachmodell</code>: Sprache und Genauigkeit, die Sie für Untertitel gewählt haben.</li>
         </ul>
         <p>
           Diese Einträge verlassen Ihr Gerät nicht. Sie löschen sie, indem Sie in Ihrem Browser die
@@ -188,6 +196,17 @@
       </section>
 
       <section>
+        <h2>Untertitel und Transkripte</h2>
+        <p>
+          Die Spracherkennung unter „Untertitel“ läuft auf Ihrem Gerät. Beim ersten Gebrauch lädt Ihr Browser
+          dafür das Spracherkennungsmodell Whisper (rund 80 MB, bei „Genauer“ rund 250 MB) von Hugging Face
+          (<code>huggingface.co</code>, Hugging Face, Inc., USA). Dabei sieht Hugging Face Ihre IP-Adresse und
+          welches Modell geladen wird — Ihre Aufnahme und der erkannte Text werden nicht gesendet. Das Modell
+          bleibt danach im Speicher Ihres Browsers, spätere Durchgänge brauchen kein Netz.
+        </p>
+      </section>
+
+      <section>
         <h2>Eigene Trennmodelle</h2>
         <p>
           Wenn Sie für „Spuren trennen“ ein eigenes Modell verwenden, lädt Ihr Browser es von Ihrem Gerät oder
@@ -230,7 +249,8 @@
           Wir verkaufen keine Daten und geben keine weiter, ausser an die oben genannten Stellen und soweit es
           für die jeweilige Funktion nötig ist. Vercel und GitHub sitzen in den USA. Die Übermittlung dorthin
           stützt sich auf die Garantien, die beide in ihren Auftragsverarbeitungsverträgen bieten
-          (Standardvertragsklauseln).
+          (Standardvertragsklauseln). Hugging Face (ebenfalls USA) erhält nur beim ersten Laden des
+          Untertitel-Modells Ihre IP-Adresse, wie jeder Server, von dem Ihr Browser eine Datei abruft.
         </p>
       </section>
 

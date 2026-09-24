@@ -108,6 +108,13 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M6 11.6V3.4l7-1.2v8.2M6 11.6a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0zM13 10.4a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0z" />,
   },
   {
+    id: 'subtitles',
+    slug: 'untertitel',
+    label: 'Untertitel',
+    summary: 'Gesprochenes als Text, SRT-Datei oder direkt im Video',
+    icon: <path d="M2 3.4h12v9.2H2zM4.4 8.2h3.2M9 8.2h2.6M4.4 10.4h1.8M7.6 10.4h4" />,
+  },
+  {
     id: 'mic',
     slug: 'mikrofon',
     label: 'Mikrofon',

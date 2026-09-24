@@ -23,7 +23,7 @@ import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
 
 import { startDownloader } from './downloader.mjs'
-import { startServer } from './server.mjs'
+import { offerFile, startServer } from './server.mjs'
 import { setupUpdates } from './updater.mjs'
 
 const PORT = 47199
@@ -91,7 +91,56 @@ function failurePage(reason, retryUrl) {
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
 }
 
-app.on('second-instance', () => {
+/**
+ * Files Windows passed on the command line: „Öffnen mit Sondra“, a file
+ * dropped on the icon or the shortcut. Anything that is not an existing file
+ * (flags, the executable itself) is ignored.
+ */
+function filesIn(argv, cwd = process.cwd()) {
+  const found = []
+  for (const arg of argv.slice(1)) {
+    if (!arg || arg.startsWith('-')) continue
+    const file = path.resolve(cwd, arg)
+    if (file === process.execPath) continue
+    try {
+      if (fs.statSync(file).isFile()) found.push(file)
+    } catch {
+      // Not a path.
+    }
+  }
+  return found
+}
+
+/** Opened before the page could take them; handed over when it asks. */
+let waitingFiles = filesIn(process.argv)
+
+function describeFiles(files) {
+  return files.map((file) => {
+    let size = null
+    try {
+      size = fs.statSync(file).size
+    } catch {
+      // Gone since; the fetch will say so.
+    }
+    return { name: path.basename(file), size, url: offerFile(file) }
+  })
+}
+
+ipcMain.handle('sondra:take-files', () => {
+  const files = waitingFiles
+  waitingFiles = []
+  if (files.length > 0) log(`Geöffnet mit Sondra: ${files.map((file) => path.basename(file)).join(', ')}`)
+  return describeFiles(files)
+})
+
+app.on('second-instance', (_event, argv, workingDirectory) => {
+  const files = filesIn(argv, workingDirectory)
+  if (files.length > 0 && window) {
+    log(`Geöffnet mit Sondra (Fenster offen): ${files.map((file) => path.basename(file)).join(', ')}`)
+    window.webContents.send('sondra:files', describeFiles(files))
+  } else if (files.length > 0) {
+    waitingFiles.push(...files)
+  }
   log('Zweiter Start: bringe das offene Fenster nach vorn.')
   if (!window) return
   // `show` as well as `focus`: a window that is hidden does not come back

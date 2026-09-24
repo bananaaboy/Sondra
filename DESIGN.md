@@ -631,6 +631,23 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Überfahren von „Hier einblenden/ausblenden" über der Auswahl; im
   Video-Editor als Rampe auf der Zeitleiste und als Schwarz über dem Bild, das
   dem Abspielkopf Bild für Bild folgt.
+- **Letzte Sitzung** steht über dem Werkzeug als Zeile mit Marke am Rand
+  (`RestoreOffer`), wie `Notice`: was es war (Dateien, Grösse, wann, in Mono)
+  und zwei Knöpfe, „Wiederherstellen“ und „Verwerfen“. Kein Dialog vor der
+  Seite — sie bleibt bedienbar, bis jemand antwortet. Im Dateimenü sagt die
+  Fusszeile „auf diesem Gerät gespeichert“ bzw. „wird … gespeichert …“, darunter
+  der Schalter zum Abschalten.
+- **Mehrere Dateien** (`BatchFiles`): ein Schalter „Mehrere Dateien auf
+  einmal“, darunter eine Liste mit Häkchen, getrennt durch Linien, und
+  „Weitere Dateien hinzufügen“ als Textlink. Nur Dateien, die das Ziel
+  werden können, stehen darin; neu hinzugefügte sind gleich angehakt. Der
+  Knopf zählt mit („3 Dateien umwandeln“).
+- **Tastenkürzel** hinter `?` und im Fuss: ein `Dialog`, je Werkzeug eine
+  Spalte, links was passiert, rechts die Tasten in Mono.
+- **Untertitel im Bild:** Public Sans 600, 5,2 % der kurzen Bildseite, weiss
+  auf einer dunklen, gerundeten Platte (62 % Deckkraft) je Zeile, höchstens
+  zwei Zeilen à rund 42 Zeichen, unten mittig mit 6 % Abstand. Im Browser
+  gezeichnet, damit es dieselbe Schrift ist wie auf der Seite.
 - **Pegelanzeige** (Mikrofon): flacher Balken ohne Rundung — eine Zeitfläche
   im Sinn der Regel oben —, Tinte auf `panel-soft`, die letzten 6 dB als
   `panel-mid` markiert statt rot, Spitzenhalter als 2-px-Strich, Werte in
