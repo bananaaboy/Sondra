@@ -37,6 +37,8 @@ const MEDIA_APPLICATION =
 /** Extensions that make `application/octet-stream` believable. */
 const MEDIA_EXTENSION =
   /\.(?:mp3|wav|flac|ogg|oga|opus|m4a|aac|aiff?|wma|mp4|m4v|webm|mkv|mov|avi|ts|flv|mpe?g|3gp|jpe?g|png|gif|webp|avif|bmp|tiff?|heic|m3u8|mpd)$/i
+const PLAYER_LINK = /https?:\/\/(?:www\.)?jamesbornmain\.com\/e\/[a-z0-9_-]+(?:[?#][^\s"'<>]*)?/gi
+const MAX_PLAYER_LINKS = 12
 
 export function looksLikeMedia(type, url, disposition) {
   if (MEDIA.test(type)) return true
@@ -224,8 +226,9 @@ export default async function handler(request, response) {
    * the CORS header that would allow it, which is the entire reason this
    * endpoint exists. So the question "is there a file here" is asked from the
    * server, with a HEAD, and if the answer is yes the address is signed and
-   * handed back. There is no page scraping here and there will not be: that is
-   * what yt-dlp is for, and yt-dlp belongs on the visitor's own machine.
+   * handed back. An HTML answer gets one small, host-limited pass for embedded
+   * player addresses; general page extraction remains the job of yt-dlp on the
+   * visitor's own machine.
    */
   try {
     const probed = await probe(target)
@@ -272,6 +275,7 @@ export default async function handler(request, response) {
         },
       ],
     })
+    return
   } catch (failure) {
     response.status(502).json({
       error: 'unreachable',
