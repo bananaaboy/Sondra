@@ -104,8 +104,24 @@ export class ServiceError extends Error {
  * one person looking for a restriction here to remove. There is none. The
  * sentence now names who said no.
  */
-export function explain(code: string | null): string {
+export function explain(code: string | null, detail?: string | null): string {
   if (!code) return 'Der Dienst hat die Anfrage abgelehnt.'
+  if (code.includes('ytdlp.cookies')) {
+    return (
+      'Die Anmeldung aus dem gewählten Browser liess sich nicht lesen. Chrome und Edge sperren ' +
+      'ihre Cookies, solange sie offen sind, und verschlüsseln sie so, dass andere Programme sie ' +
+      'oft gar nicht lesen können. Beim nächsten Versuch wird wieder gefragt — Firefox klappt am ' +
+      'zuverlässigsten.'
+    )
+  }
+  if (code.includes('ytdlp.outdated')) {
+    return (
+      'yt-dlp kommt mit dieser Seite gerade nicht zurecht, auch nicht in der neuesten Fassung. ' +
+      'Das passiert, wenn die Seite etwas umgestellt hat; meist gibt es nach wenigen Tagen eine ' +
+      'neue Fassung von yt-dlp' + (IN_DESKTOP_APP ? ', die Sondra dann selbst holt.' : '.') +
+      (detail ? ` yt-dlp meldet: „${detail}“` : '')
+    )
+  }
   if (code.includes('link.invalid') || code.includes('link.unsupported')) {
     return (
       'Der verbundene Dienst antwortet, dass er diese Seite nicht kennt — die Absage kommt von ' +
@@ -151,7 +167,11 @@ export function explain(code: string | null): string {
   if (code.includes('auth')) return 'Der Dienst verlangt einen Zugangsschlüssel.'
   if (code.includes('rate_exceeded')) return 'Zu viele Anfragen an den Dienst. Später erneut versuchen.'
   if (code.includes('fetch') || code.includes('unreachable')) {
-    return 'Der Dienst konnte die Quelle selbst nicht erreichen.'
+    // The service's own words, when it sent them: "could not reach" alone
+    // left nobody able to tell a bot check from a dead link.
+    return detail
+      ? `Der Dienst kam an die Quelle nicht heran. yt-dlp meldet: „${detail}“`
+      : 'Der Dienst konnte die Quelle selbst nicht erreichen.'
   }
   return `Der Dienst meldet: ${code}`
 }
@@ -167,7 +187,7 @@ interface ServiceResponse {
   tunnel?: string[]
   isHLS?: boolean
   output?: { type?: string; filename?: string }
-  error?: { code?: string }
+  error?: { code?: string; detail?: string }
 }
 
 /**
@@ -546,7 +566,7 @@ export async function resolveMedia(
 
   if (body.status === 'error' || !response.ok) {
     const code = body.error?.code ?? null
-    throw new ServiceError(explain(code), code)
+    throw new ServiceError(explain(code, body.error?.detail), code)
   }
 
   // "tunnel" streams through the service, "redirect" hands back the origin URL.

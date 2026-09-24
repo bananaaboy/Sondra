@@ -149,78 +149,6 @@ export function finalUrlFrom(probed, fallback) {
   }
 }
 
-/**
- * Player addresses embedded in an HTML page.
- *
- * A few pages put the actual player address in an iframe or a JavaScript
- * value, sometimes with the slashes escaped. These are deliberately limited
- * to the media host and deduplicated: this is a hand-off to the same direct
- * file probe below, not a general web crawler.
- */
-export function playerLinksFrom(html) {
-  const text = String(html).replaceAll('\\/', '/').replaceAll('&amp;', '&')
-  const links = []
-  for (const match of text.matchAll(PLAYER_LINK)) {
-    try {
-      const link = new URL(match[0])
-      if (!links.some((known) => known.toString() === link.toString())) links.push(link)
-      if (links.length === MAX_PLAYER_LINKS) break
-    } catch {
-      // A malformed value in a page is not a reason to reject its other links.
-    }
-  }
-  return links
-}
-
-/** Read only enough HTML to find embedded player addresses. */
-async function htmlFrom(page, limit = 524_288) {
-  if (!page.body) return ''
-  const reader = page.body.getReader()
-  const decoder = new TextDecoder()
-  let text = ''
-  let received = 0
-  try {
-    while (received < limit) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const part = value.subarray(0, limit - received)
-      received += part.byteLength
-      text += decoder.decode(part, { stream: received < limit })
-    }
-  } finally {
-    await reader.cancel().catch(() => {})
-  }
-  return text + decoder.decode()
-}
-
-async function playerLinksAt(target) {
-  const page = await fetch(target, {
-    method: 'GET',
-    redirect: 'follow',
-    headers: { Range: 'bytes=0-524287' },
-  })
-  const type = page.headers.get('content-type') ?? ''
-  if (!page.ok || !/^text\/html\b/i.test(type)) return []
-  return playerLinksFrom(await htmlFrom(page))
-}
-
-function directStream(target, type, disposition, id = 'direct') {
-  const name = nameFrom(target, disposition)
-  return {
-    id,
-    label: id === 'direct' ? 'Datei laden' : `Datei laden ${Number(id.split('-').pop()) + 1}`,
-    hasVideo: type.startsWith('video/'),
-    hasAudio: /^(?:audio|video)\/|^application\/ogg/i.test(type),
-    width: null,
-    height: null,
-    ext: name.includes('.') ? (name.split('.').pop() ?? 'bin') : 'bin',
-    mime: type.split(';')[0],
-    bytes: null,
-    token: sign(target.toString()),
-    name,
-  }
-}
-
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
     response.status(405).json({ error: 'method', message: 'Nur POST.' })
@@ -311,57 +239,41 @@ export default async function handler(request, response) {
     const mediaTarget = allowedTarget(finalUrlFrom(probed, target).toString())
     const type = probed.headers.get('content-type') ?? ''
     const disposition = probed.headers.get('content-disposition') ?? ''
-    if (mediaTarget && probed.ok && looksLikeMedia(type, mediaTarget, disposition)) {
-      const { name, ...stream } = directStream(mediaTarget, type, disposition)
-      response.status(200).json({
-        source: 'direct',
-        kind: 'direct',
-        title: name,
-        author: target.hostname,
-        durationSeconds: null,
-        thumbnail: null,
-        streams: [{ ...stream, bytes: sizeFrom(probed.headers) }],
+    if (!mediaTarget || !probed.ok || !looksLikeMedia(type, mediaTarget, disposition)) {
+      response.status(422).json({
+        error: 'no-extractor',
+        message:
+          'Unter dieser Adresse liegt keine Mediendatei, sondern eine Webseite. Ohne Anbieter kann ' +
+          'der eingebaute Dienst nur YouTube und direkte Datei-Adressen; für alles andere braucht ' +
+          'es einen Anbieter (SONDRA_PROVIDER_URL) oder yt-dlp auf dem eigenen Gerät. Bei einem ' +
+          'Freigabe-Link einer Cloud hilft oft die Adresse, die direkt die Datei liefert — meist ' +
+          'dieselbe mit „/download“ am Ende oder aus dem Herunterladen-Knopf der Cloud kopiert.',
       })
       return
     }
-
-    // A portal page may contain several player addresses. Probe every one and
-    // show every address that resolves to a real media file; a page that only
-    // contains players or scripts is never offered as if it were a download.
-    const playerStreams = []
-    if (probed.ok && /^text\/html\b/i.test(type)) {
-      for (const [index, player] of (await playerLinksAt(target)).entries()) {
-        const playerProbe = await probe(player)
-        const playerTarget = allowedTarget(finalUrlFrom(playerProbe, player).toString())
-        const playerType = playerProbe.headers.get('content-type') ?? ''
-        const playerDisposition = playerProbe.headers.get('content-disposition') ?? ''
-        if (playerTarget && playerProbe.ok && looksLikeMedia(playerType, playerTarget, playerDisposition)) {
-          const { name: _name, ...stream } = directStream(playerTarget, playerType, playerDisposition, `player-${index}`)
-          playerStreams.push({ ...stream, bytes: sizeFrom(playerProbe.headers) })
-        }
-      }
-    }
-    if (playerStreams.length > 0) {
-      response.status(200).json({
-        source: 'direct',
-        kind: 'direct',
-        title: 'Gefundene Mediendateien',
-        author: target.hostname,
-        durationSeconds: null,
-        thumbnail: null,
-        streams: playerStreams,
-      })
-      return
-    }
-
-    response.status(422).json({
-      error: 'no-extractor',
-      message:
-        'Unter dieser Adresse liegt keine Mediendatei, sondern eine Webseite. Ohne Anbieter kann ' +
-        'der eingebaute Dienst nur YouTube und direkte Datei-Adressen; für alles andere braucht ' +
-        'es einen Anbieter (SONDRA_PROVIDER_URL) oder yt-dlp auf dem eigenen Gerät. Bei einem ' +
-        'Freigabe-Link einer Cloud hilft oft die Adresse, die direkt die Datei liefert — meist ' +
-        'dieselbe mit „/download“ am Ende oder aus dem Herunterladen-Knopf der Cloud kopiert.',
+    const length = sizeFrom(probed.headers)
+    const name = nameFrom(mediaTarget, disposition)
+    response.status(200).json({
+      source: 'direct',
+      kind: 'direct',
+      title: name,
+      author: target.hostname,
+      durationSeconds: null,
+      thumbnail: null,
+      streams: [
+        {
+          id: 'direct',
+          label: 'Datei laden',
+          hasVideo: type.startsWith('video/'),
+          hasAudio: /^(?:audio|video)\/|^application\/ogg/i.test(type),
+          width: null,
+          height: null,
+          ext: name.includes('.') ? (name.split('.').pop() ?? 'bin') : 'bin',
+          mime: type.split(';')[0],
+          bytes: length,
+          token: sign(mediaTarget.toString()),
+        },
+      ],
     })
     return
   } catch (failure) {

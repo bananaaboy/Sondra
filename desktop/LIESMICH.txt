@@ -26,14 +26,21 @@ Herunterladen von Videoportalen
   veröffentlichte Prüfsumme geprüft, liegt danach in %APPDATA%\Sondra und
   aktualisiert sich einmal pro Woche. Verlangt YouTube eine Anmeldung, fragt
   Sondra, aus welchem Browser sie kommen soll. Läuft auf Port 9000 schon ein
-  eigener Dienst, benutzt Sondra diesen.
+  eigener Dienst, benutzt Sondra diesen. Solange die App läuft, kann auch die
+  Website sondra.lizge.ch im Browser diesen Dienst benutzen; andere Websites
+  bekommen keine Antwort.
 
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra - Multimedia →
   Deinstallieren.
 
 Aktualisieren
-  Das neuere Setup einfach darüber installieren.
+  Ab 1.0.7 sucht Sondra beim Start und dann alle sechs Stunden selbst nach
+  einer neueren Fassung, lädt sie im Hintergrund und prüft sie. Danach fragt
+  Sondra, ob sie jetzt neu starten soll; mit „Später“ wird beim nächsten
+  Schliessen installiert. Windows fragt dabei einmal nach der Erlaubnis, wie
+  beim Setup. Von Hand geht es weiterhin: das neuere Setup darüber
+  installieren.
 
 Wenn etwas nicht geht
   Sondra schreibt ein Protokoll nach %APPDATA%\Sondra\sondra.log (in die

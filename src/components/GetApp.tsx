@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { IN_DESKTOP_APP, WINDOWS_SETUP } from '../lib/desktop'
+import { useBrowserInstall } from '../lib/install'
 
 function DownloadIcon({ className = 'h-3.5 w-3.5' }: { className?: string }) {
   return (
@@ -49,6 +50,16 @@ function SetupIcon() {
   )
 }
 
+function WindowIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0" fill="none" aria-hidden>
+      <rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M3 7.5h14" stroke="currentColor" strokeWidth="1.4" />
+      <circle cx="5.4" cy="5.8" r="0.7" fill="currentColor" />
+    </svg>
+  )
+}
+
 const OPTION =
   'flex w-full items-center gap-[16px] rounded-card px-[16px] py-[14px] text-left ring-1 ring-inset ring-line'
 
@@ -58,6 +69,7 @@ export function GetAppButton() {
   const [open, setOpen] = useState(false)
   /** A tap on a touch screen has no hover, so the store says it there. */
   const [storeTapped, setStoreTapped] = useState(false)
+  const browser = useBrowserInstall()
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -120,6 +132,32 @@ export function GetAppButton() {
           </div>
 
           <div className="flex flex-col gap-[8px]">
+            {/* First, because it is the one way that works on every Windows
+                today: Smart App Control refuses the unsigned setup outright,
+                and the browser's own install is the signed browser. */}
+            <div className={`${OPTION} bg-raised text-ink`}>
+              <WindowIcon />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-body font-semibold">Als App aus dem Browser</span>
+                <span className="text-small text-prose">
+                  {browser.installed
+                    ? 'Ist installiert — Sondra steht im Startmenü.'
+                    : browser.available
+                      ? 'Eigenes Fenster und Eintrag im Startmenü, ohne Setup. Läuft auch mit der intelligenten App-Steuerung.'
+                      : 'In Edge oder Chrome: Menü ⋯ → Apps → „Sondra installieren“. Läuft auch mit der intelligenten App-Steuerung.'}
+                </span>
+              </span>
+              {browser.available && !browser.installed ? (
+                <button
+                  type="button"
+                  onClick={() => void browser.install().then((done) => done && close())}
+                  className="press shrink-0 rounded-nav bg-ink px-[12px] py-[8px] text-small font-semibold text-on-ink hover:bg-ink-hover"
+                >
+                  Installieren
+                </button>
+              ) : null}
+            </div>
+
             {/* Not `disabled`: a disabled button gets no hover and no focus in
                 several browsers, and then the one thing it has to say — soon —
                 could never be read. */}
@@ -158,7 +196,8 @@ export function GetAppButton() {
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="text-body font-semibold">Setup (.exe)</span>
                 <span className="text-small text-prose">
-                  Direkt herunterladen, rund 130 MB. Installiert für alle Benutzer.
+                  Rund 130 MB. Lädt Videoportale mit yt-dlp in voller Auflösung und aktualisiert
+                  sich selbst.
                 </span>
               </span>
               <DownloadIcon className="h-4 w-4" />
@@ -167,7 +206,9 @@ export function GetAppButton() {
 
           <p className="text-small leading-[1.5] text-muted">
             Das Setup ist noch nicht signiert. Warnt Windows beim Start, „Weitere Informationen“ und
-            dann „Trotzdem ausführen“ wählen.
+            dann „Trotzdem ausführen“ wählen. Ist die intelligente App-Steuerung eingeschaltet,
+            startet es gar nicht — dann die App aus dem Browser nehmen; Videoportale lädt sie wie
+            die Website, YouTube meist in 360p.
           </p>
         </div>
       </dialog>

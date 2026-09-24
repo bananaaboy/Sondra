@@ -20,10 +20,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { app, BrowserWindow, dialog, Menu, nativeTheme, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
 
 import { startDownloader } from './downloader.mjs'
 import { startServer } from './server.mjs'
+import { setupUpdates } from './updater.mjs'
 
 const PORT = 47199
 const SMOKE = process.env.SONDRA_SMOKE
@@ -228,10 +229,23 @@ async function open() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // The version and the updater, and nothing else, for the page.
+      preload: path.join(app.getAppPath(), 'preload.cjs'),
     },
   })
 
   log('Fenster offen')
+
+  // Updates only for the installed Windows app, and never in a test run —
+  // a test must not replace the build it is testing. The page's update
+  // control is there either way and says so.
+  setupUpdates({
+    log,
+    ipcMain,
+    window: () => window,
+    version: app.getVersion(),
+    enabled: app.isPackaged && process.platform === 'win32' && !SMOKE && !ANSWER && process.env.SONDRA_UPDATES !== 'off',
+  })
 
   // The page title is written for a browser tab; the window is just "Sondra".
   window.on('page-title-updated', (event) => event.preventDefault())
@@ -300,6 +314,8 @@ async function open() {
   })
   contents.on('console-message', (event) => {
     if (event.level === 'error') log(`Seite: ${event.message}`)
+    // The page's own notes for this log — sound, for one.
+    else if (event.message.startsWith('[Sondra] ')) log(event.message.slice(9))
   })
 
   if (SMOKE) {
@@ -344,6 +360,7 @@ async function open() {
   }
 
   await load()
+
 }
 
 app.setAppUserModelId('ch.lizge.sondra')
