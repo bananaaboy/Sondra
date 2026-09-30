@@ -280,7 +280,7 @@ export function GetAppButton() {
             Das Setup ist noch nicht signiert. Warnt Windows, „Weitere Informationen“ und dann
             „Trotzdem ausführen“ wählen. Mit eingeschalteter intelligenter App-Steuerung startet es
             nicht — dann die Website als App nehmen; Videoportale lädt sie wie die Website, YouTube
-            meist in 360p.
+            meist in 360p. <a href="./download.html" className="text-ink underline underline-offset-[3px] hover:no-underline">Download-Seite und Signatur</a>
           </p>
         </div>
       </dialog>
