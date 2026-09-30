@@ -583,14 +583,18 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Dateimenü, „App herunterladen" — als einziges getönt — und ein einzelner
   Themenknopf, der durch System, Hell und Dunkel schaltet. Der Download-Knopf
   öffnet ein natives `<dialog>` (Schattenstufe, Hintergrund abgedunkelt, bis
-  760 px breit), überschrieben „Sondra Studio für Windows" mit dem Zeichen auf
-  einer Tintenfläche. Darunter drei getönte Kacheln: Setup (.exe) und
-  Microsoft Store als die zwei grossen nebeneinander — Symbol, Dateiart in
-  Courier, Name in Überschriftgrösse, ein Satz, die Handlung am Fuss —, und
-  „Website als App" schmal über die volle Breite darunter. Die Store-Kachel
-  sagt „Bald verfügbar" als Pille auf der Fläche, nicht erst bei Hover: auf
-  einer Kachel dieser Grösse wirkt ein verstecktes „bald" wie ein Defekt.
-  Unter `sm` stehen die Kacheln untereinander. In der App entfällt er. Den Lokal-Chip („Lokal · 1
+  1120 px breit) — bewusst die lauteste Stelle der Seite, auf Wunsch
+  „breiter und extravaganter". Oben die Wortmarke gross: Zeichen, „Sondra" in
+  der Wortmarken-Schrift, „Studio" in Public Sans. Darunter drei Kacheln:
+  Setup (.exe) und Microsoft Store als die zwei grossen nebeneinander (bis
+  420 px hoch, Name in 48 px, die Dateiart als Courier-Pille, die Handlung am
+  Fuss), „Website als App" schmal über die volle Breite darunter. Die
+  Setup-Kachel ist die eine Fläche in Tinte: die fünf Balken des Zeichens
+  liegen riesig und blass darauf, gleiten beim Öffnen nacheinander herein
+  (`bar-in`, der eine Bewegungsmoment des Fensters) und rücken bei Hover
+  nach links. Die Store-Kachel steht auf `panel-strong` und sagt „Bald
+  verfügbar" als Pille auf der Fläche, nicht erst bei Hover. Unter `md`
+  stehen die Kacheln untereinander. In der App entfällt er. Den Lokal-Chip („Lokal · 1
   Ausnahme") gibt es seit dem 23.9. nicht mehr; die Ausnahme sagt der
   Downloader selbst, laut.
   „Installieren" und der Suchknopf sind auf Wunsch entfallen; gesucht wird auf
