@@ -74,9 +74,9 @@ jobs:
           # in Apps & Features, machine-wide, with the reserved product name
           # and the account's publisher name.
           $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
-            Where-Object { $_.DisplayName -eq 'Sondra - Multimedia' }
+            Where-Object { $_.DisplayName -eq 'Sondra Studio' }
           # Plain quotes only: PowerShell reads „ and “ as string delimiters.
-          if (-not $entry) { throw 'Kein Eintrag "Sondra - Multimedia" in Apps & Features (HKLM).' }
+          if (-not $entry) { throw 'Kein Eintrag "Sondra Studio" in Apps & Features (HKLM).' }
           if ($entry.Publisher -ne 'Lizge') { throw "Herausgeber ist '$($entry.Publisher)', erwartet 'Lizge'." }
           if (-not $entry.QuietUninstallString) { throw 'Keine stille Deinstallation eingetragen.' }
           if (-not $entry.InstallLocation) { throw 'InstallLocation fehlt im Eintrag.' }
