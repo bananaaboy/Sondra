@@ -129,10 +129,12 @@ jobs:
       - name: Build, install and start the Store package (MSIX)
         shell: pwsh
         env:
-          SONDRA_STORE_IDENTITY_NAME: ${{ vars.STORE_IDENTITY_NAME }}
-          SONDRA_STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
-          SONDRA_STORE_PUBLISHER_NAME: ${{ vars.STORE_PUBLISHER_NAME }}
-          SONDRA_STORE_DISPLAY_NAME: ${{ vars.STORE_DISPLAY_NAME }}
+          # Variables or secrets, whichever holds them: both are ordinary
+          # places to put them, and only one was read before.
+          SONDRA_STORE_IDENTITY_NAME: ${{ vars.STORE_IDENTITY_NAME || secrets.STORE_IDENTITY_NAME }}
+          SONDRA_STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER || secrets.STORE_PUBLISHER }}
+          SONDRA_STORE_PUBLISHER_NAME: ${{ vars.STORE_PUBLISHER_NAME || secrets.STORE_PUBLISHER_NAME }}
+          SONDRA_STORE_DISPLAY_NAME: ${{ vars.STORE_DISPLAY_NAME || secrets.STORE_DISPLAY_NAME }}
         run: |
           node scripts/build-desktop.mjs --store
           if ($LASTEXITCODE -ne 0) { throw 'Store-Paket nicht gebaut.' }

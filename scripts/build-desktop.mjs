@@ -152,17 +152,38 @@ const builder = path.join(DESKTOP, 'node_modules/electron-builder/cli.js')
 if (forStore) {
   step('Store-Paket (MSIX) bauen')
   makeStoreTiles('public/icon-512.png', path.join(RESOURCES, 'appx'))
+  // Copied out of Partner Center, a value often arrives with its XML around
+  // it (Name="…") or with quotes and a trailing space; the manifest wants the
+  // bare value.
+  const bare = (value) =>
+    (value ?? '')
+      .trim()
+      .replace(/^[A-Za-z]+\s*=\s*(?=["'])/, '')
+      .replace(/^["']|["']$/g, '')
+      .trim()
   const identity = {
-    identityName: process.env.SONDRA_STORE_IDENTITY_NAME,
-    publisher: process.env.SONDRA_STORE_PUBLISHER,
-    publisherDisplayName: process.env.SONDRA_STORE_PUBLISHER_NAME,
+    identityName: bare(process.env.SONDRA_STORE_IDENTITY_NAME),
+    publisher: bare(process.env.SONDRA_STORE_PUBLISHER),
+    publisherDisplayName: bare(process.env.SONDRA_STORE_PUBLISHER_NAME),
   }
-  const testing = !identity.identityName || !identity.publisher || !identity.publisherDisplayName
-  if (testing) {
-    console.warn('  Keine Store-Identität gesetzt: Testwerte. Dieses Paket nimmt der Store nicht an.')
+  const missing = [
+    ['STORE_IDENTITY_NAME', identity.identityName],
+    ['STORE_PUBLISHER', identity.publisher],
+    ['STORE_PUBLISHER_NAME', identity.publisherDisplayName],
+  ].filter(([, value]) => !value).map(([name]) => name)
+  if (identity.publisher && !identity.publisher.startsWith('CN=')) {
+    throw new Error(`STORE_PUBLISHER muss mit „CN=“ beginnen (Package/Identity/Publisher aus Partner Center), ist aber „${identity.publisher.slice(0, 12)}…“.`)
+  }
+  if (missing.length) {
+    const message = `Store-Identität unvollständig, es fehlt: ${missing.join(', ')}. Testwerte eingesetzt — dieses Paket nimmt der Store nicht an.`
+    console.warn(`  ${message}`)
+    // A visible annotation on the run's summary page, not only in the log.
+    if (process.env.GITHUB_ACTIONS) console.log(`::warning title=Store-Paket mit Testwerten::${message}`)
     identity.identityName ||= 'Lizge.Sondra'
     identity.publisher ||= 'CN=00000000-0000-0000-0000-000000000000'
     identity.publisherDisplayName ||= 'Lizge'
+  } else {
+    console.log(`  Store-Identität: ${identity.identityName}`)
   }
   const own = JSON.parse(fs.readFileSync(path.join(DESKTOP, 'package.json'), 'utf8')).build
   const config = {
