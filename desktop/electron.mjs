@@ -27,6 +27,12 @@ import { offerFile, startServer } from './server.mjs'
 import { setupUpdates } from './updater.mjs'
 
 const PORT = 47199
+/**
+ * Installed from the Microsoft Store (an MSIX package). The Store signs,
+ * hosts and updates it; the app's own updater and fetching yt-dlp would both
+ * be things the Store does not allow, so both stay off in this build.
+ */
+const IN_STORE = process.windowsStore === true
 const SMOKE = process.env.SONDRA_SMOKE
 /** Tests answer the app's questions in advance: `yes` or `no`. */
 const ANSWER = process.env.SONDRA_ASK
@@ -267,7 +273,7 @@ function within(promise, ms) {
 
 async function open() {
   trimLog()
-  log(`Start ${app.getVersion()} · ${process.platform} ${process.arch} · Electron ${process.versions.electron}`)
+  log(`Start ${app.getVersion()} · ${process.platform} ${process.arch} · Electron ${process.versions.electron}${IN_STORE ? ' · Microsoft Store' : ''}`)
   if (withoutGpu) log('Ohne Grafikbeschleunigung, weil die GPU in den letzten 24 Stunden abgestürzt ist.')
 
   // The default menu is English and mostly developer tools; the page carries
@@ -306,7 +312,8 @@ async function open() {
     ipcMain,
     window: () => window,
     version: app.getVersion(),
-    enabled: app.isPackaged && process.platform === 'win32' && !SMOKE && !ANSWER && process.env.SONDRA_UPDATES !== 'off',
+    enabled: app.isPackaged && process.platform === 'win32' && !IN_STORE && !SMOKE && !ANSWER && process.env.SONDRA_UPDATES !== 'off',
+    channel: IN_STORE ? 'store' : 'setup',
   })
 
   // The page title is written for a browser tab; the window is just "Sondra".
@@ -350,7 +357,7 @@ async function open() {
   // the page looks for the service again whenever it was not there yet.
   if (process.env.SONDRA_DOWNLOADER !== 'off') {
     await within(
-      startDownloader({ dataDir: app.getPath('userData'), origin, log: (message) => log(message), ask: questions }).then(
+      startDownloader({ dataDir: app.getPath('userData'), origin, log: (message) => log(message), ask: questions, fetchesTool: !IN_STORE }).then(
         (service) => log(service ? `Dienst zum Herunterladen auf ${service.url}` : 'Port 9000 belegt: die Seite nutzt den Dienst, der dort läuft.'),
       ),
       1500,

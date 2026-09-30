@@ -161,6 +161,18 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `OpenWithProgids` ein, nie als Standard (der Workflow prüft das). Dateien
   aus der Befehlszeile oder vom zweiten Start reicht `electron.mjs` über
   `server.mjs` (`/geoeffnet/<token>`, einmal abrufbar) an die Seite.
+- **Microsoft Store als MSIX** (`npm run build:desktop -- --store`, im
+  Workflow bei jedem Lauf: gebaut, mit Wegwerf-Zertifikat installiert,
+  gestartet, Artefakt „Sondra-Store-MSIX“). Das unsignierte Setup lehnt der
+  Store ab (Richtlinie 10.2.9), das MSIX signiert er selbst. Die Identität aus
+  Partner Center steht in den Repository-Variablen `STORE_IDENTITY_NAME`,
+  `STORE_PUBLISHER`, `STORE_PUBLISHER_NAME` (und `STORE_DISPLAY_NAME`, sonst
+  „Sondra - Multimedia“); ohne sie entstehen Testwerte. In der Store-Fassung
+  (`process.windowsStore`) sind der eigene Updater und das Nachladen von
+  yt-dlp aus: der Store aktualisiert selbst und erlaubt kein nachgeladenes
+  Programm (10.2.2). yt-dlp wird dort nur benutzt, wenn es schon da ist
+  (`winget install yt-dlp.yt-dlp`), und die Fehlermeldung sagt genau das.
+  Kacheln macht `scripts/store-tiles.mjs` aus `icon-512.png`.
 - `npm run build:desktop` baut die Windows-App (Electron, NSIS-Setup nach
   `release/`); vorher einmal `npm ci --prefix desktop`. Quelle in `desktop/`,
   Electron steht bewusst nur in `desktop/package.json`. `release/` wird nicht
