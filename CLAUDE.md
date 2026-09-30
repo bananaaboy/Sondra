@@ -87,8 +87,8 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte). Den Lokal-Chip
   in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
-  „App herunterladen" mit einem grossen Auswahlfenster „Sondra Studio für
-  Windows": zwei grosse Kacheln nebeneinander, Setup (.exe) und Microsoft
+  „App herunterladen" mit einem breiten Auswahlfenster „Sondra Studio"
+  (bis 1120 px, Setup-Kachel in Tinte): zwei grosse Kacheln nebeneinander, Setup (.exe) und Microsoft
   Store — die Hauptwege —, darunter eine schmale, volle Breite für „Website
   als App" (Edge/Chrome-Installation über `lib/install.ts`, der einzige Weg,
   den die intelligente App-Steuerung nicht blockiert, solange das Setup

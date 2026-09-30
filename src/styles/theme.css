@@ -466,6 +466,24 @@ select option {
   animation-delay: var(--delay, 0ms);
 }
 
+/* The mark's bars sliding into place, one after another (`--delay`). Used
+   once, on the setup tile of the download dialog. */
+@keyframes sondra-bar-in {
+  from {
+    opacity: 0;
+    transform: translateX(56px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility bar-in {
+  animation: sondra-bar-in var(--dur-slow) var(--ease-settle) both;
+  animation-delay: var(--delay, 0ms);
+}
+
 /* Cards lie on the canvas; only the thing being dragged or hovered lifts. */
 @utility elevate-lift {
   box-shadow: var(--shadow-lift);

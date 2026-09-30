@@ -62,7 +62,7 @@ function WindowIcon({ className = 'h-5 w-5' }: { className?: string }) {
   )
 }
 
-/** One of the two large tiles: icon, name, what it does, and its action at the foot. */
+/** One of the two large tiles: what it is, what it does, and its action at the foot. */
 function MainTile({
   icon,
   title,
@@ -78,21 +78,46 @@ function MainTile({
 }) {
   return (
     <>
-      <span className="flex items-start justify-between gap-[12px]">
+      <span className="relative flex items-start justify-between gap-[12px]">
         {icon}
-        <span className="value pt-[6px] text-small text-prose">{facts}</span>
+        <span className="value rounded-pill px-[12px] py-[4px] text-small ring-1 ring-inset ring-current/35">{facts}</span>
       </span>
-      <span className="mt-[28px] flex flex-col gap-[6px] sm:mt-[40px]">
-        <span className="text-heading-sm font-semibold tracking-[-0.01em]">{title}</span>
-        <span className="text-small text-prose">{children}</span>
+      <span className="relative mt-[40px] flex max-w-[34ch] flex-col gap-[10px] sm:mt-[72px]">
+        <span className="text-[40px] font-semibold leading-[1.02] tracking-[-0.03em] sm:text-[48px]">{title}</span>
+        <span className="text-body">{children}</span>
       </span>
-      <span className="mt-auto pt-[24px]">{action}</span>
+      <span className="relative mt-auto pt-[32px]">{action}</span>
     </>
   )
 }
 
-const MAIN = 'flex min-h-[240px] flex-col rounded-card p-[20px] text-left sm:min-h-[300px] sm:p-[24px]'
-const ACTION = 'inline-flex items-center gap-[8px] rounded-nav px-[16px] py-[10px] text-small font-semibold'
+/**
+ * The mark's five bars, drawn huge and faint across the setup tile, sliding in
+ * one after another when the dialog opens and leaning left on hover.
+ */
+function Bars() {
+  const bars: [number, number, number][] = [
+    [9, 5.35, 13.99],
+    [7.73, 9.85, 20.95],
+    [4.6, 14.35, 22.8],
+    [3.33, 18.85, 20.95],
+    [9, 23.35, 13.99],
+  ]
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      aria-hidden
+      className="pointer-events-none absolute -bottom-[8%] -right-[16%] h-[92%] w-auto fill-current opacity-[0.07] transition-transform duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-x-[14px]"
+    >
+      {bars.map(([x, y, w], index) => (
+        <rect key={y} x={x} y={y} width={w} height="3.3" rx="1.65" className="bar-in" style={{ ['--delay' as string]: `${120 + index * 70}ms` }} />
+      ))}
+    </svg>
+  )
+}
+
+const MAIN = 'group relative flex min-h-[300px] flex-col overflow-hidden rounded-card p-[24px] text-left sm:min-h-[420px] sm:p-[36px]'
+const ACTION = 'inline-flex items-center gap-[10px] rounded-nav px-[22px] py-[14px] text-body font-semibold'
 
 export function GetAppButton() {
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -137,48 +162,48 @@ export function GetAppButton() {
           // A click on the backdrop lands on the dialog element itself.
           if (event.target === dialogRef.current) close()
         }}
-        className="pop elevate-lift m-auto max-h-[calc(100dvh-32px)] w-[min(760px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-card bg-raised p-0 text-prose backdrop:bg-black/55 backdrop:backdrop-blur-[3px]"
+        className="pop elevate-lift m-auto max-h-[calc(100dvh-32px)] w-[min(1120px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-card bg-raised p-0 text-prose backdrop:bg-black/60 backdrop:backdrop-blur-[4px]"
       >
-        <div className="flex flex-col gap-[24px] p-[20px] sm:gap-[28px] sm:p-[32px]">
+        <div className="flex flex-col gap-[28px] p-[20px] sm:gap-[36px] sm:p-[40px]">
           <div className="flex items-start justify-between gap-[16px]">
-            <div className="flex items-center gap-[16px]">
-              <span className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-card bg-ink text-on-ink">
-                <Mark className="h-[32px] w-[32px]" />
-              </span>
-              <div className="flex flex-col gap-[2px]">
-                <h2 id="get-app-title" className="text-heading-sm font-semibold tracking-[-0.01em] text-ink sm:text-[32px] sm:leading-[1.15]">
-                  Sondra Studio für Windows
-                </h2>
-                <p className="text-small text-prose">Die ganze Werkstatt im eigenen Fenster. Windows 10 und 11.</p>
-              </div>
+            <div className="flex flex-col gap-[10px]">
+              <h2 id="get-app-title" className="m-0 flex flex-wrap items-center gap-x-[10px] gap-y-[4px] text-ink sm:gap-x-[14px]">
+                <Mark className="h-[28px] w-[28px] sm:h-[56px] sm:w-[56px]" />
+                <span className="font-wordmark text-[38px] font-light leading-none tracking-[-0.01em] sm:text-[76px]">Sondra</span>
+                <span className="text-[28px] font-light leading-none tracking-[-0.03em] sm:text-[60px]">Studio</span>
+              </h2>
+              <p className="text-body text-prose sm:text-subheading">
+                Die ganze Werkstatt im eigenen Fenster — für Windows 10 und 11.
+              </p>
             </div>
             <button
               type="button"
               onClick={close}
               aria-label="Schliessen"
-              className="press -mr-[8px] -mt-[4px] flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-nav text-muted hover:bg-panel-soft hover:text-ink"
+              className="press -mr-[8px] -mt-[4px] flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-pill text-muted hover:bg-panel-soft hover:text-ink"
             >
-              <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden>
+              <svg viewBox="0 0 16 16" className="h-[18px] w-[18px]" fill="none" aria-hidden>
                 <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </button>
           </div>
 
-          <div className="flex flex-col gap-[12px]">
-            <div className="grid grid-cols-1 gap-[12px] sm:grid-cols-2">
+          <div className="flex flex-col gap-[14px]">
+            <div className="grid grid-cols-1 gap-[14px] md:grid-cols-2">
               <a
                 href={WINDOWS_SETUP}
                 rel="noopener"
                 onClick={() => setTimeout(close, 0)}
-                className={`${MAIN} press group bg-panel-soft text-ink hover:bg-panel-mid`}
+                className={`${MAIN} press bg-ink text-on-ink`}
               >
+                <Bars />
                 <MainTile
-                  icon={<SetupIcon className="h-[44px] w-[44px]" />}
+                  icon={<SetupIcon className="h-[52px] w-[52px]" />}
                   title="Setup"
-                  facts=".exe · rund 130 MB"
+                  facts=".exe · 130 MB"
                   action={
-                    <span className={`${ACTION} bg-ink text-on-ink group-hover:bg-ink-hover`}>
-                      <DownloadIcon className="h-4 w-4" />
+                    <span className={`${ACTION} bg-on-ink text-ink transition-transform duration-[130ms] group-hover:translate-x-[4px]`}>
+                      <DownloadIcon className="h-[18px] w-[18px]" />
                       Herunterladen
                     </span>
                   }
@@ -193,10 +218,10 @@ export function GetAppButton() {
                   target="_blank"
                   rel="noopener"
                   onClick={() => setTimeout(close, 0)}
-                  className={`${MAIN} press group bg-panel-soft text-ink hover:bg-panel-mid`}
+                  className={`${MAIN} press bg-panel-strong text-ink hover:bg-panel-mid`}
                 >
                   <MainTile
-                    icon={<StoreIcon className="h-[44px] w-[44px]" />}
+                    icon={<StoreIcon className="h-[52px] w-[52px]" />}
                     title="Microsoft Store"
                     facts=".msix"
                     action={<span className={`${ACTION} bg-ink text-on-ink group-hover:bg-ink-hover`}>Im Store öffnen</span>}
@@ -205,19 +230,19 @@ export function GetAppButton() {
                   </MainTile>
                 </a>
               ) : (
-                <div aria-disabled="true" className={`${MAIN} cursor-not-allowed bg-panel-soft text-prose`}>
+                <div aria-disabled="true" className={`${MAIN} cursor-not-allowed bg-panel-strong text-ink`}>
                   <MainTile
-                    icon={<StoreIcon className="h-[44px] w-[44px] opacity-50" />}
+                    icon={<StoreIcon className="h-[52px] w-[52px] opacity-60" />}
                     title="Microsoft Store"
                     facts=".msix"
                     action={
-                      <span className="inline-flex items-center gap-[8px] rounded-pill px-[16px] py-[10px] text-small font-semibold text-prose ring-1 ring-inset ring-rule">
-                        <span className="h-[6px] w-[6px] rounded-pill bg-muted" aria-hidden />
+                      <span className="inline-flex items-center gap-[10px] rounded-pill px-[20px] py-[12px] text-body font-semibold text-prose ring-1 ring-inset ring-rule">
+                        <span className="h-[8px] w-[8px] animate-pulse rounded-pill bg-ink" aria-hidden />
                         Bald verfügbar
                       </span>
                     }
                   >
-                    Installiert sich ohne Warnung und bekommt Updates über den Store.
+                    <span className="text-prose">Installiert sich ohne Warnung und bekommt Updates über den Store.</span>
                   </MainTile>
                 </div>
               )}
@@ -225,9 +250,9 @@ export function GetAppButton() {
 
             {/* The narrow one: no setup at all, and the one way that works
                 with Smart App Control while the setup is unsigned. */}
-            <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft px-[20px] py-[14px] text-ink sm:flex-row sm:items-center sm:gap-[16px]">
-              <span className="flex min-w-0 flex-1 items-center gap-[14px]">
-                <WindowIcon className="h-[24px] w-[24px]" />
+            <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft px-[20px] py-[16px] text-ink sm:flex-row sm:items-center sm:gap-[18px] sm:px-[28px]">
+              <span className="flex min-w-0 flex-1 items-center gap-[16px]">
+                <WindowIcon className="h-[28px] w-[28px]" />
                 <span className="flex min-w-0 flex-col">
                   <span className="text-body font-semibold">Website als App</span>
                   <span className="text-small text-prose">
@@ -235,7 +260,7 @@ export function GetAppButton() {
                       ? 'Ist installiert — Sondra steht im Startmenü.'
                       : browser.available
                         ? 'Ohne Setup, aus Edge oder Chrome. Läuft auch mit der intelligenten App-Steuerung.'
-                        : 'In Edge oder Chrome: Menü ⋯ → Apps → „Sondra installieren“.'}
+                        : 'In Edge oder Chrome: Menü ⋯ → Apps → „Sondra installieren“. Läuft auch mit der intelligenten App-Steuerung.'}
                   </span>
                 </span>
               </span>
@@ -243,7 +268,7 @@ export function GetAppButton() {
                 <button
                   type="button"
                   onClick={() => void browser.install().then((done) => done && close())}
-                  className="press shrink-0 self-start rounded-nav px-[14px] py-[8px] text-small font-semibold text-ink ring-1 ring-inset ring-rule hover:bg-panel-mid sm:self-auto"
+                  className="press shrink-0 self-start rounded-nav px-[16px] py-[9px] text-small font-semibold text-ink ring-1 ring-inset ring-rule hover:bg-panel-mid sm:self-auto"
                 >
                   Installieren
                 </button>
@@ -251,7 +276,7 @@ export function GetAppButton() {
             </div>
           </div>
 
-          <p className="max-w-[62ch] text-small leading-[1.5] text-muted">
+          <p className="max-w-[72ch] text-small leading-[1.5] text-muted">
             Das Setup ist noch nicht signiert. Warnt Windows, „Weitere Informationen“ und dann
             „Trotzdem ausführen“ wählen. Mit eingeschalteter intelligenter App-Steuerung startet es
             nicht — dann die Website als App nehmen; Videoportale lädt sie wie die Website, YouTube
