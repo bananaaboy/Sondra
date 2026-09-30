@@ -51,7 +51,10 @@ export function AppUpdateButton() {
 
   if (state.status === 'off') {
     return (
-      <span className="value text-small text-muted" title="Updates gibt es nur in der installierten Windows-App.">
+      <span
+        className="value text-small text-muted"
+        title={state.channel === 'store' ? 'Updates kommen über den Microsoft Store.' : 'Updates gibt es nur in der installierten Windows-App.'}
+      >
         Version {state.version}
       </span>
     )

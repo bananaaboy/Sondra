@@ -25,6 +25,8 @@ export interface UpdateState {
   next?: string
   percent?: number
   message?: string
+  /** `store`: installed from the Microsoft Store, which updates it. */
+  channel?: 'setup' | 'store'
 }
 
 /** A file Windows opened with Sondra, fetchable once from the app's server. */

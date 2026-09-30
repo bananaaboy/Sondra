@@ -32,10 +32,10 @@ const EVERY_MS = 6 * 60 * 60 * 1000
  * States: off (not the installed Windows app, or a test run) · idle ·
  * checking · current · downloading (percent) · ready (version) · error.
  */
-export function setupUpdates({ log, ipcMain, window, version, enabled }) {
-  let state = { status: enabled ? 'idle' : 'off', version }
+export function setupUpdates({ log, ipcMain, window, version, enabled, channel = 'setup' }) {
+  let state = { status: enabled ? 'idle' : 'off', version, channel }
   const publish = (next) => {
-    state = { ...next, version }
+    state = { ...next, version, channel }
     window()?.webContents.send('sondra:update', state)
   }
 

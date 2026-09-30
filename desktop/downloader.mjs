@@ -124,8 +124,13 @@ function errorCode(stderr) {
  *
  * `ask.install()` and `ask.signIn()` put the two questions to the person in
  * front of the app and resolve to their answer.
+ *
+ * `fetchesTool: false` is the Microsoft Store build: an app from the Store
+ * may not download and run program code it did not ship (policy 10.2.2), so
+ * there yt-dlp is only used when it is already on the machine — WinGet,
+ * PATH — and a missing one is its own error, with its own way to fix it.
  */
-export async function startDownloader({ port = 9000, dataDir, origin, log = () => {}, ask }) {
+export async function startDownloader({ port = 9000, dataDir, origin, log = () => {}, ask, fetchesTool = true }) {
   const settingsFile = path.join(dataDir, 'herunterladen.json')
   const readSettings = () => {
     try {
@@ -208,7 +213,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
   /** The own copy updates itself once a week, in the background. */
   function maybeUpdate() {
-    if (updateChecked || !found || found.bin !== ownCopy) return
+    if (!fetchesTool || updateChecked || !found || found.bin !== ownCopy) return
     updateChecked = true
     try {
       if (Date.now() - fs.statSync(ownCopy).mtimeMs < UPDATE_AFTER_MS) return
@@ -227,7 +232,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
    * question of the version.
    */
   function update() {
-    if (updatedThisSession || !found || found.bin !== ownCopy) return Promise.resolve(false)
+    if (!fetchesTool || updatedThisSession || !found || found.bin !== ownCopy) return Promise.resolve(false)
     updating ??= (async () => {
       const before = found?.version
       const result = await run(ownCopy, ['-U'], { timeoutMs: 180_000 })
@@ -284,6 +289,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
   async function ytdlp() {
     const here = await locate()
     if (here) return here
+    if (!fetchesTool) return null
     if (!(await ask.install())) return null
     try {
       await install()
@@ -318,7 +324,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     if (!/^https?:\/\//i.test(target)) return { status: 'error', error: { code: 'error.api.link.invalid' } }
 
     const tool = await ytdlp()
-    if (!tool) return { status: 'error', error: { code: 'error.api.ytdlp.missing' } }
+    if (!tool) return { status: 'error', error: { code: fetchesTool ? 'error.api.ytdlp.missing' : 'error.api.ytdlp.missing.store' } }
 
     let result = await probe(tool.bin, target)
 

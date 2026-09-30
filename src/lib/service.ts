@@ -144,6 +144,13 @@ export function explain(code: string | null, detail?: string | null): string {
       'welchem Browser sie kommen soll — dort müssen Sie bei YouTube angemeldet sein.'
     )
   }
+  if (code.includes('ytdlp.missing.store')) {
+    return (
+      'Die Sondra-App aus dem Microsoft Store lädt yt-dlp nicht selbst herunter — der Store erlaubt ' +
+      'das nicht. Einmal „winget install yt-dlp.yt-dlp“ in der Eingabeaufforderung, danach findet ' +
+      'Sondra es von allein.'
+    )
+  }
   if (IN_DESKTOP_APP && code.includes('ytdlp.missing')) {
     return (
       'Ohne yt-dlp geht dieser Weg nicht. Beim nächsten Versuch fragt Sondra noch einmal, ob es ' +

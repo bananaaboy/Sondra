@@ -3,6 +3,15 @@
  *
  *   npm run build:desktop            →   release/Sondra-Setup-<version>.exe  (on Windows)
  *   npm run build:desktop -- --dir   →   release/<platform>-unpacked/        (any OS, for testing)
+ *   npm run build:desktop -- --store →   release/Sondra-Store-<version>.appx (on Windows)
+ *
+ * `--store` builds the Microsoft Store package: MSIX (electron-builder's
+ * „appx“ target), which the Store signs and hosts itself. The setup cannot go
+ * to the Store unsigned (policy 10.2.9); the package can. Its identity comes
+ * from Partner Center („Produktidentität“) through SONDRA_STORE_IDENTITY_NAME,
+ * SONDRA_STORE_PUBLISHER and SONDRA_STORE_PUBLISHER_NAME; without them the
+ * package is built with test values that the Store will refuse — good for
+ * checking the build, not for submitting.
  *
  * The installer installs for all users (one UAC prompt; `/S` runs it without
  * any UI, as the Microsoft Store requires), shows LIZENZ.txt before
@@ -26,11 +35,14 @@ import path from 'node:path'
 
 import { build } from 'esbuild'
 
+import { makeStoreTiles } from './store-tiles.mjs'
+
 const DESKTOP = path.resolve('desktop')
 const STAGE = path.join(DESKTOP, '.stage')
 const RESOURCES = path.join(DESKTOP, '.build')
 const SITE = path.join(DESKTOP, '.site')
 const onlyDir = process.argv.includes('--dir')
+const forStore = process.argv.includes('--store')
 
 /**
  * Not part of the app: deployment config, the yt-dlp bridge, and the service
@@ -133,10 +145,52 @@ for (const [name, file] of [
 
 /* -- 4. electron-builder ---------------------------------------------------- */
 
-step(onlyDir ? 'App-Ordner bauen' : 'Installer bauen')
 const builder = path.join(DESKTOP, 'node_modules/electron-builder/cli.js')
-const args = onlyDir ? ['--dir'] : ['--win', 'nsis', '--x64']
 // Never publish from the build — once, a second flag turns it into a list
 // that electron-builder no longer reads as "never". The workflow publishes
 // the tested installer, together with the latest.yml the updater reads.
-execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
+if (forStore) {
+  step('Store-Paket (MSIX) bauen')
+  makeStoreTiles('public/icon-512.png', path.join(RESOURCES, 'appx'))
+  const identity = {
+    identityName: process.env.SONDRA_STORE_IDENTITY_NAME,
+    publisher: process.env.SONDRA_STORE_PUBLISHER,
+    publisherDisplayName: process.env.SONDRA_STORE_PUBLISHER_NAME,
+  }
+  const testing = !identity.identityName || !identity.publisher || !identity.publisherDisplayName
+  if (testing) {
+    console.warn('  Keine Store-Identität gesetzt: Testwerte. Dieses Paket nimmt der Store nicht an.')
+    identity.identityName ||= 'Lizge.Sondra'
+    identity.publisher ||= 'CN=00000000-0000-0000-0000-000000000000'
+    identity.publisherDisplayName ||= 'Lizge'
+  }
+  const own = JSON.parse(fs.readFileSync(path.join(DESKTOP, 'package.json'), 'utf8')).build
+  const config = {
+    ...own,
+    win: { ...own.win, target: [{ target: 'appx', arch: ['x64'] }], artifactName: 'Sondra-Store-${version}.${ext}' },
+    appx: {
+      ...identity,
+      applicationId: 'Sondra',
+      displayName: process.env.SONDRA_STORE_DISPLAY_NAME || 'Sondra - Multimedia',
+      languages: ['de-DE'],
+      backgroundColor: 'transparent',
+    },
+    // „Öffnen mit“, the MSIX way: the package declares what it can open and
+    // Windows lists it, without it becoming anyone's default.
+    fileAssociations: [
+      { ext: ['mp3', 'wav', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'aif', 'aiff', 'wma'], name: 'sondra.ton', description: 'Ton' },
+      { ext: ['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi'], name: 'sondra.video', description: 'Video' },
+      { ext: ['png', 'jpg', 'jpeg', 'webp', 'gif'], name: 'sondra.bild', description: 'Bild' },
+    ],
+    // The Store updates the package; there is nothing for electron-updater to read.
+    publish: null,
+  }
+  delete config.nsis
+  const configFile = path.join(RESOURCES, 'store.json')
+  fs.writeFileSync(configFile, JSON.stringify(config, null, 2))
+  execFileSync(process.execPath, [builder, '--win', 'appx', '--x64', '--config', configFile, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
+} else {
+  step(onlyDir ? 'App-Ordner bauen' : 'Installer bauen')
+  const args = onlyDir ? ['--dir'] : ['--win', 'nsis', '--x64']
+  execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
+}
