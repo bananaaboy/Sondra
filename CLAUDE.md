@@ -169,7 +169,7 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   gestartet, Artefakt „Sondra-Store-MSIX“). Das unsignierte Setup lehnt der
   Store ab (Richtlinie 10.2.9), das MSIX signiert er selbst. Die Identität aus
   Partner Center steht in den Repository-Variablen `STORE_IDENTITY_NAME`,
-  `STORE_PUBLISHER`, `STORE_PUBLISHER_NAME` (und `STORE_DISPLAY_NAME`, sonst
+  `STORE_PUBLISHER`, `STORE_PUBLISHER_NAME` (als Variable oder Secret; und `STORE_DISPLAY_NAME`, sonst
   „Sondra Studio“); ohne sie entstehen Testwerte. In der Store-Fassung
   (`process.windowsStore`) sind der eigene Updater und das Nachladen von
   yt-dlp aus: der Store aktualisiert selbst und erlaubt kein nachgeladenes
