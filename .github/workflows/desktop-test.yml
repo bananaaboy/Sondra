@@ -41,8 +41,8 @@ jobs:
           Start-Process -FilePath $setup -ArgumentList '/S' -Wait
 
           $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
-            Where-Object { $_.DisplayName -eq 'Sondra - Multimedia' }
-          if (-not $entry) { throw 'Kein Eintrag "Sondra - Multimedia" in Apps & Features.' }
+            Where-Object { $_.DisplayName -eq 'Sondra Studio' }
+          if (-not $entry) { throw 'Kein Eintrag "Sondra Studio" in Apps & Features.' }
           $entry | Select-Object DisplayName, Publisher, DisplayVersion, InstallLocation, QuietUninstallString | Format-List
           Start-Sleep -Seconds 3
           Get-Process Sondra -ErrorAction SilentlyContinue | Stop-Process -Force

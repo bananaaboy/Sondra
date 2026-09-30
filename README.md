@@ -137,7 +137,7 @@ herunterladen" die Auswahl zwischen Microsoft Store (noch ausgegraut, „Bald
 verfügbar") und Setup. Das Setup installiert für alle Benutzer
 unter „Programme“ (eine UAC-Abfrage), läuft mit `/S` ganz ohne Oberfläche,
 wie es der Microsoft Store verlangt, und zeigt sonst vorher `LIZENZ.txt`. In
-„Apps & Features“ steht es als „Sondra - Multimedia“ von „Lizge“ — beides
+„Apps & Features“ steht es als „Sondra Studio“ von „Lizge“ — beides
 muss mit dem Eintrag im Partner Center übereinstimmen.
 
 `desktop/electron.mjs` öffnet ein Fenster auf `desktop/server.mjs`, der die

@@ -167,7 +167,7 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Store ab (Richtlinie 10.2.9), das MSIX signiert er selbst. Die Identität aus
   Partner Center steht in den Repository-Variablen `STORE_IDENTITY_NAME`,
   `STORE_PUBLISHER`, `STORE_PUBLISHER_NAME` (und `STORE_DISPLAY_NAME`, sonst
-  „Sondra - Multimedia“); ohne sie entstehen Testwerte. In der Store-Fassung
+  „Sondra Studio“); ohne sie entstehen Testwerte. In der Store-Fassung
   (`process.windowsStore`) sind der eigene Updater und das Nachladen von
   yt-dlp aus: der Store aktualisiert selbst und erlaubt kein nachgeladenes
   Programm (10.2.2). yt-dlp wird dort nur benutzt, wenn es schon da ist

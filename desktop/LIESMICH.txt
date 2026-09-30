@@ -31,7 +31,7 @@ Herunterladen von Videoportalen
   bekommen keine Antwort.
 
 Entfernen
-  Einstellungen → Apps → Installierte Apps → Sondra - Multimedia →
+  Einstellungen → Apps → Installierte Apps → Sondra Studio →
   Deinstallieren.
 
 Öffnen mit Sondra

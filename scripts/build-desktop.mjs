@@ -171,7 +171,7 @@ if (forStore) {
     appx: {
       ...identity,
       applicationId: 'Sondra',
-      displayName: process.env.SONDRA_STORE_DISPLAY_NAME || 'Sondra - Multimedia',
+      displayName: process.env.SONDRA_STORE_DISPLAY_NAME || 'Sondra Studio',
       languages: ['de-DE'],
       backgroundColor: 'transparent',
     },
