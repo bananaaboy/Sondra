@@ -582,11 +582,15 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Unschärfe. Links die Wortmarke, rechts drei ruhige Bedienelemente: das
   Dateimenü, „App herunterladen" — als einziges getönt — und ein einzelner
   Themenknopf, der durch System, Hell und Dunkel schaltet. Der Download-Knopf
-  öffnet ein natives `<dialog>` (Schattenstufe, Hintergrund abgedunkelt): der
-  Microsoft Store als ausgegraute Zeile, die bei Hover, Fokus und Antippen
-  „Bald verfügbar" sagt — bewusst `aria-disabled` statt `disabled`, weil ein
-  deaktivierter Knopf in mehreren Browsern gar keinen Hover bekommt —, darunter
-  das Setup (.exe). In der App entfällt er. Den Lokal-Chip („Lokal · 1
+  öffnet ein natives `<dialog>` (Schattenstufe, Hintergrund abgedunkelt, bis
+  760 px breit), überschrieben „Sondra Studio für Windows" mit dem Zeichen auf
+  einer Tintenfläche. Darunter drei getönte Kacheln: Setup (.exe) und
+  Microsoft Store als die zwei grossen nebeneinander — Symbol, Dateiart in
+  Courier, Name in Überschriftgrösse, ein Satz, die Handlung am Fuss —, und
+  „Website als App" schmal über die volle Breite darunter. Die Store-Kachel
+  sagt „Bald verfügbar" als Pille auf der Fläche, nicht erst bei Hover: auf
+  einer Kachel dieser Grösse wirkt ein verstecktes „bald" wie ein Defekt.
+  Unter `sm` stehen die Kacheln untereinander. In der App entfällt er. Den Lokal-Chip („Lokal · 1
   Ausnahme") gibt es seit dem 23.9. nicht mehr; die Ausnahme sagt der
   Downloader selbst, laut.
   „Installieren" und der Suchknopf sind auf Wunsch entfallen; gesucht wird auf

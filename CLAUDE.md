@@ -87,11 +87,14 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte). Den Lokal-Chip
   in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
-  „App herunterladen" mit einem Auswahlfenster: zuerst „Als App aus dem
-  Browser" (Edge/Chrome-Installation über `lib/install.ts` — der einzige Weg,
+  „App herunterladen" mit einem grossen Auswahlfenster „Sondra Studio für
+  Windows": zwei grosse Kacheln nebeneinander, Setup (.exe) und Microsoft
+  Store — die Hauptwege —, darunter eine schmale, volle Breite für „Website
+  als App" (Edge/Chrome-Installation über `lib/install.ts`, der einzige Weg,
   den die intelligente App-Steuerung nicht blockiert, solange das Setup
-  unsigniert ist), dann Microsoft Store ausgegraut mit „Bald verfügbar" bei
-  Hover, dann das Setup; in der App selbst entfällt er. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
+  unsigniert ist). Solange `MICROSOFT_STORE` in `lib/desktop.ts` leer ist,
+  trägt die Store-Kachel „Bald verfügbar" sichtbar auf der Fläche; ist der
+  Eintrag live, wird sie ein Link. In der App selbst entfällt der Knopf. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
   Prämisse der Warnung nicht:** dort startet `desktop/downloader.mjs` einen
   eigenen yt-dlp-Dienst auf 127.0.0.1:9000, und statt der Warnung steht ein
   ruhiger Block auf `panel-soft`, der den Haftungssatz wörtlich behält. Der

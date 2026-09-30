@@ -13,6 +13,13 @@
  */
 export const WINDOWS_SETUP = 'https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe'
 
+/**
+ * Sondra Studio's page in the Microsoft Store, once the listing is live
+ * (`https://apps.microsoft.com/detail/<Store-ID>`). Until then the store tile
+ * says „Bald verfügbar“ instead of linking anywhere.
+ */
+export const MICROSOFT_STORE: string | null = null
+
 /** True inside the desktop app, where offering the desktop app is circular. */
 export const IN_DESKTOP_APP = typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent)
 
