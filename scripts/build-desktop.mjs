@@ -229,10 +229,15 @@ if (forStore) {
         '--win',
         'nsis',
         archFlag,
-        // The arm64 setup is built with NSIS 3.12: with the default 3.0.4 its
-        // installer did not recognise Windows on Arm, unpacked nothing and
-        // still reported success. x64 stays on the version it has shipped with.
+        // The arm64 setup is built with NSIS 3.12, which knows Windows on Arm
+        // natively; x64 stays on the version it has shipped with.
         ...(arm ? ['-c.win.artifactName=Sondra-Setup-arm64-${version}.${ext}', '-c.toolsets.nsis=1.2.1'] : []),
       ]
-  execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
+  // 7-Zip from version 23 on picks an ARM64 branch filter for Arm64 programs
+  // by itself, and the installer's extraction plugin is older than that
+  // filter: it unpacked nothing and the setup still reported success. A
+  // fixed BCJ filter is one every extractor knows; on Arm code it simply
+  // gains little.
+  const env = arm ? { ...process.env, ELECTRON_BUILDER_7Z_FILTER: 'BCJ' } : process.env
+  execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit', env })
 }
