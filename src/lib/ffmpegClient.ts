@@ -30,7 +30,7 @@
  * single-threaded core loads instead, and everything still works, just slower.
  */
 
-import { FFmpeg } from '@ffmpeg/ffmpeg'
+import { FFFSType, FFmpeg } from '@ffmpeg/ffmpeg'
 // `?url` emits each file as a plain asset and hands back its hashed URL — the
 // Emscripten glue and the .wasm must reach the browser untouched, not bundled.
 import coreUrl from '@ffmpeg/core?url'
@@ -415,6 +415,165 @@ async function runFfmpegNow({ input, output, args, signal, consumeInput = false,
       }
     }
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Files straight from disk                                                    */
+/* -------------------------------------------------------------------------- */
+
+const DISK = '/disk'
+
+/** Where a file handed to `runFfmpegOnDisk` appears to FFmpeg. */
+export const diskPath = (name: string) => `${DISK}/${name}`
+
+export interface DiskRunOptions {
+  /** A picked File or any Blob; read by FFmpeg as it goes, never copied whole. */
+  source: Blob
+  /** Name with the right extension, so FFmpeg can tell the container. */
+  name: string
+  /** The argument list, with `input` as the path to read from. */
+  args: (input: string) => string[]
+  output: string[]
+  /** Small extra inputs (a replacement sound track), written into MEMFS. */
+  extraInputs?: Record<string, Uint8Array>
+  signal?: AbortSignal
+  onProgress?: (fraction: number) => void
+}
+
+/**
+ * One invocation on a file that stays where it is.
+ *
+ * `runFfmpeg` writes its inputs into MEMFS first, which for a 500 MB film is
+ * 500 MB of copy in the tab and as much again inside the worker. WORKERFS
+ * instead hands the worker the Blob itself, and FFmpeg reads it in slices as
+ * it demuxes — the way a player reads from disk. Only what is written out
+ * lives in memory.
+ */
+export function runFfmpegOnDisk(options: DiskRunOptions): Promise<RunResult> {
+  return enqueue(() => runOnDiskNow(options))
+}
+
+async function runOnDiskNow({ source, name, args, output, extraInputs = {}, signal, onProgress }: DiskRunOptions): Promise<RunResult> {
+  const ffmpeg = await loadFfmpeg()
+  const logs: string[] = []
+  const stopLogging = onFfmpegLog((line) => {
+    logs.push(line)
+    if (logs.length > 500) logs.shift()
+  })
+  const stopProgress = onProgress ? onFfmpegProgress(onProgress) : () => undefined
+  const abort = () => void unloadFfmpeg()
+  signal?.addEventListener('abort', abort, { once: true })
+  let mounted = false
+  try {
+    await ffmpeg.createDir(DISK).catch(() => undefined)
+    await ffmpeg.mount(FFFSType.WORKERFS, { blobs: [{ name, data: source }] }, DISK)
+    mounted = true
+    for (const [extra, bytes] of Object.entries(extraInputs)) await ffmpeg.writeFile(extra, bytes.slice())
+    let code: number
+    try {
+      code = await ffmpeg.exec(args(diskPath(name)))
+    } catch (failure) {
+      if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+      await unloadFfmpeg().catch(() => undefined)
+      const reason = failure instanceof Error ? failure.message : String(failure)
+      throw new Error(`FFmpeg ist abgestürzt (${reason}).\n${logs.slice(-8).join('\n')}`)
+    }
+    if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+    if (code !== 0) {
+      const tail = logs.slice(-8).join('\n')
+      await unloadFfmpeg().catch(() => undefined)
+      throw new Error(`FFmpeg endete mit Code ${code}.\n${tail}`)
+    }
+    const files: Record<string, Uint8Array> = {}
+    for (const out of output) {
+      const data = await ffmpeg.readFile(out)
+      files[out] = typeof data === 'string' ? new TextEncoder().encode(data) : data
+      await ffmpeg.deleteFile(out).catch(() => undefined)
+    }
+    return { files, logs }
+  } finally {
+    stopLogging()
+    stopProgress()
+    signal?.removeEventListener('abort', abort)
+    if (instance) {
+      if (mounted) await instance.unmount(DISK).catch(() => undefined)
+      for (const out of [...output, ...Object.keys(extraInputs)]) await instance.deleteFile(out).catch(() => undefined)
+    }
+  }
+}
+
+export interface StreamInfo {
+  /** Position among the streams of its type: `0:a:<n>` in a `-map`. */
+  index: number
+  type: 'video' | 'audio' | 'subtitle'
+  codec: string
+  language: string | null
+  title: string | null
+  isDefault: boolean
+}
+
+export interface DiskFacts extends MediaFacts {
+  streams: StreamInfo[]
+}
+
+/**
+ * What a file on disk contains: every stream, not just the first of each.
+ * A film from a disc or a TV recording has several sound tracks and
+ * subtitles, and which of them the browser can play decides what to offer.
+ */
+export function probeDisk(source: Blob, name: string, signal?: AbortSignal): Promise<DiskFacts> {
+  return enqueue(async () => {
+    const ffmpeg = await loadFfmpeg()
+    const logs: string[] = []
+    const stopLogging = onFfmpegLog((line) => logs.push(line))
+    try {
+      await ffmpeg.createDir(DISK).catch(() => undefined)
+      await ffmpeg.mount(FFFSType.WORKERFS, { blobs: [{ name, data: source }] }, DISK)
+      await ffmpeg.exec(['-hide_banner', '-i', `${DISK}/${name}`, '-t', '0.1', '-f', 'null', '-']).catch(() => 1)
+      const text = logs.join('\n')
+      return { ...(signal?.aborted ? EMPTY_FACTS : parseProbe(text)), streams: parseStreams(text) }
+    } catch {
+      return { ...EMPTY_FACTS, streams: [] }
+    } finally {
+      stopLogging()
+      // As after every probe (see probeMediaNow): the core is reloaded rather
+      // than trusted, which also drops the mount.
+      await unloadFfmpeg().catch(() => undefined)
+    }
+  })
+}
+
+/** Every `Stream #0:n` line FFmpeg printed, numbered per type. */
+export function parseStreams(text: string): StreamInfo[] {
+  const streams: StreamInfo[] = []
+  const counts = { video: 0, audio: 0, subtitle: 0 }
+  const lines = text.split('\n')
+  lines.forEach((line, at) => {
+    const match = line.match(/Stream #0:\d+(?:\[0x[0-9a-f]+\])?(?:\((\w+)\))?: (Video|Audio|Subtitle): (\w+)/)
+    if (!match) return
+    const type = match[2].toLowerCase() as StreamInfo['type']
+    // Cover art arrives as a video stream; it is not a picture to play.
+    if (type === 'video' && /attached pic/.test(line)) return
+    // The title, if any, is in the metadata block right under the stream.
+    let title: string | null = null
+    for (let next = at + 1; next < Math.min(lines.length, at + 6); next += 1) {
+      if (/Stream #/.test(lines[next])) break
+      const found = lines[next].match(/^\s+title\s*:\s*(.+)$/)
+      if (found) {
+        title = found[1].trim()
+        break
+      }
+    }
+    streams.push({
+      index: counts[type]++,
+      type,
+      codec: match[3],
+      language: match[1] && match[1] !== 'und' ? match[1] : null,
+      title,
+      isDefault: /\(default\)/.test(line),
+    })
+  })
+  return streams
 }
 
 /**

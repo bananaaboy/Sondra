@@ -3,7 +3,7 @@
 Ein Medienstudio im Browser, das nichts hochlädt. Der Server liefert HTML,
 JavaScript und WebAssembly aus — danach rechnet ausschliesslich der Rechner des
 Besuchers. Live unter [sondra.lizge.ch](https://www.sondra.lizge.ch), als Windows-App über
-die [Releases](https://github.com/bananaaboy/Lizge/releases/latest).
+die [Releases](https://github.com/bananaaboy/Sondra/releases/latest).
 
 Vite 7 · React 19 · TypeScript · Tailwind v4 · zustand · FFmpeg als
 WebAssembly.
@@ -150,7 +150,7 @@ Vercel keinen Browser herunterlädt, den sie nie startet. Die App liefert, was
 die Website ausliefert, ohne Bereitstellungsdateien, Service Worker und
 `sondra-ytdlp.mjs`.
 
-- **Herunterladen:** [Sondra-Setup.exe](https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe)
+- **Herunterladen:** [Sondra-Setup.exe](https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe)
   aus dem neuesten Release. Das Setup ist nicht signiert; Windows fragt beim
   ersten Start nach.
 - **Selbst bauen (Windows):** einmal `npm ci --prefix desktop`, dann

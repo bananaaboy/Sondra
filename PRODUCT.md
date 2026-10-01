@@ -122,8 +122,9 @@ Deshalb steht im Downloader, **welcher Weg geantwortet hat**: das entscheidet
 ## Brand Commitments
 
 - Das Produkt heisst **Sondra**. `sondra.lizge.ch` ist nur die Adresse, unter der es
-  liegt, und bleibt es; der Repository-Name „Lizge" ist Altlast. Überall in der
-  Oberfläche heisst es Sondra.
+  liegt, und bleibt es. Das Repository heisst seit Oktober 2026 auch
+  `bananaaboy/Sondra`; Links zeigen dorthin, nicht mehr auf den alten Namen
+  „Lizge". Überall in der Oberfläche heisst es Sondra.
 - **Der Haftungshinweis beim Downloader ist verbindlich** und muss sichtbar
   bleiben: dass es über einen Proxy läuft und dass dafür nicht gehaftet wird.
 - Vorhandene Assets: `public/favicon.svg`, `public/icon-192.png`,

@@ -33,7 +33,7 @@ jobs:
         env:
           SETUP_URL: ${{ inputs.setup_url }}
         run: |
-          $url = if ($env:SETUP_URL) { $env:SETUP_URL } else { 'https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe' }
+          $url = if ($env:SETUP_URL) { $env:SETUP_URL } else { 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe' }
           Write-Host "Setup: $url"
           $setup = Join-Path $env:RUNNER_TEMP 'Sondra-Setup.exe'
           Invoke-WebRequest -Uri $url -OutFile $setup

@@ -29,6 +29,12 @@ export interface Asset {
   name: string
   /** Raw container bytes, exactly as they arrived. */
   bytes: Uint8Array
+  /**
+   * The file as it was picked, when it came from disk. The video editor plays
+   * and renders from it, so a large film is read where it lies rather than
+   * copied once more for every use. Gone after a restart; `bytes` stays.
+   */
+  source?: Blob
   mime: string
   sizeBytes: number
   kind: AssetKind
