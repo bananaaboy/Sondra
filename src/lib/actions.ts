@@ -52,6 +52,16 @@ export const ACTIONS: ToolAction[] = [
     keywords: ['download', 'youtube', 'url', 'link', 'herunterladen', 'import', 'holen', 'stream'],
   },
 
+  {
+    id: 'screen',
+    panel: 'screen',
+    group: 'video',
+    label: 'Bildschirm aufnehmen',
+    hint: 'Ganzer Bildschirm oder ein Fenster, mit Ton',
+    kinds: [],
+    keywords: ['bildschirm', 'screen', 'recording', 'aufnahme', 'aufnehmen', 'screencast', 'tutorial', 'anleitung', 'fenster', 'capture', 'obs'],
+  },
+
   /* -- the microphone -------------------------------------------------------- */
   {
     id: 'mic-test',
@@ -90,6 +100,17 @@ export const ACTIONS: ToolAction[] = [
     hint: 'Als SRT-Datei, als Spur im Video oder ins Bild gebrannt',
     kinds: ['video'],
     keywords: ['untertitel', 'subtitles', 'srt', 'vtt', 'captions', 'einbrennen', 'burn', 'reels', 'tiktok'],
+  },
+
+  /* -- mixing --------------------------------------------------------------- */
+  {
+    id: 'mix-duck',
+    panel: 'mix',
+    group: 'ton',
+    label: 'Stimme und Musik mischen',
+    hint: 'Die Musik wird leiser, sobald jemand spricht',
+    kinds: ['audio', 'video'],
+    keywords: ['mischen', 'mix', 'ducking', 'absenken', 'podcast', 'hintergrundmusik', 'musik', 'stimme', 'voiceover', 'sprecher'],
   },
 
   /* -- converting ----------------------------------------------------------- */

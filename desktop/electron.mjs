@@ -20,7 +20,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
 
 import { startDownloader } from './downloader.mjs'
 import { offerFile, startServer } from './server.mjs'
@@ -131,6 +131,27 @@ function describeFiles(files) {
     return { name: path.basename(file), size, url: offerFile(file) }
   })
 }
+
+/** The screen or window the page picked for its next getDisplayMedia. */
+let capturePick = null
+
+ipcMain.handle('sondra:capture-sources', async () => {
+  const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } })
+  return sources
+    // Sondra's own window would record itself recording.
+    .filter((source) => !(window && source.id === window.getMediaSourceId()))
+    .map((source) => ({
+      id: source.id,
+      name: source.name,
+      kind: source.id.startsWith('screen:') ? 'screen' : 'window',
+      thumbnail: source.thumbnail.isEmpty() ? null : source.thumbnail.toDataURL(),
+    }))
+})
+
+ipcMain.handle('sondra:capture-pick', (_event, id, audio) => {
+  capturePick = typeof id === 'string' ? { id, audio: Boolean(audio) } : null
+  return true
+})
 
 ipcMain.handle('sondra:take-files', () => {
   const files = waitingFiles
@@ -368,6 +389,34 @@ async function open() {
   // page, never for anything it might end up framing.
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback, details) => {
     callback(Boolean(details.requestingUrl?.startsWith(origin)))
+  })
+
+  // Screen recording. A browser shows its own picker for getDisplayMedia;
+  // Electron has none, so the page lists the screens and windows through the
+  // preload, the user picks one there, and this handler hands exactly that
+  // source over when the page asks. Nothing is chosen on the page's behalf:
+  // without a pick the request is refused.
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    const pick = capturePick
+    capturePick = null
+    try {
+      if (!pick || !request.securityOrigin?.startsWith(origin)) throw new Error('keine Quelle gewählt')
+      const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } })
+      const source = sources.find((entry) => entry.id === pick.id)
+      if (!source) throw new Error('Quelle nicht mehr da')
+      log(`Bildschirmaufnahme: ${source.name}${pick.audio ? ' · mit Ton des Rechners' : ''}`)
+      // Loopback is the whole system's sound; Windows has no per-window audio.
+      callback(pick.audio && request.audioRequested ? { video: source, audio: 'loopback' } : { video: source })
+    } catch (failure) {
+      log(`Bildschirmaufnahme abgelehnt: ${failure?.message ?? failure}`)
+      // An empty answer is a refusal; some Electron versions throw on it
+      // after refusing, which is the same outcome.
+      try {
+        callback({})
+      } catch {
+        /* refused either way */
+      }
+    }
   })
 
   if (!window) return // closed while starting

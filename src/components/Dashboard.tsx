@@ -28,6 +28,8 @@ const TOOLS = {
   harmony: () => import('./panels/HarmonyPanel').then((m) => ({ default: m.HarmonyPanel })),
   mic: () => import('./panels/MicPanel').then((m) => ({ default: m.MicPanel })),
   subtitles: () => import('./panels/SubtitlesPanel').then((m) => ({ default: m.SubtitlesPanel })),
+  screen: () => import('./panels/ScreenPanel').then((m) => ({ default: m.ScreenPanel })),
+  mix: () => import('./panels/MixPanel').then((m) => ({ default: m.MixPanel })),
 } satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType }>>
 
 const DownloaderPanel = lazy(TOOLS.downloader)
@@ -41,6 +43,8 @@ const SamplerPanel = lazy(TOOLS.sampler)
 const HarmonyPanel = lazy(TOOLS.harmony)
 const MicPanel = lazy(TOOLS.mic)
 const SubtitlesPanel = lazy(TOOLS.subtitles)
+const ScreenPanel = lazy(TOOLS.screen)
+const MixPanel = lazy(TOOLS.mix)
 
 /** Fetches every tool's chunk once the page is idle. */
 function usePrefetchTools() {
@@ -298,7 +302,9 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     panel === 'video' ||
     panel === 'images' ||
     panel === 'audio' ||
-    panel === 'mic'
+    panel === 'mic' ||
+    panel === 'screen' ||
+    panel === 'mix'
 
   return (
     <section id="studio" className="shell flex flex-col gap-[16px] pb-[16px] pt-[24px] sm:pt-[32px]">
@@ -323,6 +329,8 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
             {panel === 'harmony' ? <HarmonyPanel /> : null}
             {panel === 'mic' ? <MicPanel /> : null}
             {panel === 'subtitles' ? <SubtitlesPanel /> : null}
+            {panel === 'screen' ? <ScreenPanel /> : null}
+            {panel === 'mix' ? <MixPanel /> : null}
           </Suspense>
         )}
       </div>
