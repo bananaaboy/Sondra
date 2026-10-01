@@ -80,6 +80,13 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M2 3.2h12v9.6H2zM2 10l3.4-3.2 3 2.8 2.2-2 3.4 3.2M5.6 6.2a.9.9 0 100-1.8.9.9 0 000 1.8z" />,
   },
   {
+    id: 'mix',
+    slug: 'mischen',
+    label: 'Mischen',
+    summary: 'Stimme und Musik zusammen, die Musik weicht beim Sprechen',
+    icon: <path d="M4 2.6v10.8M8 2.6v10.8M12 2.6v10.8M2.6 10h2.8M6.6 5.4h2.8M10.6 8.4h2.8" />,
+  },
+  {
     id: 'stems',
     slug: 'spuren-trennen',
     label: 'Spuren trennen',
@@ -113,6 +120,13 @@ export const PANELS: PanelMeta[] = [
     label: 'Untertitel',
     summary: 'Gesprochenes als Text, SRT-Datei oder direkt im Video',
     icon: <path d="M2 3.4h12v9.2H2zM4.4 8.2h3.2M9 8.2h2.6M4.4 10.4h1.8M7.6 10.4h4" />,
+  },
+  {
+    id: 'screen',
+    slug: 'bildschirm',
+    label: 'Bildschirm',
+    summary: 'Bildschirm oder ein Fenster mit Ton als Video aufnehmen',
+    icon: <path d="M1.8 2.8h12.4v8.4H1.8zM5.6 13.6h4.8M8 11.2v2.4M8 8.4a1.4 1.4 0 100-2.8 1.4 1.4 0 000 2.8z" />,
   },
   {
     id: 'mic',

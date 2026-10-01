@@ -60,6 +60,8 @@ export type PanelId =
   | 'harmony'
   | 'mic'
   | 'subtitles'
+  | 'screen'
+  | 'mix'
 
 interface SessionState {
   assets: Asset[]

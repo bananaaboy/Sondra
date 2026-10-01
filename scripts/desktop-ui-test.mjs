@@ -431,6 +431,27 @@ try {
     return `geoeffnet.wav in der Sitzung (${before} → ${await sessionCount()} Dateien)`
   })
 
+  await step('Bildschirm: drei Sekunden mit Ton des Rechners', async () => {
+    // The app's own way: sources listed through the preload, one picked,
+    // handed over by the display-media handler, loopback sound if the
+    // machine has an output device.
+    const before = await sessionCount()
+    await go('bildschirm')
+    await waitForText(/Bildschirme/, 20_000)
+    const sound = page.getByRole('switch', { name: /Ton des Rechners/ })
+    if ((await sound.getAttribute('aria-checked')) !== 'true') await sound.click()
+    await page.getByRole('button', { name: 'Aufnahme starten' }).click()
+    await waitForText(/Aufnahme \d+:\d\d/, 20_000)
+    await page.waitForTimeout(3500)
+    await page.getByRole('button', { name: 'Aufnahme beenden' }).click()
+    await waitForText(/Bildschirm [\d-]+ [\d-]+\.webm/, 60_000)
+    const after = await sessionCount()
+    if (after !== before + 1) throw new Error(`${before} → ${after} Dateien, erwartet +1.`)
+    const text = await mainText()
+    const size = text.match(/\.webm · ([\d.,]+ [KMG]?B)/)?.[1] ?? '?'
+    return `Aufnahme in der Sitzung (${size})${/Ton des Rechners ist nicht dabei/.test(text) ? ', ohne Ton des Rechners' : ''}`
+  })
+
   await step('Untertitel: Sprache erkennen, SRT', async () => {
     // Needs the network twice: the sample, and the model on first use.
     // SONDRA_UI_OHNE_NETZ skips it where Chromium cannot reach Hugging Face.

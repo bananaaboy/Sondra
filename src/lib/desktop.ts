@@ -43,11 +43,24 @@ export interface OpenedFile {
   url: string
 }
 
+/** A screen or window the app can record (desktop/electron.mjs). */
+export interface CaptureSource {
+  id: string
+  name: string
+  kind: 'screen' | 'window'
+  /** A PNG data URL, or null when Windows gave no picture. */
+  thumbnail: string | null
+}
+
 /** What the app's preload hands the page (desktop/preload.cjs); absent elsewhere. */
 export interface AppBridge {
   /** Missing in apps older than 1.0.12. */
   takeOpenedFiles?: () => Promise<OpenedFile[]>
   onOpenedFiles?: (callback: (files: OpenedFile[]) => void) => () => void
+  /** Missing in apps older than 1.0.13. */
+  captureSources?: () => Promise<CaptureSource[]>
+  /** Sets the source the next getDisplayMedia gets; `audio` adds the system's sound. */
+  pickCaptureSource?: (id: string, audio: boolean) => Promise<boolean>
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   installUpdate: () => Promise<boolean>
