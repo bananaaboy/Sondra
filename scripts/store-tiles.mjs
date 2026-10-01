@@ -2,7 +2,16 @@
  * The tile images an MSIX package needs, made from Sondra's 512 px icon.
  *
  * A package without them gets Electron's placeholder tiles, and the Store
- * shows those. Plain Node — zlib for the PNG data, an area average for the
+ * shows those.
+ *
+ * Two kinds. The plated ones (Start tiles, the list icon on Windows 10) are
+ * drawn full-bleed: the mark in white on Sondra's green, every pixel opaque.
+ * The icon itself has transparent rounded corners, and on a plate Windows
+ * fills those with the user's accent colour — on one machine that was a red
+ * rim round a green square. The unplated ones (taskbar, Start on Windows 11)
+ * are the icon as it is, rounded, because nothing is drawn behind them.
+ *
+ * Plain Node — zlib for the PNG data, an area average for the
  * scaling — because the one image library around (sharp) is a native module
  * this project replaces with an empty package.
  *
@@ -122,23 +131,67 @@ function scale(source, size) {
   return { width: size, height: size, pixels: out }
 }
 
-/** `image` centred on a transparent canvas of width × height. */
-function centre(image, width, height) {
+/** Sondra's green: `ink` in the light theme. */
+const INK = [0x0f, 0x3e, 0x1c]
+
+/** The five bars of the mark, in its 32-unit viewBox: x, y, width; all 3.3 high. */
+const BARS = [
+  [9, 5.35, 13.99],
+  [7.73, 9.85, 20.95],
+  [4.6, 14.35, 22.8],
+  [3.33, 18.85, 20.95],
+  [9, 23.35, 13.99],
+]
+
+/**
+ * The mark in white on full-bleed green, `share` of the shorter side high,
+ * centred. Each bar is a capsule; coverage is sampled 4 × 4 per pixel.
+ */
+function drawMark(width, height, share) {
   const pixels = Buffer.alloc(width * height * 4)
-  const left = Math.floor((width - image.width) / 2)
-  const top = Math.floor((height - image.height) / 2)
-  for (let y = 0; y < image.height; y += 1) {
-    image.pixels.copy(pixels, ((top + y) * width + left) * 4, y * image.width * 4, (y + 1) * image.width * 4)
+  const unit = (Math.min(width, height) * share) / 32
+  const left = (width - 32 * unit) / 2
+  const top = (height - 32 * unit) / 2
+  const radius = 1.65
+  const inside = (u, v) =>
+    BARS.some(([x, y, w]) => {
+      const cx = Math.max(x + radius, Math.min(x + w - radius, u))
+      return (u - cx) ** 2 + (v - (y + radius)) ** 2 <= radius * radius
+    })
+  for (let py = 0; py < height; py += 1) {
+    for (let px = 0; px < width; px += 1) {
+      let hits = 0
+      for (let sy = 0; sy < 4; sy += 1) {
+        for (let sx = 0; sx < 4; sx += 1) {
+          if (inside((px + (sx + 0.5) / 4 - left) / unit, (py + (sy + 0.5) / 4 - top) / unit)) hits += 1
+        }
+      }
+      const cover = hits / 16
+      const at = (py * width + px) * 4
+      for (let c = 0; c < 3; c += 1) pixels[at + c] = Math.round(INK[c] + (255 - INK[c]) * cover)
+      pixels[at + 3] = 255
+    }
   }
   return { width, height, pixels }
 }
 
-/** Writes the four tiles electron-builder looks for in `<buildResources>/appx`. */
+/** The sizes Windows asks for in the taskbar, Start and Explorer. */
+const TARGET_SIZES = [16, 24, 32, 44, 48, 256]
+
+/** Writes the tiles electron-builder looks for in `<buildResources>/appx`. */
 export function makeStoreTiles(icon, folder) {
   const source = readPng(icon)
+  fs.rmSync(folder, { recursive: true, force: true })
   fs.mkdirSync(folder, { recursive: true })
-  writePng(path.join(folder, 'StoreLogo.png'), scale(source, 50))
-  writePng(path.join(folder, 'Square44x44Logo.png'), scale(source, 44))
-  writePng(path.join(folder, 'Square150x150Logo.png'), centre(scale(source, 120), 150, 150))
-  writePng(path.join(folder, 'Wide310x150Logo.png'), centre(scale(source, 120), 310, 150))
+  writePng(path.join(folder, 'StoreLogo.png'), drawMark(50, 50, 0.7))
+  writePng(path.join(folder, 'Square44x44Logo.png'), drawMark(44, 44, 0.72))
+  writePng(path.join(folder, 'Square150x150Logo.png'), drawMark(150, 150, 0.5))
+  writePng(path.join(folder, 'Wide310x150Logo.png'), drawMark(310, 150, 0.5))
+  // Qualified variants make electron-builder index them in resources.pri.
+  for (const size of TARGET_SIZES) {
+    writePng(path.join(folder, `Square44x44Logo.targetsize-${size}.png`), drawMark(size, size, 0.72))
+    const unplated = scale(source, size)
+    writePng(path.join(folder, `Square44x44Logo.targetsize-${size}_altform-unplated.png`), unplated)
+    writePng(path.join(folder, `Square44x44Logo.targetsize-${size}_altform-lightunplated.png`), unplated)
+  }
 }
