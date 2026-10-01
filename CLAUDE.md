@@ -92,9 +92,9 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Store — die Hauptwege —, darunter eine schmale, volle Breite für „Website
   als App" (Edge/Chrome-Installation über `lib/install.ts`, der einzige Weg,
   den die intelligente App-Steuerung nicht blockiert, solange das Setup
-  unsigniert ist). Solange `MICROSOFT_STORE` in `lib/desktop.ts` leer ist,
-  trägt die Store-Kachel „Bald verfügbar" sichtbar auf der Fläche; ist der
-  Eintrag live, wird sie ein Link. In der App selbst entfällt der Knopf. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
+  unsigniert ist). Die Store-Kachel ist ein Link auf den Eintrag
+  (`MICROSOFT_STORE` in `lib/desktop.ts`, Store-ID 9P0JXR5GNSMG, live seit
+  1.10.2026); ohne ihn trüge sie „Bald verfügbar" sichtbar auf der Fläche. In der App selbst entfällt der Knopf. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
   Prämisse der Warnung nicht:** dort startet `desktop/downloader.mjs` einen
   eigenen yt-dlp-Dienst auf 127.0.0.1:9000, und statt der Warnung steht ein
   ruhiger Block auf `panel-soft`, der den Haftungssatz wörtlich behält. Der

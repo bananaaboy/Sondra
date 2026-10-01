@@ -135,8 +135,8 @@ steht im Panel, bevor man etwas eintippt.
 Sondra gibt es auch als installierte Windows-App: eigenes Fenster statt
 Browser, Eintrag im Startmenü, Verknüpfung auf dem Desktop, Deinstallation
 über die Windows-Einstellungen. Oben auf der Website öffnet „App
-herunterladen" die Auswahl zwischen Microsoft Store (noch ausgegraut, „Bald
-verfügbar") und Setup. Das Setup installiert für alle Benutzer
+herunterladen" die Auswahl zwischen
+[Microsoft Store](https://apps.microsoft.com/detail/9P0JXR5GNSMG) und Setup. Das Setup installiert für alle Benutzer
 unter „Programme“ (eine UAC-Abfrage), läuft mit `/S` ganz ohne Oberfläche,
 wie es der Microsoft Store verlangt, und zeigt sonst vorher `LIZENZ.txt`. In
 „Apps & Features“ steht es als „Sondra Studio“ von „Lizge“ — beides

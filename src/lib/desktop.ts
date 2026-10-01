@@ -37,11 +37,11 @@ export async function onWindowsArm(): Promise<boolean> {
 }
 
 /**
- * Sondra Studio's page in the Microsoft Store, once the listing is live
- * (`https://apps.microsoft.com/detail/<Store-ID>`). Until then the store tile
- * says „Bald verfügbar“ instead of linking anywhere.
+ * Sondra Studio's page in the Microsoft Store (Store-ID 9P0JXR5GNSMG). Without
+ * language or tracking parameters: the page picks the visitor's language
+ * itself. Set to null, the store tile says „Bald verfügbar“ instead.
  */
-export const MICROSOFT_STORE: string | null = null
+export const MICROSOFT_STORE: string | null = 'https://apps.microsoft.com/detail/9P0JXR5GNSMG'
 
 /** True inside the desktop app, where offering the desktop app is circular. */
 export const IN_DESKTOP_APP = typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent)
