@@ -74,12 +74,22 @@ jobs:
         run: |
           $setup = Get-ChildItem release -Filter 'Sondra-Setup-*.exe' | Select-Object -First 1
           if (-not $setup) { throw 'Kein Setup gebaut.' }
-          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          $installer = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          Write-Host "Setup beendet mit Code $($installer.ExitCode)"
 
           $app = Join-Path $env:ProgramFiles 'Sondra\Sondra.exe'
           if (-not (Test-Path $app)) {
-            $found = Get-ChildItem 'C:\Program Files*' -Filter Sondra.exe -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object -First 1
-            throw "Nicht installiert: $app fehlt.$(if ($found) { " Liegt stattdessen unter $($found.FullName)." })"
+            # Where it went, if anywhere: every usual program folder, and what
+            # the setup wrote into the registry, in both registry views.
+            $roots = @('C:\Program Files', 'C:\Program Files (x86)', 'C:\Program Files (Arm)', (Join-Path $env:LOCALAPPDATA 'Programs')) | Where-Object { Test-Path $_ }
+            foreach ($root in $roots) {
+              Get-ChildItem -LiteralPath $root -Filter Sondra.exe -Recurse -Depth 3 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "Gefunden: $($_.FullName)" }
+            }
+            $keys = @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')
+            Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'Sondra*' } |
+              Select-Object PSPath, DisplayName, InstallLocation, DisplayVersion | Format-List
+            Get-ChildItem $env:TEMP -Filter 'ns*.tmp' -ErrorAction SilentlyContinue | Select-Object -First 5 | Format-Table Name, LastWriteTime
+            throw "Nicht installiert: $app fehlt (Setup-Code $($installer.ExitCode))."
           }
           # The machine type in the PE header: the build is what it says it is.
           $bytes = [System.IO.File]::ReadAllBytes($app)
