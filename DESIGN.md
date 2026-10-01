@@ -592,8 +592,9 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Setup-Kachel ist die eine Fläche in Tinte: die fünf Balken des Zeichens
   liegen riesig und blass darauf, gleiten beim Öffnen nacheinander herein
   (`bar-in`, der eine Bewegungsmoment des Fensters) und rücken bei Hover
-  nach links. Die Store-Kachel steht auf `panel-strong` und sagt „Bald
-  verfügbar" als Pille auf der Fläche, nicht erst bei Hover. Unter `md`
+  nach links. Die Store-Kachel steht auf `panel-strong` und ist der
+  Link zum Store-Eintrag; ohne Eintrag sagt sie „Bald verfügbar" als Pille
+  auf der Fläche, nicht erst bei Hover. Unter `md`
   stehen die Kacheln untereinander. In der App entfällt er. Den Lokal-Chip („Lokal · 1
   Ausnahme") gibt es seit dem 23.9. nicht mehr; die Ausnahme sagt der
   Downloader selbst, laut.

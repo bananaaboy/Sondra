@@ -8,9 +8,9 @@
  *
  * Three ways, weighted as asked: the setup and the Microsoft Store are the two
  * large tiles side by side, the website installed as an app is the narrow one
- * underneath. The store tile stays in place while the listing is not live and
- * says „Bald verfügbar" on its face — on a tile this size a hover-only hint
- * reads as broken.
+ * underneath. The store tile links to the listing; without one it stays in
+ * place and says „Bald verfügbar" on its face — on a tile this size a
+ * hover-only hint reads as broken.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
