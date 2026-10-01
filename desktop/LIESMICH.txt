@@ -1,9 +1,10 @@
 SONDRA FÜR WINDOWS
 
 Installieren
-  Sondra-Setup-<Version>.exe doppelklicken, die Windows-Abfrage bestätigen,
+  Sondra-Setup-<Version>.exe doppelklicken (auf Rechnern mit
+  Arm-Prozessor, etwa Snapdragon: Sondra-Setup-arm64-<Version>.exe), die Windows-Abfrage bestätigen,
   Lizenz bestätigen, Ordner wählen, fertig. Sondra installiert sich für alle
-  Benutzer dieses Rechners unter „Programme“. Danach steht Sondra im
+  Benutzer dieses Rechners unter „Programme“. Danach steht Sondra Studio im
   Startmenü und auf dem Desktop.
 
 Stille Installation
@@ -12,6 +13,12 @@ Stille Installation
 Starten
   Sondra öffnet sich in einem eigenen Fenster, ohne Browser. Fenster
   schliessen beendet Sondra.
+
+Bildschirm aufnehmen
+  Unter „Bildschirm“ einen Bildschirm oder ein Fenster aus der Liste wählen
+  und „Aufnahme starten“. Mit „Ton des Rechners“ wird alles aufgenommen, was
+  Windows abspielt (für einzelne Fenster gibt Windows keinen eigenen Ton).
+  Die Aufnahme bleibt auf diesem Rechner.
 
 Windows-SmartScreen
   Das Setup ist nicht signiert. Beim ersten Start kann Windows „Der Computer

@@ -13,6 +13,29 @@
  */
 export const WINDOWS_SETUP = 'https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe'
 
+/** The same for Windows on Arm (from 1.0.13 on). */
+export const WINDOWS_SETUP_ARM64 = 'https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup-arm64.exe'
+
+type ArchNavigator = Navigator & {
+  userAgentData?: { platform?: string; getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }> }
+}
+
+/**
+ * True on Windows on Arm, as far as the browser says. Chromium browsers
+ * answer through client hints; others leave it unknown, and the x64 setup
+ * (which runs emulated there) stays the offer.
+ */
+export async function onWindowsArm(): Promise<boolean> {
+  const data = (navigator as ArchNavigator).userAgentData
+  if (!data?.getHighEntropyValues || data.platform !== 'Windows') return false
+  try {
+    const { architecture } = await data.getHighEntropyValues(['architecture'])
+    return architecture === 'arm'
+  } catch {
+    return false
+  }
+}
+
 /**
  * Sondra Studio's page in the Microsoft Store, once the listing is live
  * (`https://apps.microsoft.com/detail/<Store-ID>`). Until then the store tile

@@ -51,11 +51,16 @@
 
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei" "" "Mediendatei (Sondra)"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei\DefaultIcon" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
-  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei\shell\open" "FriendlyAppName" "Sondra"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei\shell\open" "FriendlyAppName" "Sondra Studio"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
-  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}" "FriendlyAppName" "Sondra"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}" "FriendlyAppName" "Sondra Studio"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
   !insertmacro sondraEachExtension sondraOpenWith
+  ; Up to 1.0.12 the shortcuts were called "Sondra". An update keeps the old
+  ; ones (so pins survive a version change), which would leave both names in
+  ; the Start menu; the old ones go.
+  Delete "$SMPROGRAMS\Sondra.lnk"
+  Delete "$DESKTOP\Sondra.lnk"
   ; Tell the Explorer, so the menu has Sondra without a sign-out.
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 !macroend
