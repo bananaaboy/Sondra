@@ -46,6 +46,26 @@
   !insertmacro ${MACRO} ".midi"
 !macroend
 
+; electron-builder picks "Program Files" for a 64-bit build only when it is
+; x64; an arm64-only setup would land in "Program Files (x86)", where 32-bit
+; programs live. The documented way round it: offer the right folder as if a
+; previous install had left it there — unless one really did.
+; Not while electron-builder runs the installer on the build machine to
+; write out the uninstaller (BUILD_UNINSTALLER): that is no installation.
+!macro preInit
+  !ifdef APP_ARM64
+  !ifndef APP_64
+  !ifndef BUILD_UNINSTALLER
+    SetRegView 64
+    ReadRegStr $0 HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
+    ${If} $0 == ""
+      WriteRegExpandStr HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation "$PROGRAMFILES64\${APP_FILENAME}"
+    ${EndIf}
+  !endif
+  !endif
+  !endif
+!macroend
+
 !macro customInstall
   WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" "InstallLocation" "$INSTDIR"
 
