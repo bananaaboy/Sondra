@@ -194,7 +194,9 @@ if (forStore) {
       applicationId: 'Sondra',
       displayName: process.env.SONDRA_STORE_DISPLAY_NAME || 'Sondra Studio',
       languages: ['de-DE'],
-      backgroundColor: 'transparent',
+      // The tiles are opaque green; a transparent plate would let Windows
+      // paint the user's accent colour round the edges.
+      backgroundColor: '#0f3e1c',
     },
     // „Öffnen mit“, the MSIX way: the package declares what it can open and
     // Windows lists it, without it becoming anyone's default.
