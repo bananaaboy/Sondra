@@ -225,6 +225,14 @@ if (forStore) {
   step(onlyDir ? 'App-Ordner bauen' : 'Installer bauen')
   const args = onlyDir
     ? ['--dir']
-    : ['--win', 'nsis', archFlag, ...(arm ? ['-c.win.artifactName=Sondra-Setup-arm64-${version}.${ext}'] : [])]
+    : [
+        '--win',
+        'nsis',
+        archFlag,
+        // The arm64 setup is built with NSIS 3.12: with the default 3.0.4 its
+        // installer did not recognise Windows on Arm, unpacked nothing and
+        // still reported success. x64 stays on the version it has shipped with.
+        ...(arm ? ['-c.win.artifactName=Sondra-Setup-arm64-${version}.${ext}', '-c.toolsets.nsis=1.2.1'] : []),
+      ]
   execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
 }
