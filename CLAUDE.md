@@ -176,6 +176,17 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Programm (10.2.2). yt-dlp wird dort nur benutzt, wenn es schon da ist
   (`winget install yt-dlp.yt-dlp`), und die Fehlermeldung sagt genau das.
   Kacheln macht `scripts/store-tiles.mjs` aus `icon-512.png`.
+- **Video-Editor: grosse Dateien und fremde Formate.** Eine gewählte Datei
+  bleibt als `asset.source` (der File) an der Sitzung; die Vorschau spielt
+  direkt von dort, und FFmpeg liest sie über WORKERFS
+  (`runFfmpegOnDisk`, `probeDisk`), statt sie erst in den Speicher zu
+  kopieren. Spielt der Browser die Datei nicht (AVI, MPEG-4, H.265 in
+  Firefox) oder ohne Ton (AC-3/DTS im MKV), macht `lib/playable.ts` eine
+  Vorschau: umpacken, nur den Ton wandeln, oder klein neu rechnen — so wenig
+  wie nötig, mit Fortschritt auf der Bühne und „Ohne Vorschau weiter".
+  Geschnitten wird immer das Original. **libopus in Stereo stürzt in diesem
+  FFmpeg-Build ab** (gemessen, auch unter Node; der Tab stirbt) — für
+  Vorschauen Vorbis oder AAC.
 - **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
   Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
   über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,

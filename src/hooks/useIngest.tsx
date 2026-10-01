@@ -46,6 +46,7 @@ export function useIngestFiles() {
           addAsset({
             name: file.name || 'eingefügt',
             bytes,
+            source: file,
             mime: file.type || 'application/octet-stream',
             sizeBytes: bytes.byteLength,
             kind: kindFromMime(file.type, file.name),

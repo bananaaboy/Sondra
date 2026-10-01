@@ -11,10 +11,10 @@
  * Desktop workflow uploads the installer under this fixed name as well as
  * under its versioned one.
  */
-export const WINDOWS_SETUP = 'https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe'
+export const WINDOWS_SETUP = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe'
 
 /** The same for Windows on Arm (from 1.0.13 on). */
-export const WINDOWS_SETUP_ARM64 = 'https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup-arm64.exe'
+export const WINDOWS_SETUP_ARM64 = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup-arm64.exe'
 
 type ArchNavigator = Navigator & {
   userAgentData?: { platform?: string; getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }> }
