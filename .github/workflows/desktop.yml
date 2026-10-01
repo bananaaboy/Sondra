@@ -21,7 +21,8 @@ on:
     tags: ['v*']
     paths:
       - desktop/**
-      - scripts/build-desktop.mjs
+      # All of them: the build, the tiles, the UI test, the update merge.
+      - scripts/**
       - api/**
       - src/**
       - public/**
