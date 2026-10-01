@@ -151,15 +151,34 @@ async function dragAcross(locator, from, to) {
 
 try {
   await waitForDevtools()
-  browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`)
-  for (let i = 0; i < 60 && !page; i += 1) {
-    page = browser
-      .contexts()
-      .flatMap((context) => context.pages())
-      .find((candidate) => candidate.url().startsWith('http://127.0.0.1'))
+  // The window's page, by what the DevTools port itself lists. Connecting
+  // before the page exists can leave Playwright without it on a slower
+  // machine (seen on Windows on Arm), so the connection is made once the
+  // page is listed, and made again if Playwright still does not show it.
+  const listed = async () => {
+    try {
+      const targets = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()
+      return targets.filter((target) => target.type === 'page').map((target) => target.url)
+    } catch {
+      return []
+    }
+  }
+  let seen = []
+  for (let i = 0; i < 120 && !page; i += 1) {
+    seen = await listed()
+    if (seen.some((url) => url.startsWith('http://127.0.0.1'))) {
+      if (!browser || i % 10 === 0) {
+        await browser?.close().catch(() => {})
+        browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`)
+      }
+      page = browser
+        .contexts()
+        .flatMap((context) => context.pages())
+        .find((candidate) => candidate.url().startsWith('http://127.0.0.1'))
+    }
     if (!page) await new Promise((resolve) => setTimeout(resolve, 500))
   }
-  if (!page) throw new Error('Kein Fenster mit der Oberfläche gefunden.')
+  if (!page) throw new Error(`Kein Fenster mit der Oberfläche gefunden (DevTools zeigt: ${seen.join(', ') || 'keine Seite'}).`)
   await page.setViewportSize({ width: 1280, height: 900 }).catch(() => {})
   await page.waitForLoadState('domcontentloaded')
   await page.waitForTimeout(1500)
