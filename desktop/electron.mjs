@@ -86,7 +86,7 @@ const escapeHtml = (text) =>
 function failurePage(reason, retryUrl) {
   const dark = nativeTheme.shouldUseDarkColors
   const [ground, ink, prose] = dark ? ['#090d0b', '#c9e3cc', '#dfe6e0'] : ['#f4f3ee', '#0f3e1c', '#1b231d']
-  const html = `<!doctype html><html lang="de"><meta charset="utf-8"><title>Sondra</title>
+  const html = `<!doctype html><html lang="de"><meta charset="utf-8"><title>Sondra Studio</title>
 <body style="margin:0;background:${ground};color:${prose};font:16px/1.55 system-ui,sans-serif">
 <main style="max-width:560px;padding:64px 32px">
 <h1 style="color:${ink};font-size:24px;margin:0 0 12px">Sondra konnte die Oberfläche nicht laden</h1>
@@ -251,7 +251,7 @@ const questions = {
     askOnce(
       {
         type: 'question',
-        title: 'Sondra',
+        title: 'Sondra Studio',
         message: 'yt-dlp laden?',
         detail:
           'Zum Herunterladen von Videoportalen braucht Sondra yt-dlp, ein freies Programm ' +
@@ -271,7 +271,7 @@ const questions = {
     ANSWER ? Promise.resolve(null) : askOnce(
       {
         type: 'question',
-        title: 'Sondra',
+        title: 'Sondra Studio',
         message: 'YouTube verlangt für dieses Video eine Anmeldung.',
         detail:
           'Sondra kann die Anmeldung aus einem Browser auf diesem Rechner übernehmen, in dem Sie ' +
@@ -306,7 +306,7 @@ async function open() {
   // that hung left an invisible Sondra running, and every later start handed
   // over to it and ended — which looked like the app opening nothing.
   window = new BrowserWindow({
-    title: 'Sondra',
+    title: 'Sondra Studio',
     width: 1280,
     height: 860,
     minWidth: 360,
@@ -337,7 +337,8 @@ async function open() {
     channel: IN_STORE ? 'store' : 'setup',
   })
 
-  // The page title is written for a browser tab; the window is just "Sondra".
+  // The page title is written for a browser tab; the window is "Sondra
+  // Studio", as in the Store and the Start menu.
   window.on('page-title-updated', (event) => event.preventDefault())
   window.webContents.on('did-finish-load', () => log(`Geladen: ${window?.webContents.getURL().slice(0, 60)}`))
   window.on('closed', () => {

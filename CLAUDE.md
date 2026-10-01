@@ -176,6 +176,20 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Programm (10.2.2). yt-dlp wird dort nur benutzt, wenn es schon da ist
   (`winget install yt-dlp.yt-dlp`), und die Fehlermeldung sagt genau das.
   Kacheln macht `scripts/store-tiles.mjs` aus `icon-512.png`.
+- **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
+  Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
+  über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,
+  `pickCaptureSource` merkt sich die Wahl, und der
+  `setDisplayMediaRequestHandler` in `electron.mjs` gibt genau diese Quelle
+  heraus; ohne Wahl lehnt er ab. Ton des Rechners ist Loopback (ganzer
+  Rechner). MediaRecorder-WebM wird mit FFmpeg per Stream-Kopie nachgearbeitet,
+  sonst fehlen Dauer und Index.
+- **Arm64**: `npm run build:desktop -- --arm64` (und `--store --arm64`). Der
+  Workflow baut x64 auf `windows-latest` und arm64 auf `windows-11-arm`, beide
+  mit denselben Prüfungen; der Release-Job legt beide Setups ins Release und
+  führt die `latest.yml` zusammen (`scripts/merge-update-info.mjs`, x64
+  zuerst — electron-updater nimmt die Datei mit der eigenen Architektur im
+  Namen, sonst die erste).
 - `npm run build:desktop` baut die Windows-App (Electron, NSIS-Setup nach
   `release/`); vorher einmal `npm ci --prefix desktop`. Quelle in `desktop/`,
   Electron steht bewusst nur in `desktop/package.json`. `release/` wird nicht

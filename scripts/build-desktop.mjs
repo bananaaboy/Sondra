@@ -5,6 +5,12 @@
  *   npm run build:desktop -- --dir   →   release/<platform>-unpacked/        (any OS, for testing)
  *   npm run build:desktop -- --store →   release/Sondra-Store-<version>.appx (on Windows)
  *
+ * `--arm64` builds either for Windows on Arm instead: Sondra-Setup-arm64-…
+ * and Sondra-Store-arm64-…. The page, FFmpeg and the models are WebAssembly
+ * and the same for both; only Electron differs. One latest.yml lists both
+ * setups (the workflow merges them, x64 first), and the updater picks the
+ * one whose name carries its own architecture.
+ *
  * `--store` builds the Microsoft Store package: MSIX (electron-builder's
  * „appx“ target), which the Store signs and hosts itself. The setup cannot go
  * to the Store unsigned (policy 10.2.9); the package can. Its identity comes
@@ -43,6 +49,9 @@ const RESOURCES = path.join(DESKTOP, '.build')
 const SITE = path.join(DESKTOP, '.site')
 const onlyDir = process.argv.includes('--dir')
 const forStore = process.argv.includes('--store')
+const arm = process.argv.includes('--arm64')
+const archFlag = arm ? '--arm64' : '--x64'
+const archTag = arm ? '-arm64' : ''
 
 /**
  * Not part of the app: deployment config, the yt-dlp bridge, and the service
@@ -188,7 +197,7 @@ if (forStore) {
   const own = JSON.parse(fs.readFileSync(path.join(DESKTOP, 'package.json'), 'utf8')).build
   const config = {
     ...own,
-    win: { ...own.win, target: [{ target: 'appx', arch: ['x64'] }], artifactName: 'Sondra-Store-${version}.${ext}' },
+    win: { ...own.win, target: [{ target: 'appx', arch: [arm ? 'arm64' : 'x64'] }], artifactName: `Sondra-Store${archTag}-\${version}.\${ext}` },
     appx: {
       ...identity,
       applicationId: 'Sondra',
@@ -211,9 +220,11 @@ if (forStore) {
   delete config.nsis
   const configFile = path.join(RESOURCES, 'store.json')
   fs.writeFileSync(configFile, JSON.stringify(config, null, 2))
-  execFileSync(process.execPath, [builder, '--win', 'appx', '--x64', '--config', configFile, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
+  execFileSync(process.execPath, [builder, '--win', 'appx', archFlag, '--config', configFile, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
 } else {
   step(onlyDir ? 'App-Ordner bauen' : 'Installer bauen')
-  const args = onlyDir ? ['--dir'] : ['--win', 'nsis', '--x64']
+  const args = onlyDir
+    ? ['--dir']
+    : ['--win', 'nsis', archFlag, ...(arm ? ['-c.win.artifactName=Sondra-Setup-arm64-${version}.${ext}'] : [])]
   execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
 }

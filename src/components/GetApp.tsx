@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-import { IN_DESKTOP_APP, MICROSOFT_STORE, WINDOWS_SETUP } from '../lib/desktop'
+import { IN_DESKTOP_APP, MICROSOFT_STORE, WINDOWS_SETUP, WINDOWS_SETUP_ARM64, onWindowsArm } from '../lib/desktop'
 import { useBrowserInstall } from '../lib/install'
 import { Mark } from './AppShell'
 
@@ -124,6 +124,11 @@ export function GetAppButton() {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const browser = useBrowserInstall()
+  /** Windows on Arm gets its own build as the main offer, the other one beside it. */
+  const [arm, setArm] = useState(false)
+  useEffect(() => {
+    void onWindowsArm().then(setArm)
+  }, [])
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -191,7 +196,7 @@ export function GetAppButton() {
           <div className="flex flex-col gap-[14px]">
             <div className="grid grid-cols-1 gap-[14px] md:grid-cols-2">
               <a
-                href={WINDOWS_SETUP}
+                href={arm ? WINDOWS_SETUP_ARM64 : WINDOWS_SETUP}
                 rel="noopener"
                 onClick={() => setTimeout(close, 0)}
                 className={`${MAIN} press bg-ink text-on-ink`}
@@ -200,7 +205,7 @@ export function GetAppButton() {
                 <MainTile
                   icon={<SetupIcon className="h-[52px] w-[52px]" />}
                   title="Setup"
-                  facts=".exe · 130 MB"
+                  facts={arm ? '.exe · Arm64' : '.exe · 130 MB'}
                   action={
                     <span className={`${ACTION} bg-on-ink text-ink transition-transform duration-[130ms] group-hover:translate-x-[4px]`}>
                       <DownloadIcon className="h-[18px] w-[18px]" />
@@ -280,7 +285,12 @@ export function GetAppButton() {
             Das Setup ist noch nicht signiert. Warnt Windows, „Weitere Informationen“ und dann
             „Trotzdem ausführen“ wählen. Mit eingeschalteter intelligenter App-Steuerung startet es
             nicht — dann die Website als App nehmen; Videoportale lädt sie wie die Website, YouTube
-            meist in 360p. <a href="./download.html" className="text-ink underline underline-offset-[3px] hover:no-underline">Download-Seite und Signatur</a>
+            meist in 360p.{' '}
+            <a href={arm ? WINDOWS_SETUP : WINDOWS_SETUP_ARM64} className="text-ink underline underline-offset-[3px] hover:no-underline">
+              {arm ? 'Setup für x64-Prozessoren' : 'Setup für Arm-Prozessoren'}
+            </a>
+            {' · '}
+            <a href="./download.html" className="text-ink underline underline-offset-[3px] hover:no-underline">Download-Seite und Signatur</a>
           </p>
         </div>
       </dialog>
