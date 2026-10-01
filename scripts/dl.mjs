@@ -66,12 +66,23 @@ async function extractVoe(url) {
     if (!res.ok) return null
     const html = await res.text()
 
-    const m = html.match(/<script type="application\/json">\s*(\[[\s\S]*?\])\s*<\/script>/)
-    if (!m) return null
-
-    const arr = JSON.parse(m[1])
-    if (!Array.isArray(arr) || !arr[0]) return null
-    const str = arr[0]
+    // VOE-Klone setzen das verschleierte Feld je nach Vorlage mit einfachen
+    // oder doppelten Anführungszeichen und weiteren script-Attributen ab.
+    // Nicht auf eine einzige, exakte HTML-Schreibweise festlegen.
+    const scripts = html.matchAll(/<script\b[^>]*\btype\s*=\s*(['"])application\/json\1[^>]*>([\s\S]*?)<\/script>/gi)
+    let str = ''
+    for (const script of scripts) {
+      try {
+        const value = JSON.parse(script[2].trim())
+        if (Array.isArray(value) && typeof value[0] === 'string') {
+          str = value[0]
+          break
+        }
+      } catch {
+        // Ein anderes JSON-Datenfeld auf derselben Seite ist kein Stream.
+      }
+    }
+    if (!str) return null
 
     const rot13 = (s) =>
       s.replace(/[a-zA-Z]/g, (c) => {
@@ -247,7 +258,15 @@ async function extractDirectStream(rawUrl) {
   if (host.includes('dood') || host.includes('myvidplay') || host.includes('dsvplay') || host.includes('playmogo')) {
     return extractDoodStream(rawUrl)
   }
-  if (host.includes('voe.') || host.includes('jamesbornmain') || host.includes('chaliceguzzler') || host.includes('tube.sx') || rawUrl.includes('/e/')) {
+  if (
+    host.includes('voe.') ||
+    host.includes('jamesbornmain') ||
+    host.includes('chaliceguzzler') ||
+    host === 'jeremyparticipantanything.com' ||
+    host.endsWith('.jeremyparticipantanything.com') ||
+    host.includes('tube.sx') ||
+    rawUrl.includes('/e/')
+  ) {
     const v = await extractVoe(rawUrl)
     if (v) return v
   }
