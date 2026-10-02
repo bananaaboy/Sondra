@@ -14,6 +14,15 @@ Starten
   Sondra öffnet sich in einem eigenen Fenster, ohne Browser. Fenster
   schliessen beendet Sondra.
 
+Abspielen
+  Unter „Abspielen“ Filme und Musik ansehen und anhören, auch sehr grosse
+  Dateien: sie werden direkt von der Festplatte gelesen. Mehrere Dateien
+  werden eine Wiedergabeliste, eine .srt mit gleichem Namen der Untertitel.
+  Hinter dem Zahnrad: Qualität, Tempo, Untertitel, Tonspur, Bild, Ton und
+  Wiedergabe. Kinomodus (T), fensterfüllend (W) und Vollbild (F). Was
+  Windows' Browser-Kern nicht abspielt (etwa AVI oder DTS-Ton), macht Sondra
+  abspielbar.
+
 Bildschirm aufnehmen
   Unter „Bildschirm“ einen Bildschirm oder ein Fenster aus der Liste wählen
   und „Aufnahme starten“. Mit „Ton des Rechners“ wird alles aufgenommen, was
