@@ -27,18 +27,19 @@
      timecodes. Never mono as a costume for "technical".
 
    Colours: the paper and the Forest Ink were pinned by the brief. On
-   2.10.2026, asked for a "more modern, more beautiful" palette, the paper
-   lost its beige for a clean sheet with a breath of green, the tints became
-   clear mint instead of grey-green, and the dark theme became deep forest
-   black instead of grey — same ink, same roles, every pair re-measured.
+   2.10.2026, asked for a "more modern, more beautiful" palette, the tints became
+   clear mint instead of grey-green and the dark theme deep forest black
+   instead of grey. The paper stayed beige, on request, and so did the
+   white: fields are a warm white rather than a stark one — same ink, same
+   roles, every pair re-measured.
    Ink is spent only on rules, section numbers and the one action per
    section; when it covers more than about a tenth of a screen it has stopped
    being ink and started being paint.
    --------------------------------------------------------------------------- */
 @theme {
   /* Light palette — the values below double as the defaults. */
-  --color-canvas: #f6f7f3;
-  --color-raised: #ffffff;
+  --color-canvas: #f2eee4;
+  --color-raised: #fdfbf6;
   --color-panel-soft: #edf5ef;
   --color-panel-mid: #e4f0e7;
   --color-panel-strong: #d3e9da;
@@ -50,14 +51,14 @@
   --color-muted: #5a6b5f;
   /* Measured against both the canvas and a white card: the old #e3e2dc sat at
      APCA Lc 7.5, half of the Lc 15 a non-text separator wants. */
-  --color-line: #cfd9d1;
+  --color-line: #d3cdbf;
   /* Two weights of rule. `line` is a table's own hairline; `rule` is the
      heavier one that opens a section. Both are tokens rather than an alpha on
      ink, because an alpha over a dark ground loses its contrast: measured, the
      same ink at 25 % sat at APCA Lc 25 on paper and Lc 7 in the dark theme. */
-  --color-rule: #b9c9bd;
+  --color-rule: #bcc4b6;
   /* Present, but not applicable to what is open. Still has to be legible. */
-  --color-faint: #97a59b;
+  --color-faint: #8f9c91;
 
   /* The editor stage. Deliberately dark in both themes and deliberately
      neutral: a picture judged against cream reads warm, against green reads

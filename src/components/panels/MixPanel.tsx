@@ -54,7 +54,7 @@ function DuckGraph({ result }: { result: DuckResult }) {
     context.scale(scale, scale)
     const css = getComputedStyle(canvas)
     const ink = css.getPropertyValue('--color-ink').trim() || '#0f3e1c'
-    const rule = css.getPropertyValue('--color-rule').trim() || '#b9c9bd'
+    const rule = css.getPropertyValue('--color-rule').trim() || '#bcc4b6'
     context.clearRect(0, 0, width, height)
 
     const { voiceDb, musicGainDb } = result

@@ -140,8 +140,9 @@ Deshalb steht im Downloader, **welcher Weg geantwortet hat**: das entscheidet
   - **Alle Werkzeuge bleiben erreichbar.** Keines fällt weg, keines wird
     versteckt.
   - **Die Farben.** Papier, Forest Ink `#0f3e1c` und der dunkle Modus waren
-    beim Redesign gesetzt (das Papier am 2.10.2026 auf Wunsch von Beige
-    `#f4f3ee` zu `#f6f7f3` aufgefrischt, das dunkle Thema zu Waldschwarz); alles andere — Typografie, Aufbau,
+    beim Redesign gesetzt (am 2.10.2026 aufgefrischt: Papier bleibt Beige,
+    jetzt `#f2eee4`, Weiss wird warmes `#fdfbf6`, das dunkle Thema
+    Waldschwarz); alles andere — Typografie, Aufbau,
     Raster, Formensprache — stand zur Disposition.
 
 ## Evidence on Hand
