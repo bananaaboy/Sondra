@@ -26,34 +26,38 @@
      Prime is what was entered afterwards: measured values, file names,
      timecodes. Never mono as a costume for "technical".
 
-   Colours are pinned by the brief and unchanged from the previous world.
+   Colours: the paper and the Forest Ink were pinned by the brief. On
+   2.10.2026, asked for a "more modern, more beautiful" palette, the paper
+   lost its beige for a clean sheet with a breath of green, the tints became
+   clear mint instead of grey-green, and the dark theme became deep forest
+   black instead of grey — same ink, same roles, every pair re-measured.
    Ink is spent only on rules, section numbers and the one action per
    section; when it covers more than about a tenth of a screen it has stopped
    being ink and started being paint.
    --------------------------------------------------------------------------- */
 @theme {
   /* Light palette — the values below double as the defaults. */
-  --color-canvas: #f4f3ee;
+  --color-canvas: #f6f7f3;
   --color-raised: #ffffff;
-  --color-panel-soft: #eaf2e9;
-  --color-panel-mid: #e2ebe1;
-  --color-panel-strong: #d2e4d1;
-  --color-panel-cool: #e4edef;
+  --color-panel-soft: #edf5ef;
+  --color-panel-mid: #e4f0e7;
+  --color-panel-strong: #d3e9da;
+  --color-panel-cool: #e1edf1;
   --color-ink: #0f3e1c;
-  --color-ink-hover: #0a2b13;
+  --color-ink-hover: #17552b;
   --color-on-ink: #ffffff;
-  --color-prose: #1b231d;
-  --color-muted: #5d6c61;
+  --color-prose: #162019;
+  --color-muted: #5a6b5f;
   /* Measured against both the canvas and a white card: the old #e3e2dc sat at
      APCA Lc 7.5, half of the Lc 15 a non-text separator wants. */
-  --color-line: #d5d4c9;
+  --color-line: #cfd9d1;
   /* Two weights of rule. `line` is a table's own hairline; `rule` is the
      heavier one that opens a section. Both are tokens rather than an alpha on
      ink, because an alpha over a dark ground loses its contrast: measured, the
      same ink at 25 % sat at APCA Lc 25 on paper and Lc 7 in the dark theme. */
-  --color-rule: #bbc6ba;
+  --color-rule: #b9c9bd;
   /* Present, but not applicable to what is open. Still has to be legible. */
-  --color-faint: #b0b6af;
+  --color-faint: #97a59b;
 
   /* The editor stage. Deliberately dark in both themes and deliberately
      neutral: a picture judged against cream reads warm, against green reads
@@ -138,28 +142,29 @@
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --color-canvas: #090d0b;
-    --color-raised: #141a16;
-    --color-panel-soft: #1a221d;
-    --color-panel-mid: #202b23;
-    --color-panel-strong: #2a3830;
-    --color-panel-cool: #1c282c;
+    --color-canvas: #0a110d;
+    --color-raised: #111a14;
+    --color-panel-soft: #142019;
+    --color-panel-mid: #18271e;
+    --color-panel-strong: #203427;
+    --color-panel-cool: #15242a;
     /* Ink and its backdrop swap roles: the single saturated colour has to be
        the light one now, or headings and filled buttons would vanish. */
     /* Measured: at #7fd394 the text on a filled button came out at APCA
        Lc 70, under the Lc 75 body-text floor, and no amount of darkening the
-       foreground fixed it — the button colour itself was the limit. */
-    --color-ink: #9ce0ad;
-    --color-ink-hover: #b6ecc4;
-    --color-on-ink: #06110a;
-    --color-prose: #e0e8e2;
-    --color-muted: #a7bbab;
+       foreground fixed it — the button colour itself was the limit. The
+       lighter #a6ecb9 gives Lc 85 there and Lc 83 as tile titles on mint. */
+    --color-ink: #a6ecb9;
+    --color-ink-hover: #c3f4d0;
+    --color-on-ink: #04100a;
+    --color-prose: #e4ede6;
+    --color-muted: #adc2b2;
     /* Measured: the old #25302a against a #141a16 card came out at APCA Lc
        0.0 — not "subtle", invisible. Since a hairline ring is how every
        container in this app is separated, dark mode had no card edges at all. */
-    --color-line: #525f55;
-    --color-rule: #6b7a6e;
-    --color-faint: #7d8d81;
+    --color-line: #4a5e50;
+    --color-rule: #5d7364;
+    --color-faint: #8ba191;
     --color-stage: #0d1011;
     --color-stage-soft: #161a1c;
     --color-stage-line: #515a5d;
@@ -173,20 +178,20 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --color-canvas: #090d0b;
-  --color-raised: #141a16;
-  --color-panel-soft: #1a221d;
-  --color-panel-mid: #202b23;
-  --color-panel-strong: #2a3830;
-  --color-panel-cool: #1c282c;
-  --color-ink: #9ce0ad;
-  --color-ink-hover: #b6ecc4;
-  --color-on-ink: #06110a;
-  --color-prose: #e0e8e2;
-  --color-muted: #a7bbab;
-  --color-line: #525f55;
-  --color-rule: #6b7a6e;
-  --color-faint: #7d8d81;
+  --color-canvas: #0a110d;
+  --color-raised: #111a14;
+  --color-panel-soft: #142019;
+  --color-panel-mid: #18271e;
+  --color-panel-strong: #203427;
+  --color-panel-cool: #15242a;
+  --color-ink: #a6ecb9;
+  --color-ink-hover: #c3f4d0;
+  --color-on-ink: #04100a;
+  --color-prose: #e4ede6;
+  --color-muted: #adc2b2;
+  --color-line: #4a5e50;
+  --color-rule: #5d7364;
+  --color-faint: #8ba191;
   --color-stage: #0d1011;
   --color-stage-soft: #161a1c;
   --color-stage-line: #515a5d;
@@ -233,6 +238,18 @@ body {
 }
 
 /* --- shared primitives ---------------------------------------------------- */
+/* The start page's one coloured field. Not a card and not lifted: a tint, as
+   every inset block here is, only with a little light in it — the stronger
+   mint gathers in the far corner where the two actions sit, so the field has
+   a direction instead of a flat fill. Both stops are panel tokens, so the
+   text on it is measured against what is actually under it (prose on
+   panel-strong: Lc 87.5 light, 89.5 dark). */
+@utility field-glow {
+  background:
+    radial-gradient(90% 130% at 100% 0%, var(--color-panel-strong), transparent 70%),
+    linear-gradient(120deg, var(--color-panel-soft), var(--color-panel-mid));
+}
+
 /* The sheet grows with the desk, but only so far.
 
    At 1280px flat, a 2560px monitor showed half its width as empty paper and a

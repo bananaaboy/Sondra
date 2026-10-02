@@ -2,20 +2,20 @@
 name: Sondra
 description: Ein Medienstudio, das im Tab rechnet — ein ruhiges, flaches Blatt, auf dem jede Zahl gemessen ist.
 colors:
-  canvas: "#f4f3ee"
+  canvas: "#f6f7f3"
   raised: "#ffffff"
-  panel-soft: "#eaf2e9"
-  panel-mid: "#e2ebe1"
-  panel-strong: "#d2e4d1"
-  panel-cool: "#e4edef"
+  panel-soft: "#edf5ef"
+  panel-mid: "#e4f0e7"
+  panel-strong: "#d3e9da"
+  panel-cool: "#e1edf1"
   ink: "#0f3e1c"
-  ink-hover: "#0a2b13"
+  ink-hover: "#17552b"
   on-ink: "#ffffff"
-  prose: "#1b231d"
-  muted: "#5d6c61"
-  line: "#d5d4c9"
-  rule: "#bbc6ba"
-  faint: "#b0b6af"
+  prose: "#162019"
+  muted: "#5a6b5f"
+  line: "#cfd9d1"
+  rule: "#b9c9bd"
+  faint: "#97a59b"
   stage: "#15181a"
   stage-soft: "#1d2124"
   stage-line: "#515a5d"
@@ -253,9 +253,21 @@ mit grosser Serifen-Schlagzeile — das war diese App vor dem Umbau.
 
 ## Colors
 
-Warmes Papier trägt die Fläche, ein einziges dunkles Waldgrün ist die
+Ein helles Blatt trägt die Fläche, ein einziges dunkles Waldgrün ist die
 Druckfarbe, und eine dritte Welt — die neutrale Bühne der Editoren —
 widerspricht beiden mit Absicht.
+
+**Aufgefrischt am 2.10.2026,** auf Wunsch „moderner und schöner von den
+Farben her": Das Papier hat sein Beige verloren und ist ein klares Blatt mit
+einem Hauch Grün (`#f6f7f3`), die Tönungen sind klare Minze statt
+Graugrün, Linien und Graphit sind ins Grünliche gezogen, und das dunkle Thema
+ist tiefes Waldschwarz (`#0a110d`) statt Grau, mit hellerer Tinte
+(`#a6ecb9`). Waldtinte `#0f3e1c` und alle Rollen sind geblieben; jede Paarung
+ist neu gemessen (Messregel). Zwei kleine Farbmomente sind dazugekommen: die
+Fläche oben auf der Startseite trägt einen Verlauf aus ihren eigenen
+Tönungen (`field-glow`, Minze sammelt sich in der Ecke der zwei Handlungen),
+und das Symbol einer Werkzeugkachel sitzt auf einem eigenen kleinen Feld, das
+beim Zeigen die Tinte annimmt.
 
 ### Primary
 
@@ -269,7 +281,7 @@ widerspricht beiden mit Absicht.
 
 ### Neutral
 
-- **Warmes Papier** (`{colors.canvas}`): das Blatt selbst, Grund der ganzen App.
+- **Papier** (`{colors.canvas}`): das Blatt selbst, Grund der ganzen App — hell, mit einem Hauch Grün statt Beige.
 - **Feld** (`{colors.raised}`): Weiss erscheint nur, wo ein Feld ausfüllbar ist
   oder wo eine Fläche eine eigene Mechanik hat — Eingaben, der Editorrahmen,
   die Reiterleiste. Nicht als Karte; eine Karte gibt es hier nicht.

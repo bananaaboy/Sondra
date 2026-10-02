@@ -20,7 +20,7 @@ who know nothing and must understand in seconds what this is.
 Job: do one thing to a file — measure it, cut it, separate it, convert it,
 analyse it — and often a second thing to the result.
 
-Constraints, binding: the colours (#f4f3ee paper, #0f3e1c ink, the dark
+Constraints, binding: the colours (#f6f7f3 paper since 2.10.2026, #0f3e1c ink, the dark
 theme); logo and wordmark unchanged; German, Sie-form, sober; every current
 tool stays reachable; the downloader's not-local warning stays visible and
 unvarnished. No fabricated evidence of any kind.

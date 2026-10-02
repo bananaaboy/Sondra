@@ -139,8 +139,9 @@ Deshalb steht im Downloader, **welcher Weg geantwortet hat**: das entscheidet
     der Ton nicht.
   - **Alle Werkzeuge bleiben erreichbar.** Keines fällt weg, keines wird
     versteckt.
-  - **Die Farben.** Papierweiss `#f4f3ee`, Forest Ink `#0f3e1c` und der dunkle
-    Modus waren beim Redesign gesetzt; alles andere — Typografie, Aufbau,
+  - **Die Farben.** Papier, Forest Ink `#0f3e1c` und der dunkle Modus waren
+    beim Redesign gesetzt (das Papier am 2.10.2026 auf Wunsch von Beige
+    `#f4f3ee` zu `#f6f7f3` aufgefrischt, das dunkle Thema zu Waldschwarz); alles andere — Typografie, Aufbau,
     Raster, Formensprache — stand zur Disposition.
 
 ## Evidence on Hand
