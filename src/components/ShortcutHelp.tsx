@@ -47,10 +47,11 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
     title: 'Abspielen',
     keys: [
       ['Leertaste · K', 'Abspielen und anhalten'],
-      ['← →', '5 Sekunden zurück und vor'],
+      ['← →', 'Zurück und vor (Sprungweite in den Einstellungen)'],
       ['J · L', '10 Sekunden zurück und vor'],
       ['↑ ↓', 'Lauter und leiser (auf der Bühne)'],
-      ['M · F · C', 'Stumm, Vollbild, Untertitel'],
+      ['M · C', 'Stumm, Untertitel'],
+      ['T · W · F', 'Kinomodus, fensterfüllend, Vollbild'],
       ['N · P', 'Nächstes und vorheriges'],
       [', .', 'Angehalten: Bild für Bild'],
       ['< >', 'Langsamer und schneller'],
