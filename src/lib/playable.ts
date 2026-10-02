@@ -107,18 +107,20 @@ export interface StandOptions {
   maxHeight?: number
   /** x264 quality when it has to be encoded again; lower is better. */
   crf?: number
+  /** Which sound track to keep, counted among the sound tracks. */
+  audioIndex?: number
 }
 
-export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxHeight = 480, crf = 28 }: StandOptions = {}): StandJob {
+export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxHeight = 480, crf = 28, audioIndex = 0 }: StandOptions = {}): StandJob {
   // A sound file the browser cannot play (WMA, a bare AC-3) becomes AAC.
   if (!facts.streams.some((stream) => stream.type === 'video')) {
     return {
-      args: ['-hide_banner', '-i', input, '-vn', '-map', '0:a:0', '-c:a', 'aac', '-b:a', '192k', 'vorschau.m4a'],
+      args: ['-hide_banner', '-i', input, '-vn', '-map', `0:a:${audioIndex}`, '-c:a', 'aac', '-b:a', '192k', 'vorschau.m4a'],
       output: 'vorschau.m4a',
       mime: 'audio/mp4',
     }
   }
-  const head = ['-hide_banner', '-i', input, '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn']
+  const head = ['-hide_banner', '-i', input, '-map', '0:v:0', '-map', `0:a:${audioIndex}?`, '-sn', '-dn']
   if (remedy === 'picture' && !browserPlaysVideo('h264')) {
     // A browser without H.264 (Chromium as some Linux systems ship it) gets
     // VP8, which every one of them plays and which encodes fast enough.
@@ -150,7 +152,8 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
     }
   }
   const picture = firstOf(facts, 'video')?.codec ?? ''
-  const sound = firstOf(facts, 'audio')?.codec ?? null
+  const sound =
+    facts.streams.find((stream) => stream.type === 'audio' && stream.index === audioIndex)?.codec ?? firstOf(facts, 'audio')?.codec ?? null
   const webm = WEBM_PICTURE.has(picture)
   const soundFits = sound === null || (webm ? WEBM_SOUND : MP4_SOUND).has(sound)
   const keepSound = remedy === 'repack' && soundFits && sound !== null && browserPlaysAudio(sound)
