@@ -226,7 +226,7 @@ const SERVICES = [
   'facebook', 'reddit', 'dailymotion', 'bilibili', 'ok', 'rutube', 'streamable', 'tumblr',
   'bluesky', 'loom', 'pinterest', 'snapchat', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
   // Embed-Hoster ohne eigenen yt-dlp-Extraktor — über den generischen Fallback
-  'filemoon', 'voe', 'doodstream', 'vidmol', 'streamwish', 'vidguard', 'upstream',
+  'aniworld', 'filemoon', 'voe', 'doodstream', 'vidmol', 'streamwish', 'vidguard', 'upstream',
 ]
 
 let versionLabel = 'yt-dlp'

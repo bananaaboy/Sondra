@@ -199,7 +199,7 @@ interface ServiceResponse {
  * which is true but tells nobody anything.
  */
 const MEDIA_HOSTS =
-  /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com|facebook\.com|spotify\.com)$/i
+  /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com|facebook\.com|spotify\.com|aniworld\.to|voe\.sx|jeremyparticipantanything\.com)$/i
 
 /**
  * Hostnames that mean "this machine".
