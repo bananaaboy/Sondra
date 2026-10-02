@@ -187,6 +187,25 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Geschnitten wird immer das Original. **libopus in Stereo stürzt in diesem
   FFmpeg-Build ab** (gemessen, auch unter Node; der Tab stirbt) — für
   Vorschauen Vorbis oder AAC.
+- **Abspielen** (`PlayerPanel.tsx`, `lib/player.ts`): der Media Player,
+  nur zum Ansehen und Anhören. Dateien werden nie in die Sitzung gelesen,
+  sondern über eine Object-URL auf dem File abgespielt; solange das Werkzeug
+  offen ist, gehören fallengelassene Dateien ihm (`claimDrops`, in
+  `useGlobalIngest`). Eine .srt/.vtt mit gleichem Namen wird Untertitel.
+  Fremde Formate über dieselbe Vorschau wie im Video-Editor (`playable.ts`),
+  hier bis 720p; neu rechnen nur auf Klick, weil es so lange dauert wie der
+  Film. „Weiter bei“ und Lautstärke bleiben im `localStorage` dieses Geräts.
+  Seit dem 2.10.2026 ein Player wie die bekannten: Steuerung über dem Bild
+  auf einem Verlauf, blendet sich beim Abspielen aus; alles Einstellbare
+  hinter dem Zahnrad (`player/SettingsMenu.tsx`): Qualität (kleinere Fassung
+  per FFmpeg, der Film läuft weiter), Tempo, Untertitel samt Grösse und
+  Hintergrund, Tonspur, Bild (Einpassen/Füllen, Helligkeit, Kontrast,
+  Sättigung, Spiegeln), Ton (Verstärkung bis 300 %, Nachtmodus über Web
+  Audio), Wiedergabe (weiter, wiederholen, Sprungweite). Vier Grössen: neben
+  der Liste, Kinomodus (T), fensterfüllend (W, Esc) und Vollbild (F). Der
+  Rahmen ist gerundet — ein Ort zum Ansehen, keine Messfläche —, die eine
+  Farbe darauf ist `stage-accent`. Fensterfüllend braucht `:root.player-fill`,
+  sonst hält die Einblende-Animation des Panels das `fixed` gefangen.
 - **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
   Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
   über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,

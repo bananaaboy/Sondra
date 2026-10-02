@@ -53,6 +53,16 @@ export const ACTIONS: ToolAction[] = [
   },
 
   {
+    id: 'player',
+    panel: 'player',
+    group: 'video',
+    label: 'Video oder Musik abspielen',
+    hint: 'Ansehen und anhören, auch grosse Filme, mit Untertiteln',
+    kinds: [],
+    keywords: ['abspielen', 'player', 'media player', 'ansehen', 'anschauen', 'film', 'wiedergabe', 'vlc', 'play', 'mkv', 'avi', 'untertitel', 'srt'],
+  },
+
+  {
     id: 'screen',
     panel: 'screen',
     group: 'video',

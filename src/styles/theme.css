@@ -69,6 +69,9 @@
   --color-stage-line: #515a5d;
   --color-stage-ink: #eef1f0;
   --color-stage-muted: #aab5b2;
+  /* The one colour on the stage, for what is the player's own — the played
+     part of the timeline, a switch that is on. Never on the picture. */
+  --color-stage-accent: #8fe0a6;
 
   /* Elevation. Exactly one level, because exactly one kind of thing floats
      above the sheet: the editor plate, the popover, the drop overlay. The
@@ -171,6 +174,7 @@
     --color-stage-line: #515a5d;
     --color-stage-ink: #eef1f0;
     --color-stage-muted: #aab5b2;
+    --color-stage-accent: #8fe0a6;
 
     --shadow-lift: 0 2px 6px rgb(0 0 0 / 0.55), 0 12px 30px -12px rgb(0 0 0 / 0.72);
   }
@@ -198,6 +202,7 @@
   --color-stage-line: #515a5d;
   --color-stage-ink: #eef1f0;
   --color-stage-muted: #aab5b2;
+  --color-stage-accent: #8fe0a6;
 
   --shadow-lift: 0 2px 6px rgb(0 0 0 / 0.55), 0 12px 30px -12px rgb(0 0 0 / 0.72);
 }
@@ -245,6 +250,28 @@ body {
    a direction instead of a flat fill. Both stops are panel tokens, so the
    text on it is measured against what is actually under it (prose on
    panel-strong: Lc 87.5 light, 89.5 dark). */
+/* A sound file has no picture: five bars of the mark move while it plays.
+   Reduced motion stops them through the global rule. */
+@keyframes sondra-eq {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+@utility eq-bar {
+  transform-origin: center;
+  animation: sondra-eq 1.1s var(--ease-out) infinite;
+}
+
+/* The player's acknowledgement: what was pressed, shown in the middle of the
+   picture for a moment, then gone. */
+@keyframes sondra-flash {
+  0% { opacity: 0; transform: scale(0.85); }
+  20% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+@utility flash-out {
+  animation: sondra-flash 620ms var(--ease-out) forwards;
+}
+
 @utility field-glow {
   background:
     radial-gradient(90% 130% at 100% 0%, var(--color-panel-strong), transparent 70%),
@@ -477,6 +504,14 @@ select option {
 @utility rise {
   animation: sondra-rise var(--dur-base) var(--ease-out) both;
   animation-delay: var(--delay, 0ms);
+}
+
+/* A player filling the window leaves its column with `position: fixed`, and
+   an ancestor still holding its entrance animation would hold it captive: an
+   animated transform, even one that ended at none, makes that ancestor the
+   box a fixed element is placed in. */
+:root.player-fill .rise {
+  animation: none;
 }
 
 @utility pop {

@@ -73,6 +73,13 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M1.8 4.2h8.6v7.6H1.8zM10.4 7l3.8-2.2v6.4L10.4 9z" />,
   },
   {
+    id: 'player',
+    slug: 'abspielen',
+    label: 'Abspielen',
+    summary: 'Videos und Musik ansehen und anhören, auch grosse Filme',
+    icon: <path d="M2 3.4h12v9.2H2zM6.6 5.8l3.6 2.2-3.6 2.2z" />,
+  },
+  {
     id: 'images',
     slug: 'bilder',
     label: 'Bilder',
