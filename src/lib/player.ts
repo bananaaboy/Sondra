@@ -114,24 +114,81 @@ export function rememberPlace(item: { name: string; size: number }, seconds: num
   }
 }
 
+export type CaptionSize = 'klein' | 'mittel' | 'gross'
+export type Fit = 'contain' | 'cover' | 'fill'
+export type Repeat = 'aus' | 'titel' | 'liste'
+
+/** Everything the settings menu holds. Kept on this device, never needed. */
 export interface PlayerSettings {
   volume: number
   muted: boolean
   rate: number
+  captionSize: CaptionSize
+  captionBackground: boolean
+  fit: Fit
+  brightness: number
+  contrast: number
+  saturation: number
+  mirror: boolean
+  /** Gain above the element's own 100 %, through Web Audio. */
+  boost: number
+  /** Quiet passages up, loud ones down — for watching at night. */
+  night: boolean
+  autoNext: boolean
+  repeat: Repeat
+  skip: number
 }
 
+export const DEFAULT_SETTINGS: PlayerSettings = {
+  volume: 1,
+  muted: false,
+  rate: 1,
+  captionSize: 'mittel',
+  captionBackground: true,
+  fit: 'contain',
+  brightness: 1,
+  contrast: 1,
+  saturation: 1,
+  mirror: false,
+  boost: 1,
+  night: false,
+  autoNext: true,
+  repeat: 'aus',
+  skip: 10,
+}
+
+export const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3]
+export const SKIPS = [5, 10, 15, 30]
+export const BOOSTS = [1, 1.5, 2, 3]
+
+const oneOf = <T,>(value: unknown, options: readonly T[], fallback: T): T => (options.includes(value as T) ? (value as T) : fallback)
+const within = (value: unknown, low: number, high: number, fallback: number) =>
+  typeof value === 'number' && Number.isFinite(value) ? Math.min(high, Math.max(low, value)) : fallback
+
 export function rememberedSettings(): PlayerSettings {
-  const fallback = { volume: 1, muted: false, rate: 1 }
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null')
-    if (!saved || typeof saved !== 'object') return fallback
+    if (!saved || typeof saved !== 'object') return DEFAULT_SETTINGS
+    const d = DEFAULT_SETTINGS
     return {
-      volume: typeof saved.volume === 'number' ? Math.min(1, Math.max(0, saved.volume)) : 1,
+      volume: within(saved.volume, 0, 1, d.volume),
       muted: saved.muted === true,
-      rate: RATES.includes(saved.rate) ? saved.rate : 1,
+      rate: oneOf(saved.rate, RATES, d.rate),
+      captionSize: oneOf(saved.captionSize, ['klein', 'mittel', 'gross'] as const, d.captionSize),
+      captionBackground: saved.captionBackground !== false,
+      fit: oneOf(saved.fit, ['contain', 'cover', 'fill'] as const, d.fit),
+      brightness: within(saved.brightness, 0.5, 1.5, d.brightness),
+      contrast: within(saved.contrast, 0.5, 1.5, d.contrast),
+      saturation: within(saved.saturation, 0, 2, d.saturation),
+      mirror: saved.mirror === true,
+      boost: oneOf(saved.boost, BOOSTS, d.boost),
+      night: saved.night === true,
+      autoNext: saved.autoNext !== false,
+      repeat: oneOf(saved.repeat, ['aus', 'titel', 'liste'] as const, d.repeat),
+      skip: oneOf(saved.skip, SKIPS, d.skip),
     }
   } catch {
-    return fallback
+    return DEFAULT_SETTINGS
   }
 }
 
@@ -143,7 +200,10 @@ export function rememberSettings(settings: PlayerSettings): void {
   }
 }
 
-export const RATES = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+/** Heights a film can be watched at below its own. */
+export const QUALITY_STEPS = [2160, 1440, 1080, 720, 480, 360]
+
+export const rateLabel = (rate: number) => (rate === 1 ? 'Normal' : `${String(rate).replace('.', ',')}×`)
 
 /** h:mm:ss or m:ss — a film's clock, not the editor's centiseconds. */
 export function clock(seconds: number): string {
