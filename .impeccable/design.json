@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-23T12:19:16.077Z",
+  "generatedAt": "2026-10-02T07:57:42.713Z",
   "title": "Design System: Sondra",
   "extensions": {
     "colorMeta": {
@@ -8,7 +8,7 @@
         "role": "primary",
         "displayName": "Waldtinte",
         "canonical": "#0f3e1c",
-        "dark": "#9ce0ad",
+        "dark": "#a6ecb9",
         "purpose": "Die einzige gesättigte Farbe und die einzige Druckfarbe: Linien, Überschriften, Kachelsymbole, Fokusring und die eine gefüllte Aktion je Abschnitt.",
         "tonalRamp": [
           "#001300",
@@ -24,25 +24,25 @@
       "ink-hover": {
         "role": "primary",
         "displayName": "Waldtinte gedrückt",
-        "canonical": "#0a2b13",
-        "dark": "#b6ecc4",
+        "canonical": "#17552b",
+        "dark": "#c3f4d0",
         "purpose": "Nur der Hover-Zustand gefüllter Flächen. Nie im Ruhezustand.",
         "tonalRamp": [
-          "#001100",
-          "#0c2d15",
-          "#2a4b31",
-          "#496b4f",
-          "#6a8d6f",
-          "#8cb091",
-          "#afd4b5",
-          "#d4fada"
+          "#001400",
+          "#003008",
+          "#0f4f26",
+          "#357044",
+          "#579264",
+          "#79b686",
+          "#9ddba9",
+          "#c1ffce"
         ]
       },
       "on-ink": {
         "role": "primary",
         "displayName": "Papier auf Tinte",
         "canonical": "#ffffff",
-        "dark": "#06110a",
+        "dark": "#04100a",
         "purpose": "Text auf gefüllter Tinte.",
         "tonalRamp": [
           "#0b0b0b",
@@ -58,188 +58,188 @@
       "canvas": {
         "role": "neutral",
         "displayName": "Warmes Papier",
-        "canonical": "#f4f3ee",
-        "dark": "#090d0b",
+        "canonical": "#f2eee4",
+        "dark": "#0a110d",
         "purpose": "Das Blatt selbst, Grund der ganzen App.",
         "tonalRamp": [
-          "#0c0b08",
-          "#262521",
-          "#43423e",
-          "#62615d",
-          "#83827e",
-          "#a6a5a0",
-          "#cac9c4",
-          "#efeeea"
+          "#0e0b05",
+          "#28251d",
+          "#45423a",
+          "#646158",
+          "#868279",
+          "#a8a59b",
+          "#cdc9bf",
+          "#f2eee4"
         ]
       },
       "raised": {
         "role": "neutral",
         "displayName": "Feld",
-        "canonical": "#ffffff",
-        "dark": "#141a16",
+        "canonical": "#fdfbf6",
+        "dark": "#111a14",
         "purpose": "Weiss erscheint nur, wo ein Feld ausfüllbar ist oder eine Fläche eigene Mechanik hat — nicht als Karte.",
         "tonalRamp": [
-          "#0b0b0b",
-          "#252525",
-          "#424242",
-          "#616161",
-          "#828282",
-          "#a5a5a5",
-          "#c9c9c9",
-          "#eeeeee"
+          "#0c0b08",
+          "#262521",
+          "#43423e",
+          "#63615d",
+          "#84827e",
+          "#a7a5a0",
+          "#cbc9c4",
+          "#f0eee9"
         ]
       },
       "panel-soft": {
         "role": "neutral",
         "displayName": "Blasse Minze",
-        "canonical": "#eaf2e9",
-        "dark": "#1a221d",
+        "canonical": "#edf5ef",
+        "dark": "#142019",
         "purpose": "Eingesetzte Blöcke und der Hover-Grund von Listenzeilen.",
         "tonalRamp": [
-          "#080d07",
-          "#212720",
-          "#3e443d",
-          "#5d635c",
-          "#7e857d",
-          "#a0a79f",
-          "#c4ccc3",
-          "#e9f1e8"
+          "#080d09",
+          "#212722",
+          "#3d443f",
+          "#5c635e",
+          "#7d847f",
+          "#a0a7a2",
+          "#c4cbc6",
+          "#e9f1eb"
         ]
       },
       "panel-mid": {
         "role": "neutral",
         "displayName": "Minze",
-        "canonical": "#e2ebe1",
-        "dark": "#202b23",
+        "canonical": "#e4f0e7",
+        "dark": "#18271e",
         "purpose": "Die zweite Tönungsstufe eingesetzter Blöcke.",
         "tonalRamp": [
-          "#070d07",
-          "#212720",
-          "#3d443c",
-          "#5c645b",
-          "#7d857c",
-          "#9fa89e",
-          "#c3ccc2",
-          "#e8f1e7"
+          "#060d08",
+          "#1f2821",
+          "#3b453e",
+          "#5a645d",
+          "#7b867d",
+          "#9da8a0",
+          "#c1cdc4",
+          "#e6f2e9"
         ]
       },
       "panel-strong": {
         "role": "neutral",
         "displayName": "Kräftige Minze",
-        "canonical": "#d2e4d1",
-        "dark": "#2a3830",
+        "canonical": "#d3e9da",
+        "dark": "#203427",
         "purpose": "Die Textmarkierung (::selection).",
         "tonalRamp": [
-          "#040f04",
-          "#1b291b",
-          "#384737",
-          "#576656",
-          "#778876",
-          "#9aab99",
-          "#bdcfbc",
-          "#e2f5e1"
+          "#020f06",
+          "#182a1f",
+          "#35473b",
+          "#54675a",
+          "#74887b",
+          "#96ab9d",
+          "#bad0c1",
+          "#dff5e6"
         ]
       },
       "panel-cool": {
         "role": "neutral",
         "displayName": "Kühle Minze",
-        "canonical": "#e4edef",
-        "dark": "#1c282c",
+        "canonical": "#e1edf1",
+        "dark": "#15242a",
         "purpose": "Reserviert für den einen Hinweis, dass etwas nicht lokal läuft.",
         "tonalRamp": [
-          "#070c0e",
-          "#202628",
-          "#3c4345",
-          "#5b6365",
-          "#7c8486",
-          "#9ea7a9",
-          "#c2cbcd",
-          "#e7f0f2"
+          "#050d0f",
+          "#1e272a",
+          "#3a4447",
+          "#596367",
+          "#7a8488",
+          "#9ca7ab",
+          "#c0cbcf",
+          "#e5f1f5"
         ]
       },
       "prose": {
         "role": "neutral",
         "displayName": "Prosa",
-        "canonical": "#1b231d",
-        "dark": "#e0e8e2",
+        "canonical": "#162019",
+        "dark": "#e4ede6",
         "purpose": "Fliesstext und Beschriftungen.",
         "tonalRamp": [
-          "#060d08",
-          "#1f2721",
-          "#3c453e",
-          "#5b645d",
-          "#7b857e",
-          "#9ea8a0",
-          "#c2ccc4",
-          "#e7f2e9"
+          "#050e08",
+          "#1e2821",
+          "#3a453d",
+          "#59655c",
+          "#7a867d",
+          "#9ca99f",
+          "#c0cdc3",
+          "#e5f3e9"
         ]
       },
       "muted": {
         "role": "neutral",
         "displayName": "Gedämpft",
-        "canonical": "#5d6c61",
-        "dark": "#a7bbab",
+        "canonical": "#5a6b5f",
+        "dark": "#adc2b2",
         "purpose": "Sekundärtext, Hinweise, Einheiten.",
         "tonalRamp": [
-          "#040e07",
-          "#1c291f",
-          "#38463c",
-          "#57665b",
-          "#77877b",
-          "#9aaa9e",
-          "#bdcec2",
-          "#e2f4e7"
+          "#030f06",
+          "#1a291f",
+          "#37473b",
+          "#55665a",
+          "#76887b",
+          "#98aa9d",
+          "#bccfc1",
+          "#e1f4e6"
         ]
       },
       "faint": {
         "role": "neutral",
         "displayName": "Nicht zutreffend",
-        "canonical": "#b0b6af",
-        "dark": "#7d8d81",
+        "canonical": "#8f9c91",
+        "dark": "#8ba191",
         "purpose": "Ein Werkzeug, das auf die geöffnete Datei nicht passt. Blasser als gedämpft, aber ausdrücklich noch lesbar.",
         "tonalRamp": [
-          "#080c08",
-          "#222721",
-          "#3f443e",
-          "#5e635d",
-          "#7f847e",
-          "#a1a7a0",
-          "#c5cbc4",
-          "#eaf1e9"
+          "#050e07",
+          "#1e281f",
+          "#3a453c",
+          "#59655b",
+          "#7a867c",
+          "#9ca99e",
+          "#c0cdc2",
+          "#e5f3e7"
         ]
       },
       "line": {
         "role": "neutral",
         "displayName": "Haarlinie",
-        "canonical": "#d5d4c9",
-        "dark": "#525f55",
+        "canonical": "#d3cdbf",
+        "dark": "#4a5e50",
         "purpose": "Die Linie einer Tabelle: jede Trennung zwischen Zeilen, Feldern und Blöcken. Gemessen auf APCA Lc 15.",
         "tonalRamp": [
-          "#0c0b05",
-          "#26251d",
-          "#434239",
-          "#636258",
-          "#848379",
-          "#a7a69b",
-          "#cbcabf",
-          "#f0efe4"
+          "#0f0b03",
+          "#29251a",
+          "#474236",
+          "#666154",
+          "#878275",
+          "#aaa597",
+          "#cfc9bb",
+          "#f4eee0"
         ]
       },
       "rule": {
         "role": "neutral",
         "displayName": "Abschnittslinie",
-        "canonical": "#bbc6ba",
-        "dark": "#6b7a6e",
+        "canonical": "#bcc4b6",
+        "dark": "#5d7364",
         "purpose": "Die schwerere Linie, die einen Abschnitt eröffnet. Eigenes Token statt Deckkraft auf Tinte, weil eine Deckkraft über dunklem Grund ihren Kontrast verliert.",
         "tonalRamp": [
-          "#060d06",
-          "#1f281f",
-          "#3c453b",
-          "#5b645a",
-          "#7b867b",
-          "#9ea99d",
-          "#c2cdc1",
-          "#e7f2e6"
+          "#080d05",
+          "#21271d",
+          "#3e4439",
+          "#5d6458",
+          "#7e8578",
+          "#a0a89a",
+          "#c4ccbe",
+          "#e9f2e3"
         ]
       },
       "stage": {
@@ -435,7 +435,7 @@
       "refersTo": "button-primary",
       "description": "Die eine Aktion, um die ein Abschnitt bittet. Eckig, ungeschattet, gefüllte Tinte.",
       "html": "<button class=\"ds-btn-primary\">Datei öffnen</button>",
-      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:8px;background:#0f3e1c;color:#ffffff;font:500 16px/1.55 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;padding:12px 16px;border:none;border-radius:0;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1),transform 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-btn-primary:hover{background:#0a2b13}.ds-btn-primary:active{transform:translateY(1px)}.ds-btn-primary:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}.ds-btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}"
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:8px;background:#0f3e1c;color:#ffffff;font:500 16px/1.55 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;padding:12px 16px;border:none;border-radius:0;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1),transform 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-btn-primary:hover{background:#17552b}.ds-btn-primary:active{transform:translateY(1px)}.ds-btn-primary:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}.ds-btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}"
     },
     {
       "name": "Quiet Button",
@@ -443,7 +443,7 @@
       "refersTo": "button-quiet",
       "description": "Die zweite Wahl, die sichtbar die zweite ist: Feldweiss mit Klausellinien-Ring.",
       "html": "<button class=\"ds-btn-quiet\">In die Sitzung übernehmen</button>",
-      "css": ".ds-btn-quiet{display:inline-flex;align-items:center;gap:8px;background:#ffffff;color:#0f3e1c;font:500 16px/1.55 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;padding:12px 16px;border:none;border-radius:0;box-shadow:inset 0 0 0 1px #bbc6ba;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1),transform 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-btn-quiet:hover{background:#eaf2e9}.ds-btn-quiet:active{transform:translateY(1px)}.ds-btn-quiet:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}"
+      "css": ".ds-btn-quiet{display:inline-flex;align-items:center;gap:8px;background:#fdfbf6;color:#0f3e1c;font:500 16px/1.55 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;padding:12px 16px;border:none;border-radius:0;box-shadow:inset 0 0 0 1px #bcc4b6;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1),transform 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-btn-quiet:hover{background:#edf5ef}.ds-btn-quiet:active{transform:translateY(1px)}.ds-btn-quiet:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}"
     },
     {
       "name": "Text Input",
@@ -451,7 +451,7 @@
       "refersTo": "input",
       "description": "Was eingetippt wird, steht in der Schrift der eingetragenen Dinge. Ring statt Rahmen, Fokus wechselt ihn auf Tinte.",
       "html": "<input class=\"ds-input\" type=\"text\" value=\"https://www.youtube.com/watch?v=…\" aria-label=\"Adresse\" />",
-      "css": ".ds-input{width:100%;box-sizing:border-box;background:#ffffff;color:#1b231d;font:400 13px/1.5 'Courier Prime',ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em;padding:8px 12px;border:none;border-radius:0;box-shadow:inset 0 0 0 1px #d5d4c9;outline:none}.ds-input::placeholder{font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#5d6c61}.ds-input:focus{box-shadow:inset 0 0 0 1px #0f3e1c}"
+      "css": ".ds-input{width:100%;box-sizing:border-box;background:#fdfbf6;color:#162019;font:400 13px/1.5 'Courier Prime',ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em;padding:8px 12px;border:none;border-radius:0;box-shadow:inset 0 0 0 1px #d3cdbf;outline:none}.ds-input::placeholder{font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#5a6b5f}.ds-input:focus{box-shadow:inset 0 0 0 1px #0f3e1c}"
     },
     {
       "name": "Choice Chip",
@@ -459,7 +459,7 @@
       "refersTo": "chip",
       "description": "Eins aus vier — Seitenverhältnis, Drehung, Format. Ausgewählt ist gefüllte Tinte ohne Ring.",
       "html": "<div style=\"display:flex;gap:4px\"><button class=\"ds-chip\" aria-pressed=\"false\">Frei</button><button class=\"ds-chip ds-chip-on\" aria-pressed=\"true\">16:9</button><button class=\"ds-chip\" aria-pressed=\"false\">4:3</button></div>",
-      "css": ".ds-chip{background:#eaf2e9;color:#1b231d;font:400 13px/1 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;padding:8px;border:none;border-radius:0;box-shadow:inset 0 0 0 1px #d5d4c9;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1),transform 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-chip:hover{background:#e2ebe1}.ds-chip:active{transform:translateY(1px)}.ds-chip-on{background:#0f3e1c;color:#ffffff;box-shadow:none}.ds-chip:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}"
+      "css": ".ds-chip{background:#edf5ef;color:#162019;font:400 13px/1 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;padding:8px;border:none;border-radius:0;box-shadow:inset 0 0 0 1px #d3cdbf;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1),transform 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-chip:hover{background:#e4f0e7}.ds-chip:active{transform:translateY(1px)}.ds-chip-on{background:#0f3e1c;color:#ffffff;box-shadow:none}.ds-chip:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}"
     },
     {
       "name": "Panel Tabs",
@@ -467,7 +467,7 @@
       "refersTo": "tab",
       "description": "Die Werkzeugleiste. Ausgewählt ist gefüllte Tinte. Die Reiter trugen einmal Nummern; sie sind mit allen anderen Zierziffern gefallen.",
       "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab ds-tab-on\" role=\"tab\" aria-selected=\"true\">Start</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Herunterladen</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Umwandeln</button></div>",
-      "css": ".ds-tabs{display:flex;gap:4px;background:#ffffff;padding:4px;box-shadow:inset 0 0 0 1px #d5d4c9}.ds-tab{display:flex;align-items:center;gap:8px;background:transparent;color:#1b231d;font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;padding:8px 12px;border:none;border-radius:0;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-tab:hover{background:#eaf2e9}.ds-tab-on{background:#0f3e1c;color:#ffffff}.ds-tab:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}"
+      "css": ".ds-tabs{display:flex;gap:4px;background:#fdfbf6;padding:4px;box-shadow:inset 0 0 0 1px #d3cdbf}.ds-tab{display:flex;align-items:center;gap:8px;background:transparent;color:#162019;font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;padding:8px 12px;border:none;border-radius:0;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-tab:hover{background:#edf5ef}.ds-tab-on{background:#0f3e1c;color:#ffffff}.ds-tab:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}"
     },
     {
       "name": "Toggle",
@@ -475,7 +475,7 @@
       "refersTo": "toggle-track",
       "description": "Eckiger Körper, runder Knauf: der Schalter ist der eine physische Gegenstand auf einem Blatt Papier und darf deshalb als einziges eine Rundung haben.",
       "html": "<button class=\"ds-toggle\" role=\"switch\" aria-checked=\"true\"><span class=\"ds-toggle-track\"><span class=\"ds-toggle-knob\"></span></span><span class=\"ds-toggle-text\"><span class=\"ds-toggle-label\">Mehrkern verwenden</span><span class=\"ds-toggle-hint\">Braucht Cross-Origin-Isolation.</span></span></button>",
-      "css": ".ds-toggle{display:flex;align-items:flex-start;gap:12px;background:none;border:none;padding:0;text-align:left;cursor:pointer;font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}.ds-toggle-track{display:flex;align-items:center;flex-shrink:0;margin-top:2px;width:28px;height:16px;padding:2px;box-sizing:border-box;background:#0f3e1c;border-radius:0}.ds-toggle-knob{width:12px;height:12px;border-radius:999px;background:#ffffff;transform:translateX(12px);transition:transform 240ms cubic-bezier(.16,1,.3,1)}.ds-toggle[aria-checked=\"false\"] .ds-toggle-track{background:transparent;box-shadow:inset 0 0 0 1px #bbc6ba}.ds-toggle[aria-checked=\"false\"] .ds-toggle-knob{transform:translateX(0);background:#0f3e1c;opacity:.55}.ds-toggle-text{display:flex;flex-direction:column;gap:2px}.ds-toggle-label{font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#1b231d}.ds-toggle-hint{font:400 13px/1.45 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#5d6c61}.ds-toggle:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}"
+      "css": ".ds-toggle{display:flex;align-items:flex-start;gap:12px;background:none;border:none;padding:0;text-align:left;cursor:pointer;font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}.ds-toggle-track{display:flex;align-items:center;flex-shrink:0;margin-top:2px;width:28px;height:16px;padding:2px;box-sizing:border-box;background:#0f3e1c;border-radius:0}.ds-toggle-knob{width:12px;height:12px;border-radius:999px;background:#ffffff;transform:translateX(12px);transition:transform 240ms cubic-bezier(.16,1,.3,1)}.ds-toggle[aria-checked=\"false\"] .ds-toggle-track{background:transparent;box-shadow:inset 0 0 0 1px #bcc4b6}.ds-toggle[aria-checked=\"false\"] .ds-toggle-knob{transform:translateX(0);background:#0f3e1c;opacity:.55}.ds-toggle-text{display:flex;flex-direction:column;gap:2px}.ds-toggle-label{font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#162019}.ds-toggle-hint{font:400 13px/1.45 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#5a6b5f}.ds-toggle:focus-visible{outline:2px solid #0f3e1c;outline-offset:2px}"
     },
     {
       "name": "Stat Row",
@@ -483,7 +483,7 @@
       "refersTo": "stat-row",
       "description": "Eine Messzeile: was gemessen wurde links, was herauskam rechts in der Wertschrift, die Einheit in eigener Spalte. Haarlinie oben statt Kasten ringsum.",
       "html": "<div class=\"ds-stats\"><div class=\"ds-stat\"><span class=\"ds-stat-label\">Integrierte Lautheit</span><span class=\"ds-stat-figure\"><span class=\"ds-stat-value\">-14.2</span><span class=\"ds-stat-unit\">LUFS</span></span></div><div class=\"ds-stat\"><span class=\"ds-stat-label\">True Peak</span><span class=\"ds-stat-figure\"><span class=\"ds-stat-value\">-1.0</span><span class=\"ds-stat-unit\">dBTP</span></span></div><div class=\"ds-stat\"><span class=\"ds-stat-label\">Dynamikumfang</span><span class=\"ds-stat-figure\"><span class=\"ds-stat-value\">7.4</span><span class=\"ds-stat-unit\">LU</span></span></div></div>",
-      "css": ".ds-stats{font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;background:#f4f3ee;max-width:420px}.ds-stat{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #d5d4c9}.ds-stat-label{font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#1b231d}.ds-stat-figure{display:flex;align-items:baseline;gap:4px;flex-shrink:0}.ds-stat-value{font:400 13px/1.5 'Courier Prime',ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:#0f3e1c}.ds-stat-unit{width:4ch;text-align:left;font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#5d6c61}"
+      "css": ".ds-stats{font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;background:#f2eee4;max-width:420px}.ds-stat{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #d3cdbf}.ds-stat-label{font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#162019}.ds-stat-figure{display:flex;align-items:baseline;gap:4px;flex-shrink:0}.ds-stat-value{font:400 13px/1.5 'Courier Prime',ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:#0f3e1c}.ds-stat-unit{width:4ch;text-align:left;font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#5a6b5f}"
     },
     {
       "name": "Section Head",
@@ -491,7 +491,7 @@
       "refersTo": "entry-row",
       "description": "Der Kopf eines Abschnitts: Linie darüber, Überschrift, darunter die Messzeilen. Kein Kasten, keine Nummer — Abschnittsnummern sind gefallen.",
       "html": "<div class=\"ds-sec\"><h2 class=\"ds-sec-head\">Ergebnis</h2><div class=\"ds-sec-row\"><span class=\"ds-sec-key\">Datei</span><span class=\"ds-sec-val\">out_audio.wav</span></div><div class=\"ds-sec-row\"><span class=\"ds-sec-key\">Dauer</span><span class=\"ds-sec-val\">03:42.118</span></div></div>",
-      "css": ".ds-sec{font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;background:#f4f3ee;max-width:420px}.ds-sec-head{margin:0;padding-top:12px;border-top:2px solid #bbc6ba;font:700 25px/1.25 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:-.015em;color:#0f3e1c}.ds-sec-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid #d5d4c9;margin-top:12px}.ds-sec-row+.ds-sec-row{margin-top:0}.ds-sec-key{font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#5d6c61}.ds-sec-val{font:400 13px/1.5 'Courier Prime',ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:#0f3e1c;text-align:right}"
+      "css": ".ds-sec{font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;background:#f2eee4;max-width:420px}.ds-sec-head{margin:0;padding-top:12px;border-top:2px solid #bcc4b6;font:700 25px/1.25 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:-.015em;color:#0f3e1c}.ds-sec-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid #d3cdbf;margin-top:12px}.ds-sec-row+.ds-sec-row{margin-top:0}.ds-sec-key{font:400 13px/1.5 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#5a6b5f}.ds-sec-val{font:400 13px/1.5 'Courier Prime',ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:#0f3e1c;text-align:right}"
     },
     {
       "name": "Tool Tile",
@@ -499,7 +499,7 @@
       "refersTo": "procedure-row",
       "description": "Eine Werkzeugkachel: getöntes Feld, Symbol oben, Beschriftung, Hinweis. Die Tönung gibt die Kante — kein Rahmen, kein Schatten, keine Rundung. Ersetzt den nummerierten Index, der hier zuvor stand.",
       "html": "<div class=\"ds-tiles\"><button class=\"ds-tile\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.35\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 3.2h12v9.6H2zM2 10l3.4-3.2 3 2.8 2.2-2 3.4 3.2M5.6 6.2a.9.9 0 100-1.8.9.9 0 000 1.8z\"/></svg><span class=\"ds-tile-label\">Bild zuschneiden</span><span class=\"ds-tile-hint\">Ausschnitt aufziehen</span></button><button class=\"ds-tile\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.35\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.6 5.4h9.2m0 0L9.4 3.1m2.4 2.3L9.4 7.7M13.4 10.6H4.2m0 0l2.4-2.3m-2.4 2.3l2.4 2.3\"/></svg><span class=\"ds-tile-label\">Bildformat ändern</span><span class=\"ds-tile-hint\">PNG, JPEG oder WebP</span></button></div>",
-      "css": ".ds-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f4f3ee;max-width:460px}.ds-tile{display:flex;flex-direction:column;align-items:flex-start;gap:6px;background:#e2ebe1;border:none;border-radius:0;padding:16px;text-align:left;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-tile:hover{background:#d2e4d1}.ds-tile svg{color:#0f3e1c;flex-shrink:0}.ds-tile-label{font:600 13px/1.3 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#0f3e1c}.ds-tile-hint{font:400 13px/1.4 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#1b231d}.ds-tile:focus-visible{outline:2px solid #0f3e1c;outline-offset:-2px}"
+      "css": ".ds-tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f2eee4;max-width:460px}.ds-tile{display:flex;flex-direction:column;align-items:flex-start;gap:6px;background:#e4f0e7;border:none;border-radius:0;padding:16px;text-align:left;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-tile:hover{background:#d3e9da}.ds-tile svg{color:#0f3e1c;flex-shrink:0}.ds-tile-label{font:600 13px/1.3 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#0f3e1c}.ds-tile-hint{font:400 13px/1.4 'Public Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;color:#162019}.ds-tile:focus-visible{outline:2px solid #0f3e1c;outline-offset:-2px}"
     }
   ],
   "narrative": {

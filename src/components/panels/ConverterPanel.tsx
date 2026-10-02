@@ -27,7 +27,9 @@ import { formatTimecode } from '../../lib/format'
 import { decodeWithBrowser } from '../../lib/audio'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { kindFromMime, useActiveAsset, useSession } from '../../state/store'
+import type { AssetKind } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
+import { BatchFiles, useBatchSelection } from '../BatchFiles'
 import { FileDrop } from '../FileDrop'
 import {
   ArrowRight,
@@ -454,9 +456,8 @@ export function ConverterPanel() {
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  // Batch mode: one settings pass applied to everything in the session, which
-  // is the common case for a folder of recordings.
-  const assets = useSession((state) => state.assets)
+  // Batch mode: one settings pass applied to several files — the ones ticked
+  // below, including any added for the batch in one pick.
   const [batch, setBatch] = useState(false)
   const [queue, setQueue] = useState<QueueItem[] | null>(null)
   const [archive, setArchive] = useState<Uint8Array<ArrayBuffer> | null>(null)
@@ -464,6 +465,9 @@ export function ConverterPanel() {
   const [preview, setPreview] = useState<import('../../lib/wav').AudioData | null>(null)
 
   const format = useMemo(() => findFormat(settings.formatId), [settings.formatId])
+  // What can become the target: sound from sound or video, pictures only from video.
+  const batchKinds = useMemo<AssetKind[]>(() => (format.kind === 'audio' ? ['audio', 'video'] : ['video']), [format.kind])
+  const selection = useBatchSelection(batchKinds)
 
   /**
    * What this file can sensibly become.
@@ -594,7 +598,8 @@ export function ConverterPanel() {
 
   /** Runs the current settings over every asset in the session, in order. */
   const convertBatch = async () => {
-    if (assets.length === 0) return
+    const chosen = selection.selected
+    if (chosen.length === 0) return
     const controller = new AbortController()
     abortRef.current = controller
     const releaseWakeLock = await holdScreenAwake()
@@ -603,7 +608,7 @@ export function ConverterPanel() {
     setError(null)
     setOutcome(null)
     setArchive(null)
-    setQueue(assets.map((entry) => ({ id: entry.id, name: entry.name, state: 'pending', outputBytes: null })))
+    setQueue(chosen.map((entry) => ({ id: entry.id, name: entry.name, state: 'pending', outputBytes: null })))
 
     const produced: { name: string; data: Uint8Array }[] = []
     const mark = (id: string, patch: Partial<QueueItem>) =>
@@ -611,7 +616,7 @@ export function ConverterPanel() {
 
     try {
       await loadFfmpeg()
-      for (const entry of assets) {
+      for (const entry of chosen) {
         if (controller.signal.aborted) break
         mark(entry.id, { state: 'running' })
         const inputName = `in_${sanitize(entry.name)}`
@@ -637,7 +642,7 @@ export function ConverterPanel() {
 
       if (produced.length > 0) {
         setArchive(createZip(produced.map((file) => ({ name: file.name, data: file.data }))))
-        log('konverter', `${produced.length} von ${assets.length} Dateien umgewandelt`)
+        log('konverter', `${produced.length} von ${chosen.length} Dateien umgewandelt`)
       }
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : String(failure)
@@ -975,14 +980,10 @@ export function ConverterPanel() {
                 </Reveal>
               ) : null}
 
-              {/* Only once there is more than one file: „Alle 1 Dateien" as a
-                  greyed-out switch was a control for a situation that did
-                  not exist. */}
-              {assets.length > 1 ? (
-              <div className="mt-[20px]">
+              <div className="mt-[20px] flex flex-col gap-[12px]">
                 <Toggle
-                  label={`Alle ${assets.length} Dateien der Sitzung umwandeln`}
-                  hint="Dieselben Einstellungen nacheinander auf jede Datei anwenden, Ergebnis als ZIP."
+                  label="Mehrere Dateien auf einmal"
+                  hint="Dieselben Einstellungen nacheinander auf jede gewählte Datei anwenden, Ergebnis als ZIP."
                   checked={batch}
                   onChange={(value) => {
                     setBatch(value)
@@ -990,12 +991,16 @@ export function ConverterPanel() {
                     setArchive(null)
                   }}
                 />
+                {batch ? <BatchFiles selection={selection} disabled={running} /> : null}
               </div>
-              ) : null}
 
               <div className="mt-[20px] flex flex-wrap items-center gap-[12px]">
-                <Button onClick={batch ? convertBatch : convert} disabled={running}>
-                  {running ? 'Läuft…' : batch ? `${assets.length} Dateien umwandeln` : 'Umwandeln'}
+                <Button onClick={batch ? convertBatch : convert} disabled={running || (batch && selection.selected.length === 0)}>
+                  {running
+                    ? 'Läuft…'
+                    : batch
+                      ? `${selection.selected.length} ${selection.selected.length === 1 ? 'Datei' : 'Dateien'} umwandeln`
+                      : 'Umwandeln'}
                   {!running ? <ArrowRight /> : null}
                 </Button>
                 {running ? (

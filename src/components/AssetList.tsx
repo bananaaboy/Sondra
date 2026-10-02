@@ -20,9 +20,10 @@ import { saveBytes } from '../lib/download'
 import { formatBytes, formatDuration } from '../lib/format'
 import { useDecodedAudio } from '../hooks/useDecodedAudio'
 import { useFilePicker } from '../hooks/useIngest'
+import { useKept } from '../hooks/useKeptSession'
 import { useActiveAsset, useSession } from '../state/store'
 import { AudioPreview } from './AudioPreview'
-import { Badge } from './ui/primitives'
+import { Badge, Toggle } from './ui/primitives'
 
 /** Playback of the selected file, decoded only once the menu is open. */
 function SelectedPlayer() {
@@ -81,6 +82,9 @@ export function SessionMenu() {
   const clearAssets = useSession((state) => state.clearAssets)
   const active = useActiveAsset()
   const picker = useFilePicker('geöffnet')
+  const keep = useKept((state) => state.keep)
+  const saving = useKept((state) => state.saving)
+  const setKeep = useKept((state) => state.setKeep)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -230,8 +234,9 @@ export function SessionMenu() {
 
           <div className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[4px] border-t border-line pt-[12px] text-small text-muted">
             <span>
-              <span className="value">{(totalBytes / 1024 / 1024).toFixed(1)} MB</span> im Arbeitsspeicher
-              dieses Tabs, nichts davon gesendet
+              <span className="value">{(totalBytes / 1024 / 1024).toFixed(1)} MB</span>{' '}
+              {keep ? (saving ? 'wird auf diesem Gerät gespeichert …' : 'auf diesem Gerät gespeichert') : 'nur im Arbeitsspeicher'}, nichts
+              davon gesendet
             </span>
             <button
               type="button"
@@ -241,6 +246,17 @@ export function SessionMenu() {
               Alles verwerfen
             </button>
           </div>
+
+          <Toggle
+            label="Sitzung auf diesem Gerät behalten"
+            checked={keep}
+            onChange={(next) => void setKeep(next)}
+            hint={
+              keep
+                ? 'Nach dem Schliessen oder einem Update bietet Sondra die Dateien wieder an.'
+                : 'Schliessen löscht alles. Für fremde oder geteilte Rechner.'
+            }
+          />
         </div>
       ) : null}
     </div>

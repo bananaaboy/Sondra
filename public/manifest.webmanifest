@@ -5,8 +5,8 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f4f3ee",
-  "theme_color": "#f4f3ee",
+  "background_color": "#f2eee4",
+  "theme_color": "#f2eee4",
   "lang": "de",
   "categories": [
     "utilities",

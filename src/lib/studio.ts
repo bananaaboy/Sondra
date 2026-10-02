@@ -125,6 +125,9 @@ export async function finishLocalJob(
   const { onProgress, onNote, signal } = options
   const inputs: Record<string, Uint8Array> = {}
   const names: string[] = []
+  // The core comes down while the parts do, not after them: its 30 MB were
+  // otherwise a wait of their own at the very end.
+  void loadFfmpeg().catch(() => undefined)
 
   for (const [index, tunnel] of job.tunnels.entries()) {
     onNote?.(`Teil ${index + 1} von ${job.tunnels.length} wird geholt`)
@@ -157,6 +160,8 @@ export async function finishLocalJob(
     output: [outputName],
     args: localJobArgs(job, names, outputName),
     signal,
+    // The parts were fetched for this merge only.
+    consumeInput: true,
   })
   const bytes = files[outputName]
 

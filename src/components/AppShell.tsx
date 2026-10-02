@@ -162,7 +162,7 @@ export function DropOverlay({ visible }: { visible: boolean }) {
       <div className="pop elevate-lift rounded-card bg-raised px-[48px] py-[40px] text-center ring-2 ring-inset ring-ink">
         <Mark className="mx-auto mb-[16px] h-[36px] w-[36px] text-ink" />
         <p className="display-sm">Loslassen zum Öffnen</p>
-        <p className="mt-[8px] text-small text-muted">Die Datei bleibt in diesem Tab.</p>
+        <p className="mt-[8px] text-small text-muted">Die Datei bleibt auf diesem Gerät.</p>
       </div>
     </div>
   )
@@ -194,6 +194,9 @@ export function Footer() {
         <a className={footerLink} href="./lizenz.html">
           Lizenz
         </a>
+        <button type="button" className={footerLink} onClick={() => window.dispatchEvent(new Event('sondra:tastenkuerzel'))}>
+          Tastenkürzel <span className="value">?</span>
+        </button>
       </p>
     </footer>
   )

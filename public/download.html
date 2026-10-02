@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Herunterladen · Sondra Studio</title>
+    <meta name="description" content="Sondra Studio für Windows herunterladen: Setup, Microsoft Store oder die Website als App — und wie das Setup signiert wird." />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./fonts.css" />
+    <script>
+      /* The theme the app remembers, before the first paint. */
+      try {
+        var choice = localStorage.getItem('sondra:theme')
+        if (choice === 'light' || choice === 'dark') document.documentElement.setAttribute('data-theme', choice)
+      } catch (e) {}
+    </script>
+    <style>
+      /* The app's own tokens (src/styles/theme.css), for a page that stands
+         outside the app bundle so it has a fixed address. */
+      :root {
+        color-scheme: light;
+        --canvas: #f2eee4;
+        --ink: #0f3e1c;
+        --prose: #162019;
+        --muted: #5a6b5f;
+        --line: #d3cdbf;
+        --tile: #edf5ef;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme='light']) {
+          color-scheme: dark;
+          --canvas: #0a110d;
+          --ink: #a6ecb9;
+          --prose: #e4ede6;
+          --muted: #adc2b2;
+          --line: #4a5e50;
+          --tile: #142019;
+        }
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --canvas: #0a110d;
+        --ink: #a6ecb9;
+        --prose: #e4ede6;
+        --muted: #adc2b2;
+        --line: #4a5e50;
+        --tile: #142019;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--prose);
+        font: 400 16px/1.6 'Public Sans', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
+      @media (min-width: 640px) { main { padding: 64px 24px 96px; } }
+
+      a { color: var(--ink); text-underline-offset: 3px; }
+      a:hover { text-decoration: none; }
+      a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+      .back { font-size: 14px; }
+      h1 { color: var(--ink); font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; margin: 24px 0 8px; }
+      .stand { color: var(--muted); font-size: 14px; margin: 0 0 32px; }
+      .kurz { font-size: 18px; line-height: 1.55; margin: 0 0 8px; }
+
+      section { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 32px; }
+      h2 { color: var(--ink); font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 12px; }
+      h3 { font-size: 16px; margin: 20px 0 6px; }
+      p, ul { margin: 0 0 12px; }
+      ul { padding-left: 20px; }
+      li { margin-bottom: 6px; }
+      code, .value { font-family: 'Courier Prime', ui-monospace, monospace; font-size: 15px; }
+      pre {
+        font-family: 'Courier Prime', ui-monospace, monospace;
+        font-size: 14px;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        margin: 0 0 12px;
+      }
+      table { border-collapse: collapse; width: 100%; font-size: 15px; }
+      th, td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
+      th { color: var(--ink); font-weight: 600; }
+      td:last-child, th:last-child { padding-right: 0; }
+      .wege { display: grid; gap: 12px; margin: 24px 0 8px; }
+      @media (min-width: 640px) { .wege { grid-template-columns: 1fr 1fr; } }
+      .weg { border-radius: 16px; padding: 20px; background: var(--tile); }
+      .weg h3 { margin: 0 0 6px; color: var(--ink); font-size: 20px; }
+      .weg p { margin: 0 0 14px; }
+      .weg.breit { grid-column: 1 / -1; }
+      .knopf {
+        display: inline-block; border-radius: 10px; padding: 10px 16px; font-weight: 600;
+        background: var(--ink); color: var(--canvas); text-decoration: none;
+      }
+      .knopf:hover { opacity: 0.9; }
+      [lang='en'] h2 { margin-top: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="./">Zurück zu Sondra</a>
+      <h1>Sondra Studio herunterladen</h1>
+      <p class="stand">Für Windows 10 und 11 · kostenlos · quelloffen unter der MIT-Lizenz</p>
+      <p class="kurz">
+        Sondra Studio ist ein Medienstudio, das Ton, Video und Bilder vollständig auf dem eigenen Gerät
+        bearbeitet. Die App ist dieselbe Werkstatt wie die Website, im eigenen Fenster.
+      </p>
+
+      <div class="wege">
+        <div class="weg">
+          <h3>Setup (.exe)</h3>
+          <p>Rund 130 MB. Installiert für alle Benutzer, lädt Videoportale mit yt-dlp in voller Auflösung und aktualisiert sich selbst.</p>
+          <a class="knopf" href="https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe">Setup herunterladen</a>
+          <p style="margin: 12px 0 0">Rechner mit Arm-Prozessor (etwa Snapdragon): <a href="https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup-arm64.exe">Setup für Arm64</a></p>
+        </div>
+        <div class="weg">
+          <h3>Microsoft Store</h3>
+          <p>Von Microsoft signiert, installiert sich ohne Warnung, Updates über den Store. Wählt x64 oder Arm64 selbst.</p>
+          <a class="knopf" href="https://apps.microsoft.com/detail/9P0JXR5GNSMG">Im Store öffnen</a>
+        </div>
+        <div class="weg breit">
+          <h3>Website als App</h3>
+          <p>Ohne Setup: <a href="./">sondra.lizge.ch</a> in Edge oder Chrome öffnen, dann Menü ⋯ → Apps → „Sondra installieren“.</p>
+        </div>
+      </div>
+      <p>
+        Alle Fassungen mit Änderungen stehen unter
+        <a href="https://github.com/bananaaboy/Sondra/releases">GitHub Releases</a>, der Quelltext unter
+        <a href="https://github.com/bananaaboy/Sondra">github.com/bananaaboy/Sondra</a>.
+      </p>
+
+      <section>
+        <h2>Signatur des Setups</h2>
+        <p>
+          Das Setup soll über die SignPath Foundation signiert werden; die Aufnahme ist beantragt. Bis sie
+          bestätigt ist, ist das Setup unsigniert, und Windows kann beim Start warnen („Weitere Informationen“ →
+          „Trotzdem ausführen“). Die Fassung im Microsoft Store signiert Microsoft.
+        </p>
+      </section>
+
+      <section lang="en">
+        <h2>Code signing policy</h2>
+        <p>Free code signing provided by <a href="https://signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
+        <p>
+          Only binaries built by the project's GitHub Actions workflow from the source code in
+          <a href="https://github.com/bananaaboy/Sondra">github.com/bananaaboy/Sondra</a> are signed. Every
+          signing request is approved manually by the project's approver.
+        </p>
+        <h3>Team roles</h3>
+        <ul>
+          <li>Committers and reviewers: <a href="https://github.com/bananaaboy">Lizge Navajeetharan</a></li>
+          <li>Approvers: <a href="https://github.com/bananaaboy">Lizge Navajeetharan</a></li>
+        </ul>
+        <h3>Privacy policy</h3>
+        <p>
+          The installed app checks GitHub for new versions of itself. Apart from that, it transfers information
+          to other networked systems only when the user asks for it: downloading from an address the user
+          enters, fetching yt-dlp when a video site is used for the first time, and loading the speech
+          recognition model on first use. It sends no usage data, crash reports or statistics. Details:
+          <a href="./datenschutz.html">Datenschutz</a> (German).
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,7 +1,7 @@
 {
   "name": "sondra",
   "private": true,
-  "version": "1.0.10",
+  "version": "1.0.13",
   "license": "MIT",
   "type": "module",
   "description": "Sondra — a fully client-side media studio. Download, convert, separate, normalize and sample audio entirely in the browser.",
@@ -13,9 +13,10 @@
     "typecheck": "tsc -b --noEmit",
     "verify:loudness": "node --experimental-strip-types scripts/verify-loudness.mts",
     "verify:tempo": "esbuild scripts/verify-tempo.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-tempo.mjs && node node_modules/.verify-tempo.mjs",
-    "verify": "npm run verify:loudness && npm run verify:tempo && npm run verify:harmony && npm run verify:resolve",
+    "verify": "npm run verify:loudness && npm run verify:tempo && npm run verify:harmony && npm run verify:resolve && npm run verify:ytdlp",
     "verify:harmony": "esbuild scripts/verify-harmony.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-harmony.mjs && node node_modules/.verify-harmony.mjs",
     "verify:resolve": "node scripts/verify-resolve.mjs",
+    "verify:ytdlp": "node scripts/verify-ytdlp.mjs",
     "dl": "node scripts/dl.mjs",
     "ytdlp": "node public/sondra-ytdlp.mjs",
     "build:desktop": "npm run build && node scripts/build-desktop.mjs",
@@ -24,6 +25,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "@huggingface/transformers": "^4.3.0",
     "onnxruntime-web": "^1.22.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
@@ -42,5 +44,9 @@
     "tailwindcss": "^4.1.11",
     "typescript": "^5.8.3",
     "vite": "^7.0.0"
+  },
+  "overrides": {
+    "onnxruntime-node": "file:./stubs/onnxruntime-node",
+    "sharp": "file:./stubs/sharp"
   }
 }

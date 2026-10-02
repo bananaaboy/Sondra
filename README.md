@@ -3,7 +3,7 @@
 Ein Medienstudio im Browser, das nichts hochlädt. Der Server liefert HTML,
 JavaScript und WebAssembly aus — danach rechnet ausschliesslich der Rechner des
 Besuchers. Live unter [sondra.lizge.ch](https://www.sondra.lizge.ch), als Windows-App über
-die [Releases](https://github.com/bananaaboy/Lizge/releases/latest).
+die [Releases](https://github.com/bananaaboy/Sondra/releases/latest).
 
 Vite 7 · React 19 · TypeScript · Tailwind v4 · zustand · FFmpeg als
 WebAssembly.
@@ -16,15 +16,22 @@ eine eigene Adresse; der Start ist die blanke Wurzel.
 | Werkzeug | Adresse | |
 |---|---|---|
 | **Herunterladen** | `#herunterladen` | Direkte Links, Freigabe-Links, HLS-Playlisten, YouTube (progressive Spur) und — mit Anbieter oder eigenem Dienst — weitere Portale |
-| **Umwandeln** | `#umwandeln` | Ton und Video in andere Formate; die Ziele richten sich nach der Quelle, Stapel als ZIP |
-| **Ton** | `#ton` | Schneiden an der Wellenform, Kopieren/Einfügen/Verdoppeln, Stille einfügen, Zoom und Schleife; Filter, Bass/Höhen, Kompressor, Rauschentfernung aus einem Rauschprofil, Echo, Hall, Pegel, Blenden, Tonhöhe und Tempo — alles live zu hören, bevor es übernommen wird; Kanäle |
+| **Umwandeln** | `#umwandeln` | Ton und Video in andere Formate; die Ziele richten sich nach der Quelle, mehrere Dateien auf einmal als ZIP |
+| **Ton** | `#ton` | Schneiden an der Wellenform, Kopieren/Einfügen/Verdoppeln, Stille einfügen, Zoom (auch mit dem Mausrad) und Schleife; Filter, Bass/Höhen, Kompressor, Klicks und Knackser entfernen, Rauschentfernung aus einem Rauschprofil, Echo, Hall, Pegel, Blenden, Tonhöhe und Tempo — alles live zu hören, bevor es übernommen wird; Kanäle |
 | **Video** | `#video` | Schneiden an der Zeitleiste, Ausschnitt, Drehen; Bild (Helligkeit, Kontrast, Sättigung, Looks, schärfen, entrauschen, stabilisieren), Blenden, Lautstärke und Lautheit, Tempo, rückwärts, Ton herauslösen, GIF |
 | **Bilder** | `#bilder` | Skalieren, zuschneiden, Farbe, umwandeln, Stapel als ZIP |
 | **Spuren trennen** | `#spuren-trennen` | Gesang, Schlagzeug, Bass, Übriges — ohne Modell-Download |
-| **Lautstärke** | `#lautstaerke` | EBU R128 / ITU-R BS.1770-4 mit True-Peak-Grenze |
+| **Lautstärke** | `#lautstaerke` | EBU R128 / ITU-R BS.1770-4 mit True-Peak-Grenze, mehrere Dateien auf einmal als ZIP |
 | **Zerschneiden** | `#zerschneiden` | Schnitte an Anschlägen oder im Tempo-Raster, 16 Pads mit Tonhöhe, Pegel, Panorama und Hüllkurve, eigene Bereiche nach Bestätigung, Step-Sequencer (Tempo, Swing, 16/32 Schritte) mit Klavierrolle je Pad, als loopbare WAV oder MIDI, Sample-Pack |
 | **Tonart** | `#tonart` | Tempo, Tonart mit Camelot-Code, Akkordverlauf, Melodie als MIDI |
+| **Untertitel** | `#untertitel` | Gesprochenes als Text mit Whisper auf dem Gerät (Modell einmalig von Hugging Face), jede Zeile korrigierbar; als TXT, SRT, VTT, als Untertitelspur im Video oder ins Bild gebrannt |
+| **Mischen** | `#mischen` | Stimme und Musik in eine Datei; die Musik wird beim Sprechen weich leiser (Schwelle aus der Aufnahme, Haltezeit, Vorlauf, Ausklang), Vorher/Nachher, als WAV oder unter das Video gelegt |
+| **Bildschirm** | `#bildschirm` | Ganzer Bildschirm oder ein Fenster, mit Ton des Rechners und/oder Mikrofon, als Video direkt in die Sitzung; in der App mit Quellenauswahl samt Vorschaubildern |
 | **Mikrofon** | `#mikrofon` | Ein- und Ausgang wählen, Pegelanzeige, Mithören, Probe; Einstellen für Podcast, Streaming, Videocall, Gesang oder Instrument mit Bericht jedes Schritts und Vorher/Nachher |
+
+Die Sitzung bleibt auf dem Gerät (IndexedDB) und wird nach dem Schliessen
+wieder angeboten; abschaltbar im Dateimenü. Nach einem Besuch geht alles ausser
+dem Herunterladen auch ohne Netz. `?` zeigt alle Tastenkürzel.
 
 Die Startseite zeigt ohne Datei nur, was die Seite kann, und den Knopf, der
 sie startet. Mit Datei fragt sie, was damit passieren soll, und bietet die
@@ -128,11 +135,11 @@ steht im Panel, bevor man etwas eintippt.
 Sondra gibt es auch als installierte Windows-App: eigenes Fenster statt
 Browser, Eintrag im Startmenü, Verknüpfung auf dem Desktop, Deinstallation
 über die Windows-Einstellungen. Oben auf der Website öffnet „App
-herunterladen" die Auswahl zwischen Microsoft Store (noch ausgegraut, „Bald
-verfügbar") und Setup. Das Setup installiert für alle Benutzer
+herunterladen" die Auswahl zwischen
+[Microsoft Store](https://apps.microsoft.com/detail/9P0JXR5GNSMG) und Setup. Das Setup installiert für alle Benutzer
 unter „Programme“ (eine UAC-Abfrage), läuft mit `/S` ganz ohne Oberfläche,
 wie es der Microsoft Store verlangt, und zeigt sonst vorher `LIZENZ.txt`. In
-„Apps & Features“ steht es als „Sondra - Multimedia“ von „Lizge“ — beides
+„Apps & Features“ steht es als „Sondra Studio“ von „Lizge“ — beides
 muss mit dem Eintrag im Partner Center übereinstimmen.
 
 `desktop/electron.mjs` öffnet ein Fenster auf `desktop/server.mjs`, der die
@@ -143,7 +150,7 @@ Vercel keinen Browser herunterlädt, den sie nie startet. Die App liefert, was
 die Website ausliefert, ohne Bereitstellungsdateien, Service Worker und
 `sondra-ytdlp.mjs`.
 
-- **Herunterladen:** [Sondra-Setup.exe](https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe)
+- **Herunterladen:** [Sondra-Setup.exe](https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe)
   aus dem neuesten Release. Das Setup ist nicht signiert; Windows fragt beim
   ersten Start nach.
 - **Selbst bauen (Windows):** einmal `npm ci --prefix desktop`, dann
@@ -157,12 +164,12 @@ die Website ausliefert, ohne Bereitstellungsdateien, Service Worker und
   Werkzeug mit einer echten Datei, das Mikrofon mit Chromiums Testgerät. Die
   Bildschirmfotos landen als Artefakt „Bildschirmfotos“.
 - **GitHub Actions → „Desktop testen":** lädt eine veröffentlichte Setup-Datei
-  herunter (Blob-Adresse oder neuestes Release), installiert sie und klickt
+  herunter (eine Adresse oder das neueste Release), installiert sie und klickt
   sie ebenso durch.
   Von Hand gestartet, veröffentlicht die Option `release` ein Release
-  `v<Version>` mit `Sondra-Setup.exe`, und die Option `store` legt das Setup
-  zusätzlich auf Vercel Blob (Secret `BLOB_READ_WRITE_TOKEN`) — eine
-  Paket-URL ohne Umleitung, wie sie der Microsoft Store verlangt.
+  `v<Version>` mit `Sondra-Setup.exe`. Für den Microsoft Store baut jeder Lauf
+  das MSIX-Paket (Artefakt „Sondra-Store-MSIX“); eine Setup-Adresse ohne
+  Umleitung braucht es dafür nicht mehr.
 
 Die App schreibt ein Protokoll nach `%APPDATA%\Sondra\sondra.log`.
 

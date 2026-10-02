@@ -151,15 +151,34 @@ async function dragAcross(locator, from, to) {
 
 try {
   await waitForDevtools()
-  browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`)
-  for (let i = 0; i < 60 && !page; i += 1) {
-    page = browser
-      .contexts()
-      .flatMap((context) => context.pages())
-      .find((candidate) => candidate.url().startsWith('http://127.0.0.1'))
+  // The window's page, by what the DevTools port itself lists. Connecting
+  // before the page exists can leave Playwright without it on a slower
+  // machine (seen on Windows on Arm), so the connection is made once the
+  // page is listed, and made again if Playwright still does not show it.
+  const listed = async () => {
+    try {
+      const targets = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()
+      return targets.filter((target) => target.type === 'page').map((target) => target.url)
+    } catch {
+      return []
+    }
+  }
+  let seen = []
+  for (let i = 0; i < 120 && !page; i += 1) {
+    seen = await listed()
+    if (seen.some((url) => url.startsWith('http://127.0.0.1'))) {
+      if (!browser || i % 10 === 0) {
+        await browser?.close().catch(() => {})
+        browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`)
+      }
+      page = browser
+        .contexts()
+        .flatMap((context) => context.pages())
+        .find((candidate) => candidate.url().startsWith('http://127.0.0.1'))
+    }
     if (!page) await new Promise((resolve) => setTimeout(resolve, 500))
   }
-  if (!page) throw new Error('Kein Fenster mit der Oberfläche gefunden.')
+  if (!page) throw new Error(`Kein Fenster mit der Oberfläche gefunden (DevTools zeigt: ${seen.join(', ') || 'keine Seite'}).`)
   await page.setViewportSize({ width: 1280, height: 900 }).catch(() => {})
   await page.waitForLoadState('domcontentloaded')
   await page.waitForTimeout(1500)
@@ -411,6 +430,65 @@ try {
     return `flower.mp4 in der Sitzung · ${ytdlp.replace(/^.*ms {2}/, '').slice(0, 60)}`
   })
 
+  await step('Öffnen mit Sondra: Datei an die laufende App', async () => {
+    // What Windows does for „Öffnen mit“ or a file dropped on the icon: start
+    // the executable with the path. The running app takes it over.
+    const opened = path.join(work, 'geoeffnet.wav')
+    fs.copyFileSync(wav, opened)
+    const before = await sessionCount()
+    const second = spawn(executable, ['--no-sandbox', opened], { stdio: 'ignore', env: { ...process.env, SONDRA_SMOKE: '' } })
+    await new Promise((resolve) => second.once('exit', resolve))
+    await page.waitForFunction(
+      (count) => {
+        const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
+        const extra = text.match(/\+(\d+)/)
+        return (extra ? Number(extra[1]) + 1 : 1) > count && text.includes('geoeffnet.wav')
+      },
+      before,
+      { timeout: 20_000 },
+    )
+    return `geoeffnet.wav in der Sitzung (${before} → ${await sessionCount()} Dateien)`
+  })
+
+  await step('Bildschirm: drei Sekunden mit Ton des Rechners', async () => {
+    // The app's own way: sources listed through the preload, one picked,
+    // handed over by the display-media handler, loopback sound if the
+    // machine has an output device.
+    const before = await sessionCount()
+    await go('bildschirm')
+    await waitForText(/Bildschirme/, 20_000)
+    const sound = page.getByRole('switch', { name: /Ton des Rechners/ })
+    if ((await sound.getAttribute('aria-checked')) !== 'true') await sound.click()
+    await page.getByRole('button', { name: 'Aufnahme starten' }).click()
+    await waitForText(/Aufnahme \d+:\d\d/, 20_000)
+    await page.waitForTimeout(3500)
+    await page.getByRole('button', { name: 'Aufnahme beenden' }).click()
+    await waitForText(/Bildschirm [\d-]+ [\d-]+\.webm/, 60_000)
+    const after = await sessionCount()
+    if (after !== before + 1) throw new Error(`${before} → ${after} Dateien, erwartet +1.`)
+    const text = await mainText()
+    const size = text.match(/\.webm · ([\d.,]+ [KMG]?B)/)?.[1] ?? '?'
+    return `Aufnahme in der Sitzung (${size})${/Ton des Rechners ist nicht dabei/.test(text) ? ', ohne Ton des Rechners' : ''}`
+  })
+
+  await step('Untertitel: Sprache erkennen, SRT', async () => {
+    // Needs the network twice: the sample, and the model on first use.
+    // SONDRA_UI_OHNE_NETZ skips it where Chromium cannot reach Hugging Face.
+    if (process.env.SONDRA_UI_OHNE_NETZ) return 'übersprungen (SONDRA_UI_OHNE_NETZ)'
+    const speech = path.join(work, 'jfk.wav')
+    const sample = await fetch('https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav')
+    if (!sample.ok) throw new Error(`Sprachprobe nicht geladen: ${sample.status}`)
+    fs.writeFileSync(speech, Buffer.from(await sample.arrayBuffer()))
+    await openFile(speech)
+    await go('untertitel')
+    await page.locator('main select').first().selectOption('en')
+    await page.getByRole('button', { name: 'Text erkennen' }).click()
+    await page.getByRole('button', { name: 'Als SRT speichern' }).waitFor({ timeout: 240_000 })
+    const text = (await page.locator('main textarea').evaluateAll((areas) => areas.map((area) => area.value).join(' '))).toLowerCase()
+    if (!/ask not what your country/.test(text)) throw new Error(`Erkannt: „${text.slice(0, 120)}“`)
+    return `„${text.slice(0, 60)}…“`
+  })
+
   await step('Herunterladen: YouTube (nur Hinweis)', async () => {
     await go('herunterladen')
     await page.getByLabel('Adresse zum Herunterladen').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
@@ -438,6 +516,25 @@ try {
       return `Laden abgelehnt: ${(await mainText()).match(/Hat nicht geklappt (.{0,120})/)?.[1]}`
     }
     return 'Video geladen'
+  })
+
+  await step('Sitzung: nach dem Neuladen wiederherstellen', async () => {
+    const before = await sessionCount()
+    // Written a moment behind the session; the file menu says when it is done.
+    await page.locator('header button[title="Dateien dieser Sitzung"]').click()
+    await page.getByText('auf diesem Gerät gespeichert,').waitFor({ timeout: 120_000 })
+    await page.keyboard.press('Escape')
+    await page.reload()
+    await page.getByRole('region', { name: 'Letzte Sitzung' }).waitFor({ timeout: 15_000 })
+    await page.getByRole('button', { name: 'Wiederherstellen', exact: true }).click()
+    await page.waitForFunction((count) => {
+      const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
+      const extra = text.match(/\+(\d+)/)
+      return (extra ? Number(extra[1]) + 1 : text ? 1 : 0) >= count
+    }, before, { timeout: 60_000 }).catch(async () => {
+      throw new Error(`${before} Dateien vorher, ${await sessionCount()} wiederhergestellt`)
+    })
+    return `${before} Dateien nach dem Neuladen wieder da`
   })
 } catch (error) {
   results.push({ name: 'Ablauf', ok: false, detail: String(error?.message ?? error), ms: 0 })

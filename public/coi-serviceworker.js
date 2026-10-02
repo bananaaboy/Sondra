@@ -66,9 +66,39 @@ self.addEventListener('message', (event) => {
         if (!(await cache.match(url))) missing.push(url)
       }
       await Promise.allSettled(missing.map((url) => cache.add(url)))
+      await keepWholeBuild(cache)
     })(),
   )
 })
+
+/**
+ * Every tool of the current build, and nothing of the old ones.
+ *
+ * Tools are loaded when opened, so a first visit alone left most of them
+ * uncached and offline they would not open. `offline.json` lists this build's
+ * files: all of them are fetched now, apart from the WebAssembly cores (cached
+ * on first use), and any cached asset from an earlier build is deleted — each
+ * deploy used to leave its bundles behind for good.
+ */
+async function keepWholeBuild(cache) {
+  let list
+  try {
+    const response = await fetch(new URL('./offline.json', self.registration.scope), { cache: 'no-store' })
+    if (!response.ok) return
+    list = await response.json()
+  } catch {
+    return // offline, or an older build without the list
+  }
+  const base = new URL('./', self.registration.scope)
+  const current = new Set([...(list.keep ?? []), ...(list.onDemand ?? [])].map((name) => new URL(name, base).href))
+  const wanted = (list.keep ?? []).map((name) => new URL(name, base).href)
+  const missing = []
+  for (const url of wanted) if (!(await cache.match(url))) missing.push(url)
+  await Promise.allSettled(missing.map((url) => cache.add(url)))
+  for (const request of await cache.keys()) {
+    if (request.url.startsWith(new URL('./assets/', base).href) && !current.has(request.url)) await cache.delete(request)
+  }
+}
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(

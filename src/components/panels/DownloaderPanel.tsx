@@ -82,6 +82,21 @@ function NotLocalNotice() {
  * server of the site. Not `panel-cool`, which says "not local" and would be
  * wrong here — but the liability sentence stays, word for word.
  */
+/** Whether the browser believes it has a network — offline the tools work, this one cannot. */
+function useOnline(): boolean {
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine)
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+    }
+  }, [])
+  return online
+}
+
 function AppNotice() {
   return (
     <div role="note" className="rounded-card bg-panel-soft p-[20px] sm:p-[24px]">
@@ -116,6 +131,7 @@ export function DownloaderPanel() {
   /** What the last „Laden“ put into the session, so it can still be saved. */
   const [taken, setTaken] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const online = useOnline()
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -196,6 +212,14 @@ export function DownloaderPanel() {
         <h2 className="display-md mt-[8px] mb-[12px]">Ein Video oder Lied von einer Adresse</h2>
 
         {IN_DESKTOP_APP ? <AppNotice /> : <NotLocalNotice />}
+
+        {!online ? (
+          <div className="mt-[16px]">
+            <Notice tone="warn" title="Keine Internetverbindung">
+              Herunterladen braucht das Netz. Alle anderen Werkzeuge rechnen auf diesem Gerät und gehen weiter.
+            </Notice>
+          </div>
+        ) : null}
 
         <form
           className="mt-[16px] flex flex-col gap-[8px] sm:flex-row"

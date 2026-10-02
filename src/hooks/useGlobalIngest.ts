@@ -15,6 +15,7 @@
 
 import { useEffect, useState } from 'react'
 
+import { APP_BRIDGE, type OpenedFile } from '../lib/desktop'
 import { useIngestFiles } from './useIngest'
 
 /** The slice of the File Handling API this app uses. */
@@ -92,6 +93,31 @@ export function useGlobalIngest(): { dragging: boolean } {
         await ingest(files, 'aus dem Betriebssystem geöffnet')
       })()
     })
+  }, [ingest])
+
+  // The same from the Windows app: „Öffnen mit Sondra“, or a file dropped on
+  // its icon. The app offers each file on its own server; fetching it here
+  // turns it into an ordinary File for the same path a pick takes.
+  useEffect(() => {
+    const bridge = APP_BRIDGE
+    if (!bridge?.takeOpenedFiles) return
+    const take = async (opened: OpenedFile[]) => {
+      if (opened.length === 0) return
+      const files: File[] = []
+      for (const entry of opened) {
+        try {
+          const response = await fetch(entry.url)
+          if (!response.ok) continue
+          const blob = await response.blob()
+          files.push(new File([blob], entry.name, { type: blob.type }))
+        } catch {
+          // The file went away between the click and now; the rest still come.
+        }
+      }
+      if (files.length > 0) await ingest(files, 'mit Sondra geöffnet')
+    }
+    void bridge.takeOpenedFiles().then(take)
+    return bridge.onOpenedFiles?.((opened) => void take(opened))
   }, [ingest])
 
   // Files a share sheet handed to the service worker, which parked them and

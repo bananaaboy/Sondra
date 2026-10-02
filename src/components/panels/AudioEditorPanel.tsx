@@ -49,14 +49,14 @@ import {
   tailSeconds,
   type SoundSettings,
 } from '../../lib/liveSound'
+import { removeClicks, type ClickStrength } from '../../lib/declick'
 import { formatBytes, formatTimecode } from '../../lib/format'
 import { pitchShift, stretchAudio } from '../../lib/timestretch'
 import { encodeWav, type AudioData, type WavBitDepth } from '../../lib/wav'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { useActiveAssetOfKind, useAssetsOfKind, useSession } from '../../state/store'
 import { FileDrop } from '../FileDrop'
-import { Waveform } from '../Waveform'
-import { FadeOverlay, type FadeShape } from '../editor/FadeOverlay'
+import { Waveform, type WaveFade } from '../Waveform'
 import {
   ArrowRight,
   Button,
@@ -71,7 +71,7 @@ import {
 } from '../ui/primitives'
 
 /** What can be switched on to be heard live, before it is written in. */
-type LiveId = 'fade' | 'highpass' | 'lowpass' | 'tone' | 'comp' | 'noise' | 'echo' | 'room' | 'pitch' | 'tempo'
+type LiveId = 'fade' | 'highpass' | 'lowpass' | 'tone' | 'comp' | 'clicks' | 'noise' | 'echo' | 'room' | 'pitch' | 'tempo'
 
 /** The live shifter's speed: the new pitch, divided by how fast the file runs. */
 const shifterRatio = (semitones: number, tempo: number) => Math.min(4, Math.max(0.25, 2 ** (semitones / 12) / tempo))
@@ -121,6 +121,8 @@ export function AudioEditorPanel() {
   const [compRatio, setCompRatio] = useState(3)
   const [noise, setNoise] = useState<Float32Array | null>(null)
   const [noiseCut, setNoiseCut] = useState(12)
+  const [clickStrength, setClickStrength] = useState<ClickStrength>('mittel')
+  const [declicked, setDeclicked] = useState<{ source: AudioData; strength: ClickStrength; audio: AudioData; repaired: number } | null>(null)
   const [echoDelay, setEchoDelay] = useState(300)
   const [echoFeedback, setEchoFeedback] = useState(0.35)
   const [echoMix, setEchoMix] = useState(0.4)
@@ -279,23 +281,40 @@ export function AudioEditorPanel() {
   const liveTempo = !compare && on.tempo ? tempo : 1
   const fading = Boolean(on.fade) && (fadeIn > 0 || fadeOut > 0)
   const noiseLive = Boolean(on.noise) && noise !== null
+  const clickLive = Boolean(on.clicks)
 
-  // Noise reduction is spectral and runs over the whole file, so it is heard
-  // from a second buffer, rebuilt when the profile or the strength changes.
-  const noiseReady =
-    denoised !== null && denoised.source === current && denoised.profile === noise && denoised.cut === noiseCut
+  // Clicks and noise run over the whole file, so they are heard from second
+  // buffers: clicks first, then noise on what is left, each rebuilt when its
+  // input or its setting changes.
+  const clickReady = declicked !== null && declicked.source === current && declicked.strength === clickStrength
   useEffect(() => {
-    if (!noiseLive || !current || !noise || noiseReady) return
+    if (!clickLive || !current || clickReady) return
     let cancelled = false
     const timer = window.setTimeout(() => {
-      const audio = removeNoise(current, noise, noiseCut)
-      if (!cancelled) setDenoised({ source: current, profile: noise, cut: noiseCut, audio })
+      const { audio, repaired } = removeClicks(current, clickStrength)
+      if (!cancelled) setDeclicked({ source: current, strength: clickStrength, audio, repaired })
     }, 40)
     return () => {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [noiseLive, current, noise, noiseCut, noiseReady])
+  }, [clickLive, current, clickStrength, clickReady])
+  const cleanBase = clickLive ? (clickReady && declicked ? declicked.audio : null) : current
+
+  const noiseReady =
+    denoised !== null && cleanBase !== null && denoised.source === cleanBase && denoised.profile === noise && denoised.cut === noiseCut
+  useEffect(() => {
+    if (!noiseLive || !cleanBase || !noise || noiseReady) return
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      const audio = removeNoise(cleanBase, noise, noiseCut)
+      if (!cancelled) setDenoised({ source: cleanBase, profile: noise, cut: noiseCut, audio })
+    }, 40)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [noiseLive, cleanBase, noise, noiseCut, noiseReady])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setFadeHeard({ in: fadeIn, out: fadeOut }), 160)
@@ -305,10 +324,10 @@ export function AudioEditorPanel() {
   /** The buffer that plays: the file, cleaned and faded if that is switched on. */
   const liveAudio = useMemo(() => {
     if (!current || compare) return current
-    let audio = noiseLive && noiseReady && denoised ? denoised.audio : current
+    let audio = noiseLive && noiseReady && denoised ? denoised.audio : (cleanBase ?? current)
     if (fading && (fadeHeard.in > 0 || fadeHeard.out > 0)) audio = applyFades(audio, fadeHeard.in, fadeHeard.out)
     return audio
-  }, [current, compare, noiseLive, noiseReady, denoised, fading, fadeHeard])
+  }, [current, compare, noiseLive, noiseReady, denoised, cleanBase, fading, fadeHeard])
 
   /** In words, for the bar under the waveform and the history. */
   const liveParts: string[] = []
@@ -318,6 +337,7 @@ export function AudioEditorPanel() {
   if (on.lowpass) liveParts.push(`Höhen über ${comma(lowpassHz / 1000)} kHz weg`)
   if (on.tone && (bassDb !== 0 || trebleDb !== 0)) liveParts.push(`Bass ${bassDb > 0 ? '+' : ''}${bassDb} dB, Höhen ${trebleDb > 0 ? '+' : ''}${trebleDb} dB`)
   if (on.comp) liveParts.push(`Kompressor ${comma(compRatio)}:1 ab ${compThreshold} dBFS`)
+  if (clickLive) liveParts.push(clickReady && declicked ? `${declicked.repaired} ${declicked.repaired === 1 ? 'Klick' : 'Klicks'} entfernt (${clickStrength})` : 'Klicks entfernen')
   if (noiseLive) liveParts.push(`Rauschen bis ${noiseCut} dB leiser`)
   if (on.echo) liveParts.push(`Echo ${echoDelay} ms`)
   if (on.room) liveParts.push(`Hall ${comma(roomSeconds)} s`)
@@ -332,6 +352,7 @@ export function AudioEditorPanel() {
       let audio = input
       const part = (fn: (a: AudioData) => AudioData | Promise<AudioData>) =>
         ranged ? processRange(audio, span.start, span.end, fn) : Promise.resolve(fn(audio))
+      if (clickLive) audio = await part((a) => removeClicks(a, clickStrength).audio)
       if (noiseLive && noise) audio = await part((a) => removeNoise(a, noise, noiseCut))
       if (!soundIsNeutral(wanted)) audio = await part((a) => renderSound(a, wanted, !ranged))
       if (fading) audio = applyFades(audio, fadeIn, fadeOut)
@@ -461,6 +482,42 @@ export function AudioEditorPanel() {
     [current, view, viewStart, viewEnd],
   )
 
+  // The wheel over the waveform zooms around the pointer; with Shift (or a
+  // sideways swipe) it moves the view along. A native listener, because React
+  // registers wheel handlers as passive and the page would scroll as well.
+  const wheelRef = useRef({ duration, viewStart, viewEnd })
+  wheelRef.current = { duration, viewStart, viewEnd }
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!frame) return
+    const onWheel = (event: WheelEvent) => {
+      const { duration: total, viewStart: start, viewEnd: end } = wheelRef.current
+      if (total <= 0) return
+      event.preventDefault()
+      const box = frame.getBoundingClientRect()
+      const fraction = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width))
+      const span = end - start
+      const sideways = event.shiftKey ? event.deltaY : event.deltaX
+      if (Math.abs(sideways) > Math.abs(event.shiftKey ? 0 : event.deltaY)) {
+        if (span >= total) return
+        const shift = (sideways / box.width) * span
+        const nextStart = Math.min(total - span, Math.max(0, start + shift))
+        setView({ start: nextStart, end: nextStart + span })
+        return
+      }
+      const at = start + fraction * span
+      const nextSpan = Math.min(total, Math.max(0.05, span * Math.exp(event.deltaY * 0.0015)))
+      if (nextSpan >= total * 0.999) {
+        setView(null)
+        return
+      }
+      const nextStart = Math.min(total - nextSpan, Math.max(0, at - fraction * nextSpan))
+      setView({ start: nextStart, end: nextStart + nextSpan })
+    }
+    frame.addEventListener('wheel', onWheel, { passive: false })
+    return () => frame.removeEventListener('wheel', onWheel)
+  }, [current])
+
   const secondsAt = (clientX: number) => {
     const box = frameRef.current?.getBoundingClientRect()
     if (!box || duration <= 0) return 0
@@ -479,7 +536,7 @@ export function AudioEditorPanel() {
 
   // The fades as they will fall: the file's own ends while the fade switch is
   // on, and the selection while a pointer rests on one of its fade buttons.
-  const fadeShapes: FadeShape[] = []
+  const fadeShapes: WaveFade[] = []
   if (fading && !compare) {
     const lead = Math.min(fadeIn, duration)
     if (lead > 0) fadeShapes.push({ from: 0, to: lead, direction: 'in' })
@@ -487,6 +544,11 @@ export function AudioEditorPanel() {
     if (tail > 0) fadeShapes.push({ from: duration - tail, to: duration, direction: 'out' })
   }
   if (fadeHover && hasSelection) fadeShapes.push({ from: span.start, to: span.end, direction: fadeHover })
+  // The waveform draws the view, so the fades move into its time.
+  const fadesInView = useMemo(
+    () => fadeShapes.map((fade) => ({ ...fade, from: fade.from - viewStart, to: fade.to - viewStart })),
+    [fadeShapes.map((fade) => `${fade.direction}${fade.from}-${fade.to}`).join(','), viewStart],
+  )
 
   const copySelection = () => {
     if (!current || !hasSelection) return
@@ -594,8 +656,7 @@ export function AudioEditorPanel() {
             }}
             className="relative mt-[16px] cursor-text touch-none bg-panel-soft p-[12px] select-none"
           >
-            <Waveform audio={shown} height={130} position={positionInView} selection={liveInView} />
-            <FadeOverlay fades={fadeShapes} viewStart={viewStart} viewEnd={viewEnd} />
+            <Waveform audio={shown} height={130} position={positionInView} selection={liveInView} fades={fadesInView} />
           </div>
 
           {/* -- what is heard live, and writing it in ------------------------ */}
@@ -838,7 +899,7 @@ export function AudioEditorPanel() {
           {/* -- sound: filters, dynamics, noise, space --------------------------- */}
           {/* Every block is a switch. Moving a slider switches it on, and what
               is on plays live — „Übernehmen“ under the waveform writes it in. */}
-          <Reveal label={`Klang: Filter, Bass und Höhen, Kompressor, Rauschen, Echo, Hall${hasSelection ? ' — gilt für den Ausschnitt' : ''}`} className="mt-[16px]">
+          <Reveal label={`Klang: Filter, Bass und Höhen, Kompressor, Klicks, Rauschen, Echo, Hall${hasSelection ? ' — gilt für den Ausschnitt' : ''}`} className="mt-[16px]">
             <div className="grid gap-[20px] rounded-card bg-panel-soft p-[16px] sm:grid-cols-2">
               <div className="flex flex-col gap-[8px]">
                 <Toggle label="Tiefen entfernen" checked={Boolean(on.highpass)} onChange={toggle('highpass')}
@@ -897,6 +958,28 @@ export function AudioEditorPanel() {
                       setCompRatio(Number(event.target.value))
                       enable('comp')
                     }} />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-[8px] sm:col-span-2">
+                <Toggle label="Klicks und Knackser entfernen" checked={clickLive} onChange={toggle('clicks')}
+                  hint={clickLive && clickReady && declicked
+                    ? declicked.repaired === 0
+                      ? 'Nichts gefunden, was wie ein Klick aussieht.'
+                      : `${declicked.repaired} ${declicked.repaired === 1 ? 'Stelle' : 'Stellen'} ausgebessert — für alte Platten, Kabelknacken, Schmatzen am Mikrofon.`
+                    : 'Für alte Platten, Kabelknacken, Schmatzen am Mikrofon. Schläge und Konsonanten bleiben.'} />
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  {(['sanft', 'mittel', 'stark'] as const).map((value) => (
+                    <button key={value} type="button" aria-pressed={clickStrength === value}
+                      onClick={() => {
+                        setClickStrength(value)
+                        enable('clicks')
+                      }}
+                      className={`press rounded-pill px-[12px] py-[5px] text-small ${clickStrength === value ? 'bg-ink text-on-ink' : 'bg-panel-mid text-prose hover:bg-panel-strong'}`}>
+                      {value[0].toUpperCase() + value.slice(1)}
+                    </button>
+                  ))}
+                  {clickLive && !clickReady ? <span className="text-small text-prose">wird gesucht …</span> : null}
                 </div>
               </div>
 

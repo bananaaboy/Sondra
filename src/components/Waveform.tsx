@@ -9,6 +9,11 @@
  * canvas. Moving the playhead then costs one blit and one line, instead of
  * re-scanning every sample — which, at sixty frames a second during playback,
  * is the difference between a smooth cursor and a locked-up page.
+ *
+ * A fade that is set but not yet written is drawn into the waveform itself:
+ * the columns shrink by the same equal-power gain the audio gets, what the
+ * fade takes away stays as a faint trace, and a hairline follows the curve.
+ * The picture is what will be heard, not a veil laid over the old one.
  */
 
 import { useEffect, useRef } from 'react'
@@ -16,6 +21,25 @@ import { useEffect, useRef } from 'react'
 import { peakEnvelope } from '../lib/audio'
 import { readPalette } from '../lib/theme'
 import type { AudioData } from '../lib/wav'
+
+export interface WaveFade {
+  /** Seconds in the audio being drawn. */
+  from: number
+  to: number
+  direction: 'in' | 'out'
+}
+
+/** Equal-power gain at `seconds` — the curve `fadeRange` renders with. */
+export function fadeGainAt(fades: readonly WaveFade[], seconds: number): number {
+  let gain = 1
+  for (const fade of fades) {
+    const length = fade.to - fade.from
+    if (length <= 0 || seconds < fade.from || seconds > fade.to) continue
+    const t = (seconds - fade.from) / length
+    gain *= fade.direction === 'in' ? Math.sin((t * Math.PI) / 2) : Math.cos((t * Math.PI) / 2)
+  }
+  return gain
+}
 
 export interface WaveformProps {
   audio: AudioData | null
@@ -27,8 +51,12 @@ export interface WaveformProps {
   position?: number | null
   /** Highlighted region in seconds. */
   selection?: { start: number; end: number } | null
+  /** Fades to draw into the waveform before they are applied. */
+  fades?: readonly WaveFade[]
   className?: string
 }
+
+const NO_FADES: readonly WaveFade[] = []
 
 export function Waveform({
   audio,
@@ -37,12 +65,17 @@ export function Waveform({
   background = 'transparent',
   position = null,
   selection = null,
+  fades = NO_FADES,
   className = '',
 }: WaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  /** The rendered envelope, reused until the audio, size or colours change. */
+  /** The rendered envelope, reused until the audio, size, colours or fades change. */
   const layerRef = useRef<HTMLCanvasElement | null>(null)
   const layerKeyRef = useRef('')
+  /** The peaks themselves, kept apart so moving a fade does not re-scan the audio. */
+  const peaksRef = useRef<{ audio: AudioData; buckets: number; min: Float32Array; max: Float32Array } | null>(null)
+  /** Which audio the cached layer shows; the key alone misses an edit that keeps the length. */
+  const layerAudioRef = useRef<AudioData | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -77,14 +110,57 @@ export function Waveform({
       }
 
       const buckets = Math.max(1, Math.floor(width))
-      const { min, max } = peakEnvelope(audio, buckets)
+      if (peaksRef.current?.audio !== audio || peaksRef.current.buckets !== buckets) {
+        peaksRef.current = { audio, buckets, ...peakEnvelope(audio, buckets) }
+      }
+      const { min, max } = peaksRef.current
+      const reach = middle * 0.94
+      const duration = audio.channels[0].length / audio.sampleRate
+      const gainOf = (x: number) => (fades.length === 0 ? 1 : fadeGainAt(fades, ((x + 0.5) / buckets) * duration))
+
+      // What a fade takes away, as a trace: the original columns, faint.
+      if (fades.length > 0) {
+        layerContext.fillStyle = stroke
+        layerContext.globalAlpha = 0.16
+        for (let x = 0; x < buckets; x += 1) {
+          if (gainOf(x) >= 0.999) continue
+          const top = middle - max[x] * reach
+          layerContext.fillRect(x, top, 1, Math.max(1, middle - min[x] * reach - top))
+        }
+        layerContext.globalAlpha = 1
+      }
 
       layerContext.fillStyle = stroke
       for (let x = 0; x < buckets; x += 1) {
-        const top = middle - max[x] * middle * 0.94
-        const bottom = middle - min[x] * middle * 0.94
+        const gain = gainOf(x)
+        const top = middle - max[x] * gain * reach
+        const bottom = middle - min[x] * gain * reach
         // Sub-pixel-tall columns vanish entirely; keep a hairline instead.
         layerContext.fillRect(x, top, 1, Math.max(1, bottom - top))
+      }
+
+      // The curve itself, so a fade over a quiet passage still has a shape.
+      if (fades.length > 0) {
+        layerContext.strokeStyle = stroke
+        layerContext.globalAlpha = 0.5
+        layerContext.lineWidth = 1
+        for (const edge of [-1, 1]) {
+          layerContext.beginPath()
+          let drawing = false
+          for (let x = 0; x <= buckets; x += 1) {
+            const gain = gainOf(Math.min(x, buckets - 1))
+            if (gain >= 0.999) {
+              drawing = false
+              continue
+            }
+            const y = middle + edge * gain * reach
+            if (drawing) layerContext.lineTo(x, y)
+            else layerContext.moveTo(x, y)
+            drawing = true
+          }
+          layerContext.stroke()
+        }
+        layerContext.globalAlpha = 1
       }
     }
 
@@ -96,10 +172,12 @@ export function Waveform({
       if (width <= 0) return
 
       const frames = audio?.channels[0]?.length ?? 0
-      const key = `${width}x${height}@${ratio}:${stroke}:${frames}:${audio?.sampleRate ?? 0}:${audio?.channels.length ?? 0}`
-      if (key !== layerKeyRef.current) {
+      const fadeKey = fades.map((fade) => `${fade.direction}${fade.from.toFixed(4)}-${fade.to.toFixed(4)}`).join(',')
+      const key = `${width}x${height}@${ratio}:${stroke}:${frames}:${audio?.sampleRate ?? 0}:${audio?.channels.length ?? 0}:${fadeKey}`
+      if (key !== layerKeyRef.current || layerAudioRef.current !== audio) {
         buildLayer(width, ratio, stroke)
         layerKeyRef.current = key
+        layerAudioRef.current = audio
       }
 
       canvas.width = Math.max(1, Math.floor(width * ratio))
@@ -140,7 +218,7 @@ export function Waveform({
     })
     observer.observe(canvas)
     return () => observer.disconnect()
-  }, [audio, height, color, background, position, selection])
+  }, [audio, height, color, background, position, selection, fades])
 
   return <canvas ref={canvasRef} style={{ height, width: '100%', display: 'block' }} className={className} />
 }

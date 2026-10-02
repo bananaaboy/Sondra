@@ -1,0 +1,1 @@
+{ "name": "sharp", "version": "0.0.0-sondra", "private": true, "main": "index.js", "description": "Leer: Sondra nutzt die Browser-Fassung von transformers.js, die dieses Paket nie lädt." }

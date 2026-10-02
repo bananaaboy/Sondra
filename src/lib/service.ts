@@ -144,6 +144,13 @@ export function explain(code: string | null, detail?: string | null): string {
       'welchem Browser sie kommen soll — dort müssen Sie bei YouTube angemeldet sein.'
     )
   }
+  if (code.includes('ytdlp.missing.store')) {
+    return (
+      'Die Sondra-App aus dem Microsoft Store lädt yt-dlp nicht selbst herunter — der Store erlaubt ' +
+      'das nicht. Einmal „winget install yt-dlp.yt-dlp“ in der Eingabeaufforderung, danach findet ' +
+      'Sondra es von allein.'
+    )
+  }
   if (IN_DESKTOP_APP && code.includes('ytdlp.missing')) {
     return (
       'Ohne yt-dlp geht dieser Weg nicht. Beim nächsten Versuch fragt Sondra noch einmal, ob es ' +
@@ -621,11 +628,15 @@ export function localJobArgs(job: LocalJob, inputs: string[], output: string): s
   const args = inputs.flatMap((name) => ['-i', name])
 
   switch (job.type) {
+    // No `+faststart` on the copies: it moves the index to the front for
+    // streaming from a web server, by writing the whole file a second time —
+    // for a file that ends up in the session or on disk, that second pass was
+    // most of the wait at the end of a download.
     case 'merge':
       // Separate video and audio streams, already in the right codecs.
-      return [...args, '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-movflags', '+faststart', output]
+      return [...args, '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', output]
     case 'mute':
-      return [...args, '-an', '-c:v', 'copy', '-movflags', '+faststart', output]
+      return [...args, '-an', '-c:v', 'copy', output]
     case 'audio':
       return [
         ...args,
@@ -644,7 +655,7 @@ export function localJobArgs(job: LocalJob, inputs: string[], output: string): s
       ]
     case 'remux':
     default:
-      return [...args, '-c', 'copy', '-movflags', '+faststart', output]
+      return [...args, '-c', 'copy', output]
   }
 }
 

@@ -70,7 +70,13 @@ function Tool({
       <span className="flex items-center gap-[8px]">
         {/* A tool that needs a kind of file the session does not hold says so
             through its icon only; fading the whole tile cost legibility. */}
-        <span className={dimmed ? 'text-faint' : 'text-ink'}>
+        {/* The icon sits on its own small field, which takes the ink when the
+            tile is pointed at — the one moment a tile spends ink. */}
+        <span
+          className={`grid h-[26px] w-[26px] shrink-0 place-items-center rounded-nav bg-raised transition-colors duration-[var(--dur-fast)] ${
+            dimmed ? 'text-faint' : 'text-ink group-hover:bg-ink group-hover:text-on-ink'
+          }`}
+        >
           <ToolIcon>{ICONS[action.panel]}</ToolIcon>
         </span>
         <span className="text-small font-semibold leading-[1.3] text-ink">{action.label}</span>
@@ -236,12 +242,12 @@ export function Home() {
       ) : (
         /* One block: what the page is, and how to start. The tint holds both,
            so the headline is not a sentence floating beside a box. */
-        <section className="flex flex-col gap-[24px] rounded-card bg-panel-soft p-[24px] sm:flex-row sm:items-center sm:justify-between sm:gap-[40px] sm:p-[40px]">
+        <section className="field-glow flex flex-col gap-[24px] rounded-card p-[24px] sm:flex-row sm:items-center sm:justify-between sm:gap-[40px] sm:p-[40px]">
           <div className="flex max-w-[40em] flex-col gap-[12px]">
             <h2 className="display-md sm:display-lg">Ton, Video und Bilder bearbeiten</h2>
             <p className="text-body leading-[1.55] text-prose">
-              Alles rechnet in diesem Tab. Ihre Dateien werden nirgendwohin hochgeladen, und mit dem
-              Schließen des Tabs ist alles weg.
+              Alles rechnet auf diesem Gerät. Ihre Dateien werden nirgendwohin hochgeladen, und die Sitzung
+              bleibt hier, bis Sie sie verwerfen.
             </p>
           </div>
           <WayIn onOpen={picker.open} busy={picker.busy} />

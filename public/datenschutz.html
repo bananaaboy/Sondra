@@ -19,29 +19,29 @@
          outside the app bundle so it has a fixed address. */
       :root {
         color-scheme: light;
-        --canvas: #f4f3ee;
+        --canvas: #f2eee4;
         --ink: #0f3e1c;
-        --prose: #1b231d;
-        --muted: #5d6c61;
-        --line: #d5d4c9;
+        --prose: #162019;
+        --muted: #5a6b5f;
+        --line: #d3cdbf;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
           color-scheme: dark;
-          --canvas: #090d0b;
-          --ink: #9ce0ad;
-          --prose: #e0e8e2;
-          --muted: #a7bbab;
-          --line: #525f55;
+          --canvas: #0a110d;
+          --ink: #a6ecb9;
+          --prose: #e4ede6;
+          --muted: #adc2b2;
+          --line: #4a5e50;
         }
       }
       :root[data-theme='dark'] {
         color-scheme: dark;
-        --canvas: #090d0b;
-        --ink: #9ce0ad;
-        --prose: #e0e8e2;
-        --muted: #a7bbab;
-        --line: #525f55;
+        --canvas: #0a110d;
+        --ink: #a6ecb9;
+        --prose: #e4ede6;
+        --muted: #adc2b2;
+        --line: #4a5e50;
       }
 
       * { box-sizing: border-box; }
@@ -78,7 +78,7 @@
       <a class="back" href="./">Zurück zu Sondra</a>
 
       <h1>Datenschutz</h1>
-      <p class="stand">Stand: 23. September 2026 · gilt für die Website und die Windows-App</p>
+      <p class="stand">Stand: 1. Oktober 2026 · gilt für die Website und die Windows-App</p>
 
       <p class="kurz">
         Sondra bearbeitet Ihre Dateien auf Ihrem Gerät. Nichts davon wird zu uns hochgeladen. Es gibt keine
@@ -102,10 +102,16 @@
         <h2>Was auf Ihrem Gerät bleibt</h2>
         <p>
           Alles, was Sie öffnen, umwandeln, schneiden, trennen oder messen, wird im Browser beziehungsweise in
-          der App auf Ihrem Gerät gerechnet. Die Dateien liegen nur im Arbeitsspeicher und sind weg, sobald Sie
-          den Tab oder die App schliessen.
+          der App auf Ihrem Gerät gerechnet.
         </p>
-        <p>Im Speicher Ihres Browsers (localStorage) legt Sondra nur Einstellungen ab:</p>
+        <p>
+          Die Dateien Ihrer Sitzung speichert Sondra im Speicher Ihres Browsers auf diesem Gerät (IndexedDB),
+          damit sie nach dem Schliessen oder einem Update wieder angeboten werden können. Sie werden nicht
+          gesendet. Unter dem Dateinamen oben rechts lässt sich das mit „Sitzung auf diesem Gerät behalten“
+          abschalten; dabei wird alles Gespeicherte gelöscht, und die Dateien sind wieder weg, sobald Sie den Tab
+          oder die App schliessen. Auf einem fremden oder geteilten Rechner sollten Sie das tun.
+        </p>
+        <p>Im Speicher Ihres Browsers (localStorage) legt Sondra ausserdem nur Einstellungen ab:</p>
         <ul>
           <li><code>sondra:theme</code>: ob Sie das helle oder dunkle Aussehen gewählt haben.</li>
           <li>
@@ -116,6 +122,8 @@
             <code>sondra:instances</code>: bis zu sechs Adressen solcher Dienste, die schon einmal
             geantwortet haben, damit Sie sie wieder auswählen können.
           </li>
+          <li><code>sondra:sitzung-behalten</code>: ob die Sitzung auf diesem Gerät behalten wird.</li>
+          <li><code>sondra:sprache</code>, <code>sondra:sprachmodell</code>: Sprache und Genauigkeit, die Sie für Untertitel gewählt haben.</li>
         </ul>
         <p>
           Diese Einträge verlassen Ihr Gerät nicht. Sie löschen sie, indem Sie in Ihrem Browser die
@@ -188,6 +196,29 @@
       </section>
 
       <section>
+        <h2>Bildschirmaufnahme</h2>
+        <p>
+          Sondra nimmt den Bildschirm nur auf, wenn Sie unter „Bildschirm“ selbst auf „Aufnahme starten“
+          drücken und eine Quelle freigeben; im Browser fragt der Browser, in der App wählen Sie den Bildschirm
+          oder das Fenster aus einer Liste mit Vorschaubildern. Die Aufnahme entsteht auf Ihrem Gerät, wird
+          nicht gesendet und liegt danach in Ihrer Sitzung. Mit „Ton des Rechners“ wird alles aufgenommen, was
+          der Rechner in dieser Zeit abspielt; mit „Mikrofon dazu“ auch Ihr Mikrofon, das beim Beenden wieder
+          freigegeben wird.
+        </p>
+      </section>
+
+      <section>
+        <h2>Untertitel und Transkripte</h2>
+        <p>
+          Die Spracherkennung unter „Untertitel“ läuft auf Ihrem Gerät. Beim ersten Gebrauch lädt Ihr Browser
+          dafür das Spracherkennungsmodell Whisper (rund 80 MB, bei „Genauer“ rund 250 MB) von Hugging Face
+          (<code>huggingface.co</code>, Hugging Face, Inc., USA). Dabei sieht Hugging Face Ihre IP-Adresse und
+          welches Modell geladen wird — Ihre Aufnahme und der erkannte Text werden nicht gesendet. Das Modell
+          bleibt danach im Speicher Ihres Browsers, spätere Durchgänge brauchen kein Netz.
+        </p>
+      </section>
+
+      <section>
         <h2>Eigene Trennmodelle</h2>
         <p>
           Wenn Sie für „Spuren trennen“ ein eigenes Modell verwenden, lädt Ihr Browser es von Ihrem Gerät oder
@@ -200,13 +231,23 @@
         <p>
           Die App enthält dieselbe Oberfläche und die beiden Funktionen und führt sie auf Ihrem Rechner aus.
           Sie ist nur unter <code>127.0.0.1</code> erreichbar, also nur von Ihrem eigenen Rechner. Es werden
-          keine Nutzungsdaten, Absturzberichte oder Statistiken gesendet, und die App sucht nicht selbständig
-          nach Updates.
+          keine Nutzungsdaten, Absturzberichte oder Statistiken gesendet.
         </p>
         <ul>
           <li>
             Das Setup wird über GitHub (GitHub Inc., USA) ausgeliefert. Beim Herunterladen verarbeitet GitHub
             Ihre IP-Adresse und Verbindungsdaten nach den eigenen Datenschutzregeln.
+          </li>
+          <li>
+            Die mit dem Setup installierte App fragt 20 Sekunden nach dem Start und danach alle sechs Stunden bei
+            GitHub nach, ob es eine neue Fassung gibt, und lädt sie dann im Hintergrund. Dabei sieht GitHub Ihre
+            IP-Adresse und die installierte Version; sonst wird nichts übermittelt. Die Fassung aus dem Microsoft
+            Store fragt nicht selbst, dort aktualisiert der Store.
+          </li>
+          <li>
+            yt-dlp, das Programm für Videoportale, lädt die App erst, wenn Sie ein Portal zum ersten Mal
+            benutzen, von GitHub, und prüft es über seine SHA-256-Prüfsumme. Ist diese Kopie älter als eine
+            Woche, bringt yt-dlp sich beim nächsten Gebrauch selbst über GitHub auf den neuesten Stand.
           </li>
           <li>
             Laden Sie in der App etwas von einer Adresse, geht die Anfrage direkt von Ihrem Rechner an die
@@ -230,7 +271,8 @@
           Wir verkaufen keine Daten und geben keine weiter, ausser an die oben genannten Stellen und soweit es
           für die jeweilige Funktion nötig ist. Vercel und GitHub sitzen in den USA. Die Übermittlung dorthin
           stützt sich auf die Garantien, die beide in ihren Auftragsverarbeitungsverträgen bieten
-          (Standardvertragsklauseln).
+          (Standardvertragsklauseln). Hugging Face (ebenfalls USA) erhält nur beim ersten Laden des
+          Untertitel-Modells Ihre IP-Adresse, wie jeder Server, von dem Ihr Browser eine Datei abruft.
         </p>
       </section>
 

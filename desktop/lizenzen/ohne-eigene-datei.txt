@@ -4,3 +4,8 @@ onnxruntime-web   MIT License, Copyright (c) Microsoft Corporation
                   https://github.com/microsoft/onnxruntime/blob/main/LICENSE
 @ffmpeg/ffmpeg    MIT License, Copyright (c) 2019 Jerome Wu
                   https://github.com/ffmpegwasm/ffmpeg.wasm/blob/main/LICENSE
+
+Whisper models  MIT License, Copyright (c) 2022 OpenAI
+                https://github.com/openai/whisper/blob/main/LICENSE
+                Not shipped: fetched from huggingface.co (onnx-community) on
+                first use of „Untertitel“ and kept in the app's cache.
