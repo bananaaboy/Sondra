@@ -85,7 +85,7 @@ const escapeHtml = (text) =>
  */
 function failurePage(reason, retryUrl) {
   const dark = nativeTheme.shouldUseDarkColors
-  const [ground, ink, prose] = dark ? ['#0a110d', '#c3f4d0', '#e4ede6'] : ['#f6f7f3', '#0f3e1c', '#162019']
+  const [ground, ink, prose] = dark ? ['#0a110d', '#c3f4d0', '#e4ede6'] : ['#f2eee4', '#0f3e1c', '#162019']
   const html = `<!doctype html><html lang="de"><meta charset="utf-8"><title>Sondra Studio</title>
 <body style="margin:0;background:${ground};color:${prose};font:16px/1.55 system-ui,sans-serif">
 <main style="max-width:560px;padding:64px 32px">
@@ -312,7 +312,7 @@ async function open() {
     minWidth: 360,
     minHeight: 480,
     show: !SMOKE,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a110d' : '#f6f7f3',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a110d' : '#f2eee4',
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,

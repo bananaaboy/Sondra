@@ -9,7 +9,7 @@
       content="Konvertieren, Spuren trennen, normalisieren und sampeln — vollständig lokal im Browser über WebAssembly und Web Workers. Keine Uploads, kein Server."
     />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#f6f7f3" />
+    <meta name="theme-color" content="#f2eee4" />
     <link rel="stylesheet" href="./fonts.css" />
     <link rel="preload" href="./fonts/public-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="./fonts/courier-prime-latin.woff2" as="font" type="font/woff2" crossorigin />
@@ -36,7 +36,7 @@
             (choice !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
           document
             .querySelector('meta[name="theme-color"]')
-            .setAttribute('content', dark ? '#0a110d' : '#f6f7f3')
+            .setAttribute('content', dark ? '#0a110d' : '#f2eee4')
         } catch (error) {
           /* private window, blocked storage — the media query still applies */
         }
