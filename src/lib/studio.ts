@@ -42,6 +42,7 @@ import {
   localJobArgs,
   localJobExtension,
   resolveMedia,
+  ServiceError,
   type LocalJob,
   type ServiceItem,
   type ServiceSettings,
@@ -287,6 +288,11 @@ export async function resolveViaService(url: string, signal?: AbortSignal): Prom
       }
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
+      // The connected local service did answer, but could not resolve this
+      // portal. Do not hide that concrete answer behind the much narrower
+      // website fallback — it only understands YouTube and direct files and
+      // otherwise produces misleading errors unrelated to the pasted address.
+      if (cause instanceof ServiceError) throw cause
       // A service that cannot answer is not the end of the road: this site's
       // own endpoint may still know the address.
     }
