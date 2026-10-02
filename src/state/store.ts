@@ -68,6 +68,7 @@ export type PanelId =
   | 'subtitles'
   | 'screen'
   | 'mix'
+  | 'player'
 
 interface SessionState {
   assets: Asset[]

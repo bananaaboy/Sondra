@@ -187,6 +187,14 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Geschnitten wird immer das Original. **libopus in Stereo stürzt in diesem
   FFmpeg-Build ab** (gemessen, auch unter Node; der Tab stirbt) — für
   Vorschauen Vorbis oder AAC.
+- **Abspielen** (`PlayerPanel.tsx`, `lib/player.ts`): der Media Player,
+  nur zum Ansehen und Anhören. Dateien werden nie in die Sitzung gelesen,
+  sondern über eine Object-URL auf dem File abgespielt; solange das Werkzeug
+  offen ist, gehören fallengelassene Dateien ihm (`claimDrops`, in
+  `useGlobalIngest`). Eine .srt/.vtt mit gleichem Namen wird Untertitel.
+  Fremde Formate über dieselbe Vorschau wie im Video-Editor (`playable.ts`),
+  hier bis 720p; neu rechnen nur auf Klick, weil es so lange dauert wie der
+  Film. „Weiter bei“ und Lautstärke bleiben im `localStorage` dieses Geräts.
 - **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
   Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
   über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,
