@@ -44,6 +44,20 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
     ],
   },
   {
+    title: 'Abspielen',
+    keys: [
+      ['Leertaste · K', 'Abspielen und anhalten'],
+      ['← →', '5 Sekunden zurück und vor'],
+      ['J · L', '10 Sekunden zurück und vor'],
+      ['↑ ↓', 'Lauter und leiser (auf der Bühne)'],
+      ['M · F · C', 'Stumm, Vollbild, Untertitel'],
+      ['N · P', 'Nächstes und vorheriges'],
+      [', .', 'Angehalten: Bild für Bild'],
+      ['< >', 'Langsamer und schneller'],
+      ['0 … 9', 'Zu 0 % … 90 % springen'],
+    ],
+  },
+  {
     title: 'Bilder und Video',
     keys: [
       [`${MOD} + Z`, 'Bilder: Rückgängig'],

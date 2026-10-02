@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react'
 
 import { APP_BRIDGE, type OpenedFile } from '../lib/desktop'
+import { playerInbox } from '../lib/player'
 import { useIngestFiles } from './useIngest'
 
 /** The slice of the File Handling API this app uses. */
@@ -54,6 +55,10 @@ export function useGlobalIngest(): { dragging: boolean } {
       event.preventDefault()
       depth = 0
       setDragging(false)
+      // The player takes its own: a film dropped there is played from disk,
+      // not read into the session.
+      const inbox = playerInbox()
+      if (inbox) return inbox(Array.from(event.dataTransfer.files))
       void ingest(Array.from(event.dataTransfer.files), 'per Drag & Drop geladen')
     }
     const onPaste = (event: ClipboardEvent) => {
@@ -63,6 +68,8 @@ export function useGlobalIngest(): { dragging: boolean } {
       const files = Array.from(event.clipboardData?.files ?? [])
       if (files.length === 0) return
       event.preventDefault()
+      const inbox = playerInbox()
+      if (inbox) return inbox(files)
       void ingest(files, 'aus der Zwischenablage eingefügt')
     }
 
