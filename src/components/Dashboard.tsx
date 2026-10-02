@@ -30,6 +30,7 @@ const TOOLS = {
   subtitles: () => import('./panels/SubtitlesPanel').then((m) => ({ default: m.SubtitlesPanel })),
   screen: () => import('./panels/ScreenPanel').then((m) => ({ default: m.ScreenPanel })),
   mix: () => import('./panels/MixPanel').then((m) => ({ default: m.MixPanel })),
+  player: () => import('./panels/PlayerPanel').then((m) => ({ default: m.PlayerPanel })),
 } satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType }>>
 
 const DownloaderPanel = lazy(TOOLS.downloader)
@@ -45,6 +46,7 @@ const MicPanel = lazy(TOOLS.mic)
 const SubtitlesPanel = lazy(TOOLS.subtitles)
 const ScreenPanel = lazy(TOOLS.screen)
 const MixPanel = lazy(TOOLS.mix)
+const PlayerPanel = lazy(TOOLS.player)
 
 /** Fetches every tool's chunk once the page is idle. */
 function usePrefetchTools() {
@@ -304,7 +306,8 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     panel === 'audio' ||
     panel === 'mic' ||
     panel === 'screen' ||
-    panel === 'mix'
+    panel === 'mix' ||
+    panel === 'player'
 
   return (
     <section id="studio" className="shell flex flex-col gap-[16px] pb-[16px] pt-[24px] sm:pt-[32px]">
@@ -331,6 +334,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
             {panel === 'subtitles' ? <SubtitlesPanel /> : null}
             {panel === 'screen' ? <ScreenPanel /> : null}
             {panel === 'mix' ? <MixPanel /> : null}
+            {panel === 'player' ? <PlayerPanel /> : null}
           </Suspense>
         )}
       </div>

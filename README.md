@@ -26,6 +26,7 @@ eine eigene Adresse; der Start ist die blanke Wurzel.
 | **Tonart** | `#tonart` | Tempo, Tonart mit Camelot-Code, Akkordverlauf, Melodie als MIDI |
 | **Untertitel** | `#untertitel` | Gesprochenes als Text mit Whisper auf dem Gerät (Modell einmalig von Hugging Face), jede Zeile korrigierbar; als TXT, SRT, VTT, als Untertitelspur im Video oder ins Bild gebrannt |
 | **Mischen** | `#mischen` | Stimme und Musik in eine Datei; die Musik wird beim Sprechen weich leiser (Schwelle aus der Aufnahme, Haltezeit, Vorlauf, Ausklang), Vorher/Nachher, als WAV oder unter das Video gelegt |
+| **Abspielen** | `#abspielen` | Media Player zum Ansehen und Anhören: spielt direkt von der Festplatte, auch grosse Filme, Wiedergabeliste, Untertitel aus .srt/.vtt, Vollbild, Bild im Bild, Tempo, Tastatur, „Weiter bei“; was der Browser nicht kann (AVI, MPEG-4, AC-3/DTS-Ton), macht FFmpeg abspielbar |
 | **Bildschirm** | `#bildschirm` | Ganzer Bildschirm oder ein Fenster, mit Ton des Rechners und/oder Mikrofon, als Video direkt in die Sitzung; in der App mit Quellenauswahl samt Vorschaubildern |
 | **Mikrofon** | `#mikrofon` | Ein- und Ausgang wählen, Pegelanzeige, Mithören, Probe; Einstellen für Podcast, Streaming, Videocall, Gesang oder Instrument mit Bericht jedes Schritts und Vorher/Nachher |
 
