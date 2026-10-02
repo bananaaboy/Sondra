@@ -39,7 +39,7 @@ const preload = `
 const episode = 'https://aniworld.to/anime/stream/fixture/staffel-1/episode-1'
 globalThis.fetch = async (url) => {
   const target = String(url)
-  if (target === episode) return { ok: true, text: async () => '<section>VOE <a href="/redirect/4241628">start</a></section><a href="/redirect/other">other</a>' }
+  if (target === episode) return { ok: true, text: async () => '<section>VOE <button data-link-target="/redirect/4241628">start</button></section><a href="/redirect/other">other</a>' }
   if (target === 'https://aniworld.to/redirect/4241628') return { ok: true, url: 'https://voe.sx/e/fixture' }
   if (target === 'https://voe.sx/e/fixture') return { ok: true, text: async () => \`<script data-page="fixture" type='application/json'>["${payload}"]</script>\` }
   throw new Error('Unexpected request: ' + target)
@@ -95,7 +95,7 @@ try {
   globalThis.fetch = async (url) => {
     const target = String(url)
     if (target === 'https://aniworld.to/anime/stream/fixture/staffel-1/episode-1') {
-      return { ok: true, text: async () => '<section>VOE <a href="/redirect/4241628">start</a></section><a href="/redirect/other">other</a>' }
+      return { ok: true, text: async () => '<section>VOE <button data-link-target="/redirect/4241628">start</button></section><a href="/redirect/other">other</a>' }
     }
     if (target === 'https://aniworld.to/redirect/4241628') return { ok: true, url: 'https://voe.sx/e/fixture' }
     if (target === 'https://voe.sx/e/fixture') return { ok: true, text: async () => `<script data-page="fixture" type='application/json'>["${payload}"]</script>` }

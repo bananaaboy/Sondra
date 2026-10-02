@@ -348,7 +348,9 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         const page = await fetch(url, { headers: browserHeaders })
         if (!page.ok) return null
         const html = await page.text()
-        const redirects = [...html.matchAll(/\bhref\s*=\s*(['"])(\/redirect\/[^'"?#]+(?:\?[^'"]*)?)\1/gi)]
+        // AniWorld uses both ordinary links and data-link-target on its hoster
+        // cards. The latter is the current markup on some episode pages.
+        const redirects = [...html.matchAll(/\b(?:href|data-link-target)\s*=\s*(['"])(\/redirect\/[^'"?#]+(?:\?[^'"]*)?)\1/gi)]
           .map((match) => ({
             url: new URL(match[2], url).href,
             voe: /\bvoe\b/i.test(html.slice(Math.max(0, match.index - 1_500), match.index + 200)),
