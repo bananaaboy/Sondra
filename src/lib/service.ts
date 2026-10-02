@@ -408,6 +408,7 @@ function describeUnreachable(endpoint: string): ServiceError {
     `${host} antwortet nicht, oder die Instanz erlaubt keine Anfragen von dieser Seite. ` +
       'Prüfen Sie die Adresse und stellen Sie sicher, dass die Instanz CORS für diesen Ursprung ' +
       'freigibt (bei cobalt ist das die Voreinstellung).',
+    'service.unreachable',
   )
 }
 

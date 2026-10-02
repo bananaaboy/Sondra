@@ -7,10 +7,9 @@
  * itself: on 127.0.0.1:9000, speaking the protocol the page already knows,
  * and calling yt-dlp underneath.
  *
- * What it deliberately is not: the bridge script from the website. That one
- * carries extractors of its own for a handful of embed hosts; this one has
- * none and leaves every site to yt-dlp's own judgement, exactly as yt-dlp on
- * the command line would.
+ * Like the website bridge, it resolves AniWorld's VOE embeds itself before
+ * probing the direct stream, so the desktop route does not depend on a
+ * separate yt-dlp extractor for that catalogue page.
  *
  * yt-dlp is not shipped. It changes every few weeks as the sites change, and
  * a copy frozen into an installer would be out of date before the next
@@ -46,7 +45,7 @@ const SITE_ORIGINS = ['https://www.sondra.lizge.ch', 'https://sondra.lizge.ch']
 const SERVICES = [
   'youtube', 'soundcloud', 'bandcamp', 'vimeo', 'twitch', 'twitter', 'tiktok', 'instagram',
   'facebook', 'reddit', 'dailymotion', 'bilibili', 'streamable', 'tumblr', 'bluesky', 'loom',
-  'pinterest', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
+  'pinterest', 'mixcloud', 'ard', 'zdf', 'arte', 'srf', 'aniworld', 'voe',
 ]
 
 /* -- choosing formats (the same rules as the bridge) ------------------------ */
@@ -116,6 +115,81 @@ function errorCode(stderr) {
   if (text.includes('no video formats') || text.includes('unable to extract')) return 'error.api.link.unsupported'
   return 'error.api.fetch.fail'
 }
+
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+}
+
+const isVoeHost = (host) => /(?:^|\.)(?:voe\.sx|jeremyparticipantanything\.com|jamesbornmain\.com|chaliceguzzlerlandlord\.com)$/i.test(host) || (process.env.SONDRA_VOE_HOSTS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).includes(host)
+const isAniWorldHost = (host) => host === 'aniworld.to' || host.endsWith('.aniworld.to') || (process.env.SONDRA_ANIWORLD_HOSTS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).includes(host)
+
+function decodeVoePayload(value) {
+  const rot13 = (text) => text.replace(/[a-zA-Z]/g, (char) => {
+    const code = char.charCodeAt(0)
+    const base = code <= 90 ? 65 : 97
+    return String.fromCharCode(((code - base + 13) % 26) + base)
+  })
+  const withoutMarkers = ['@$', '^^', '~@', '%?', '*~', '!!', '#&'].reduce((text, marker) => text.replaceAll(marker, ''), rot13(value))
+  const shifted = Array.from(Buffer.from(withoutMarkers, 'base64').toString('utf8'), (char) =>
+    String.fromCharCode(char.charCodeAt(0) - 3),
+  ).join('')
+  return JSON.parse(Buffer.from([...shifted].reverse().join(''), 'base64').toString('utf8'))
+}
+
+async function extractVoe(url) {
+  try {
+    const res = await fetch(url, { headers: BROWSER_HEADERS })
+    if (!res.ok) return null
+    const html = await res.text()
+    // VOE rotates markup details; inspect every JSON script, regardless of
+    // attribute order or additional attributes, instead of relying on one tag.
+    const blocks = [...html.matchAll(/<script\b(?=[^>]*\btype\s*=\s*(['"])application\/json\1)[^>]*>([\s\S]*?)<\/script>/gi)]
+    for (const block of blocks) {
+      let payload
+      try { payload = JSON.parse(block[2].trim()) } catch { continue }
+      for (const encoded of Array.isArray(payload) ? payload : []) {
+        if (typeof encoded !== 'string') continue
+        try {
+          const data = decodeVoePayload(encoded)
+          const streamUrl = data.source || data.direct_access_url
+          if (streamUrl) return { title: data.title || 'VOE Video', url: streamUrl, referer: url }
+        } catch { /* another JSON block, not the VOE payload */ }
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+async function extractAniWorld(url) {
+  try {
+    const episode = await fetch(url, { headers: BROWSER_HEADERS })
+    if (!episode.ok) return null
+    const episodeUrl = episode.url
+    const html = await episode.text()
+    const redirects = [...html.matchAll(/(?:href|data-link-target)\s*=\s*(['"])(\/redirect\/[^'"]+)\1/gi)]
+      .map((match) => ({ href: new URL(match[2], episodeUrl).href, nearby: html.slice(Math.max(0, match.index - 500), match.index + 500) }))
+      .sort((a, b) => Number(/\bvoe\b/i.test(b.nearby)) - Number(/\bvoe\b/i.test(a.nearby)))
+    for (const redirect of redirects) {
+      const target = await fetch(redirect.href, { redirect: 'follow', headers: { ...BROWSER_HEADERS, Referer: episodeUrl } })
+      if (!target.ok) continue
+      const finalUrl = target.url
+      const targetHtml = await target.text()
+      const embed = isVoeHost(new URL(finalUrl).hostname)
+        ? finalUrl
+        : targetHtml.match(/https?:\\?\/\\?\/[^'"\s<]+/i)?.[0]?.replace(/\\\//g, '/')
+      if (embed) {
+        try {
+          if (isVoeHost(new URL(embed).hostname)) return extractVoe(embed)
+        } catch { /* keep trying hosters */ }
+      }
+    }
+  } catch { /* ordinary yt-dlp fallback */ }
+  return null
+}
+
 
 /**
  * Starts the service. Resolves to `{ url }`, or to null when the port is
@@ -315,8 +389,8 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
   /* -- the API -------------------------------------------------------------- */
 
-  async function probe(bin, target) {
-    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...cookieArgs(), '--', target])
+  async function probe(bin, target, referer = null) {
+    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...(referer ? ['--referer', referer] : []), ...cookieArgs(), '--', target])
   }
 
   async function resolve(body) {
@@ -326,17 +400,22 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const tool = await ytdlp()
     if (!tool) return { status: 'error', error: { code: fetchesTool ? 'error.api.ytdlp.missing' : 'error.api.ytdlp.missing.store' } }
 
-    let result = await probe(tool.bin, target)
+    // AniWorld is only a catalogue page; follow its selected VOE redirect
+    // ourselves so yt-dlp receives the playable MP4 rather than a bare page.
+    const directSource = await extractAniWorld(target)
+    const queryUrl = directSource?.url ?? target
+    const referer = directSource?.referer ?? null
+    let result = await probe(tool.bin, queryUrl, referer)
 
     // A sign-in that cannot be read is forgotten, and the video tried without.
     if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.cookies') {
       log(`Anmeldung aus ${readSettings().cookies} nicht lesbar: ${detailOf(result.stderr)}`)
       writeSettings({ cookies: null })
-      result = await probe(tool.bin, target)
+      result = await probe(tool.bin, queryUrl, referer)
     }
     // Too old for the site: update once, then try again.
     if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.outdated' && (await update())) {
-      result = await probe(tool.bin, target)
+      result = await probe(tool.bin, queryUrl, referer)
     }
     if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.signin') {
       // A sign-in that was chosen and still does not do: ask again next time.
@@ -346,7 +425,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         const browser = await ask.signIn()
         if (browser) {
           writeSettings({ cookies: browser })
-          result = await probe(tool.bin, target)
+          result = await probe(tool.bin, queryUrl, referer)
         }
       }
     }
@@ -366,9 +445,9 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
     const quality = String(body.videoQuality ?? 'max')
     const maxHeight = quality === 'max' ? 0 : Number(quality) || 0
-    const stem = String(info.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+    const stem = String(directSource?.title ?? info.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
     const mode = String(body.downloadMode ?? 'auto')
-    const job = (format, mime) => remember({ bin: tool.bin, url: target, format, mime })
+    const job = (format, mime) => remember({ bin: tool.bin, url: queryUrl, referer, format, mime })
 
     if (mode === 'audio') {
       const audio = pickAudio(formats)
@@ -455,7 +534,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
       child = spawn(
         job.bin,
-        ['-f', selector, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...cookieArgs(), '--', job.url],
+        ['-f', selector, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...(job.referer ? ['--referer', job.referer] : []), ...cookieArgs(), '--', job.url],
         { windowsHide: true },
       )
       let sent = 0

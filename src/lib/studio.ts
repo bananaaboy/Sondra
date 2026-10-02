@@ -42,6 +42,7 @@ import {
   localJobArgs,
   localJobExtension,
   resolveMedia,
+  ServiceError,
   type LocalJob,
   type ServiceItem,
   type ServiceSettings,
@@ -292,6 +293,9 @@ export async function resolveViaService(url: string, signal?: AbortSignal): Prom
       }
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
+      // Preserve an answer from the connected service. Only a service that
+      // could not be reached may fall back to this website's resolver.
+      if (cause instanceof ServiceError && cause.code !== 'local-network-blocked' && cause.code !== 'service.unreachable') throw cause
       // A service that cannot answer is not the end of the road: this site's
       // own endpoint may still know the address.
     }

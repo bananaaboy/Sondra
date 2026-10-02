@@ -226,68 +226,85 @@ const SERVICES = [
   'facebook', 'reddit', 'dailymotion', 'bilibili', 'ok', 'rutube', 'streamable', 'tumblr',
   'bluesky', 'loom', 'pinterest', 'snapchat', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
   // Embed-Hoster ohne eigenen yt-dlp-Extraktor — über den generischen Fallback
-  'filemoon', 'voe', 'doodstream', 'vidmol', 'streamwish', 'vidguard', 'upstream',
+  'aniworld', 'filemoon', 'voe', 'doodstream', 'vidmol', 'streamwish', 'vidguard', 'upstream',
 ]
 
 let versionLabel = 'yt-dlp'
 
 /* -- Benutzerdefinierte Extraktoren (VOE, FileMoon, Vidmoly, DoodStream) ---- */
 
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+}
+
+const isVoeHost = (host) => /(?:^|\.)(?:voe\.sx|jeremyparticipantanything\.com|jamesbornmain\.com|chaliceguzzlerlandlord\.com)$/i.test(host) || (process.env.SONDRA_VOE_HOSTS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).includes(host)
+const isAniWorldHost = (host) => host === 'aniworld.to' || host.endsWith('.aniworld.to') || (process.env.SONDRA_ANIWORLD_HOSTS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).includes(host)
+
+function decodeVoePayload(value) {
+  const rot13 = (text) => text.replace(/[a-zA-Z]/g, (char) => {
+    const code = char.charCodeAt(0)
+    const base = code <= 90 ? 65 : 97
+    return String.fromCharCode(((code - base + 13) % 26) + base)
+  })
+  const withoutMarkers = ['@$', '^^', '~@', '%?', '*~', '!!', '#&'].reduce((text, marker) => text.replaceAll(marker, ''), rot13(value))
+  const shifted = Array.from(Buffer.from(withoutMarkers, 'base64').toString('utf8'), (char) =>
+    String.fromCharCode(char.charCodeAt(0) - 3),
+  ).join('')
+  return JSON.parse(Buffer.from([...shifted].reverse().join(''), 'base64').toString('utf8'))
+}
+
 async function extractVoe(url) {
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-    })
+    const res = await fetch(url, { headers: BROWSER_HEADERS })
     if (!res.ok) return null
     const html = await res.text()
-
-    const m = html.match(/<script type="application\/json">\s*(\[[\s\S]*?\])\s*<\/script>/)
-    if (!m) return null
-
-    const arr = JSON.parse(m[1])
-    if (!Array.isArray(arr) || !arr[0]) return null
-    const str = arr[0]
-
-    const rot13 = (s) =>
-      s.replace(/[a-zA-Z]/g, (c) => {
-        const code = c.charCodeAt(0)
-        const base = code <= 90 ? 65 : 97
-        return String.fromCharCode(((code - base + 13) % 26) + base)
-      })
-
-    const replacePatterns = (s) => {
-      let t = s
-      for (const pat of ['@$', '^^', '~@', '%?', '*~', '!!', '#&']) {
-        t = t.replaceAll(pat, '')
+    // VOE rotates markup details; inspect every JSON script, regardless of
+    // attribute order or additional attributes, instead of relying on one tag.
+    const blocks = [...html.matchAll(/<script\b(?=[^>]*\btype\s*=\s*(['"])application\/json\1)[^>]*>([\s\S]*?)<\/script>/gi)]
+    for (const block of blocks) {
+      let payload
+      try { payload = JSON.parse(block[2].trim()) } catch { continue }
+      for (const encoded of Array.isArray(payload) ? payload : []) {
+        if (typeof encoded !== 'string') continue
+        try {
+          const data = decodeVoePayload(encoded)
+          const streamUrl = data.source || data.direct_access_url
+          if (streamUrl) return { title: data.title || 'VOE Video', url: streamUrl, referer: url }
+        } catch { /* another JSON block, not the VOE payload */ }
       }
-      return t
     }
-
-    const shiftChars = (s, shift) => Array.from(s).map((c) => String.fromCharCode(c.charCodeAt(0) - shift)).join('')
-
-    const s1 = rot13(str)
-    const s2 = replacePatterns(s1)
-    const s3 = Buffer.from(s2, 'base64').toString('utf-8')
-    const s4 = shiftChars(s3, 3)
-    const s5 = s4.split('').reverse().join('')
-    const s6 = Buffer.from(s5, 'base64').toString('utf-8')
-
-    const data = JSON.parse(s6)
-    const streamUrl = data.source || data.direct_access_url
-    if (!streamUrl) return null
-
-    return {
-      title: data.title || 'VOE Video',
-      url: streamUrl,
-      referer: url,
-    }
+    return null
   } catch {
     return null
   }
+}
+
+async function extractAniWorld(url) {
+  try {
+    const episode = await fetch(url, { headers: BROWSER_HEADERS })
+    if (!episode.ok) return null
+    const episodeUrl = episode.url
+    const html = await episode.text()
+    const redirects = [...html.matchAll(/(?:href|data-link-target)\s*=\s*(['"])(\/redirect\/[^'"]+)\1/gi)]
+      .map((match) => ({ href: new URL(match[2], episodeUrl).href, nearby: html.slice(Math.max(0, match.index - 500), match.index + 500) }))
+      .sort((a, b) => Number(/\bvoe\b/i.test(b.nearby)) - Number(/\bvoe\b/i.test(a.nearby)))
+    for (const redirect of redirects) {
+      const target = await fetch(redirect.href, { redirect: 'follow', headers: { ...BROWSER_HEADERS, Referer: episodeUrl } })
+      if (!target.ok) continue
+      const finalUrl = target.url
+      const targetHtml = await target.text()
+      const embed = isVoeHost(new URL(finalUrl).hostname)
+        ? finalUrl
+        : targetHtml.match(/https?:\\?\/\\?\/[^'"\s<]+/i)?.[0]?.replace(/\\\//g, '/')
+      if (embed) {
+        try {
+          if (isVoeHost(new URL(embed).hostname)) return extractVoe(embed)
+        } catch { /* keep trying hosters */ }
+      }
+    }
+  } catch { /* ordinary yt-dlp fallback */ }
+  return null
 }
 
 async function extractFileMoon(url) {
@@ -420,6 +437,11 @@ async function extractDirectStream(rawUrl) {
     host = (new URL(rawUrl).hostname || '').toLowerCase()
   } catch {
     return null
+  }
+
+  if (isAniWorldHost(host)) {
+    const result = await extractAniWorld(rawUrl)
+    if (result) return result
   }
 
   // 1. FileMoon

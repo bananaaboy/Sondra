@@ -129,7 +129,7 @@ function writeServiceSettings(settings: ServiceSettings): void {
 }
 
 /** Hosts a browser can never reach directly, so the hint can be specific. */
-const PORTAL_HOSTS = /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com)$/i
+const PORTAL_HOSTS = /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com|aniworld\.to|voe\.sx|jeremyparticipantanything\.com)$/i
 
 function isPortalUrl(value: string): boolean {
   try {
