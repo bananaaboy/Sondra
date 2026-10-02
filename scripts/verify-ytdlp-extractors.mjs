@@ -12,6 +12,7 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import { startDownloader } from '../desktop/downloader.mjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const fixtureDir = await mkdtemp(path.join(os.tmpdir(), 'sondra-ytdlp-'))
@@ -50,6 +51,7 @@ printf '%s\\n' '{"title":"probe","formats":[{"format_id":"fixture","vcodec":"avc
 `
 
 let service
+let desktopService
 try {
   await writeFile(path.join(fixtureDir, 'preload.mjs'), preload)
   await writeFile(path.join(fixtureDir, 'yt-dlp'), ytdlp)
@@ -88,7 +90,47 @@ try {
   assert.equal(body.status, 'tunnel')
   assert.equal(body.filename, 'AniWorld fixture (720p).mp4')
   console.log('ok    AniWorld → Redirect → VOE → MP4-Auftrag')
+
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    const target = String(url)
+    if (target === 'https://aniworld.to/anime/stream/fixture/staffel-1/episode-1') {
+      return { ok: true, text: async () => '<section>VOE <a href="/redirect/4241628">start</a></section><a href="/redirect/other">other</a>' }
+    }
+    if (target === 'https://aniworld.to/redirect/4241628') return { ok: true, url: 'https://voe.sx/e/fixture' }
+    if (target === 'https://voe.sx/e/fixture') return { ok: true, text: async () => `<script data-page="fixture" type='application/json'>["${payload}"]</script>` }
+    throw new Error(`Unexpected request: ${target}`)
+  }
+  try {
+    desktopService = await startDownloader({
+      port: port + 1,
+      dataDir: fixtureDir,
+      origin: 'http://127.0.0.1:4199',
+      ask: { install: async () => false, signIn: async () => null },
+    })
+    assert.ok(desktopService, 'Der Desktop-Dienst ist nicht gestartet.')
+    const desktopResponse = await new Promise((resolve, reject) => {
+      const request = http.request(
+        { hostname: '127.0.0.1', port: port + 1, path: '/', method: 'POST', headers: { 'content-type': 'application/json' } },
+        async (result) => {
+          let text = ''
+          for await (const chunk of result) text += chunk
+          resolve({ status: result.statusCode, body: text })
+        },
+      )
+      request.on('error', reject)
+      request.end(JSON.stringify({ url: 'https://aniworld.to/anime/stream/fixture/staffel-1/episode-1' }))
+    })
+    assert.equal(desktopResponse.status, 200)
+    const desktopBody = JSON.parse(desktopResponse.body)
+    assert.equal(desktopBody.status, 'tunnel')
+    assert.equal(desktopBody.filename, 'AniWorld fixture (720p).mp4')
+    console.log('ok    Desktop: AniWorld → Redirect → VOE → MP4-Auftrag')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 } finally {
+  if (desktopService) await desktopService.close()
   if (service && !service.killed) {
     service.kill()
     await once(service, 'exit')

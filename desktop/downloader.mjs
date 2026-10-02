@@ -7,10 +7,8 @@
  * itself: on 127.0.0.1:9000, speaking the protocol the page already knows,
  * and calling yt-dlp underneath.
  *
- * What it deliberately is not: the bridge script from the website. That one
- * carries extractors of its own for a handful of embed hosts; this one has
- * none and leaves every site to yt-dlp's own judgement, exactly as yt-dlp on
- * the command line would.
+ * It uses the same small embed-host extractors as the bridge script. Some
+ * portal redirectors lead to hosts yt-dlp cannot inspect directly.
  *
  * yt-dlp is not shipped. It changes every few weeks as the sites change, and
  * a copy frozen into an installer would be out of date before the next
@@ -46,7 +44,7 @@ const SITE_ORIGINS = ['https://www.sondra.lizge.ch', 'https://sondra.lizge.ch']
 const SERVICES = [
   'youtube', 'soundcloud', 'bandcamp', 'vimeo', 'twitch', 'twitter', 'tiktok', 'instagram',
   'facebook', 'reddit', 'dailymotion', 'bilibili', 'streamable', 'tumblr', 'bluesky', 'loom',
-  'pinterest', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
+  'pinterest', 'mixcloud', 'ard', 'zdf', 'arte', 'srf', 'aniworld', 'voe',
 ]
 
 /* -- choosing formats (the same rules as the bridge) ------------------------ */
@@ -294,6 +292,82 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     return locate()
   }
 
+  const browserHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  }
+  const isVoeClone = (host) =>
+    host.includes('voe.') ||
+    host.includes('jamesbornmain') ||
+    host.includes('chaliceguzzler') ||
+    host === 'jeremyparticipantanything.com' ||
+    host.endsWith('.jeremyparticipantanything.com') ||
+    host.includes('tube.sx')
+
+  async function extractVoe(url) {
+    try {
+      const response = await fetch(url, { headers: browserHeaders })
+      if (!response.ok) return null
+      const html = await response.text()
+      const scripts = html.matchAll(/<script\b[^>]*\btype\s*=\s*(['"])application\/json\1[^>]*>([\s\S]*?)<\/script>/gi)
+      let encoded = ''
+      for (const script of scripts) {
+        try {
+          const value = JSON.parse(script[2].trim())
+          if (Array.isArray(value) && typeof value[0] === 'string') {
+            encoded = value[0]
+            break
+          }
+        } catch {
+          /* another JSON data field */
+        }
+      }
+      if (!encoded) return null
+      const rot13 = (value) => value.replace(/[a-zA-Z]/g, (character) => {
+        const code = character.charCodeAt(0)
+        const base = code <= 90 ? 65 : 97
+        return String.fromCharCode(((code - base + 13) % 26) + base)
+      })
+      let value = rot13(encoded)
+      for (const pattern of ['@$', '^^', '~@', '%?', '*~', '!!', '#&']) value = value.replaceAll(pattern, '')
+      value = Buffer.from(value, 'base64').toString('utf8')
+      value = Array.from(value, (character) => String.fromCharCode(character.charCodeAt(0) - 3)).join('')
+      value = Buffer.from(value.split('').reverse().join(''), 'base64').toString('utf8')
+      const source = JSON.parse(value)
+      if (!source.source && !source.direct_access_url) return null
+      return { url: source.source || source.direct_access_url, title: source.title || 'VOE Video', referer: url }
+    } catch {
+      return null
+    }
+  }
+
+  async function extractDirectStream(url) {
+    try {
+      const host = new URL(url).hostname.toLowerCase()
+      if (host === 'aniworld.to' || host.endsWith('.aniworld.to')) {
+        const page = await fetch(url, { headers: browserHeaders })
+        if (!page.ok) return null
+        const html = await page.text()
+        const redirects = [...html.matchAll(/\bhref\s*=\s*(['"])(\/redirect\/[^'"?#]+(?:\?[^'"]*)?)\1/gi)]
+          .map((match) => ({
+            url: new URL(match[2], url).href,
+            voe: /\bvoe\b/i.test(html.slice(Math.max(0, match.index - 1_500), match.index + 200)),
+          }))
+          .sort((a, b) => Number(b.voe) - Number(a.voe))
+        for (const redirect of redirects) {
+          const result = await fetch(redirect.url, { redirect: 'follow', headers: { ...browserHeaders, Referer: url } })
+          const target = new URL(result.url)
+          if (isVoeClone(target.hostname.toLowerCase())) return extractVoe(target.href)
+        }
+        return null
+      }
+      if (isVoeClone(host) || url.includes('/e/')) return extractVoe(url)
+    } catch {
+      /* yt-dlp remains the fallback */
+    }
+    return null
+  }
+
   /* -- jobs ----------------------------------------------------------------- */
 
   const jobs = new Map()
@@ -309,8 +383,8 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
   /* -- the API -------------------------------------------------------------- */
 
-  async function probe(bin, target) {
-    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...cookieArgs(), '--', target])
+  async function probe(bin, target, referer) {
+    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...(referer ? ['--referer', referer] : []), ...cookieArgs(), '--', target])
   }
 
   async function resolve(body) {
@@ -320,17 +394,20 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const tool = await ytdlp()
     if (!tool) return { status: 'error', error: { code: 'error.api.ytdlp.missing' } }
 
-    let result = await probe(tool.bin, target)
+    const direct = await extractDirectStream(target)
+    const sourceUrl = direct?.url ?? target
+    const referer = direct?.referer
+    let result = await probe(tool.bin, sourceUrl, referer)
 
     // A sign-in that cannot be read is forgotten, and the video tried without.
     if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.cookies') {
       log(`Anmeldung aus ${readSettings().cookies} nicht lesbar: ${detailOf(result.stderr)}`)
       writeSettings({ cookies: null })
-      result = await probe(tool.bin, target)
+      result = await probe(tool.bin, sourceUrl, referer)
     }
     // Too old for the site: update once, then try again.
     if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.outdated' && (await update())) {
-      result = await probe(tool.bin, target)
+      result = await probe(tool.bin, sourceUrl, referer)
     }
     if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.signin') {
       // A sign-in that was chosen and still does not do: ask again next time.
@@ -340,7 +417,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         const browser = await ask.signIn()
         if (browser) {
           writeSettings({ cookies: browser })
-          result = await probe(tool.bin, target)
+          result = await probe(tool.bin, sourceUrl, referer)
         }
       }
     }
@@ -360,9 +437,9 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
     const quality = String(body.videoQuality ?? 'max')
     const maxHeight = quality === 'max' ? 0 : Number(quality) || 0
-    const stem = String(info.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+    const stem = String(direct?.title ?? info.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
     const mode = String(body.downloadMode ?? 'auto')
-    const job = (format, mime) => remember({ bin: tool.bin, url: target, format, mime })
+    const job = (format, mime) => remember({ bin: tool.bin, url: sourceUrl, referer, format, mime })
 
     if (mode === 'audio') {
       const audio = pickAudio(formats)
@@ -449,7 +526,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
       child = spawn(
         job.bin,
-        ['-f', selector, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...cookieArgs(), '--', job.url],
+        ['-f', selector, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...(job.referer ? ['--referer', job.referer] : []), ...cookieArgs(), '--', job.url],
         { windowsHide: true },
       )
       let sent = 0
