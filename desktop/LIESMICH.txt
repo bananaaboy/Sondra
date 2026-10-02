@@ -1,9 +1,10 @@
 SONDRA FÜR WINDOWS
 
 Installieren
-  Sondra-Setup-<Version>.exe doppelklicken, die Windows-Abfrage bestätigen,
+  Sondra-Setup-<Version>.exe doppelklicken (auf Rechnern mit
+  Arm-Prozessor, etwa Snapdragon: Sondra-Setup-arm64-<Version>.exe), die Windows-Abfrage bestätigen,
   Lizenz bestätigen, Ordner wählen, fertig. Sondra installiert sich für alle
-  Benutzer dieses Rechners unter „Programme“. Danach steht Sondra im
+  Benutzer dieses Rechners unter „Programme“. Danach steht Sondra Studio im
   Startmenü und auf dem Desktop.
 
 Stille Installation
@@ -12,6 +13,12 @@ Stille Installation
 Starten
   Sondra öffnet sich in einem eigenen Fenster, ohne Browser. Fenster
   schliessen beendet Sondra.
+
+Bildschirm aufnehmen
+  Unter „Bildschirm“ einen Bildschirm oder ein Fenster aus der Liste wählen
+  und „Aufnahme starten“. Mit „Ton des Rechners“ wird alles aufgenommen, was
+  Windows abspielt (für einzelne Fenster gibt Windows keinen eigenen Ton).
+  Die Aufnahme bleibt auf diesem Rechner.
 
 Windows-SmartScreen
   Das Setup ist nicht signiert. Beim ersten Start kann Windows „Der Computer
@@ -31,16 +38,29 @@ Herunterladen von Videoportalen
   bekommen keine Antwort.
 
 Entfernen
-  Einstellungen → Apps → Installierte Apps → Sondra - Multimedia →
+  Einstellungen → Apps → Installierte Apps → Sondra Studio →
   Deinstallieren.
 
+Öffnen mit Sondra
+  Rechtsklick auf eine Ton-, Video- oder Bilddatei → „Öffnen mit“ → Sondra,
+  oder die Datei auf das Sondra-Symbol ziehen. Das Setup trägt Sondra nur in
+  „Öffnen mit“ ein und macht sich für keine Dateiart zum Standard. Läuft
+  Sondra schon, kommt die Datei in die offene Sitzung.
+
+Sitzung
+  Die Dateien der Sitzung bleiben auf diesem Rechner gespeichert und werden
+  nach dem Schliessen oder einem Update wieder angeboten („Letzte Sitzung:
+  Wiederherstellen“). Abschalten lässt sich das unter dem Dateinamen oben
+  rechts; dabei wird das Gespeicherte gelöscht.
+
 Aktualisieren
-  Ab 1.0.7 sucht Sondra beim Start und dann alle sechs Stunden selbst nach
-  einer neueren Fassung, lädt sie im Hintergrund und prüft sie. Danach fragt
-  Sondra, ob sie jetzt neu starten soll; mit „Später“ wird beim nächsten
+  Sondra sucht kurz nach dem Start und dann alle sechs Stunden selbst nach
+  einer neueren Fassung, lädt sie im Hintergrund und prüft sie. Oben rechts
+  steht dann „Auf x.y.z aktualisieren“; ohne Klick wird beim nächsten
   Schliessen installiert. Windows fragt dabei einmal nach der Erlaubnis, wie
-  beim Setup. Von Hand geht es weiterhin: das neuere Setup darüber
-  installieren.
+  beim Setup. Klappt das nicht, steht dort „Update nicht möglich“ mit dem
+  Grund und daneben „Setup laden“: das neuere Setup einfach darüber
+  installieren. Jeder Schritt des Updates steht im Protokoll.
 
 Wenn etwas nicht geht
   Sondra schreibt ein Protokoll nach %APPDATA%\Sondra\sondra.log (in die

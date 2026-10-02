@@ -21,8 +21,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { getAudioContext, resumeAudioContext } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
-import { loadFfmpeg, onFfmpegProgress, probeMedia, runFfmpeg, sanitize } from '../../lib/ffmpegClient'
+import { loadFfmpeg, onFfmpegProgress, diskPath, probeDisk, runFfmpegOnDisk, sanitize, unloadFfmpeg, type DiskFacts } from '../../lib/ffmpegClient'
 import { formatBytes, formatTimecode } from '../../lib/format'
+import { NATIVE_CONTAINER, REMEDY_TEXT, diskName, remedyFor, standJob, type Remedy } from '../../lib/playable'
 import {
   DEFAULT_VIDEO_OPS,
   VIDEO_LOOKS,
@@ -74,16 +75,30 @@ interface Outcome {
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4]
 
-function useObjectUrl(bytes: Uint8Array | null, mime: string): string | null {
+/**
+ * An object URL for a file or for bytes. A picked File is handed over as it
+ * is, so the browser reads it from disk as it plays — a 500 MB film used to
+ * be copied twice here, on top of the copy the session already holds.
+ */
+function useObjectUrl(data: Blob | Uint8Array | null, mime: string): string | null {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
-    if (!bytes) return setUrl(null)
-    const view = bytes.slice()
-    const next = URL.createObjectURL(new Blob([view.buffer as ArrayBuffer], { type: mime }))
+    if (!data) return setUrl(null)
+    const blob = data instanceof Blob ? data : new Blob([data as BlobPart], { type: mime })
+    const next = URL.createObjectURL(blob)
     setUrl(next)
     return () => URL.revokeObjectURL(next)
-  }, [bytes, mime])
+  }, [data, mime])
   return url
+}
+
+/** A stand-in the browser can play, while the original is what gets cut. */
+interface Stand {
+  remedy: Remedy
+  why: string
+  fraction: number
+  url: string | null
+  error: string | null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -231,6 +246,45 @@ function Timeline({
   )
 }
 
+/**
+ * The stand-in being made, shown where the picture will be: what is done,
+ * why, how far, and a way out. Nothing waits on it — every tool works on the
+ * original meanwhile.
+ */
+function StandProgress({ stand, onStop }: { stand: Stand; onStop: () => void }) {
+  const percent = Math.round(stand.fraction * 100)
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-[12px] p-[20px] text-center" role="status">
+      {stand.error ? (
+        <>
+          <p className="text-small font-semibold text-stage-ink">Keine Vorschau möglich</p>
+          <p className="max-w-[46ch] text-small leading-[1.5] text-stage-muted">
+            {stand.error}. Der Schnitt geht trotzdem, nur ohne Bild.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-small font-semibold text-stage-ink">
+            {REMEDY_TEXT[stand.remedy].doing}
+            <span className="value ml-[8px] text-stage-muted">{percent} %</span>
+          </p>
+          <div className="h-[3px] w-full max-w-[280px] bg-stage-line" aria-hidden>
+            <div className="h-full bg-stage-ink transition-[width] duration-[var(--dur-fast)]" style={{ width: `${percent}%` }} />
+          </div>
+          <p className="max-w-[46ch] text-small leading-[1.5] text-stage-muted">{stand.why}</p>
+          <button
+            type="button"
+            onClick={onStop}
+            className="press rounded-nav px-[12px] py-[6px] text-small text-stage-ink ring-1 ring-inset ring-stage-line hover:bg-stage-line"
+          >
+            Ohne Vorschau weiter
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 
 export function VideoPanel() {
@@ -254,6 +308,8 @@ export function VideoPanel() {
   const [unplayable, setUnplayable] = useState(false)
   const [probing, setProbing] = useState(false)
   const [replacement, setReplacement] = useState('')
+  const [stand, setStand] = useState<Stand | null>(null)
+  const standAbortRef = useRef<AbortController | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -262,7 +318,13 @@ export function VideoPanel() {
 
   const patch = (next: Partial<VideoOps>) => setOps((value) => ({ ...value, ...next }))
 
-  const sourceUrl = useObjectUrl(asset?.bytes ?? null, asset?.mime || 'video/mp4')
+  // What FFmpeg reads: the picked file where it lies, or the session's bytes.
+  const fileBlob = useMemo(
+    () => (asset ? (asset.source ?? new Blob([asset.bytes as BlobPart], { type: asset.mime || 'video/mp4' })) : null),
+    [asset?.source, asset?.bytes, asset?.mime],
+  )
+  const originalUrl = useObjectUrl(fileBlob, asset?.mime || 'video/mp4')
+  const sourceUrl = stand?.url ?? originalUrl
   const outcomeUrl = useObjectUrl(outcome?.bytes ?? null, outcome?.mime ?? 'video/mp4')
 
   useEffect(() => onFfmpegProgress((fraction) => setProgress(fraction)), [])
@@ -276,7 +338,14 @@ export function VideoPanel() {
     setUnplayable(false)
     setAspect('free')
     setPosition(0)
+    setStand(null)
+    return () => standAbortRef.current?.abort()
   }, [asset?.id])
+
+  // The stand-in's URL belongs to it.
+  useEffect(() => () => {
+    if (stand?.url) URL.revokeObjectURL(stand.url)
+  }, [stand?.url])
 
   /* -- how much room the stage has ---------------------------------------- */
   useLayoutEffect(() => {
@@ -287,35 +356,93 @@ export function VideoPanel() {
     const observer = new ResizeObserver(measure)
     observer.observe(node)
     return () => observer.disconnect()
-  }, [])
+    // The stage only exists once there is a video: opened from the empty
+    // editor, it mounts after this ran first — and was never measured, so
+    // the picture sat at 0 × 0 in a black box.
+  }, [Boolean(asset)])
 
   /**
-   * When the browser will not decode the file, ask FFmpeg instead.
+   * When the browser will not play the file, ask FFmpeg what is in it — and
+   * make something it will play.
    *
-   * A Chromium build without H.264 — and this is common, it is the licensed
-   * codec — reports a duration of zero and no error worth the name. Every
-   * control that needs a length would then sit disabled with nothing to
-   * explain it. FFmpeg is already here and knows the answer.
+   * A Chromium build without H.264, an AVI, an H.265 film in Firefox: the
+   * browser reports a duration of zero or an error and nothing worth the
+   * name. FFmpeg is already here and knows the length, the size and the
+   * codecs, and from the codecs follows how little has to be done for a
+   * picture to appear (lib/playable.ts). A file in a container the browser
+   * does not usually open is looked at even when it plays, because an MKV
+   * with a DTS track plays as a silent film.
    */
   const probedRef = useRef<string | null>(null)
+  const needsLook = Boolean(asset) && (unplayable || (duration > 0 && !NATIVE_CONTAINER.test(asset?.name ?? '')))
   useEffect(() => {
-    if (!asset || !unplayable || duration > 0) return
+    if (!asset || !fileBlob || !needsLook) return
     // Guarded by a ref rather than a `probing` flag: a flag this effect sets
     // itself and also depends on re-runs the effect, whose cleanup cancels the
     // run still in flight — and "läuft…" then never clears.
     if (probedRef.current === asset.id) return
     probedRef.current = asset.id
+    const failed = unplayable
     setProbing(true)
-    void probeMedia(asset.bytes, asset.name)
+    void probeDisk(fileBlob, diskName(asset.name))
       .then((facts) => {
-        if (facts.durationSeconds) {
+        if (useSession.getState().activeAssetId !== asset.id) return
+        if (facts.durationSeconds && failed) {
           setDuration(facts.durationSeconds)
-          setOps((value) => ({ ...value, end: facts.durationSeconds ?? 0 }))
+          setOps((value) => ({ ...value, end: value.end || (facts.durationSeconds ?? 0) }))
         }
         if (facts.width && facts.height) setSize({ width: facts.width, height: facts.height })
+        const remedy = remedyFor(facts, failed)
+        if (remedy) void makeStand(remedy, facts)
       })
       .finally(() => setProbing(false))
-  }, [asset, unplayable, duration])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset?.id, fileBlob, needsLook])
+
+  const makeStand = async (remedy: Remedy, facts: DiskFacts) => {
+    if (!asset || !fileBlob) return
+    standAbortRef.current?.abort()
+    const controller = new AbortController()
+    standAbortRef.current = controller
+    setStand({ remedy, why: REMEDY_TEXT[remedy].why(facts), fraction: 0, url: null, error: null })
+    const started = performance.now()
+    try {
+      const onDisk = diskName(asset.name)
+      const job = standJob(remedy, facts, diskPath(onDisk))
+      log('video', `ffmpeg ${job.args.join(' ')}`)
+      const { files } = await runFfmpegOnDisk({
+        source: fileBlob,
+        name: onDisk,
+        args: () => job.args,
+        output: [job.output],
+        signal: controller.signal,
+        onProgress: (fraction) => setStand((value) => (value && !value.url ? { ...value, fraction } : value)),
+      })
+      if (controller.signal.aborted) return
+      const url = URL.createObjectURL(new Blob([files[job.output] as BlobPart], { type: job.mime }))
+      setStand((value) => (value ? { ...value, fraction: 1, url } : value))
+      setUnplayable(false)
+      log('video', `${asset.name}: Vorschau bereit (${REMEDY_TEXT[remedy].doing.toLowerCase()}, ${((performance.now() - started) / 1000).toFixed(1)} s)`)
+    } catch (failure) {
+      if (controller.signal.aborted || (failure instanceof DOMException && failure.name === 'AbortError')) return
+      // The headline says only that FFmpeg stopped; its last line says why.
+      const lines = (failure instanceof Error ? failure.message : String(failure)).split('\n').filter(Boolean)
+      const message = (lines.length > 1 ? lines[lines.length - 1] : lines[0] ?? 'Unbekannter Fehler').replace(/\.$/, '')
+      setStand((value) => (value ? { ...value, error: message } : value))
+      log('video', `${asset.name}: keine Vorschau — ${message}`, 'warn')
+    } finally {
+      if (standAbortRef.current === controller) standAbortRef.current = null
+      // The stand-in's encode can leave a large heap behind; the next job
+      // starts a fresh core either way.
+      void unloadFfmpeg().catch(() => undefined)
+    }
+  }
+
+  const stopStand = () => {
+    standAbortRef.current?.abort()
+    standAbortRef.current = null
+    setStand(null)
+  }
 
   /* -- the frame on screen -------------------------------------------------- */
   const turned = ops.rotate === 90 || ops.rotate === 270
@@ -414,7 +541,10 @@ export function VideoPanel() {
     kind: Outcome['kind'],
     extraInputs: Record<string, Uint8Array> = {},
   ) => {
-    if (!asset) return
+    if (!asset || !fileBlob) return
+    // One job at a time on the one core: a stand-in still being made gives
+    // way to the actual result.
+    if (standAbortRef.current) stopStand()
     const controller = new AbortController()
     abortRef.current = controller
     const release = await holdScreenAwake()
@@ -426,15 +556,19 @@ export function VideoPanel() {
 
     try {
       await loadFfmpeg()
-      const inputName = sanitize(`in_${asset.name}`)
-      const built = build(inputName)
+      // Read from where the file lies (WORKERFS) instead of copying it into
+      // the core first — for a large film that copy was the job's biggest
+      // allocation.
+      const onDisk = diskName(asset.name)
+      const built = build(diskPath(onDisk))
       const output = `out.${built.extension}`
-
       log('video', `ffmpeg ${built.args.join(' ')} ${output}`)
-      const { files } = await runFfmpeg({
-        input: { [inputName]: asset.bytes, ...extraInputs },
+      const { files } = await runFfmpegOnDisk({
+        source: fileBlob,
+        name: onDisk,
+        args: () => [...built.args, output],
         output: [output],
-        args: [...built.args, output],
+        extraInputs,
         signal: controller.signal,
       })
 
@@ -534,6 +668,7 @@ export function VideoPanel() {
           [
             size ? `${size.width} × ${size.height}` : probing ? 'wird geprüft …' : null,
             formatBytes(asset.sizeBytes),
+            stand?.url ? (stand.remedy === 'picture' ? 'Vorschau verkleinert' : 'Vorschau umgepackt') : null,
             duration > 0 ? formatTimecode(duration) : null,
             touched ? 'bearbeitet' : null,
           ]
@@ -576,12 +711,20 @@ export function VideoPanel() {
                   if (Number.isFinite(node.duration) && node.duration > 0) {
                     setDuration(node.duration)
                     setOps((value) => ({ ...value, end: value.end || node.duration }))
-                    setSize({ width: node.videoWidth, height: node.videoHeight })
+                    // A stand-in is smaller than the original; the frame the
+                    // crop is drawn on stays the original's.
+                    if (node.videoWidth > 0 && !stand?.url) setSize({ width: node.videoWidth, height: node.videoHeight })
+                    // Sound without a picture: the browser knows the
+                    // container but not the picture's codec.
+                    if (node.videoWidth === 0 && !stand?.url) setUnplayable(true)
                   } else {
                     setUnplayable(true)
                   }
                 }}
-                onError={() => setUnplayable(true)}
+                onError={() => {
+                  if (!stand?.url) setUnplayable(true)
+                  else setStand({ ...stand, url: null, error: 'Auch die Vorschau spielt dieser Browser nicht ab' })
+                }}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
                 onTimeUpdate={(event) => {
@@ -621,9 +764,11 @@ export function VideoPanel() {
                   ratio={ratio}
                 />
               ) : null}
-              {unplayable ? (
-                <p className="absolute inset-0 grid place-items-center p-[16px] text-center text-small leading-[1.5] text-stage-muted">
-                  Dieser Browser spielt die Datei nicht ab — der Schnitt geht trotzdem, nur ohne Bild.
+              {stand && !stand.url ? (
+                <StandProgress stand={stand} onStop={stopStand} />
+              ) : unplayable ? (
+                <p className="absolute inset-0 grid place-items-center p-[16px] text-center text-small leading-[1.5] text-stage-muted" role="status">
+                  {probing ? 'Datei wird geprüft …' : 'Dieser Browser spielt die Datei nicht ab — der Schnitt geht trotzdem, nur ohne Bild.'}
                 </p>
               ) : null}
             </div>

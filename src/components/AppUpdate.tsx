@@ -6,13 +6,20 @@
  * this control says where that stands and lets the person check now or
  * install what is ready. Outside the installed Windows app there are no
  * updates to run, and it says only the version.
+ *
+ * When the automatic way fails it says so in the header, not only in a
+ * tooltip, and the setup of the newest version is one click away — an update
+ * that silently falls back to „Nach Updates suchen“ reads as one that never
+ * existed.
  */
 
 import { useEffect, useState } from 'react'
 
-import { APP_BRIDGE, type UpdateState } from '../lib/desktop'
+import { APP_BRIDGE, WINDOWS_SETUP, type UpdateState } from '../lib/desktop'
+import { keepSession } from '../lib/sessionStore'
 
 const BASE = 'press flex items-center gap-[8px] rounded-nav px-[12px] py-[8px] text-small'
+
 
 function RefreshIcon() {
   return (
@@ -35,7 +42,7 @@ export function AppUpdateButton() {
   }, [bridge])
 
   useEffect(() => {
-    if (!asked || (state?.status !== 'current' && state?.status !== 'error')) return
+    if (!asked || state?.status !== 'current') return
     const timer = window.setTimeout(() => setAsked(false), 5000)
     return () => window.clearTimeout(timer)
   }, [asked, state?.status])
@@ -44,7 +51,10 @@ export function AppUpdateButton() {
 
   if (state.status === 'off') {
     return (
-      <span className="value text-small text-muted" title="Updates gibt es nur in der installierten Windows-App.">
+      <span
+        className="value text-small text-muted"
+        title={state.channel === 'store' ? 'Updates kommen über den Microsoft Store.' : 'Updates gibt es nur in der installierten Windows-App.'}
+      >
         Version {state.version}
       </span>
     )
@@ -56,7 +66,9 @@ export function AppUpdateButton() {
         type="button"
         onClick={() => {
           const ok = window.confirm(
-            `Sondra startet neu und installiert ${state.next}. Dateien der Sitzung, die Sie nicht gespeichert haben, gehen dabei verloren. Jetzt aktualisieren?`,
+            keepSession()
+              ? `Sondra startet neu und installiert ${state.next}. Die Dateien der Sitzung sind gespeichert und werden danach wieder angeboten. Jetzt aktualisieren?`
+              : `Sondra startet neu und installiert ${state.next}. Die Sitzung wird nicht behalten — Dateien, die Sie nicht gespeichert haben, gehen verloren. Jetzt aktualisieren?`,
           )
           if (ok) void bridge.installUpdate()
         }}
@@ -80,14 +92,36 @@ export function AppUpdateButton() {
     )
   }
 
+  if (state.status === 'error') {
+    return (
+      <span className="flex items-center gap-[4px]" role="status" title={state.message ?? undefined}>
+        <button
+          type="button"
+          onClick={() => {
+            setAsked(true)
+            void bridge.checkForUpdates().then(setState)
+          }}
+          className={`${BASE} bg-panel-soft text-ink hover:bg-panel-mid`}
+          aria-label={`Update nicht möglich${state.message ? `: ${state.message}` : ''}. Erneut versuchen`}
+        >
+          <RefreshIcon />
+          <span className="hidden sm:inline">Update nicht möglich · erneut</span>
+          <span className="sm:hidden">Erneut</span>
+        </button>
+        <a
+          href={WINDOWS_SETUP}
+          target="_blank"
+          rel="noreferrer"
+          className="press rounded-nav px-[8px] py-[8px] text-small text-ink underline underline-offset-4 hover:bg-panel-soft"
+        >
+          Setup laden
+        </a>
+      </span>
+    )
+  }
+
   const label =
-    state.status === 'checking'
-      ? 'Suche Updates …'
-      : asked && state.status === 'current'
-        ? 'Sondra ist aktuell'
-        : asked && state.status === 'error'
-          ? 'Update nicht möglich'
-          : 'Nach Updates suchen'
+    state.status === 'checking' ? 'Suche Updates …' : asked && state.status === 'current' ? 'Sondra ist aktuell' : 'Nach Updates suchen'
 
   return (
     <button
@@ -98,7 +132,7 @@ export function AppUpdateButton() {
         void bridge.checkForUpdates().then(setState)
       }}
       className={`${BASE} bg-panel-soft text-ink hover:bg-panel-mid disabled:cursor-wait`}
-      title={state.status === 'error' && state.message ? state.message : `Version ${state.version}`}
+      title={`Version ${state.version}`}
       aria-live="polite"
     >
       <RefreshIcon />

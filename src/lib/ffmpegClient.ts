@@ -30,7 +30,7 @@
  * single-threaded core loads instead, and everything still works, just slower.
  */
 
-import { FFmpeg } from '@ffmpeg/ffmpeg'
+import { FFFSType, FFmpeg } from '@ffmpeg/ffmpeg'
 // `?url` emits each file as a plain asset and hands back its hashed URL — the
 // Emscripten glue and the .wasm must reach the browser untouched, not bundled.
 import coreUrl from '@ffmpeg/core?url'
@@ -103,13 +103,22 @@ function setBoot(patch: Partial<FfmpegBoot>): void {
 }
 
 /**
- * Fetches a URL while reporting how much has arrived, and hands back a blob URL.
+ * Fetches a URL while reporting how much has arrived, and hands back the URL
+ * the core should load from.
+ *
+ * Where the server lets the browser keep the file (the hashed assets are
+ * cached for a year, here and in the app), that is the plain URL: the worker's
+ * own fetch then comes out of the cache, and the browser can keep the
+ * *compiled* module too. A blob URL is never cached, so every start compiled
+ * thirty megabytes of WebAssembly again. Otherwise it is a blob of the bytes
+ * just read, so they do not cross the network twice.
  *
  * Falls back to the plain URL where the body cannot be streamed; the core still
  * loads, the bar just cannot say how far along it is.
  */
 async function fetchWithProgress(url: string): Promise<string> {
-  const response = await fetch(url, { credentials: 'omit' })
+  // Same credentials mode as the core's own fetch, so both read one cache entry.
+  const response = await fetch(url, { credentials: 'same-origin' })
   if (!response.ok) throw new Error(`${url} antwortete mit ${response.status}`)
 
   // `content-length` counts the bytes on the wire, while the reader hands over
@@ -121,6 +130,7 @@ async function fetchWithProgress(url: string): Promise<string> {
   const declared = Number(response.headers.get('content-length'))
   const encoded = (response.headers.get('content-encoding') ?? '').trim() !== ''
   let totalBytes = !encoded && Number.isFinite(declared) && declared > 0 ? declared : null
+  const cacheable = /max-age=[1-9]/.test(response.headers.get('cache-control') ?? '')
 
   const reader = response.body?.getReader()
   if (!reader) return url
@@ -129,15 +139,24 @@ async function fetchWithProgress(url: string): Promise<string> {
 
   const chunks: Uint8Array[] = []
   let received = 0
+  let reportedAt = 0
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
-    chunks.push(value)
+    if (!cacheable) chunks.push(value)
     received += value.byteLength
     if (totalBytes !== null && received > totalBytes) totalBytes = null
-    setBoot({ receivedBytes: received, totalBytes })
+    // A few times a second is a moving bar; every chunk was hundreds of
+    // renders while the page was still starting.
+    const now = performance.now()
+    if (now - reportedAt > 100) {
+      reportedAt = now
+      setBoot({ receivedBytes: received, totalBytes })
+    }
   }
+  setBoot({ receivedBytes: received, totalBytes })
 
+  if (cacheable) return url
   return URL.createObjectURL(new Blob(chunks as BlobPart[], { type: 'application/wasm' }))
 }
 
@@ -278,6 +297,14 @@ export interface RunOptions {
   /** The argument list, exactly as it would follow `ffmpeg` on a command line. */
   args: string[]
   signal?: AbortSignal
+  /**
+   * The inputs belong to this run alone and may be handed to the worker
+   * as they are — detached afterwards, not copied first. For bytes that were
+   * fetched only to be merged, the copy was a second full file in memory.
+   */
+  consumeInput?: boolean
+  /** Folders to create before the inputs are written, e.g. `fonts` for libass. */
+  folders?: string[]
 }
 
 export interface RunResult {
@@ -316,7 +343,7 @@ export function runFfmpeg(options: RunOptions): Promise<RunResult> {
   return enqueue(() => runFfmpegNow(options))
 }
 
-async function runFfmpegNow({ input, output, args, signal }: RunOptions): Promise<RunResult> {
+async function runFfmpegNow({ input, output, args, signal, consumeInput = false, folders = [] }: RunOptions): Promise<RunResult> {
   const ffmpeg = await loadFfmpeg()
   const logs: string[] = []
   const stopLogging = onFfmpegLog((line) => {
@@ -333,15 +360,29 @@ async function runFfmpegNow({ input, output, args, signal }: RunOptions): Promis
 
   const written = Object.keys(input)
   try {
+    for (const folder of folders) {
+      await ffmpeg.createDir(folder).catch(() => undefined) // already there from an earlier run
+    }
     for (const [name, bytes] of Object.entries(input)) {
       // `writeFile` puts the caller's ArrayBuffer in the transfer list, which
       // detaches it — the session asset would be an empty husk afterwards and
       // could never be converted, decoded or re-used again. The copy is the
       // price of keeping the input intact.
-      await ffmpeg.writeFile(name, bytes.slice())
+      await ffmpeg.writeFile(name, consumeInput ? bytes : bytes.slice())
     }
 
-    const code = await ffmpeg.exec(args)
+    let code: number
+    try {
+      code = await ffmpeg.exec(args)
+    } catch (failure) {
+      if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+      // A crash inside the core arrives as whatever the WebAssembly runtime
+      // threw — sometimes not even an Error. What FFmpeg printed last is the
+      // only useful part, and the core is reloaded, as after a failed exit.
+      await unloadFfmpeg().catch(() => undefined)
+      const reason = failure instanceof Error ? failure.message : String(failure)
+      throw new Error(`FFmpeg ist abgestürzt (${reason}).\n${logs.slice(-8).join('\n')}`)
+    }
     if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
     if (code !== 0) {
       // A non-zero exit usually means ffmpeg called exit(), and exit() takes
@@ -373,6 +414,183 @@ async function runFfmpegNow({ input, output, args, signal }: RunOptions): Promis
         }
       }
     }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Files straight from disk                                                    */
+/* -------------------------------------------------------------------------- */
+
+const DISK = '/disk'
+
+/** Where a file handed to `runFfmpegOnDisk` appears to FFmpeg. */
+export const diskPath = (name: string) => `${DISK}/${name}`
+
+export interface DiskRunOptions {
+  /** A picked File or any Blob; read by FFmpeg as it goes, never copied whole. */
+  source: Blob
+  /** Name with the right extension, so FFmpeg can tell the container. */
+  name: string
+  /** The argument list, with `input` as the path to read from. */
+  args: (input: string) => string[]
+  output: string[]
+  /** Small extra inputs (a replacement sound track), written into MEMFS. */
+  extraInputs?: Record<string, Uint8Array>
+  signal?: AbortSignal
+  onProgress?: (fraction: number) => void
+}
+
+/**
+ * One invocation on a file that stays where it is.
+ *
+ * `runFfmpeg` writes its inputs into MEMFS first, which for a 500 MB film is
+ * 500 MB of copy in the tab and as much again inside the worker. WORKERFS
+ * instead hands the worker the Blob itself, and FFmpeg reads it in slices as
+ * it demuxes — the way a player reads from disk. Only what is written out
+ * lives in memory.
+ */
+export function runFfmpegOnDisk(options: DiskRunOptions): Promise<RunResult> {
+  return enqueue(() => runOnDiskNow(options))
+}
+
+async function runOnDiskNow({ source, name, args, output, extraInputs = {}, signal, onProgress }: DiskRunOptions): Promise<RunResult> {
+  const ffmpeg = await loadFfmpeg()
+  const logs: string[] = []
+  const stopLogging = onFfmpegLog((line) => {
+    logs.push(line)
+    if (logs.length > 500) logs.shift()
+  })
+  const stopProgress = onProgress ? onFfmpegProgress(onProgress) : () => undefined
+  const abort = () => void unloadFfmpeg()
+  signal?.addEventListener('abort', abort, { once: true })
+  let mounted = false
+  try {
+    await ffmpeg.createDir(DISK).catch(() => undefined)
+    await ffmpeg.mount(FFFSType.WORKERFS, { blobs: [{ name, data: source }] }, DISK)
+    mounted = true
+    for (const [extra, bytes] of Object.entries(extraInputs)) await ffmpeg.writeFile(extra, bytes.slice())
+    let code: number
+    try {
+      code = await ffmpeg.exec(args(diskPath(name)))
+    } catch (failure) {
+      if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+      await unloadFfmpeg().catch(() => undefined)
+      const reason = failure instanceof Error ? failure.message : String(failure)
+      throw new Error(`FFmpeg ist abgestürzt (${reason}).\n${logs.slice(-8).join('\n')}`)
+    }
+    if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+    if (code !== 0) {
+      const tail = logs.slice(-8).join('\n')
+      await unloadFfmpeg().catch(() => undefined)
+      throw new Error(`FFmpeg endete mit Code ${code}.\n${tail}`)
+    }
+    const files: Record<string, Uint8Array> = {}
+    for (const out of output) {
+      const data = await ffmpeg.readFile(out)
+      files[out] = typeof data === 'string' ? new TextEncoder().encode(data) : data
+      await ffmpeg.deleteFile(out).catch(() => undefined)
+    }
+    return { files, logs }
+  } finally {
+    stopLogging()
+    stopProgress()
+    signal?.removeEventListener('abort', abort)
+    if (instance) {
+      if (mounted) await instance.unmount(DISK).catch(() => undefined)
+      for (const out of [...output, ...Object.keys(extraInputs)]) await instance.deleteFile(out).catch(() => undefined)
+    }
+  }
+}
+
+export interface StreamInfo {
+  /** Position among the streams of its type: `0:a:<n>` in a `-map`. */
+  index: number
+  type: 'video' | 'audio' | 'subtitle'
+  codec: string
+  language: string | null
+  title: string | null
+  isDefault: boolean
+}
+
+export interface DiskFacts extends MediaFacts {
+  streams: StreamInfo[]
+}
+
+/**
+ * What a file on disk contains: every stream, not just the first of each.
+ * A film from a disc or a TV recording has several sound tracks and
+ * subtitles, and which of them the browser can play decides what to offer.
+ */
+export function probeDisk(source: Blob, name: string, signal?: AbortSignal): Promise<DiskFacts> {
+  return enqueue(async () => {
+    const ffmpeg = await loadFfmpeg()
+    const logs: string[] = []
+    const stopLogging = onFfmpegLog((line) => logs.push(line))
+    try {
+      await ffmpeg.createDir(DISK).catch(() => undefined)
+      await ffmpeg.mount(FFFSType.WORKERFS, { blobs: [{ name, data: source }] }, DISK)
+      await ffmpeg.exec(['-hide_banner', '-i', `${DISK}/${name}`, '-t', '0.1', '-f', 'null', '-']).catch(() => 1)
+      const text = logs.join('\n')
+      return { ...(signal?.aborted ? EMPTY_FACTS : parseProbe(text)), streams: parseStreams(text) }
+    } catch {
+      return { ...EMPTY_FACTS, streams: [] }
+    } finally {
+      stopLogging()
+      // As after every probe (see probeMediaNow): the core is reloaded rather
+      // than trusted, which also drops the mount.
+      await unloadFfmpeg().catch(() => undefined)
+    }
+  })
+}
+
+/** Every `Stream #0:n` line FFmpeg printed, numbered per type. */
+export function parseStreams(text: string): StreamInfo[] {
+  const streams: StreamInfo[] = []
+  const counts = { video: 0, audio: 0, subtitle: 0 }
+  const lines = text.split('\n')
+  lines.forEach((line, at) => {
+    const match = line.match(/Stream #0:\d+(?:\[0x[0-9a-f]+\])?(?:\((\w+)\))?: (Video|Audio|Subtitle): (\w+)/)
+    if (!match) return
+    const type = match[2].toLowerCase() as StreamInfo['type']
+    // Cover art arrives as a video stream; it is not a picture to play.
+    if (type === 'video' && /attached pic/.test(line)) return
+    // The title, if any, is in the metadata block right under the stream.
+    let title: string | null = null
+    for (let next = at + 1; next < Math.min(lines.length, at + 6); next += 1) {
+      if (/Stream #/.test(lines[next])) break
+      const found = lines[next].match(/^\s+title\s*:\s*(.+)$/)
+      if (found) {
+        title = found[1].trim()
+        break
+      }
+    }
+    streams.push({
+      index: counts[type]++,
+      type,
+      codec: match[3],
+      language: match[1] && match[1] !== 'und' ? match[1] : null,
+      title,
+      isDefault: /\(default\)/.test(line),
+    })
+  })
+  return streams
+}
+
+/**
+ * Width, height and length of a video, as FFmpeg reads them — the browser's
+ * own player cannot open every container, and some builds none with H.264.
+ */
+export async function probeVideo(bytes: Uint8Array, name: string): Promise<{ width: number; height: number; duration: number }> {
+  const extension = (name.split('.').pop() ?? 'mp4').toLowerCase()
+  const input = `probe.${extension}`
+  const { logs } = await runFfmpeg({ input: { [input]: bytes }, output: [], args: ['-i', input, '-map', '0:v:0', '-frames:v', '1', '-f', 'null', '-'] })
+  const text = logs.join('\n')
+  const size = text.match(/Video:[^\n]*?(\d{2,5})x(\d{2,5})/)
+  const time = text.match(/Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/)
+  return {
+    width: size ? Number(size[1]) : 0,
+    height: size ? Number(size[2]) : 0,
+    duration: time ? Number(time[1]) * 3600 + Number(time[2]) * 60 + Number(time[3]) : 0,
   }
 }
 

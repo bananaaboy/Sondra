@@ -1,11 +1,10 @@
 {
   "name": "sondra-desktop",
   "private": true,
-  "version": "1.0.10",
+  "version": "1.0.13",
   "description": "Sondra als Windows-App: eigenes Fenster, Installer, läuft lokal.",
   "author": "Lizge",
   "devDependencies": {
-    "@vercel/blob": "2.8.0",
     "electron": "44.4.4",
     "electron-builder": "26.15.3",
     "electron-updater": "6.8.9"
@@ -55,12 +54,13 @@
       "oneClick": false,
       "perMachine": true,
       "allowElevation": true,
+      "packElevateHelper": true,
       "allowToChangeInstallationDirectory": true,
       "license": ".build/LIZENZ.txt",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Sondra",
-      "uninstallDisplayName": "Sondra - Multimedia",
+      "shortcutName": "Sondra Studio",
+      "uninstallDisplayName": "Sondra Studio",
       "installerLanguages": [
         "de_DE"
       ],

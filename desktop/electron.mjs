@@ -20,13 +20,19 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
 
 import { startDownloader } from './downloader.mjs'
-import { startServer } from './server.mjs'
+import { offerFile, startServer } from './server.mjs'
 import { setupUpdates } from './updater.mjs'
 
 const PORT = 47199
+/**
+ * Installed from the Microsoft Store (an MSIX package). The Store signs,
+ * hosts and updates it; the app's own updater and fetching yt-dlp would both
+ * be things the Store does not allow, so both stay off in this build.
+ */
+const IN_STORE = process.windowsStore === true
 const SMOKE = process.env.SONDRA_SMOKE
 /** Tests answer the app's questions in advance: `yes` or `no`. */
 const ANSWER = process.env.SONDRA_ASK
@@ -79,8 +85,8 @@ const escapeHtml = (text) =>
  */
 function failurePage(reason, retryUrl) {
   const dark = nativeTheme.shouldUseDarkColors
-  const [ground, ink, prose] = dark ? ['#090d0b', '#c9e3cc', '#dfe6e0'] : ['#f4f3ee', '#0f3e1c', '#1b231d']
-  const html = `<!doctype html><html lang="de"><meta charset="utf-8"><title>Sondra</title>
+  const [ground, ink, prose] = dark ? ['#0a110d', '#c3f4d0', '#e4ede6'] : ['#f2eee4', '#0f3e1c', '#162019']
+  const html = `<!doctype html><html lang="de"><meta charset="utf-8"><title>Sondra Studio</title>
 <body style="margin:0;background:${ground};color:${prose};font:16px/1.55 system-ui,sans-serif">
 <main style="max-width:560px;padding:64px 32px">
 <h1 style="color:${ink};font-size:24px;margin:0 0 12px">Sondra konnte die Oberfläche nicht laden</h1>
@@ -91,7 +97,77 @@ function failurePage(reason, retryUrl) {
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
 }
 
-app.on('second-instance', () => {
+/**
+ * Files Windows passed on the command line: „Öffnen mit Sondra“, a file
+ * dropped on the icon or the shortcut. Anything that is not an existing file
+ * (flags, the executable itself) is ignored.
+ */
+function filesIn(argv, cwd = process.cwd()) {
+  const found = []
+  for (const arg of argv.slice(1)) {
+    if (!arg || arg.startsWith('-')) continue
+    const file = path.resolve(cwd, arg)
+    if (file === process.execPath) continue
+    try {
+      if (fs.statSync(file).isFile()) found.push(file)
+    } catch {
+      // Not a path.
+    }
+  }
+  return found
+}
+
+/** Opened before the page could take them; handed over when it asks. */
+let waitingFiles = filesIn(process.argv)
+
+function describeFiles(files) {
+  return files.map((file) => {
+    let size = null
+    try {
+      size = fs.statSync(file).size
+    } catch {
+      // Gone since; the fetch will say so.
+    }
+    return { name: path.basename(file), size, url: offerFile(file) }
+  })
+}
+
+/** The screen or window the page picked for its next getDisplayMedia. */
+let capturePick = null
+
+ipcMain.handle('sondra:capture-sources', async () => {
+  const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } })
+  return sources
+    // Sondra's own window would record itself recording.
+    .filter((source) => !(window && source.id === window.getMediaSourceId()))
+    .map((source) => ({
+      id: source.id,
+      name: source.name,
+      kind: source.id.startsWith('screen:') ? 'screen' : 'window',
+      thumbnail: source.thumbnail.isEmpty() ? null : source.thumbnail.toDataURL(),
+    }))
+})
+
+ipcMain.handle('sondra:capture-pick', (_event, id, audio) => {
+  capturePick = typeof id === 'string' ? { id, audio: Boolean(audio) } : null
+  return true
+})
+
+ipcMain.handle('sondra:take-files', () => {
+  const files = waitingFiles
+  waitingFiles = []
+  if (files.length > 0) log(`Geöffnet mit Sondra: ${files.map((file) => path.basename(file)).join(', ')}`)
+  return describeFiles(files)
+})
+
+app.on('second-instance', (_event, argv, workingDirectory) => {
+  const files = filesIn(argv, workingDirectory)
+  if (files.length > 0 && window) {
+    log(`Geöffnet mit Sondra (Fenster offen): ${files.map((file) => path.basename(file)).join(', ')}`)
+    window.webContents.send('sondra:files', describeFiles(files))
+  } else if (files.length > 0) {
+    waitingFiles.push(...files)
+  }
   log('Zweiter Start: bringe das offene Fenster nach vorn.')
   if (!window) return
   // `show` as well as `focus`: a window that is hidden does not come back
@@ -103,14 +179,26 @@ app.on('second-instance', () => {
 
 /**
  * A GPU process that keeps dying leaves a window that paints nothing and then
- * closes. When it happens, the next start runs without hardware acceleration;
+ * closes. When it happens, the next starts run without hardware acceleration;
  * the page is 2D and the maths runs on the CPU either way.
+ *
+ * For a day, not for good. The marker used to stay forever, so one crash —
+ * a driver update, a resume from sleep — left every later start drawing in
+ * software, and the whole app felt slow for a reason nobody could see.
  */
 const NO_GPU = () => path.join(app.getPath('userData'), 'ohne-gpu')
+const NO_GPU_FOR_MS = 24 * 60 * 60 * 1000
+let withoutGpu = false
 try {
-  if (fs.existsSync(NO_GPU())) app.disableHardwareAcceleration()
+  const since = fs.statSync(NO_GPU()).mtimeMs
+  if (Date.now() - since < NO_GPU_FOR_MS) {
+    app.disableHardwareAcceleration()
+    withoutGpu = true
+  } else {
+    fs.rmSync(NO_GPU(), { force: true })
+  }
 } catch {
-  // No data folder yet: first start.
+  // No marker, or no data folder yet: first start.
 }
 
 app.on('child-process-gone', (_event, details) => {
@@ -163,7 +251,7 @@ const questions = {
     askOnce(
       {
         type: 'question',
-        title: 'Sondra',
+        title: 'Sondra Studio',
         message: 'yt-dlp laden?',
         detail:
           'Zum Herunterladen von Videoportalen braucht Sondra yt-dlp, ein freies Programm ' +
@@ -183,7 +271,7 @@ const questions = {
     ANSWER ? Promise.resolve(null) : askOnce(
       {
         type: 'question',
-        title: 'Sondra',
+        title: 'Sondra Studio',
         message: 'YouTube verlangt für dieses Video eine Anmeldung.',
         detail:
           'Sondra kann die Anmeldung aus einem Browser auf diesem Rechner übernehmen, in dem Sie ' +
@@ -206,7 +294,8 @@ function within(promise, ms) {
 
 async function open() {
   trimLog()
-  log(`Start ${app.getVersion()} · ${process.platform} ${process.arch} · Electron ${process.versions.electron}`)
+  log(`Start ${app.getVersion()} · ${process.platform} ${process.arch} · Electron ${process.versions.electron}${IN_STORE ? ' · Microsoft Store' : ''}`)
+  if (withoutGpu) log('Ohne Grafikbeschleunigung, weil die GPU in den letzten 24 Stunden abgestürzt ist.')
 
   // The default menu is English and mostly developer tools; the page carries
   // its own navigation.
@@ -217,13 +306,13 @@ async function open() {
   // that hung left an invisible Sondra running, and every later start handed
   // over to it and ended — which looked like the app opening nothing.
   window = new BrowserWindow({
-    title: 'Sondra',
+    title: 'Sondra Studio',
     width: 1280,
     height: 860,
     minWidth: 360,
     minHeight: 480,
     show: !SMOKE,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#090d0b' : '#f4f3ee',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a110d' : '#f2eee4',
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
@@ -244,10 +333,12 @@ async function open() {
     ipcMain,
     window: () => window,
     version: app.getVersion(),
-    enabled: app.isPackaged && process.platform === 'win32' && !SMOKE && !ANSWER && process.env.SONDRA_UPDATES !== 'off',
+    enabled: app.isPackaged && process.platform === 'win32' && !IN_STORE && !SMOKE && !ANSWER && process.env.SONDRA_UPDATES !== 'off',
+    channel: IN_STORE ? 'store' : 'setup',
   })
 
-  // The page title is written for a browser tab; the window is just "Sondra".
+  // The page title is written for a browser tab; the window is "Sondra
+  // Studio", as in the Store and the Start menu.
   window.on('page-title-updated', (event) => event.preventDefault())
   window.webContents.on('did-finish-load', () => log(`Geladen: ${window?.webContents.getURL().slice(0, 60)}`))
   window.on('closed', () => {
@@ -288,7 +379,7 @@ async function open() {
   // the page looks for the service again whenever it was not there yet.
   if (process.env.SONDRA_DOWNLOADER !== 'off') {
     await within(
-      startDownloader({ dataDir: app.getPath('userData'), origin, log: (message) => log(message), ask: questions }).then(
+      startDownloader({ dataDir: app.getPath('userData'), origin, log: (message) => log(message), ask: questions, fetchesTool: !IN_STORE }).then(
         (service) => log(service ? `Dienst zum Herunterladen auf ${service.url}` : 'Port 9000 belegt: die Seite nutzt den Dienst, der dort läuft.'),
       ),
       1500,
@@ -299,6 +390,34 @@ async function open() {
   // page, never for anything it might end up framing.
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback, details) => {
     callback(Boolean(details.requestingUrl?.startsWith(origin)))
+  })
+
+  // Screen recording. A browser shows its own picker for getDisplayMedia;
+  // Electron has none, so the page lists the screens and windows through the
+  // preload, the user picks one there, and this handler hands exactly that
+  // source over when the page asks. Nothing is chosen on the page's behalf:
+  // without a pick the request is refused.
+  session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+    const pick = capturePick
+    capturePick = null
+    try {
+      if (!pick || !request.securityOrigin?.startsWith(origin)) throw new Error('keine Quelle gewählt')
+      const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } })
+      const source = sources.find((entry) => entry.id === pick.id)
+      if (!source) throw new Error('Quelle nicht mehr da')
+      log(`Bildschirmaufnahme: ${source.name}${pick.audio ? ' · mit Ton des Rechners' : ''}`)
+      // Loopback is the whole system's sound; Windows has no per-window audio.
+      callback(pick.audio && request.audioRequested ? { video: source, audio: 'loopback' } : { video: source })
+    } catch (failure) {
+      log(`Bildschirmaufnahme abgelehnt: ${failure?.message ?? failure}`)
+      // An empty answer is a refusal; some Electron versions throw on it
+      // after refusing, which is the same outcome.
+      try {
+        callback({})
+      } catch {
+        /* refused either way */
+      }
+    }
   })
 
   if (!window) return // closed while starting

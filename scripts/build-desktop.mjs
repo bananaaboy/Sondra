@@ -3,6 +3,21 @@
  *
  *   npm run build:desktop            →   release/Sondra-Setup-<version>.exe  (on Windows)
  *   npm run build:desktop -- --dir   →   release/<platform>-unpacked/        (any OS, for testing)
+ *   npm run build:desktop -- --store →   release/Sondra-Store-<version>.appx (on Windows)
+ *
+ * `--arm64` builds either for Windows on Arm instead: Sondra-Setup-arm64-…
+ * and Sondra-Store-arm64-…. The page, FFmpeg and the models are WebAssembly
+ * and the same for both; only Electron differs. One latest.yml lists both
+ * setups (the workflow merges them, x64 first), and the updater picks the
+ * one whose name carries its own architecture.
+ *
+ * `--store` builds the Microsoft Store package: MSIX (electron-builder's
+ * „appx“ target), which the Store signs and hosts itself. The setup cannot go
+ * to the Store unsigned (policy 10.2.9); the package can. Its identity comes
+ * from Partner Center („Produktidentität“) through SONDRA_STORE_IDENTITY_NAME,
+ * SONDRA_STORE_PUBLISHER and SONDRA_STORE_PUBLISHER_NAME; without them the
+ * package is built with test values that the Store will refuse — good for
+ * checking the build, not for submitting.
  *
  * The installer installs for all users (one UAC prompt; `/S` runs it without
  * any UI, as the Microsoft Store requires), shows LIZENZ.txt before
@@ -26,11 +41,17 @@ import path from 'node:path'
 
 import { build } from 'esbuild'
 
+import { makeStoreTiles } from './store-tiles.mjs'
+
 const DESKTOP = path.resolve('desktop')
 const STAGE = path.join(DESKTOP, '.stage')
 const RESOURCES = path.join(DESKTOP, '.build')
 const SITE = path.join(DESKTOP, '.site')
 const onlyDir = process.argv.includes('--dir')
+const forStore = process.argv.includes('--store')
+const arm = process.argv.includes('--arm64')
+const archFlag = arm ? '--arm64' : '--x64'
+const archTag = arm ? '-arm64' : ''
 
 /**
  * Not part of the app: deployment config, the yt-dlp bridge, and the service
@@ -123,6 +144,7 @@ const licences = path.join(RESOURCES, 'lizenzen')
 fs.cpSync('desktop/lizenzen', licences, { recursive: true })
 for (const [name, file] of [
   ['react.txt', 'node_modules/react/LICENSE'],
+  ['transformers.js.txt', 'node_modules/@huggingface/transformers/LICENSE'],
   ['tone.txt', 'node_modules/tone/LICENSE.md'],
   ['wavesurfer.js.txt', 'node_modules/wavesurfer.js/LICENSE'],
   ['zustand.txt', 'node_modules/zustand/LICENSE'],
@@ -132,10 +154,90 @@ for (const [name, file] of [
 
 /* -- 4. electron-builder ---------------------------------------------------- */
 
-step(onlyDir ? 'App-Ordner bauen' : 'Installer bauen')
 const builder = path.join(DESKTOP, 'node_modules/electron-builder/cli.js')
-const args = onlyDir ? ['--dir'] : ['--win', 'nsis', '--x64']
 // Never publish from the build — once, a second flag turns it into a list
 // that electron-builder no longer reads as "never". The workflow publishes
 // the tested installer, together with the latest.yml the updater reads.
-execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
+if (forStore) {
+  step('Store-Paket (MSIX) bauen')
+  makeStoreTiles('public/icon-512.png', path.join(RESOURCES, 'appx'))
+  // Copied out of Partner Center, a value often arrives with its XML around
+  // it (Name="…") or with quotes and a trailing space; the manifest wants the
+  // bare value.
+  const bare = (value) =>
+    (value ?? '')
+      .trim()
+      .replace(/^[A-Za-z]+\s*=\s*(?=["'])/, '')
+      .replace(/^["']|["']$/g, '')
+      .trim()
+  const identity = {
+    identityName: bare(process.env.SONDRA_STORE_IDENTITY_NAME),
+    publisher: bare(process.env.SONDRA_STORE_PUBLISHER),
+    publisherDisplayName: bare(process.env.SONDRA_STORE_PUBLISHER_NAME),
+  }
+  const missing = [
+    ['STORE_IDENTITY_NAME', identity.identityName],
+    ['STORE_PUBLISHER', identity.publisher],
+    ['STORE_PUBLISHER_NAME', identity.publisherDisplayName],
+  ].filter(([, value]) => !value).map(([name]) => name)
+  if (identity.publisher && !identity.publisher.startsWith('CN=')) {
+    throw new Error(`STORE_PUBLISHER muss mit „CN=“ beginnen (Package/Identity/Publisher aus Partner Center), ist aber „${identity.publisher.slice(0, 12)}…“.`)
+  }
+  if (missing.length) {
+    const message = `Store-Identität unvollständig, es fehlt: ${missing.join(', ')}. Testwerte eingesetzt — dieses Paket nimmt der Store nicht an.`
+    console.warn(`  ${message}`)
+    // A visible annotation on the run's summary page, not only in the log.
+    if (process.env.GITHUB_ACTIONS) console.log(`::warning title=Store-Paket mit Testwerten::${message}`)
+    identity.identityName ||= 'Lizge.Sondra'
+    identity.publisher ||= 'CN=00000000-0000-0000-0000-000000000000'
+    identity.publisherDisplayName ||= 'Lizge'
+  } else {
+    console.log(`  Store-Identität: ${identity.identityName}`)
+  }
+  const own = JSON.parse(fs.readFileSync(path.join(DESKTOP, 'package.json'), 'utf8')).build
+  const config = {
+    ...own,
+    win: { ...own.win, target: [{ target: 'appx', arch: [arm ? 'arm64' : 'x64'] }], artifactName: `Sondra-Store${archTag}-\${version}.\${ext}` },
+    appx: {
+      ...identity,
+      applicationId: 'Sondra',
+      displayName: process.env.SONDRA_STORE_DISPLAY_NAME || 'Sondra Studio',
+      languages: ['de-DE'],
+      // The tiles are opaque green; a transparent plate would let Windows
+      // paint the user's accent colour round the edges.
+      backgroundColor: '#0f3e1c',
+    },
+    // „Öffnen mit“, the MSIX way: the package declares what it can open and
+    // Windows lists it, without it becoming anyone's default.
+    fileAssociations: [
+      { ext: ['mp3', 'wav', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'aif', 'aiff', 'wma'], name: 'sondra.ton', description: 'Ton' },
+      { ext: ['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi'], name: 'sondra.video', description: 'Video' },
+      { ext: ['png', 'jpg', 'jpeg', 'webp', 'gif'], name: 'sondra.bild', description: 'Bild' },
+    ],
+    // The Store updates the package; there is nothing for electron-updater to read.
+    publish: null,
+  }
+  delete config.nsis
+  const configFile = path.join(RESOURCES, 'store.json')
+  fs.writeFileSync(configFile, JSON.stringify(config, null, 2))
+  execFileSync(process.execPath, [builder, '--win', 'appx', archFlag, '--config', configFile, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit' })
+} else {
+  step(onlyDir ? 'App-Ordner bauen' : 'Installer bauen')
+  const args = onlyDir
+    ? ['--dir']
+    : [
+        '--win',
+        'nsis',
+        archFlag,
+        // The arm64 setup is built with NSIS 3.12, which knows Windows on Arm
+        // natively; x64 stays on the version it has shipped with.
+        ...(arm ? ['-c.win.artifactName=Sondra-Setup-arm64-${version}.${ext}', '-c.toolsets.nsis=1.2.1'] : []),
+      ]
+  // 7-Zip from version 23 on picks an ARM64 branch filter for Arm64 programs
+  // by itself, and the installer's extraction plugin is older than that
+  // filter: it unpacked nothing and the setup still reported success. A
+  // fixed BCJ filter is one every extractor knows; on Arm code it simply
+  // gains little.
+  const env = arm ? { ...process.env, ELECTRON_BUILDER_7Z_FILTER: 'BCJ' } : process.env
+  execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit', env })
+}

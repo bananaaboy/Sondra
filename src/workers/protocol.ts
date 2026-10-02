@@ -111,3 +111,32 @@ export type HarmonyResponse =
       chroma: Float32Array
       notes: import('../lib/pitch').Note[]
     }
+
+/* --- speech recognition worker ------------------------------------------- */
+
+export interface TranscriptSegment {
+  /** Seconds in the file. */
+  start: number
+  end: number
+  text: string
+}
+
+export type TranscribeRequest =
+  | {
+      type: 'transcribe'
+      id: number
+      /** Mono, 16 kHz — what Whisper hears. */
+      samples: Float32Array
+      /** A Hugging Face model id, e.g. onnx-community/whisper-base. */
+      model: string
+      /** ISO 639-1, or `auto` to let the model decide. */
+      language: string
+    }
+  | { type: 'cancel'; id: number }
+
+export type TranscribeResponse =
+  | { type: 'loading'; id: number; loaded: number; total: number }
+  | { type: 'progress'; id: number; fraction: number; done: number }
+  | { type: 'partial'; id: number; segments: TranscriptSegment[] }
+  | { type: 'done'; id: number; segments: TranscriptSegment[] }
+  | { type: 'error'; id: number; message: string; aborted: boolean }

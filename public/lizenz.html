@@ -19,29 +19,29 @@
          outside the app bundle so it has a fixed address. */
       :root {
         color-scheme: light;
-        --canvas: #f4f3ee;
+        --canvas: #f2eee4;
         --ink: #0f3e1c;
-        --prose: #1b231d;
-        --muted: #5d6c61;
-        --line: #d5d4c9;
+        --prose: #162019;
+        --muted: #5a6b5f;
+        --line: #d3cdbf;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
           color-scheme: dark;
-          --canvas: #090d0b;
-          --ink: #9ce0ad;
-          --prose: #e0e8e2;
-          --muted: #a7bbab;
-          --line: #525f55;
+          --canvas: #0a110d;
+          --ink: #a6ecb9;
+          --prose: #e4ede6;
+          --muted: #adc2b2;
+          --line: #4a5e50;
         }
       }
       :root[data-theme='dark'] {
         color-scheme: dark;
-        --canvas: #090d0b;
-        --ink: #9ce0ad;
-        --prose: #e0e8e2;
-        --muted: #a7bbab;
-        --line: #525f55;
+        --canvas: #0a110d;
+        --ink: #a6ecb9;
+        --prose: #e4ede6;
+        --muted: #adc2b2;
+        --line: #4a5e50;
       }
 
       * { box-sizing: border-box; }
@@ -97,7 +97,7 @@
         weitergeben, auch kommerziell, solange der Lizenzhinweis mitkommt.
       </p>
       <p>
-        Der Quelltext liegt auf <a href="https://github.com/bananaaboy/Lizge">GitHub</a>. Bausteine anderer
+        Der Quelltext liegt auf <a href="https://github.com/bananaaboy/Sondra">GitHub</a>. Bausteine anderer
         Projekte behalten ihre eigenen Lizenzen; sie stehen unten.
       </p>
 
@@ -136,7 +136,9 @@ SOFTWARE.</pre>
           <tbody>
             <tr><td>FFmpeg (ffmpeg.wasm-Core)</td><td>Umwandeln, Video, Zusammenfügen</td><td>GPL-2.0 oder neuer</td></tr>
             <tr><td>@ffmpeg/ffmpeg, @ffmpeg/util</td><td>Anbindung an FFmpeg</td><td>MIT</td></tr>
-            <tr><td>ONNX Runtime Web</td><td>eigenes Trennmodell</td><td>MIT</td></tr>
+            <tr><td>ONNX Runtime Web</td><td>eigenes Trennmodell, Spracherkennung</td><td>MIT</td></tr>
+            <tr><td>Transformers.js</td><td>Spracherkennung für Untertitel</td><td>Apache-2.0</td></tr>
+            <tr><td>Whisper-Modelle (base, small), beim ersten Gebrauch von Hugging Face geladen</td><td>Spracherkennung</td><td>MIT</td></tr>
             <tr><td>wavesurfer.js</td><td>Wellenformen</td><td>BSD-3-Clause</td></tr>
             <tr><td>Tone.js</td><td>Wiedergabe im Sampler</td><td>MIT</td></tr>
             <tr><td>React, React DOM</td><td>Oberfläche</td><td>MIT</td></tr>

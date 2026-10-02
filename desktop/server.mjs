@@ -72,6 +72,60 @@ function fileFor(root, pathname) {
  * Serve `root` on 127.0.0.1, preferring `port` and falling back to any free
  * one. Resolves to the base address once listening.
  */
+/** Types for files opened from Windows, so the page sorts them like a pick. */
+const MEDIA = {
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac', '.ogg': 'audio/ogg', '.oga': 'audio/ogg',
+  '.opus': 'audio/ogg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.aif': 'audio/aiff', '.aiff': 'audio/aiff',
+  '.wma': 'audio/x-ms-wma', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime',
+  '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo', '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp',
+  '.mid': 'audio/midi', '.midi': 'audio/midi',
+}
+
+/**
+ * Files Windows handed to the app („Öffnen mit“, a file dropped on the icon),
+ * offered to the page under an unguessable address for a few minutes. The
+ * page fetches them like any other response — no copy through IPC, and a
+ * video of several gigabytes streams rather than crossing in one message.
+ */
+const offered = new Map()
+const OFFER_FOR_MS = 10 * 60 * 1000
+
+/** Makes one file on disk fetchable once, by the page on this server. */
+export function offerFile(file) {
+  const token = crypto.randomBytes(18).toString('base64url')
+  offered.set(token, { file, until: Date.now() + OFFER_FOR_MS })
+  return `/geoeffnet/${token}`
+}
+
+function serveOffered(token, response, onError) {
+  const entry = offered.get(token)
+  offered.delete(token)
+  if (!entry || entry.until < Date.now()) {
+    response.statusCode = 404
+    response.end()
+    return
+  }
+  let size
+  try {
+    size = fs.statSync(entry.file).size
+  } catch (failure) {
+    onError?.(`Geöffnete Datei nicht lesbar: ${entry.file}: ${failure.message}`)
+    response.statusCode = 404
+    response.end()
+    return
+  }
+  response.setHeader('content-type', MEDIA[path.extname(entry.file).toLowerCase()] ?? 'application/octet-stream')
+  response.setHeader('content-length', String(size))
+  response.setHeader('cache-control', 'no-store')
+  const stream = fs.createReadStream(entry.file)
+  stream.on('error', (failure) => {
+    onError?.(`Geöffnete Datei: ${entry.file}: ${failure.message}`)
+    response.destroy()
+  })
+  stream.pipe(response)
+}
+
 export async function startServer({ root, port, onError }) {
   if (!fs.existsSync(path.join(root, 'index.html'))) {
     throw new Error(`Die Oberfläche fehlt: ${path.join(root, 'index.html')} gibt es nicht.`)
@@ -107,6 +161,12 @@ export async function startServer({ root, port, onError }) {
         if (!response.headersSent) response.status(500).json({ error: 'crash', message: String(failure?.message ?? failure) })
         else response.end()
       }
+      return
+    }
+
+    const handed = url.pathname.match(/^\/geoeffnet\/([\w-]+)$/)
+    if (handed) {
+      serveOffered(handed[1], response, onError)
       return
     }
 

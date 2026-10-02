@@ -21,8 +21,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       # Only the CDP client; the app under test brings its own Chromium.
@@ -33,7 +33,7 @@ jobs:
         env:
           SETUP_URL: ${{ inputs.setup_url }}
         run: |
-          $url = if ($env:SETUP_URL) { $env:SETUP_URL } else { 'https://github.com/bananaaboy/Lizge/releases/latest/download/Sondra-Setup.exe' }
+          $url = if ($env:SETUP_URL) { $env:SETUP_URL } else { 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe' }
           Write-Host "Setup: $url"
           $setup = Join-Path $env:RUNNER_TEMP 'Sondra-Setup.exe'
           Invoke-WebRequest -Uri $url -OutFile $setup
@@ -41,8 +41,8 @@ jobs:
           Start-Process -FilePath $setup -ArgumentList '/S' -Wait
 
           $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
-            Where-Object { $_.DisplayName -eq 'Sondra - Multimedia' }
-          if (-not $entry) { throw 'Kein Eintrag "Sondra - Multimedia" in Apps & Features.' }
+            Where-Object { $_.DisplayName -eq 'Sondra Studio' }
+          if (-not $entry) { throw 'Kein Eintrag "Sondra Studio" in Apps & Features.' }
           $entry | Select-Object DisplayName, Publisher, DisplayVersion, InstallLocation, QuietUninstallString | Format-List
           Start-Sleep -Seconds 3
           Get-Process Sondra -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -56,7 +56,7 @@ jobs:
         shell: pwsh
         run: Get-Content (Join-Path $env:APPDATA 'Sondra\sondra.log') -ErrorAction SilentlyContinue
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: Bildschirmfotos

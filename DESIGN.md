@@ -2,20 +2,20 @@
 name: Sondra
 description: Ein Medienstudio, das im Tab rechnet — ein ruhiges, flaches Blatt, auf dem jede Zahl gemessen ist.
 colors:
-  canvas: "#f4f3ee"
-  raised: "#ffffff"
-  panel-soft: "#eaf2e9"
-  panel-mid: "#e2ebe1"
-  panel-strong: "#d2e4d1"
-  panel-cool: "#e4edef"
+  canvas: "#f2eee4"
+  raised: "#fdfbf6"
+  panel-soft: "#edf5ef"
+  panel-mid: "#e4f0e7"
+  panel-strong: "#d3e9da"
+  panel-cool: "#e1edf1"
   ink: "#0f3e1c"
-  ink-hover: "#0a2b13"
+  ink-hover: "#17552b"
   on-ink: "#ffffff"
-  prose: "#1b231d"
-  muted: "#5d6c61"
-  line: "#d5d4c9"
-  rule: "#bbc6ba"
-  faint: "#b0b6af"
+  prose: "#162019"
+  muted: "#5a6b5f"
+  line: "#d3cdbf"
+  rule: "#bcc4b6"
+  faint: "#8f9c91"
   stage: "#15181a"
   stage-soft: "#1d2124"
   stage-line: "#515a5d"
@@ -257,6 +257,19 @@ Warmes Papier trägt die Fläche, ein einziges dunkles Waldgrün ist die
 Druckfarbe, und eine dritte Welt — die neutrale Bühne der Editoren —
 widerspricht beiden mit Absicht.
 
+**Aufgefrischt am 2.10.2026,** auf Wunsch „moderner und schöner von den
+Farben her": Die Tönungen sind klare Minze statt Graugrün, Graphit ist ins
+Grünliche gezogen, und das dunkle Thema
+ist tiefes Waldschwarz (`#0a110d`) statt Grau, mit hellerer Tinte
+(`#a6ecb9`). Das Papier bleibt auf Wunsch Beige (`#f2eee4`, eine Spur
+wärmer als vorher), und Weiss ist nirgends grell: Felder stehen auf warmem
+Weiss (`#fdfbf6`). Waldtinte `#0f3e1c` und alle Rollen sind geblieben; jede Paarung
+ist neu gemessen (Messregel). Zwei kleine Farbmomente sind dazugekommen: die
+Fläche oben auf der Startseite trägt einen Verlauf aus ihren eigenen
+Tönungen (`field-glow`, Minze sammelt sich in der Ecke der zwei Handlungen),
+und das Symbol einer Werkzeugkachel sitzt auf einem eigenen kleinen Feld, das
+beim Zeigen die Tinte annimmt.
+
 ### Primary
 
 - **Waldtinte** (`{colors.ink}`): die einzige gesättigte Farbe im System und
@@ -269,7 +282,7 @@ widerspricht beiden mit Absicht.
 
 ### Neutral
 
-- **Warmes Papier** (`{colors.canvas}`): das Blatt selbst, Grund der ganzen App.
+- **Warmes Papier** (`{colors.canvas}`): das Blatt selbst, Grund der ganzen App. Beige, auf ausdrücklichen Wunsch.
 - **Feld** (`{colors.raised}`): Weiss erscheint nur, wo ein Feld ausfüllbar ist
   oder wo eine Fläche eine eigene Mechanik hat — Eingaben, der Editorrahmen,
   die Reiterleiste. Nicht als Karte; eine Karte gibt es hier nicht.
@@ -582,11 +595,20 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Unschärfe. Links die Wortmarke, rechts drei ruhige Bedienelemente: das
   Dateimenü, „App herunterladen" — als einziges getönt — und ein einzelner
   Themenknopf, der durch System, Hell und Dunkel schaltet. Der Download-Knopf
-  öffnet ein natives `<dialog>` (Schattenstufe, Hintergrund abgedunkelt): der
-  Microsoft Store als ausgegraute Zeile, die bei Hover, Fokus und Antippen
-  „Bald verfügbar" sagt — bewusst `aria-disabled` statt `disabled`, weil ein
-  deaktivierter Knopf in mehreren Browsern gar keinen Hover bekommt —, darunter
-  das Setup (.exe). In der App entfällt er. Den Lokal-Chip („Lokal · 1
+  öffnet ein natives `<dialog>` (Schattenstufe, Hintergrund abgedunkelt, bis
+  1120 px breit) — bewusst die lauteste Stelle der Seite, auf Wunsch
+  „breiter und extravaganter". Oben die Wortmarke gross: Zeichen, „Sondra" in
+  der Wortmarken-Schrift, „Studio" in Public Sans. Darunter drei Kacheln:
+  Setup (.exe) und Microsoft Store als die zwei grossen nebeneinander (bis
+  420 px hoch, Name in 48 px, die Dateiart als Courier-Pille, die Handlung am
+  Fuss), „Website als App" schmal über die volle Breite darunter. Die
+  Setup-Kachel ist die eine Fläche in Tinte: die fünf Balken des Zeichens
+  liegen riesig und blass darauf, gleiten beim Öffnen nacheinander herein
+  (`bar-in`, der eine Bewegungsmoment des Fensters) und rücken bei Hover
+  nach links. Die Store-Kachel steht auf `panel-strong` und ist der
+  Link zum Store-Eintrag; ohne Eintrag sagt sie „Bald verfügbar" als Pille
+  auf der Fläche, nicht erst bei Hover. Unter `md`
+  stehen die Kacheln untereinander. In der App entfällt er. Den Lokal-Chip („Lokal · 1
   Ausnahme") gibt es seit dem 23.9. nicht mehr; die Ausnahme sagt der
   Downloader selbst, laut.
   „Installieren" und der Suchknopf sind auf Wunsch entfallen; gesucht wird auf
@@ -623,11 +645,31 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   der Welle sagt in einem Satz, was gerade zu hören ist, mit Vorher/Nachher.
   Tempo und Tonhöhe hört man live über einen körnigeren Schieber; übernommen
   rechnet der Phasenvocoder, und der Hinweis sagt das.
-- **Blenden sind zu sehen, bevor sie da sind:** im Ton-Editor als Kurve über
-  der Welle (der leiser werdende Teil verschleiert in der Farbe des Grunds),
-  beim Überfahren von „Hier einblenden/ausblenden" über der Auswahl; im
+- **Blenden sind zu sehen, bevor sie da sind:** im Ton-Editor in der Welle
+  selbst — die Säulen werden mit derselben Gleichleistungs-Kurve kleiner, die
+  der Ton bekommt, was die Blende wegnimmt, bleibt als schwache Spur stehen,
+  und eine Haarlinie folgt der Kurve. Kein Schleier über der alten Welle: der
+  las sich als Kasten und zeigte nicht, was zu hören sein wird. Ebenso beim
+  Überfahren von „Hier einblenden/ausblenden" über der Auswahl; im
   Video-Editor als Rampe auf der Zeitleiste und als Schwarz über dem Bild, das
   dem Abspielkopf Bild für Bild folgt.
+- **Letzte Sitzung** steht über dem Werkzeug als Zeile mit Marke am Rand
+  (`RestoreOffer`), wie `Notice`: was es war (Dateien, Grösse, wann, in Mono)
+  und zwei Knöpfe, „Wiederherstellen“ und „Verwerfen“. Kein Dialog vor der
+  Seite — sie bleibt bedienbar, bis jemand antwortet. Im Dateimenü sagt die
+  Fusszeile „auf diesem Gerät gespeichert“ bzw. „wird … gespeichert …“, darunter
+  der Schalter zum Abschalten.
+- **Mehrere Dateien** (`BatchFiles`): ein Schalter „Mehrere Dateien auf
+  einmal“, darunter eine Liste mit Häkchen, getrennt durch Linien, und
+  „Weitere Dateien hinzufügen“ als Textlink. Nur Dateien, die das Ziel
+  werden können, stehen darin; neu hinzugefügte sind gleich angehakt. Der
+  Knopf zählt mit („3 Dateien umwandeln“).
+- **Tastenkürzel** hinter `?` und im Fuss: ein `Dialog`, je Werkzeug eine
+  Spalte, links was passiert, rechts die Tasten in Mono.
+- **Untertitel im Bild:** Public Sans 600, 5,2 % der kurzen Bildseite, weiss
+  auf einer dunklen, gerundeten Platte (62 % Deckkraft) je Zeile, höchstens
+  zwei Zeilen à rund 42 Zeichen, unten mittig mit 6 % Abstand. Im Browser
+  gezeichnet, damit es dieselbe Schrift ist wie auf der Seite.
 - **Pegelanzeige** (Mikrofon): flacher Balken ohne Rundung — eine Zeitfläche
   im Sinn der Regel oben —, Tinte auf `panel-soft`, die letzten 6 dB als
   `panel-mid` markiert statt rot, Spitzenhalter als 2-px-Strich, Werte in

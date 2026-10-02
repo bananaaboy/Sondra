@@ -5,7 +5,10 @@
 # website links through `releases/latest/download/Sondra-Setup.exe`. Path
 # filters are not evaluated for tag pushes, so a tag always builds.
 #
-# Everything runs on windows-latest: an NSIS installer needs Windows to build,
+# Built and checked twice, x64 on windows-latest and arm64 on windows-11-arm;
+# the release then carries both setups and one latest.yml for both.
+#
+# Everything runs on Windows: an NSIS installer needs Windows to build,
 # and "the installed app opens and shows Sondra" is only worth something when
 # it was checked on Windows. The installer is kept as the artifact
 # "Sondra-Setup" — download, unpack, run Sondra-Setup-<version>.exe.
@@ -18,7 +21,8 @@ on:
     tags: ['v*']
     paths:
       - desktop/**
-      - scripts/build-desktop.mjs
+      # All of them: the build, the tiles, the UI test, the update merge.
+      - scripts/**
       - api/**
       - src/**
       - public/**
@@ -32,23 +36,30 @@ on:
         description: 'Setup als GitHub Release v<Version aus package.json> veröffentlichen'
         type: boolean
         default: false
-      store:
-        description: 'Setup auf Vercel Blob legen (Paket-URL ohne Umleitung für den Microsoft Store)'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 jobs:
+  # The same build and the same checks twice: x64 on the usual runner, and
+  # Windows on Arm on GitHub's own Arm machine, so the arm64 app is installed,
+  # started and clicked through on the hardware it is for.
   windows:
-    runs-on: windows-latest
-    permissions:
-      # Write only for the release step on a tag; nothing else pushes.
-      contents: write
+    name: windows-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            suffix: ''
+          - arch: arm64
+            runner: windows-11-arm
+            suffix: '-arm64'
+    runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -57,30 +68,64 @@ jobs:
             desktop/package-lock.json
       - run: npm ci
       - run: npm ci --prefix desktop
-      - run: npm run build:desktop
+      - run: npm run build:desktop -- --${{ matrix.arch }}
 
       - name: Install silently and start the installed app
         shell: pwsh
         run: |
           $setup = Get-ChildItem release -Filter 'Sondra-Setup-*.exe' | Select-Object -First 1
           if (-not $setup) { throw 'Kein Setup gebaut.' }
-          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          $installer = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          Write-Host "Setup beendet mit Code $($installer.ExitCode)"
 
           $app = Join-Path $env:ProgramFiles 'Sondra\Sondra.exe'
-          if (-not (Test-Path $app)) { throw "Nicht installiert: $app fehlt." }
+          if (-not (Test-Path $app)) {
+            # Where it went, if anywhere: every usual program folder, and what
+            # the setup wrote into the registry, in both registry views.
+            $roots = @('C:\Program Files', 'C:\Program Files (x86)', 'C:\Program Files (Arm)', (Join-Path $env:LOCALAPPDATA 'Programs')) | Where-Object { Test-Path $_ }
+            foreach ($root in $roots) {
+              Get-ChildItem -LiteralPath $root -Filter Sondra.exe -Recurse -Depth 3 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "Gefunden: $($_.FullName)" }
+            }
+            $keys = @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')
+            Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'Sondra*' } |
+              Select-Object PSPath, DisplayName, InstallLocation, DisplayVersion | Format-List
+            Get-ChildItem $env:TEMP -Filter 'ns*.tmp' -ErrorAction SilentlyContinue | Select-Object -First 5 | Format-Table Name, LastWriteTime
+            throw "Nicht installiert: $app fehlt (Setup-Code $($installer.ExitCode))."
+          }
+          # The machine type in the PE header: the build is what it says it is.
+          $bytes = [System.IO.File]::ReadAllBytes($app)
+          $pe = [BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = '{0:X4}' -f [BitConverter]::ToUInt16($bytes, $pe + 4)
+          $expected = if ('${{ matrix.arch }}' -eq 'arm64') { 'AA64' } else { '8664' }
+          if ($machine -ne $expected) { throw "Sondra.exe ist fuer Maschine $machine gebaut, erwartet $expected." }
+          Write-Host "Sondra.exe: ${{ matrix.arch }} ($machine)"
           if (-not (Test-Path (Join-Path $env:ProgramFiles 'Sondra\LIZENZ.txt'))) { throw 'LIZENZ.txt fehlt im Installationsordner.' }
 
           # What the Microsoft Store looks for after a silent install: an entry
           # in Apps & Features, machine-wide, with the reserved product name
           # and the account's publisher name.
           $entry = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
-            Where-Object { $_.DisplayName -eq 'Sondra - Multimedia' }
+            Where-Object { $_.DisplayName -eq 'Sondra Studio' }
           # Plain quotes only: PowerShell reads „ and “ as string delimiters.
-          if (-not $entry) { throw 'Kein Eintrag "Sondra - Multimedia" in Apps & Features (HKLM).' }
+          if (-not $entry) { throw 'Kein Eintrag "Sondra Studio" in Apps & Features (HKLM).' }
           if ($entry.Publisher -ne 'Lizge') { throw "Herausgeber ist '$($entry.Publisher)', erwartet 'Lizge'." }
           if (-not $entry.QuietUninstallString) { throw 'Keine stille Deinstallation eingetragen.' }
           if (-not $entry.InstallLocation) { throw 'InstallLocation fehlt im Eintrag.' }
           $entry | Select-Object DisplayName, Publisher, DisplayVersion, InstallLocation, QuietUninstallString | Format-List
+
+          # Open with: Sondra listed for media files, and no default taken over.
+          $progids = Get-ItemProperty 'HKLM:\Software\Classes\.mp3\OpenWithProgids' -ErrorAction SilentlyContinue
+          if (-not ($progids.PSObject.Properties.Name -contains 'Sondra.Datei')) { throw 'Sondra fehlt unter Oeffnen mit fuer .mp3.' }
+          $command = (Get-ItemProperty 'HKLM:\Software\Classes\Sondra.Datei\shell\open\command').'(default)'
+          if ($command -notlike '*Sondra.exe*%1*') { throw "Befehl fuer Oeffnen mit: $command" }
+          $default = (Get-ItemProperty 'HKLM:\Software\Classes\.mp3' -ErrorAction SilentlyContinue).'(default)'
+          if ($default -eq 'Sondra.Datei') { throw 'Das Setup hat sich zum Standard fuer .mp3 gemacht.' }
+          Write-Host "Oeffnen mit: $command"
+
+          # The Start menu entry carries the Store's name.
+          $startMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+          if (-not (Test-Path (Join-Path $startMenu 'Sondra Studio.lnk'))) { throw 'Kein Eintrag "Sondra Studio" im Startmenue.' }
+          if (Test-Path (Join-Path $startMenu 'Sondra.lnk')) { throw 'Der alte Eintrag "Sondra" steht noch im Startmenue.' }
 
           # Twice: the second start runs against the profile the first one left
           # behind, which is where a start that works once and then fails lives.
@@ -111,28 +156,126 @@ jobs:
           npm i --no-save --no-package-lock --ignore-scripts playwright-core@1.56.1
           node scripts/desktop-ui-test.mjs (Join-Path $env:ProgramFiles 'Sondra\Sondra.exe') ui-shots
 
+      # The Microsoft Store takes an MSIX package and signs it itself; the
+      # unsigned setup it refuses (policy 10.2.9). The identity comes from
+      # Partner Center, set as repository variables; without them the
+      # package is built with test values, which proves the build but is not
+      # for submitting. To see that the package installs and runs, it is
+      # signed here with a throwaway certificate for this runner only.
+      - name: Build, install and start the Store package (MSIX)
+        shell: pwsh
+        env:
+          # Variables or secrets, whichever holds them: both are ordinary
+          # places to put them, and only one was read before.
+          SONDRA_STORE_IDENTITY_NAME: ${{ vars.STORE_IDENTITY_NAME || secrets.STORE_IDENTITY_NAME }}
+          SONDRA_STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER || secrets.STORE_PUBLISHER }}
+          SONDRA_STORE_PUBLISHER_NAME: ${{ vars.STORE_PUBLISHER_NAME || secrets.STORE_PUBLISHER_NAME }}
+          SONDRA_STORE_DISPLAY_NAME: ${{ vars.STORE_DISPLAY_NAME || secrets.STORE_DISPLAY_NAME }}
+        run: |
+          node scripts/build-desktop.mjs --store --${{ matrix.arch }}
+          if ($LASTEXITCODE -ne 0) { throw 'Store-Paket nicht gebaut.' }
+          $package = Get-ChildItem release -Filter 'Sondra-Store-*.appx' | Select-Object -First 1
+          if (-not $package) { throw 'Kein .appx in release/.' }
+          Write-Host "Paket: $($package.Name), $([math]::Round($package.Length / 1MB)) MB"
+
+          # What the Store will read: identity and what the app opens.
+          $unpacked = Join-Path $env:RUNNER_TEMP 'appx'
+          Copy-Item $package.FullName "$unpacked.zip"
+          Expand-Archive "$unpacked.zip" $unpacked -Force
+          [xml]$manifest = Get-Content (Join-Path $unpacked 'AppxManifest.xml')
+          $identity = $manifest.Package.Identity
+          Write-Host "Identity: $($identity.Name) · $($identity.Publisher) · $($identity.Version)"
+          $types = Select-String -Path (Join-Path $unpacked 'AppxManifest.xml') -Pattern 'FileType>' | Measure-Object
+          if ($types.Count -lt 10) { throw "Nur $($types.Count) Dateiarten im Manifest." }
+          Write-Host "Dateiarten im Manifest: $($types.Count)"
+
+          # Sign with a certificate made for this run, trust it, install.
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $identity.Publisher -KeyUsage DigitalSignature `
+            -FriendlyName 'Sondra CI' -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          $pfx = Join-Path $env:RUNNER_TEMP 'ci.pfx'
+          $password = ConvertTo-SecureString -String 'ci' -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $password | Out-Null
+          Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' -Password $password | Out-Null
+          $tools = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe
+          $signtool = $tools | Where-Object { $_.FullName -match '\\${{ matrix.arch }}\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { $signtool = $tools | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1 }
+          $signed = Join-Path $env:RUNNER_TEMP 'Sondra-Test.appx'
+          Copy-Item $package.FullName $signed
+          & $signtool.FullName sign /fd SHA256 /a /f $pfx /p ci $signed
+          if ($LASTEXITCODE -ne 0) { throw 'Testsignatur fehlgeschlagen.' }
+
+          Add-AppxPackage -Path $signed
+          $installed = Get-AppxPackage -Name $identity.Name
+          if (-not $installed) { throw 'Paket ist nicht installiert.' }
+          Write-Host "Installiert: $($installed.PackageFullName)"
+
+          # Start it the way the start menu does and read its own log.
+          Get-Process Sondra -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Process "shell:AppsFolder\$($installed.PackageFamilyName)!Sondra"
+          $log = Join-Path $env:LOCALAPPDATA "Packages\$($installed.PackageFamilyName)\LocalCache\Roaming\Sondra\sondra.log"
+          $deadline = (Get-Date).AddSeconds(60)
+          while ((Get-Date) -lt $deadline) {
+            if ((Test-Path $log) -and (Select-String -Path $log -Pattern 'Geladen:' -Quiet)) { break }
+            Start-Sleep -Seconds 2
+          }
+          if (-not (Test-Path $log)) {
+            $log = Join-Path $env:APPDATA 'Sondra\sondra.log'
+          }
+          Get-Content $log -Tail 12
+          if (-not (Select-String -Path $log -Pattern 'Microsoft Store' -Quiet)) { throw 'Die App weiss nicht, dass sie aus dem Store kommt.' }
+          if (-not (Select-String -Path $log -Pattern 'Geladen:' -Quiet)) { throw 'Das Store-Paket hat die Oberfläche nicht geladen.' }
+          Get-Process Sondra -ErrorAction SilentlyContinue | Stop-Process -Force
+          Remove-AppxPackage -Package $installed.PackageFullName
+          Write-Host 'Store-Paket gebaut, installiert, gestartet.'
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Sondra-Store-MSIX${{ matrix.suffix }}
+          path: release/Sondra-Store-*.appx
+          retention-days: 30
+
       - name: Show the app's log
         if: always()
         shell: pwsh
         run: Get-Content (Join-Path $env:APPDATA 'Sondra\sondra.log') -ErrorAction SilentlyContinue
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
-          name: Bildschirmfotos
+          name: Bildschirmfotos${{ matrix.suffix }}
           path: ui-shots
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
-          name: Sondra-Setup
+          name: Sondra-Setup${{ matrix.suffix }}
           path: |
             release/Sondra-Setup-*.exe
+            release/Sondra-Setup-*.exe.blockmap
             release/latest.yml
           retention-days: 30
 
+  # Both builds passed: one release with both setups, and one latest.yml
+  # that lists both (x64 first; the updater picks its own architecture).
+  release:
+    needs: windows
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+    runs-on: ubuntu-latest
+    permissions:
+      # Write only here; nothing else pushes.
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: Sondra-Setup
+          path: release
+      - uses: actions/download-artifact@v5
+        with:
+          name: Sondra-Setup-arm64
+          path: release-arm64
       - name: Publish the release
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -143,20 +286,24 @@ jobs:
             throw "Tag $env:GITHUB_REF_NAME passt nicht zur Version $version in package.json."
           }
           # A release that already exists is left as it is: its files are
-          # what was published, and a rerun for the Store upload below must
-          # not fail on it.
+          # what was published, and a rerun must not fail on it.
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag gibt es schon, bleibt unverändert."
             exit 0
           }
-          $setup = Get-ChildItem release -Filter 'Sondra-Setup-*.exe' | Select-Object -First 1
-          Copy-Item $setup.FullName release\Sondra-Setup.exe
+          $setup = Get-ChildItem release -Filter "Sondra-Setup-$version.exe" | Select-Object -First 1
+          $armSetup = Get-ChildItem release-arm64 -Filter "Sondra-Setup-arm64-$version.exe" | Select-Object -First 1
+          if (-not $setup -or -not $armSetup) { throw 'Ein Setup fehlt (x64 oder arm64).' }
+          Copy-Item $setup.FullName release/Sondra-Setup.exe
+          Copy-Item $armSetup.FullName release/Sondra-Setup-arm64.exe
+          node scripts/merge-update-info.mjs release/latest.yml release-arm64/latest.yml release/latest.yml
+          if ($LASTEXITCODE -ne 0) { throw 'latest.yml nicht zusammengefuehrt.' }
 
           $notes = @"
           Sondra für Windows, Version $version.
 
-          **Installieren:** Sondra-Setup.exe herunterladen und ausführen. Sondra installiert sich für alle Benutzer unter „Programme“ (eine Windows-Abfrage) und legt einen Eintrag im Startmenü und eine Verknüpfung auf dem Desktop an.
+          **Installieren:** Sondra-Setup.exe herunterladen und ausführen — auf Windows-Rechnern mit Arm-Prozessor (z. B. Snapdragon) Sondra-Setup-arm64.exe. Sondra installiert sich für alle Benutzer unter „Programme“ (eine Windows-Abfrage) und legt einen Eintrag im Startmenü und eine Verknüpfung auf dem Desktop an.
 
           **Stille Installation:** ``Sondra-Setup-$version.exe /S``
 
@@ -171,28 +318,7 @@ jobs:
           # latest.yml is what the installed app's updater reads; it names the
           # versioned installer and its SHA-512. The blockmap lets the updater
           # fetch only the parts that changed.
-          $extra = @('release\latest.yml', "$($setup.FullName).blockmap") | Where-Object { Test-Path $_ }
-          if (-not (Test-Path 'release\latest.yml')) { throw 'latest.yml fehlt: ohne sie findet die App kein Update.' }
-          gh release create $tag $setup.FullName release\Sondra-Setup.exe @extra `
+          $extra = @('release/latest.yml', "$($setup.FullName).blockmap", "$($armSetup.FullName).blockmap") | Where-Object { Test-Path $_ }
+          if (-not (Test-Path 'release/latest.yml')) { throw 'latest.yml fehlt: ohne sie findet die App kein Update.' }
+          gh release create $tag $setup.FullName release/Sondra-Setup.exe $armSetup.FullName release/Sondra-Setup-arm64.exe @extra `
             --target $env:GITHUB_SHA --title "Sondra $version" --notes $notes
-
-      # The Microsoft Store refuses an installer URL that redirects, and every
-      # GitHub release download does. Vercel Blob serves the file directly.
-      # Needs the repository secret BLOB_READ_WRITE_TOKEN (from the Blob store
-      # in the Vercel project); without it a tag build skips this quietly.
-      - name: Put the installer on Vercel Blob
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.release || inputs.store
-        shell: pwsh
-        env:
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-        run: |
-          if (-not $env:BLOB_READ_WRITE_TOKEN) {
-            $message = 'Repository-Secret BLOB_READ_WRITE_TOKEN fehlt: kein Upload auf Vercel Blob.'
-            if ('${{ inputs.store }}' -eq 'true') { throw $message }
-            Write-Warning $message
-            exit 0
-          }
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $setup = Get-ChildItem release -Filter "Sondra-Setup-$version.exe" | Select-Object -First 1
-          node desktop/upload-blob.mjs $setup.FullName $version
-          if ($LASTEXITCODE -ne 0) { throw 'Upload auf Vercel Blob fehlgeschlagen.' }

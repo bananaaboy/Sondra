@@ -9,10 +9,18 @@ erreichbar ist, und zeigt die Oberfläche in ihrem eigenen Fenster. Ihre
 Dateien werden nicht an Sondra oder an die Herausgeberschaft von Sondra
 übertragen.
 
-Verbindungen ins Internet entstehen nur dann, wenn Sie selbst eine Adresse
-eingeben, von der geladen werden soll, oder selbst einen Extraktionsdienst
-verbinden. Diese Verbindungen gehen von Ihrem Rechner aus, unter Ihrer
-Internetverbindung, und liegen in Ihrer Verantwortung.
+Von sich aus fragt die mit dem Setup installierte App nur bei GitHub nach,
+ob es eine neue Fassung gibt (20 Sekunden nach dem Start, dann alle sechs
+Stunden), und lädt sie dann. GitHub sieht dabei Ihre IP-Adresse und die
+installierte Version. Alle anderen Verbindungen ins Internet entstehen nur,
+wenn Sie selbst etwas verlangen: eine Adresse zum Herunterladen, yt-dlp beim
+ersten Gebrauch eines Videoportals, das Spracherkennungsmodell beim ersten
+Untertitel, ein Extraktionsdienst, den Sie verbinden. Diese Verbindungen
+gehen von Ihrem Rechner aus, unter Ihrer Internetverbindung, und liegen in
+Ihrer Verantwortung. Es werden keine Nutzungsdaten, Absturzberichte oder
+Statistiken gesendet.
+
+Datenschutzerklärung: https://www.sondra.lizge.ch/datenschutz.html
 
 2. Nutzungsrecht
 

@@ -19,10 +19,27 @@ import { useEffect } from 'react'
 
 import { loadFfmpeg } from '../lib/ffmpegClient'
 
+/**
+ * After the page has settled, not during its first second: fetching and
+ * compiling thirty megabytes competed with the first paint and the first
+ * clicks for the same cores. A tool that needs the core earlier asks for it
+ * itself and gets the same shared load.
+ */
+const SETTLE_MS = 2500
+
 export function useFfmpegPrefetch() {
   useEffect(() => {
     // Failures surface through the boot state and through whichever panel
     // needs the core; there is nothing to do with the rejection here.
-    void loadFfmpeg().catch(() => {})
+    const start = () => void loadFfmpeg().catch(() => {})
+    let idle: number | null = null
+    const timer = window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(start, { timeout: 3000 })
+      else start()
+    }, SETTLE_MS)
+    return () => {
+      window.clearTimeout(timer)
+      if (idle !== null) window.cancelIdleCallback(idle)
+    }
   }, [])
 }
