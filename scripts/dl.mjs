@@ -55,23 +55,73 @@ function findYtDlp() {
 
 const YTDLP = findYtDlp()
 
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+}
+
+function isVoeClone(host) {
+  return (
+    host.includes('voe.') ||
+    host.includes('jamesbornmain') ||
+    host.includes('chaliceguzzler') ||
+    host === 'jeremyparticipantanything.com' ||
+    host.endsWith('.jeremyparticipantanything.com') ||
+    host.includes('tube.sx')
+  )
+}
+
+/** Folgt einem AniWorld-Episodenlink bis zur VOE-Embed-Adresse. */
+async function extractAniworld(url) {
+  try {
+    const page = await fetch(url, { headers: BROWSER_HEADERS })
+    if (!page.ok) return null
+    const html = await page.text()
+    const redirects = [...html.matchAll(/\bhref\s*=\s*(['"])(\/redirect\/[^'"?#]+(?:\?[^'"]*)?)\1/gi)]
+      .map((match) => ({
+        url: new URL(match[2], url).href,
+        // Bei AniWorld steht der Hostername neben dem jeweiligen Redirect-Link.
+        voe: /\bvoe\b/i.test(html.slice(Math.max(0, match.index - 1_500), match.index + 200)),
+      }))
+      .sort((a, b) => Number(b.voe) - Number(a.voe))
+
+    for (const redirect of redirects) {
+      const result = await fetch(redirect.url, {
+        redirect: 'follow',
+        headers: { ...BROWSER_HEADERS, Referer: url },
+      })
+      const target = new URL(result.url)
+      if (isVoeClone(target.hostname.toLowerCase())) return extractVoe(target.href)
+    }
+  } catch {
+    // yt-dlp bleibt der Rückfall, wenn sich die Seite oder ihr Redirect ändert.
+  }
+  return null
+}
+
 async function extractVoe(url) {
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-    })
+    const res = await fetch(url, { headers: BROWSER_HEADERS })
     if (!res.ok) return null
     const html = await res.text()
 
-    const m = html.match(/<script type="application\/json">\s*(\[[\s\S]*?\])\s*<\/script>/)
-    if (!m) return null
-
-    const arr = JSON.parse(m[1])
-    if (!Array.isArray(arr) || !arr[0]) return null
-    const str = arr[0]
+    // VOE-Klone setzen das verschleierte Feld je nach Vorlage mit einfachen
+    // oder doppelten Anführungszeichen und weiteren script-Attributen ab.
+    // Nicht auf eine einzige, exakte HTML-Schreibweise festlegen.
+    const scripts = html.matchAll(/<script\b[^>]*\btype\s*=\s*(['"])application\/json\1[^>]*>([\s\S]*?)<\/script>/gi)
+    let str = ''
+    for (const script of scripts) {
+      try {
+        const value = JSON.parse(script[2].trim())
+        if (Array.isArray(value) && typeof value[0] === 'string') {
+          str = value[0]
+          break
+        }
+      } catch {
+        // Ein anderes JSON-Datenfeld auf derselben Seite ist kein Stream.
+      }
+    }
+    if (!str) return null
 
     const rot13 = (s) =>
       s.replace(/[a-zA-Z]/g, (c) => {
@@ -242,12 +292,17 @@ async function extractDirectStream(rawUrl) {
     return null
   }
 
+  if (host === 'aniworld.to' || host.endsWith('.aniworld.to')) {
+    const res = await extractAniworld(rawUrl)
+    if (res) return res
+  }
+
   if (host.includes('filemoon')) return extractFileMoon(rawUrl)
   if (host.includes('vidmoly')) return extractVidmoly(rawUrl)
   if (host.includes('dood') || host.includes('myvidplay') || host.includes('dsvplay') || host.includes('playmogo')) {
     return extractDoodStream(rawUrl)
   }
-  if (host.includes('voe.') || host.includes('jamesbornmain') || host.includes('chaliceguzzler') || host.includes('tube.sx') || rawUrl.includes('/e/')) {
+  if (isVoeClone(host) || rawUrl.includes('/e/')) {
     const v = await extractVoe(rawUrl)
     if (v) return v
   }
