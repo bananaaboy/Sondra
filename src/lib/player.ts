@@ -49,7 +49,7 @@ export function srtToVtt(text: string): string {
   const body = text
     .replace(/^﻿/, '')
     .replace(/\r\n?/g, '\n')
-    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+    .replace(/(?:(\d{1,2}):(\d{2}):(\d{2})),(\d{3})/g, (_m, h, m, s, ms) => `${String(h).padStart(2, '0')}:${m}:${s}.${ms}`)
   return body.trimStart().startsWith('WEBVTT') ? body : `WEBVTT\n\n${body.trim()}\n`
 }
 
