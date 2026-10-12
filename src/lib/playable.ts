@@ -113,7 +113,8 @@ export interface StandOptions {
 
 export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxHeight = 480, crf = 28, audioIndex = 0 }: StandOptions = {}): StandJob {
   // A sound file the browser cannot play (WMA, a bare AC-3) becomes AAC.
-  if (!facts.streams.some((stream) => stream.type === 'video')) {
+  const hasVideo = remedy === 'picture' || facts.streams.some((stream) => stream.type === 'video') || facts.videoCodec !== null
+  if (!hasVideo) {
     return {
       args: ['-hide_banner', '-i', input, '-vn', '-map', `0:a:${audioIndex}`, '-c:a', 'aac', '-b:a', '192k', 'vorschau.m4a'],
       output: 'vorschau.m4a',
@@ -121,13 +122,18 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
     }
   }
   const head = ['-hide_banner', '-i', input, '-map', '0:v:0', '-map', `0:a:${audioIndex}?`, '-sn', '-dn']
+  const scaleFilter = `scale=-2:'min(${maxHeight},2*trunc(ih/2))'`
+  const sound =
+    facts.streams.find((stream) => stream.type === 'audio' && stream.index === audioIndex)?.codec ?? firstOf(facts, 'audio')?.codec ?? null
+  const audioFast = sound && browserPlaysAudio(sound) ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2']
+
   if (remedy === 'picture' && !browserPlaysVideo('h264')) {
     // A browser without H.264 (Chromium as some Linux systems ship it) gets
     // VP8, which every one of them plays and which encodes fast enough.
     return {
       args: [
         ...head,
-        '-vf', `scale=-2:'min(${maxHeight},ih)'`,
+        '-vf', scaleFilter,
         '-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8', '-b:v', '1M',
         '-c:a', 'libvorbis', '-q:a', '4', '-ac', '2',
         'vorschau.webm',
@@ -142,9 +148,9 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
     return {
       args: [
         ...head,
-        '-vf', `scale=-2:'min(${maxHeight},ih)'`,
+        '-vf', scaleFilter,
         '-c:v', 'libx264', '-preset', 'medium', '-crf', String(crf), '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+        ...audioFast,
         '-movflags', '+faststart', 'vorschau.mp4',
       ],
       output: 'vorschau.mp4',
@@ -152,8 +158,6 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
     }
   }
   const picture = firstOf(facts, 'video')?.codec ?? ''
-  const sound =
-    facts.streams.find((stream) => stream.type === 'audio' && stream.index === audioIndex)?.codec ?? firstOf(facts, 'audio')?.codec ?? null
   const webm = WEBM_PICTURE.has(picture)
   const soundFits = sound === null || (webm ? WEBM_SOUND : MP4_SOUND).has(sound)
   const keepSound = remedy === 'repack' && soundFits && sound !== null && browserPlaysAudio(sound)

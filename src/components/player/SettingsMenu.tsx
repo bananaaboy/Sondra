@@ -221,7 +221,7 @@ export function SettingsMenu({
 
   const qualityValue =
     quality.making
-      ? `${quality.making.height}p wird erstellt`
+      ? `${quality.making.height}p wird erstellt (${Math.round(quality.making.fraction * 100)} %)`
       : quality.current === 'original'
         ? `Original${quality.sourceHeight ? ` · ${quality.sourceHeight}p` : ''}`
         : `${quality.current}p`
@@ -282,7 +282,7 @@ export function SettingsMenu({
                 }
                 hint={height <= 480 ? 'Für langsame Rechner, schnell erstellt' : 'Leichter abzuspielen als das Original'}
                 selected={quality.current === height}
-                disabled={Boolean(quality.making)}
+                disabled={quality.making?.height === height}
                 onClick={() => onQuality(height)}
               />
             ))}

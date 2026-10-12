@@ -82,24 +82,24 @@ const PauseIcon = ({ size }: { size?: number }) => (
 )
 const BackIcon = () => (
   <Glyph>
-    <path d="M9.5 6.2V3.6L5.4 7l4.1 3.4V7.8a4.6 4.6 0 11-4.4 6" />
+    <path d="M11 5.5L6.5 10l4.5 4.5M16 5.5L11.5 10l4.5 4.5" />
   </Glyph>
 )
 const ForwardIcon = () => (
   <Glyph>
-    <path d="M10.5 6.2V3.6L14.6 7l-4.1 3.4V7.8a4.6 4.6 0 104.4 6" />
+    <path d="M4 5.5L8.5 10 4 14.5M9 5.5L13.5 10 9 14.5" />
   </Glyph>
 )
 const PrevIcon = () => (
   <Glyph filled>
     <rect x="4" y="4.5" width="2" height="11" rx="1" />
-    <path d="M15.6 5.2c0-.7-.8-1.1-1.4-.7L8.2 9.2c-.5.4-.5 1.2 0 1.6l6 4.7c.6.4 1.4 0 1.4-.7z" />
+    <path d="M15.6 5.2c0-.7-.8-1.1-1.4-.7L8.2 9.2c-.5.4-.5 1.2 0 1.6l7.4 4.7c.6.4 1.4 0 1.4-.7z" />
   </Glyph>
 )
 const NextIcon = () => (
   <Glyph filled>
     <rect x="14" y="4.5" width="2" height="11" rx="1" />
-    <path d="M4.4 5.2c0-.7.8-1.1 1.4-.7l6 4.7c.5.4.5 1.2 0 1.6l-6 4.7c-.6.4-1.4 0-1.4-.7z" />
+    <path d="M4.4 5.2c0-.7.8-1.1 1.4-.7L11.8 9.2c.5.4.5 1.2 0 1.6l-7.4 4.7c-.6.4-1.4 0-1.4-.7z" />
   </Glyph>
 )
 const VolumeIcon = ({ level }: { level: number }) => (
@@ -112,12 +112,12 @@ const VolumeIcon = ({ level }: { level: number }) => (
 const CaptionIcon = () => (
   <Glyph>
     <rect x="2.6" y="4.4" width="14.8" height="11.2" rx="2.4" />
-    <path d="M8.4 8.6a2 2 0 100 2.8M14.2 8.6a2 2 0 100 2.8" />
+    <path d="M8.8 8.2H7.2a1.8 1.8 0 00-1.8 1.8v0a1.8 1.8 0 001.8 1.8h1.6M14.6 8.2h-1.6a1.8 1.8 0 00-1.8 1.8v0a1.8 1.8 0 001.8 1.8h1.6" />
   </Glyph>
 )
 const GearIcon = () => (
   <Glyph>
-    <path d="M10 12.6a2.6 2.6 0 100-5.2 2.6 2.6 0 000 5.2z" />
+    <circle cx="10" cy="10" r="2.6" />
     <path d="M16.2 11.8l1.2.9-1.6 2.8-1.4-.6a6 6 0 01-1.6.9l-.2 1.5H9.4l-.2-1.5a6 6 0 01-1.6-.9l-1.4.6-1.6-2.8 1.2-.9a6 6 0 010-1.8l-1.2-.9 1.6-2.8 1.4.6a6 6 0 011.6-.9l.2-1.5h3.2l.2 1.5a6 6 0 011.6.9l1.4-.6 1.6 2.8-1.2.9a6 6 0 010 1.8z" />
   </Glyph>
 )
@@ -129,7 +129,8 @@ const PipIcon = () => (
 )
 const TheaterIcon = () => (
   <Glyph>
-    <rect x="2" y="5.6" width="16" height="8.8" rx="2" />
+    <rect x="2" y="5" width="16" height="10" rx="1.6" />
+    <path d="M6 5v10M14 5v10" />
   </Glyph>
 )
 /** The browser window: a frame with its bar, filled. */
@@ -137,7 +138,7 @@ const WindowIcon = ({ on }: { on: boolean }) => (
   <Glyph>
     <rect x="2.4" y="3.6" width="15.2" height="12.8" rx="2.2" />
     <path d="M2.4 7h15.2" />
-    {on ? <path d="M8 9.6l-2 2 2 2M12 9.6l2 2-2 2" /> : <path d="M6 13.8l2.6-2.6M14 9.2l-2.6 2.6M6 13.8h2.2M6 13.8v-2.2M14 9.2h-2.2M14 9.2v2.2" />}
+    {on ? <path d="M6 9.5l2 2-2 2M14 9.5l-2 2 2 2" /> : <path d="M8 9.5L6 11.5l2 2M12 9.5l2 2-2 2" />}
   </Glyph>
 )
 const FullIcon = ({ on }: { on: boolean }) => (
@@ -638,6 +639,7 @@ export function PlayerPanel() {
       source.connect(settings.night ? squeeze : gain)
       // Night mode brings the quiet up after squeezing the loud down.
       gain.gain.value = settings.boost * (settings.night ? 1.6 : 1)
+      void resumeAudioContext()
     } catch {
       /* the browser declined; the element's own volume still works */
     }
@@ -784,9 +786,10 @@ export function PlayerPanel() {
 
   const info = current ? facts[current.id] : undefined
   const known = info && info !== 'pending' ? info : null
-  const sourceHeight = known?.height ?? size?.height ?? null
+  const sourceHeight = videoRef.current?.videoHeight || known?.height || size?.height || null
+  const isVersionReady = Boolean(version?.reason === 'chosen' && version.url && (!version.started || version.fraction === 1))
   const qualityState: QualityState = {
-    current: version?.reason === 'chosen' && version.height && (version.url || version.started) ? version.height : 'original',
+    current: isVersionReady && version?.height ? version.height : 'original',
     sourceHeight,
     options: sourceHeight ? QUALITY_STEPS.filter((height) => height < sourceHeight - 40) : [],
     making:
@@ -818,9 +821,10 @@ export function PlayerPanel() {
     if (!current) return
     const found = await probe(current)
     if (!found) return
+    const audioStreams = found.streams.filter((stream) => stream.type === 'audio')
     const audioIndex = version?.audioIndex ?? 0
     if (quality === 'original') {
-      if (audioIndex === 0 || audioTracks.length < 2) {
+      if (audioIndex === 0 || audioStreams.length < 2) {
         jobAbort.current?.abort()
         if (versionsRef.current[current.id]?.reason === 'chosen') {
           keepPlace()
@@ -828,7 +832,7 @@ export function PlayerPanel() {
         }
         return
       }
-      const codec = audioTracks[audioIndex]?.codec ?? ''
+      const codec = audioStreams[audioIndex]?.codec ?? ''
       return make(current, found, { reason: 'chosen', remedy: browserPlaysAudio(codec) && !failed ? 'repack' : 'sound', height: null, audioIndex })
     }
     return make(current, found, { reason: 'chosen', remedy: 'picture', height: quality, audioIndex })
@@ -838,6 +842,7 @@ export function PlayerPanel() {
     if (!current) return
     const found = await probe(current)
     if (!found) return
+    const audioStreams = found.streams.filter((stream) => stream.type === 'audio')
     const height = version?.reason === 'chosen' ? version.height : null
     if (height) return make(current, found, { reason: 'chosen', remedy: 'picture', height, audioIndex })
     if (audioIndex === 0) {
@@ -847,7 +852,7 @@ export function PlayerPanel() {
       }
       return
     }
-    const codec = audioTracks[audioIndex]?.codec ?? ''
+    const codec = audioStreams[audioIndex]?.codec ?? ''
     return make(current, found, { reason: 'chosen', remedy: browserPlaysAudio(codec) ? 'repack' : 'sound', height: null, audioIndex })
   }
 
@@ -1133,6 +1138,7 @@ export function PlayerPanel() {
                 }}
                 onPlay={() => {
                   setPlaying(true)
+                  void resumeAudioContext()
                   wake()
                 }}
                 onPause={() => {
@@ -1158,13 +1164,15 @@ export function PlayerPanel() {
                   if (settings.repeat === 'titel') {
                     seek(0)
                     void video()?.play().catch(() => undefined)
-                  } else if (settings.autoNext && index < items.length - 1) {
+                  } else if (index < items.length - 1 && (settings.autoNext || settings.repeat === 'liste')) {
                     goTo(1)
-                  } else if (settings.repeat === 'liste' && items.length > 1) {
-                    setCurrentId(items[0].id)
-                  } else if (settings.repeat === 'liste') {
-                    seek(0)
-                    void video()?.play().catch(() => undefined)
+                  } else if (settings.repeat === 'liste' && items.length > 0) {
+                    if (items.length > 1) {
+                      setCurrentId(items[0].id)
+                    } else {
+                      seek(0)
+                      void video()?.play().catch(() => undefined)
+                    }
                   }
                 }}
               >
