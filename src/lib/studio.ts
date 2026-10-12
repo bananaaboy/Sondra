@@ -81,8 +81,8 @@ export interface StudioStream {
 }
 
 export interface StudioResult {
-  /** Which of the three routes answered — the panel says so out loud. */
-  source?: 'provider' | 'youtube' | 'direct' | 'service'
+  /** Which of the routes answered — the panel says so out loud. */
+  source?: 'provider' | 'youtube' | 'direct' | 'service' | 'aniworld'
   kind: 'youtube' | 'direct' | 'provider'
   title: string
   author: string | null

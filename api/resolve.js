@@ -14,6 +14,11 @@ import {
   sign,
   youtubeId,
 } from './_shared.js'
+import {
+  extractDirectMedia,
+  isAniworldUrl,
+  isHosterUrl,
+} from './extractors.js'
 
 /*
  * The four helpers below are exported so they can be tested directly. A
@@ -215,6 +220,61 @@ export default async function handler(request, response) {
       })
     }
     return
+  }
+
+  /**
+   * AniWorld, SerienStream (s.to) & Direkt-Hoster (VOE, Filemoon, Vidmoly, etc.)
+   */
+  const targetStr = target.toString()
+  if (isAniworldUrl(targetStr) || isHosterUrl(targetStr)) {
+    try {
+      const media = await extractDirectMedia(targetStr)
+      if (media && (media.url || (media.streams && media.streams.length > 0))) {
+        const streams = []
+        if (Array.isArray(media.streams) && media.streams.length > 0) {
+          for (const s of media.streams) {
+            streams.push({
+              id: s.id,
+              label: s.label || `${s.provider || 'Video'} (${s.language || 'Stream'})`,
+              hasVideo: true,
+              hasAudio: true,
+              width: null,
+              height: 1080,
+              ext: s.ext || (s.isHls ? 'mp4' : 'mp4'),
+              mime: s.isHls ? 'application/x-mpegurl' : 'video/mp4',
+              bytes: null,
+              token: sign(s.url, { ref: s.referer, isHls: s.isHls }),
+            })
+          }
+        } else if (media.url) {
+          streams.push({
+            id: 'stream-0',
+            label: `${media.hoster || 'Video'} · Stream (1080p)`,
+            hasVideo: true,
+            hasAudio: true,
+            width: null,
+            height: 1080,
+            ext: media.isHls ? 'mp4' : 'mp4',
+            mime: media.isHls ? 'application/x-mpegurl' : 'video/mp4',
+            bytes: null,
+            token: sign(media.url, { ref: media.referer, isHls: media.isHls }),
+          })
+        }
+
+        response.status(200).json({
+          source: isAniworldUrl(targetStr) ? 'aniworld' : 'direct',
+          kind: 'direct',
+          title: media.title || 'Video',
+          author: media.seriesTitle || target.hostname,
+          durationSeconds: null,
+          thumbnail: media.thumbnail || null,
+          streams,
+        })
+        return
+      }
+    } catch {
+      // Fall through to probe below
+    }
   }
 
   /**

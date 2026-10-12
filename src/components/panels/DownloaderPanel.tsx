@@ -314,6 +314,8 @@ export function DownloaderPanel() {
                     ? 'Über den hinterlegten Anbieter'
                     : result.source === 'youtube'
                     ? 'YouTube direkt · nur die Fassung mit Bild und Ton in einem'
+                    : result.source === 'aniworld'
+                    ? 'AniWorld / SerienStream direkt'
                     : 'Direkte Datei-Adresse'}
               </p>
             </div>

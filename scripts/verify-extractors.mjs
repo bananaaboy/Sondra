@@ -1,0 +1,304 @@
+/**
+ * Comprehensive test suite for all extractors:
+ * P.A.C.K.E.R, VOE, FileMoon, Vidmoly, Doodstream, Streamtape, Vidoza, AniWorld (s.to).
+ *
+ * Runs locally with an HTTP stand-in server: zero network calls needed.
+ *
+ * Run with: node scripts/verify-extractors.mjs
+ */
+
+import http from 'node:http'
+import crypto from 'node:crypto'
+import {
+  unpackPackedJs,
+  extractVoe,
+  extractFilemoon,
+  extractVidmoly,
+  extractDoodstream,
+  extractStreamtape,
+  extractVidoza,
+  extractAniworld,
+  isAniworldUrl,
+  isVoeUrl,
+  isFilemoonUrl,
+  isVidmolyUrl,
+  isDoodstreamUrl,
+  isStreamtapeUrl,
+  isVidozaUrl,
+} from '../api/extractors.js'
+
+let failures = 0
+function check(label, actual, expected) {
+  const ok = Object.is(actual, expected)
+  if (!ok) failures += 1
+  console.log(`${ok ? 'ok  ' : 'FEHL'}  ${label}${ok ? '' : ` — erwartet: ${JSON.stringify(expected)}, erhalten: ${JSON.stringify(actual)}`}`)
+}
+
+/* -------------------------------------------------------------------------- */
+/* 1. URL Pattern Checks                                                      */
+/* -------------------------------------------------------------------------- */
+
+check('URL: AniWorld Episode', isAniworldUrl('https://aniworld.to/anime/stream/one-piece/staffel-1/episode-1'), true)
+check('URL: AniWorld Film', isAniworldUrl('https://aniworld.to/anime/stream/one-piece/filme/film-1'), true)
+check('URL: s.to Episode', isAniworldUrl('https://s.to/serie/stream/breaking-bad/staffel-1/episode-1'), true)
+check('URL: serienstream.to', isAniworldUrl('https://serienstream.to/serie/stream/dr-house/staffel-2/episode-4'), true)
+check('URL: fremde Seite nicht AniWorld', isAniworldUrl('https://youtube.com/watch?v=123'), false)
+
+check('URL: VOE sx', isVoeUrl('https://voe.sx/e/2ldxarskbpp2'), true)
+check('URL: VOE Clone jamesbornmain', isVoeUrl('https://jamesbornmain.com/e/2ldxarskbpp2'), true)
+check('URL: FileMoon', isFilemoonUrl('https://filemoon.sx/e/abc123xyz'), true)
+check('URL: Vidmoly', isVidmolyUrl('https://vidmoly.to/embed-xyz.html'), true)
+check('URL: DoodStream', isDoodstreamUrl('https://dood.to/e/xyz123'), true)
+check('URL: Streamtape', isStreamtapeUrl('https://streamtape.com/e/68rB24M1gXszB12'), true)
+check('URL: Vidoza', isVidozaUrl('https://vidoza.net/embed-8x7y6z5w4v.html'), true)
+
+/* -------------------------------------------------------------------------- */
+/* 2. P.A.C.K.E.R Unpacker Check                                              */
+/* -------------------------------------------------------------------------- */
+
+const packedSample =
+  "eval(function(p,a,c,k,e,d){while(c--)if(k[c])p=p.replace(new RegExp('\\\\b'+c.toString(a)+'\\\\b','g'),k[c]);return p}('0 1=\"2\";',3,3,'var|source|https://storage.example/hls.m3u8'.split('|')))"
+const unpacked = unpackPackedJs(packedSample)
+check('PACKER: entpackt Code korrekt', unpacked, 'var source="https://storage.example/hls.m3u8";')
+
+/* -------------------------------------------------------------------------- */
+/* Mock Server for Hosters and AniWorld                                       */
+/* -------------------------------------------------------------------------- */
+
+// Generate VOE encoded payload
+function createVoePayload(title, sourceUrl) {
+  function rot13(s) {
+    return s.replace(/[a-zA-Z]/g, (c) => {
+      const base = c <= 'Z' ? 65 : 97
+      return String.fromCharCode(((c.charCodeAt(0) - base + 13) % 26) + base)
+    })
+  }
+  const rawJson = JSON.stringify({ title, source: sourceUrl })
+  const s5 = Buffer.from(rawJson, 'utf8').toString('base64').split('').reverse().join('')
+  const s4 = Array.from(s5).map((c) => String.fromCharCode(c.charCodeAt(0) + 3)).join('')
+  const s3 = Buffer.from(s4, 'latin1').toString('base64')
+  const s2 = s3.slice(0, 8) + '@$' + s3.slice(8, 16) + '^^' + s3.slice(16, 24) + '*~' + s3.slice(24)
+  return rot13(s2)
+}
+
+// Generate FileMoon AES-256-GCM payload
+const filemoonKey1 = crypto.randomBytes(16)
+const filemoonKey2 = crypto.randomBytes(16)
+const filemoonKey = Buffer.concat([filemoonKey1, filemoonKey2])
+const filemoonIv = crypto.randomBytes(12)
+const filemoonPlaintext = JSON.stringify({
+  sources: [{ file: 'https://cdn.filemoon.example/hls/stream.m3u8', mime_type: 'application/x-mpegurl' }],
+})
+const filemoonCipher = crypto.createCipheriv('aes-256-gcm', filemoonKey, filemoonIv)
+const filemoonCt = Buffer.concat([filemoonCipher.update(filemoonPlaintext, 'utf8'), filemoonCipher.final()])
+const filemoonTag = filemoonCipher.getAuthTag()
+const filemoonPayload = Buffer.concat([filemoonCt, filemoonTag])
+
+let serverBase = ''
+
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url, serverBase)
+  const p = url.pathname
+
+  // 1. VOE Mock
+  if (p === '/voe/e/sample') {
+    const encoded = createVoePayload('One Piece - Episode 1', 'https://delivery.voe.example/hls/master.m3u8')
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>VOE Sample</title></head><body>
+        <script type="application/json">["${encoded}"]</script>
+      </body></html>
+    `)
+  }
+
+  // 2. FileMoon Mock (API & Embed & Packed)
+  if (p === '/filemoon/e/fm123') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>FileMoon Video</title></head><body>
+        <div id="player"></div>
+      </body></html>
+    `)
+  }
+  if (p === '/filemoon/e/fm_packed') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>Packed FileMoon</title></head><body>
+        <script>
+          ${packedSample}
+        </script>
+      </body></html>
+    `)
+  }
+  if (p === '/filemoon/api/videos/fm123') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    return res.end(
+      JSON.stringify({
+        title: 'Attack on Titan S01E01',
+        playback: {
+          key_parts: [filemoonKey1.toString('base64url'), filemoonKey2.toString('base64url')],
+          iv: filemoonIv.toString('base64url'),
+          payload: filemoonPayload.toString('base64url'),
+        },
+      }),
+    )
+  }
+
+  // 3. Vidmoly Mock
+  if (p === '/vidmoly/embed-vm123.html') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>Demon Slayer - Vidmoly</title></head><body>
+        <script>
+          var player = jwplayer("vplayer");
+          player.setup({
+            sources: [{ file: "https://stream.vidmoly.example/hls/ep1.m3u8" }]
+          });
+        </script>
+      </body></html>
+    `)
+  }
+
+  // 4. Doodstream Mock
+  if (p === '/dood/e/dood123') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>Jujutsu Kaisen - Dood</title></head><body>
+        <script>
+          fetch('/pass_md5/mytoken12345');
+        </script>
+      </body></html>
+    `)
+  }
+  if (p === '/pass_md5/mytoken12345') {
+    res.writeHead(200, { 'Content-Type': 'text/plain' })
+    return res.end('https://video.dood.example/stream/')
+  }
+
+  // 5. Streamtape Mock
+  if (p === '/streamtape/e/st123') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>Naruto - Streamtape</title></head><body>
+        <div id="norobotlink"></div>
+        <script>
+          document.getElementById('norobotlink').innerHTML = '//streamtape.com/get_video?id=st123&token=' + ('xyzTOKEN456').substring(3);
+        </script>
+      </body></html>
+    `)
+  }
+
+  // 6. Vidoza Mock
+  if (p === '/vidoza/embed-vz123.html') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>Bleach - Vidoza</title></head><body>
+        <video id="player">
+          <source src="https://media.vidoza.example/video.mp4" type="video/mp4">
+        </video>
+      </body></html>
+    `)
+  }
+
+  // 7. AniWorld Episode Mock
+  if (p === '/anime/stream/one-piece/staffel-1/episode-1') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>One Piece Staffel 1 Folge 1</title></head><body>
+        <div class="series-title"><h1><span>One Piece</span></h1></div>
+        <div class="hosterSiteTitle">
+          <h2><span class="episodeGermanTitle">Ich bin Ruffy!</span> <small class="episodeEnglishTitle">I'm Luffy!</small></h2>
+        </div>
+        <div class="hosterSiteVideo">
+          <ul class="row">
+            <li class="col-md-3 episodeLink101" data-lang-key="3" data-link-id="101" data-link-target="/redirect/101">
+              <div><a class="watchEpisode" href="/redirect/101"><h4>VOE</h4></a></div>
+            </li>
+            <li class="col-md-3 episodeLink102" data-lang-key="1" data-link-id="102" data-link-target="/redirect/102">
+              <div><a class="watchEpisode" href="/redirect/102"><h4>Filemoon</h4></a></div>
+            </li>
+          </ul>
+        </div>
+      </body></html>
+    `)
+  }
+
+  // AniWorld redirect endpoints
+  if (p === '/redirect/101') {
+    res.writeHead(302, { Location: `${serverBase}/voe/e/sample` })
+    return res.end()
+  }
+  if (p === '/redirect/102') {
+    res.writeHead(302, { Location: `${serverBase}/filemoon/e/fm123` })
+    return res.end()
+  }
+
+  res.writeHead(404)
+  res.end('Not found')
+})
+
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+serverBase = `http://127.0.0.1:${server.address().port}`
+
+/* -------------------------------------------------------------------------- */
+/* 3. Run Extractor Tests against Mock Server                                 */
+/* -------------------------------------------------------------------------- */
+
+// VOE
+const voeResult = await extractVoe(`${serverBase}/voe/e/sample`)
+check('VOE: Extraktion erfolgreich', Boolean(voeResult), true)
+check('VOE: Stream-URL stimmt', voeResult?.url, 'https://delivery.voe.example/hls/master.m3u8')
+check('VOE: isHls Flag gesetzt', voeResult?.isHls, true)
+
+// FileMoon
+const fmResult = await extractFilemoon(`${serverBase}/filemoon/e/fm123`)
+check('FileMoon: Extraktion via AES-256-GCM', Boolean(fmResult), true)
+check('FileMoon: Stream-URL stimmt', fmResult?.url, 'https://cdn.filemoon.example/hls/stream.m3u8')
+check('FileMoon: Titel korrekt', fmResult?.title, 'Attack on Titan S01E01')
+
+const fmPackedResult = await extractFilemoon(`${serverBase}/filemoon/e/fm_packed`)
+check('FileMoon: Fallback via PACKER', Boolean(fmPackedResult), true)
+check('FileMoon: Packed Stream-URL stimmt', fmPackedResult?.url, 'https://storage.example/hls.m3u8')
+
+// Vidmoly
+const vmResult = await extractVidmoly(`${serverBase}/vidmoly/embed-vm123.html`)
+check('Vidmoly: Extraktion erfolgreich', Boolean(vmResult), true)
+check('Vidmoly: Stream-URL stimmt', vmResult?.url, 'https://stream.vidmoly.example/hls/ep1.m3u8')
+check('Vidmoly: isHls Flag gesetzt', vmResult?.isHls, true)
+
+// DoodStream
+const doodResult = await extractDoodstream(`${serverBase}/dood/e/dood123`)
+check('DoodStream: Extraktion erfolgreich', Boolean(doodResult), true)
+check('DoodStream: URL beginnt mit baseStream', doodResult?.url?.startsWith('https://video.dood.example/stream/'), true)
+check('DoodStream: Token in URL', doodResult?.url?.includes('token=mytoken12345'), true)
+
+// Streamtape
+const stResult = await extractStreamtape(`${serverBase}/streamtape/e/st123`)
+check('Streamtape: Extraktion erfolgreich', Boolean(stResult), true)
+check('Streamtape: Token substring zusammengefügt', stResult?.url, 'https://streamtape.com/get_video?id=st123&token=TOKEN456&stream=1')
+
+// Vidoza
+const vzResult = await extractVidoza(`${serverBase}/vidoza/embed-vz123.html`)
+check('Vidoza: Extraktion erfolgreich', Boolean(vzResult), true)
+check('Vidoza: MP4 URL stimmt', vzResult?.url, 'https://media.vidoza.example/video.mp4')
+check('Vidoza: isHls ist false', vzResult?.isHls, false)
+
+// AniWorld Full Flow
+const aniResult = await extractAniworld(`${serverBase}/anime/stream/one-piece/staffel-1/episode-1`)
+check('AniWorld: Extraktion erfolgreich', Boolean(aniResult), true)
+check('AniWorld: Titel zusammengesetzt', aniResult?.title, 'One Piece - S01E01 - Ich bin Ruffy!')
+check('AniWorld: Hoster gewählt', aniResult?.hoster, 'VOE')
+check('AniWorld: Direkte Stream-URL aufgelöst', aniResult?.url, 'https://delivery.voe.example/hls/master.m3u8')
+check('AniWorld: isHls Flag', aniResult?.isHls, true)
+check('AniWorld: mindestens ein aufgelöster Stream', aniResult?.streams?.length >= 1, true)
+check('AniWorld: alle Hoster-Einträge erfasst', aniResult?.allEntries?.length, 2)
+
+server.close()
+
+if (failures > 0) {
+  console.error(`\n❌ ${failures} Test(s) fehlgeschlagen!`)
+  process.exit(1)
+} else {
+  console.log('\n✅ Alle Extractor-Tests bestanden! VOE, FileMoon, Vidmoly, Dood, Streamtape, Vidoza und AniWorld funktionieren einwandfrei.')
+  process.exit(0)
+}
