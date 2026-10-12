@@ -10,6 +10,7 @@
 
 import { useFilePicker } from '../hooks/useIngest'
 import { IN_DESKTOP_APP, WINDOWS_SETUP } from '../lib/desktop'
+import { APP_VERSION } from '../lib/version'
 import type { ThemeChoice } from '../lib/theme'
 import { useSession } from '../state/store'
 import { SessionMenu } from './AssetList'
@@ -53,6 +54,9 @@ export function Logo({ as = 'h1' }: { as?: 'h1' | 'span' }) {
     <Tag className="m-0 flex items-center gap-[8px] text-ink">
       <Mark />
       <span className="font-wordmark text-[25px] font-light tracking-[-0.01em]">Sondra</span>
+      <span className="value rounded-pill border border-line bg-panel-soft px-[7px] py-[1.5px] text-[11px] font-medium tracking-normal text-muted">
+        v{APP_VERSION}
+      </span>
       <span className="sr-only"> — Ton, Video und Bilder bearbeiten</span>
     </Tag>
   )
@@ -180,7 +184,7 @@ export function Footer() {
           Statisch ausgeliefert, lokal gerechnet. Quelloffene Bausteine: FFmpeg (WebAssembly), ONNX
           Runtime Web, Wavesurfer, Tone.js.
         </p>
-        <p>Keine Uploads · keine Cookies · kein Tracking</p>
+        <p>v{APP_VERSION} · Keine Uploads · keine Cookies · kein Tracking</p>
       </div>
       <p className="flex flex-wrap gap-x-[16px] gap-y-[4px]">
         {IN_DESKTOP_APP ? null : (

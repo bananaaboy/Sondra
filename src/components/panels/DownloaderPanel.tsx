@@ -118,13 +118,32 @@ function AppNotice() {
 
 /* -------------------------------------------------------------------------- */
 
+interface BatchItem {
+  url: string
+  status: 'pending' | 'resolving' | 'ready' | 'downloading' | 'done' | 'error'
+  result?: StudioResult
+  selectedStreamId?: string
+  error?: string
+  progress?: { loaded: number; total: number | null } | null
+  taken?: { name: string; bytes: Uint8Array; mime: string }
+}
+
 export function DownloaderPanel() {
   const addAsset = useSession((state) => state.addAsset)
   const log = useSession((state) => state.log)
 
   const [url, setUrl] = useState('')
+  const [stealthNames, setStealthNames] = useState(false)
+  const stealthNamesRef = useRef(stealthNames)
+  stealthNamesRef.current = stealthNames
+
   const [looking, setLooking] = useState(false)
   const [result, setResult] = useState<StudioResult | null>(null)
+  const [batchEntries, setBatchEntries] = useState<BatchItem[] | null>(null)
+  const batchEntriesRef = useRef<BatchItem[] | null>(null)
+  batchEntriesRef.current = batchEntries
+
+  const [batchBusy, setBatchBusy] = useState(false)
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [progress, setProgress] = useState<{ loaded: number; total: number | null } | null>(null)
@@ -136,27 +155,87 @@ export function DownloaderPanel() {
   useEffect(() => () => abortRef.current?.abort(), [])
 
   const look = async () => {
-    const target = url.trim()
-    if (!target) return
+    const targets = url
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+    if (targets.length === 0) return
+
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
     setLooking(true)
     setError(null)
     setResult(null)
+    setBatchEntries(null)
     setTaken(null)
+
+    if (targets.length === 1) {
+      try {
+        const found = await resolveViaService(targets[0], controller.signal)
+        setResult(found)
+        log('holen', `${found.title} — ${found.streams.length} Spur(en) verfügbar`)
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return
+        const studio = cause instanceof StudioError ? cause : null
+        setError({
+          code: studio?.code ?? 'unknown',
+          message: studio?.message ?? (cause instanceof Error ? cause.message : String(cause)),
+        })
+        log('holen', studio?.message ?? String(cause), 'error')
+      } finally {
+        setLooking(false)
+      }
+      return
+    }
+
+    // Mehrere Adressen: Batch-Modus
+    const initial: BatchItem[] = targets.map((u) => ({
+      url: u,
+      status: 'resolving',
+    }))
+    setBatchEntries(initial)
+
     try {
-      const found = await resolveViaService(target, controller.signal)
-      setResult(found)
-      log('holen', `${found.title} — ${found.streams.length} Spur(en) verfügbar`)
-    } catch (cause) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') return
-      const studio = cause instanceof StudioError ? cause : null
-      setError({
-        code: studio?.code ?? 'unknown',
-        message: studio?.message ?? (cause instanceof Error ? cause.message : String(cause)),
-      })
-      log('holen', studio?.message ?? String(cause), 'error')
+      await Promise.all(
+        targets.map(async (target, i) => {
+          try {
+            const res = await resolveViaService(target, controller.signal)
+            const bestStream = res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
+            setBatchEntries((prev) =>
+              prev
+                ? prev.map((entry, idx) =>
+                    idx === i
+                      ? {
+                          ...entry,
+                          status: 'ready',
+                          result: res,
+                          selectedStreamId: bestStream?.id ?? res.streams[0]?.id,
+                        }
+                      : entry
+                  )
+                : null
+            )
+            log('holen', `${res.title} — bereit`)
+          } catch (cause) {
+            if (cause instanceof DOMException && cause.name === 'AbortError') return
+            const msg =
+              cause instanceof StudioError
+                ? cause.message
+                : cause instanceof Error
+                ? cause.message
+                : String(cause)
+            setBatchEntries((prev) =>
+              prev
+                ? prev.map((entry, idx) =>
+                    idx === i ? { ...entry, status: 'error', error: msg } : entry
+                  )
+                : null
+            )
+            log('holen', `Fehler bei ${target}: ${msg}`, 'error')
+          }
+        })
+      )
     } finally {
       setLooking(false)
     }
@@ -175,7 +254,7 @@ export function DownloaderPanel() {
         signal: controller.signal,
         onProgress: setProgress,
       })
-      const name = filenameFor(result, stream)
+      const name = filenameFor(result, stream, { anonymize: stealthNames })
       addAsset({
         name,
         bytes,
@@ -187,9 +266,6 @@ export function DownloaderPanel() {
         origin: 'download',
       })
       log('holen', `${name} geladen (${formatBytes(bytes.byteLength)})`)
-      // Into the session only. Saving to disk is one click on the line below
-      // and in the file menu — a download that also started a browser
-      // download was one file too many for anyone who only wanted to edit it.
       setTaken({ name, bytes, mime: stream.mime })
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
@@ -203,6 +279,97 @@ export function DownloaderPanel() {
       setBusy(null)
       setProgress(null)
       abortRef.current = null
+    }
+  }
+
+  const takeBatchItem = async (index: number) => {
+    const entry = batchEntriesRef.current?.[index]
+    if (!entry || !entry.result) return
+    const stream =
+      entry.result.streams.find((s) => s.id === entry.selectedStreamId) ||
+      entry.result.streams[0]
+    if (!stream) return
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    setBatchEntries((prev) =>
+      prev
+        ? prev.map((e, idx) =>
+            idx === index
+              ? { ...e, status: 'downloading', progress: { loaded: 0, total: stream.bytes } }
+              : e
+          )
+        : null
+    )
+
+    try {
+      const bytes = await downloadStream(stream, {
+        signal: controller.signal,
+        onProgress: (p) => {
+          setBatchEntries((prev) =>
+            prev ? prev.map((e, idx) => (idx === index ? { ...e, progress: p } : e)) : null
+          )
+        },
+      })
+      const name = filenameFor(entry.result, stream, { anonymize: stealthNamesRef.current })
+      addAsset({
+        name,
+        bytes,
+        mime: stream.mime,
+        sizeBytes: bytes.byteLength,
+        kind: kindFromMime(stream.mime, name),
+        audio: null,
+        durationSeconds: entry.result.durationSeconds,
+        origin: 'download',
+      })
+      log('holen', `${name} geladen (${formatBytes(bytes.byteLength)})`)
+      setBatchEntries((prev) =>
+        prev
+          ? prev.map((e, idx) =>
+              idx === index
+                ? {
+                    ...e,
+                    status: 'done',
+                    progress: null,
+                    taken: { name, bytes, mime: stream.mime },
+                  }
+                : e
+            )
+          : null
+      )
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      const msg =
+        cause instanceof StudioError
+          ? cause.message
+          : cause instanceof Error
+          ? cause.message
+          : String(cause)
+      setBatchEntries((prev) =>
+        prev
+          ? prev.map((e, idx) =>
+              idx === index ? { ...e, status: 'error', error: msg, progress: null } : e
+            )
+          : null
+      )
+      log('holen', `Fehler beim Laden von ${entry.result.title}: ${msg}`, 'error')
+    }
+  }
+
+  const downloadAllBatch = async () => {
+    if (!batchEntriesRef.current) return
+    setBatchBusy(true)
+    try {
+      for (let i = 0; i < batchEntriesRef.current.length; i++) {
+        if (abortRef.current?.signal.aborted) break
+        const current = batchEntriesRef.current[i]
+        if (current && current.status === 'ready') {
+          await takeBatchItem(i)
+        }
+      }
+    } finally {
+      setBatchBusy(false)
     }
   }
 
@@ -222,33 +389,47 @@ export function DownloaderPanel() {
         ) : null}
 
         <form
-          className="mt-[16px] flex flex-col gap-[8px] sm:flex-row"
+          className="mt-[16px] flex flex-col gap-[8px]"
           onSubmit={(event) => {
             event.preventDefault()
             void look()
           }}
         >
-          <TextInput
-            value={url}
-            onChange={(event) => {
-              setUrl(event.target.value)
-              // A new address makes the last answer stale. Leaving it up was
-              // worse than showing nothing: somebody who had a failure here,
-              // then pasted a different link, kept reading the old refusal as
-              // a verdict on the new one — including „Es wurde keine Adresse
-              // übergeben" sitting under a field with an address in it.
-              setError(null)
-              setResult(null)
-              setProgress(null)
-            }}
-            placeholder="https://www.youtube.com/watch?v=… oder eine Adresse, die direkt auf eine Datei zeigt"
-            inputMode="url"
-            aria-label="Adresse zum Herunterladen"
-            className="flex-1"
-          />
-          <Button type="submit" disabled={looking || url.trim().length === 0}>
-            {looking ? 'Wird gesucht …' : 'Nachsehen'}
-          </Button>
+          <div className="flex flex-col gap-[8px] sm:flex-row">
+            <TextInput
+              value={url}
+              onChange={(event) => {
+                setUrl(event.target.value)
+                setError(null)
+                setResult(null)
+                setBatchEntries(null)
+                setProgress(null)
+              }}
+              placeholder="https://... oder mehrere Links mit Komma getrennt (z. B. Link 1, Link 2)"
+              inputMode="url"
+              aria-label="Adresse oder kommagetrennte Adressen zum Herunterladen"
+              className="flex-1"
+            />
+            <Button type="submit" disabled={looking || url.trim().length === 0}>
+              {looking ? 'Wird gesucht …' : 'Nachsehen'}
+            </Button>
+          </div>
+
+          <div className="mt-[4px] flex flex-wrap items-center justify-between gap-[12px]">
+            <label className="flex cursor-pointer items-center gap-[8px] text-small text-ink select-none">
+              <input
+                type="checkbox"
+                checked={stealthNames}
+                onChange={(e) => setStealthNames(e.target.checked)}
+                className="h-[15px] w-[15px] rounded border-line text-ink accent-ink focus:ring-ink"
+              />
+              <span className="flex items-center gap-[6px]">
+                <span aria-hidden>🔒</span>
+                <span className="font-medium">Dateinamen verschleiern</span>
+                <span className="text-muted">(anonyme Hash-Namen wie media_7a8b9c.mp4)</span>
+              </span>
+            </label>
+          </div>
         </form>
 
         {/* Seven lines under the field on every visit, for a question most
@@ -297,12 +478,22 @@ export function DownloaderPanel() {
               />
             ) : null}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-subheading text-ink">{result.title}</p>
-              <p className="value mt-[2px] text-small text-muted">
-                {[result.author, result.durationSeconds ? formatDuration(result.durationSeconds) : null]
-                  .filter(Boolean)
-                  .join(' · ')}
+              <p className="truncate text-subheading text-ink">
+                {stealthNames
+                  ? `🔒 [Verschleiert] ${filenameFor(result, result.streams[0], { anonymize: true })}`
+                  : result.title}
               </p>
+              {!stealthNames ? (
+                <p className="value mt-[2px] text-small text-muted">
+                  {[result.author, result.durationSeconds ? formatDuration(result.durationSeconds) : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              ) : (
+                <p className="mt-[2px] text-small text-muted">
+                  Titel und Metadaten werden im Dateinamen anonymisiert
+                </p>
+              )}
               {/* Which route answered. Not a detail: it decides the resolution
                   on offer, and it decides who saw the address. */}
               <p className="mt-[8px] text-small text-muted">
@@ -373,6 +564,157 @@ export function DownloaderPanel() {
               </button>
             </div>
           ) : null}
+        </Card>
+      ) : null}
+
+      {batchEntries ? (
+        <Card tone="keylime" className="rise">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line pb-[12px]">
+            <div>
+              <h3 className="text-subheading text-ink">Mehrfach-Download ({batchEntries.length} Links)</h3>
+              <p className="mt-[2px] text-small text-muted">
+                {batchEntries.filter((e) => e.status === 'done').length} von {batchEntries.length} geladen
+                {batchEntries.filter((e) => e.status === 'error').length > 0
+                  ? ` · ${batchEntries.filter((e) => e.status === 'error').length} fehlgeschlagen`
+                  : ''}
+                {stealthNames ? ' · 🔒 Anonyme Dateinamen aktiv' : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-[8px]">
+              {batchBusy ? (
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => {
+                    abortRef.current?.abort()
+                    setBatchBusy(false)
+                  }}
+                >
+                  Abbrechen
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                disabled={
+                  batchBusy ||
+                  looking ||
+                  !batchEntries.some((e) => e.status === 'ready')
+                }
+                onClick={() => void downloadAllBatch()}
+              >
+                {batchBusy ? 'Laden läuft …' : 'Alle herunterladen'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-[16px] flex flex-col gap-[12px]">
+            {batchEntries.map((entry, index) => {
+              const stream =
+                entry.result?.streams.find((s) => s.id === entry.selectedStreamId) ||
+                entry.result?.streams[0]
+
+              return (
+                <div
+                  key={`${index}-${entry.url}`}
+                  className="flex flex-col gap-[8px] rounded-nav border border-line bg-panel-soft p-[12px]"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-[8px]">
+                    <div className="min-w-0 flex-1">
+                      {entry.result ? (
+                        <p className="truncate text-body font-medium text-ink">
+                          {stealthNames
+                            ? `🔒 ${filenameFor(entry.result, stream || entry.result.streams[0], { anonymize: true })}`
+                            : entry.result.title}
+                        </p>
+                      ) : (
+                        <p className="truncate text-small font-mono text-muted">{entry.url}</p>
+                      )}
+                      {entry.result && !stealthNames ? (
+                        <p className="value text-small text-muted">
+                          {[entry.result.author, entry.result.durationSeconds ? formatDuration(entry.result.durationSeconds) : null]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-[8px]">
+                      {entry.status === 'resolving' ? (
+                        <span className="value text-small text-muted">Wird gesucht …</span>
+                      ) : null}
+
+                      {entry.status === 'ready' && entry.result ? (
+                        <>
+                          {entry.result.streams.length > 1 ? (
+                            <select
+                              value={entry.selectedStreamId}
+                              disabled={batchBusy}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                setBatchEntries((prev) =>
+                                  prev
+                                    ? prev.map((item, idx) =>
+                                        idx === index ? { ...item, selectedStreamId: val } : item
+                                      )
+                                    : null
+                                )
+                              }}
+                              className="rounded-nav border border-line bg-canvas px-[8px] py-[4px] text-small text-ink focus:border-ink focus:outline-none"
+                            >
+                              {entry.result.streams.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.label} ({s.ext.toUpperCase()}{s.bytes ? ` · ${formatBytes(s.bytes)}` : ''})
+                                </option>
+                              ))}
+                            </select>
+                          ) : stream ? (
+                            <span className="value text-small text-muted">
+                              {stream.ext.toUpperCase()}
+                              {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
+                            </span>
+                          ) : null}
+
+                          <Button
+                            size="sm"
+                            disabled={batchBusy}
+                            onClick={() => void takeBatchItem(index)}
+                          >
+                            Laden
+                          </Button>
+                        </>
+                      ) : null}
+
+                      {entry.status === 'done' && entry.taken ? (
+                        <div className="flex items-center gap-[8px]">
+                          <span className="value text-small font-medium text-ink">✓ In der Sitzung</span>
+                          <Button
+                            size="sm"
+                            variant="quiet"
+                            onClick={() => saveBytes(entry.taken!.bytes, entry.taken!.name, entry.taken!.mime)}
+                          >
+                            Speichern
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {entry.status === 'error' ? (
+                    <p className="text-small text-prose font-medium text-ink">{entry.error}</p>
+                  ) : null}
+
+                  {entry.status === 'downloading' && entry.progress ? (
+                    <Progress
+                      value={entry.progress.total ? entry.progress.loaded / entry.progress.total : null}
+                      label={`${formatBytes(entry.progress.loaded)}${
+                        entry.progress.total ? ` von ${formatBytes(entry.progress.total)}` : ''
+                      }`}
+                    />
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
         </Card>
       ) : null}
 

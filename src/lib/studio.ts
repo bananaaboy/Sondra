@@ -411,7 +411,20 @@ export async function downloadStream(
 }
 
 /** A filename that survives every filesystem, from a video title. */
-export function filenameFor(result: StudioResult, stream: StudioStream): string {
+export function filenameFor(
+  result: StudioResult,
+  stream: StudioStream,
+  options: { anonymize?: boolean } = {},
+): string {
+  if (options.anonymize) {
+    let hash = 0
+    const str = `${result.title}:${stream.id}`
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
+    }
+    const hex = Math.abs(hash).toString(16).padStart(8, '0')
+    return `media_${hex}.${stream.ext || 'mp4'}`
+  }
   const stem =
     result.title
       .replace(/[\\/:*?"<>|]+/g, ' ')
