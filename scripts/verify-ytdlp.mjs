@@ -152,6 +152,21 @@ async function main() {
     const stale = await fetch(`${base}tunnel?id=gibt-es-nicht`, { headers: { origin: ORIGIN } })
     check('abgelaufener Tunnel → 404', stale.status === 404, String(stale.status))
 
+    // 6. Adapter list and selection
+    const adaptersRes = await fetch(`${base}adapters`, { headers: { origin: ORIGIN } })
+    const adaptersBody = await adaptersRes.json()
+    check('Adapterliste: 200', adaptersRes.status === 200, String(adaptersRes.status))
+    check('Adapterliste enthält Standard', Array.isArray(adaptersBody?.adapters) && adaptersBody.adapters.some((a) => a.id === 'default'))
+
+    process.env.SONDRA_TEST_STUB = '1'
+    const setAdapterRes = await fetch(`${base}adapters`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: ORIGIN },
+      body: JSON.stringify({ bindAddress: '192.168.43.123' }),
+    })
+    const setAdapterBody = await setAdapterRes.json()
+    check('Adapter setzen: 200', setAdapterRes.status === 200 && setAdapterBody?.selected === '192.168.43.123')
+
     check('keine Rückfragen an die Person', asked.length === 0, asked.join(', '))
   } finally {
     service.close()

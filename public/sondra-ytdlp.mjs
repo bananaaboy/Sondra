@@ -43,6 +43,10 @@ const cookieFlag = argv.indexOf('--cookies')
 const COOKIES = cookieFlag >= 0 ? argv[cookieFlag + 1] : process.env.SONDRA_COOKIES || ''
 const cookieArgs = COOKIES ? ['--cookies-from-browser', COOKIES] : []
 
+const sourceFlag = argv.indexOf('--source-address')
+let SOURCE_ADDRESS = sourceFlag >= 0 ? argv[sourceFlag + 1] : process.env.SONDRA_SOURCE_ADDRESS || ''
+const sourceArgs = () => (SOURCE_ADDRESS && SOURCE_ADDRESS !== 'default' ? ['--source-address', String(SOURCE_ADDRESS)] : [])
+
 /* -- yt-dlp finden --------------------------------------------------------- */
 
 /**
@@ -640,7 +644,7 @@ async function resolve(body) {
   const queryUrl = directSource ? directSource.url : target
   const refererArgs = directSource?.referer ? ['--referer', directSource.referer] : []
 
-  let probe = await run(['-J', '--no-warnings', '--no-playlist', ...refererArgs, ...cookieArgs, '--', queryUrl])
+  let probe = await run(['-J', '--no-warnings', '--no-playlist', ...sourceArgs(), ...refererArgs, ...cookieArgs, '--', queryUrl])
   if (probe.missing) return { status: 'error', error: { code: 'error.api.ytdlp.missing' } }
 
   if (probe.code !== 0) return { status: 'error', error: { code: errorCode(probe.stderr) } }
@@ -744,6 +748,7 @@ function tunnel(job, req, res) {
       '-f', String(job.format.format_id),
       '-o', '-',
       '--no-part', '--no-warnings', '--quiet', '--no-playlist',
+      ...sourceArgs(),
       ...(job.referer ? ['--referer', job.referer] : []),
       ...cookieArgs,
       '--', job.url,
@@ -817,6 +822,33 @@ http
       return json(res, 200, {
         cobalt: { version: versionLabel, url: `http://localhost:${SERVICE_PORT}/`, services: SERVICES },
       })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/adapters') {
+      const os = await import('node:os')
+      const nets = os.default.networkInterfaces()
+      const list = []
+      for (const [name, addrs] of Object.entries(nets)) {
+        for (const a of addrs || []) {
+          if (a.family === 'IPv4' && !a.internal) list.push({ id: a.address, name: `${name} (${a.address})`, address: a.address })
+        }
+      }
+      return json(res, 200, {
+        adapters: [
+          { id: 'default', name: 'Automatisch (Windows-Standard)', address: null },
+          ...list,
+        ],
+        selected: SOURCE_ADDRESS || 'default',
+      })
+    }
+
+    if (req.method === 'POST' && url.pathname === '/adapters') {
+      let raw = ''
+      for await (const chunk of req) raw += chunk
+      let body = {}
+      try { body = raw ? JSON.parse(raw) : {} } catch {}
+      SOURCE_ADDRESS = body.bindAddress || 'default'
+      return json(res, 200, { ok: true, selected: SOURCE_ADDRESS })
     }
 
     if (req.method === 'GET' && url.pathname === '/tunnel') {

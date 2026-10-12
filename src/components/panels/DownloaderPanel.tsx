@@ -129,6 +129,12 @@ interface BatchItem {
   taken?: { name: string; bytes: Uint8Array; mime: string }
 }
 
+interface NetworkAdapter {
+  id: string
+  name: string
+  address: string | null
+}
+
 export function DownloaderPanel() {
   const addAsset = useSession((state) => state.addAsset)
   const log = useSession((state) => state.log)
@@ -137,6 +143,61 @@ export function DownloaderPanel() {
   const [stealthMode, setStealthMode] = useState<StealthMode>('off')
   const stealthModeRef = useRef<StealthMode>(stealthMode)
   stealthModeRef.current = stealthMode
+
+  const [adapters, setAdapters] = useState<NetworkAdapter[]>([])
+  const [selectedAdapter, setSelectedAdapter] = useState<string>('default')
+  const [adapterLoading, setAdapterLoading] = useState(false)
+
+  const fetchAdapters = async () => {
+    setAdapterLoading(true)
+    try {
+      const conn = serviceConnection()
+      const targetUrl = conn.endpoint
+        ? `${conn.endpoint.replace(/\/$/, '')}/adapters`
+        : IN_DESKTOP_APP
+        ? 'http://localhost:9000/adapters'
+        : '/api/adapters'
+      const res = await fetch(targetUrl, { signal: AbortSignal.timeout(3000) })
+      if (res.ok) {
+        const data = (await res.json()) as { adapters?: NetworkAdapter[]; selected?: string }
+        if (Array.isArray(data.adapters) && data.adapters.length > 0) {
+          setAdapters(data.adapters)
+          if (data.selected) setSelectedAdapter(data.selected)
+        }
+      }
+    } catch {
+      // Endpoint not reachable
+    } finally {
+      setAdapterLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void fetchAdapters()
+  }, [])
+
+  const changeAdapter = async (val: string) => {
+    setSelectedAdapter(val)
+    try {
+      const conn = serviceConnection()
+      const targetUrl = conn.endpoint
+        ? `${conn.endpoint.replace(/\/$/, '')}/adapters`
+        : IN_DESKTOP_APP
+        ? 'http://localhost:9000/adapters'
+        : '/api/adapters'
+      await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ bindAddress: val === 'default' ? null : val }),
+      })
+      log(
+        'netzwerk',
+        val === 'default' ? 'Netzwerk: Automatisch (Windows-Standard)' : `Netzwerk gebunden an: ${val}`,
+      )
+    } catch (err) {
+      log('netzwerk', `Adapter konnte nicht umgestellt werden: ${err}`, 'error')
+    }
+  }
 
   const [looking, setLooking] = useState(false)
   const [result, setResult] = useState<StudioResult | null>(null)
@@ -439,6 +500,51 @@ export function DownloaderPanel() {
                 {stealthMode === 'full_security' && 'Muster: 7a8b9c0d1e2f.mp4 — minimaler Code ohne Wörter oder Zeitbezug'}
                 {stealthMode === 'teams_office' && 'Muster: Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4 — wirkt wie ein regulärer Office-Download'}
               </p>
+            ) : null}
+
+            {(IN_DESKTOP_APP || adapters.length > 0) ? (
+              <div className="mt-[4px] flex flex-col gap-[4px] border-t border-line/60 pt-[8px]">
+                <div className="flex flex-wrap items-center gap-[10px]">
+                  <label htmlFor="adapter-select" className="text-small font-medium text-ink">
+                    Verbindung / Netzwerkkarte:
+                  </label>
+                  <select
+                    id="adapter-select"
+                    value={selectedAdapter}
+                    disabled={adapterLoading || adapters.length === 0}
+                    onChange={(e) => void changeAdapter(e.target.value)}
+                    className="rounded-nav border border-line bg-canvas px-[10px] py-[4px] text-small text-ink focus:border-ink focus:outline-none"
+                  >
+                    {adapters.length === 0 ? (
+                      <option value="default">Automatisch (Windows-Standard)</option>
+                    ) : (
+                      adapters.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void fetchAdapters()}
+                    disabled={adapterLoading}
+                    title="Adapterliste aktualisieren"
+                    className="cursor-pointer text-small text-muted underline hover:text-ink disabled:opacity-50"
+                  >
+                    {adapterLoading ? 'Sucht…' : 'Neu suchen'}
+                  </button>
+                </div>
+                {selectedAdapter !== 'default' ? (
+                  <p className="text-small text-muted">
+                    Downloads laufen über diesen Adapter — Ethernet bleibt unberührt.
+                  </p>
+                ) : (
+                  <p className="text-small text-muted">
+                    Standard: Windows entscheidet die Route. Schalte den Handy-Hotspot ein und wähle ihn hier aus, um Downloads über Mobilfunk zu leiten.
+                  </p>
+                )}
+              </div>
             ) : null}
           </div>
         </form>
