@@ -304,6 +304,7 @@ interface Version {
   reason: 'needed' | 'chosen'
   remedy: Remedy
   height: number | null
+  activeHeight?: number | null
   audioIndex: number
   /** 0 while waiting to be asked (a slow encode), then the progress. */
   fraction: number
@@ -338,6 +339,8 @@ export function PlayerPanel() {
   const [duration, setDuration] = useState(0)
   const [buffered, setBuffered] = useState(0)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
+  const [sourceDimensions, setSourceDimensions] = useState<Record<string, { width: number; height: number }>>({})
+  const qualityCache = useRef<Map<string, Map<number, string>>>(new Map())
   const [failed, setFailed] = useState(false)
   const [captions, setCaptions] = useState(-1)
   const [resume, setResume] = useState<number | null>(null)
@@ -437,12 +440,15 @@ export function PlayerPanel() {
     setVersions((value) => {
       const old = value[id]
       if (!old) return value
-      if (old.url) URL.revokeObjectURL(old.url)
+      const isCached = Array.from(qualityCache.current.get(id)?.values() ?? []).includes(old.url ?? '')
+      if (old.url && !isCached) URL.revokeObjectURL(old.url)
       const { [id]: _gone, ...rest } = value
       return rest
     })
 
   const remove = (id: string) => {
+    qualityCache.current.get(id)?.forEach((url) => URL.revokeObjectURL(url))
+    qualityCache.current.delete(id)
     const value = itemsRef.current
     value.find((item) => item.id === id)?.subtitles.forEach((track) => URL.revokeObjectURL(track.url))
     const rest = value.filter((item) => item.id !== id)
@@ -460,14 +466,27 @@ export function PlayerPanel() {
     jobAbort.current?.abort()
     const controller = new AbortController()
     jobAbort.current = controller
-    const keepOld = versionsRef.current[item.id]?.url ?? null
-    setVersions((value) => ({ ...value, [item.id]: { ...spec, itemId: item.id, fraction: 0.0001, started: true, url: keepOld, error: null } }))
+    const previous = versionsRef.current[item.id]
+    const keepOld = previous?.url ?? null
+    const currentActiveHeight = previous?.activeHeight ?? (previous?.url && previous?.fraction === 1 ? previous.height : null)
+    setVersions((value) => ({
+      ...value,
+      [item.id]: {
+        ...spec,
+        itemId: item.id,
+        fraction: 0.0001,
+        started: true,
+        activeHeight: currentActiveHeight,
+        url: keepOld,
+        error: null,
+      },
+    }))
     const started = performance.now()
     try {
       const name = diskName(item.name)
       const job = standJob(spec.remedy, found, diskPath(name), {
         maxHeight: spec.height ?? 720,
-        crf: spec.height && spec.height <= 480 ? 26 : 23,
+        crf: spec.height && spec.height <= 480 ? 28 : 26,
         audioIndex: spec.audioIndex,
       })
       const { files } = await runFfmpegOnDisk({
@@ -484,21 +503,54 @@ export function PlayerPanel() {
       })
       if (controller.signal.aborted) return
       const url = URL.createObjectURL(new Blob([files[job.output] as BlobPart], { type: job.mime }))
+      if (spec.height) {
+        let itemCache = qualityCache.current.get(item.id)
+        if (!itemCache) {
+          itemCache = new Map()
+          qualityCache.current.set(item.id, itemCache)
+        }
+        itemCache.set(spec.height, url)
+      }
       // The film keeps its place and keeps playing across the swap.
       const node = videoRef.current
       if (currentIdRef.current === item.id && node) {
         if (node.currentTime > 0) setResume(node.currentTime)
         wasPlaying.current = !node.paused
       }
-      if (keepOld) URL.revokeObjectURL(keepOld)
-      setVersions((value) => ({ ...value, [item.id]: { ...spec, itemId: item.id, fraction: 1, started: true, url, error: null } }))
+      if (keepOld) {
+        const isCached = Array.from(qualityCache.current.get(item.id)?.values() ?? []).includes(keepOld)
+        if (!isCached) URL.revokeObjectURL(keepOld)
+      }
+      setVersions((value) => ({
+        ...value,
+        [item.id]: {
+          ...spec,
+          itemId: item.id,
+          fraction: 1,
+          started: false,
+          activeHeight: spec.height,
+          url,
+          error: null,
+        },
+      }))
       setFailed(false)
       log('abspielen', `${item.name}: ${spec.height ? `${spec.height}p` : 'abspielbare Fassung'} bereit (${((performance.now() - started) / 1000).toFixed(1)} s)`)
     } catch (failure) {
       if (controller.signal.aborted) return
       const lines = (failure instanceof Error ? failure.message : String(failure)).split('\n').filter(Boolean)
       const message = (lines.length > 1 ? lines[lines.length - 1] : lines[0] ?? 'Unbekannter Fehler').replace(/\.$/, '')
-      setVersions((value) => ({ ...value, [item.id]: { ...spec, itemId: item.id, fraction: 0, started: false, url: keepOld, error: message } }))
+      setVersions((value) => ({
+        ...value,
+        [item.id]: {
+          ...spec,
+          itemId: item.id,
+          fraction: 0,
+          started: false,
+          activeHeight: currentActiveHeight,
+          url: keepOld,
+          error: message,
+        },
+      }))
       log('abspielen', `${item.name}: ${message}`, 'warn')
     } finally {
       if (jobAbort.current === controller) jobAbort.current = null
@@ -533,6 +585,11 @@ export function PlayerPanel() {
     setFacts((value) => ({ ...value, [item.id]: 'pending' }))
     const asked = probeDisk(item.source, diskName(item.name)).then((found) => {
       setFacts((value) => ({ ...value, [item.id]: found }))
+      if (found.width && found.height) {
+        const width = found.width
+        const height = found.height
+        setSourceDimensions((prev) => ({ ...prev, [item.id]: { width, height } }))
+      }
       return found
     })
     probes.current.set(item.id, asked)
@@ -545,7 +602,12 @@ export function PlayerPanel() {
     if (!found) return
     if (browserFailed) {
       if (found.durationSeconds) setDuration((value) => value || found.durationSeconds || 0)
-      if (found.width && found.height) setSize({ width: found.width, height: found.height })
+      if (found.width && found.height) {
+        const width = found.width
+        const height = found.height
+        setSize({ width, height })
+        setSourceDimensions((prev) => ({ ...prev, [item.id]: { width, height } }))
+      }
     }
     const remedy = remedyFor(found, browserFailed)
     if (!remedy || currentIdRef.current !== item.id || versionsRef.current[item.id]) return
@@ -588,6 +650,8 @@ export function PlayerPanel() {
     () => () => {
       jobAbort.current?.abort()
       itemsRef.current.forEach((item) => item.subtitles.forEach((track) => URL.revokeObjectURL(track.url)))
+      qualityCache.current.forEach((map) => map.forEach((url) => URL.revokeObjectURL(url)))
+      qualityCache.current.clear()
       Object.values(versionsRef.current).forEach((entry) => entry.url && URL.revokeObjectURL(entry.url))
     },
     [],
@@ -786,10 +850,11 @@ export function PlayerPanel() {
 
   const info = current ? facts[current.id] : undefined
   const known = info && info !== 'pending' ? info : null
-  const sourceHeight = videoRef.current?.videoHeight || known?.height || size?.height || null
-  const isVersionReady = Boolean(version?.reason === 'chosen' && version.url && (!version.started || version.fraction === 1))
+  const originalDim = current ? sourceDimensions[current.id] : null
+  const sourceHeight = originalDim?.height ?? known?.height ?? size?.height ?? (!version?.height ? videoRef.current?.videoHeight : null) ?? null
+  const activeHeight = version?.activeHeight ?? (version?.url && (!version.started || version.fraction === 1) ? version.height : null)
   const qualityState: QualityState = {
-    current: isVersionReady && version?.height ? version.height : 'original',
+    current: version?.reason === 'chosen' && activeHeight ? activeHeight : 'original',
     sourceHeight,
     options: sourceHeight ? QUALITY_STEPS.filter((height) => height < sourceHeight - 40) : [],
     making:
@@ -835,6 +900,29 @@ export function PlayerPanel() {
       const codec = audioStreams[audioIndex]?.codec ?? ''
       return make(current, found, { reason: 'chosen', remedy: browserPlaysAudio(codec) && !failed ? 'repack' : 'sound', height: null, audioIndex })
     }
+
+    const cachedUrl = qualityCache.current.get(current.id)?.get(quality)
+    if (cachedUrl) {
+      jobAbort.current?.abort()
+      keepPlace()
+      setVersions((value) => ({
+        ...value,
+        [current.id]: {
+          itemId: current.id,
+          reason: 'chosen',
+          remedy: 'picture',
+          height: quality,
+          activeHeight: quality,
+          audioIndex,
+          fraction: 1,
+          started: false,
+          url: cachedUrl,
+          error: null,
+        },
+      }))
+      return
+    }
+
     return make(current, found, { reason: 'chosen', remedy: 'picture', height: quality, audioIndex })
   }
 
@@ -1110,7 +1198,12 @@ export function PlayerPanel() {
                   node.playbackRate = settings.rate
                   const length = Number.isFinite(node.duration) ? node.duration : 0
                   setDuration(length)
-                  if (node.videoWidth > 0 && !version?.height) setSize({ width: node.videoWidth, height: node.videoHeight })
+                  if (node.videoWidth > 0 && !version?.height) {
+                    setSize({ width: node.videoWidth, height: node.videoHeight })
+                    if (current) {
+                      setSourceDimensions((prev) => ({ ...prev, [current.id]: { width: node.videoWidth, height: node.videoHeight } }))
+                    }
+                  }
                   // Sound without a picture: the container is known, the picture's codec is not.
                   const noPicture = isVideo && node.videoWidth === 0
                   if ((noPicture || length === 0) && !version?.url) {
