@@ -121,8 +121,8 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
       mime: 'audio/mp4',
     }
   }
-  const head = ['-hide_banner', '-i', input, '-map', '0:v:0', '-map', `0:a:${audioIndex}?`, '-sn', '-dn']
-  const scaleFilter = `scale=-2:'min(${maxHeight},2*trunc(ih/2))'`
+  const head = ['-hide_banner', '-threads', '0', '-i', input, '-map', '0:v:0', '-map', `0:a:${audioIndex}?`, '-sn', '-dn']
+  const scaleFilter = `scale=-2:'min(${maxHeight},2*trunc(ih/2))':flags=fast_bilinear`
   const sound =
     facts.streams.find((stream) => stream.type === 'audio' && stream.index === audioIndex)?.codec ?? firstOf(facts, 'audio')?.codec ?? null
   const audioFast = sound && browserPlaysAudio(sound) ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2']
@@ -134,7 +134,7 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
       args: [
         ...head,
         '-vf', scaleFilter,
-        '-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8', '-b:v', '1M',
+        '-c:v', 'libvpx', '-deadline', 'realtime', '-cpu-used', '8', '-b:v', '1M', '-threads', '0',
         '-c:a', 'libvorbis', '-q:a', '4', '-ac', '2',
         'vorschau.webm',
       ],
@@ -143,13 +143,11 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
     }
   }
   if (remedy === 'picture') {
-    // Small by default, because the editor only needs it to see the cut.
-    // x264 always with -preset medium — faster presets crash this build.
     return {
       args: [
         ...head,
         '-vf', scaleFilter,
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', String(crf), '-pix_fmt', 'yuv420p',
+        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-threads', '0',
         ...audioFast,
         '-movflags', '+faststart', 'vorschau.mp4',
       ],
