@@ -149,14 +149,13 @@ export function DownloaderPanel() {
   const [adapterLoading, setAdapterLoading] = useState(false)
 
   const fetchAdapters = async () => {
+    if (!IN_DESKTOP_APP) return
     setAdapterLoading(true)
     try {
       const conn = serviceConnection()
       const targetUrl = conn.endpoint
         ? `${conn.endpoint.replace(/\/$/, '')}/adapters`
-        : IN_DESKTOP_APP
-        ? 'http://localhost:9000/adapters'
-        : '/api/adapters'
+        : 'http://localhost:9000/adapters'
       const res = await fetch(targetUrl, { signal: AbortSignal.timeout(3000) })
       if (res.ok) {
         const data = (await res.json()) as { adapters?: NetworkAdapter[]; selected?: string }
@@ -173,18 +172,19 @@ export function DownloaderPanel() {
   }
 
   useEffect(() => {
-    void fetchAdapters()
+    if (IN_DESKTOP_APP) {
+      void fetchAdapters()
+    }
   }, [])
 
   const changeAdapter = async (val: string) => {
+    if (!IN_DESKTOP_APP) return
     setSelectedAdapter(val)
     try {
       const conn = serviceConnection()
       const targetUrl = conn.endpoint
         ? `${conn.endpoint.replace(/\/$/, '')}/adapters`
-        : IN_DESKTOP_APP
-        ? 'http://localhost:9000/adapters'
-        : '/api/adapters'
+        : 'http://localhost:9000/adapters'
       await fetch(targetUrl, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -212,9 +212,13 @@ export function DownloaderPanel() {
   /** What the last „Laden“ put into the session, so it can still be saved. */
   const [taken, setTaken] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const batchAbortRef = useRef<AbortController | null>(null)
   const online = useOnline()
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => () => {
+    abortRef.current?.abort()
+    batchAbortRef.current?.abort()
+  }, [])
 
   const look = async () => {
     const targets = url
@@ -344,7 +348,7 @@ export function DownloaderPanel() {
     }
   }
 
-  const takeBatchItem = async (index: number) => {
+  const takeBatchItem = async (index: number, externalSignal?: AbortSignal) => {
     const entry = batchEntriesRef.current?.[index]
     if (!entry || !entry.result) return
     const stream =
@@ -352,8 +356,9 @@ export function DownloaderPanel() {
       entry.result.streams[0]
     if (!stream) return
 
-    const controller = new AbortController()
-    abortRef.current = controller
+    const controller = externalSignal ? null : new AbortController()
+    if (controller) abortRef.current = controller
+    const signal = externalSignal || controller!.signal
 
     setBatchEntries((prev) =>
       prev
@@ -367,7 +372,7 @@ export function DownloaderPanel() {
 
     try {
       const bytes = await downloadStream(stream, {
-        signal: controller.signal,
+        signal,
         onProgress: (p) => {
           setBatchEntries((prev) =>
             prev ? prev.map((e, idx) => (idx === index ? { ...e, progress: p } : e)) : null
@@ -421,17 +426,18 @@ export function DownloaderPanel() {
 
   const downloadAllBatch = async () => {
     if (!batchEntriesRef.current) return
+    const controller = new AbortController()
+    batchAbortRef.current = controller
     setBatchBusy(true)
     try {
-      for (let i = 0; i < batchEntriesRef.current.length; i++) {
-        if (abortRef.current?.signal.aborted) break
-        const current = batchEntriesRef.current[i]
-        if (current && current.status === 'ready') {
-          await takeBatchItem(i)
-        }
-      }
+      const readyIndices = batchEntriesRef.current
+        .map((entry, idx) => (entry.status === 'ready' ? idx : -1))
+        .filter((idx) => idx !== -1)
+
+      await Promise.all(readyIndices.map((idx) => takeBatchItem(idx, controller.signal)))
     } finally {
       setBatchBusy(false)
+      batchAbortRef.current = null
     }
   }
 
@@ -502,7 +508,7 @@ export function DownloaderPanel() {
               </p>
             ) : null}
 
-            {(IN_DESKTOP_APP || adapters.length > 0) ? (
+            {IN_DESKTOP_APP ? (
               <div className="mt-[4px] flex flex-col gap-[4px] border-t border-line/60 pt-[8px]">
                 <div className="flex flex-wrap items-center gap-[10px]">
                   <label htmlFor="adapter-select" className="text-small font-medium text-ink">
@@ -711,6 +717,7 @@ export function DownloaderPanel() {
                   size="sm"
                   variant="quiet"
                   onClick={() => {
+                    batchAbortRef.current?.abort()
                     abortRef.current?.abort()
                     setBatchBusy(false)
                   }}
