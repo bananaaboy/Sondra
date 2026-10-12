@@ -469,7 +469,7 @@ export function DownloaderPanel() {
               }}
               placeholder="https://... oder mehrere Links mit Komma getrennt (z. B. Link 1, Link 2)"
               inputMode="url"
-              aria-label="Adresse oder kommagetrennte Adressen zum Herunterladen"
+              aria-label="Adresse zum Herunterladen"
               className="flex-1"
             />
             <Button type="submit" disabled={looking || url.trim().length === 0}>

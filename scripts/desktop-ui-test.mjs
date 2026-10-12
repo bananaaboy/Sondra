@@ -389,7 +389,7 @@ try {
 
   await step('Herunterladen: direkte Adresse', async () => {
     await go('herunterladen')
-    await page.getByLabel('Adresse zum Herunterladen').fill('https://www.sondra.lizge.ch/icon-512.png')
+    await page.getByLabel(/Adresse.*Herunterladen/).fill('https://www.sondra.lizge.ch/icon-512.png')
     await page.getByRole('button', { name: 'Nachsehen' }).click()
     const before = await sessionCount()
     await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 60_000 })
@@ -407,7 +407,7 @@ try {
 
   await step('Herunterladen: Dienst der App mit yt-dlp', async () => {
     await go('herunterladen')
-    await page.getByLabel('Adresse zum Herunterladen').fill('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4')
+    await page.getByLabel(/Adresse.*Herunterladen/).fill('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4')
     await page.getByRole('button', { name: 'Nachsehen' }).click()
     const before = await sessionCount()
     await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 120_000 })
@@ -491,7 +491,7 @@ try {
 
   await step('Herunterladen: YouTube (nur Hinweis)', async () => {
     await go('herunterladen')
-    await page.getByLabel('Adresse zum Herunterladen').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    await page.getByLabel(/Adresse.*Herunterladen/).fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
     await page.getByRole('button', { name: 'Nachsehen' }).click()
     await page.waitForFunction(
       () => /Laden|Hat nicht geklappt/.test(document.querySelector('main')?.innerText ?? ''),
@@ -554,7 +554,7 @@ for (const result of results) {
 }
 const summary = process.env.GITHUB_STEP_SUMMARY
 if (summary) {
-  const rows = results.map((result) => `| ${result.ok ? '✅' : '❌'} | ${result.name} | ${result.detail.replace(/\|/g, '/')} |`)
+  const rows = results.map((result) => `| ${result.ok ? 'OK' : 'FEHL'} | ${result.name} | ${result.detail.replace(/\|/g, '/')} |`)
   fs.appendFileSync(summary, ['### Sondra-App, durchgeklickt', '', '| | Schritt | Ergebnis |', '|---|---|---|', ...rows, ''].join('\n'))
 }
 console.log(failed ? `\n${failed} von ${results.length} Schritten fehlgeschlagen.` : `\nAlle ${results.length} Schritte bestanden.`)
