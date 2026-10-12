@@ -94,18 +94,13 @@ let innertube = null
 /**
  * One Innertube session per warm instance.
  *
- * Creating it downloads and parses YouTube's player script, which is megabytes
- * and seconds. Doing that per request would put the cost on every single
- * resolve; doing it once per container puts it on the first one.
+ * MWEB (Mobile Web) client is used: unlike desktop WEB which restricts high
+ * resolutions to SABR, MWEB provides full adaptive formats (4K, 1440p, 1080p,
+ * 720p, etc.) and complete audio streams with decipherable playback signatures.
  */
 async function youtube() {
   if (innertube) return innertube
   const { Innertube, Platform } = await import('youtubei.js')
-  // Deciphering a signature means running a chunk of YouTube's own JavaScript.
-  // youtubei.js deliberately refuses to pick an evaluator for you, because
-  // where that code runs is a security decision. `node:vm` with an empty
-  // context is the smallest sandbox that works: the script gets no require, no
-  // process, no fetch, and ten seconds.
   Platform.load({
     ...Platform.shim,
     eval: (data) =>
@@ -113,7 +108,15 @@ async function youtube() {
         timeout: 10_000,
       }),
   })
-  innertube = await Innertube.create({ retrieve_player: true })
+  try {
+    innertube = await Innertube.create({ retrieve_player: true, client_type: 'MWEB' })
+  } catch {
+    try {
+      innertube = await Innertube.create({ retrieve_player: true, client_type: 'ANDROID' })
+    } catch {
+      innertube = await Innertube.create({ retrieve_player: true })
+    }
+  }
   return innertube
 }
 
@@ -135,9 +138,16 @@ export function youtubeId(raw) {
 }
 
 const sizeLabel = (format) => {
-  if (format.has_video && format.has_audio) return `${format.quality_label ?? 'Video'} mit Ton`
-  if (format.has_video) return `${format.quality_label ?? 'Video'} ohne Ton`
-  return `Nur Ton${format.bitrate ? ` · ${Math.round(format.bitrate / 1000)} kbit/s` : ''}`
+  const quality = format.quality_label || (format.height ? `${format.height}p` : null)
+  if (format.has_video && format.has_audio) {
+    return `${quality ?? 'Video'} mit Ton`
+  }
+  if (format.has_video) {
+    const fps = format.fps && format.fps > 30 ? ` · ${format.fps} fps` : ''
+    return `${quality ?? 'Video'}${fps}`
+  }
+  const bitrate = format.bitrate ? ` · ${Math.round(format.bitrate / 1000)} kbit/s` : ''
+  return `Nur Ton${bitrate}`
 }
 
 /**
@@ -240,10 +250,19 @@ export async function resolveYoutube(id) {
     })
   }
 
-  // Best first: sound and picture together, then the taller one.
+  // Highest resolution video first (with mp4 preferred over webm at same resolution), then audio
   streams.sort((a, b) => {
-    const complete = Number(b.hasVideo && b.hasAudio) - Number(a.hasVideo && a.hasAudio)
-    return complete || (b.height ?? 0) - (a.height ?? 0)
+    if (a.hasVideo && b.hasVideo) {
+      if ((b.height ?? 0) !== (a.height ?? 0)) return (b.height ?? 0) - (a.height ?? 0)
+      const aComplete = Number(a.hasAudio)
+      const bComplete = Number(b.hasAudio)
+      if (bComplete !== aComplete) return bComplete - aComplete
+      const aMp4 = a.ext === 'mp4' ? 1 : 0
+      const bMp4 = b.ext === 'mp4' ? 1 : 0
+      return bMp4 - aMp4
+    }
+    if (a.hasVideo !== b.hasVideo) return a.hasVideo ? -1 : 1
+    return (b.bytes ?? 0) - (a.bytes ?? 0)
   })
 
   return {

@@ -32,6 +32,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
+import { extractDirectMedia, isAniworldUrl, isHosterUrl } from '../api/extractors.js'
 
 const RELEASES = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/'
 const ASSET = { win32: 'yt-dlp.exe', darwin: 'yt-dlp_macos', linux: 'yt-dlp_linux' }[process.platform] ?? 'yt-dlp'
@@ -47,6 +48,7 @@ const SERVICES = [
   'youtube', 'soundcloud', 'bandcamp', 'vimeo', 'twitch', 'twitter', 'tiktok', 'instagram',
   'facebook', 'reddit', 'dailymotion', 'bilibili', 'streamable', 'tumblr', 'bluesky', 'loom',
   'pinterest', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
+  'aniworld', 'serienstream', 'filemoon', 'voe', 'vidmoly', 'streamtape', 'vidoza', 'doodstream',
 ]
 
 /* -- choosing formats (the same rules as the bridge) ------------------------ */
@@ -70,12 +72,11 @@ const isProgressive = (f) => f.vcodec && f.vcodec !== 'none' && f.acodec && f.ac
 const isHls = (f) => f.protocol === 'm3u8' || f.protocol === 'm3u8_native'
 const isPlain = (f) => !f.protocol || f.protocol.startsWith('http') || isHls(f)
 
-// H.264 and AAC first: the page copies the streams into an MP4 unchanged,
-// and VP9, AV1 and Opus do not go into one without re-encoding.
+// Higher resolution first, with H.264/MP4 preferred over VP9/AV1 at equal height.
 function scoreVideo(f) {
   const codec = String(f.vcodec ?? '')
   const rank = codec.startsWith('avc') || codec.startsWith('h264') ? 3 : codec.startsWith('av01') ? 1 : 2
-  return rank * 1e9 + heightOf(f) * 1e4 + (f.tbr ?? 0)
+  return heightOf(f) * 1e6 + rank * 1e4 + (f.tbr ?? 0)
 }
 function scoreAudio(f) {
   const codec = String(f.acodec ?? '')
@@ -315,30 +316,45 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
   /* -- the API -------------------------------------------------------------- */
 
-  async function probe(bin, target) {
-    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...cookieArgs(), '--', target])
+  async function probe(bin, target, referer = null) {
+    const extra = referer ? ['--referer', referer] : []
+    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...extra, ...cookieArgs(), '--', target])
   }
 
   async function resolve(body) {
     const target = String(body.url ?? '').trim()
     if (!/^https?:\/\//i.test(target)) return { status: 'error', error: { code: 'error.api.link.invalid' } }
 
-    const tool = await ytdlp()
-    if (!tool) return { status: 'error', error: { code: fetchesTool ? 'error.api.ytdlp.missing' : 'error.api.ytdlp.missing.store' } }
+    let directMedia = null
+    if (isAniworldUrl(target) || isHosterUrl(target)) {
+      try {
+        directMedia = await extractDirectMedia(target)
+      } catch (failure) {
+        log(`Direktextraktion: ${failure?.message ?? failure}`)
+      }
+    }
 
-    let result = await probe(tool.bin, target)
+    const tool = await ytdlp()
+    if (!tool && !directMedia) {
+      return { status: 'error', error: { code: fetchesTool ? 'error.api.ytdlp.missing' : 'error.api.ytdlp.missing.store' } }
+    }
+
+    const queryUrl = directMedia ? directMedia.url : target
+    const referer = directMedia?.referer ?? null
+
+    let result = tool ? await probe(tool.bin, queryUrl, referer) : { code: -1, stdout: '', stderr: '' }
 
     // A sign-in that cannot be read is forgotten, and the video tried without.
-    if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.cookies') {
+    if (tool && result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.cookies') {
       log(`Anmeldung aus ${readSettings().cookies} nicht lesbar: ${detailOf(result.stderr)}`)
       writeSettings({ cookies: null })
-      result = await probe(tool.bin, target)
+      result = await probe(tool.bin, queryUrl, referer)
     }
     // Too old for the site: update once, then try again.
-    if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.outdated' && (await update())) {
-      result = await probe(tool.bin, target)
+    if (tool && result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.outdated' && (await update())) {
+      result = await probe(tool.bin, queryUrl, referer)
     }
-    if (result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.signin') {
+    if (tool && result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.signin') {
       // A sign-in that was chosen and still does not do: ask again next time.
       if (readSettings().cookies) {
         writeSettings({ cookies: null })
@@ -346,10 +362,28 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         const browser = await ask.signIn()
         if (browser) {
           writeSettings({ cookies: browser })
-          result = await probe(tool.bin, target)
+          result = await probe(tool.bin, queryUrl, referer)
         }
       }
     }
+
+    // If yt-dlp probe failed or is not available, but direct extraction succeeded:
+    if (result.code !== 0 && directMedia) {
+      const stem = String(directMedia.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+      return {
+        status: 'tunnel',
+        url: remember({
+          bin: tool?.bin ?? null,
+          url: directMedia.url,
+          referer: directMedia.referer,
+          format: { format_id: 'best' },
+          mime: 'video/mp4',
+          directFetch: !tool?.bin,
+        }),
+        filename: `${stem}.mp4`,
+      }
+    }
+
     if (result.code !== 0) {
       log(`yt-dlp: ${detailOf(result.stderr) || result.code}`)
       return failure(result.stderr)
@@ -366,9 +400,10 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
     const quality = String(body.videoQuality ?? 'max')
     const maxHeight = quality === 'max' ? 0 : Number(quality) || 0
-    const stem = String(info.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+    const titleCandidate = (directMedia?.title && directMedia.title !== 'master') ? directMedia.title : (info.title ?? 'download')
+    const stem = String(titleCandidate).replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
     const mode = String(body.downloadMode ?? 'auto')
-    const job = (format, mime) => remember({ bin: tool.bin, url: target, format, mime })
+    const job = (format, mime) => remember({ bin: tool.bin, url: queryUrl, referer, format, mime })
 
     if (mode === 'audio') {
       const audio = pickAudio(formats)
@@ -438,7 +473,38 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
   }
 
   function tunnel(job, res, cors) {
-    const size = Number(job.format.filesize) || 0
+    if (!job.bin || job.directFetch) {
+      let cancelled = false
+      res.on('close', () => { cancelled = true })
+      fetch(job.url, {
+        headers: {
+          ...(job.referer ? { Referer: job.referer } : {}),
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        },
+      }).then(async (up) => {
+        if (!up.ok) return send(res, 502, { status: 'error', error: { code: 'error.api.fetch.fail' } }, cors)
+        const headers = { 'content-type': job.mime || 'video/mp4', 'cache-control': 'no-store', ...cors }
+        const cl = up.headers.get('content-length')
+        if (cl) headers['content-length'] = cl
+        res.writeHead(200, headers)
+        const reader = up.body?.getReader()
+        if (!reader) return res.end()
+        for (;;) {
+          if (cancelled) { reader.cancel(); break }
+          const { done, value } = await reader.read()
+          if (done) { res.end(); break }
+          if (!res.write(value)) {
+            await new Promise((r) => res.once('drain', r))
+          }
+        }
+      }).catch(() => {
+        if (!res.headersSent) send(res, 502, { status: 'error', error: { code: 'error.api.fetch.fail' } }, cors)
+        else res.destroy()
+      })
+      return
+    }
+
+    const size = Number(job.format?.filesize) || 0
     let cancelled = false
     let child = null
     res.on('close', () => {
@@ -451,11 +517,14 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       // The exact size only for the exact format — a wrong length breaks the
       // transfer in the browser.
       if (exact && size > 0) headers['content-length'] = String(size)
-      else if (job.format.filesize_approx) headers['estimated-content-length'] = String(job.format.filesize_approx)
+      else if (job.format?.filesize_approx) headers['estimated-content-length'] = String(job.format.filesize_approx)
+
+      const refererArgs = job.referer ? ['--referer', job.referer] : []
+      const formatArgs = selector ? ['-f', selector] : []
 
       child = spawn(
         job.bin,
-        ['-f', selector, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...cookieArgs(), '--', job.url],
+        [...formatArgs, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...refererArgs, ...cookieArgs(), '--', job.url],
         { windowsHide: true },
       )
       let sent = 0
@@ -471,14 +540,14 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       })
       res.on('drain', () => child?.stdout.resume())
       child.stderr.on('data', (chunk) => (complaints += chunk))
-      child.on('close', () => {
+      child.on('close', (code) => {
         if (cancelled) return
         if (!started) {
           log(`yt-dlp (Übertragung, ${selector}): ${detailOf(complaints) || 'keine Daten'}`)
           if (exact) return attempt(looseSelector(job.format), false)
           return send(res, 502, failure(complaints), cors)
         }
-        if (exact && size > 0 && sent !== size) res.destroy()
+        if (exact && size > 0 && sent !== size && code !== 0) res.destroy()
         else res.end()
       })
       child.on('error', () => {
@@ -487,7 +556,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       })
     }
 
-    attempt(String(job.format.format_id), true)
+    attempt(String(job.format?.format_id ?? 'best'), true)
   }
 
   function send(res, status, body, cors) {

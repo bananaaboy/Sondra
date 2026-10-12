@@ -37,11 +37,16 @@ export default async function handler(request, response) {
     return
   }
 
-  const headers = {}
+  const headers = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+  }
   // A media host that gets no Range answers 200 with the whole file, which is
   // exactly what must not happen here.
   const range = request.headers.range
   if (range) headers.range = range
+  const referer = claim.ref || claim.referer
+  if (referer) headers.Referer = referer
 
   try {
     let target = await targetFor(claim)

@@ -134,7 +134,7 @@ const isHlsFormat = (format) =>
 function scoreVideo(format) {
   const codec = String(format.vcodec ?? '')
   const container = codec.startsWith('avc') || codec.startsWith('h264') ? 3 : codec.startsWith('av01') ? 1 : 2
-  return container * 1e9 + heightOf(format) * 1e4 + (format.tbr ?? 0)
+  return heightOf(format) * 1e6 + container * 1e4 + (format.tbr ?? 0)
 }
 
 function scoreAudio(format) {
@@ -225,77 +225,157 @@ const SERVICES = [
   'youtube', 'soundcloud', 'bandcamp', 'vimeo', 'twitch', 'twitter', 'tiktok', 'instagram',
   'facebook', 'reddit', 'dailymotion', 'bilibili', 'ok', 'rutube', 'streamable', 'tumblr',
   'bluesky', 'loom', 'pinterest', 'snapchat', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
-  // Embed-Hoster ohne eigenen yt-dlp-Extraktor — über den generischen Fallback
-  'filemoon', 'voe', 'doodstream', 'vidmol', 'streamwish', 'vidguard', 'upstream',
+  'aniworld', 'serienstream', 'filemoon', 'voe', 'vidmoly', 'streamtape', 'vidoza', 'doodstream',
 ]
 
 let versionLabel = 'yt-dlp'
 
-/* -- Benutzerdefinierte Extraktoren (VOE, FileMoon, Vidmoly, DoodStream) ---- */
+/* -- Benutzerdefinierte Extraktoren (AniWorld, VOE, FileMoon, Vidmoly, Streamtape, Vidoza, DoodStream) ---- */
+
+const DEFAULT_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
+
+const ANIWORLD_HOSTS = /^(?:www\.)?(?:aniworld\.to|s\.to|serienstream\.to)$/i
+const VOE_HOSTS =
+  /(?:^|\.)(?:voe\.sx|tube\.sx|jamesbornmain\.com|chaliceguzzlerlandlord\.com|jeremyparticipantanything\.com|voe-network\.net)$/i
+const FILEMOON_HOSTS = /(?:^|\.)(?:filemoon\.(?:sx|to|in|nl|wf)|kerapoxy\.cc|moonmov\.pro)$/i
+const VIDMOLY_HOSTS = /(?:^|\.)(?:vidmoly\.(?:to|me|net))$/i
+const DOOD_HOSTS =
+  /(?:^|\.)(?:dood\.(?:to|so|ws|wf|re|pm|la|li|watch|cx|yt|stream)|doodstream\.com|dsvplay\.com|myvidplay\.com|playmogo\.com|d0o0d\.com|dooood\.com|ds2play\.com)$/i
+const STREAMTAPE_HOSTS = /(?:^|\.)(?:streamtape\.(?:com|net|to)|streamta\.pe|streamadblocker\.com)$/i
+const VIDOZA_HOSTS = /(?:^|\.)(?:vidoza\.net)$/i
+
+function isAniworld(raw) {
+  try { return ANIWORLD_HOSTS.test(new URL(raw).hostname) } catch { return false }
+}
+function isVoe(raw) {
+  try { const u = new URL(raw); return VOE_HOSTS.test(u.hostname) || u.pathname.startsWith('/e/') } catch { return false }
+}
+function isFilemoon(raw) {
+  try { return FILEMOON_HOSTS.test(new URL(raw).hostname) || new URL(raw).hostname.includes('filemoon') } catch { return false }
+}
+function isVidmoly(raw) {
+  try { return VIDMOLY_HOSTS.test(new URL(raw).hostname) || new URL(raw).hostname.includes('vidmoly') } catch { return false }
+}
+function isDood(raw) {
+  try { const h = new URL(raw).hostname; return DOOD_HOSTS.test(h) || h.includes('dood') || h.includes('dsvplay') || h.includes('playmogo') } catch { return false }
+}
+function isStreamtape(raw) {
+  try { return STREAMTAPE_HOSTS.test(new URL(raw).hostname) || new URL(raw).hostname.includes('streamtape') } catch { return false }
+}
+function isVidoza(raw) {
+  try { return VIDOZA_HOSTS.test(new URL(raw).hostname) || new URL(raw).hostname.includes('vidoza') } catch { return false }
+}
+
+const PACKER_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+function baseDecode(token, radix) {
+  let value = 0
+  for (let i = 0; i < token.length; i++) {
+    const digit = PACKER_ALPHABET.indexOf(token[i])
+    if (digit === -1 || digit >= radix) return null
+    value = value * radix + digit
+  }
+  return value
+}
+function unpackPackedJs(source) {
+  if (!source || !source.includes('eval(function(p,a,c,k,e,d)')) return null
+  const match = source.match(
+    /eval\(function\(p,a,c,k,e,d\)\{[\s\S]*?\}\((['"][\s\S]*?['"]),\s*(\d+),\s*(\d+),\s*(['"][\s\S]*?['"])\.split\(['"]\|['"]\)/,
+  )
+  if (!match) return null
+  let payload = match[1]
+  if (payload.startsWith("'") && payload.endsWith("'")) payload = payload.slice(1, -1).replace(/\\'/g, "'").replace(/\\\\/g, '\\')
+  else if (payload.startsWith('"') && payload.endsWith('"')) payload = payload.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+  const radix = Number(match[2])
+  const count = Number(match[3])
+  let keywordsStr = match[4]
+  if (keywordsStr.startsWith("'") && keywordsStr.endsWith("'")) keywordsStr = keywordsStr.slice(1, -1).replace(/\\'/g, "'").replace(/\\\\/g, '\\')
+  else if (keywordsStr.startsWith('"') && keywordsStr.endsWith('"')) keywordsStr = keywordsStr.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+  const keywords = keywordsStr.split('|')
+  while (keywords.length < count) keywords.push('')
+  return payload.replace(/\b\w+\b/g, (token) => {
+    const index = baseDecode(token, radix)
+    return (index !== null && index < keywords.length && keywords[index] !== '') ? keywords[index] : token
+  })
+}
 
 async function extractVoe(url) {
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'User-Agent': DEFAULT_UA,
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
+      redirect: 'follow',
     })
     if (!res.ok) return null
+    const finalUrl = res.url || url
     const html = await res.text()
 
-    // VOE-Klone setzen das verschleierte Feld je nach Vorlage mit einfachen
-    // oder doppelten Anführungszeichen und weiteren script-Attributen ab.
-    // Nicht auf eine einzige, exakte HTML-Schreibweise festlegen.
+    const cloneRedirect = html.match(/window\.location\.href\s*=\s*['"](https?:\/\/[^'"]+)['"]/i)
+    if (cloneRedirect && cloneRedirect[1] !== url && cloneRedirect[1] !== finalUrl) {
+      return extractVoe(cloneRedirect[1])
+    }
+
     const scripts = html.matchAll(/<script\b[^>]*\btype\s*=\s*(['"])application\/json\1[^>]*>([\s\S]*?)<\/script>/gi)
-    let str = ''
+    let b64Payload = ''
     for (const script of scripts) {
       try {
-        const value = JSON.parse(script[2].trim())
-        if (Array.isArray(value) && typeof value[0] === 'string') {
-          str = value[0]
+        const val = JSON.parse(script[2].trim())
+        if (Array.isArray(val) && typeof val[0] === 'string' && val[0].length > 20) {
+          b64Payload = val[0]
           break
         }
-      } catch {
-        // Ein anderes JSON-Datenfeld auf derselben Seite ist kein Stream.
+      } catch {}
+    }
+
+    if (b64Payload) {
+      const rot13 = (s) =>
+        s.replace(/[a-zA-Z]/g, (c) => {
+          const code = c.charCodeAt(0)
+          const base = code <= 90 ? 65 : 97
+          return String.fromCharCode(((code - base + 13) % 26) + base)
+        })
+      const removeJunk = (s) => {
+        let t = s
+        for (const pat of ['@$', '^^', '~@', '%?', '*~', '!!', '#&']) t = t.replaceAll(pat, '')
+        return t
+      }
+      const shiftChars = (s, shift) => Array.from(s).map((c) => String.fromCharCode(c.charCodeAt(0) - shift)).join('')
+
+      const s1 = rot13(b64Payload)
+      const s2 = removeJunk(s1)
+      const s3 = Buffer.from(s2, 'base64').toString('latin1')
+      const s4 = shiftChars(s3, 3)
+      const s5 = s4.split('').reverse().join('')
+      const s6 = Buffer.from(s5, 'base64').toString('utf8')
+      const data = JSON.parse(s6)
+      const streamUrl = data.source || data.direct_access_url
+      if (streamUrl) {
+        return {
+          title: data.title || 'VOE Video',
+          url: streamUrl,
+          referer: finalUrl,
+          isHls: streamUrl.includes('.m3u8'),
+        }
       }
     }
-    if (!str) return null
 
-    const rot13 = (s) =>
-      s.replace(/[a-zA-Z]/g, (c) => {
-        const code = c.charCodeAt(0)
-        const base = code <= 90 ? 65 : 97
-        return String.fromCharCode(((code - base + 13) % 26) + base)
-      })
-
-    const replacePatterns = (s) => {
-      let t = s
-      for (const pat of ['@$', '^^', '~@', '%?', '*~', '!!', '#&']) {
-        t = t.replaceAll(pat, '')
-      }
-      return t
+    const hlsMatch = html.match(/['"]hls['"]\s*:\s*['"]([A-Za-z0-9+/=]+)['"]/i)
+    if (hlsMatch) {
+      try {
+        const decoded = Buffer.from(hlsMatch[1], 'base64').toString('utf8')
+        if (decoded.startsWith('http')) {
+          return { title: 'VOE Video', url: decoded, referer: finalUrl, isHls: decoded.includes('.m3u8') }
+        }
+      } catch {}
     }
 
-    const shiftChars = (s, shift) => Array.from(s).map((c) => String.fromCharCode(c.charCodeAt(0) - shift)).join('')
-
-    const s1 = rot13(str)
-    const s2 = replacePatterns(s1)
-    const s3 = Buffer.from(s2, 'base64').toString('utf-8')
-    const s4 = shiftChars(s3, 3)
-    const s5 = s4.split('').reverse().join('')
-    const s6 = Buffer.from(s5, 'base64').toString('utf-8')
-
-    const data = JSON.parse(s6)
-    const streamUrl = data.source || data.direct_access_url
-    if (!streamUrl) return null
-
-    return {
-      title: data.title || 'VOE Video',
-      url: streamUrl,
-      referer: url,
+    const directSrcMatch = html.match(/(?:sources|mp4|source)\s*:\s*['"](https?:\/\/[^'"]+\.(?:m3u8|mp4)[^'"]*)['"]/i)
+    if (directSrcMatch) {
+      return { title: 'VOE Video', url: directSrcMatch[1], referer: finalUrl, isHls: directSrcMatch[1].includes('.m3u8') }
     }
+    return null
   } catch {
     return null
   }
@@ -303,43 +383,62 @@ async function extractVoe(url) {
 
 async function extractFileMoon(url) {
   try {
-    const parsed = new URL(url)
-    const parts = parsed.pathname.replace(/\/$/, '').split('/')
-    const code = parts[parts.length - 1]
-    if (!code || code === 'e' || code === 'd') return null
-
-    const apiUrl = `${parsed.protocol}//${parsed.host}/api/videos/${code}`
-    const res = await fetch(apiUrl, {
-      headers: {
-        Referer: url,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
+    const res = await fetch(url, {
+      headers: { Referer: url, 'User-Agent': DEFAULT_UA },
+      redirect: 'follow',
     })
     if (!res.ok) return null
-    const data = await res.json()
-    const playback = data?.playback
-    if (!playback?.key_parts || !playback?.iv || !playback?.payload) return null
+    const finalUrl = res.url || url
+    const html = await res.text()
 
-    const key = Buffer.concat(playback.key_parts.map((p) => Buffer.from(p, 'base64url')))
-    const iv = Buffer.from(playback.iv, 'base64url')
-    const payload = Buffer.from(playback.payload, 'base64url')
+    const parsed = new URL(finalUrl)
+    const parts = parsed.pathname.replace(/\/$/, '').split('/')
+    const code = parts[parts.length - 1]
 
-    const tag = payload.subarray(payload.length - 16)
-    const ciphertext = payload.subarray(0, payload.length - 16)
-
-    const decipher = createDecipheriv('aes-256-gcm', key, iv)
-    decipher.setAuthTag(tag)
-    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-    const parsedPlayback = JSON.parse(decrypted.toString('utf-8'))
-
-    const hls = parsedPlayback.sources?.find((s) => s.mime_type?.includes('mpegurl')) || parsedPlayback.sources?.[0]
-    if (!hls?.url) return null
-
-    return {
-      title: data.title || 'FileMoon Video',
-      url: hls.url,
-      referer: url,
+    if (code && code !== 'e' && code !== 'd') {
+      const apiUrl = `${parsed.protocol}//${parsed.host}/api/videos/${code}`
+      try {
+        const apiRes = await fetch(apiUrl, {
+          headers: { Referer: finalUrl, 'User-Agent': DEFAULT_UA },
+        })
+        if (apiRes.ok) {
+          const data = await apiRes.json()
+          const playback = data?.playback
+          if (playback?.key_parts && playback?.iv && playback?.payload) {
+            const key = Buffer.concat(playback.key_parts.map((p) => Buffer.from(p, 'base64url')))
+            const iv = Buffer.from(playback.iv, 'base64url')
+            const payload = Buffer.from(playback.payload, 'base64url')
+            const tag = payload.subarray(payload.length - 16)
+            const ciphertext = payload.subarray(0, payload.length - 16)
+            const decipher = createDecipheriv('aes-256-gcm', key, iv)
+            decipher.setAuthTag(tag)
+            const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+            const parsedPlayback = JSON.parse(decrypted.toString('utf8'))
+            const src = parsedPlayback.sources?.find((s) => s.mime_type?.includes('mpegurl')) || parsedPlayback.sources?.[0]
+            if (src?.url) {
+              return { title: data.title || 'FileMoon Video', url: src.url, referer: finalUrl, isHls: src.url.includes('.m3u8') }
+            }
+          }
+        }
+      } catch {}
     }
+
+    if (html.includes('eval(function(p,a,c,k,e,d)')) {
+      const unpacked = unpackPackedJs(html)
+      if (unpacked) {
+        const m3u8Match = unpacked.match(/['"](https?:\/\/[^'"]+?\.m3u8[^'"]*)['"]/) || unpacked.match(/file\s*:\s*['"]([^'"]+)['"]/)
+        if (m3u8Match) {
+          const streamUrl = new URL(m3u8Match[1], finalUrl).href
+          return { title: 'FileMoon Video', url: streamUrl, referer: finalUrl, isHls: streamUrl.includes('.m3u8') }
+        }
+      }
+    }
+
+    const directMatch = html.match(/['"](https?:\/\/[^'"]+?\.(?:m3u8|mp4)[^'"]*)['"]/)
+    if (directMatch) {
+      return { title: 'FileMoon Video', url: directMatch[1], referer: finalUrl, isHls: directMatch[1].includes('.m3u8') }
+    }
+    return null
   } catch {
     return null
   }
@@ -348,32 +447,68 @@ async function extractFileMoon(url) {
 async function extractVidmoly(url) {
   try {
     const parsed = new URL(url)
-    const embedIdMatch =
-      parsed.pathname.match(/\/embed-([a-zA-Z0-9]+)\.html/) || parsed.pathname.match(/\/([a-zA-Z0-9]+)$/)
+    const embedIdMatch = parsed.pathname.match(/\/embed-([a-zA-Z0-9]+)\.html/) || parsed.pathname.match(/\/([a-zA-Z0-9]+)$/)
     const embedId = embedIdMatch ? embedIdMatch[1] : ''
-
     const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'User-Agent': DEFAULT_UA,
       Referer: url,
       Cookie: embedId ? `cf_turnstile_demo_pass_${embedId}=1` : '',
     }
-
-    const res = await fetch(url, { headers })
+    const res = await fetch(url, { headers, redirect: 'follow' })
     if (!res.ok) return null
+    const finalUrl = res.url || url
     const html = await res.text()
-
     const match = html.match(/sources\s*:\s*\[\s*\{\s*file\s*:\s*['"]([^'"]+)/)
     if (!match) return null
-    const streamUrl = new URL(match[1], url).href
-
+    const streamUrl = new URL(match[1], finalUrl).href
     const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
     const title = titleMatch ? titleMatch[1].replace(/ - Vidmoly.*$/i, '').trim() : 'Vidmoly Video'
+    return { title, url: streamUrl, referer: finalUrl, isHls: streamUrl.includes('.m3u8') }
+  } catch {
+    return null
+  }
+}
 
-    return {
-      title,
-      url: streamUrl,
-      referer: url,
+async function extractStreamtape(url) {
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
+    if (!res.ok) return null
+    const finalUrl = res.url || url
+    const html = await res.text()
+    const tokenMatch = html.match(/document\.getElementById\(['"](?:robotlink|norobotlink)['"]\)\.innerHTML\s*=\s*(.+?);/i)
+    if (!tokenMatch) return null
+    const parts = tokenMatch[1].matchAll(/['"]([^'"]+)['"]|\+.*substring\((\d+)\)/g)
+    let streamUrl = ''
+    for (const p of parts) {
+      if (p[1]) streamUrl += p[1]
     }
+    const subMatch = tokenMatch[1].match(/\+.*substring\((\d+)\)/)
+    if (subMatch) {
+      const offset = Number(subMatch[1])
+      const targetStr = html.match(new RegExp(`id=['"](?:norobotlink|robotlink)['"][^>]*>([^<]+)<`))
+      if (targetStr && targetStr[1]) streamUrl += targetStr[1].substring(offset)
+    }
+    if (!streamUrl.startsWith('http')) streamUrl = `https:${streamUrl}`
+    if (!streamUrl.includes('&stream=1')) streamUrl += '&stream=1'
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
+    const title = titleMatch ? titleMatch[1].replace(/ - Streamtape.*$/i, '').trim() : 'Streamtape Video'
+    return { title, url: streamUrl, referer: finalUrl, isHls: false }
+  } catch {
+    return null
+  }
+}
+
+async function extractVidoza(url) {
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
+    if (!res.ok) return null
+    const finalUrl = res.url || url
+    const html = await res.text()
+    const srcMatch = html.match(/<source\s+[^>]*src=['"]([^'"]+\.mp4[^'"]*)['"]/i) || html.match(/['"](https?:\/\/[^'"]+\.mp4[^'"]*)['"]/)
+    if (!srcMatch) return null
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
+    const title = titleMatch ? titleMatch[1].replace(/ - Vidoza.*$/i, '').trim() : 'Vidoza Video'
+    return { title, url: srcMatch[1], referer: finalUrl, isHls: false }
   } catch {
     return null
   }
@@ -381,44 +516,98 @@ async function extractVidmoly(url) {
 
 async function extractDoodStream(url) {
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Referer: url,
-      },
-    })
+    const res = await fetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
     if (!res.ok) return null
+    const finalUrl = res.url || url
     const html = await res.text()
-
     const passMatch = html.match(/\/pass_md5\/[^'"<>\s]+/)
     if (!passMatch) return null
-
-    const baseOrigin = new URL(url).origin
+    const baseOrigin = new URL(finalUrl).origin
     const passUrl = `${baseOrigin}${passMatch[0]}`
-
-    const passRes = await fetch(passUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Referer: url,
-      },
-    })
+    const passRes = await fetch(passUrl, { headers: { 'User-Agent': DEFAULT_UA, Referer: finalUrl } })
     if (!passRes.ok) return null
     const baseStream = (await passRes.text()).trim()
     if (!baseStream || baseStream.includes('RELOAD')) return null
-
-    const randomChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
     let token = ''
-    for (let i = 0; i < 10; i++) token += randomChars.charAt(Math.floor(Math.random() * randomChars.length))
-    const finalUrl = `${baseStream}${token}?token=${passMatch[0].split('/').pop()}&expiry=${Date.now()}`
-
+    for (let i = 0; i < 10; i++) token += chars.charAt(Math.floor(Math.random() * chars.length))
+    const finalStreamUrl = `${baseStream}${token}?token=${passMatch[0].split('/').pop()}&expiry=${Date.now()}`
     const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
     const title = titleMatch ? titleMatch[1].replace(/ - Dood.*$/i, '').trim() : 'DoodStream Video'
+    return { title, url: finalStreamUrl, referer: finalUrl, isHls: false }
+  } catch {
+    return null
+  }
+}
 
-    return {
-      title,
-      url: finalUrl,
-      referer: url,
+async function extractAniworld(url) {
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': DEFAULT_UA, Accept: 'text/html,*/*' }, redirect: 'follow' })
+    if (!res.ok) return null
+    const finalUrl = res.url || url
+    const html = await res.text()
+
+    const germanTitleMatch = html.match(/<span\s+class=["']episodeGermanTitle["'][^>]*>([^<]+)<\/span>/i)
+    const englishTitleMatch = html.match(/<small\s+class=["']episodeEnglishTitle["'][^>]*>([^<]+)<\/small>/i)
+    const seriesTitleMatch = html.match(/<h1[^>]*>.*?<span[^>]*>([^<]+)<\/span>/i) || html.match(/data-series-title=["']([^"']+)["']/i)
+    const seriesTitle = (seriesTitleMatch ? seriesTitleMatch[1] : '').trim()
+    const episodeTitle = (germanTitleMatch ? germanTitleMatch[1] : englishTitleMatch ? englishTitleMatch[1] : '').trim()
+
+    const seasonMatch = finalUrl.match(/staffel-(\d+)/i)
+    const episodeMatch = finalUrl.match(/episode-(\d+)/i)
+    const seasonNumber = seasonMatch ? Number(seasonMatch[1]) : 1
+    const episodeNumber = episodeMatch ? Number(episodeMatch[1]) : 1
+
+    let compoundTitle = seriesTitle
+      ? `${seriesTitle} - S${String(seasonNumber).padStart(2, '0')}E${String(episodeNumber).padStart(2, '0')}${episodeTitle ? ` - ${episodeTitle}` : ''}`
+      : episodeTitle || 'AniWorld Episode'
+
+    const hosterRegex = /<li\s+[^>]*?data-lang-key=["'](\d+)["'][^>]*?data-link-target=["'](\/redirect\/\d+)["'][^>]*>[\s\S]*?<h4[^>]*>([^<]+)<\/h4>/gi
+    const hosters = []
+    let hMatch
+    while ((hMatch = hosterRegex.exec(html)) !== null) {
+      hosters.push({ langKey: Number(hMatch[1]), redirectUrl: new URL(hMatch[2], finalUrl).href, hosterName: hMatch[3].trim().toLowerCase() })
     }
+
+    if (hosters.length === 0) {
+      const fallbackRegex = /<li\s+[^>]*?data-link-target=["'](\/redirect\/\d+)["'][^>]*>[\s\S]*?<h4[^>]*>([^<]+)<\/h4>/gi
+      while ((hMatch = fallbackRegex.exec(html)) !== null) {
+        hosters.push({ langKey: 1, redirectUrl: new URL(hMatch[1], finalUrl).href, hosterName: hMatch[2].trim().toLowerCase() })
+      }
+    }
+
+    const priority = ['voe', 'filemoon', 'vidmoly', 'streamtape', 'vidoza', 'doodstream']
+    hosters.sort((a, b) => {
+      const langRankA = a.langKey === 1 ? 3 : a.langKey === 3 ? 2 : 1
+      const langRankB = b.langKey === 1 ? 3 : b.langKey === 3 ? 2 : 1
+      if (langRankA !== langRankB) return langRankB - langRankA
+      const prioA = priority.indexOf(a.hosterName) !== -1 ? priority.indexOf(a.hosterName) : 999
+      const prioB = priority.indexOf(b.hosterName) !== -1 ? priority.indexOf(b.hosterName) : 999
+      return prioA - prioB
+    })
+
+    for (const h of hosters) {
+      try {
+        const redirRes = await fetch(h.redirectUrl, {
+          headers: { 'User-Agent': DEFAULT_UA, Referer: finalUrl },
+          redirect: 'manual',
+        })
+        const location = redirRes.headers.get('location')
+        if (location) {
+          const direct = await extractDirectStream(location)
+          if (direct) {
+            return {
+              title: compoundTitle,
+              url: direct.url,
+              referer: direct.referer,
+              isHls: direct.isHls,
+              hoster: h.hosterName,
+            }
+          }
+        }
+      } catch {}
+    }
+    return null
   } catch {
     return null
   }
@@ -426,46 +615,13 @@ async function extractDoodStream(url) {
 
 /** Erkennt den Hoster und extrahiert die direkte Stream-Adresse vor dem yt-dlp-Aufruf. */
 async function extractDirectStream(rawUrl) {
-  let host = ''
-  try {
-    host = (new URL(rawUrl).hostname || '').toLowerCase()
-  } catch {
-    return null
-  }
-
-  // 1. FileMoon
-  if (host.includes('filemoon')) {
-    const res = await extractFileMoon(rawUrl)
-    if (res) return res
-  }
-
-  // 2. Vidmoly
-  if (host.includes('vidmoly')) {
-    const res = await extractVidmoly(rawUrl)
-    if (res) return res
-  }
-
-  // 3. DoodStream
-  if (host.includes('dood') || host.includes('myvidplay') || host.includes('dsvplay') || host.includes('playmogo')) {
-    const res = await extractDoodStream(rawUrl)
-    if (res) return res
-  }
-
-  // 4. VOE (voe.sx, jamesbornmain.com, chaliceguzzlerlandlord.com usw.)
-  if (
-    host.includes('voe.') ||
-    host.includes('jamesbornmain') ||
-    host.includes('chaliceguzzler') ||
-    host === 'jeremyparticipantanything.com' ||
-    host.endsWith('.jeremyparticipantanything.com') ||
-    host.includes('tube.sx') ||
-    rawUrl.includes('/e/')
-  ) {
-    const res = await extractVoe(rawUrl)
-    if (res) return res
-  }
-
-  // Universeller Fallback auf VOE-Erkennung
+  if (isAniworld(rawUrl)) return extractAniworld(rawUrl)
+  if (isFilemoon(rawUrl)) return extractFileMoon(rawUrl)
+  if (isVidmoly(rawUrl)) return extractVidmoly(rawUrl)
+  if (isStreamtape(rawUrl)) return extractStreamtape(rawUrl)
+  if (isVidoza(rawUrl)) return extractVidoza(rawUrl)
+  if (isDood(rawUrl)) return extractDoodStream(rawUrl)
+  if (isVoe(rawUrl)) return extractVoe(rawUrl)
   return extractVoe(rawUrl)
 }
 
@@ -624,14 +780,13 @@ function tunnel(job, req, res) {
     process.stderr.write(chunk)
   })
 
-  child.on('close', () => {
+  child.on('close', (code) => {
     if (!started) {
       // Nie ein Byte gesehen: das lässt sich noch sauber als Fehler sagen.
       return json(res, 502, { status: 'error', error: { code: errorCode(complaints) } })
     }
-    // Zu wenig Bytes bei angekündigter Länge: die Verbindung abreißen lassen,
-    // damit der Browser das als Fehler sieht statt als kurze Datei.
-    if (size > 0 && sent !== size) res.destroy()
+    // Zu wenig Bytes bei angekündigter Länge und fehlgeschlagenem Prozess: Verbindung abreißen lassen
+    if (size > 0 && sent !== size && code !== 0) res.destroy()
     else res.end()
   })
   child.on('error', () => {
