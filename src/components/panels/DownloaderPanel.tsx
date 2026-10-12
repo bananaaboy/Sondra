@@ -25,6 +25,7 @@ import {
   downloadStream,
   filenameFor,
   resolveViaService,
+  type StealthMode,
   type StudioResult,
   type StudioStream,
 } from '../../lib/studio'
@@ -133,9 +134,9 @@ export function DownloaderPanel() {
   const log = useSession((state) => state.log)
 
   const [url, setUrl] = useState('')
-  const [stealthNames, setStealthNames] = useState(false)
-  const stealthNamesRef = useRef(stealthNames)
-  stealthNamesRef.current = stealthNames
+  const [stealthMode, setStealthMode] = useState<StealthMode>('off')
+  const stealthModeRef = useRef<StealthMode>(stealthMode)
+  stealthModeRef.current = stealthMode
 
   const [looking, setLooking] = useState(false)
   const [result, setResult] = useState<StudioResult | null>(null)
@@ -254,7 +255,7 @@ export function DownloaderPanel() {
         signal: controller.signal,
         onProgress: setProgress,
       })
-      const name = filenameFor(result, stream, { anonymize: stealthNames })
+      const name = filenameFor(result, stream, { mode: stealthMode })
       addAsset({
         name,
         bytes,
@@ -312,7 +313,7 @@ export function DownloaderPanel() {
           )
         },
       })
-      const name = filenameFor(entry.result, stream, { anonymize: stealthNamesRef.current })
+      const name = filenameFor(entry.result, stream, { mode: stealthModeRef.current })
       addAsset({
         name,
         bytes,
@@ -415,20 +416,30 @@ export function DownloaderPanel() {
             </Button>
           </div>
 
-          <div className="mt-[4px] flex flex-wrap items-center justify-between gap-[12px]">
-            <label className="flex cursor-pointer items-center gap-[8px] text-small text-ink select-none">
-              <input
-                type="checkbox"
-                checked={stealthNames}
-                onChange={(e) => setStealthNames(e.target.checked)}
-                className="h-[15px] w-[15px] rounded border-line text-ink accent-ink focus:ring-ink"
-              />
-              <span className="flex items-center gap-[6px]">
-                <span aria-hidden>🔒</span>
-                <span className="font-medium">Dateinamen verschleiern</span>
-                <span className="text-muted">(anonyme Hash-Namen wie media_7a8b9c.mp4)</span>
-              </span>
-            </label>
+          <div className="mt-[6px] flex flex-col gap-[6px]">
+            <div className="flex flex-wrap items-center gap-[10px]">
+              <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
+                Dateinamen-Verschleierung:
+              </label>
+              <select
+                id="stealth-mode-select"
+                value={stealthMode}
+                onChange={(e) => setStealthMode(e.target.value as StealthMode)}
+                className="rounded-nav border border-line bg-canvas px-[10px] py-[4px] text-small text-ink focus:border-ink focus:outline-none"
+              >
+                <option value="off">Aus (Originaltitel)</option>
+                <option value="standard">Standard (media_xxx.mp4)</option>
+                <option value="full_security">Maximale Sicherheit (reiner Hash-Code)</option>
+                <option value="teams_office">Unauffällig (Teams & Office Dokument)</option>
+              </select>
+            </div>
+            {stealthMode !== 'off' ? (
+              <p className="text-small text-muted">
+                {stealthMode === 'standard' && 'Muster: media_7a8b9c.mp4 — neutraler Standardname'}
+                {stealthMode === 'full_security' && 'Muster: 7a8b9c0d1e2f.mp4 — minimaler Code ohne Wörter oder Zeitbezug'}
+                {stealthMode === 'teams_office' && 'Muster: Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4 — wirkt wie ein regulärer Office-Download'}
+              </p>
+            ) : null}
           </div>
         </form>
 
@@ -479,11 +490,11 @@ export function DownloaderPanel() {
             ) : null}
             <div className="min-w-0 flex-1">
               <p className="truncate text-subheading text-ink">
-                {stealthNames
-                  ? `🔒 [Verschleiert] ${filenameFor(result, result.streams[0], { anonymize: true })}`
+                {stealthMode !== 'off'
+                  ? `[Verschleiert: ${filenameFor(result, result.streams[0], { mode: stealthMode })}]`
                   : result.title}
               </p>
-              {!stealthNames ? (
+              {stealthMode === 'off' ? (
                 <p className="value mt-[2px] text-small text-muted">
                   {[result.author, result.durationSeconds ? formatDuration(result.durationSeconds) : null]
                     .filter(Boolean)
@@ -491,7 +502,7 @@ export function DownloaderPanel() {
                 </p>
               ) : (
                 <p className="mt-[2px] text-small text-muted">
-                  Titel und Metadaten werden im Dateinamen anonymisiert
+                  Anonymisierter Dateiname: {filenameFor(result, result.streams[0], { mode: stealthMode })}
                 </p>
               )}
               {/* Which route answered. Not a detail: it decides the resolution
@@ -577,7 +588,15 @@ export function DownloaderPanel() {
                 {batchEntries.filter((e) => e.status === 'error').length > 0
                   ? ` · ${batchEntries.filter((e) => e.status === 'error').length} fehlgeschlagen`
                   : ''}
-                {stealthNames ? ' · 🔒 Anonyme Dateinamen aktiv' : ''}
+                {stealthMode !== 'off'
+                  ? ` · Verschleierung aktiv (${
+                      stealthMode === 'standard'
+                        ? 'Standard'
+                        : stealthMode === 'full_security'
+                        ? 'Maximale Sicherheit'
+                        : 'Teams / Office'
+                    })`
+                  : ''}
               </p>
             </div>
             <div className="flex items-center gap-[8px]">
@@ -622,14 +641,14 @@ export function DownloaderPanel() {
                     <div className="min-w-0 flex-1">
                       {entry.result ? (
                         <p className="truncate text-body font-medium text-ink">
-                          {stealthNames
-                            ? `🔒 ${filenameFor(entry.result, stream || entry.result.streams[0], { anonymize: true })}`
+                          {stealthMode !== 'off'
+                            ? filenameFor(entry.result, stream || entry.result.streams[0], { mode: stealthMode })
                             : entry.result.title}
                         </p>
                       ) : (
                         <p className="truncate text-small font-mono text-muted">{entry.url}</p>
                       )}
-                      {entry.result && !stealthNames ? (
+                      {entry.result && stealthMode === 'off' ? (
                         <p className="value text-small text-muted">
                           {[entry.result.author, entry.result.durationSeconds ? formatDuration(entry.result.durationSeconds) : null]
                             .filter(Boolean)
@@ -686,7 +705,7 @@ export function DownloaderPanel() {
 
                       {entry.status === 'done' && entry.taken ? (
                         <div className="flex items-center gap-[8px]">
-                          <span className="value text-small font-medium text-ink">✓ In der Sitzung</span>
+                          <span className="value text-small font-medium text-ink">In der Sitzung</span>
                           <Button
                             size="sm"
                             variant="quiet"

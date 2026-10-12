@@ -410,26 +410,69 @@ export async function downloadStream(
   return whole
 }
 
+export type StealthMode = 'off' | 'standard' | 'full_security' | 'teams_office'
+
 /** A filename that survives every filesystem, from a video title. */
 export function filenameFor(
   result: StudioResult,
   stream: StudioStream,
-  options: { anonymize?: boolean } = {},
+  options: { mode?: StealthMode; anonymize?: boolean } = {},
 ): string {
-  if (options.anonymize) {
+  const mode = options.mode ?? (options.anonymize ? 'standard' : 'off')
+  const ext = (stream.ext || 'mp4').toLowerCase()
+
+  if (mode !== 'off') {
     let hash = 0
     const str = `${result.title}:${stream.id}`
     for (let i = 0; i < str.length; i++) {
       hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0
     }
-    const hex = Math.abs(hash).toString(16).padStart(8, '0')
-    return `media_${hex}.${stream.ext || 'mp4'}`
+    const posHash = Math.abs(hash)
+    const hex8 = posHash.toString(16).padStart(8, '0')
+
+    if (mode === 'standard') {
+      return `media_${hex8}.${ext}`
+    }
+
+    if (mode === 'full_security') {
+      const secondHash = Math.abs((posHash * 1664525 + 1013904223) | 0).toString(16).padStart(8, '0')
+      const fullCode = `${hex8}${secondHash}`.slice(0, 12)
+      return `${fullCode}.${ext}`
+    }
+
+    if (mode === 'teams_office') {
+      const today = new Date().toISOString().slice(0, 10)
+      const code = hex8.slice(0, 4).toUpperCase()
+      const isAudio = ext === 'mp3' || ext === 'wav' || ext === 'm4a' || ext === 'flac' || ext === 'aac' || ext === 'ogg'
+
+      const videoTemplates = [
+        `Teams_Meeting_Aufzeichnung_${today}_${code}`,
+        `Meeting_Recording_${today}_${code}`,
+        `Teams_Projektbesprechung_${today}_${code}`,
+        `Schulung_Aufzeichnung_${today}_${code}`,
+        `Teams_Review_Meeting_${today}_${code}`,
+        `Besprechung_Q4_Aufzeichnung_${today}_${code}`,
+      ]
+
+      const audioTemplates = [
+        `Teams_Meeting_Audio_${today}_${code}`,
+        `Besprechungsnotiz_Audio_${today}_${code}`,
+        `Teams_Call_Aufzeichnung_${today}_${code}`,
+        `Diktat_Audioexport_${today}_${code}`,
+        `Teams_Voice_Recording_${today}_${code}`,
+      ]
+
+      const templates = isAudio ? audioTemplates : videoTemplates
+      const picked = templates[posHash % templates.length]
+      return `${picked}.${ext}`
+    }
   }
+
   const stem =
     result.title
       .replace(/[\\/:*?"<>|]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 80) || 'download'
-  return stem.toLowerCase().endsWith(`.${stream.ext}`) ? stem : `${stem}.${stream.ext}`
+  return stem.toLowerCase().endsWith(`.${ext}`) ? stem : `${stem}.${ext}`
 }
