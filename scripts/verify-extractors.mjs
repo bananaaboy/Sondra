@@ -299,6 +299,6 @@ if (failures > 0) {
   console.error(`\n❌ ${failures} Test(s) fehlgeschlagen!`)
   process.exit(1)
 } else {
-  console.log('\n✅ Alle Extractor-Tests bestanden! VOE, FileMoon, Vidmoly, Dood, Streamtape, Vidoza und AniWorld funktionieren einwandfrei.')
+  console.log('\nOK: Alle Extractor-Tests bestanden! VOE, FileMoon, Vidmoly, Dood, Streamtape, Vidoza und AniWorld funktionieren einwandfrei.')
   process.exit(0)
 }

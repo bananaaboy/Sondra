@@ -155,6 +155,41 @@ export async function startServer({ root, port, onError }) {
       try {
         if (url.pathname === '/api/resolve') await resolveFn(request, response)
         else if (url.pathname === '/api/stream') await streamFn(request, response)
+        else if (url.pathname === '/api/adapters') {
+          try {
+            const forwardRes = await fetch('http://127.0.0.1:9000/adapters', {
+              method: request.method,
+              headers: { 'content-type': 'application/json' },
+              body: request.method === 'POST' ? request.body : undefined,
+            })
+            if (!forwardRes.ok) throw new Error(`downloader status ${forwardRes.status}`)
+            const data = await forwardRes.json()
+            response.status(forwardRes.status).json(data)
+          } catch {
+            const nets = (await import('node:os')).default.networkInterfaces()
+            const list = []
+            for (const [name, addrs] of Object.entries(nets)) {
+              for (const a of addrs || []) {
+                if (a.family === 'IPv4' && !a.internal) list.push({ id: a.address, name: `${name} (${a.address})`, address: a.address })
+              }
+            }
+            if (request.method === 'POST') {
+              let bodyObj = {}
+              try {
+                bodyObj = request.body ? JSON.parse(request.body) : {}
+              } catch {}
+              response.status(200).json({ ok: true, selected: bodyObj.bindAddress || 'default' })
+            } else {
+              response.status(200).json({
+                adapters: [
+                  { id: 'default', name: 'Automatisch (Windows-Standard)', address: null },
+                  ...list,
+                ],
+                selected: 'default',
+              })
+            }
+          }
+        }
         else response.status(404).json({ error: 'route' })
       } catch (failure) {
         onError?.(`${url.pathname}: ${failure?.stack ?? failure}`)

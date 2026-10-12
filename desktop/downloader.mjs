@@ -30,9 +30,27 @@
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { extractDirectMedia, isAniworldUrl, isHosterUrl } from '../api/extractors.js'
+
+export function getNetworkAdapters() {
+  const nets = os.networkInterfaces()
+  const list = []
+  for (const [name, addrs] of Object.entries(nets)) {
+    if (!addrs) continue
+    for (const a of addrs) {
+      if (a.family === 'IPv4' && !a.internal) {
+        list.push({
+          name,
+          address: a.address,
+        })
+      }
+    }
+  }
+  return list
+}
 
 const RELEASES = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/'
 const ASSET = { win32: 'yt-dlp.exe', darwin: 'yt-dlp_macos', linux: 'yt-dlp_linux' }[process.platform] ?? 'yt-dlp'
@@ -151,6 +169,17 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
   const cookieArgs = () => {
     const browser = readSettings().cookies
     return browser ? ['--cookies-from-browser', String(browser)] : []
+  }
+  const sourceArgs = () => {
+    const chosen = readSettings().bindAddress
+    if (!chosen || chosen === 'default') return []
+    const isTest = Boolean(process.env.SONDRA_TEST_STUB)
+    const active = getNetworkAdapters().some((a) => a.address === chosen)
+    if (!active && !isTest) {
+      log(`Netzwerkadapter ${chosen} ist nicht mehr aktiv; weiche auf Standard aus.`)
+      return []
+    }
+    return ['--source-address', String(chosen)]
   }
 
   /* -- finding yt-dlp ------------------------------------------------------ */
@@ -318,7 +347,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
   async function probe(bin, target, referer = null) {
     const extra = referer ? ['--referer', referer] : []
-    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...extra, ...cookieArgs(), '--', target])
+    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...sourceArgs(), ...extra, ...cookieArgs(), '--', target])
   }
 
   async function resolve(body) {
@@ -524,7 +553,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
       child = spawn(
         job.bin,
-        [...formatArgs, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...refererArgs, ...cookieArgs(), '--', job.url],
+        [...formatArgs, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...sourceArgs(), ...refererArgs, ...cookieArgs(), '--', job.url],
         { windowsHide: true },
       )
       let sent = 0
@@ -596,6 +625,35 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
           services: SERVICES,
         },
       }, cors)
+    }
+
+    if (req.method === 'GET' && url.pathname === '/adapters') {
+      const adapters = getNetworkAdapters()
+      const current = readSettings().bindAddress || 'default'
+      return send(res, 200, {
+        adapters: [
+          { id: 'default', name: 'Automatisch (Windows-Standard)', address: null },
+          ...adapters.map((a) => ({
+            id: a.address,
+            name: `${a.name} (${a.address})`,
+            address: a.address,
+          })),
+        ],
+        selected: current,
+      }, cors)
+    }
+
+    if (req.method === 'POST' && url.pathname === '/adapters') {
+      let raw = ''
+      for await (const chunk of req) raw += chunk
+      let body = {}
+      try {
+        body = raw ? JSON.parse(raw) : {}
+      } catch {}
+      const chosen = body.bindAddress || 'default'
+      writeSettings({ bindAddress: chosen })
+      log(`Netzwerkadapter gesetzt: ${chosen}`)
+      return send(res, 200, { ok: true, selected: chosen }, cors)
     }
 
     if (req.method === 'GET' && url.pathname === '/tunnel') {
