@@ -417,9 +417,13 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
   // While this tool is open, a drop anywhere on the window is the player's.
   useEffect(() => {
+    if (hidden) {
+      claimDrops(null)
+      return
+    }
     claimDrops((files) => void addFiles(files, true))
     return () => claimDrops(null)
-  }, [addFiles])
+  }, [addFiles, hidden])
 
   const addAsset = (asset: Asset) => {
     const item: PlayerItem = {
@@ -964,10 +968,11 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     }
   }
   useEffect(() => {
+    if (hidden) return
     const onKey = (event: KeyboardEvent) => keys.current(event)
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [hidden])
 
   // Electron global media shortcuts
   useEffect(() => {
@@ -1416,7 +1421,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     <>
       {miniBar}
       <div className={hidden ? 'hidden' : 'flex flex-col gap-[16px]'}>
-        {fileInputs}
+        {!hidden ? fileInputs : null}
         <style>{`
         .sondra-player video::cue {
           font-family: var(--font-sans);

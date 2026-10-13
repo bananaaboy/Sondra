@@ -315,8 +315,8 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
 
       {/* Keyed on the panel so every switch replays the entrance rather than
           swapping content in place, which reads as a jump. */}
-      <div key={panel === 'player' ? 'other-tools' : panel} role="tabpanel" aria-label={current?.label} className={panel === 'player' ? 'hidden' : 'panel-root rise flex min-w-0 flex-col gap-[16px]'}>
-        {!ready ? (
+      <div key={panel} role="tabpanel" aria-label={current?.label} className="panel-root rise flex min-w-0 flex-col gap-[16px]">
+        {panel === 'player' ? null : !ready ? (
           <NothingLoaded label={current?.label ?? ''} summary={current?.summary ?? ''} />
         ) : (
           <Suspense fallback={<ToolLoading />}>
@@ -336,11 +336,10 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
             {panel === 'mix' ? <MixPanel /> : null}
           </Suspense>
         )}
+        <Suspense fallback={null}>
+          <PlayerPanel hidden={panel !== 'player'} />
+        </Suspense>
       </div>
-
-      <Suspense fallback={null}>
-        <PlayerPanel hidden={panel !== 'player'} />
-      </Suspense>
 
       <MachineRow />
     </section>
