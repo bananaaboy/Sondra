@@ -231,6 +231,16 @@ export default async function handler(request, response) {
       const media = await extractDirectMedia(targetStr, {
         localAddress: request.body?.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
       })
+      if (media && media.isPlaylist) {
+        response.status(200).json({
+          status: 'playlist',
+          kind: 'playlist',
+          title: media.title,
+          author: media.seriesTitle,
+          items: media.items,
+        })
+        return
+      }
       if (media && (media.url || (media.streams && media.streams.length > 0))) {
         const streams = []
         if (Array.isArray(media.streams) && media.streams.length > 0) {

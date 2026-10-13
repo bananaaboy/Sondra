@@ -37,21 +37,41 @@ async function recognizer(model: string, id: number): Promise<AutomaticSpeechRec
   if (loaded?.model === model) return loaded.run
   loaded = null
   const files = new Map<string, { loaded: number; total: number }>()
-  const run = (await pipeline('automatic-speech-recognition', model, {
-    device: 'wasm',
-    dtype: 'q8',
-    progress_callback: (event: { status: string; file?: string; loaded?: number; total?: number }) => {
-      if (event.status !== 'progress' || !event.file) return
-      files.set(event.file, { loaded: event.loaded ?? 0, total: event.total ?? 0 })
-      let done = 0
-      let total = 0
-      for (const entry of files.values()) {
-        done += entry.loaded
-        total += entry.total
-      }
-      post({ type: 'loading', id, loaded: done, total })
-    },
-  })) as AutomaticSpeechRecognitionPipeline
+  const progressCallback = (event: { status: string; file?: string; loaded?: number; total?: number }) => {
+    if (event.status !== 'progress' || !event.file) return
+    files.set(event.file, { loaded: event.loaded ?? 0, total: event.total ?? 0 })
+    let done = 0
+    let total = 0
+    for (const entry of files.values()) {
+      done += entry.loaded
+      total += entry.total
+    }
+    post({ type: 'loading', id, loaded: done, total })
+  }
+
+  const hasWebGpu = typeof navigator !== 'undefined' && 'gpu' in navigator && Boolean((navigator as { gpu?: unknown }).gpu)
+  let run: AutomaticSpeechRecognitionPipeline | null = null
+
+  if (hasWebGpu) {
+    try {
+      run = (await pipeline('automatic-speech-recognition', model, {
+        device: 'webgpu',
+        dtype: 'fp32',
+        progress_callback: progressCallback,
+      })) as AutomaticSpeechRecognitionPipeline
+    } catch {
+      run = null
+    }
+  }
+
+  if (!run) {
+    run = (await pipeline('automatic-speech-recognition', model, {
+      device: 'wasm',
+      dtype: 'q8',
+      progress_callback: progressCallback,
+    })) as AutomaticSpeechRecognitionPipeline
+  }
+
   loaded = { model, run }
   return run
 }

@@ -37,6 +37,18 @@ export function isAniworldUrl(rawUrl) {
   }
 }
 
+export function isAniworldSeasonUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    if (!ANIWORLD_HOSTS.test(u.hostname)) return false
+    const isEpisode = /\/episode-\d+/i.test(u.pathname) || /\/film-\d+/i.test(u.pathname)
+    const isSeasonOrSeries = /\/(?:anime|serie)\/stream\/[^/]+(?:\/(?:staffel-\d+|filme))?\/?$/i.test(u.pathname)
+    return !isEpisode && isSeasonOrSeries
+  } catch {
+    return false
+  }
+}
+
 export function isVoeUrl(rawUrl) {
   try {
     const u = new URL(rawUrl)
@@ -712,10 +724,100 @@ async function resolveAniworldRedirect(redirectUrl, referer, options = {}) {
 }
 
 /**
+ * Parses an AniWorld or SerienStream (s.to) season or series page,
+ * extracting all episode URLs and metadata in order.
+ */
+export async function extractAniworldSeason(url, options = {}) {
+  try {
+    const res = await fetchHtml(url, options)
+    if (!res.ok) return null
+    const html = await res.text()
+
+    const pageUrl = new URL(url)
+    const baseOrigin = pageUrl.origin
+
+    const seriesTitleMatch =
+      html.match(/<div class="series-title"[^>]*>[\s\S]*?<h1[^>]*>[\s\S]*?<span>([^<]+)<\/span>/i) ||
+      html.match(/<h1\b[^>]*\bitemprop=['"]name['"][^>]*>[\s\S]*?<span>([^<]+)<\/span>/i) ||
+      html.match(/<meta property="og:title" content="([^"]+)"/i)
+    const seriesTitle = (seriesTitleMatch ? seriesTitleMatch[1] : 'Anime')
+      .replace(/&#039;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim()
+
+    const seasonMatch = pageUrl.pathname.match(/staffel-(\d+)/i)
+    const seasonNum = seasonMatch ? Number(seasonMatch[1]) : 1
+
+    const episodes = []
+    const trMatches = html.matchAll(/<tr[^>]*data-episode-id=[\s\S]*?<\/tr>/gi)
+
+    for (const trMatch of trMatches) {
+      const tr = trMatch[0]
+      const linkMatch = tr.match(/href=['"](\/(?:anime|serie)\/stream\/[^/]+\/staffel-\d+\/episode-\d+)['"]/i)
+      if (!linkMatch) continue
+
+      const epUrl = `${baseOrigin}${linkMatch[1]}`
+      const epNumMatch = tr.match(/itemprop=['"]episodeNumber['"]\s+content=['"](\d+)['"]/i) || linkMatch[1].match(/episode-(\d+)/i)
+      const epNum = epNumMatch ? Number(epNumMatch[1]) : episodes.length + 1
+
+      const deTitleMatch = tr.match(/<strong>([^<]+)<\/strong>/i)
+      const subTitleMatch = tr.match(/<span>([^<]+)<\/span>/i)
+      const germanTitle = deTitleMatch ? deTitleMatch[1].replace(/&#039;/g, "'").replace(/&amp;/g, '&').trim() : ''
+      const secondTitle = subTitleMatch ? subTitleMatch[1].replace(/&#039;/g, "'").replace(/&amp;/g, '&').trim() : ''
+      const epName = germanTitle || secondTitle
+
+      const numTag = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`
+      const fullTitle = `${seriesTitle} - ${numTag}${epName ? ` - ${epName}` : ''}`
+
+      episodes.push({
+        episodeNumber: epNum,
+        seasonNumber: seasonNum,
+        title: fullTitle,
+        url: epUrl,
+      })
+    }
+
+    if (episodes.length === 0) {
+      const epLinks = [
+        ...new Set([...html.matchAll(/href=['"](\/(?:anime|serie)\/stream\/[^/]+\/staffel-\d+\/episode-\d+)['"]/gi)].map((m) => m[1])),
+      ]
+      for (let i = 0; i < epLinks.length; i++) {
+        const epPath = epLinks[i]
+        const epNumMatch = epPath.match(/episode-(\d+)/i)
+        const epNum = epNumMatch ? Number(epNumMatch[1]) : i + 1
+        const numTag = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`
+        episodes.push({
+          episodeNumber: epNum,
+          seasonNumber: seasonNum,
+          title: `${seriesTitle} - ${numTag}`,
+          url: `${baseOrigin}${epPath}`,
+        })
+      }
+    }
+
+    if (episodes.length === 0) return null
+
+    return {
+      isPlaylist: true,
+      title: `${seriesTitle} - Staffel ${seasonNum}`,
+      seriesTitle,
+      seasonNumber: seasonNum,
+      count: episodes.length,
+      items: episodes,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Parses an AniWorld or SerienStream (s.to) episode or movie page, finds all
  * available hoster links, and resolves them to direct playable streams.
  */
 export async function extractAniworld(url, options = {}) {
+  if (isAniworldSeasonUrl(url)) {
+    return extractAniworldSeason(url, options)
+  }
   try {
     const res = await fetchHtml(url, options)
     if (!res.ok) return null

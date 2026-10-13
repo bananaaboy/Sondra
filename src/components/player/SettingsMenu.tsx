@@ -381,7 +381,60 @@ export function SettingsMenu({
                 />
               ))}
             </Group>
+            <Group title="Klang & Bass-Boost">
+              <Range
+                label="Bass-Boost"
+                value={settings.bassBoost}
+                display={settings.bassBoost > 0 ? `+${settings.bassBoost} dB` : 'Aus'}
+                min={0}
+                max={12}
+                step={1}
+                onChange={(bassBoost) => update({ bassBoost })}
+              />
+              <Range
+                label="Tiefen (100 Hz)"
+                value={settings.eqLow}
+                display={`${settings.eqLow > 0 ? '+' : ''}${settings.eqLow} dB`}
+                min={-12}
+                max={12}
+                step={1}
+                onChange={(eqLow) => update({ eqLow })}
+              />
+              <Range
+                label="Mitten (1 kHz)"
+                value={settings.eqMid}
+                display={`${settings.eqMid > 0 ? '+' : ''}${settings.eqMid} dB`}
+                min={-12}
+                max={12}
+                step={1}
+                onChange={(eqMid) => update({ eqMid })}
+              />
+              <Range
+                label="Höhen (10 kHz)"
+                value={settings.eqHigh}
+                display={`${settings.eqHigh > 0 ? '+' : ''}${settings.eqHigh} dB`}
+                min={-12}
+                max={12}
+                step={1}
+                onChange={(eqHigh) => update({ eqHigh })}
+              />
+              <button
+                type="button"
+                className={ROW}
+                disabled={settings.bassBoost === 0 && settings.eqLow === 0 && settings.eqMid === 0 && settings.eqHigh === 0}
+                onClick={() => update({ bassBoost: 0, eqLow: 0, eqMid: 0, eqHigh: 0 })}
+              >
+                <span className="w-[14px]" />
+                <span className="flex-1 text-stage-ink">Equalizer zurücksetzen</span>
+              </button>
+            </Group>
             <Group>
+              <Switch
+                label="Audio-Visualizer"
+                hint="Echtzeit-Frequenzbalken unter der Steuerleiste"
+                on={settings.visualizer}
+                onChange={(visualizer) => update({ visualizer })}
+              />
               <Switch
                 label="Nachtmodus"
                 hint="Leise Stellen lauter, laute leiser — Dialoge verstehen, ohne die Nachbarn zu wecken"

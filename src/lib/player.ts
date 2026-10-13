@@ -24,6 +24,10 @@ export interface PlayerItem {
   subtitles: { label: string; url: string }[]
   /** Set when the item came from the session rather than from disk. */
   assetId?: string
+  /** Direct URL if available (e.g. streaming) */
+  directUrl?: string
+  /** Pre-extracted resolution streams (e.g. from service/downloader) */
+  streamVariants?: { height: number; url: string; label?: string }[]
 }
 
 const VIDEO_EXTENSIONS = /\.(mp4|m4v|mov|mkv|webm|avi|wmv|flv|ts|mts|m2ts|mpg|mpeg|vob|3gp|ogv|asf)$/i
@@ -134,6 +138,11 @@ export interface PlayerSettings {
   boost: number
   /** Quiet passages up, loud ones down — for watching at night. */
   night: boolean
+  bassBoost: number
+  eqLow: number
+  eqMid: number
+  eqHigh: number
+  visualizer: boolean
   autoNext: boolean
   repeat: Repeat
   skip: number
@@ -152,6 +161,11 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   mirror: false,
   boost: 1,
   night: false,
+  bassBoost: 0,
+  eqLow: 0,
+  eqMid: 0,
+  eqHigh: 0,
+  visualizer: true,
   autoNext: true,
   repeat: 'aus',
   skip: 10,
@@ -183,6 +197,11 @@ export function rememberedSettings(): PlayerSettings {
       mirror: saved.mirror === true,
       boost: oneOf(saved.boost, BOOSTS, d.boost),
       night: saved.night === true,
+      bassBoost: within(saved.bassBoost, 0, 12, d.bassBoost),
+      eqLow: within(saved.eqLow, -12, 12, d.eqLow),
+      eqMid: within(saved.eqMid, -12, 12, d.eqMid),
+      eqHigh: within(saved.eqHigh, -12, 12, d.eqHigh),
+      visualizer: saved.visualizer !== false,
       autoNext: saved.autoNext !== false,
       repeat: oneOf(saved.repeat, ['aus', 'titel', 'liste'] as const, d.repeat),
       skip: oneOf(saved.skip, SKIPS, d.skip),

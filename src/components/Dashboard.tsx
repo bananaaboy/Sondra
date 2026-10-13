@@ -31,7 +31,7 @@ const TOOLS = {
   screen: () => import('./panels/ScreenPanel').then((m) => ({ default: m.ScreenPanel })),
   mix: () => import('./panels/MixPanel').then((m) => ({ default: m.MixPanel })),
   player: () => import('./panels/PlayerPanel').then((m) => ({ default: m.PlayerPanel })),
-} satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType }>>
+} satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType<{ hidden?: boolean }> | ComponentType }>>
 
 const DownloaderPanel = lazy(TOOLS.downloader)
 const ConverterPanel = lazy(TOOLS.converter)
@@ -315,7 +315,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
 
       {/* Keyed on the panel so every switch replays the entrance rather than
           swapping content in place, which reads as a jump. */}
-      <div key={panel} role="tabpanel" aria-label={current?.label} className="panel-root rise flex min-w-0 flex-col gap-[16px]">
+      <div key={panel === 'player' ? 'other-tools' : panel} role="tabpanel" aria-label={current?.label} className={panel === 'player' ? 'hidden' : 'panel-root rise flex min-w-0 flex-col gap-[16px]'}>
         {!ready ? (
           <NothingLoaded label={current?.label ?? ''} summary={current?.summary ?? ''} />
         ) : (
@@ -334,10 +334,13 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
             {panel === 'subtitles' ? <SubtitlesPanel /> : null}
             {panel === 'screen' ? <ScreenPanel /> : null}
             {panel === 'mix' ? <MixPanel /> : null}
-            {panel === 'player' ? <PlayerPanel /> : null}
           </Suspense>
         )}
       </div>
+
+      <Suspense fallback={null}>
+        <PlayerPanel hidden={panel !== 'player'} />
+      </Suspense>
 
       <MachineRow />
     </section>

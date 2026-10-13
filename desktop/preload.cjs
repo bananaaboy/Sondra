@@ -24,4 +24,9 @@ contextBridge.exposeInMainWorld('sondraApp', {
     ipcRenderer.on('sondra:update', listener)
     return () => ipcRenderer.removeListener('sondra:update', listener)
   },
+  onMediaAction: (callback) => {
+    const listener = (_event, action) => callback(action)
+    ipcRenderer.on('sondra:media-action', listener)
+    return () => ipcRenderer.removeListener('sondra:media-action', listener)
+  },
 })

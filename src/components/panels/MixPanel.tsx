@@ -16,6 +16,7 @@ import { DEFAULT_DUCK, mixWithDucking, type DuckResult, type DuckSettings } from
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { formatBytes, formatTimecode } from '../../lib/format'
 import { encodeWav, type AudioData } from '../../lib/wav'
+import { createZip } from '../../lib/zip'
 import { decodeAssetAudio } from '../../hooks/useDecodedAudio'
 import { useFilePicker } from '../../hooks/useIngest'
 import { useSession, type Asset } from '../../state/store'
@@ -316,6 +317,22 @@ export function MixPanel() {
             </Button>
             <Button variant="quiet" disabled={Boolean(writing)} onClick={() => saveBytes(encodeWav(result.mix.audio, 24), `${stem} (gemischt).wav`, 'audio/wav')}>
               Als WAV speichern
+            </Button>
+            <Button
+              variant="quiet"
+              disabled={Boolean(writing) || !decoded}
+              onClick={() => {
+                if (!decoded) return
+                const zipData = createZip([
+                  { name: '01_Stimme_Roh.wav', data: encodeWav(decoded.voice, 24) },
+                  { name: '02_Musik_Bearbeitet.wav', data: encodeWav(decoded.music, 24) },
+                  { name: '03_Master_Geduckt.wav', data: encodeWav(result.mix.audio, 24) },
+                ])
+                saveBytes(zipData, `${stem}-spuren.zip`, 'application/zip')
+                log('mischen', 'Einzelspuren als ZIP exportiert')
+              }}
+            >
+              Einzelspuren als ZIP
             </Button>
             {voice?.kind === 'video' ? (
               <Button variant="quiet" disabled={Boolean(writing)} onClick={() => void intoVideo()}>

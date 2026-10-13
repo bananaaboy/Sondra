@@ -322,7 +322,7 @@ const newId = () => `p${Date.now().toString(36)}${(nextId++).toString(36)}`
 /* The panel                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export function PlayerPanel() {
+export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const sessionAssets = useSession((state) => state.assets)
   const setActiveAsset = useSession((state) => state.setActiveAsset)
   const setPanel = useSession((state) => state.setPanel)
@@ -340,6 +340,7 @@ export function PlayerPanel() {
   const [buffered, setBuffered] = useState(0)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [sourceDimensions, setSourceDimensions] = useState<Record<string, { width: number; height: number }>>({})
+  const masterDimensionsRef = useRef<Record<string, { width: number; height: number }>>({})
   const qualityCache = useRef<Map<string, Map<number, string>>>(new Map())
   const [failed, setFailed] = useState(false)
   const [captions, setCaptions] = useState(-1)
@@ -588,6 +589,7 @@ export function PlayerPanel() {
       if (found.width && found.height) {
         const width = found.width
         const height = found.height
+        masterDimensionsRef.current[item.id] = { width, height }
         setSourceDimensions((prev) => ({ ...prev, [item.id]: { width, height } }))
       }
       return found
@@ -675,39 +677,160 @@ export function PlayerPanel() {
     })
   }, [captions, sourceUrl, current?.subtitles.length])
 
-  // Louder than 100 % and the night mode need the sound routed through Web
-  // Audio — once per element, and only when asked for.
-  const graph = useRef<{ node: HTMLVideoElement; source: MediaElementAudioSourceNode; squeeze: DynamicsCompressorNode; gain: GainNode } | null>(null)
+  // Parametric EQ, Bass-Boost, Night mode, and FFT visualizer through Web Audio
+  interface AudioNodes {
+    node: HTMLVideoElement
+    source: MediaElementAudioSourceNode
+    bass: BiquadFilterNode
+    eqLow: BiquadFilterNode
+    eqMid: BiquadFilterNode
+    eqHigh: BiquadFilterNode
+    squeeze: DynamicsCompressorNode
+    gain: GainNode
+    analyser: AnalyserNode
+  }
+  const graph = useRef<AudioNodes | null>(null)
+  const visualizerCanvasRef = useRef<HTMLCanvasElement | null>(null)
+
   useEffect(() => {
     const node = videoRef.current
     if (!node) return
-    const wanted = settings.boost > 1 || settings.night
+    const wanted =
+      settings.boost > 1 ||
+      settings.night ||
+      settings.bassBoost > 0 ||
+      settings.eqLow !== 0 ||
+      settings.eqMid !== 0 ||
+      settings.eqHigh !== 0 ||
+      settings.visualizer
+
     if (!wanted && graph.current?.node !== node) return
     try {
       if (graph.current?.node !== node) {
         const context = getAudioContext()
         const source = context.createMediaElementSource(node)
+
+        const bass = context.createBiquadFilter()
+        bass.type = 'lowshelf'
+        bass.frequency.value = 90
+        bass.gain.value = settings.bassBoost
+
+        const eqLow = context.createBiquadFilter()
+        eqLow.type = 'lowshelf'
+        eqLow.frequency.value = 100
+        eqLow.gain.value = settings.eqLow
+
+        const eqMid = context.createBiquadFilter()
+        eqMid.type = 'peaking'
+        eqMid.frequency.value = 1000
+        eqMid.Q.value = 1.0
+        eqMid.gain.value = settings.eqMid
+
+        const eqHigh = context.createBiquadFilter()
+        eqHigh.type = 'highshelf'
+        eqHigh.frequency.value = 10000
+        eqHigh.gain.value = settings.eqHigh
+
         const squeeze = context.createDynamicsCompressor()
         squeeze.threshold.value = -32
         squeeze.knee.value = 18
         squeeze.ratio.value = 5
         squeeze.attack.value = 0.01
         squeeze.release.value = 0.35
+
         const gain = context.createGain()
-        squeeze.connect(gain).connect(context.destination)
-        graph.current = { node, source, squeeze, gain }
+        const analyser = context.createAnalyser()
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.8
+
+        source.connect(bass)
+        bass.connect(eqLow)
+        eqLow.connect(eqMid)
+        eqMid.connect(eqHigh)
+
+        if (settings.night) {
+          eqHigh.connect(squeeze)
+          squeeze.connect(gain)
+        } else {
+          eqHigh.connect(gain)
+        }
+
+        gain.connect(analyser)
+        analyser.connect(context.destination)
+
+        graph.current = { node, source, bass, eqLow, eqMid, eqHigh, squeeze, gain, analyser }
         void resumeAudioContext()
       }
-      const { source, squeeze, gain } = graph.current!
-      source.disconnect()
-      source.connect(settings.night ? squeeze : gain)
-      // Night mode brings the quiet up after squeezing the loud down.
-      gain.gain.value = settings.boost * (settings.night ? 1.6 : 1)
+
+      const g = graph.current!
+      g.bass.gain.value = settings.bassBoost
+      g.eqLow.gain.value = settings.eqLow
+      g.eqMid.gain.value = settings.eqMid
+      g.eqHigh.gain.value = settings.eqHigh
+      g.gain.gain.value = settings.boost * (settings.night ? 1.6 : 1)
+
+      g.eqHigh.disconnect()
+      g.squeeze.disconnect()
+      if (settings.night) {
+        g.eqHigh.connect(g.squeeze)
+        g.squeeze.connect(g.gain)
+      } else {
+        g.eqHigh.connect(g.gain)
+      }
+
       void resumeAudioContext()
     } catch {
       /* the browser declined; the element's own volume still works */
     }
-  }, [settings.boost, settings.night, sourceUrl])
+  }, [
+    settings.boost,
+    settings.night,
+    settings.bassBoost,
+    settings.eqLow,
+    settings.eqMid,
+    settings.eqHigh,
+    settings.visualizer,
+    sourceUrl,
+  ])
+
+  useEffect(() => {
+    if (!settings.visualizer) return
+    const canvas = visualizerCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const analyser = graph.current?.analyser
+    if (!analyser) return
+
+    let animId: number
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    const render = () => {
+      animId = requestAnimationFrame(render)
+      analyser.getByteFrequencyData(dataArray)
+      const w = canvas.width
+      const h = canvas.height
+      ctx.clearRect(0, 0, w, h)
+
+      const bars = 48
+      const barWidth = Math.max(2, Math.floor(w / bars) - 2)
+      const step = Math.max(1, Math.floor(bufferLength / bars))
+
+      for (let i = 0; i < bars; i++) {
+        const val = playing ? dataArray[i * step] / 255 : 0
+        const barHeight = Math.max(2, val * (h - 4))
+        const x = i * (barWidth + 2)
+        const y = h - barHeight
+
+        ctx.fillStyle = playing ? 'rgba(195, 244, 208, 0.85)' : 'rgba(255, 255, 255, 0.2)'
+        ctx.fillRect(x, y, barWidth, barHeight)
+      }
+    }
+
+    render()
+    return () => cancelAnimationFrame(animId)
+  }, [settings.visualizer, playing])
 
   // A playing film keeps the screen awake.
   useEffect(() => {
@@ -846,12 +969,106 @@ export function PlayerPanel() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Electron global media shortcuts
+  useEffect(() => {
+    const app = (window as unknown as {
+      sondraApp?: { onMediaAction?: (cb: (action: string) => void) => () => void }
+    }).sondraApp
+    if (!app?.onMediaAction) return
+    const unbind = app.onMediaAction((action) => {
+      if (action === 'toggle') toggle()
+      else if (action === 'next') goTo(1)
+      else if (action === 'prev') goTo(-1)
+      else if (action === 'stop') {
+        const n = video()
+        if (n) {
+          n.pause()
+          n.currentTime = 0
+        }
+      }
+    })
+    return unbind
+  }, [index, items.length])
+
+  // Navigator mediaSession
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    if (!current) {
+      navigator.mediaSession.playbackState = 'none'
+      return
+    }
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: current.name.replace(/\.[^.]+$/, ''),
+      artist: 'Sondra',
+      album: 'Sondra Studio',
+    })
+
+    navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
+
+    const handlePlay = () => void video()?.play().catch(() => undefined)
+    const handlePause = () => video()?.pause()
+    const handlePrev = () => goTo(-1)
+    const handleNext = () => goTo(1)
+    const handleSeekTo = (details: MediaSessionActionDetails) => {
+      if (details.seekTime !== undefined) seek(details.seekTime)
+    }
+    const handleSeekBackward = (details: MediaSessionActionDetails) => {
+      skip(-(details.seekOffset || settings.skip))
+    }
+    const handleSeekForward = (details: MediaSessionActionDetails) => {
+      skip(details.seekOffset || settings.skip)
+    }
+
+    try {
+      navigator.mediaSession.setActionHandler('play', handlePlay)
+      navigator.mediaSession.setActionHandler('pause', handlePause)
+      navigator.mediaSession.setActionHandler('previoustrack', handlePrev)
+      navigator.mediaSession.setActionHandler('nexttrack', handleNext)
+      navigator.mediaSession.setActionHandler('seekto', handleSeekTo)
+      navigator.mediaSession.setActionHandler('seekbackward', handleSeekBackward)
+      navigator.mediaSession.setActionHandler('seekforward', handleSeekForward)
+    } catch {
+      // not all actions supported
+    }
+
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler('play', null)
+        navigator.mediaSession.setActionHandler('pause', null)
+        navigator.mediaSession.setActionHandler('previoustrack', null)
+        navigator.mediaSession.setActionHandler('nexttrack', null)
+        navigator.mediaSession.setActionHandler('seekto', null)
+        navigator.mediaSession.setActionHandler('seekbackward', null)
+        navigator.mediaSession.setActionHandler('seekforward', null)
+      } catch {
+        // ignore
+      }
+    }
+  }, [current, playing, settings.skip, index, items.length])
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    if (!current || duration <= 0) return
+    try {
+      if ('setPositionState' in navigator.mediaSession) {
+        navigator.mediaSession.setPositionState({
+          duration,
+          playbackRate: settings.rate,
+          position: Math.min(Math.max(0, time), duration),
+        })
+      }
+    } catch {
+      // ignore
+    }
+  }, [time, duration, settings.rate, current])
+
   /* -- the settings menu's view of things ----------------------------------------------------- */
 
   const info = current ? facts[current.id] : undefined
   const known = info && info !== 'pending' ? info : null
-  const originalDim = current ? sourceDimensions[current.id] : null
-  const sourceHeight = originalDim?.height ?? known?.height ?? size?.height ?? (!version?.height ? videoRef.current?.videoHeight : null) ?? null
+  const masterDim = current ? masterDimensionsRef.current[current.id] ?? sourceDimensions[current.id] : null
+  const sourceHeight = masterDim?.height ?? known?.height ?? size?.height ?? videoRef.current?.videoHeight ?? null
   const activeHeight = version?.activeHeight ?? (version?.url && (!version.started || version.fraction === 1) ? version.height : null)
   const qualityState: QualityState = {
     current: version?.reason === 'chosen' && activeHeight ? activeHeight : 'original',
@@ -884,6 +1101,32 @@ export function PlayerPanel() {
 
   const chooseQuality = async (quality: Quality) => {
     if (!current) return
+
+    // If item has a streamVariant matching this height, switch directly without re-encode
+    if (quality !== 'original' && current.streamVariants) {
+      const match = current.streamVariants.find((v) => v.height === quality)
+      if (match) {
+        jobAbort.current?.abort()
+        keepPlace()
+        setVersions((value) => ({
+          ...value,
+          [current.id]: {
+            itemId: current.id,
+            reason: 'chosen',
+            remedy: 'picture',
+            height: quality,
+            activeHeight: quality,
+            audioIndex: version?.audioIndex ?? 0,
+            fraction: 1,
+            started: false,
+            url: match.url,
+            error: null,
+          },
+        }))
+        return
+      }
+    }
+
     const found = await probe(current)
     if (!found) return
     const audioStreams = found.streams.filter((stream) => stream.type === 'audio')
@@ -1008,6 +1251,7 @@ export function PlayerPanel() {
     ) : null
 
   if (!current) {
+    if (hidden) return null
     return (
       <div className="flex flex-col gap-[24px]">
         {fileInputs}
@@ -1133,10 +1377,47 @@ export function PlayerPanel() {
     </section>
   )
 
+  const miniBar =
+    hidden && current ? (
+      <div className="fixed bottom-4 right-4 left-4 z-50 flex items-center gap-3 rounded-card bg-stage/95 p-3 text-white shadow-2xl ring-1 ring-white/15 backdrop-blur-md sm:left-auto sm:right-6 sm:w-[420px]">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? 'Pause' : 'Abspielen'}
+          className="press grid h-10 w-10 shrink-0 place-items-center rounded-pill bg-white/15 text-white hover:bg-white/25"
+        >
+          {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-small font-semibold text-white">{title}</p>
+          <div className="flex items-center justify-between text-micro text-white/60">
+            <span>{clock(time)}</span>
+            <span>{clock(duration)}</span>
+          </div>
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-pill bg-white/20">
+            <div
+              className="h-full bg-stage-accent transition-[width] duration-[var(--dur-fast)]"
+              style={{ width: `${duration > 0 ? (time / duration) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPanel('player')}
+          title="Im Player öffnen"
+          className="press shrink-0 rounded-pill bg-white/15 px-3 py-1.5 text-micro font-medium text-white hover:bg-white/25"
+        >
+          Öffnen
+        </button>
+      </div>
+    ) : null
+
   return (
-    <div className="flex flex-col gap-[16px]">
-      {fileInputs}
-      <style>{`
+    <>
+      {miniBar}
+      <div className={hidden ? 'hidden' : 'flex flex-col gap-[16px]'}>
+        {fileInputs}
+        <style>{`
         .sondra-player video::cue {
           font-family: var(--font-sans);
           font-size: ${{ klein: '0.85em', mittel: '1.1em', gross: '1.45em' }[settings.captionSize]};
@@ -1201,6 +1482,7 @@ export function PlayerPanel() {
                   if (node.videoWidth > 0 && !version?.height) {
                     setSize({ width: node.videoWidth, height: node.videoHeight })
                     if (current) {
+                      masterDimensionsRef.current[current.id] = { width: node.videoWidth, height: node.videoHeight }
                       setSourceDimensions((prev) => ({ ...prev, [current.id]: { width: node.videoWidth, height: node.videoHeight } }))
                     }
                   }
@@ -1542,6 +1824,13 @@ export function PlayerPanel() {
             ) : null}
           </div>
 
+          {/* Audio Visualizer */}
+          {settings.visualizer ? (
+            <div className="relative h-[44px] w-full overflow-hidden rounded-card bg-stage/85 px-[12px] py-[6px] ring-1 ring-white/10">
+              <canvas ref={visualizerCanvasRef} width={640} height={44} className="h-full w-full" />
+            </div>
+          ) : null}
+
           {/* Under the picture: what it is, and where else it can go. */}
           <div className="flex flex-wrap items-start justify-between gap-[12px]">
             <div className="flex min-w-0 flex-col gap-[4px]">
@@ -1574,5 +1863,6 @@ export function PlayerPanel() {
       {!sideBySide ? playlist : null}
       {sessionRow}
     </div>
+    </>
   )
 }

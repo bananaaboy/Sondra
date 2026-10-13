@@ -18,7 +18,9 @@ import {
   extractStreamtape,
   extractVidoza,
   extractAniworld,
+  extractAniworldSeason,
   isAniworldUrl,
+  isAniworldSeasonUrl,
   isVoeUrl,
   isFilemoonUrl,
   isVidmolyUrl,
@@ -43,6 +45,9 @@ check('URL: AniWorld Film', isAniworldUrl('https://aniworld.to/anime/stream/one-
 check('URL: s.to Episode', isAniworldUrl('https://s.to/serie/stream/breaking-bad/staffel-1/episode-1'), true)
 check('URL: serienstream.to', isAniworldUrl('https://serienstream.to/serie/stream/dr-house/staffel-2/episode-4'), true)
 check('URL: fremde Seite nicht AniWorld', isAniworldUrl('https://youtube.com/watch?v=123'), false)
+check('URL: AniWorld Staffel', isAniworldSeasonUrl('https://aniworld.to/anime/stream/one-piece/staffel-1'), true)
+check('URL: AniWorld Serie Root', isAniworldSeasonUrl('https://aniworld.to/anime/stream/one-piece'), true)
+check('URL: AniWorld Episode keine Staffel', isAniworldSeasonUrl('https://aniworld.to/anime/stream/one-piece/staffel-1/episode-1'), false)
 
 check('URL: VOE sx', isVoeUrl('https://voe.sx/e/2ldxarskbpp2'), true)
 check('URL: VOE Clone jamesbornmain', isVoeUrl('https://jamesbornmain.com/e/2ldxarskbpp2'), true)
@@ -223,6 +228,26 @@ const server = http.createServer((req, res) => {
     `)
   }
 
+  // 8. AniWorld Season Mock
+  if (p === '/anime/stream/one-piece/staffel-1') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    return res.end(`
+      <!DOCTYPE html><html><head><title>One Piece Staffel 1</title></head><body>
+        <div class="series-title"><h1><span>One Piece</span></h1></div>
+        <table><tbody>
+          <tr data-episode-id="1">
+            <td><meta itemprop="episodeNumber" content="1" /><a href="/anime/stream/one-piece/staffel-1/episode-1">Folge 1</a></td>
+            <td><strong>Ich bin Ruffy!</strong> - <span>I'm Luffy!</span></td>
+          </tr>
+          <tr data-episode-id="2">
+            <td><meta itemprop="episodeNumber" content="2" /><a href="/anime/stream/one-piece/staffel-1/episode-2">Folge 2</a></td>
+            <td><strong>Der große Schwertkämpfer</strong> - <span>Great Swordsman</span></td>
+          </tr>
+        </tbody></table>
+      </body></html>
+    `)
+  }
+
   // AniWorld redirect endpoints
   if (p === '/redirect/101') {
     res.writeHead(302, { Location: `${serverBase}/voe/e/sample` })
@@ -292,6 +317,14 @@ check('AniWorld: Direkte Stream-URL aufgelöst', aniResult?.url, 'https://delive
 check('AniWorld: isHls Flag', aniResult?.isHls, true)
 check('AniWorld: mindestens ein aufgelöster Stream', aniResult?.streams?.length >= 1, true)
 check('AniWorld: alle Hoster-Einträge erfasst', aniResult?.allEntries?.length, 2)
+
+// AniWorld Season Extraction
+const seasonResult = await extractAniworldSeason(`${serverBase}/anime/stream/one-piece/staffel-1`)
+check('AniWorld Staffel: Extraktion erfolgreich', Boolean(seasonResult), true)
+check('AniWorld Staffel: isPlaylist Flag', seasonResult?.isPlaylist, true)
+check('AniWorld Staffel: Episodenanzahl', seasonResult?.items?.length, 2)
+check('AniWorld Staffel: Titel', seasonResult?.title, 'One Piece - Staffel 1')
+check('AniWorld Staffel: Episode 1 Titel', seasonResult?.items?.[0]?.title, 'One Piece - S01E01 - Ich bin Ruffy!')
 
 server.close()
 
