@@ -25,8 +25,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: npm
       # Only the CDP client; the app under test brings its own Chromium.
-      - run: npm i --no-save --no-package-lock --ignore-scripts playwright-core@1.56.1
+      - run: npm ci
 
       - name: Download and install silently
         shell: pwsh

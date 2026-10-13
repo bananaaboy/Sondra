@@ -152,9 +152,7 @@ jobs:
       # and presses the buttons in every tool of the installed app.
       - name: Click through the installed app
         shell: pwsh
-        run: |
-          npm i --no-save --no-package-lock --ignore-scripts playwright-core@1.56.1
-          node scripts/desktop-ui-test.mjs (Join-Path $env:ProgramFiles 'Sondra\Sondra.exe') ui-shots
+        run: node scripts/desktop-ui-test.mjs (Join-Path $env:ProgramFiles 'Sondra\Sondra.exe') ui-shots
 
       # The Microsoft Store takes an MSIX package and signs it itself; the
       # unsigned setup it refuses (policy 10.2.9). The identity comes from
