@@ -32,7 +32,9 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
       [`${MOD} + Z`, 'Rückgängig'],
       [`${MOD} + Umschalt + Z`, 'Wiederholen'],
       [`${MOD} + C · X · V`, 'Auswahl kopieren, ausschneiden, einfügen'],
+      ['T', 'Tap-Tempo: Takt mitklopfen für BPM-Ermittlung'],
       ['Tonhöhe & Tempo', 'Halbtöne transponieren (-12 bis +12) & Time-Stretch (0,5x–2x)'],
+      ['Normalisieren', '−0,3 dBFS (Peak), −1,0 dBFS (Spotify/Apple), DC-Offset weg'],
     ],
   },
   {
@@ -60,6 +62,8 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
       [', .', 'Angehalten: Bild für Bild'],
       ['< >', 'Langsamer und schneller'],
       ['0 … 9', 'Zu 0 % … 90 % springen'],
+      ['Visualizer', 'Klick auf Visualizer wechselt Stil (Balken · Welle · Radial)'],
+      ['Equalizer', 'Presets: Linear, Bass-Boost, Vocal, Club, Rock, Akustik'],
       ['Karaoke', 'Echtzeit Gesangsdämpfung (Mid-Side Phasenauslöschung)'],
     ],
   },

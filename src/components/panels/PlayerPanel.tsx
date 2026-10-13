@@ -870,32 +870,76 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     let animId: number
     const bufferLength = analyser.frequencyBinCount
     const dataArray = new Uint8Array(bufferLength)
+    const timeData = new Uint8Array(bufferLength)
+
+    const mode = settings.visualizerMode ?? 'bars'
 
     const render = () => {
       animId = requestAnimationFrame(render)
-      analyser.getByteFrequencyData(dataArray)
       const w = canvas.width
       const h = canvas.height
       ctx.clearRect(0, 0, w, h)
 
-      const bars = 48
-      const barWidth = Math.max(2, Math.floor(w / bars) - 2)
-      const step = Math.max(1, Math.floor(bufferLength / bars))
+      if (mode === 'wave') {
+        analyser.getByteTimeDomainData(timeData)
+        ctx.lineWidth = 2
+        ctx.strokeStyle = playing ? 'rgba(195, 244, 208, 0.95)' : 'rgba(255, 255, 255, 0.25)'
+        ctx.beginPath()
+        const sliceWidth = w / bufferLength
+        let x = 0
+        for (let i = 0; i < bufferLength; i++) {
+          const v = playing ? timeData[i] / 128.0 : 1.0
+          const y = (v * h) / 2
+          if (i === 0) ctx.moveTo(x, y)
+          else ctx.lineTo(x, y)
+          x += sliceWidth
+        }
+        ctx.stroke()
+      } else if (mode === 'radial') {
+        analyser.getByteFrequencyData(dataArray)
+        const centerX = w / 2
+        const centerY = h / 2
+        const radius = Math.min(w, h) * 0.18
+        const bars = 40
+        const step = Math.max(1, Math.floor(bufferLength / bars))
 
-      for (let i = 0; i < bars; i++) {
-        const val = playing ? dataArray[i * step] / 255 : 0
-        const barHeight = Math.max(2, val * (h - 4))
-        const x = i * (barWidth + 2)
-        const y = h - barHeight
+        ctx.strokeStyle = playing ? 'rgba(195, 244, 208, 0.85)' : 'rgba(255, 255, 255, 0.2)'
+        ctx.lineWidth = 2.5
+        for (let i = 0; i < bars; i++) {
+          const val = playing ? dataArray[i * step] / 255 : 0
+          const barLen = val * (Math.min(w, h) * 0.28) + 2
+          const angle = (i * 2 * Math.PI) / bars
+          const x1 = centerX + Math.cos(angle) * radius
+          const y1 = centerY + Math.sin(angle) * radius
+          const x2 = centerX + Math.cos(angle) * (radius + barLen)
+          const y2 = centerY + Math.sin(angle) * (radius + barLen)
+          ctx.beginPath()
+          ctx.moveTo(x1, y1)
+          ctx.lineTo(x2, y2)
+          ctx.stroke()
+        }
+      } else {
+        // 'bars'
+        analyser.getByteFrequencyData(dataArray)
+        const bars = 48
+        const barWidth = Math.max(2, Math.floor(w / bars) - 2)
+        const step = Math.max(1, Math.floor(bufferLength / bars))
 
-        ctx.fillStyle = playing ? 'rgba(195, 244, 208, 0.85)' : 'rgba(255, 255, 255, 0.2)'
-        ctx.fillRect(x, y, barWidth, barHeight)
+        for (let i = 0; i < bars; i++) {
+          const val = playing ? dataArray[i * step] / 255 : 0
+          const barHeight = Math.max(2, val * (h - 4))
+          const x = i * (barWidth + 2)
+          const y = h - barHeight
+
+          ctx.fillStyle = playing ? 'rgba(195, 244, 208, 0.85)' : 'rgba(255, 255, 255, 0.2)'
+          ctx.fillRect(x, y, barWidth, barHeight)
+        }
       }
     }
 
     render()
     return () => cancelAnimationFrame(animId)
-  }, [settings.visualizer, playing])
+  }, [settings.visualizer, settings.visualizerMode, playing])
 
   // A playing film keeps the screen awake.
   useEffect(() => {
@@ -1924,8 +1968,22 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
           {/* Audio Visualizer */}
           {settings.visualizer ? (
-            <div className="relative h-[44px] w-full overflow-hidden rounded-card bg-stage/85 px-[12px] py-[6px] ring-1 ring-white/10">
+            <div
+              className="group relative h-[44px] w-full cursor-pointer overflow-hidden rounded-card bg-stage/85 px-[12px] py-[6px] ring-1 ring-white/10 select-none transition-opacity hover:opacity-95"
+              onClick={() => {
+                const nextMode: Record<string, 'bars' | 'wave' | 'radial'> = {
+                  bars: 'wave',
+                  wave: 'radial',
+                  radial: 'bars',
+                }
+                updateSettings({ visualizerMode: nextMode[settings.visualizerMode] ?? 'bars' })
+              }}
+              title="Klicken: Stil wechseln (Balken · Welle · Radial)"
+            >
               <canvas ref={visualizerCanvasRef} width={640} height={44} className="h-full w-full" />
+              <div className="pointer-events-none absolute right-[8px] top-[6px] rounded-pill bg-black/50 px-[6px] py-[1px] text-[10px] font-medium tracking-wide text-white/80 opacity-0 transition-opacity group-hover:opacity-100">
+                {settings.visualizerMode === 'bars' ? 'Balken' : settings.visualizerMode === 'wave' ? 'Oszilloskop' : 'Radial'}
+              </div>
             </div>
           ) : null}
 

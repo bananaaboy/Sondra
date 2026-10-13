@@ -24,6 +24,7 @@ import {
   frameCount,
   normalizePeak,
   peakDb,
+  removeDcOffset,
   removeSilence,
   resampleAudio,
   setChannels,
@@ -112,6 +113,32 @@ export function AudioEditorPanel() {
   const [view, setView] = useState<{ start: number; end: number } | null>(null)
   const [loop, setLoop] = useState(false)
   const [silenceLength, setSilenceLength] = useState(1)
+  const [silenceThresholdDb, setSilenceThresholdDb] = useState(-50)
+  const [targetPeakDb, setTargetPeakDb] = useState(-0.3)
+  const [tapTimes, setTapTimes] = useState<number[]>([])
+  const [tappedBpm, setTappedBpm] = useState<number | null>(null)
+
+  const handleTap = useCallback(() => {
+    const now = performance.now()
+    setTapTimes((prev) => {
+      const valid = prev.length > 0 && now - prev[prev.length - 1] > 2500 ? [] : prev
+      const updated = [...valid, now].slice(-8)
+      if (updated.length >= 2) {
+        const deltas: number[] = []
+        for (let i = 1; i < updated.length; i++) {
+          deltas.push(updated[i] - updated[i - 1])
+        }
+        const avg = deltas.reduce((a, b) => a + b, 0) / deltas.length
+        if (avg > 0) {
+          const calculated = Math.round(60000 / avg)
+          if (calculated >= 30 && calculated <= 300) {
+            setTappedBpm(calculated)
+          }
+        }
+      }
+      return updated
+    })
+  }, [])
   // Sound shaping.
   const [highpassHz, setHighpassHz] = useState(80)
   const [lowpassHz, setLowpassHz] = useState(12000)
@@ -238,10 +265,17 @@ export function AudioEditorPanel() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) return
       const target = event.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
       const key = event.key.toLowerCase()
+
+      if (key === 't' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault()
+        handleTap()
+        return
+      }
+
+      if (!(event.metaKey || event.ctrlKey)) return
       if (key === 'z') {
         event.preventDefault()
         if (event.shiftKey) redo()
@@ -255,7 +289,7 @@ export function AudioEditorPanel() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [undo, redo])
+  }, [undo, redo, handleTap])
 
   /* -- live: what is switched on is what is heard ------------------------- */
 
@@ -653,7 +687,7 @@ export function AudioEditorPanel() {
     )
   }
 
-  const silence = detectSilence(current)
+  const silence = detectSilence(current, silenceThresholdDb)
 
   return (
     <div className="grid gap-[16px] lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -865,10 +899,38 @@ export function AudioEditorPanel() {
                 min={-24} max={12} step={0.5} value={gain}
                 onChange={(event) => setGain(Number(event.target.value))}
               />
-              <div className="mt-[8px] flex gap-[8px]">
-                <Button size="sm" variant="quiet" disabled={busy !== null}
-                  onClick={() => void apply('Auf −0,3 dBFS normalisiert', (a) => normalizePeak(a, -0.3))}>
-                  Auf −0,3 dBFS bringen
+              <div className="mt-[8px] flex flex-wrap items-center gap-[6px]">
+                <Select
+                  value={targetPeakDb}
+                  onChange={(e) => setTargetPeakDb(Number(e.target.value))}
+                  aria-label="Ziel-Pegel Normalisierung"
+                  className="w-auto! py-[4px] text-small"
+                >
+                  <option value={-0.3}>−0,3 dBFS (Spitze)</option>
+                  <option value={-1.0}>−1,0 dBFS (Spotify / Apple)</option>
+                  <option value={-2.0}>−2,0 dBFS (Headroom)</option>
+                </Select>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void apply(
+                      `Auf ${targetPeakDb > 0 ? '+' : ''}${targetPeakDb.toFixed(1).replace('.', ',')} dBFS normalisiert`,
+                      (a) => normalizePeak(a, targetPeakDb),
+                    )
+                  }
+                >
+                  Normalisieren
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy !== null}
+                  onClick={() => void apply('DC-Offset entfernt', removeDcOffset)}
+                  title="Gleichspannungs-Versatz auf Nullachse zentrieren"
+                >
+                  DC-Offset weg
                 </Button>
               </div>
             </div>
@@ -894,31 +956,43 @@ export function AudioEditorPanel() {
           </div>
 
           {/* -- silence ------------------------------------------------------- */}
-          {/* Nothing found is one quiet line; the explanation and the button
-              only appear when there is silence to remove. */}
-          {silence.length === 0 ? (
-            <p className="mt-[20px] border-t border-line pt-[12px] text-small text-muted">
-              Keine nennenswerte Stille gefunden.
-            </p>
-          ) : (
-            <div className="mt-[20px] flex flex-wrap items-center gap-[8px] border-t border-line pt-[16px]">
-              <div className="min-w-0 flex-1">
-                <p className="text-small text-ink">
-                  {`${silence.length} stille Stelle${silence.length === 1 ? '' : 'n'} gefunden — zusammen ${
-                    silence.reduce((sum, r) => sum + (r.endSeconds - r.startSeconds), 0).toFixed(1)
-                  } s.`}
+          <div className="mt-[20px] flex flex-wrap items-center gap-[12px] border-t border-line pt-[16px]">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-[8px]">
+                <p className="text-small font-semibold text-ink">
+                  {silence.length === 0
+                    ? 'Keine nennenswerte Stille gefunden.'
+                    : `${silence.length} stille Stelle${silence.length === 1 ? '' : 'n'} (${silence
+                        .reduce((sum, r) => sum + (r.endSeconds - r.startSeconds), 0)
+                        .toFixed(1)} s)`}
                 </p>
-                <p className="mt-[4px] text-small leading-[1.45] text-muted">
-                  Unter −50 dBFS und länger als 0,35 s. An den Rändern bleiben 50 ms stehen, sonst
-                  klingt der Schnitt abgehackt.
-                </p>
+                <span className="text-micro text-muted">Schwelle:</span>
+                <Select
+                  value={silenceThresholdDb}
+                  onChange={(e) => setSilenceThresholdDb(Number(e.target.value))}
+                  aria-label="Schwellenwert für Stille"
+                  className="w-auto! py-[2px] text-micro"
+                >
+                  <option value={-40}>−40 dBFS (Atmung / Rauschen)</option>
+                  <option value={-50}>−50 dBFS (Standard)</option>
+                  <option value={-60}>−60 dBFS (Nur absolute Stille)</option>
+                </Select>
               </div>
-              <Button size="sm" variant="quiet" disabled={busy !== null}
-                onClick={() => void apply('Stille entfernt', (a) => removeSilence(a))}>
+              <p className="mt-[4px] text-small leading-[1.45] text-muted">
+                Unter {silenceThresholdDb} dBFS und länger als 0,35 s. An den Rändern bleiben 50 ms Puffer stehen.
+              </p>
+            </div>
+            {silence.length > 0 ? (
+              <Button
+                size="sm"
+                variant="quiet"
+                disabled={busy !== null}
+                onClick={() => void apply(`Stille entfernt (${silenceThresholdDb} dBFS)`, (a) => removeSilence(a, silenceThresholdDb))}
+              >
                 Stille entfernen
               </Button>
-            </div>
-          )}
+            ) : null}
+          </div>
 
           {/* -- a pause, put in ------------------------------------------------ */}
           <div className="mt-[16px] flex flex-wrap items-center gap-[8px] border-t border-line pt-[16px]">
@@ -1061,6 +1135,56 @@ export function AudioEditorPanel() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* -- Tap-Tempo & BPM Tool --------------------------------------- */}
+          <div className="mt-[16px] rounded-card bg-panel-soft p-[14px] ring-1 ring-inset ring-line/70">
+            <div className="flex flex-wrap items-center justify-between gap-[10px]">
+              <div>
+                <p className="text-small font-semibold text-ink">BPM-Detektor / Tap-Tempo (Takt mitklopfen)</p>
+                <p className="text-small text-muted">
+                  Klicke im Takt oder drücke die Taste T auf der Tastatur, um das Song-Tempo zu messen.
+                </p>
+              </div>
+              <div className="flex items-center gap-[8px]">
+                <button
+                  type="button"
+                  onClick={handleTap}
+                  className="press rounded-pill bg-ink px-[16px] py-[6px] text-small font-semibold text-on-ink shadow-sm hover:opacity-90 active:scale-95 transition-transform"
+                >
+                  Takt klopfen (Tap)
+                </button>
+                {tapTimes.length > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setTapTimes([])
+                      setTappedBpm(null)
+                    }}
+                  >
+                    Zurücksetzen
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            {tappedBpm ? (
+              <div className="mt-[10px] flex flex-wrap items-center gap-[16px] border-t border-line/60 pt-[8px] text-small">
+                <span className="value text-[16px] font-bold text-ink">
+                  {tappedBpm} BPM
+                </span>
+                <span className="text-muted">
+                  ({tapTimes.length} {tapTimes.length === 1 ? 'Schlag' : 'Schläge'})
+                </span>
+                <span className="text-muted">
+                  1/4 Note: {(60000 / tappedBpm).toFixed(0)} ms
+                </span>
+                <span className="text-muted">
+                  1/8 Note: {(30000 / tappedBpm).toFixed(0)} ms
+                </span>
+              </div>
+            ) : null}
           </div>
 
           {/* -- sound: filters, dynamics, noise, space --------------------------- */}
