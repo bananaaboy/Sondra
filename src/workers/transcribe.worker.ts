@@ -49,16 +49,32 @@ async function recognizer(model: string, id: number): Promise<AutomaticSpeechRec
     post({ type: 'loading', id, loaded: done, total })
   }
 
-  const hasWebGpu = typeof navigator !== 'undefined' && 'gpu' in navigator && Boolean((navigator as { gpu?: unknown }).gpu)
+  let canUseWebGpu = false
+  if (typeof navigator !== 'undefined' && 'gpu' in navigator && Boolean((navigator as { gpu?: unknown }).gpu)) {
+    try {
+      const gpuNav = navigator as unknown as { gpu: { requestAdapter: () => Promise<{ isFallbackAdapter?: boolean } | null> } }
+      const adapter = await gpuNav.gpu.requestAdapter()
+      // Only hardware WebGPU; software/CPU fallback adapters (like SwiftShader on CI) are drastically slower than WASM
+      if (adapter && !adapter.isFallbackAdapter) {
+        canUseWebGpu = true
+      }
+    } catch {
+      canUseWebGpu = false
+    }
+  }
+
   let run: AutomaticSpeechRecognitionPipeline | null = null
 
-  if (hasWebGpu) {
+  if (canUseWebGpu) {
     try {
-      run = (await pipeline('automatic-speech-recognition', model, {
-        device: 'webgpu',
-        dtype: 'fp32',
-        progress_callback: progressCallback,
-      })) as AutomaticSpeechRecognitionPipeline
+      run = (await Promise.race([
+        pipeline('automatic-speech-recognition', model, {
+          device: 'webgpu',
+          dtype: 'fp32',
+          progress_callback: progressCallback,
+        }),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('WebGPU timeout')), 15000)),
+      ])) as AutomaticSpeechRecognitionPipeline
     } catch {
       run = null
     }
