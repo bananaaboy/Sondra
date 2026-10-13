@@ -24,7 +24,7 @@ import { useShallow } from 'zustand/shallow'
 
 import { useFilePicker } from '../hooks/useIngest'
 import { ACTIONS, GROUP_LABEL, actionsFor, searchActions, type ToolAction, type ToolGroup } from '../lib/actions'
-import { IN_DESKTOP_APP, WINDOWS_SETUP } from '../lib/desktop'
+import { IN_DESKTOP_APP } from '../lib/desktop'
 import { formatBytes, formatDuration } from '../lib/format'
 import { KIND_LABEL, useActiveAsset, useSession, type PanelId } from '../state/store'
 import { PANELS, ToolIcon } from './panelMeta'
@@ -346,8 +346,7 @@ export function Home() {
             <p className="text-small text-prose">Eigenes Fenster, läuft ohne Browser, rechnet auf Ihrem Rechner.</p>
           </div>
           <a
-            href={WINDOWS_SETUP}
-            rel="noopener"
+            href="./download.html"
             className="press inline-flex shrink-0 items-center gap-[8px] rounded-nav bg-raised px-[14px] py-[10px] text-small font-medium text-ink ring-1 ring-inset ring-rule hover:ring-ink"
           >
             <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>

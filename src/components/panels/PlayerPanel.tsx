@@ -188,7 +188,21 @@ function Control({
 /* The timeline over the picture                                               */
 /* -------------------------------------------------------------------------- */
 
-function SeekBar({ time, duration, buffered, onSeek }: { time: number; duration: number; buffered: number; onSeek: (seconds: number) => void }) {
+function SeekBar({
+  time,
+  duration,
+  buffered,
+  loopA,
+  loopB,
+  onSeek,
+}: {
+  time: number
+  duration: number
+  buffered: number
+  loopA?: number | null
+  loopB?: number | null
+  onSeek: (seconds: number) => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<{ x: number; seconds: number; width: number } | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -242,6 +256,18 @@ function SeekBar({ time, duration, buffered, onSeek }: { time: number; duration:
     >
       <div className={`relative w-full overflow-hidden rounded-pill bg-white/25 transition-[height] duration-[var(--dur-fast)] ${dragging ? 'h-[7px]' : 'h-[4px] group-hover/seek:h-[7px]'}`}>
         <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: share(buffered) }} />
+        {known && loopA !== null && loopA !== undefined ? (
+          <div
+            className="absolute inset-y-0 bg-stage-accent/40 ring-1 ring-stage-accent"
+            style={{
+              left: share(loopA),
+              width:
+                loopB !== null && loopB !== undefined && loopB > loopA
+                  ? `${Math.min(100 - (loopA / duration) * 100, ((loopB - loopA) / duration) * 100)}%`
+                  : '4px',
+            }}
+          />
+        ) : null}
         {hover ? <div className="absolute inset-y-0 left-0 bg-white/30" style={{ width: hover.x }} /> : null}
         <div className="absolute inset-y-0 left-0 bg-stage-accent" style={{ width: share(time) }} />
       </div>
@@ -352,6 +378,32 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [idle, setIdle] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [remaining, setRemaining] = useState(false)
+  const [loopA, setLoopA] = useState<number | null>(null)
+  const [loopB, setLoopB] = useState<number | null>(null)
+
+  useEffect(() => {
+    setLoopA(null)
+    setLoopB(null)
+  }, [currentId])
+
+  const toggleLoopAB = () => {
+    if (loopA === null) {
+      setLoopA(time)
+      log('abspielen', `A-B Loop: Startpunkt A bei ${clock(time)} gesetzt`)
+    } else if (loopB === null) {
+      if (time > loopA + 0.2) {
+        setLoopB(time)
+        log('abspielen', `A-B Loop: Endpunkt B bei ${clock(time)} gesetzt (Loop aktiv)`)
+      } else {
+        setLoopA(time)
+        log('abspielen', `A-B Loop: Startpunkt A auf ${clock(time)} aktualisiert`)
+      }
+    } else {
+      setLoopA(null)
+      setLoopB(null)
+      log('abspielen', 'A-B Loop deaktiviert')
+    }
+  }
   const [flash, setFlash] = useState<{ key: number; icon: 'play' | 'pause' | 'back' | 'forward' } | null>(null)
   const [facts, setFacts] = useState<Record<string, DiskFacts | 'pending'>>({})
   const [versions, setVersions] = useState<Record<string, Version>>({})
@@ -1537,6 +1589,11 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 onTimeUpdate={(event) => {
                   const node = event.currentTarget
                   setTime(node.currentTime)
+                  if (loopA !== null && loopB !== null && loopB > loopA) {
+                    if (node.currentTime >= loopB || node.currentTime < loopA) {
+                      node.currentTime = loopA
+                    }
+                  }
                   if (node.buffered.length) setBuffered(node.buffered.end(node.buffered.length - 1))
                   if (Math.abs(node.currentTime - lastSaved.current) > 5) {
                     lastSaved.current = node.currentTime
@@ -1731,7 +1788,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               }`}
               style={{ background: 'linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0.38) 55%, transparent)' }}
             >
-              <SeekBar time={time} duration={duration} buffered={buffered} onSeek={seek} />
+              <SeekBar time={time} duration={duration} buffered={buffered} loopA={loopA} loopB={loopB} onSeek={seek} />
               <div className="flex items-center gap-[2px]">
                 <Control label="Vorheriges (P)" onClick={() => goTo(-1)} disabled={index <= 0} wideOnly>
                   <PrevIcon />
@@ -1776,6 +1833,33 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 >
                   {remaining ? `−${clock(Math.max(0, duration - time))}` : clock(time)}
                   <span className="text-white/60"> / {clock(duration)}</span>
+                </button>
+
+                {/* A-B Loop button */}
+                <button
+                  type="button"
+                  onClick={toggleLoopAB}
+                  title={
+                    loopA === null
+                      ? 'A-B Loop: Klick setzt Startpunkt A'
+                      : loopB === null
+                        ? `A gesetzt (${clock(loopA)}) — Klick setzt Endpunkt B`
+                        : `A-B Loop aktiv (${clock(loopA)}–${clock(loopB)}) — Klick zum Beenden`
+                  }
+                  className={`press value ml-[6px] flex items-center gap-[4px] rounded-pill px-[8px] py-[4px] text-small transition-colors ${
+                    loopA !== null && loopB !== null
+                      ? 'bg-stage-accent text-white font-semibold ring-1 ring-white/30'
+                      : loopA !== null
+                        ? 'bg-white/20 text-white font-medium ring-1 ring-white/20'
+                        : 'text-white/70 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold tracking-tight">A-B</span>
+                  {loopA !== null && loopB !== null ? (
+                    <span className="text-micro opacity-90">{clock(loopA)}–{clock(loopB)}</span>
+                  ) : loopA !== null ? (
+                    <span className="text-micro opacity-90">{clock(loopA)}→</span>
+                  ) : null}
                 </button>
 
                 <span className="flex-1" />

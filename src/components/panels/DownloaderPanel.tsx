@@ -248,6 +248,10 @@ export function DownloaderPanel() {
   const autoTranscribeRef = useRef(false)
   autoTranscribeRef.current = autoTranscribe
 
+  const [filterAudioOnly, setFilterAudioOnly] = useState(false)
+  const filterAudioOnlyRef = useRef(false)
+  filterAudioOnlyRef.current = filterAudioOnly
+
   const triggerAutoTranscribe = useCallback(
     async (assetName: string, assetBytes: Uint8Array) => {
       log('holen', `Starte automatische Untertitel-Generierung für ${assetName}…`)
@@ -375,7 +379,10 @@ export function DownloaderPanel() {
     try {
       const res = await resolveViaService(entry.url, signal)
       if (res.isPlaylist) return
-      const bestStream = res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
+      const audioStream = res.streams.find((s) => !s.hasVideo && s.hasAudio)
+      const bestStream = filterAudioOnlyRef.current && audioStream
+        ? audioStream
+        : res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
       setBatchEntries((prev) =>
         prev
           ? prev.map((e, idx) =>
@@ -638,6 +645,18 @@ export function DownloaderPanel() {
               </label>
             </div>
 
+            <div className="flex items-center gap-[10px]">
+              <label className="flex cursor-pointer items-center gap-[8px] text-small font-medium text-ink">
+                <input
+                  type="checkbox"
+                  checked={filterAudioOnly}
+                  onChange={(e) => setFilterAudioOnly(e.target.checked)}
+                  className="rounded border-line text-ink focus:ring-ink"
+                />
+                Nur Tonspur laden (bevorzugt reine Audio-Streams)
+              </label>
+            </div>
+
             <div className="flex flex-wrap items-center gap-[10px]">
               <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
                 Dateinamen-Verschleierung:
@@ -790,7 +809,10 @@ export function DownloaderPanel() {
           </div>
 
           <div className="mt-[16px] flex flex-col gap-[8px]">
-            {result.streams.map((stream) => (
+            {(filterAudioOnly && result.streams.some((s) => !s.hasVideo && s.hasAudio)
+              ? result.streams.filter((s) => !s.hasVideo && s.hasAudio)
+              : result.streams
+            ).map((stream) => (
               <div
                 key={stream.id}
                 // A list of options, so a rule between them rather than a box

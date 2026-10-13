@@ -117,12 +117,106 @@ function Bars() {
 }
 
 const MAIN = 'group relative flex min-h-[300px] flex-col overflow-hidden rounded-card p-[24px] text-left sm:min-h-[420px] sm:p-[36px]'
+function DefenderDialog({
+  open,
+  downloadUrl,
+  onClose,
+}: {
+  open: boolean
+  downloadUrl: string
+  onClose: () => void
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (open && !dialog.open) dialog.showModal()
+    if (!open && dialog.open) dialog.close()
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <dialog
+      ref={dialogRef}
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === dialogRef.current) onClose()
+      }}
+      className="pop elevate-lift m-auto max-h-[calc(100dvh-32px)] w-[min(580px,calc(100vw-32px))] overflow-y-auto rounded-card bg-raised p-0 text-prose backdrop:bg-black/60 backdrop:backdrop-blur-[4px]"
+    >
+      <div className="flex flex-col gap-[20px] p-[24px] sm:p-[32px]">
+        <div className="flex items-start justify-between gap-[16px]">
+          <h3 className="m-0 text-subheading font-semibold text-ink">
+            Warum warnt Windows Defender / SmartScreen?
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Schliessen"
+            className="press -mr-[8px] -mt-[4px] flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-pill text-muted hover:bg-panel-soft hover:text-ink"
+          >
+            <svg viewBox="0 0 16 16" className="h-[16px] w-[16px]" fill="none" aria-hidden>
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="rounded-[10px] bg-[#0078d7] p-[16px] text-white">
+          <div className="text-[15px] font-semibold">„Der Computer wurde durch Windows geschützt“</div>
+          <div className="mt-[4px] text-[13px] opacity-90">
+            Microsoft Defender SmartScreen hat den Start einer unbekannten App verhindert.
+          </div>
+        </div>
+
+        <p className="m-0 text-body font-medium text-ink">
+          Keine Sorge: Die Datei ist 100% sauber, virenfrei und werbefrei.
+        </p>
+
+        <p className="m-0 text-small text-prose leading-[1.55]">
+          Microsoft SmartScreen stuft neue oder seltener geladene Programme automatisch als „unbekannter Herausgeber“ ein, wenn sie nicht mit einem teuren Firmenzertifikat (mehrere hundert Euro jährlich) signiert sind. Da Sondra ein freies Open-Source-Projekt ist, schlägt SmartScreen rein vorsorglich an.
+        </p>
+
+        <div className="rounded-[10px] border border-line bg-panel-soft p-[16px]">
+          <div className="text-small font-semibold text-ink">So startest du die Installation:</div>
+          <ol className="m-0 mt-[8px] list-decimal pl-[20px] text-small text-prose space-y-[4px]">
+            <li>Klicke im blauen Windows-Fenster auf <strong>„Weitere Informationen“</strong>.</li>
+            <li>Klicke danach unten rechts auf den Button <strong>„Trotzdem ausführen“</strong>.</li>
+          </ol>
+        </div>
+
+        <div className="mt-[8px] flex flex-wrap items-center gap-[12px]">
+          <a
+            href={downloadUrl}
+            onClick={() => {
+              setTimeout(onClose, 100)
+            }}
+            className="press inline-flex items-center gap-[8px] rounded-nav bg-ink px-[20px] py-[12px] text-body font-semibold text-on-ink hover:bg-ink-hover"
+          >
+            <DownloadIcon />
+            Alles klar, Download starten
+          </a>
+          <button
+            type="button"
+            onClick={onClose}
+            className="press rounded-nav border border-line px-[16px] py-[12px] text-body font-medium text-prose hover:bg-panel-soft"
+          >
+            Abbrechen
+          </button>
+        </div>
+      </div>
+    </dialog>
+  )
+}
+
 const ACTION = 'inline-flex items-center gap-[10px] rounded-nav px-[22px] py-[14px] text-body font-semibold'
 
 export function GetAppButton() {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
+  const [defenderUrl, setDefenderUrl] = useState<string | null>(null)
   const browser = useBrowserInstall()
   /** Windows on Arm gets its own build as the main offer, the other one beside it. */
   const [arm, setArm] = useState(false)
@@ -198,7 +292,10 @@ export function GetAppButton() {
               <a
                 href={arm ? WINDOWS_SETUP_ARM64 : WINDOWS_SETUP}
                 rel="noopener"
-                onClick={() => setTimeout(close, 0)}
+                onClick={(e) => {
+                  e.preventDefault()
+                  setDefenderUrl(arm ? WINDOWS_SETUP_ARM64 : WINDOWS_SETUP)
+                }}
                 className={`${MAIN} press bg-ink text-on-ink`}
               >
                 <Bars />
@@ -286,14 +383,20 @@ export function GetAppButton() {
             „Trotzdem ausführen“ wählen. Mit eingeschalteter intelligenter App-Steuerung startet es
             nicht — dann die Website als App nehmen; Videoportale lädt sie wie die Website, YouTube
             meist in 360p.{' '}
-            <a href={arm ? WINDOWS_SETUP : WINDOWS_SETUP_ARM64} className="text-ink underline underline-offset-[3px] hover:no-underline">
+            <button
+              type="button"
+              onClick={() => setDefenderUrl(arm ? WINDOWS_SETUP : WINDOWS_SETUP_ARM64)}
+              className="text-ink underline underline-offset-[3px] hover:no-underline"
+            >
               {arm ? 'Setup für x64-Prozessoren' : 'Setup für Arm-Prozessoren'}
-            </a>
+            </button>
             {' · '}
-            <a href="./download.html" className="text-ink underline underline-offset-[3px] hover:no-underline">Download-Seite und Signatur</a>
+            <a href="./download.html" className="text-ink underline underline-offset-[3px] hover:no-underline">Download-Seite & Hinweise</a>
           </p>
         </div>
       </dialog>
+
+      <DefenderDialog open={Boolean(defenderUrl)} downloadUrl={defenderUrl ?? ''} onClose={() => setDefenderUrl(null)} />
     </>
   )
 }
