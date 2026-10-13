@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import {
   BOOSTS,
   DEFAULT_SETTINGS,
+  EQ_PRESETS,
   RATES,
   SKIPS,
   rateLabel,
@@ -227,7 +228,20 @@ export function SettingsMenu({
         : `${quality.current}p`
   const pictureTouched =
     settings.brightness !== 1 || settings.contrast !== 1 || settings.saturation !== 1 || settings.mirror || settings.fit !== 'contain'
-  const soundValue = [settings.karaoke ? 'Karaoke' : null, settings.boost > 1 ? `${Math.round(settings.boost * 100)} %` : null, settings.night ? 'Nachtmodus' : null]
+  const matchedPreset = EQ_PRESETS.find(
+    (p) =>
+      p.id !== 'flat' &&
+      settings.bassBoost === p.bassBoost &&
+      settings.eqLow === p.eqLow &&
+      settings.eqMid === p.eqMid &&
+      settings.eqHigh === p.eqHigh,
+  )
+  const soundValue = [
+    settings.karaoke ? 'Karaoke' : null,
+    matchedPreset ? matchedPreset.name : settings.bassBoost > 0 ? 'Bass-Boost' : null,
+    settings.boost > 1 ? `${Math.round(settings.boost * 100)} %` : null,
+    settings.night ? 'Nachtmodus' : null,
+  ]
     .filter(Boolean)
     .join(' · ') || 'Normal'
   const playbackValue = settings.repeat !== 'aus' ? (settings.repeat === 'titel' ? 'Titel wiederholen' : 'Liste wiederholen') : settings.autoNext ? 'Automatisch weiter' : 'Anhalten am Ende'
@@ -381,7 +395,37 @@ export function SettingsMenu({
                 />
               ))}
             </Group>
-            <Group title="Klang & Bass-Boost">
+            <Group title="Klang & Equalizer Presets">
+              <div className="flex flex-wrap gap-[6px] px-[16px] py-[8px]">
+                {EQ_PRESETS.map((preset) => {
+                  const active =
+                    settings.bassBoost === preset.bassBoost &&
+                    settings.eqLow === preset.eqLow &&
+                    settings.eqMid === preset.eqMid &&
+                    settings.eqHigh === preset.eqHigh
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() =>
+                        update({
+                          bassBoost: preset.bassBoost,
+                          eqLow: preset.eqLow,
+                          eqMid: preset.eqMid,
+                          eqHigh: preset.eqHigh,
+                        })
+                      }
+                      className={`press rounded-pill px-[10px] py-[4px] text-micro font-medium transition-colors ${
+                        active
+                          ? 'bg-stage-ink text-stage-on-ink font-semibold'
+                          : 'bg-stage-line/50 text-stage-ink hover:bg-stage-line'
+                      }`}
+                    >
+                      {preset.name}
+                    </button>
+                  )
+                })}
+              </div>
               <Range
                 label="Bass-Boost"
                 value={settings.bassBoost}
@@ -437,10 +481,35 @@ export function SettingsMenu({
               />
               <Switch
                 label="Audio-Visualizer"
-                hint="Echtzeit-Frequenzbalken unter der Steuerleiste"
+                hint="Echtzeit-Frequenz- und Wellenanzeige"
                 on={settings.visualizer}
                 onChange={(visualizer) => update({ visualizer })}
               />
+              {settings.visualizer ? (
+                <div className="flex items-center justify-between border-t border-stage-line/30 px-[16px] py-[8px]">
+                  <span className="text-small text-stage-ink">Visualizer-Stil</span>
+                  <div className="flex gap-[4px]">
+                    {([
+                      { id: 'bars', label: 'Balken' },
+                      { id: 'wave', label: 'Welle' },
+                      { id: 'radial', label: 'Radial' },
+                    ] as const).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => update({ visualizerMode: m.id })}
+                        className={`press rounded-pill px-[8px] py-[3px] text-micro font-medium ${
+                          settings.visualizerMode === m.id
+                            ? 'bg-stage-ink text-stage-on-ink font-semibold'
+                            : 'bg-stage-line/50 text-stage-muted hover:bg-stage-line'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <Switch
                 label="Nachtmodus"
                 hint="Leise Stellen lauter, laute leiser — Dialoge verstehen, ohne die Nachbarn zu wecken"

@@ -286,3 +286,26 @@ export function channelTrick(audio: AudioData, mode: 'swap' | 'left' | 'right'):
   if (mode === 'left') return shaped(audio, [pick(left), pick(left)])
   return shaped(audio, [pick(right), pick(right)])
 }
+
+/**
+ * Removes DC offset by subtracting the mean of each channel.
+ */
+export function removeDcOffset(audio: AudioData): AudioData {
+  return {
+    sampleRate: audio.sampleRate,
+    channels: audio.channels.map((channel) => {
+      let sum = 0
+      const len = channel.length
+      if (len === 0) return new Float32Array(0)
+      for (let i = 0; i < len; i += 1) {
+        sum += channel[i]
+      }
+      const mean = sum / len
+      const out = new Float32Array(len)
+      for (let i = 0; i < len; i += 1) {
+        out[i] = channel[i] - mean
+      }
+      return out
+    }),
+  }
+}

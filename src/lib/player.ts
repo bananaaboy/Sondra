@@ -122,6 +122,26 @@ export type CaptionSize = 'klein' | 'mittel' | 'gross'
 export type Fit = 'contain' | 'cover' | 'fill'
 export type Repeat = 'aus' | 'titel' | 'liste'
 
+export type VisualizerMode = 'bars' | 'wave' | 'radial'
+
+export interface EqPreset {
+  id: string
+  name: string
+  bassBoost: number
+  eqLow: number
+  eqMid: number
+  eqHigh: number
+}
+
+export const EQ_PRESETS: EqPreset[] = [
+  { id: 'flat', name: 'Linear', bassBoost: 0, eqLow: 0, eqMid: 0, eqHigh: 0 },
+  { id: 'bass', name: 'Bass-Boost', bassBoost: 6, eqLow: 5, eqMid: 0, eqHigh: 1 },
+  { id: 'vocal', name: 'Vocal / Podcast', bassBoost: 0, eqLow: -2, eqMid: 4, eqHigh: 2 },
+  { id: 'electronic', name: 'Club / Dance', bassBoost: 4, eqLow: 4, eqMid: -2, eqHigh: 4 },
+  { id: 'rock', name: 'Rock / Metal', bassBoost: 2, eqLow: 4, eqMid: 2, eqHigh: 3 },
+  { id: 'acoustic', name: 'Akustik / Jazz', bassBoost: 0, eqLow: 2, eqMid: 1, eqHigh: 3 },
+]
+
 /** Everything the settings menu holds. Kept on this device, never needed. */
 export interface PlayerSettings {
   volume: number
@@ -144,6 +164,7 @@ export interface PlayerSettings {
   eqHigh: number
   karaoke: boolean
   visualizer: boolean
+  visualizerMode: VisualizerMode
   autoNext: boolean
   repeat: Repeat
   skip: number
@@ -168,6 +189,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   eqHigh: 0,
   karaoke: false,
   visualizer: true,
+  visualizerMode: 'bars',
   autoNext: true,
   repeat: 'aus',
   skip: 10,
@@ -205,6 +227,7 @@ export function rememberedSettings(): PlayerSettings {
       eqHigh: within(saved.eqHigh, -12, 12, d.eqHigh),
       karaoke: saved.karaoke === true,
       visualizer: saved.visualizer !== false,
+      visualizerMode: oneOf(saved.visualizerMode, ['bars', 'wave', 'radial'] as const, d.visualizerMode),
       autoNext: saved.autoNext !== false,
       repeat: oneOf(saved.repeat, ['aus', 'titel', 'liste'] as const, d.repeat),
       skip: oneOf(saved.skip, SKIPS, d.skip),

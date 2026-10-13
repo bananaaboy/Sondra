@@ -622,6 +622,21 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
     log('sampler', 'Einstellungen des gewählten Pads auf alle übertragen')
   }
 
+  const transposeAll = (delta: number) => {
+    setSlices((current) =>
+      current.map((slice) => ({
+        ...slice,
+        semitones: delta === 0 ? 0 : clamp(slice.semitones + delta, -24, 24),
+      })),
+    )
+    log('sampler', delta === 0 ? 'Tonhöhe aller Pads zurückgesetzt' : `Alle Pads um ${delta > 0 ? '+' : ''}${delta} Halbtöne transponiert`)
+  }
+
+  const setAllMode = (mode: PlayMode) => {
+    setSlices((current) => current.map((slice) => ({ ...slice, mode })))
+    log('sampler', `Alle Pads auf Modus „${mode === 'oneshot' ? 'One-Shot' : 'Gate'}“ umgestellt`)
+  }
+
   /* --- export ------------------------------------------------------------- */
   const buildSlice = useCallback(
     async (slice: Slice): Promise<AudioData | null> => {
@@ -1271,6 +1286,73 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
             <Toggle label="Auf −0,3 dBFS normalisieren" checked={normalize} onChange={setNormalize} />
           </div>
         </Card>
+
+        {slices.length > 0 ? (
+          <Card tone="mint" size="compact">
+            <SectionHead>Alle {slices.length} Pads anpassen</SectionHead>
+            <div className="mt-[12px] flex flex-col gap-[12px]">
+              <div>
+                <span className="text-micro font-medium text-muted">Tonhöhe (Halbtöne)</span>
+                <div className="mt-[4px] flex flex-wrap gap-[6px]">
+                  <button
+                    type="button"
+                    onClick={() => transposeAll(-12)}
+                    className="press rounded-pill bg-raised px-[8px] py-[3px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+                  >
+                    −12 (Oktave)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => transposeAll(-1)}
+                    className="press rounded-pill bg-raised px-[8px] py-[3px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+                  >
+                    −1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => transposeAll(0)}
+                    className="press rounded-pill bg-raised px-[8px] py-[3px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+                  >
+                    Reset (0)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => transposeAll(1)}
+                    className="press rounded-pill bg-raised px-[8px] py-[3px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+                  >
+                    +1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => transposeAll(12)}
+                    className="press rounded-pill bg-raised px-[8px] py-[3px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+                  >
+                    +12 (Oktave)
+                  </button>
+                </div>
+              </div>
+              <div>
+                <span className="text-micro font-medium text-muted">Abspielmodus</span>
+                <div className="mt-[4px] flex gap-[6px]">
+                  <button
+                    type="button"
+                    onClick={() => setAllMode('oneshot')}
+                    className="press rounded-pill bg-raised px-[10px] py-[4px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+                  >
+                    Alle One-Shot
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllMode('gate')}
+                    className="press rounded-pill bg-raised px-[10px] py-[4px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+                  >
+                    Alle Gate
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : null}
 
       </aside>
     </div>

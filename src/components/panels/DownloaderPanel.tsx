@@ -139,9 +139,63 @@ interface NetworkAdapter {
   address: string | null
 }
 
+interface DownloadHistoryItem {
+  id: string
+  url: string
+  title: string
+  author: string
+  format: string
+  bytes?: number
+  timestamp: number
+}
+
+const HISTORY_KEY = 'sondra:download_history'
+
+function loadDownloadHistory(): DownloadHistoryItem[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveDownloadHistory(items: DownloadHistoryItem[]): void {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 20)))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
 export function DownloaderPanel() {
   const addAsset = useSession((state) => state.addAsset)
   const log = useSession((state) => state.log)
+
+  const [history, setHistory] = useState<DownloadHistoryItem[]>(loadDownloadHistory)
+
+  const recordDownload = useCallback(
+    (targetUrl: string, title: string, author: string, format: string, byteSize?: number) => {
+      setHistory((prev) => {
+        const filtered = prev.filter((item) => item.url !== targetUrl)
+        const newItem: DownloadHistoryItem = {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          url: targetUrl,
+          title: title || 'Download',
+          author: author || '',
+          format,
+          bytes: byteSize,
+          timestamp: Date.now(),
+        }
+        const updated = [newItem, ...filtered].slice(0, 20)
+        saveDownloadHistory(updated)
+        return updated
+      })
+    },
+    [],
+  )
 
   const [url, setUrl] = useState('')
   const [stealthMode, setStealthMode] = useState<StealthMode>('off')
@@ -292,8 +346,9 @@ export function DownloaderPanel() {
     [addAsset, log],
   )
 
-  const look = async () => {
-    const targets = url
+  const look = async (overrideUrl?: string) => {
+    const targetSource = overrideUrl ?? url
+    const targets = targetSource
       .split(/[\n,]+/)
       .map((s) => s.trim())
       .filter((s) => s.length > 0)
@@ -446,6 +501,7 @@ export function DownloaderPanel() {
       })
       log('holen', `${name} geladen (${formatBytes(finalBytes.byteLength)})`)
       setTaken({ name, bytes: finalBytes, mime: stream.mime })
+      recordDownload(url, result.title, result.author ?? '', stream.ext, finalBytes.byteLength)
       if (autoTranscribe) {
         void triggerAutoTranscribe(name, finalBytes)
       }
@@ -544,6 +600,7 @@ export function DownloaderPanel() {
             )
           : null,
       )
+      recordDownload(entry.url, entry.result.title, entry.result.author ?? '', stream.ext, finalBytes.byteLength)
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
       const msg =
@@ -1049,6 +1106,81 @@ export function DownloaderPanel() {
                 </div>
               )
             })}
+          </div>
+        </Card>
+      ) : null}
+
+      {/* Download-Verlauf (Historie) */}
+      {history.length > 0 ? (
+        <Card tone="keylime">
+          <div className="flex flex-wrap items-center justify-between gap-[8px] border-b border-line pb-[10px]">
+            <div>
+              <h3 className="text-small font-semibold text-ink">Download-Verlauf (Zuletzt geladen)</h3>
+              <p className="text-small text-muted">Die letzten {history.length} Downloads auf diesem Gerät gemerkt.</p>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setHistory([])
+                try {
+                  localStorage.removeItem('sondra:download_history')
+                } catch {
+                  /* ignore */
+                }
+              }}
+            >
+              Verlauf leeren
+            </Button>
+          </div>
+          <div className="mt-[12px] flex flex-col divide-y divide-line/60">
+            {history.map((item) => (
+              <div key={item.id} className="flex flex-wrap items-center justify-between gap-[8px] py-[8px]">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-small font-semibold text-ink" title={item.title}>
+                    {item.title}
+                  </p>
+                  <p className="value text-micro text-muted">
+                    {[
+                      item.author,
+                      item.format.toUpperCase(),
+                      item.bytes ? formatBytes(item.bytes) : null,
+                      new Date(item.timestamp).toLocaleDateString(undefined, {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-[6px]">
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    onClick={() => {
+                      setUrl(item.url)
+                      void look(item.url)
+                    }}
+                    title="URL erneut abrufen"
+                  >
+                    Erneut laden
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(item.url)
+                    }}
+                    title="URL in Zwischenablage kopieren"
+                  >
+                    Kopieren
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       ) : null}
