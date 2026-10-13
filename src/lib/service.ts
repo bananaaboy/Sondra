@@ -71,6 +71,7 @@ export type ServiceResult =
   | { kind: 'file'; item: ServiceItem }
   | { kind: 'picker'; items: ServiceItem[] }
   | { kind: 'local'; job: LocalJob }
+  | { kind: 'playlist'; title: string; author: string | null; items: { title: string; url: string }[] }
 
 /** What a reachable instance says about itself. */
 export interface ServiceInfo {
@@ -187,6 +188,9 @@ interface ServiceResponse {
   status?: string
   url?: string
   filename?: string
+  title?: string
+  author?: string
+  items?: { title: string; url: string }[]
   picker?: { type?: string; url?: string; thumb?: string }[]
   audio?: string | { format?: string; copy?: boolean }
   audioFilename?: string
@@ -574,6 +578,15 @@ export async function resolveMedia(
   if (body.status === 'error' || !response.ok) {
     const code = body.error?.code ?? null
     throw new ServiceError(explain(code, body.error?.detail), code)
+  }
+
+  if (body.status === 'playlist' && Array.isArray(body.items)) {
+    return {
+      kind: 'playlist',
+      title: body.title || 'Playlist',
+      author: body.author || null,
+      items: body.items,
+    }
   }
 
   // "tunnel" streams through the service, "redirect" hands back the origin URL.

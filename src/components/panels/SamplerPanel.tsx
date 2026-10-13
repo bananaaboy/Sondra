@@ -32,7 +32,7 @@ import {
 } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
 import { clamp, dbToGain, formatTimecode } from '../../lib/format'
-import { detectOnsets, divideEvenly } from '../../lib/onsets'
+import { detectAutoChop16, detectOnsets, divideEvenly } from '../../lib/onsets'
 import { beatGrid, estimateTempo, snapToZeroCrossing, type TempoEstimate } from '../../lib/tempo'
 import { readPalette, withAlpha, type ResolvedTheme } from '../../lib/theme'
 import { encodeWav, type AudioData } from '../../lib/wav'
@@ -163,6 +163,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   const [bpm, setBpm] = useState(120)
   const [division, setDivision] = useState(1)
   const [sliceCount, setSliceCount] = useState(16)
+  const [sensitivity, setSensitivity] = useState(1.4)
   const [zoom, setZoom] = useState(0)
   /** Wavesurfer rejects most calls until it has decoded the audio. */
   const [waveReady, setWaveReady] = useState(false)
@@ -535,6 +536,11 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
     [audio, duration, log, snap],
   )
 
+  const chopAuto16 = () => {
+    if (!audio) return
+    applyCuts(detectAutoChop16(audio, sensitivity, 16), 'Auto-Chop 16')
+  }
+
   const chopTransients = () => {
     if (!audio) return
     applyCuts(detectOnsets(audio), 'Transienten')
@@ -751,15 +757,43 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
               ) : null}
 
               {/* ---- chop controls ------------------------------------------ */}
-              <div className="mt-[16px] grid gap-[12px] sm:grid-cols-3">
+              <div className="mt-[16px] grid gap-[12px] sm:grid-cols-2 xl:grid-cols-4">
                 <div className="flex flex-col gap-[8px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-ink/20">
+                  <span className="text-small font-semibold text-ink">
+                    Auto-Chop 16
+                  </span>
+                  <p className="text-small leading-[1.4] text-muted">
+                    Findet die 16 stärksten Hits und belegt die 16 Pads sauber.
+                  </p>
+                  <div className="mt-[4px] flex flex-col gap-[2px]">
+                    <div className="flex justify-between text-micro text-muted">
+                      <span>Empfindlichkeit</span>
+                      <span className="value text-ink">{sensitivity.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={3.0}
+                      step={0.1}
+                      value={sensitivity}
+                      onChange={(e) => setSensitivity(Number(e.target.value))}
+                      aria-label="Empfindlichkeit"
+                      className="w-full"
+                    />
+                  </div>
+                  <Button size="sm" onClick={chopAuto16} disabled={!audio} className="mt-auto">
+                    16 Pads belegen
+                  </Button>
+                </div>
+
+                <div className="flex flex-col gap-[8px] rounded-card bg-panel-soft p-[16px]">
                   <span className="text-small font-semibold text-ink">
                     Nach Anschlägen
                   </span>
                   <p className="text-small leading-[1.4] text-muted">
                     Schneidet, wo etwas anfängt. Meistens die richtige Wahl.
                   </p>
-                  <Button size="sm" onClick={chopTransients} disabled={!audio} className="mt-auto">
+                  <Button size="sm" variant="quiet" onClick={chopTransients} disabled={!audio} className="mt-auto">
                     Schneiden
                   </Button>
                 </div>

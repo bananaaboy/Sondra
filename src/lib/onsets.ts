@@ -75,3 +75,66 @@ export function detectOnsets(audio: AudioData, options: OnsetOptions = DEFAULT_O
 export function divideEvenly(durationSeconds: number, count: number): number[] {
   return Array.from({ length: count }, (_, i) => (durationSeconds * i) / count)
 }
+
+/**
+ * Detects the most prominent onsets and returns at most `padCount` (default: 16)
+ * sorted chronologically, suitable for 16-pad MPC-style mapping.
+ */
+export function detectAutoChop16(audio: AudioData, sensitivity = 1.4, padCount = 16): number[] {
+  const mono = mixToMono(audio).channels[0]
+  if (mono.length < 1024 * 2) return [0]
+
+  const spec = stft(mono, 1024, 256)
+  const magnitude = magnitudeOf(spec)
+  const { frames, bins } = spec
+
+  const flux = new Float32Array(frames)
+  for (let f = 1; f < frames; f += 1) {
+    let sum = 0
+    for (let b = 0; b < bins; b += 1) {
+      const delta = magnitude[f * bins + b] - magnitude[(f - 1) * bins + b]
+      if (delta > 0) sum += delta
+    }
+    flux[f] = sum
+  }
+
+  const window = 24
+  const secondsPerFrame = 256 / audio.sampleRate
+  const minimumGapFrames = Math.max(1, Math.round(0.06 / secondsPerFrame))
+
+  interface Candidate {
+    time: number
+    score: number
+  }
+  const candidates: Candidate[] = []
+
+  let lastOnset = -minimumGapFrames
+  for (let f = 1; f < frames; f += 1) {
+    const from = Math.max(0, f - window)
+    const to = Math.min(frames, f + window)
+    let mean = 0
+    for (let i = from; i < to; i += 1) mean += flux[i]
+    mean /= to - from
+
+    const isPeak = flux[f] > flux[f - 1] && (f + 1 >= frames || flux[f] >= flux[f + 1])
+    const ratio = mean > 0 ? flux[f] / mean : 0
+    if (isPeak && ratio > sensitivity && f - lastOnset >= minimumGapFrames) {
+      candidates.push({ time: f * secondsPerFrame, score: ratio * flux[f] })
+      lastOnset = f
+    }
+  }
+
+  candidates.sort((a, b) => b.score - a.score)
+  const chosen = candidates.slice(0, padCount - 1).map((c) => c.time)
+  chosen.push(0)
+  chosen.sort((a, b) => a - b)
+
+  const result: number[] = []
+  for (const t of chosen) {
+    if (result.length === 0 || t - result[result.length - 1] >= 0.05) {
+      result.push(t)
+    }
+  }
+
+  return result.slice(0, padCount)
+}

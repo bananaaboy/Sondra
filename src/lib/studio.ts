@@ -89,7 +89,25 @@ export interface StudioResult {
   durationSeconds: number | null
   thumbnail: string | null
   streams: StudioStream[]
+  isPlaylist?: false
 }
+
+export interface StudioPlaylistItem {
+  title: string
+  url: string
+  episodeNumber?: number
+  seasonNumber?: number
+}
+
+export interface StudioPlaylist {
+  isPlaylist: true
+  kind: 'playlist'
+  title: string
+  author: string | null
+  items: StudioPlaylistItem[]
+}
+
+export type StudioResolveResult = StudioResult | StudioPlaylist
 
 export class StudioError extends Error {
   code: string
@@ -251,7 +269,7 @@ function storedServiceChoices(): Partial<ServiceSettings> {
   }
 }
 
-export async function resolveViaService(url: string, signal?: AbortSignal): Promise<StudioResult> {
+export async function resolveViaService(url: string, signal?: AbortSignal): Promise<StudioResolveResult> {
   const connected = serviceConnection()
   if (connected.endpoint) {
     try {
@@ -261,6 +279,15 @@ export async function resolveViaService(url: string, signal?: AbortSignal): Prom
         connected.apiKey,
         signal,
       )
+      if (outcome.kind === 'playlist') {
+        return {
+          isPlaylist: true,
+          kind: 'playlist',
+          title: outcome.title,
+          author: outcome.author,
+          items: outcome.items,
+        }
+      }
       if (outcome.kind === 'file') return fromServiceItems([outcome.item], url)
       if (outcome.kind === 'picker') return fromServiceItems(outcome.items, 'Mehrere Dateien')
       if (outcome.kind === 'local') {
@@ -315,13 +342,22 @@ export async function resolveViaService(url: string, signal?: AbortSignal): Prom
   }
 
   const data = (await response.json().catch(() => null)) as
-    | (StudioResult & { error?: string; message?: string })
+    | (StudioResolveResult & { error?: string; message?: string; status?: string })
     | null
   if (!response.ok || !data) {
     throw new StudioError(
       data?.error ?? String(response.status),
       data?.message ?? `Der Dienst antwortete mit ${response.status}.`,
     )
+  }
+  if ((data as any).status === 'playlist' || data.isPlaylist) {
+    return {
+      isPlaylist: true,
+      kind: 'playlist',
+      title: data.title || 'Playlist',
+      author: data.author || null,
+      items: (data as any).items || [],
+    }
   }
   return data
 }

@@ -20,7 +20,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
 
 import { startDownloader } from './downloader.mjs'
 import { offerFile, startServer } from './server.mjs'
@@ -325,6 +325,23 @@ async function open() {
 
   log('Fenster offen')
 
+  try {
+    globalShortcut.register('MediaPlayPause', () => {
+      window?.webContents.send('sondra:media-action', 'toggle')
+    })
+    globalShortcut.register('MediaNextTrack', () => {
+      window?.webContents.send('sondra:media-action', 'next')
+    })
+    globalShortcut.register('MediaPreviousTrack', () => {
+      window?.webContents.send('sondra:media-action', 'prev')
+    })
+    globalShortcut.register('MediaStop', () => {
+      window?.webContents.send('sondra:media-action', 'stop')
+    })
+  } catch (err) {
+    log(`Globale Medientasten konnten nicht registriert werden: ${err?.message ?? err}`)
+  }
+
   // Updates only for the installed Windows app, and never in a test run —
   // a test must not replace the build it is testing. The page's update
   // control is there either way and says so.
@@ -493,5 +510,9 @@ if (primary) app.whenReady().then(() =>
     app.exit(1)
   }),
 )
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
+})
 
 app.on('window-all-closed', () => app.quit())

@@ -363,12 +363,44 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     if (isAniworldUrl(target) || isHosterUrl(target)) {
       try {
         directMedia = await extractDirectMedia(target, { localAddress: bindAddr })
+        if (directMedia && directMedia.isPlaylist) {
+          return {
+            status: 'playlist',
+            title: directMedia.title,
+            author: directMedia.seriesTitle,
+            items: directMedia.items,
+          }
+        }
       } catch (failure) {
         log(`Direktextraktion: ${failure?.message ?? failure}`)
       }
     }
 
     const tool = await ytdlp()
+    const isPlaylistTarget = /[?&]list=|\/playlist\b/i.test(target)
+    if (tool && isPlaylistTarget) {
+      const plResult = await run(tool.bin, ['--flat-playlist', '-J', '--no-warnings', ...sourceArgs(), ...cookieArgs(), '--', target])
+      if (plResult.code === 0 && plResult.stdout) {
+        try {
+          const plInfo = JSON.parse(plResult.stdout)
+          if (Array.isArray(plInfo.entries) && plInfo.entries.length > 0) {
+            return {
+              status: 'playlist',
+              title: plInfo.title || 'Playlist',
+              author: plInfo.uploader || plInfo.channel || 'YouTube',
+              items: plInfo.entries
+                .map((e) => ({
+                  title: e.title || 'Video',
+                  url: e.url || (e.id ? `https://www.youtube.com/watch?v=${e.id}` : null),
+                }))
+                .filter((e) => e.url),
+            }
+          }
+        } catch {
+          // fallback to probe
+        }
+      }
+    }
     if (!tool && !directMedia) {
       return { status: 'error', error: { code: fetchesTool ? 'error.api.ytdlp.missing' : 'error.api.ytdlp.missing.store' } }
     }

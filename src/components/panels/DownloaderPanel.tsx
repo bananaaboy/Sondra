@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from 'react'
 import { IN_DESKTOP_APP } from '../../lib/desktop'
 import { saveBytes } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
+import { tagAudioFile } from '../../lib/tagger'
 import {
   StudioError,
   downloadStream,
@@ -121,6 +122,7 @@ function AppNotice() {
 
 interface BatchItem {
   url: string
+  titleHint?: string
   status: 'pending' | 'resolving' | 'ready' | 'downloading' | 'done' | 'error'
   result?: StudioResult
   selectedStreamId?: string
@@ -224,6 +226,7 @@ export function DownloaderPanel() {
   const batchEntriesRef = useRef<BatchItem[] | null>(null)
   batchEntriesRef.current = batchEntries
 
+  const [concurrency, setConcurrency] = useState<number>(3)
   const [batchBusy, setBatchBusy] = useState(false)
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -258,6 +261,19 @@ export function DownloaderPanel() {
     if (targets.length === 1) {
       try {
         const found = await resolveViaService(targets[0], controller.signal)
+        if (found.isPlaylist) {
+          log('holen', `Staffel / Playlist erkannt: ${found.title} (${found.items.length} Titel)`)
+          const playlistItems: BatchItem[] = found.items.map((item) => ({
+            url: item.url,
+            titleHint: item.title,
+            status: 'pending',
+          }))
+          setBatchEntries(playlistItems)
+          // Resolve first items up to concurrency in the background
+          const initialIndices = playlistItems.slice(0, concurrency).map((_, i) => i)
+          void Promise.all(initialIndices.map((i) => resolveBatchItem(i, controller.signal, playlistItems)))
+          return
+        }
         setResult(found)
         log('holen', `${found.title} — ${found.streams.length} Spur(en) verfügbar`)
       } catch (cause) {
@@ -277,52 +293,64 @@ export function DownloaderPanel() {
     // Mehrere Adressen: Batch-Modus
     const initial: BatchItem[] = targets.map((u) => ({
       url: u,
-      status: 'resolving',
+      status: 'pending',
     }))
     setBatchEntries(initial)
 
     try {
-      await Promise.all(
-        targets.map(async (target, i) => {
-          try {
-            const res = await resolveViaService(target, controller.signal)
-            const bestStream = res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
-            setBatchEntries((prev) =>
-              prev
-                ? prev.map((entry, idx) =>
-                    idx === i
-                      ? {
-                          ...entry,
-                          status: 'ready',
-                          result: res,
-                          selectedStreamId: bestStream?.id ?? res.streams[0]?.id,
-                        }
-                      : entry
-                  )
-                : null
-            )
-            log('holen', `${res.title} — bereit`)
-          } catch (cause) {
-            if (cause instanceof DOMException && cause.name === 'AbortError') return
-            const msg =
-              cause instanceof StudioError
-                ? cause.message
-                : cause instanceof Error
-                ? cause.message
-                : String(cause)
-            setBatchEntries((prev) =>
-              prev
-                ? prev.map((entry, idx) =>
-                    idx === i ? { ...entry, status: 'error', error: msg } : entry
-                  )
-                : null
-            )
-            log('holen', `Fehler bei ${target}: ${msg}`, 'error')
-          }
-        })
-      )
+      let cursor = 0
+      const workerCount = Math.min(concurrency, targets.length)
+      const workers = Array.from({ length: workerCount }, async () => {
+        while (cursor < targets.length) {
+          if (controller.signal.aborted) break
+          const i = cursor++
+          await resolveBatchItem(i, controller.signal, initial)
+        }
+      })
+      await Promise.all(workers)
     } finally {
       setLooking(false)
+    }
+  }
+
+  const resolveBatchItem = async (
+    index: number,
+    signal?: AbortSignal,
+    fallbackEntries?: BatchItem[],
+  ) => {
+    const list = batchEntriesRef.current ?? fallbackEntries
+    const entry = list?.[index]
+    if (!entry || entry.status === 'ready' || entry.status === 'done') return
+
+    setBatchEntries((prev) =>
+      prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'resolving', error: undefined } : e)) : null,
+    )
+
+    try {
+      const res = await resolveViaService(entry.url, signal)
+      if (res.isPlaylist) return
+      const bestStream = res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
+      setBatchEntries((prev) =>
+        prev
+          ? prev.map((e, idx) =>
+              idx === index
+                ? {
+                    ...e,
+                    status: 'ready',
+                    result: res,
+                    selectedStreamId: bestStream?.id ?? res.streams[0]?.id,
+                  }
+                : e,
+            )
+          : null,
+      )
+      log('holen', `${res.title} — bereit`)
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      const msg = cause instanceof StudioError ? cause.message : cause instanceof Error ? cause.message : String(cause)
+      setBatchEntries((prev) =>
+        prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'error', error: msg } : e)) : null,
+      )
     }
   }
 
@@ -339,19 +367,32 @@ export function DownloaderPanel() {
         signal: controller.signal,
         onProgress: setProgress,
       })
+      let finalBytes = bytes
+      if (!stream.hasVideo && stream.hasAudio) {
+        finalBytes = await tagAudioFile(
+          bytes,
+          stream.ext,
+          {
+            title: result.title,
+            artist: result.author,
+            coverUrl: result.thumbnail,
+          },
+          controller.signal,
+        )
+      }
       const name = filenameFor(result, stream, { mode: stealthMode })
       addAsset({
         name,
-        bytes,
+        bytes: finalBytes,
         mime: stream.mime,
-        sizeBytes: bytes.byteLength,
+        sizeBytes: finalBytes.byteLength,
         kind: kindFromMime(stream.mime, name),
         audio: null,
         durationSeconds: result.durationSeconds,
         origin: 'download',
       })
-      log('holen', `${name} geladen (${formatBytes(bytes.byteLength)})`)
-      setTaken({ name, bytes, mime: stream.mime })
+      log('holen', `${name} geladen (${formatBytes(finalBytes.byteLength)})`)
+      setTaken({ name, bytes: finalBytes, mime: stream.mime })
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
       const studio = cause instanceof StudioError ? cause : null
@@ -368,8 +409,15 @@ export function DownloaderPanel() {
   }
 
   const takeBatchItem = async (index: number, externalSignal?: AbortSignal) => {
-    const entry = batchEntriesRef.current?.[index]
-    if (!entry || !entry.result) return
+    let entry = batchEntriesRef.current?.[index]
+    if (!entry) return
+
+    if (entry.status === 'pending' || !entry.result) {
+      await resolveBatchItem(index, externalSignal)
+      entry = batchEntriesRef.current?.[index]
+      if (!entry || !entry.result) return
+    }
+
     const stream =
       entry.result.streams.find((s) => s.id === entry.selectedStreamId) ||
       entry.result.streams[0]
@@ -384,9 +432,9 @@ export function DownloaderPanel() {
         ? prev.map((e, idx) =>
             idx === index
               ? { ...e, status: 'downloading', progress: { loaded: 0, total: stream.bytes } }
-              : e
+              : e,
           )
-        : null
+        : null,
     )
 
     try {
@@ -394,22 +442,35 @@ export function DownloaderPanel() {
         signal,
         onProgress: (p) => {
           setBatchEntries((prev) =>
-            prev ? prev.map((e, idx) => (idx === index ? { ...e, progress: p } : e)) : null
+            prev ? prev.map((e, idx) => (idx === index ? { ...e, progress: p } : e)) : null,
           )
         },
       })
+      let finalBytes = bytes
+      if (!stream.hasVideo && stream.hasAudio) {
+        finalBytes = await tagAudioFile(
+          bytes,
+          stream.ext,
+          {
+            title: entry.result.title,
+            artist: entry.result.author,
+            coverUrl: entry.result.thumbnail,
+          },
+          signal,
+        )
+      }
       const name = filenameFor(entry.result, stream, { mode: stealthModeRef.current })
       addAsset({
         name,
-        bytes,
+        bytes: finalBytes,
         mime: stream.mime,
-        sizeBytes: bytes.byteLength,
+        sizeBytes: finalBytes.byteLength,
         kind: kindFromMime(stream.mime, name),
         audio: null,
         durationSeconds: entry.result.durationSeconds,
         origin: 'download',
       })
-      log('holen', `${name} geladen (${formatBytes(bytes.byteLength)})`)
+      log('holen', `${name} geladen (${formatBytes(finalBytes.byteLength)})`)
       setBatchEntries((prev) =>
         prev
           ? prev.map((e, idx) =>
@@ -418,11 +479,11 @@ export function DownloaderPanel() {
                     ...e,
                     status: 'done',
                     progress: null,
-                    taken: { name, bytes, mime: stream.mime },
+                    taken: { name, bytes: finalBytes, mime: stream.mime },
                   }
-                : e
+                : e,
             )
-          : null
+          : null,
       )
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
@@ -435,11 +496,11 @@ export function DownloaderPanel() {
       setBatchEntries((prev) =>
         prev
           ? prev.map((e, idx) =>
-              idx === index ? { ...e, status: 'error', error: msg, progress: null } : e
+              idx === index ? { ...e, status: 'error', error: msg, progress: null } : e,
             )
-          : null
+          : null,
       )
-      log('holen', `Fehler beim Laden von ${entry.result.title}: ${msg}`, 'error')
+      log('holen', `Fehler beim Laden von ${entry.result?.title ?? entry.url}: ${msg}`, 'error')
     }
   }
 
@@ -449,11 +510,21 @@ export function DownloaderPanel() {
     batchAbortRef.current = controller
     setBatchBusy(true)
     try {
-      const readyIndices = batchEntriesRef.current
-        .map((entry, idx) => (entry.status === 'ready' ? idx : -1))
-        .filter((idx) => idx !== -1)
+      const indicesToProcess = batchEntriesRef.current
+        .map((entry, idx) => ({ entry, idx }))
+        .filter(({ entry }) => entry.status === 'ready' || entry.status === 'pending')
+        .map(({ idx }) => idx)
 
-      await Promise.all(readyIndices.map((idx) => takeBatchItem(idx, controller.signal)))
+      let cursor = 0
+      const activeWorkers = Math.min(concurrency, indicesToProcess.length)
+      const workers = Array.from({ length: activeWorkers }, async () => {
+        while (cursor < indicesToProcess.length) {
+          if (controller.signal.aborted) break
+          const targetIndex = indicesToProcess[cursor++]
+          await takeBatchItem(targetIndex, controller.signal)
+        }
+      })
+      await Promise.all(workers)
     } finally {
       setBatchBusy(false)
       batchAbortRef.current = null
@@ -713,11 +784,16 @@ export function DownloaderPanel() {
         <Card tone="keylime" className="rise">
           <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line pb-[12px]">
             <div>
-              <h3 className="text-subheading text-ink">Mehrfach-Download ({batchEntries.length} Links)</h3>
+              <h3 className="text-subheading text-ink">Mehrfach-Download ({batchEntries.length} Einträge)</h3>
               <p className="mt-[2px] text-small text-muted">
                 {batchEntries.filter((e) => e.status === 'done').length} von {batchEntries.length} geladen
                 {batchEntries.filter((e) => e.status === 'error').length > 0
                   ? ` · ${batchEntries.filter((e) => e.status === 'error').length} fehlgeschlagen`
+                  : ''}
+                {batchBusy
+                  ? ` · ${batchEntries.filter((e) => e.status === 'downloading' || e.status === 'resolving').length} aktiv, ${
+                      batchEntries.filter((e) => e.status === 'pending' || e.status === 'ready').length
+                    } wartend`
                   : ''}
                 {stealthMode !== 'off'
                   ? ` · Verschleierung aktiv (${
@@ -730,7 +806,23 @@ export function DownloaderPanel() {
                   : ''}
               </p>
             </div>
-            <div className="flex items-center gap-[8px]">
+            <div className="flex flex-wrap items-center gap-[8px]">
+              <div className="flex items-center gap-[6px] text-small text-muted">
+                <label htmlFor="concurrency-select" className="text-small text-muted">Gleichzeitig:</label>
+                <select
+                  id="concurrency-select"
+                  value={concurrency}
+                  disabled={batchBusy}
+                  onChange={(e) => setConcurrency(Number(e.target.value))}
+                  className="rounded-nav border border-line bg-canvas px-[8px] py-[4px] text-small font-medium text-ink focus:border-ink focus:outline-none"
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n} {n === 1 ? 'Download' : 'Downloads'}
+                    </option>
+                  ))}
+                </select>
+              </div>
               {batchBusy ? (
                 <Button
                   size="sm"
@@ -749,7 +841,7 @@ export function DownloaderPanel() {
                 disabled={
                   batchBusy ||
                   looking ||
-                  !batchEntries.some((e) => e.status === 'ready')
+                  !batchEntries.some((e) => e.status === 'ready' || e.status === 'pending')
                 }
                 onClick={() => void downloadAllBatch()}
               >
@@ -778,7 +870,9 @@ export function DownloaderPanel() {
                             : entry.result.title}
                         </p>
                       ) : (
-                        <p className="truncate text-small font-mono text-muted">{entry.url}</p>
+                        <p className="truncate text-body font-medium text-ink">
+                          {entry.titleHint || entry.url}
+                        </p>
                       )}
                       {entry.result && stealthMode === 'off' ? (
                         <p className="value text-small text-muted">
@@ -790,6 +884,10 @@ export function DownloaderPanel() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-[8px]">
+                      {entry.status === 'pending' ? (
+                        <span className="value text-small text-muted">In Warteschlange</span>
+                      ) : null}
+
                       {entry.status === 'resolving' ? (
                         <span className="value text-small text-muted">Wird gesucht …</span>
                       ) : null}
