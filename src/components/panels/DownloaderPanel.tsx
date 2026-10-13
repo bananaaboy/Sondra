@@ -710,7 +710,7 @@ export function DownloaderPanel() {
                   onChange={(e) => setFilterAudioOnly(e.target.checked)}
                   className="rounded border-line text-ink focus:ring-ink"
                 />
-                Nur Tonspur laden (bevorzugt reine Audio-Streams)
+                Nur Tonspur (bevorzugt reine Audio-Streams)
               </label>
             </div>
 
@@ -1115,8 +1115,8 @@ export function DownloaderPanel() {
         <Card tone="keylime">
           <div className="flex flex-wrap items-center justify-between gap-[8px] border-b border-line pb-[10px]">
             <div>
-              <h3 className="text-small font-semibold text-ink">Download-Verlauf (Zuletzt geladen)</h3>
-              <p className="text-small text-muted">Die letzten {history.length} Downloads auf diesem Gerät gemerkt.</p>
+              <h3 className="text-small font-semibold text-ink">Download-Verlauf (Zuletzt abgerufen)</h3>
+              <p className="text-small text-muted">Die letzten {history.length} Einträge auf diesem Gerät gemerkt.</p>
             </div>
             <Button
               size="sm"
@@ -1166,7 +1166,7 @@ export function DownloaderPanel() {
                     }}
                     title="URL erneut abrufen"
                   >
-                    Erneut laden
+                    Erneut abrufen
                   </Button>
                   <Button
                     size="sm"
