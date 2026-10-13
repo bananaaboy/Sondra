@@ -370,7 +370,7 @@ async function open() {
 
   // Plain files next to the app archive (see scripts/build-desktop.mjs).
   const root = process.env.SONDRA_APP_DIR ?? path.join(process.resourcesPath, 'site')
-  const { url } = await startServer({ root, port: PORT, onError: (message) => log(`Server: ${message}`) })
+  const { url } = await startServer({ root, port: PORT, dataDir: app.getPath('userData'), onError: (message) => log(`Server: ${message}`) })
   const origin = url.replace(/\/$/, '')
   log(`Server auf ${url}`)
 

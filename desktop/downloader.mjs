@@ -33,7 +33,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { extractDirectMedia, isAniworldUrl, isHosterUrl } from '../api/extractors.js'
+import { extractDirectMedia, isAniworldUrl, isHosterUrl, boundedFetch } from '../api/extractors.js'
 
 export function getNetworkAdapters() {
   const nets = os.networkInterfaces()
@@ -170,16 +170,20 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const browser = readSettings().cookies
     return browser ? ['--cookies-from-browser', String(browser)] : []
   }
-  const sourceArgs = () => {
+  const getBindAddress = () => {
     const chosen = readSettings().bindAddress
-    if (!chosen || chosen === 'default') return []
+    if (!chosen || chosen === 'default') return null
     const isTest = Boolean(process.env.SONDRA_TEST_STUB)
     const active = getNetworkAdapters().some((a) => a.address === chosen)
     if (!active && !isTest) {
       log(`Netzwerkadapter ${chosen} ist nicht mehr aktiv; weiche auf Standard aus.`)
-      return []
+      return null
     }
-    return ['--source-address', String(chosen)]
+    return String(chosen)
+  }
+  const sourceArgs = () => {
+    const chosen = getBindAddress()
+    return chosen ? ['--source-address', chosen] : []
   }
 
   /* -- finding yt-dlp ------------------------------------------------------ */
@@ -354,10 +358,11 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const target = String(body.url ?? '').trim()
     if (!/^https?:\/\//i.test(target)) return { status: 'error', error: { code: 'error.api.link.invalid' } }
 
+    const bindAddr = getBindAddress()
     let directMedia = null
     if (isAniworldUrl(target) || isHosterUrl(target)) {
       try {
-        directMedia = await extractDirectMedia(target)
+        directMedia = await extractDirectMedia(target, { localAddress: bindAddr })
       } catch (failure) {
         log(`Direktextraktion: ${failure?.message ?? failure}`)
       }
@@ -406,10 +411,11 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
           url: directMedia.url,
           referer: directMedia.referer,
           format: { format_id: 'best' },
-          mime: 'video/mp4',
+          mime: directMedia.isHls ? 'application/x-mpegurl' : 'video/mp4',
           directFetch: !tool?.bin,
+          bindAddress: bindAddr,
         }),
-        filename: `${stem}.mp4`,
+        filename: `${stem}.${directMedia.isHls ? 'm3u8' : 'mp4'}`,
       }
     }
 
@@ -432,7 +438,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const titleCandidate = (directMedia?.title && directMedia.title !== 'master') ? directMedia.title : (info.title ?? 'download')
     const stem = String(titleCandidate).replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
     const mode = String(body.downloadMode ?? 'auto')
-    const job = (format, mime) => remember({ bin: tool.bin, url: queryUrl, referer, format, mime })
+    const job = (format, mime) => remember({ bin: tool.bin, url: queryUrl, referer, format, mime, bindAddress: bindAddr })
 
     if (mode === 'audio') {
       const audio = pickAudio(formats)
@@ -505,11 +511,12 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     if (!job.bin || job.directFetch) {
       let cancelled = false
       res.on('close', () => { cancelled = true })
-      fetch(job.url, {
+      boundedFetch(job.url, {
         headers: {
           ...(job.referer ? { Referer: job.referer } : {}),
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         },
+        localAddress: job.bindAddress ?? getBindAddress(),
       }).then(async (up) => {
         if (!up.ok) return send(res, 502, { status: 'error', error: { code: 'error.api.fetch.fail' } }, cors)
         const headers = { 'content-type': job.mime || 'video/mp4', 'cache-control': 'no-store', ...cors }

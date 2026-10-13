@@ -228,7 +228,9 @@ export default async function handler(request, response) {
   const targetStr = target.toString()
   if (isAniworldUrl(targetStr) || isHosterUrl(targetStr)) {
     try {
-      const media = await extractDirectMedia(targetStr)
+      const media = await extractDirectMedia(targetStr, {
+        localAddress: request.body?.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
+      })
       if (media && (media.url || (media.streams && media.streams.length > 0))) {
         const streams = []
         if (Array.isArray(media.streams) && media.streams.length > 0) {

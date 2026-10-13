@@ -153,19 +153,25 @@ export function DownloaderPanel() {
     setAdapterLoading(true)
     try {
       const conn = serviceConnection()
-      const targetUrl = conn.endpoint
-        ? `${conn.endpoint.replace(/\/$/, '')}/adapters`
-        : 'http://localhost:9000/adapters'
-      const res = await fetch(targetUrl, { signal: AbortSignal.timeout(3000) })
-      if (res.ok) {
-        const data = (await res.json()) as { adapters?: NetworkAdapter[]; selected?: string }
-        if (Array.isArray(data.adapters) && data.adapters.length > 0) {
-          setAdapters(data.adapters)
-          if (data.selected) setSelectedAdapter(data.selected)
+      const candidates: string[] = []
+      if (conn.endpoint) candidates.push(`${conn.endpoint.replace(/\/$/, '')}/adapters`)
+      candidates.push('/api/adapters', 'http://127.0.0.1:9000/adapters', 'http://localhost:9000/adapters')
+
+      for (const targetUrl of candidates) {
+        try {
+          const res = await fetch(targetUrl, { signal: AbortSignal.timeout(2000) })
+          if (res.ok) {
+            const data = (await res.json()) as { adapters?: NetworkAdapter[]; selected?: string }
+            if (Array.isArray(data.adapters) && data.adapters.length > 0) {
+              setAdapters(data.adapters)
+              if (data.selected) setSelectedAdapter(data.selected)
+              break
+            }
+          }
+        } catch {
+          // try next candidate
         }
       }
-    } catch {
-      // Endpoint not reachable
     } finally {
       setAdapterLoading(false)
     }
@@ -180,22 +186,35 @@ export function DownloaderPanel() {
   const changeAdapter = async (val: string) => {
     if (!IN_DESKTOP_APP) return
     setSelectedAdapter(val)
-    try {
-      const conn = serviceConnection()
-      const targetUrl = conn.endpoint
-        ? `${conn.endpoint.replace(/\/$/, '')}/adapters`
-        : 'http://localhost:9000/adapters'
-      await fetch(targetUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ bindAddress: val === 'default' ? null : val }),
-      })
+    const conn = serviceConnection()
+    const candidates: string[] = []
+    if (conn.endpoint) candidates.push(`${conn.endpoint.replace(/\/$/, '')}/adapters`)
+    candidates.push('/api/adapters', 'http://127.0.0.1:9000/adapters', 'http://localhost:9000/adapters')
+
+    let succeeded = false
+    for (const targetUrl of candidates) {
+      try {
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ bindAddress: val === 'default' ? null : val }),
+          signal: AbortSignal.timeout(2000),
+        })
+        if (res.ok) {
+          succeeded = true
+          break
+        }
+      } catch {
+        // try next candidate
+      }
+    }
+    if (succeeded) {
       log(
         'netzwerk',
         val === 'default' ? 'Netzwerk: Automatisch (Windows-Standard)' : `Netzwerk gebunden an: ${val}`,
       )
-    } catch (err) {
-      log('netzwerk', `Adapter konnte nicht umgestellt werden: ${err}`, 'error')
+    } else {
+      log('netzwerk', 'Adapter konnte nicht umgestellt werden (Dienst nicht erreichbar)', 'error')
     }
   }
 
@@ -543,7 +562,7 @@ export function DownloaderPanel() {
                 </div>
                 {selectedAdapter !== 'default' ? (
                   <p className="text-small text-muted">
-                    Downloads laufen über diesen Adapter — Ethernet bleibt unberührt.
+                    Downloads laufen über diesen Adapter ({selectedAdapter}) — Ethernet bleibt unberührt.
                   </p>
                 ) : (
                   <p className="text-small text-muted">

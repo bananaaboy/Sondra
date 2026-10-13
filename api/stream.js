@@ -13,6 +13,7 @@
  */
 
 import { allowedTarget, verify, youtubeStreamUrl } from './_shared.js'
+import { boundedFetch } from './extractors.js'
 
 /**
  * Where to fetch a claim from.
@@ -59,12 +60,13 @@ export default async function handler(request, response) {
       return
     }
 
-    let upstream = await fetch(target, { headers, redirect: 'follow' })
+    const localAddress = process.env.SONDRA_BIND_ADDRESS || undefined
+    let upstream = await boundedFetch(target, { headers, redirect: 'follow', localAddress })
     // A cached YouTube address can go stale, or belong to an egress address
     // this instance no longer has. One fresh lookup settles which it was.
     if (upstream.status === 403 && claim.yt) {
       target = await targetFor(claim, true)
-      if (target) upstream = await fetch(target, { headers, redirect: 'follow' })
+      if (target) upstream = await boundedFetch(target, { headers, redirect: 'follow', localAddress })
     }
 
     // Passed through, a refusal from the media host looked exactly like this
