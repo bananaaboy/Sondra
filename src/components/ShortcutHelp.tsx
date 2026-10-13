@@ -56,6 +56,7 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
       ['M · C', 'Stumm, Untertitel'],
       ['T · W · F', 'Kinomodus, fensterfüllend, Vollbild'],
       ['N · P', 'Nächstes und vorheriges'],
+      ['A-B', 'Loop-Punkte A und B setzen / aufheben'],
       [', .', 'Angehalten: Bild für Bild'],
       ['< >', 'Langsamer und schneller'],
       ['0 … 9', 'Zu 0 % … 90 % springen'],

@@ -835,6 +835,20 @@ export function AudioEditorPanel() {
               onClick={() => void apply('Umgekehrt', reverseAudio)}>
               Umkehren
             </Button>
+            <Button size="sm" variant="quiet" disabled={busy !== null || !current}
+              onClick={() => void apply('1 s am Anfang eingeblendet', (a) => fadeRange(a, 0, Math.min(1.0, durationOf(a)), 'in'))}
+              title="Sanftes Einblenden der ersten Sekunde">
+              Fade In (1s)
+            </Button>
+            <Button size="sm" variant="quiet" disabled={busy !== null || !current}
+              onClick={() => {
+                if (!current) return
+                const dur = durationOf(current)
+                void apply('2 s am Ende ausgeblendet', (a) => fadeRange(a, Math.max(0, dur - 2.0), dur, 'out'))
+              }}
+              title="Sanftes Ausblenden der letzten zwei Sekunden">
+              Fade Out (2s)
+            </Button>
             {selection ? (
               <Button size="sm" variant="ghost" onClick={() => setSelection(null)}>
                 Auswahl aufheben

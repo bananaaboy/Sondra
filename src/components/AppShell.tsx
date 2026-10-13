@@ -9,7 +9,7 @@
 
 
 import { useFilePicker } from '../hooks/useIngest'
-import { IN_DESKTOP_APP, WINDOWS_SETUP } from '../lib/desktop'
+import { IN_DESKTOP_APP } from '../lib/desktop'
 import { APP_VERSION } from '../lib/version'
 import type { ThemeChoice } from '../lib/theme'
 import { useSession } from '../state/store'
@@ -188,7 +188,7 @@ export function Footer() {
       </div>
       <p className="flex flex-wrap gap-x-[16px] gap-y-[4px]">
         {IN_DESKTOP_APP ? null : (
-          <a className={footerLink} href={WINDOWS_SETUP} rel="noopener">
+          <a className={footerLink} href="./download.html">
             Sondra für Windows herunterladen
           </a>
         )}

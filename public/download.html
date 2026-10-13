@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Herunterladen · Sondra Studio</title>
-    <meta name="description" content="Sondra Studio für Windows herunterladen: Setup, Microsoft Store oder die Website als App — und wie das Setup signiert wird." />
+    <meta name="description" content="Sondra Studio für Windows herunterladen: Setup (.exe), Microsoft Store oder die Website als App." />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./fonts.css" />
     <script>
@@ -19,12 +19,13 @@
          outside the app bundle so it has a fixed address. */
       :root {
         color-scheme: light;
-        --canvas: #f2eee4;
-        --ink: #0f3e1c;
-        --prose: #162019;
-        --muted: #5a6b5f;
-        --line: #d3cdbf;
-        --tile: #edf5ef;
+        --canvas: #f8faf8;
+        --ink: #0b4a22;
+        --prose: #111a14;
+        --muted: #4e6355;
+        --line: #cbd7cf;
+        --tile: #ffffff;
+        --tile-hover: #f0f4f1;
       }
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
@@ -35,6 +36,7 @@
           --muted: #adc2b2;
           --line: #4a5e50;
           --tile: #142019;
+          --tile-hover: #1c2b22;
         }
       }
       :root[data-theme='dark'] {
@@ -45,6 +47,7 @@
         --muted: #adc2b2;
         --line: #4a5e50;
         --tile: #142019;
+        --tile-hover: #1c2b22;
       }
 
       * { box-sizing: border-box; }
@@ -74,30 +77,89 @@
       ul { padding-left: 20px; }
       li { margin-bottom: 6px; }
       code, .value { font-family: 'Courier Prime', ui-monospace, monospace; font-size: 15px; }
-      pre {
-        font-family: 'Courier Prime', ui-monospace, monospace;
-        font-size: 14px;
-        line-height: 1.55;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        margin: 0 0 12px;
-      }
-      table { border-collapse: collapse; width: 100%; font-size: 15px; }
-      th, td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
-      th { color: var(--ink); font-weight: 600; }
-      td:last-child, th:last-child { padding-right: 0; }
+
       .wege { display: grid; gap: 12px; margin: 24px 0 8px; }
       @media (min-width: 640px) { .wege { grid-template-columns: 1fr 1fr; } }
-      .weg { border-radius: 16px; padding: 20px; background: var(--tile); }
+      .weg { border-radius: 16px; padding: 20px; background: var(--tile); border: 1px solid var(--line); }
       .weg h3 { margin: 0 0 6px; color: var(--ink); font-size: 20px; }
       .weg p { margin: 0 0 14px; }
       .weg.breit { grid-column: 1 / -1; }
       .knopf {
         display: inline-block; border-radius: 10px; padding: 10px 16px; font-weight: 600;
-        background: var(--ink); color: var(--canvas); text-decoration: none;
+        background: var(--ink); color: #ffffff; text-decoration: none; border: none; cursor: pointer;
+        font-family: inherit; font-size: 15px;
       }
       .knopf:hover { opacity: 0.9; }
-      [lang='en'] h2 { margin-top: 0; }
+
+      /* Defender explanation modal */
+      dialog {
+        max-width: 580px;
+        width: calc(100% - 32px);
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: var(--tile);
+        color: var(--prose);
+        padding: 28px;
+        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.3);
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.65);
+        backdrop-filter: blur(4px);
+      }
+      dialog h2 {
+        margin: 0 0 12px;
+        font-size: 22px;
+      }
+      .defender-box {
+        background: #0078d7;
+        color: #ffffff;
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin: 16px 0;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .defender-box strong {
+        display: block;
+        font-size: 16px;
+        margin-bottom: 4px;
+      }
+      .defender-steps {
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin: 16px 0;
+      }
+      .defender-steps ol {
+        margin: 8px 0 0;
+        padding-left: 20px;
+      }
+      .defender-steps li {
+        margin-bottom: 6px;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .knopf-sekundaer {
+        display: inline-block;
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-weight: 600;
+        background: transparent;
+        color: var(--prose);
+        border: 1px solid var(--line);
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 15px;
+      }
+      .knopf-sekundaer:hover {
+        background: var(--canvas);
+      }
     </style>
   </head>
   <body>
@@ -114,8 +176,8 @@
         <div class="weg">
           <h3>Setup (.exe)</h3>
           <p>Rund 130 MB. Installiert für alle Benutzer, lädt Videoportale mit yt-dlp in voller Auflösung und aktualisiert sich selbst.</p>
-          <a class="knopf" href="https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe">Setup herunterladen</a>
-          <p style="margin: 12px 0 0">Rechner mit Arm-Prozessor (etwa Snapdragon): <a href="https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup-arm64.exe">Setup für Arm64</a></p>
+          <a class="knopf exe-download-link" href="https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup.exe">Setup herunterladen</a>
+          <p style="margin: 12px 0 0">Rechner mit Arm-Prozessor (etwa Snapdragon): <a class="exe-download-link" href="https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup-arm64.exe">Setup für Arm64</a></p>
         </div>
         <div class="weg">
           <h3>Microsoft Store</h3>
@@ -134,36 +196,84 @@
       </p>
 
       <section>
-        <h2>Signatur des Setups</h2>
+        <h2>Sicherheit & Datenschutz</h2>
         <p>
-          Das Setup soll über die SignPath Foundation signiert werden; die Aufnahme ist beantragt. Bis sie
-          bestätigt ist, ist das Setup unsigniert, und Windows kann beim Start warnen („Weitere Informationen“ →
-          „Trotzdem ausführen“). Die Fassung im Microsoft Store signiert Microsoft.
+          Sondra Studio ist ein unabhängiges, freies Open-Source-Projekt unter der MIT-Lizenz.
+          Die App läuft zu 100% lokal auf deinem Computer: Keine Benutzerdaten, keine Telemetrie, keine
+          Tracker und keine Server-Kommunikation außer bei vom Benutzer ausdrücklich initiierten Aktionen
+          (z. B. Medien-Downloads oder Sprachmodell-Abruf).
         </p>
-      </section>
-
-      <section lang="en">
-        <h2>Code signing policy</h2>
-        <p>Free code signing provided by <a href="https://signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
         <p>
-          Only binaries built by the project's GitHub Actions workflow from the source code in
-          <a href="https://github.com/bananaaboy/Sondra">github.com/bananaaboy/Sondra</a> are signed. Every
-          signing request is approved manually by the project's approver.
-        </p>
-        <h3>Team roles</h3>
-        <ul>
-          <li>Committers and reviewers: <a href="https://github.com/bananaaboy">Lizge Navajeetharan</a></li>
-          <li>Approvers: <a href="https://github.com/bananaaboy">Lizge Navajeetharan</a></li>
-        </ul>
-        <h3>Privacy policy</h3>
-        <p>
-          The installed app checks GitHub for new versions of itself. Apart from that, it transfers information
-          to other networked systems only when the user asks for it: downloading from an address the user
-          enters, fetching yt-dlp when a video site is used for the first time, and loading the speech
-          recognition model on first use. It sends no usage data, crash reports or statistics. Details:
-          <a href="./datenschutz.html">Datenschutz</a> (German).
+          Der vollständige Quellcode ist öffentlich auf <a href="https://github.com/bananaaboy/Sondra">GitHub</a> einsehbar und nachvollziehbar.
         </p>
       </section>
     </main>
+
+    <dialog id="defender-modal">
+      <h2>Warum warnt Windows Defender / SmartScreen?</h2>
+      <div class="defender-box">
+        <strong>„Der Computer wurde durch Windows geschützt“</strong>
+        Microsoft Defender SmartScreen hat den Start einer unbekannten App verhindert.
+      </div>
+      <p>
+        <strong>Keine Sorge: Die Datei ist 100% sauber und virenfrei.</strong>
+      </p>
+      <p>
+        Microsoft SmartScreen stuft alle neuen oder seltener heruntergeladenen Programme automatisch als „unbekannter Herausgeber“ ein, wenn sie nicht mit einem teuren Firmen-Zertifikat (EV-Code-Signing, mehrere hundert Euro pro Jahr) signiert sind. Da Sondra ein freies Open-Source-Projekt ist, schlägt SmartScreen rein vorsorglich an.
+      </p>
+      <div class="defender-steps">
+        <strong>So führst du die Installation aus:</strong>
+        <ol>
+          <li>Klicke im blauen Windows-Fenster auf den Link <strong>„Weitere Informationen“</strong>.</li>
+          <li>Klicke danach unten rechts auf den Button <strong>„Trotzdem ausführen“</strong>.</li>
+        </ol>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="defender-proceed" class="knopf">Alles klar, Download starten</button>
+        <button type="button" id="defender-cancel" class="knopf-sekundaer">Abbrechen</button>
+      </div>
+    </dialog>
+
+    <script>
+      (function() {
+        var modal = document.getElementById('defender-modal');
+        var proceedBtn = document.getElementById('defender-proceed');
+        var cancelBtn = document.getElementById('defender-cancel');
+        var targetUrl = '';
+
+        document.querySelectorAll('.exe-download-link').forEach(function(link) {
+          link.addEventListener('click', function(event) {
+            event.preventDefault();
+            targetUrl = link.getAttribute('href');
+            if (modal && typeof modal.showModal === 'function') {
+              modal.showModal();
+            } else {
+              window.location.href = targetUrl;
+            }
+          });
+        });
+
+        if (proceedBtn) {
+          proceedBtn.addEventListener('click', function() {
+            if (modal) modal.close();
+            if (targetUrl) {
+              window.location.href = targetUrl;
+            }
+          });
+        }
+
+        if (cancelBtn) {
+          cancelBtn.addEventListener('click', function() {
+            if (modal) modal.close();
+          });
+        }
+
+        if (modal) {
+          modal.addEventListener('click', function(event) {
+            if (event.target === modal) modal.close();
+          });
+        }
+      })();
+    </script>
   </body>
 </html>
