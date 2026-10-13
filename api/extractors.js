@@ -7,6 +7,9 @@
  */
 
 import { createDecipheriv } from 'node:crypto'
+import http from 'node:http'
+import https from 'node:https'
+import { Readable } from 'node:stream'
 
 /* -------------------------------------------------------------------------- */
 /* Constants & URL matchers                                                   */
@@ -161,8 +164,93 @@ export function unpackPackedJs(source) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Common HTTP fetch helper                                                   */
+/* Common HTTP fetch helper with network adapter (localAddress) support      */
 /* -------------------------------------------------------------------------- */
+
+export async function boundedFetch(url, options = {}, redirectCount = 0) {
+  const localAddr = options.localAddress && options.localAddress !== 'default' ? String(options.localAddress) : null
+  if (!localAddr && typeof globalThis.fetch === 'function') {
+    return globalThis.fetch(url, options)
+  }
+
+  const parsed = typeof url === 'string' ? new URL(url) : url
+  const isHttps = parsed.protocol === 'https:'
+  const transport = isHttps ? https : http
+
+  const headers = {}
+  if (options.headers) {
+    if (typeof options.headers.entries === 'function') {
+      for (const [k, v] of options.headers.entries()) headers[k] = v
+    } else {
+      Object.assign(headers, options.headers)
+    }
+  }
+
+  const method = (options.method || 'GET').toUpperCase()
+
+  return new Promise((resolve, reject) => {
+    const req = transport.request(parsed, {
+      method,
+      headers,
+      localAddress: localAddr || undefined,
+      rejectUnauthorized: false,
+      signal: options.signal,
+    }, (res) => {
+      const isRedirect = [301, 302, 303, 307, 308].includes(res.statusCode)
+      if (options.redirect !== 'manual' && isRedirect && res.headers.location && redirectCount < 10) {
+        res.resume()
+        const nextUrl = new URL(res.headers.location, parsed.href).href
+        const nextMethod = (res.statusCode === 303 || ((res.statusCode === 301 || res.statusCode === 302) && method === 'POST')) ? 'GET' : method
+        const nextOptions = { ...options, method: nextMethod }
+        if (nextMethod === 'GET') delete nextOptions.body
+        return resolve(boundedFetch(nextUrl, nextOptions, redirectCount + 1))
+      }
+
+      const headersObj = new Headers()
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (Array.isArray(v)) {
+          for (const item of v) headersObj.append(k, item)
+        } else if (v !== undefined) {
+          headersObj.set(k, v)
+        }
+      }
+
+      let bodyUsed = false
+      const response = {
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+        status: res.statusCode,
+        statusText: res.statusMessage || '',
+        headers: headersObj,
+        url: parsed.href,
+        get body() {
+          return Readable.toWeb(res)
+        },
+        async text() {
+          if (bodyUsed) throw new Error('Body already used')
+          bodyUsed = true
+          const chunks = []
+          for await (const chunk of res) chunks.push(chunk)
+          return Buffer.concat(chunks).toString('utf-8')
+        },
+        async json() {
+          return JSON.parse(await this.text())
+        },
+        async arrayBuffer() {
+          if (bodyUsed) throw new Error('Body already used')
+          bodyUsed = true
+          const chunks = []
+          for await (const chunk of res) chunks.push(chunk)
+          return Buffer.concat(chunks).buffer
+        },
+      }
+      resolve(response)
+    })
+
+    req.on('error', reject)
+    if (options.body) req.write(options.body)
+    req.end()
+  })
+}
 
 async function fetchHtml(url, options = {}) {
   const headers = {
@@ -171,12 +259,13 @@ async function fetchHtml(url, options = {}) {
     'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
     ...options.headers,
   }
-  const res = await fetch(url, {
+  const res = await boundedFetch(url, {
     method: options.method || 'GET',
     headers,
     redirect: options.redirect || 'follow',
     signal: options.signal,
     body: options.body,
+    localAddress: options.localAddress,
   })
   return res
 }

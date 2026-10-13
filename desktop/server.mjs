@@ -126,9 +126,31 @@ function serveOffered(token, response, onError) {
   stream.pipe(response)
 }
 
-export async function startServer({ root, port, onError }) {
+export async function startServer({ root, port, dataDir, onError }) {
   if (!fs.existsSync(path.join(root, 'index.html'))) {
     throw new Error(`Die Oberfläche fehlt: ${path.join(root, 'index.html')} gibt es nicht.`)
+  }
+
+  const settingsFile = dataDir ? path.join(dataDir, 'herunterladen.json') : null
+  const readSettings = () => {
+    if (!settingsFile) return {}
+    try {
+      return JSON.parse(fs.readFileSync(settingsFile, 'utf8'))
+    } catch {
+      return {}
+    }
+  }
+  const writeSettings = (patch) => {
+    if (!settingsFile || !dataDir) return
+    try {
+      fs.mkdirSync(dataDir, { recursive: true })
+      fs.writeFileSync(settingsFile, JSON.stringify({ ...readSettings(), ...patch }, null, 2))
+    } catch {}
+  }
+
+  const initialBind = readSettings().bindAddress
+  if (initialBind && initialBind !== 'default') {
+    process.env.SONDRA_BIND_ADDRESS = initialBind
   }
 
   // Before the API modules load: they read the secret once, at import time.
@@ -156,6 +178,13 @@ export async function startServer({ root, port, onError }) {
         if (url.pathname === '/api/resolve') await resolveFn(request, response)
         else if (url.pathname === '/api/stream') await streamFn(request, response)
         else if (url.pathname === '/api/adapters') {
+          let chosen = null
+          if (request.method === 'POST') {
+            try {
+              const parsed = request.body ? JSON.parse(request.body) : {}
+              chosen = parsed.bindAddress || 'default'
+            } catch {}
+          }
           try {
             const forwardRes = await fetch('http://127.0.0.1:9000/adapters', {
               method: request.method,
@@ -164,6 +193,10 @@ export async function startServer({ root, port, onError }) {
             })
             if (!forwardRes.ok) throw new Error(`downloader status ${forwardRes.status}`)
             const data = await forwardRes.json()
+            if (chosen) {
+              process.env.SONDRA_BIND_ADDRESS = chosen === 'default' ? '' : chosen
+              writeSettings({ bindAddress: chosen })
+            }
             response.status(forwardRes.status).json(data)
           } catch {
             const nets = (await import('node:os')).default.networkInterfaces()
@@ -174,18 +207,18 @@ export async function startServer({ root, port, onError }) {
               }
             }
             if (request.method === 'POST') {
-              let bodyObj = {}
-              try {
-                bodyObj = request.body ? JSON.parse(request.body) : {}
-              } catch {}
-              response.status(200).json({ ok: true, selected: bodyObj.bindAddress || 'default' })
+              const val = chosen || 'default'
+              process.env.SONDRA_BIND_ADDRESS = val === 'default' ? '' : val
+              writeSettings({ bindAddress: val })
+              response.status(200).json({ ok: true, selected: val })
             } else {
+              const saved = readSettings().bindAddress || 'default'
               response.status(200).json({
                 adapters: [
                   { id: 'default', name: 'Automatisch (Windows-Standard)', address: null },
                   ...list,
                 ],
-                selected: 'default',
+                selected: saved,
               })
             }
           }

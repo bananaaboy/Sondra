@@ -18,6 +18,8 @@
  */
 
 import http from 'node:http'
+import https from 'node:https'
+import { Readable } from 'node:stream'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -46,6 +48,91 @@ const cookieArgs = COOKIES ? ['--cookies-from-browser', COOKIES] : []
 const sourceFlag = argv.indexOf('--source-address')
 let SOURCE_ADDRESS = sourceFlag >= 0 ? argv[sourceFlag + 1] : process.env.SONDRA_SOURCE_ADDRESS || ''
 const sourceArgs = () => (SOURCE_ADDRESS && SOURCE_ADDRESS !== 'default' ? ['--source-address', String(SOURCE_ADDRESS)] : [])
+
+async function boundedFetch(url, options = {}, redirectCount = 0) {
+  const localAddr = options.localAddress ?? (SOURCE_ADDRESS && SOURCE_ADDRESS !== 'default' ? String(SOURCE_ADDRESS) : null)
+  if (!localAddr && typeof globalThis.fetch === 'function') {
+    return globalThis.fetch(url, options)
+  }
+
+  const parsed = typeof url === 'string' ? new URL(url) : url
+  const isHttps = parsed.protocol === 'https:'
+  const transport = isHttps ? https : http
+
+  const headers = {}
+  if (options.headers) {
+    if (typeof options.headers.entries === 'function') {
+      for (const [k, v] of options.headers.entries()) headers[k] = v
+    } else {
+      Object.assign(headers, options.headers)
+    }
+  }
+
+  const method = (options.method || 'GET').toUpperCase()
+
+  return new Promise((resolve, reject) => {
+    const req = transport.request(parsed, {
+      method,
+      headers,
+      localAddress: localAddr || undefined,
+      rejectUnauthorized: false,
+      signal: options.signal,
+    }, (res) => {
+      const isRedirect = [301, 302, 303, 307, 308].includes(res.statusCode)
+      if (options.redirect !== 'manual' && isRedirect && res.headers.location && redirectCount < 10) {
+        res.resume()
+        const nextUrl = new URL(res.headers.location, parsed.href).href
+        const nextMethod = (res.statusCode === 303 || ((res.statusCode === 301 || res.statusCode === 302) && method === 'POST')) ? 'GET' : method
+        const nextOptions = { ...options, method: nextMethod }
+        if (nextMethod === 'GET') delete nextOptions.body
+        return resolve(boundedFetch(nextUrl, nextOptions, redirectCount + 1))
+      }
+
+      const headersObj = new Headers()
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (Array.isArray(v)) {
+          for (const item of v) headersObj.append(k, item)
+        } else if (v !== undefined) {
+          headersObj.set(k, v)
+        }
+      }
+
+      let bodyUsed = false
+      const response = {
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+        status: res.statusCode,
+        statusText: res.statusMessage || '',
+        headers: headersObj,
+        url: parsed.href,
+        get body() {
+          return Readable.toWeb(res)
+        },
+        async text() {
+          if (bodyUsed) throw new Error('Body already used')
+          bodyUsed = true
+          const chunks = []
+          for await (const chunk of res) chunks.push(chunk)
+          return Buffer.concat(chunks).toString('utf-8')
+        },
+        async json() {
+          return JSON.parse(await this.text())
+        },
+        async arrayBuffer() {
+          if (bodyUsed) throw new Error('Body already used')
+          bodyUsed = true
+          const chunks = []
+          for await (const chunk of res) chunks.push(chunk)
+          return Buffer.concat(chunks).buffer
+        },
+      }
+      resolve(response)
+    })
+
+    req.on('error', reject)
+    if (options.body) req.write(options.body)
+    req.end()
+  })
+}
 
 /* -- yt-dlp finden --------------------------------------------------------- */
 
@@ -305,7 +392,7 @@ function unpackPackedJs(source) {
 
 async function extractVoe(url) {
   try {
-    const res = await fetch(url, {
+    const res = await boundedFetch(url, {
       headers: {
         'User-Agent': DEFAULT_UA,
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -387,7 +474,7 @@ async function extractVoe(url) {
 
 async function extractFileMoon(url) {
   try {
-    const res = await fetch(url, {
+    const res = await boundedFetch(url, {
       headers: { Referer: url, 'User-Agent': DEFAULT_UA },
       redirect: 'follow',
     })
@@ -402,7 +489,7 @@ async function extractFileMoon(url) {
     if (code && code !== 'e' && code !== 'd') {
       const apiUrl = `${parsed.protocol}//${parsed.host}/api/videos/${code}`
       try {
-        const apiRes = await fetch(apiUrl, {
+        const apiRes = await boundedFetch(apiUrl, {
           headers: { Referer: finalUrl, 'User-Agent': DEFAULT_UA },
         })
         if (apiRes.ok) {
@@ -458,7 +545,7 @@ async function extractVidmoly(url) {
       Referer: url,
       Cookie: embedId ? `cf_turnstile_demo_pass_${embedId}=1` : '',
     }
-    const res = await fetch(url, { headers, redirect: 'follow' })
+    const res = await boundedFetch(url, { headers, redirect: 'follow' })
     if (!res.ok) return null
     const finalUrl = res.url || url
     const html = await res.text()
@@ -475,7 +562,7 @@ async function extractVidmoly(url) {
 
 async function extractStreamtape(url) {
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
+    const res = await boundedFetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
     if (!res.ok) return null
     const finalUrl = res.url || url
     const html = await res.text()
@@ -504,7 +591,7 @@ async function extractStreamtape(url) {
 
 async function extractVidoza(url) {
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
+    const res = await boundedFetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
     if (!res.ok) return null
     const finalUrl = res.url || url
     const html = await res.text()
@@ -520,7 +607,7 @@ async function extractVidoza(url) {
 
 async function extractDoodStream(url) {
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
+    const res = await boundedFetch(url, { headers: { 'User-Agent': DEFAULT_UA, Referer: url }, redirect: 'follow' })
     if (!res.ok) return null
     const finalUrl = res.url || url
     const html = await res.text()
@@ -528,7 +615,7 @@ async function extractDoodStream(url) {
     if (!passMatch) return null
     const baseOrigin = new URL(finalUrl).origin
     const passUrl = `${baseOrigin}${passMatch[0]}`
-    const passRes = await fetch(passUrl, { headers: { 'User-Agent': DEFAULT_UA, Referer: finalUrl } })
+    const passRes = await boundedFetch(passUrl, { headers: { 'User-Agent': DEFAULT_UA, Referer: finalUrl } })
     if (!passRes.ok) return null
     const baseStream = (await passRes.text()).trim()
     if (!baseStream || baseStream.includes('RELOAD')) return null
@@ -546,7 +633,7 @@ async function extractDoodStream(url) {
 
 async function extractAniworld(url) {
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': DEFAULT_UA, Accept: 'text/html,*/*' }, redirect: 'follow' })
+    const res = await boundedFetch(url, { headers: { 'User-Agent': DEFAULT_UA, Accept: 'text/html,*/*' }, redirect: 'follow' })
     if (!res.ok) return null
     const finalUrl = res.url || url
     const html = await res.text()
@@ -592,7 +679,7 @@ async function extractAniworld(url) {
 
     for (const h of hosters) {
       try {
-        const redirRes = await fetch(h.redirectUrl, {
+        const redirRes = await boundedFetch(h.redirectUrl, {
           headers: { 'User-Agent': DEFAULT_UA, Referer: finalUrl },
           redirect: 'manual',
         })
