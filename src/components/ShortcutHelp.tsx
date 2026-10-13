@@ -25,22 +25,25 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
     ],
   },
   {
-    title: 'Ton',
+    title: 'Ton & Editor',
     keys: [
       ['Mausrad auf der Welle', 'Hinein- und herauszoomen, um den Zeiger herum'],
       ['Umschalt + Mausrad', 'Den Ausschnitt verschieben'],
       [`${MOD} + Z`, 'Rückgängig'],
       [`${MOD} + Umschalt + Z`, 'Wiederholen'],
       [`${MOD} + C · X · V`, 'Auswahl kopieren, ausschneiden, einfügen'],
+      ['Tonhöhe & Tempo', 'Halbtöne transponieren (-12 bis +12) & Time-Stretch (0,5x–2x)'],
     ],
   },
   {
-    title: 'Zerschneiden',
+    title: 'Sampler & Beat',
     keys: [
-      ['1 2 3 4 · Q W E R · A S D F · Y X C V', 'Pads spielen'],
+      ['1 2 3 4 · Q W E R · A S D F · Y X C V', 'Pads 1–16 spielen'],
+      ['USB-MIDI', 'Pads & Keyboards spielen Slices mit Velocity-Dynamik'],
       ['Enter', 'Gezogenen Bereich als Pad anlegen'],
       ['Entf', 'Gewähltes Pad löschen'],
       ['Leertaste', 'Alles anhalten; im Beat: abspielen und anhalten'],
+      ['Export', 'CUE-Sheet (.cue) & Audacity-Labels (.txt)'],
     ],
   },
   {
@@ -56,6 +59,7 @@ const GROUPS: { title: string; keys: [string, string][] }[] = [
       [', .', 'Angehalten: Bild für Bild'],
       ['< >', 'Langsamer und schneller'],
       ['0 … 9', 'Zu 0 % … 90 % springen'],
+      ['Karaoke', 'Echtzeit Gesangsdämpfung (Mid-Side Phasenauslöschung)'],
     ],
   },
   {

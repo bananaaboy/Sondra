@@ -27,6 +27,8 @@ import {
   isDoodstreamUrl,
   isStreamtapeUrl,
   isVidozaUrl,
+  isPodcastOrRssUrl,
+  parsePodcastFeed,
 } from '../api/extractors.js'
 
 let failures = 0
@@ -326,12 +328,42 @@ check('AniWorld Staffel: Episodenanzahl', seasonResult?.items?.length, 2)
 check('AniWorld Staffel: Titel', seasonResult?.title, 'One Piece - Staffel 1')
 check('AniWorld Staffel: Episode 1 Titel', seasonResult?.items?.[0]?.title, 'One Piece - S01E01 - Ich bin Ruffy!')
 
+// Podcast & RSS Feed
+check('URL: Podcast RSS Feed', isPodcastOrRssUrl('https://feeds.example.com/podcast.rss'), true)
+check('URL: Feed URL', isPodcastOrRssUrl('https://example.com/podcast/feed/'), true)
+check('URL: Keine RSS URL', isPodcastOrRssUrl('https://example.com/video.mp4'), false)
+
+const sampleRss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Sondra Audio Talk</title>
+    <itunes:author>Sondra Studio</itunes:author>
+    <item>
+      <title>Episode 1: Web Audio &amp; MIDI</title>
+      <enclosure url="https://storage.example/ep1.mp3" length="12345678" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Episode 2: Pitch &amp; Time Stretch</title>
+      <enclosure url="https://storage.example/ep2.mp3" length="23456789" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>`
+
+const parsedRss = parsePodcastFeed(sampleRss, 'https://feeds.example.com/podcast.rss')
+check('Podcast: parsePodcastFeed erfolgreich', Boolean(parsedRss), true)
+check('Podcast: isPlaylist Flag', parsedRss?.isPlaylist, true)
+check('Podcast: Episodenanzahl', parsedRss?.items?.length, 2)
+check('Podcast: Titel', parsedRss?.title, 'Sondra Audio Talk')
+check('Podcast: Author', parsedRss?.seriesTitle, 'Sondra Studio')
+check('Podcast: Episode 1 Titel', parsedRss?.items?.[0]?.title, 'Episode 1: Web Audio & MIDI')
+check('Podcast: Episode 1 URL', parsedRss?.items?.[0]?.url, 'https://storage.example/ep1.mp3')
+
 server.close()
 
 if (failures > 0) {
-  console.error(`\n❌ ${failures} Test(s) fehlgeschlagen!`)
+  console.error(`\nFEHLER: ${failures} Test(s) fehlgeschlagen!`)
   process.exit(1)
 } else {
-  console.log('\nOK: Alle Extractor-Tests bestanden! VOE, FileMoon, Vidmoly, Dood, Streamtape, Vidoza und AniWorld funktionieren einwandfrei.')
+  console.log('\nOK: Alle Extractor-Tests bestanden! VOE, FileMoon, Vidmoly, Dood, Streamtape, Vidoza, AniWorld und Podcast/RSS funktionieren einwandfrei.')
   process.exit(0)
 }

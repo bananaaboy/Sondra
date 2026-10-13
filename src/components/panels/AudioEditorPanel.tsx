@@ -369,6 +369,40 @@ export function AudioEditorPanel() {
     }
   }
 
+  const applyPitchShift = () => {
+    if (semitones === 0) return
+    const label = `Tonhöhe ${semitones > 0 ? '+' : ''}${semitones} Halbtöne` + (hasSelection ? ' (Ausschnitt)' : '')
+    void apply(label, async (a) => {
+      if (hasSelection) {
+        return processRange(a, span.start, span.end, (part) =>
+          pitchShift(part, { semitones, preserveDuration: true })
+        )
+      }
+      return pitchShift(a, { semitones, preserveDuration: true })
+    }).then((ok) => {
+      if (ok) {
+        setOn((s) => ({ ...s, pitch: false }))
+      }
+    })
+  }
+
+  const applyTimeStretch = () => {
+    if (tempo === 1) return
+    const label = `Tempo ${comma(tempo, 2)}×` + (hasSelection ? ' (Ausschnitt)' : '')
+    void apply(label, async (a) => {
+      if (hasSelection) {
+        return processRange(a, span.start, span.end, (part) =>
+          stretchAudio(part, 1 / tempo)
+        )
+      }
+      return stretchAudio(a, 1 / tempo)
+    }).then((ok) => {
+      if (ok) {
+        setOn((s) => ({ ...s, tempo: false }))
+      }
+    })
+  }
+
   /* -- playing ------------------------------------------------------------- */
 
   const soundRef = useRef(sound)
@@ -894,6 +928,125 @@ export function AudioEditorPanel() {
               }}>
               {hasSelection ? 'Am Auswahlbeginn' : position !== null ? 'An der Abspielstelle' : 'Am Ende'}
             </Button>
+          </div>
+
+          {/* -- pitch shift & time stretch --------------------------------- */}
+          <div className="mt-[20px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-line/70">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-[10px]">
+              <div>
+                <p className="text-small font-semibold text-ink">Tonhöhe & Tempo (Pitch-Shift & Time-Stretch)</p>
+                <p className="text-small text-muted">
+                  Tonhöhe transponieren ohne Tempoverlust oder Tempo anpassen ohne Micky-Maus-Stimmen.
+                  {hasSelection ? ' Wirkt auf den markierten Ausschnitt.' : ' Wirkt auf die gesamte Datei.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-[14px] grid gap-[20px] sm:grid-cols-2">
+              {/* Tonhöhe */}
+              <div className="flex flex-col gap-[10px]">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-small font-medium text-ink">Tonhöhe (Halbtöne)</span>
+                  <span className="value text-small text-ink font-semibold">
+                    {semitones === 0 ? 'Original (0)' : `${semitones > 0 ? '+' : ''}${semitones} Halbtöne`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={-12}
+                  max={12}
+                  step={1}
+                  value={semitones}
+                  onChange={(e) => {
+                    const val = Number(e.target.value)
+                    setSemitones(val)
+                    if (val !== 0) enable('pitch')
+                  }}
+                  className="w-full"
+                />
+                <div className="flex flex-wrap gap-[6px]">
+                  {[-12, -2, -1, 0, 1, 2, 12].map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => {
+                        setSemitones(st)
+                        if (st !== 0) enable('pitch')
+                      }}
+                      className={`press px-[8px] py-[3px] rounded-nav text-micro value font-semibold transition-colors ${
+                        semitones === st
+                          ? 'bg-ink text-on-ink'
+                          : 'bg-raised text-ink ring-1 ring-inset ring-line hover:bg-panel-mid'
+                      }`}
+                    >
+                      {st === 0 ? '0' : st > 0 ? `+${st}` : st}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-[8px] pt-[4px]">
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    disabled={busy !== null || semitones === 0}
+                    onClick={applyPitchShift}
+                  >
+                    Tonhöhe fest anwenden
+                  </Button>
+                </div>
+              </div>
+
+              {/* Tempo */}
+              <div className="flex flex-col gap-[10px]">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-small font-medium text-ink">Tempo (Time-Stretch)</span>
+                  <span className="value text-small text-ink font-semibold">
+                    {tempo === 1 ? 'Original (1,00×)' : `${comma(tempo, 2)}×`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={2.0}
+                  step={0.05}
+                  value={tempo}
+                  onChange={(e) => {
+                    const val = Number(e.target.value)
+                    setTempo(val)
+                    if (val !== 1) enable('tempo')
+                  }}
+                  className="w-full"
+                />
+                <div className="flex flex-wrap gap-[6px]">
+                  {[0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        setTempo(t)
+                        if (t !== 1) enable('tempo')
+                      }}
+                      className={`press px-[8px] py-[3px] rounded-nav text-micro value font-semibold transition-colors ${
+                        Math.abs(tempo - t) < 0.001
+                          ? 'bg-ink text-on-ink'
+                          : 'bg-raised text-ink ring-1 ring-inset ring-line hover:bg-panel-mid'
+                      }`}
+                    >
+                      {t === 1 ? '1×' : `${comma(t, 2)}×`}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-[8px] pt-[4px]">
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    disabled={busy !== null || tempo === 1}
+                    onClick={applyTimeStretch}
+                  >
+                    Tempo fest anwenden
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* -- sound: filters, dynamics, noise, space --------------------------- */}

@@ -18,6 +18,8 @@ import {
   extractDirectMedia,
   isAniworldUrl,
   isHosterUrl,
+  isPodcastOrRssUrl,
+  parsePodcastFeed,
 } from './extractors.js'
 
 /*
@@ -290,6 +292,36 @@ export default async function handler(request, response) {
   }
 
   /**
+   * Podcast / RSS Feed
+   */
+  if (isPodcastOrRssUrl(targetStr)) {
+    try {
+      const feedRes = await fetch(targetStr, {
+        headers: {
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+          accept: 'application/rss+xml, application/xml, text/xml, text/plain, */*',
+        },
+      })
+      if (feedRes.ok) {
+        const text = await feedRes.text()
+        const feed = parsePodcastFeed(text, targetStr)
+        if (feed && Array.isArray(feed.items) && feed.items.length > 0) {
+          response.status(200).json({
+            status: 'playlist',
+            kind: 'playlist',
+            title: feed.title,
+            author: feed.seriesTitle,
+            items: feed.items,
+          })
+          return
+        }
+      }
+    } catch {
+      // Fall through to probe below
+    }
+  }
+
+  /**
    * Anything else: is this already a media file?
    *
    * The browser cannot fetch it itself — a foreign server almost never sends
@@ -309,6 +341,28 @@ export default async function handler(request, response) {
     const type = probed.headers.get('content-type') ?? ''
     const disposition = probed.headers.get('content-disposition') ?? ''
     if (!mediaTarget || !probed.ok || !looksLikeMedia(type, mediaTarget, disposition)) {
+      if (type.includes('xml') || type.includes('rss') || type.includes('atom') || target.pathname.endsWith('.xml') || target.pathname.endsWith('.rss')) {
+        try {
+          const feedRes = await fetch(target.toString(), {
+            headers: { accept: 'application/rss+xml, application/xml, text/xml, */*' },
+          })
+          if (feedRes.ok) {
+            const text = await feedRes.text()
+            const feed = parsePodcastFeed(text, target.toString())
+            if (feed && Array.isArray(feed.items) && feed.items.length > 0) {
+              response.status(200).json({
+                status: 'playlist',
+                kind: 'playlist',
+                title: feed.title,
+                author: feed.seriesTitle,
+                items: feed.items,
+              })
+              return
+            }
+          }
+        } catch {}
+      }
+
       response.status(422).json({
         error: 'no-extractor',
         message:

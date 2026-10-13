@@ -991,3 +991,98 @@ export async function extractDirectMedia(rawUrl, options = {}) {
   }
   return extractDirectHoster(rawUrl, options)
 }
+
+/* -------------------------------------------------------------------------- */
+/* Podcast & RSS Feed Extractor                                               */
+/* -------------------------------------------------------------------------- */
+
+export function isPodcastOrRssUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    return (
+      /\.(?:rss|xml)(?:\?.*)?$/i.test(u.pathname) ||
+      /(?:feed|podcast|rss)/i.test(u.pathname) ||
+      /(?:feeds\.megaphone\.fm|feed\.podbean\.com|anchor\.fm\/s\/|podcasts\.apple\.com)/i.test(u.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
+function unescapeXml(str) {
+  if (!str) return ''
+  return str
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#039;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .trim()
+}
+
+export function parsePodcastFeed(xmlText, feedUrl = '') {
+  if (!xmlText || typeof xmlText !== 'string') return null
+  const isRss = /<rss[\s>]/i.test(xmlText) || /<channel[\s>]/i.test(xmlText)
+  const isAtom = /<feed[\s>]/i.test(xmlText)
+  if (!isRss && !isAtom) return null
+
+  // Extract channel / feed title
+  let title = 'Podcast Feed'
+  const titleMatch = xmlText.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i)
+  if (titleMatch && titleMatch[1]) {
+    title = unescapeXml(titleMatch[1].replace(/<[^>]+>/g, ''))
+  }
+
+  // Extract author
+  let author = 'Podcast'
+  const authorMatch = xmlText.match(/<(?:itunes:author|author)[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/(?:itunes:author|author)>/i)
+  if (authorMatch && authorMatch[1]) {
+    author = unescapeXml(authorMatch[1].replace(/<[^>]+>/g, ''))
+  }
+
+  const items = []
+  const itemRegex = /<(?:item|entry)[\s>]([\s\S]*?)<\/(?:item|entry)>/gi
+  let match
+  while ((match = itemRegex.exec(xmlText)) !== null) {
+    const itemXml = match[1]
+
+    const epTitleMatch = itemXml.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i)
+    const epTitle = epTitleMatch ? unescapeXml(epTitleMatch[1].replace(/<[^>]+>/g, '')) : `Episode ${items.length + 1}`
+
+    let epUrl = null
+    const encMatch = itemXml.match(/<enclosure[^>]+url=["']([^"']+)["']/i)
+    if (encMatch) {
+      epUrl = encMatch[1].trim()
+    } else {
+      const mediaMatch = itemXml.match(/<media:content[^>]+url=["']([^"']+)["']/i)
+      if (mediaMatch) {
+        epUrl = mediaMatch[1].trim()
+      } else {
+        const linkMatch = itemXml.match(/<link[^>]+(?:rel=["']enclosure["']|type=["'](?:audio|video)\/[^"']+["'])[^>]+href=["']([^"']+)["']/i)
+        if (linkMatch) {
+          epUrl = linkMatch[1].trim()
+        }
+      }
+    }
+
+    if (epUrl) {
+      epUrl = epUrl.replace(/&amp;/g, '&')
+      items.push({
+        title: epTitle,
+        url: epUrl,
+        episodeNumber: items.length + 1,
+      })
+    }
+  }
+
+  if (items.length === 0) return null
+
+  return {
+    isPlaylist: true,
+    title,
+    seriesTitle: author,
+    items,
+  }
+}
+

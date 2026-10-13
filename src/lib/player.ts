@@ -142,6 +142,7 @@ export interface PlayerSettings {
   eqLow: number
   eqMid: number
   eqHigh: number
+  karaoke: boolean
   visualizer: boolean
   autoNext: boolean
   repeat: Repeat
@@ -165,6 +166,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   eqLow: 0,
   eqMid: 0,
   eqHigh: 0,
+  karaoke: false,
   visualizer: true,
   autoNext: true,
   repeat: 'aus',
@@ -201,6 +203,7 @@ export function rememberedSettings(): PlayerSettings {
       eqLow: within(saved.eqLow, -12, 12, d.eqLow),
       eqMid: within(saved.eqMid, -12, 12, d.eqMid),
       eqHigh: within(saved.eqHigh, -12, 12, d.eqHigh),
+      karaoke: saved.karaoke === true,
       visualizer: saved.visualizer !== false,
       autoNext: saved.autoNext !== false,
       repeat: oneOf(saved.repeat, ['aus', 'titel', 'liste'] as const, d.repeat),

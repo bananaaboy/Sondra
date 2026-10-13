@@ -37,9 +37,9 @@ type Tone = 'cream' | 'keylime' | 'mint' | 'sage' | 'slate'
 const TONE_CLASS: Record<Tone, string> = {
   cream: 'border-t-2 border-rule pt-[20px]',
   keylime: 'border-t-2 border-rule pt-[20px]',
-  mint: 'rounded-card bg-panel-soft',
-  sage: 'rounded-card bg-panel-mid',
-  slate: 'rounded-card bg-panel-cool',
+  mint: 'rounded-card bg-panel-soft ring-1 ring-inset ring-line/70',
+  sage: 'rounded-card bg-panel-mid ring-1 ring-inset ring-line/70',
+  slate: 'rounded-card bg-panel-cool ring-1 ring-inset ring-line/70',
 }
 
 export function Card({
