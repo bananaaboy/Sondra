@@ -79,8 +79,11 @@ export function SessionMenu() {
   const activeId = useSession((state) => state.activeAssetId)
   const setActive = useSession((state) => state.setActiveAsset)
   const removeAsset = useSession((state) => state.removeAsset)
+  const reorderAssets = useSession((state) => state.reorderAssets)
   const clearAssets = useSession((state) => state.clearAssets)
   const active = useActiveAsset()
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const picker = useFilePicker('geöffnet')
   const keep = useKept((state) => state.keep)
   const saving = useKept((state) => state.saving)
@@ -182,10 +185,57 @@ export function SessionMenu() {
           <SelectedPlayer />
 
           <ul className="flex flex-col">
-            {assets.map((asset) => {
+            {assets.map((asset, index) => {
               const current = asset.id === activeId
               return (
-                <li key={asset.id} className="flex items-center gap-[4px] border-t border-line first:border-t-0">
+                <li
+                  key={asset.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggedIndex(index)
+                    e.dataTransfer.setData('text/plain', String(index))
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    if (dragOverIndex !== index) setDragOverIndex(index)
+                  }}
+                  onDragLeave={() => {
+                    if (dragOverIndex === index) setDragOverIndex(null)
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setDragOverIndex(null)
+                    setDraggedIndex(null)
+                    const fromStr = e.dataTransfer.getData('text/plain')
+                    const fromIndex = fromStr ? parseInt(fromStr, 10) : draggedIndex
+                    if (fromIndex !== null && !isNaN(fromIndex) && fromIndex !== index) {
+                      reorderAssets(fromIndex, index)
+                    }
+                  }}
+                  onDragEnd={() => {
+                    setDraggedIndex(null)
+                    setDragOverIndex(null)
+                  }}
+                  className={`group flex items-center gap-[4px] border-t border-line first:border-t-0 transition-colors ${
+                    dragOverIndex === index ? 'bg-panel-strong/60 ring-1 ring-ink' : ''
+                  } ${draggedIndex === index ? 'opacity-40' : ''}`}
+                >
+                  <span
+                    title="Ziehen zum Sortieren"
+                    className="flex cursor-grab items-center justify-center p-[4px] text-muted/60 hover:text-ink active:cursor-grabbing"
+                    aria-hidden
+                  >
+                    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor">
+                      <circle cx="5" cy="4" r="1.2" />
+                      <circle cx="11" cy="4" r="1.2" />
+                      <circle cx="5" cy="8" r="1.2" />
+                      <circle cx="11" cy="8" r="1.2" />
+                      <circle cx="5" cy="12" r="1.2" />
+                      <circle cx="11" cy="12" r="1.2" />
+                    </svg>
+                  </span>
                   <button
                     type="button"
                     onClick={() => setActive(asset.id)}

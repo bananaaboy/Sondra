@@ -227,7 +227,7 @@ export function SettingsMenu({
         : `${quality.current}p`
   const pictureTouched =
     settings.brightness !== 1 || settings.contrast !== 1 || settings.saturation !== 1 || settings.mirror || settings.fit !== 'contain'
-  const soundValue = [settings.boost > 1 ? `${Math.round(settings.boost * 100)} %` : null, settings.night ? 'Nachtmodus' : null]
+  const soundValue = [settings.karaoke ? 'Karaoke' : null, settings.boost > 1 ? `${Math.round(settings.boost * 100)} %` : null, settings.night ? 'Nachtmodus' : null]
     .filter(Boolean)
     .join(' · ') || 'Normal'
   const playbackValue = settings.repeat !== 'aus' ? (settings.repeat === 'titel' ? 'Titel wiederholen' : 'Liste wiederholen') : settings.autoNext ? 'Automatisch weiter' : 'Anhalten am Ende'
@@ -429,6 +429,12 @@ export function SettingsMenu({
               </button>
             </Group>
             <Group>
+              <Switch
+                label="Instrumental / Karaoke"
+                hint="Gesang in Echtzeit dämpfen (Mid-Side Phasenauslöschung der Mitten-Vokale)"
+                on={settings.karaoke}
+                onChange={(karaoke) => update({ karaoke })}
+              />
               <Switch
                 label="Audio-Visualizer"
                 hint="Echtzeit-Frequenzbalken unter der Steuerleiste"

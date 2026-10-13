@@ -56,6 +56,7 @@ export function startVoice(
   buffers: { forward: AudioBuffer; reversed: AudioBuffer | null },
   when: number,
   holdSeconds?: number,
+  velocity = 1,
 ): Voice {
   const source = context.createBufferSource()
   const reversed = slice.reverse && buffers.reversed
@@ -67,7 +68,8 @@ export function startVoice(
   source.playbackRate.value = rate
 
   const gain = context.createGain()
-  const level = dbToGain(slice.gainDb)
+  const velGain = Math.max(0.01, Math.min(1, velocity))
+  const level = dbToGain(slice.gainDb) * velGain
   const attack = slice.attackMs / 1000
   const release = slice.releaseMs / 1000
   if (attack > 0) {

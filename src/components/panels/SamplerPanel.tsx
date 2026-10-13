@@ -40,6 +40,8 @@ import { renderSliceInWorker } from '../../lib/workerClient'
 import { SLICE_DEFAULTS, startVoice, type PlayMode, type Slice, type Voice } from '../../lib/pattern'
 import { StepSequencer } from './StepSequencer'
 import { createZip } from '../../lib/zip'
+import { createCueSheet, createAudacityLabels } from '../../lib/cueExport'
+import { connectWebMidi, type MidiAccessSubscription } from '../../lib/midi'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { useActiveAsset, useSession } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
@@ -172,6 +174,8 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   const [progress, setProgress] = useState<number | null>(null)
   /** The selected pad rendered exactly as it would export. */
   const [rendered, setRendered] = useState<{ id: string; audio: AudioData } | null>(null)
+  /** Detected USB MIDI controllers and keyboards */
+  const [midiDevices, setMidiDevices] = useState<string[]>([])
 
   useEffect(() => {
     if (asset && !audio && status === 'idle') void decode()
@@ -348,7 +352,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
   }, [stopPad])
 
   const triggerPad = useCallback(
-    (index: number, semitone = 0) => {
+    (index: number, semitone = 0, velocity = 1) => {
       const pad = slices[index]
       const buffer = bufferRef.current
       if (!pad || !buffer) return
@@ -358,7 +362,7 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
       if (context.state === 'suspended') {
         // A click is a user gesture, so this is allowed — but it resolves
         // asynchronously, and starting a node before it does produces silence.
-        void resumeAudioContext().then(() => triggerPad(index, semitone))
+        void resumeAudioContext().then(() => triggerPad(index, semitone, velocity))
         return
       }
 
@@ -371,6 +375,8 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
         slice,
         { forward: buffer, reversed: reversedRef.current },
         context.currentTime,
+        undefined,
+        velocity,
       )
       const source = voice.source
 
@@ -507,6 +513,36 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
       window.removeEventListener('keyup', onKeyUp)
     }
   }, [slices, stopAll, stopPad, triggerPad])
+
+  /* --- Web MIDI: Hardware keyboards and drum pads ------------------------- */
+  useEffect(() => {
+    let sub: MidiAccessSubscription | null = null
+    void connectWebMidi({
+      onNoteOn: (padIndex, velocity) => {
+        if (padIndex >= 0 && padIndex < MAX_PADS && slices[padIndex]) {
+          setActiveSlice(slices[padIndex].id)
+          triggerPad(padIndex, 0, velocity)
+        }
+      },
+      onNoteOff: (padIndex) => {
+        if (padIndex >= 0 && padIndex < MAX_PADS) {
+          const pad = slices[padIndex]
+          if (pad && pad.mode === 'gate') stopPad(padIndex)
+        }
+      },
+      onStateChange: (devices) => {
+        setMidiDevices(devices)
+        if (devices.length > 0) log('sampler', `MIDI: ${devices.join(', ')}`)
+      },
+    }).then((res) => {
+      if (res) {
+        sub = res
+        setMidiDevices(res.devices)
+        if (res.devices.length > 0) log('sampler', `MIDI: ${res.devices.join(', ')}`)
+      }
+    })
+    return () => sub?.disconnect()
+  }, [log, slices, stopPad, triggerPad])
 
   useEffect(() => stopAll, [stopAll])
 
@@ -708,6 +744,22 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
       setRendering(false)
       setProgress(null)
     }
+  }
+
+  const exportCue = () => {
+    if (slices.length === 0) return
+    const cueContent = createCueSheet(`${baseName}.wav`, slices, baseName)
+    const bytes = new TextEncoder().encode(cueContent)
+    saveBytes(bytes, `${baseName}.cue`, 'application/x-cue')
+    log('sampler', `${baseName}.cue exportiert (${slices.length} Cues)`)
+  }
+
+  const exportAudacity = () => {
+    if (slices.length === 0) return
+    const labelContent = createAudacityLabels(slices)
+    const bytes = new TextEncoder().encode(labelContent)
+    saveBytes(bytes, `${baseName}-labels.txt`, 'text/plain')
+    log('sampler', `Audacity Labels exportiert (${slices.length} Abschnitte)`)
   }
 
   const confident = (tempo?.confidence ?? 0) >= 0.5
@@ -916,7 +968,12 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
         {slices.length > 0 ? (
           <Card tone="slate" size="compact">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <SectionHead>Pads · {slices.length}</SectionHead>
+              <div className="flex items-center gap-[10px]">
+                <SectionHead>Pads · {slices.length}</SectionHead>
+                <Badge tone={midiDevices.length > 0 ? 'forest' : 'cream'}>
+                  {midiDevices.length > 0 ? `MIDI: ${midiDevices[0]}` : 'MIDI bereit'}
+                </Badge>
+              </div>
               {slices.length > MAX_PADS ? (
                 <span className="text-small text-muted">
                   Nur die ersten {MAX_PADS} liegen auf Tasten; exportiert werden alle.
@@ -992,6 +1049,12 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
                   Alle {slices.length} in die Sitzung
                 </Button>
               ) : null}
+              <Button size="sm" variant="quiet" onClick={exportCue} disabled={rendering}>
+                CUE-Sheet (.cue)
+              </Button>
+              <Button size="sm" variant="quiet" onClick={exportAudacity} disabled={rendering}>
+                Audacity Labels (.txt)
+              </Button>
             </div>
 
             {rendering ? (

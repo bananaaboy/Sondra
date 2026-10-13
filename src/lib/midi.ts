@@ -98,3 +98,92 @@ export function writeMidi(notes: Note[], options: MidiOptions): Uint8Array<Array
   const bytes = [...header, ...chunk('MTrk', track)]
   return new Uint8Array(bytes) as Uint8Array<ArrayBuffer>
 }
+
+/* -------------------------------------------------------------------------- */
+/* Web MIDI API: Hardware Controller & Pad Triggering                         */
+/* -------------------------------------------------------------------------- */
+
+export interface WebMidiHandler {
+  onNoteOn: (padIndex: number, velocity: number, note: number) => void
+  onNoteOff?: (padIndex: number, note: number) => void
+  onStateChange?: (devices: string[]) => void
+}
+
+export function isWebMidiSupported(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.requestMIDIAccess === 'function'
+}
+
+/**
+ * Maps incoming MIDI note numbers to pad indices (0..15).
+ * Standard MPC / General MIDI Drum notes 36 (C1) through 51 (D#2) map 1:1.
+ */
+export function midiNoteToPadIndex(note: number): number {
+  if (note >= 36 && note <= 51) return note - 36
+  if (note >= 48 && note <= 63) return note - 48
+  if (note >= 60 && note <= 75) return note - 60
+  return ((note % 16) + 16) % 16
+}
+
+export interface MidiAccessSubscription {
+  devices: string[]
+  disconnect: () => void
+}
+
+/**
+ * Connects to connected MIDI keyboards and drum pads (AKAI MPK Mini, Novation Launchpad, etc.)
+ * and routes Note-On / Note-Off messages to the handler.
+ */
+export async function connectWebMidi(handler: WebMidiHandler): Promise<MidiAccessSubscription | null> {
+  if (!isWebMidiSupported()) return null
+  try {
+    const access = await navigator.requestMIDIAccess({ sysex: false })
+    const activeInputs: MIDIInput[] = []
+
+    const attach = (input: MIDIInput) => {
+      activeInputs.push(input)
+      input.onmidimessage = (event: MIDIMessageEvent) => {
+        if (!event.data || event.data.length < 3) return
+        const status = event.data[0] & 0xf0
+        const note = event.data[1]
+        const rawVelocity = event.data[2]
+        const padIndex = midiNoteToPadIndex(note)
+
+        if (status === 0x90 && rawVelocity > 0) {
+          const velocity = Math.max(0.01, Math.min(1, rawVelocity / 127))
+          handler.onNoteOn(padIndex, velocity, note)
+        } else if (status === 0x80 || (status === 0x90 && rawVelocity === 0)) {
+          handler.onNoteOff?.(padIndex, note)
+        }
+      }
+    }
+
+    const getDeviceNames = (): string[] => {
+      const names: string[] = []
+      for (const input of access.inputs.values()) {
+        names.push(input.name || 'MIDI-Eingang')
+      }
+      return names
+    }
+
+    for (const input of access.inputs.values()) {
+      attach(input)
+    }
+
+    access.onstatechange = () => {
+      handler.onStateChange?.(getDeviceNames())
+    }
+
+    return {
+      devices: getDeviceNames(),
+      disconnect: () => {
+        for (const input of activeInputs) {
+          input.onmidimessage = null
+        }
+        access.onstatechange = null
+      },
+    }
+  } catch {
+    return null
+  }
+}
+

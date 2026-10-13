@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 
 import { useIngestFiles } from '../../hooks/useIngest'
 import { getAudioContext, resumeAudioContext } from '../../lib/audio'
+import { createKaraokeProcessor, type KaraokeProcessor } from '../../lib/audioKaraoke'
 import { diskPath, probeDisk, runFfmpegOnDisk, unloadFfmpeg, type DiskFacts, type StreamInfo } from '../../lib/ffmpegClient'
 import { formatBytes } from '../../lib/format'
 import { NATIVE_CONTAINER, browserPlaysAudio, codecName, diskName, remedyFor, standJob, type Remedy } from '../../lib/playable'
@@ -689,6 +690,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     eqLow: BiquadFilterNode
     eqMid: BiquadFilterNode
     eqHigh: BiquadFilterNode
+    karaoke: KaraokeProcessor
     squeeze: DynamicsCompressorNode
     gain: GainNode
     analyser: AnalyserNode
@@ -706,6 +708,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
       settings.eqLow !== 0 ||
       settings.eqMid !== 0 ||
       settings.eqHigh !== 0 ||
+      settings.karaoke ||
       settings.visualizer
 
     if (!wanted && graph.current?.node !== node) return
@@ -735,6 +738,9 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         eqHigh.frequency.value = 10000
         eqHigh.gain.value = settings.eqHigh
 
+        const karaoke = createKaraokeProcessor(context)
+        karaoke.setEnabled(settings.karaoke)
+
         const squeeze = context.createDynamicsCompressor()
         squeeze.threshold.value = -32
         squeeze.knee.value = 18
@@ -751,18 +757,19 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         bass.connect(eqLow)
         eqLow.connect(eqMid)
         eqMid.connect(eqHigh)
+        eqHigh.connect(karaoke.input)
 
         if (settings.night) {
-          eqHigh.connect(squeeze)
+          karaoke.output.connect(squeeze)
           squeeze.connect(gain)
         } else {
-          eqHigh.connect(gain)
+          karaoke.output.connect(gain)
         }
 
         gain.connect(analyser)
         analyser.connect(context.destination)
 
-        graph.current = { node, source, bass, eqLow, eqMid, eqHigh, squeeze, gain, analyser }
+        graph.current = { node, source, bass, eqLow, eqMid, eqHigh, karaoke, squeeze, gain, analyser }
         void resumeAudioContext()
       }
 
@@ -771,15 +778,16 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
       g.eqLow.gain.value = settings.eqLow
       g.eqMid.gain.value = settings.eqMid
       g.eqHigh.gain.value = settings.eqHigh
+      g.karaoke.setEnabled(settings.karaoke)
       g.gain.gain.value = settings.boost * (settings.night ? 1.6 : 1)
 
-      g.eqHigh.disconnect()
+      g.karaoke.output.disconnect()
       g.squeeze.disconnect()
       if (settings.night) {
-        g.eqHigh.connect(g.squeeze)
+        g.karaoke.output.connect(g.squeeze)
         g.squeeze.connect(g.gain)
       } else {
-        g.eqHigh.connect(g.gain)
+        g.karaoke.output.connect(g.gain)
       }
 
       void resumeAudioContext()
@@ -793,6 +801,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     settings.eqLow,
     settings.eqMid,
     settings.eqHigh,
+    settings.karaoke,
     settings.visualizer,
     sourceUrl,
   ])

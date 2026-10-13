@@ -37,28 +37,21 @@
    being ink and started being paint.
    --------------------------------------------------------------------------- */
 @theme {
-  /* Light palette — the values below double as the defaults. */
-  --color-canvas: #f2eee4;
-  --color-raised: #fdfbf6;
-  --color-panel-soft: #edf5ef;
-  --color-panel-mid: #e4f0e7;
-  --color-panel-strong: #d3e9da;
-  --color-panel-cool: #e1edf1;
-  --color-ink: #0f3e1c;
-  --color-ink-hover: #17552b;
+  /* Light palette — crisp, high-contrast, modern studio finish. */
+  --color-canvas: #f8faf8;
+  --color-raised: #ffffff;
+  --color-panel-soft: #f0f4f1;
+  --color-panel-mid: #e4ece6;
+  --color-panel-strong: #d2e4d6;
+  --color-panel-cool: #e5eff3;
+  --color-ink: #0b4a22;
+  --color-ink-hover: #073517;
   --color-on-ink: #ffffff;
-  --color-prose: #162019;
-  --color-muted: #5a6b5f;
-  /* Measured against both the canvas and a white card: the old #e3e2dc sat at
-     APCA Lc 7.5, half of the Lc 15 a non-text separator wants. */
-  --color-line: #d3cdbf;
-  /* Two weights of rule. `line` is a table's own hairline; `rule` is the
-     heavier one that opens a section. Both are tokens rather than an alpha on
-     ink, because an alpha over a dark ground loses its contrast: measured, the
-     same ink at 25 % sat at APCA Lc 25 on paper and Lc 7 in the dark theme. */
-  --color-rule: #bcc4b6;
-  /* Present, but not applicable to what is open. Still has to be legible. */
-  --color-faint: #8f9c91;
+  --color-prose: #111a14;
+  --color-muted: #4e6355;
+  --color-line: #cbd7cf;
+  --color-rule: #a7bca9;
+  --color-faint: #799081;
 
   /* The editor stage. Deliberately dark in both themes and deliberately
      neutral: a picture judged against cream reads warm, against green reads
@@ -213,6 +206,21 @@
 
 :root[data-theme='light'] {
   color-scheme: light;
+
+  --color-canvas: #f8faf8;
+  --color-raised: #ffffff;
+  --color-panel-soft: #f0f4f1;
+  --color-panel-mid: #e4ece6;
+  --color-panel-strong: #d2e4d6;
+  --color-panel-cool: #e5eff3;
+  --color-ink: #0b4a22;
+  --color-ink-hover: #073517;
+  --color-on-ink: #ffffff;
+  --color-prose: #111a14;
+  --color-muted: #4e6355;
+  --color-line: #cbd7cf;
+  --color-rule: #a7bca9;
+  --color-faint: #799081;
 }
 
 html {

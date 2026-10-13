@@ -34,7 +34,7 @@ const STORAGE_KEY = 'sondra:theme'
 
 /** Background colours per theme, mirroring theme.css, for the browser chrome. */
 const CHROME_COLOR: Record<ResolvedTheme, string> = {
-  light: '#f2eee4',
+  light: '#f8faf8',
   dark: '#0a110d',
 }
 
@@ -106,12 +106,12 @@ export function readPalette(): Palette {
   const styles = getComputedStyle(document.documentElement)
   const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback
   return {
-    ink: read('--color-ink', '#0f3e1c'),
-    inkHover: read('--color-ink-hover', '#17552b'),
-    canvas: read('--color-canvas', '#f2eee4'),
-    raised: read('--color-raised', '#fdfbf6'),
-    muted: read('--color-muted', '#5a6b5f'),
-    line: read('--color-line', '#d3cdbf'),
+    ink: read('--color-ink', '#0b4a22'),
+    inkHover: read('--color-ink-hover', '#073517'),
+    canvas: read('--color-canvas', '#f8faf8'),
+    raised: read('--color-raised', '#ffffff'),
+    muted: read('--color-muted', '#4e6355'),
+    line: read('--color-line', '#cbd7cf'),
   }
 }
 

@@ -83,6 +83,7 @@ interface SessionState {
   addAsset: (asset: Omit<Asset, 'id' | 'createdAt'>) => Asset
   updateAsset: (id: string, patch: Partial<Asset>) => void
   removeAsset: (id: string) => void
+  reorderAssets: (fromIndex: number, toIndex: number) => void
   clearAssets: () => void
   setActiveAsset: (id: string | null) => void
   setPanel: (panel: PanelId) => void
@@ -132,6 +133,23 @@ export const useSession = create<SessionState>((set, get) => ({
         assets,
         activeAssetId: state.activeAssetId === id ? (assets.at(-1)?.id ?? null) : state.activeAssetId,
       }
+    }),
+
+  reorderAssets: (fromIndex, toIndex) =>
+    set((state) => {
+      if (
+        fromIndex < 0 ||
+        fromIndex >= state.assets.length ||
+        toIndex < 0 ||
+        toIndex >= state.assets.length ||
+        fromIndex === toIndex
+      ) {
+        return state
+      }
+      const next = [...state.assets]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return { assets: next }
     }),
 
   clearAssets: () => set({ assets: [], activeAssetId: null }),

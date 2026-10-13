@@ -15,11 +15,13 @@
  * paste, choose, download.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { IN_DESKTOP_APP } from '../../lib/desktop'
 import { saveBytes } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
+import { decodeWithBrowser } from '../../lib/audio'
+import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
 import { tagAudioFile } from '../../lib/tagger'
 import {
   StudioError,
@@ -242,6 +244,50 @@ export function DownloaderPanel() {
     batchAbortRef.current?.abort()
   }, [])
 
+  const [autoTranscribe, setAutoTranscribe] = useState(false)
+  const autoTranscribeRef = useRef(false)
+  autoTranscribeRef.current = autoTranscribe
+
+  const triggerAutoTranscribe = useCallback(
+    async (assetName: string, assetBytes: Uint8Array) => {
+      log('holen', `Starte automatische Untertitel-Generierung für ${assetName}…`)
+      try {
+        const copy = new Uint8Array(assetBytes.byteLength)
+        copy.set(assetBytes)
+        const audioData = await decodeWithBrowser(copy.buffer as ArrayBuffer)
+        if (!audioData) return
+        const samples = await toSpeechSamples(audioData)
+        const segments = await transcribe(samples, {
+          model: SPEECH_MODELS[0].id,
+          language: 'auto',
+        })
+        if (segments && segments.length > 0) {
+          const srtText = toSrt(segments)
+          const stem = assetName.replace(/\.[^.]+$/, '')
+          const srtBytes = new TextEncoder().encode(srtText)
+          addAsset({
+            name: `${stem}.srt`,
+            bytes: srtBytes,
+            mime: 'application/x-subrip',
+            sizeBytes: srtBytes.byteLength,
+            kind: 'unknown',
+            audio: null,
+            durationSeconds: null,
+            origin: 'derived',
+          })
+          log('holen', `Untertitel generiert: ${stem}.srt in die Sitzung gelegt (${segments.length} Abschnitte)`)
+        }
+      } catch (err) {
+        log(
+          'holen',
+          `Untertitel-Generierung übersprungen: ${err instanceof Error ? err.message : String(err)}`,
+          'warn',
+        )
+      }
+    },
+    [addAsset, log],
+  )
+
   const look = async () => {
     const targets = url
       .split(/[\n,]+/)
@@ -393,6 +439,9 @@ export function DownloaderPanel() {
       })
       log('holen', `${name} geladen (${formatBytes(finalBytes.byteLength)})`)
       setTaken({ name, bytes: finalBytes, mime: stream.mime })
+      if (autoTranscribe) {
+        void triggerAutoTranscribe(name, finalBytes)
+      }
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
       const studio = cause instanceof StudioError ? cause : null
@@ -471,6 +520,9 @@ export function DownloaderPanel() {
         origin: 'download',
       })
       log('holen', `${name} geladen (${formatBytes(finalBytes.byteLength)})`)
+      if (autoTranscribeRef.current) {
+        void triggerAutoTranscribe(name, finalBytes)
+      }
       setBatchEntries((prev) =>
         prev
           ? prev.map((e, idx) =>
@@ -563,7 +615,7 @@ export function DownloaderPanel() {
                 setBatchEntries(null)
                 setProgress(null)
               }}
-              placeholder="https://... oder mehrere Links mit Komma getrennt (z. B. Link 1, Link 2)"
+              placeholder="https://... YouTube, AniWorld, Podcast-RSS-Feed oder direkte Mediendatei"
               inputMode="url"
               aria-label="Adresse zum Herunterladen"
               className="flex-1"
@@ -574,6 +626,18 @@ export function DownloaderPanel() {
           </div>
 
           <div className="mt-[6px] flex flex-col gap-[6px]">
+            <div className="flex items-center gap-[10px]">
+              <label className="flex cursor-pointer items-center gap-[8px] text-small font-medium text-ink">
+                <input
+                  type="checkbox"
+                  checked={autoTranscribe}
+                  onChange={(e) => setAutoTranscribe(e.target.checked)}
+                  className="rounded border-line text-ink focus:ring-ink"
+                />
+                Nach dem Download automatisch Untertitel generieren (.srt)
+              </label>
+            </div>
+
             <div className="flex flex-wrap items-center gap-[10px]">
               <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
                 Dateinamen-Verschleierung:
