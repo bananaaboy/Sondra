@@ -206,19 +206,28 @@ try {
     return 'beat.wav in der Sitzung'
   })
 
+  // The sound editor is a studio since October 2026: a rail of tools, one
+  // tool's controls beside the stage, the history in its own tool.
+  const tool = (name) => main().getByRole('tab', { name, exact: true }).first().click()
+  const history = async () => {
+    await tool('Verlauf')
+    return mainText()
+  }
+
   await step('Ton: Ausschnitt behalten, umkehren, rückgängig', async () => {
     await go('ton')
     await waitForText(/Stereo/)
     const before = (await mainText()).match(/(\d+:\d\d\.\d\d) · Stereo/)?.[1]
     await dragAcross(main().locator('canvas').first(), 0.2, 0.5)
-    await page.getByRole('button', { name: 'Nur den Ausschnitt behalten', exact: true }).click()
+    await tool('Schnitt')
+    await page.getByRole('button', { name: 'Nur die Auswahl behalten', exact: true }).click()
     await page.waitForTimeout(800)
     const after = (await mainText()).match(/(\d+:\d\d\.\d\d) · Stereo/)?.[1]
     if (!after || after === before) throw new Error(`Länge unverändert (${before} → ${after}).`)
-    await page.getByRole('button', { name: 'Umkehren', exact: true }).click()
+    await page.getByRole('button', { name: 'Rückwärts drehen', exact: true }).click()
     await page.waitForTimeout(600)
-    if (!(await mainText()).includes('Umgekehrt')) throw new Error('Umkehren steht nicht im Verlauf.')
-    await page.getByRole('button', { name: 'Rückgängig', exact: true }).click()
+    if (!(await history()).includes('Umgekehrt')) throw new Error('Umkehren steht nicht im Verlauf.')
+    await page.getByRole('button', { name: 'Rückgängig (Strg+Z)', exact: true }).click()
     await page.waitForTimeout(600)
     if ((await mainText()).includes('Umgekehrt')) throw new Error('Rückgängig hat nichts zurückgenommen.')
     return `${before} → ${after}, Umkehren und Rückgängig wirken`
@@ -226,6 +235,7 @@ try {
 
   await step('Ton: in die Sitzung übernehmen', async () => {
     const before = await sessionCount()
+    await tool('Ausgabe')
     await page.getByRole('button', { name: 'In die Sitzung übernehmen', exact: true }).click()
     await page.waitForTimeout(800)
     const after = await sessionCount()
@@ -234,15 +244,17 @@ try {
   })
 
   await step('Ton: Hall und Rauschentfernung live, dann übernommen', async () => {
-    await page.locator('main summary', { hasText: 'Klang: Filter' }).click()
+    await tool('Raum')
     await page.getByRole('switch', { name: /^Hall/ }).click()
-    await waitForText(/Live zu hören: .*Hall/, 10_000)
+    await waitForText(/Zu hören: .*Hall/, 10_000)
     await dragAcross(main().locator('canvas').first(), 0.0, 0.05)
-    await page.getByRole('button', { name: 'Rauschprofil aus der Auswahl' }).click()
+    await tool('Säubern')
+    await page.getByRole('button', { name: 'Aus der Auswahl lernen' }).click()
     await waitForText(/Rauschen bis \d+ dB leiser/, 10_000)
     await page.waitForFunction(() => !/wird gerechnet/.test(document.querySelector('main')?.innerText ?? ''), null, { timeout: 30_000 })
     await page.getByRole('button', { name: 'Übernehmen', exact: true }).click()
-    await page.waitForFunction(() => /Hall [\d,]+ s/.test(document.querySelector('aside')?.innerText ?? ''), null, { timeout: 30_000 })
+    await page.waitForFunction(() => !/Zu hören:/.test(document.querySelector('main')?.innerText ?? ''), null, { timeout: 30_000 })
+    if (!/Hall [\d,]+ s/.test(await history())) throw new Error('Hall steht nicht im Verlauf.')
     return 'live gehört, Hall und Rauschen im Verlauf'
   })
 
@@ -252,15 +264,21 @@ try {
     await page.getByRole('dialog').getByText('beat.wav', { exact: true }).click()
     await page.keyboard.press('Escape')
     await go('zerschneiden')
+    // The planned cuts are counted before anything is cut.
+    await waitForText(/ergibt \d+/)
     await page.getByRole('button', { name: 'Schneiden', exact: true }).first().click()
-    await waitForText(/Pads · \d+/)
-    const pads = (await mainText()).match(/Pads · (\d+)/)?.[1]
-    await main().locator('button.aspect-square').nth(1).dispatchEvent('pointerdown')
+    await page.locator('section[aria-label="Pads und Pattern"]').waitFor({ timeout: 30_000 })
+    const pads = (await mainText()).match(/BPM[^·]*· (\d+) Pads/)?.[1]
+    // Pads and pattern are one rack: each row starts with its pad.
+    await page.getByRole('button', { name: /^Pad 2, Taste/ }).first().dispatchEvent('pointerdown')
     await page.waitForTimeout(300)
+    await page.getByRole('tab', { name: 'Export', exact: true }).click()
     const before = await sessionCount()
-    await page.getByRole('button', { name: 'Pad 2 in die Sitzung' }).click()
+    await page.getByRole('tabpanel').getByRole('button', { name: 'In die Sitzung', exact: true }).first().click()
     await page.waitForTimeout(1500)
     const after = await sessionCount()
+    // Back to the pad's own settings, so the pattern's own button is the only one of its name.
+    await page.getByRole('tab', { name: /^Pad( \d+)?$/ }).click()
     if (after !== before + 1) throw new Error(`${pads} Pads: ${before} → ${after} Dateien, erwartet +1.`)
     return `${pads} Pads, genau ein Pad übernommen`
   })

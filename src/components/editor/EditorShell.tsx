@@ -222,6 +222,7 @@ export function EditorShell({
   underStage,
   inspector,
   status,
+  stageClassName = 'stage-checks min-h-[360px] sm:min-h-[clamp(460px,58vh,760px)]',
 }: {
   title: ReactNode
   subtitle?: ReactNode
@@ -237,6 +238,13 @@ export function EditorShell({
   underStage?: ReactNode
   inspector: ReactNode
   status?: ReactNode
+  /**
+   * The stage's ground and height. The picture and video stages sit on the
+   * transparency checks; the sound stage has nothing that can be transparent
+   * and draws on plain stage black, a little lower, since a waveform gains
+   * nothing from 760 pixels of height.
+   */
+  stageClassName?: string
 }) {
   return (
     <div className="flex flex-col overflow-hidden bg-raised ring-1 ring-inset ring-line">
@@ -249,7 +257,8 @@ export function EditorShell({
       </header>
 
       <div className="flex min-h-0 flex-col lg:flex-row">
-        <div className="hidden lg:block">
+        {/* Flex, so the rail runs the full height of the stage beside it. */}
+        <div className="hidden lg:flex">
           <Rail tools={tools} tool={tool} onTool={onTool} orientation="vertical" />
         </div>
 
@@ -269,7 +278,7 @@ export function EditorShell({
               regresses on a laptop, and stops at 760px, past which a picture
               is no easier to work on and the tool rail and the inspector
               beside it just stretch. */}
-          <div className="stage-checks relative min-h-[360px] flex-1 overflow-hidden sm:min-h-[clamp(460px,58vh,760px)]">
+          <div className={`relative flex-1 overflow-hidden ${stageClassName}`}>
             {stage}
             {stageOverlay ? (
               <div className="pointer-events-none absolute inset-x-0 bottom-[12px] flex justify-center">
@@ -285,14 +294,20 @@ export function EditorShell({
           </div>
         </div>
 
+        {/* Beside the stage the column scrolls in itself rather than
+            stretching the row: a tool with four blocks of controls made the
+            stage — and the waveform on it — as tall as those blocks, and
+            pushed the transport under the fold. The stage sets the height. */}
         <aside
           role="tabpanel"
-          className="flex w-full shrink-0 flex-col gap-[16px] border-t border-line bg-raised p-[16px] lg:max-h-none lg:w-[288px] lg:border-l lg:border-t-0 lg:overflow-y-auto"
+          className="relative w-full shrink-0 border-t border-line bg-raised lg:w-[288px] lg:border-l lg:border-t-0"
         >
-          {/* Keyed so switching tools replays the entrance instead of
-              swapping controls underneath the pointer. */}
-          <div key={tool} className="rise flex flex-col gap-[16px]">
-            {inspector}
+          <div className="p-[16px] lg:absolute lg:inset-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-color:var(--color-rule)_transparent] lg:[scrollbar-width:thin]">
+            {/* Keyed so switching tools replays the entrance instead of
+                swapping controls underneath the pointer. */}
+            <div key={tool} className="rise flex flex-col gap-[16px]">
+              {inspector}
+            </div>
           </div>
         </aside>
       </div>

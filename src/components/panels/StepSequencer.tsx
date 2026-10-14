@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { getAudioContext, resumeAudioContext } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
@@ -32,7 +33,9 @@ import {
   startVoice,
 } from '../../lib/pattern'
 import { encodeWav, type AudioData } from '../../lib/wav'
-import { Button, Card, SectionHead, Select, Slider } from '../ui/primitives'
+import { Button, Select, Slider } from '../ui/primitives'
+import { ChoiceRow } from '../editor/EditorShell'
+import { IconPlay, IconStop } from '../editor/icons'
 import { PianoRoll } from './PianoRoll'
 
 const PAD_KEYS = ['1', '2', '3', '4', 'q', 'w', 'e', 'r', 'a', 's', 'd', 'f', 'y', 'x', 'c', 'v']
@@ -45,6 +48,9 @@ export function StepSequencer({
   baseName,
   onPreviewPad,
   onBounce,
+  head,
+  aside,
+  note,
 }: {
   slices: Slice[]
   buffers: () => { forward: AudioBuffer; reversed: AudioBuffer | null } | null
@@ -54,6 +60,17 @@ export function StepSequencer({
   /** Plays a pad, optionally transposed — the roll auditions its keys. */
   onPreviewPad: (index: number, semitone?: number) => void
   onBounce: (audio: AudioData, name: string) => void
+  /**
+   * The start of each row: the pad itself. Pads and pattern used to be two
+   * blocks — a 4 × 4 grid of pads and, below it, the same sixteen pads again
+   * as row names. Now the row name is the pad: it plays, it is chosen, and its
+   * steps run straight on from it, as in a channel rack.
+   */
+  head: (slice: Slice, row: number) => ReactNode
+  /** Beside the rows: the settings of the chosen pad and of the kit. */
+  aside?: ReactNode
+  /** A line under the title, for what the rows do not show. */
+  note?: string
 }) {
   const rows = slices.slice(0, PAD_KEYS.length)
   const [pattern, setPattern] = useState<Pattern>(() => ({
@@ -219,66 +236,80 @@ export function StepSequencer({
   if (rows.length === 0) return null
 
   return (
-    <Card tone="cream" size="compact">
-      <div className="flex flex-wrap items-baseline justify-between gap-[12px]">
-        <SectionHead>Pattern</SectionHead>
-        <span className="text-small text-muted">Feld anklicken setzt einen Schlag · Leertaste spielt</span>
-      </div>
+    <section aria-label="Pads und Pattern" className="flex flex-col overflow-hidden bg-raised ring-1 ring-inset ring-line">
+      <header className="flex flex-wrap items-baseline gap-x-[16px] gap-y-[4px] border-b border-line px-[16px] py-[8px]">
+        <p className="text-small font-semibold text-ink">Pads und Pattern</p>
+        <p className="text-small text-prose">
+          {note ?? 'Pad antippen spielt und wählt · Feld setzt einen Schlag · Leertaste spielt das Pattern'}
+        </p>
+      </header>
 
-      <div className="mt-[12px] flex flex-wrap items-end gap-[12px]">
-        <Button size="sm" onClick={() => (playing ? stop() : void play())} disabled={!hasHits && !playing}>
-          {playing ? 'Stopp' : 'Abspielen'}
-        </Button>
-        <div className="w-[160px]">
+      <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px] border-b border-line px-[16px] py-[10px]">
+        <button
+          type="button"
+          onClick={() => (playing ? stop() : void play())}
+          disabled={!hasHits && !playing}
+          aria-label={playing ? 'Pattern anhalten (Leertaste)' : 'Pattern abspielen (Leertaste)'}
+          title={playing ? 'Anhalten (Leertaste)' : hasHits ? 'Abspielen (Leertaste)' : 'Erst ein paar Felder setzen'}
+          className="press inline-flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-pill bg-ink text-on-ink hover:bg-ink-hover disabled:opacity-40"
+        >
+          {playing ? IconStop : IconPlay}
+        </button>
+        <div className="w-[150px]">
           <Slider label="Tempo" display={`${pattern.bpm} BPM`} min={60} max={200} step={1} value={pattern.bpm}
             onChange={(event) => setPattern((value) => ({ ...value, bpm: Number(event.target.value) }))} />
         </div>
-        <div className="w-[140px]">
+        <div className="w-[130px]">
           <Slider label="Swing" display={`${Math.round(pattern.swing * 100)} %`} min={0} max={0.6} step={0.01} value={pattern.swing}
             onChange={(event) => setPattern((value) => ({ ...value, swing: Number(event.target.value) }))} />
         </div>
-        <Select value={pattern.steps} onChange={(event) => setSteps(Number(event.target.value))} aria-label="Länge" className="w-auto! py-[6px] text-small">
-          <option value={16}>1 Takt · 16 Schritte</option>
-          <option value={32}>2 Takte · 32 Schritte</option>
-        </Select>
+        <ChoiceRow
+          value={pattern.steps}
+          onChange={setSteps}
+          options={[
+            { value: 16, label: '1 Takt', title: '16 Schritte' },
+            { value: 32, label: '2 Takte', title: '32 Schritte' },
+          ]}
+        />
         {!hasHits ? (
-          <Button size="sm" variant="ghost" onClick={() => setPattern((value) => ({ ...value, cells: starterPattern(rows, value.steps) }))}>
+          <Button size="sm" variant="quiet" onClick={() => setPattern((value) => ({ ...value, cells: starterPattern(rows, value.steps) }))}>
             Grundbeat vorschlagen
           </Button>
         ) : (
-          <Button size="sm" variant="ghost" onClick={() => setPattern((value) => ({ ...value, cells: {}, notes: Object.fromEntries(Object.keys(value.notes).map((id) => [id, []])) }))}>
+          <button
+            type="button"
+            onClick={() => setPattern((value) => ({ ...value, cells: {}, notes: Object.fromEntries(Object.keys(value.notes).map((id) => [id, []])) }))}
+            className="press rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+          >
             Leeren
-          </Button>
+          </button>
         )}
       </div>
 
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+      <div className="min-w-0">
       {/* The grid scrolls sideways on a phone rather than shrinking the cells
-          below what a thumb can hit. */}
-      <div className="mt-[16px] overflow-x-auto pb-[4px]">
+          below what a thumb can hit; the pads stay put at the left edge. */}
+      <div className="overflow-x-auto px-[16px] py-[14px]">
         <div className="flex min-w-max flex-col gap-[4px]">
           {rows.map((slice, row) => {
             const muted = Boolean(pattern.muted[slice.id])
             const cells = pattern.cells[slice.id] ?? []
             return (
-              <div key={slice.id} className={`flex items-center gap-[4px] ${muted ? 'opacity-45' : ''}`}>
+              <div key={slice.id} className="flex items-center gap-[4px]">
+                <div className="sticky left-0 z-[1] flex shrink-0 items-center gap-[4px] bg-raised pr-[4px]">
+                {head(slice, row)}
                 <button
                   type="button"
                   aria-pressed={muted}
+                  aria-label={`Pad ${row + 1} stumm`}
                   title={muted ? 'Stumm — klicken zum Einschalten' : 'Stummschalten'}
                   onClick={() => setPattern((value) => ({ ...value, muted: { ...value.muted, [slice.id]: !muted } }))}
-                  className={`press h-[28px] w-[28px] shrink-0 rounded-nav text-micro font-semibold ${
-                    muted ? 'bg-ink text-on-ink' : 'bg-panel-soft text-muted hover:text-ink'
+                  className={`press h-[34px] w-[28px] shrink-0 rounded-nav text-micro font-semibold ${
+                    muted ? 'bg-ink text-on-ink' : 'bg-panel-soft text-prose hover:text-ink'
                   }`}
                 >
                   M
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onPreviewPad(row)}
-                  className="press h-[28px] w-[76px] shrink-0 truncate rounded-nav bg-raised px-[8px] text-left text-small text-ink ring-1 ring-inset ring-line hover:bg-panel-soft"
-                  title="Pad anhören"
-                >
-                  <span className="value text-muted">{PAD_KEYS[row]}</span> Pad {row + 1}
                 </button>
                 <button
                   type="button"
@@ -286,7 +317,7 @@ export function StepSequencer({
                   aria-label={`Klavierrolle für Pad ${row + 1}`}
                   title="Klavierrolle: Töne setzen"
                   onClick={() => (rollFor === slice.id ? setRollFor(null) : openRoll(slice.id))}
-                  className={`press grid h-[28px] w-[28px] shrink-0 place-items-center rounded-nav ${
+                  className={`press grid h-[34px] w-[28px] shrink-0 place-items-center rounded-nav ${
                     rollFor === slice.id
                       ? 'bg-ink text-on-ink'
                       : hasRoll(pattern, slice.id)
@@ -300,14 +331,16 @@ export function StepSequencer({
                     <rect x="3" y="11" width="5" height="2" rx="0.6" />
                   </svg>
                 </button>
+                </div>
+                <div className={`flex items-center ${muted ? 'opacity-45' : ''}`}>
                 {hasRoll(pattern, slice.id) ? (
                   // A rolled pad shows its notes in miniature; a click opens it.
                   <button
                     type="button"
                     onClick={() => openRoll(slice.id)}
                     title="Klavierrolle öffnen"
-                    className="relative h-[28px] shrink-0 rounded-[5px] bg-panel-soft hover:bg-panel-mid"
-                    style={{ width: pattern.steps * 27 + Math.floor((pattern.steps - 1) / 4) * 5 - 3 }}
+                    className="relative h-[34px] shrink-0 rounded-[5px] bg-panel-soft hover:bg-panel-mid"
+                    style={{ width: pattern.steps * 29 + Math.floor((pattern.steps - 1) / 4) * 5 - 3 }}
                   >
                     {(pattern.notes[slice.id] ?? []).map((note, index) => (
                       <span
@@ -316,7 +349,7 @@ export function StepSequencer({
                         style={{
                           left: `${(note.step / pattern.steps) * 100}%`,
                           width: `${(note.length / pattern.steps) * 100}%`,
-                          top: `${Math.min(24, Math.max(2, 13 - note.semitone))}px`,
+                          top: `${Math.min(30, Math.max(2, 16 - note.semitone))}px`,
                         }}
                       />
                     ))}
@@ -337,7 +370,7 @@ export function StepSequencer({
                         aria-pressed={on}
                         aria-label={`Pad ${row + 1}, Schritt ${step + 1}`}
                         onClick={() => toggleCell(slice.id, step)}
-                        className={`h-[28px] w-[24px] rounded-[5px] transition-colors ${step % 4 === 0 && step > 0 ? 'ml-[5px]' : ''} ${
+                        className={`h-[34px] w-[26px] rounded-[5px] transition-colors ${step % 4 === 0 && step > 0 ? 'ml-[5px]' : ''} ${
                           on
                             ? 'bg-ink'
                             : beat
@@ -349,6 +382,7 @@ export function StepSequencer({
                   })}
                 </div>
                 )}
+                </div>
               </div>
             )
           })}
@@ -357,7 +391,7 @@ export function StepSequencer({
 
       {/* -- the open pad: its piano roll ------------------------------------ */}
       {rolled ? (
-        <div className="mt-[16px] border-t border-line pt-[12px]">
+        <div className="border-t border-line px-[16px] py-[12px]">
           <div className="flex flex-wrap items-center gap-[8px]">
             <Select
               value={rolled.id}
@@ -402,14 +436,17 @@ export function StepSequencer({
         </div>
       ) : null}
 
-      <div className="mt-[16px] flex flex-wrap items-center gap-[8px] border-t border-line pt-[12px]">
-        <Select value={loops} onChange={(event) => setLoops(Number(event.target.value))} aria-label="Wiederholungen" className="w-auto! py-[6px] text-small">
-          {[1, 2, 4, 8].map((value) => (
-            <option key={value} value={value}>
-              {value}× durchspielen
-            </option>
-          ))}
-        </Select>
+      </div>
+      {aside ? <div className="flex min-w-0 flex-col border-t border-line lg:border-l lg:border-t-0">{aside}</div> : null}
+      </div>
+
+      <footer className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line px-[16px] py-[10px]">
+        <span className="text-small text-prose">Ausgabe</span>
+        <ChoiceRow
+          value={loops}
+          onChange={setLoops}
+          options={[1, 2, 4, 8].map((value) => ({ value, label: `${value}×`, title: `${value}× durchspielen` }))}
+        />
         <Button size="sm" disabled={!hasHits || bouncing} onClick={() => void bounce('session')}>
           {bouncing ? 'Rendert…' : 'In die Sitzung'}
         </Button>
@@ -421,11 +458,12 @@ export function StepSequencer({
           variant="quiet"
           disabled={!hasHits}
           onClick={() => saveBytes(patternToMidi(rows, pattern, loops), `${baseName}-pattern.mid`, 'audio/midi')}
+          title="Pad 1 auf C1, Pad 2 auf C♯1 … — Pads mit Klavierrolle ab C4"
         >
           Als MIDI
         </Button>
-        <span className="text-small text-muted">nahtlos loopbar; MIDI legt Pad 1 auf C1, Pad 2 auf C♯1 … — Pads mit Klavierrolle spielen ab C4</span>
-      </div>
-    </Card>
+        <span className="text-small text-prose">Nahtlos loopbar.</span>
+      </footer>
+    </section>
   )
 }

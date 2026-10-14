@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { IN_DESKTOP_APP } from '../../lib/desktop'
+import { opusArgs } from '../../lib/convert'
 import { isPortalUrl, saveBytes } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { decodeWithBrowser } from '../../lib/audio'
@@ -169,7 +170,7 @@ async function processDownloadedAudio(
   } else if (targetFormat === 'flac') {
     args.push('-c:a', 'flac')
   } else if (targetFormat === 'opus') {
-    args.push('-c:a', 'libopus', '-b:a', '160k')
+    args.push(...opusArgs('160k'))
   } else if (targetFormat === 'wav') {
     // wav default PCM
   } else {
@@ -333,9 +334,46 @@ function saveDownloadHistory(items: DownloadHistoryItem[]): void {
   }
 }
 
+/** One way in, as a tile: what it is, when it applies, and the one action. */
+function WayTile({
+  title,
+  hint,
+  action,
+  onClick,
+  pressed,
+}: {
+  title: string
+  hint: string
+  action: string
+  onClick: () => void
+  pressed?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      className={`press group flex flex-col items-start gap-[6px] rounded-card p-[16px] text-left transition-colors duration-[var(--dur-fast)] ${
+        pressed ? 'bg-panel-strong' : 'bg-panel-mid hover:bg-panel-strong'
+      }`}
+    >
+      <span className="text-body font-semibold text-ink">{title}</span>
+      <span className="text-small leading-[1.5] text-prose">{hint}</span>
+      <span className="mt-auto inline-flex items-center gap-[6px] pt-[6px] text-small font-semibold text-ink">
+        {action}
+        <ArrowRight className="transition-transform duration-[var(--dur-fast)] group-hover:translate-x-[2px]" />
+      </span>
+    </button>
+  )
+}
+
+/** Opens the setup dialog, which lives in the advanced downloader. */
+const openSetup = () => window.dispatchEvent(new CustomEvent('sondra:open-setup-dialog'))
+
 export function DownloaderPanel() {
   const addAsset = useSession((state) => state.addAsset)
   const log = useSession((state) => state.log)
+  const [waysOpen, setWaysOpen] = useState(false)
 
   const [history, setHistory] = useState<DownloadHistoryItem[]>(loadDownloadHistory)
 
@@ -1643,11 +1681,48 @@ export function DownloaderPanel() {
         </Card>
       ) : null}
 
-      {/* The complete panel — instances, keys, cookies, playlists, full
-          resolution — exactly as it was, just no longer the front door. */}
-      <Reveal label="Mehr Wege & Downloader-Optionen (yt-dlp, HLS, eigene Instanz)">
-        <AdvancedDownloader url={url} />
-      </Reveal>
+      {/* Every way there is, said on the page. The field at the top picks
+          one by itself; this is where someone who wants another one finds
+          out that it exists. A fold labelled „Mehr Wege" hid three whole
+          ways behind one line of grey text, and they went unfound. */}
+      <section aria-labelledby="weitere-wege" className="flex flex-col gap-[12px] border-t-2 border-rule pt-[16px]">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[4px]">
+          <h3 id="weitere-wege" className="display-sm text-ink">
+            Weitere Wege
+          </h3>
+          <p className="text-small text-prose">Das Feld oben wählt den Weg selbst. Hier stehen alle, die es gibt.</p>
+        </div>
+        <div className="grid gap-[8px] sm:grid-cols-3">
+          <WayTile
+            title="Datei oder Stream"
+            hint="Eine Adresse, die direkt auf eine Datei oder eine HLS-Playlist (.m3u8) zeigt. Lädt im Browser, ohne Dienst."
+            action={waysOpen ? 'Schliessen' : 'Öffnen'}
+            pressed={waysOpen}
+            onClick={() => setWaysOpen((open) => !open)}
+          />
+          <WayTile
+            title="YouTube in voller Auflösung"
+            hint={
+              IN_DESKTOP_APP
+                ? 'Läuft in dieser App über ihren eigenen Dienst — nichts einzurichten.'
+                : 'Mit der Windows-App oder einer lokalen Brücke: yt-dlp oder cobalt, mit oder ohne Node.js.'
+            }
+            action="Einrichten"
+            onClick={openSetup}
+          />
+          <WayTile
+            title="Eigener Dienst"
+            hint="Einen Server, einen Docker-Container oder eine Instanz verbinden, deren Adresse Sie haben."
+            action="Verbinden"
+            onClick={openSetup}
+          />
+        </div>
+        {/* Always mounted: the service connection and the setup dialog live in
+            here, and the buttons above and in the error notice reach them. */}
+        <div hidden={!waysOpen}>
+          <AdvancedDownloader url={url} />
+        </div>
+      </section>
     </div>
   )
 }
