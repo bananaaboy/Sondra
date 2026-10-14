@@ -708,6 +708,18 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Seite — sie bleibt bedienbar, bis jemand antwortet. Im Dateimenü sagt die
   Fusszeile „auf diesem Gerät gespeichert“ bzw. „wird … gespeichert …“, darunter
   der Schalter zum Abschalten.
+- **Einstellungen stehen als Felder, nicht in Kästen** (14.10.2026): eine
+  Linie, darunter die Frage in `prose`, darunter die Wahl als `ChoiceRow`,
+  `Toggle` oder `Select` — der zeichnet seinen Pfeil selbst, ohne ihn sah
+  jede Liste aus wie ein Textfeld. Kein Doppelpunkt am Etikett, keine
+  Klammer im Knopf („Nur Ton", nicht „Nur Tonspur (Audio)"). Herunterladen,
+  Lautstärke und Spuren trennen hatten getönte Kästen mit Doppelpunkt-
+  Etiketten und Browser-Häkchen; eine Liste mehrerer Einträge hat Linien
+  zwischen den Zeilen, keinen Kasten je Zeile.
+- **Jede Ton-Aufgabe hat ihr Symbol** (Startseite, `ACTION_ICONS` in
+  `Home.tsx`): 16er-Raster, Strich 1,35, runde Enden, wie die Werkzeug-
+  symbole. Dreizehn Kacheln mit derselben Welle lasen sich wie keine.
+  Video- und Bildkacheln tragen noch das Symbol ihres Werkzeugs.
 - **Mehrere Dateien** (`BatchFiles`): ein Schalter „Mehrere Dateien auf
   einmal“, darunter eine Liste mit Häkchen, getrennt durch Linien, und
   „Weitere Dateien hinzufügen“ als Textlink. Nur Dateien, die das Ziel
