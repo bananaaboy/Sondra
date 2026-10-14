@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { getAudioContext, resumeAudioContext, sliceAudio, applyFades, reverseAudio, toAudioBuffer } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
@@ -57,19 +58,31 @@ import { encodeWav, type AudioData, type WavBitDepth } from '../../lib/wav'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { useActiveAssetOfKind, useAssetsOfKind, useSession } from '../../state/store'
 import { FileDrop } from '../FileDrop'
-import { Waveform, type WaveFade } from '../Waveform'
+import type { WaveFade } from '../Waveform'
+import { ChoiceRow, EditorShell, IconButton, ToolHeading, type EditorTool } from '../editor/EditorShell'
 import {
-  ArrowRight,
-  Button,
-  Card,
-  SectionHead,
-  Field,
-  Notice,
-  Reveal,
-  Select,
-  Slider,
-  Toggle,
-} from '../ui/primitives'
+  IconClean,
+  IconCut,
+  IconEq,
+  IconExport,
+  IconHistory,
+  IconLevel,
+  IconLoop,
+  IconPause,
+  IconPlay,
+  IconRedo,
+  IconRoom,
+  IconStop,
+  IconTempo,
+  IconUndo,
+  IconZoomIn,
+  IconZoomOut,
+} from '../editor/icons'
+import { SoundStage } from '../editor/SoundStage'
+import { ArrowRight, Button, Card, Notice, Select, Slider, Toggle } from '../ui/primitives'
+
+/** The rail: one job each, and only that job's controls in the column beside it. */
+type ToolId = 'schnitt' | 'pegel' | 'klang' | 'saeubern' | 'raum' | 'tempo' | 'ausgabe' | 'verlauf'
 
 /** What can be switched on to be heard live, before it is written in. */
 type LiveId = 'fade' | 'highpass' | 'lowpass' | 'tone' | 'comp' | 'clicks' | 'noise' | 'echo' | 'room' | 'pitch' | 'tempo'
@@ -668,6 +681,50 @@ export function AudioEditorPanel() {
     log('ton', `${outputName} in die Sitzung übernommen`)
   }
 
+  /* -- the studio around it ---------------------------------------------- */
+
+  const [tool, setTool] = useState<ToolId>('schnitt')
+
+  // The space bar starts and stops, as in every program that plays sound.
+  // Left alone in fields and on buttons, where it already means something.
+  const transportRef = useRef({ ready: false, toggle: () => {} })
+  transportRef.current = {
+    ready: current !== null,
+    toggle: () => (engineRef.current ? stop() : void play()),
+  }
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== ' ' || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) || target.isContentEditable)) return
+      if (!transportRef.current.ready) return
+      event.preventDefault()
+      transportRef.current.toggle()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Found only while its tool is open: it scans every sample, and it used to
+  // run on each render — sixty times a second while the file played.
+  const silence = useMemo(
+    () => (current && tool === 'saeubern' ? detectSilence(current, silenceThresholdDb) : []),
+    [current, tool, silenceThresholdDb],
+  )
+
+  /** Zooms around the playhead, the selection, or the middle of the view. */
+  const zoomBy = (factor: number) => {
+    if (duration <= 0) return
+    const centre = position ?? (hasSelection ? (span.start + span.end) / 2 : (viewStart + viewEnd) / 2)
+    const next = Math.min(duration, Math.max(0.05, (viewEnd - viewStart) * factor))
+    if (next >= duration * 0.999) {
+      setView(null)
+      return
+    }
+    const from = Math.min(duration - next, Math.max(0, centre - next / 2))
+    setView({ start: from, end: from + next })
+  }
+
   if (!asset) {
     return (
       <Card tone="keylime">
@@ -691,842 +748,736 @@ export function AudioEditorPanel() {
     )
   }
 
-  const silence = detectSilence(current, silenceThresholdDb)
+  const playing = position !== null
+  const where = hasSelection ? 'den Ausschnitt' : 'die ganze Datei'
+  const idle = busy !== null
+  const save = () => {
+    if (!bytes) return
+    saveBytes(bytes, outputName, 'audio/wav')
+    log('ton', `${outputName} gespeichert (${formatBytes(bytes.byteLength)})`)
+  }
 
-  return (
-    <div className="grid gap-[16px] lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="flex flex-col gap-[16px]">
-        <Card tone="keylime">
-          {/* Studio Monitor Info Header */}
-          <div className="flex flex-wrap items-center justify-between gap-[10px] border-b border-line/60 pb-[10px]">
-            <div className="flex flex-wrap items-center gap-[8px]">
-              <span className="rounded-nav bg-panel-soft px-[8px] py-[3px] text-small font-semibold text-ink">
-                {formatTimecode(duration)} · {current.channels.length === 1 ? 'Mono' : 'Stereo'}
-              </span>
-              <span className="rounded-nav bg-panel-soft px-[8px] py-[3px] text-micro value text-muted">
-                {(current.sampleRate / 1000).toFixed(1)} kHz
-              </span>
-              <span className="rounded-nav bg-panel-soft px-[8px] py-[3px] text-micro value text-muted">
-                Spitze {peakDb(current).toFixed(1)} dBFS
-              </span>
-            </div>
-            <div className="flex items-center gap-[6px]">
-              <Button size="sm" variant="ghost" disabled={history.length === 0} onClick={undo} title="Rückgängig (Strg/Cmd + Z)">
-                Rückgängig
-              </Button>
-              <Button size="sm" variant="ghost" disabled={future.length === 0} onClick={redo} title="Wiederholen (Strg/Cmd + Shift + Z)">
-                Wiederholen
-              </Button>
-            </div>
-          </div>
+  const tools: EditorTool[] = [
+    { id: 'schnitt', label: 'Schnitt', icon: IconCut },
+    { id: 'pegel', label: 'Pegel', icon: IconLevel, touched: gain !== 0 || Boolean(on.fade) },
+    { id: 'klang', label: 'Klang', icon: IconEq, touched: Boolean(on.highpass || on.lowpass || on.tone || on.comp) },
+    { id: 'saeubern', label: 'Säubern', icon: IconClean, touched: Boolean(on.clicks || on.noise) },
+    { id: 'raum', label: 'Raum', icon: IconRoom, touched: Boolean(on.echo || on.room) },
+    { id: 'tempo', label: 'Tempo', icon: IconTempo, touched: Boolean(on.pitch || on.tempo) },
+    { id: 'ausgabe', label: 'Ausgabe', icon: IconExport },
+    { id: 'verlauf', label: 'Verlauf', icon: IconHistory, touched: history.length > 0 },
+  ]
 
-          {/* Waveform Rack Display */}
-          <div
-            ref={frameRef}
-            onPointerDown={(event) => {
-              event.currentTarget.setPointerCapture(event.pointerId)
-              const at = secondsAt(event.clientX)
-              setDragging({ start: at, end: at })
-            }}
-            onPointerMove={(event) => {
-              if (!dragging) return
-              setDragging((value) => (value ? { ...value, end: secondsAt(event.clientX) } : value))
-            }}
-            onPointerUp={() => {
-              if (!dragging) return
-              const next = {
-                start: Math.min(dragging.start, dragging.end),
-                end: Math.max(dragging.start, dragging.end),
+  const fadeButton = (direction: 'in' | 'out') => ({
+    onPointerEnter: () => setFadeHover(direction),
+    onPointerLeave: () => setFadeHover(null),
+    onFocus: () => setFadeHover(direction),
+    onBlur: () => setFadeHover(null),
+    onClick: () => {
+      setFadeHover(null)
+      void apply(
+        direction === 'in' ? 'Über den Ausschnitt eingeblendet' : 'Über den Ausschnitt ausgeblendet',
+        (a) => fadeRange(a, span.start, span.end, direction),
+      )
+    },
+  })
+
+  const inspector = (() => {
+    switch (tool) {
+      case 'schnitt':
+        return (
+          <>
+            <ToolHeading
+              title="Schnitt"
+              hint={
+                hasSelection
+                  ? `Auswahl ${formatTimecode(span.start)} – ${formatTimecode(span.end)}, ${comma(span.end - span.start, 2)} s.`
+                  : 'Über die Welle ziehen wählt einen Ausschnitt. Ohne Auswahl wirkt alles auf die ganze Datei.'
               }
-              setDragging(null)
-              // A click rather than a drag clears the selection.
-              setSelection(next.end - next.start < 0.02 ? null : next)
-            }}
-            className="relative mt-[12px] cursor-text touch-none rounded-card border border-line bg-panel-soft p-[12px] select-none shadow-inner"
-          >
-            <Waveform audio={shown} height={130} position={positionInView} selection={liveInView} fades={fadesInView} />
-          </div>
-
-          {/* Live Preview Monitor */}
-          {liveParts.length > 0 || noiseLive ? (
-            <div className="mt-[10px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-nav bg-keylime/20 border border-keylime/40 px-[12px] py-[8px] text-ink">
-              <p className="min-w-0 flex-1 text-small text-prose">
-                <span className="font-semibold text-ink">Live zu hören:</span> {liveParts.join(' · ')}
-                {noiseLive && !noiseReady ? <span className="text-muted"> — Rauschminderung wird gerechnet…</span> : null}
-              </p>
-              <div role="group" aria-label="Vergleich" className="flex rounded-pill bg-canvas ring-1 ring-line p-[2px]">
-                {([false, true] as const).map((value) => (
-                  <button
-                    key={String(value)}
-                    type="button"
-                    aria-pressed={compare === value}
-                    onClick={() => setCompare(value)}
-                    className={`press rounded-pill px-[12px] py-[3px] text-small font-medium transition-all ${
-                      compare === value ? 'bg-ink text-on-ink' : 'text-ink hover:bg-panel-mid'
-                    }`}
-                  >
-                    {value ? 'Vorher' : 'Nachher'}
-                  </button>
-                ))}
-              </div>
-              <Button size="sm" disabled={busy !== null || (noiseLive && !noiseReady && liveParts.length === 1)} onClick={() => void commit()}>
-                Übernehmen
-              </Button>
-              <Button size="sm" variant="ghost" disabled={busy !== null}
-                onClick={() => {
-                  setOn({})
-                  setGain(0)
-                  setCompare(false)
-                }}>
-                Alles aus
-              </Button>
-            </div>
-          ) : null}
-
-          {/* Studio Transport Bar */}
-          <div className="mt-[10px] flex flex-wrap items-center justify-between gap-[10px] rounded-nav bg-panel-soft/90 px-[12px] py-[8px] border border-line/70">
-            <div className="flex flex-wrap items-center gap-[8px]">
-              <Button size="sm" onClick={() => void play()}>
-                {hasSelection ? 'Auswahl hören' : 'Alles hören'}
-              </Button>
-              <Button size="sm" variant="quiet" onClick={() => stop()}>
-                Stopp
-              </Button>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={loop}
-                onClick={() => {
-                  stop()
-                  setLoop((value) => !value)
-                }}
-                className={`press rounded-pill px-[12px] py-[6px] text-small font-medium transition-colors ${
-                  loop ? 'bg-ink text-on-ink shadow-xs' : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
-                }`}
-              >
-                Schleife
-              </button>
-              {hasSelection && !(view && Math.abs(view.start - span.start) < 1e-3 && Math.abs(view.end - span.end) < 1e-3) ? (
-                <Button size="sm" variant="ghost" onClick={() => setView({ start: span.start, end: span.end })}>
-                  Auf Auswahl zoomen
-                </Button>
-              ) : null}
-              {view ? (
-                <Button size="sm" variant="ghost" onClick={() => setView(null)}>
-                  Ganz zeigen
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="flex items-center gap-[8px]">
-              <span className="value text-small text-muted">
-                {hasSelection
-                  ? `${formatTimecode(span.start)} – ${formatTimecode(span.end)} · ${(span.end - span.start).toFixed(2)} s`
-                  : 'Über die Wellenform ziehen wählt einen Ausschnitt'}
-              </span>
-            </div>
-          </div>
-
-          {/* Selection & Edit Toolbar */}
-          <div className="mt-[10px] flex flex-col gap-[10px]">
+            />
             {hasSelection ? (
-              <div className="flex flex-wrap items-center gap-[8px] rounded-card border border-line bg-canvas p-[12px] shadow-xs">
-                <span className="text-micro font-bold uppercase tracking-wider text-muted px-[4px]">
-                  Auswahl:
-                </span>
-                <Button size="sm" disabled={busy !== null}
-                  onClick={() => void apply('Ausschnitt behalten', (a) => sliceAudio(a, span.start, span.end))}>
-                  Nur den Ausschnitt behalten
+              <>
+                <Button size="sm" disabled={idle} onClick={() => void apply('Ausschnitt behalten', (a) => sliceAudio(a, span.start, span.end))}>
+                  Nur die Auswahl behalten
                 </Button>
-                <Button size="sm" variant="quiet" disabled={busy !== null}
-                  onClick={() => void apply('Ausschnitt entfernt', (a) => cutRange(a, span.start, span.end))}>
-                  Ausschnitt herausschneiden
-                </Button>
-                <Button size="sm" variant="quiet" disabled={busy !== null} onClick={copySelection} title="Strg/Cmd + C">
-                  Kopieren
-                </Button>
-                <Button size="sm" variant="quiet" disabled={busy !== null} onClick={cutSelection} title="Strg/Cmd + X">
-                  Ausschneiden
-                </Button>
-                <Button size="sm" variant="quiet" disabled={busy !== null}
-                  onClick={() => void apply('Ausschnitt verdoppelt', (a) => duplicateRange(a, span.start, span.end))}>
-                  Verdoppeln
-                </Button>
-                <Button size="sm" variant="quiet" disabled={busy !== null}
-                  onClick={() => void apply('Ausschnitt stumm', (a) => muteRange(a, span.start, span.end))}>
-                  Stumm
-                </Button>
-                <Button size="sm" variant="quiet" disabled={busy !== null}
-                  onPointerEnter={() => setFadeHover('in')} onPointerLeave={() => setFadeHover(null)}
-                  onFocus={() => setFadeHover('in')} onBlur={() => setFadeHover(null)}
-                  onClick={() => {
-                    setFadeHover(null)
-                    void apply('Über den Ausschnitt eingeblendet', (a) => fadeRange(a, span.start, span.end, 'in'))
-                  }}>
-                  Hier einblenden
-                </Button>
-                <Button size="sm" variant="quiet" disabled={busy !== null}
-                  onPointerEnter={() => setFadeHover('out')} onPointerLeave={() => setFadeHover(null)}
-                  onFocus={() => setFadeHover('out')} onBlur={() => setFadeHover(null)}
-                  onClick={() => {
-                    setFadeHover(null)
-                    void apply('Über den Ausschnitt ausgeblendet', (a) => fadeRange(a, span.start, span.end, 'out'))
-                  }}>
-                  Hier ausblenden
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setSelection(null)}>
-                  Auswahl aufheben
-                </Button>
-              </div>
+                <div className="grid grid-cols-2 gap-[4px]">
+                  <Button size="sm" variant="quiet" disabled={idle} onClick={() => void apply('Ausschnitt entfernt', (a) => cutRange(a, span.start, span.end))}>
+                    Entfernen
+                  </Button>
+                  <Button size="sm" variant="quiet" disabled={idle} onClick={copySelection} title="Strg/Cmd + C">
+                    Kopieren
+                  </Button>
+                  <Button size="sm" variant="quiet" disabled={idle} onClick={cutSelection} title="Strg/Cmd + X">
+                    Ausschneiden
+                  </Button>
+                  <Button size="sm" variant="quiet" disabled={idle} onClick={() => void apply('Ausschnitt verdoppelt', (a) => duplicateRange(a, span.start, span.end))}>
+                    Verdoppeln
+                  </Button>
+                  <Button size="sm" variant="quiet" disabled={idle} onClick={() => void apply('Ausschnitt stumm', (a) => muteRange(a, span.start, span.end))}>
+                    Stumm
+                  </Button>
+                  <Button size="sm" variant="quiet" disabled={idle} {...fadeButton('in')}>
+                    Einblenden
+                  </Button>
+                  <Button size="sm" variant="quiet" disabled={idle} {...fadeButton('out')}>
+                    Ausblenden
+                  </Button>
+                  <Button size="sm" variant="quiet" onClick={() => setSelection(null)}>
+                    Aufheben
+                  </Button>
+                </div>
+              </>
             ) : null}
-
-            <div className="flex flex-wrap items-center gap-[8px]">
-              {clipboard ? (
-                <Button size="sm" variant="quiet" disabled={busy !== null} onClick={paste} title="Strg/Cmd + V">
-                  {hasSelection ? 'Auswahl ersetzen' : 'Einfügen'} ({durationOf(clipboard).toFixed(1)} s)
-                </Button>
-              ) : null}
-              <Button size="sm" variant="quiet" disabled={busy !== null}
-                onClick={() => void apply('Umgekehrt', reverseAudio)}>
-                Umkehren
+            {clipboard ? (
+              <Button size="sm" variant="quiet" disabled={idle} onClick={paste} title="Strg/Cmd + V">
+                {hasSelection ? 'Auswahl ersetzen' : position !== null ? 'An der Abspielstelle einfügen' : 'Am Ende einfügen'} ({comma(durationOf(clipboard))} s)
               </Button>
-              <Button size="sm" variant="quiet" disabled={busy !== null || !current}
-                onClick={() => void apply('1 s am Anfang eingeblendet', (a) => fadeRange(a, 0, Math.min(1.0, durationOf(a)), 'in'))}
-                title="Sanftes Einblenden der ersten Sekunde">
-                Fade In (1s)
-              </Button>
-              <Button size="sm" variant="quiet" disabled={busy !== null || !current}
+            ) : null}
+            <Module
+              title="Stille einfügen"
+              hint={`Länge in Sekunden, ${hasSelection ? 'am Beginn der Auswahl' : position !== null ? 'an der Abspielstelle' : 'am Ende der Datei'}.`}
+            >
+              <ChoiceRow
+                value={silenceLength}
+                columns={5}
+                onChange={setSilenceLength}
+                options={[0.25, 0.5, 1, 2, 5].map((value) => ({ value, label: comma(value, value === 0.25 ? 2 : value < 1 ? 1 : 0), title: `${comma(value, 2)} Sekunden` }))}
+              />
+              <Button
+                size="sm"
+                variant="quiet"
+                disabled={idle}
                 onClick={() => {
-                  if (!current) return
-                  const dur = durationOf(current)
-                  void apply('2 s am Ende ausgeblendet', (a) => fadeRange(a, Math.max(0, dur - 2.0), dur, 'out'))
+                  const at = hasSelection ? span.start : (position ?? duration)
+                  void apply(`${comma(silenceLength, 2)} s Stille eingefügt`, (a) => insertSilence(a, at, silenceLength))
                 }}
-                title="Sanftes Ausblenden der letzten zwei Sekunden">
-                Fade Out (2s)
+              >
+                Einfügen
               </Button>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="mt-[16px]">
-              <Notice tone="error" title="Ging nicht">{error}</Notice>
-            </div>
-          ) : null}
-
-          {/* -- Studio Rack Unit 1: Pegel, Blenden & Stille ----------------- */}
-          <div className="mt-[16px] rounded-card border border-line bg-canvas p-[16px] shadow-xs flex flex-col gap-[16px]">
-            <div className="flex flex-wrap items-baseline justify-between gap-[8px] border-b border-line pb-[10px]">
-              <div>
-                <p className="text-small font-semibold text-ink">Pegel, Blenden & Stille</p>
-                <p className="text-small text-muted">
-                  Lautstärke anpassen, Spitzen normalisieren und Pausen präzise schneiden.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-[16px] lg:grid-cols-2">
-              {/* Pegel & Normalisierung */}
-              <div className="flex flex-col gap-[12px] rounded-nav bg-panel-soft p-[14px] ring-1 ring-line/60">
-                <Slider
-                  label={hasSelection ? 'Pegel im Ausschnitt' : 'Pegel'}
-                  display={`${gain > 0 ? '+' : ''}${gain.toFixed(1)} dB`}
-                  min={-24} max={12} step={0.5} value={gain}
-                  onChange={(event) => setGain(Number(event.target.value))}
-                />
-                <div className="flex flex-wrap items-center gap-[6px] pt-[2px]">
-                  <Select
-                    value={targetPeakDb}
-                    onChange={(e) => setTargetPeakDb(Number(e.target.value))}
-                    aria-label="Ziel-Pegel Normalisierung"
-                    className="w-auto! py-[4px] text-small"
-                  >
-                    <option value={-0.3}>−0,3 dBFS (Spitze)</option>
-                    <option value={-1.0}>−1,0 dBFS (Spotify / Apple)</option>
-                    <option value={-2.0}>−2,0 dBFS (Headroom)</option>
-                  </Select>
-                  <Button
-                    size="sm"
-                    variant="quiet"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      void apply(
-                        `Auf ${targetPeakDb > 0 ? '+' : ''}${targetPeakDb.toFixed(1).replace('.', ',')} dBFS normalisiert`,
-                        (a) => normalizePeak(a, targetPeakDb),
-                      )
-                    }
-                  >
-                    Normalisieren
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy !== null}
-                    onClick={() => void apply('DC-Offset entfernt', removeDcOffset)}
-                    title="Gleichspannungs-Versatz auf Nullachse zentrieren"
-                  >
-                    DC-Offset weg
-                  </Button>
-                </div>
-              </div>
-
-              {/* Blenden */}
-              <div className="flex flex-col gap-[10px] rounded-nav bg-panel-soft p-[14px] ring-1 ring-line/60">
-                <Toggle label="Blenden am Anfang und Ende" checked={Boolean(on.fade)} onChange={toggle('fade')}
-                  hint="Die Kurve steht auf der Wellenform, zu hören ist sie sofort." />
-                <div className="grid grid-cols-2 gap-[12px] pt-[4px]">
-                  <Slider label="Einblenden" display={`${comma(fadeIn, 2)} s`}
-                    min={0} max={Math.min(5, duration)} step={0.05} value={fadeIn}
-                    onChange={(event) => {
-                      setFadeIn(Number(event.target.value))
-                      enable('fade')
-                    }} />
-                  <Slider label="Ausblenden" display={`${comma(fadeOut, 2)} s`}
-                    min={0} max={Math.min(5, duration)} step={0.05} value={fadeOut}
-                    onChange={(event) => {
-                      setFadeOut(Number(event.target.value))
-                      enable('fade')
-                    }} />
-                </div>
-              </div>
-            </div>
-
-            {/* Stille verwalten */}
-            <div className="grid gap-[16px] border-t border-line/60 pt-[14px] sm:grid-cols-2">
-              <div className="flex flex-col gap-[8px] rounded-nav bg-panel-soft p-[12px] ring-1 ring-line/50">
-                <div className="flex flex-wrap items-center gap-[8px]">
-                  <span className="text-small font-semibold text-ink">Stille entfernen:</span>
-                  <Select
-                    value={silenceThresholdDb}
-                    onChange={(e) => setSilenceThresholdDb(Number(e.target.value))}
-                    aria-label="Schwellenwert für Stille"
-                    className="w-auto! py-[2px] text-micro"
-                  >
-                    <option value={-40}>−40 dBFS (Atmung / Rauschen)</option>
-                    <option value={-50}>−50 dBFS (Standard)</option>
-                    <option value={-60}>−60 dBFS (Nur absolute Stille)</option>
-                  </Select>
-                  {silence.length > 0 ? (
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      disabled={busy !== null}
-                      onClick={() => void apply(`Stille entfernt (${silenceThresholdDb} dBFS)`, (a) => removeSilence(a, silenceThresholdDb))}
-                    >
-                      Entfernen ({silence.length})
-                    </Button>
-                  ) : null}
-                </div>
-                <p className="text-small text-muted leading-[1.4]">
-                  {silence.length === 0
-                    ? 'Keine nennenswerte Stille gefunden.'
-                    : `${silence.length} Stelle${silence.length === 1 ? '' : 'n'} (${silence
-                        .reduce((sum, r) => sum + (r.endSeconds - r.startSeconds), 0)
-                        .toFixed(1)} s Gesamtstille)`}
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-[8px] rounded-nav bg-panel-soft p-[12px] ring-1 ring-line/50">
-                <div className="flex flex-wrap items-center gap-[8px]">
-                  <span className="text-small font-semibold text-ink">Stille einfügen:</span>
-                  <Select
-                    value={silenceLength}
-                    onChange={(event) => setSilenceLength(Number(event.target.value))}
-                    aria-label="Länge der Stille"
-                    className="w-auto! py-[2px] text-small"
-                  >
-                    {[0.25, 0.5, 1, 2, 5].map((value) => (
-                      <option key={value} value={value}>
-                        {value.toString().replace('.', ',')} s
+            </Module>
+            <Module title="Ganze Datei">
+              <Button size="sm" variant="quiet" disabled={idle} onClick={() => void apply('Umgekehrt', reverseAudio)}>
+                Rückwärts drehen
+              </Button>
+            </Module>
+            {others.length > 1 ? (
+              <Module title="Anhängen" hint="Eine zweite Aufnahme hinten anfügen, mit kurzer Überblendung.">
+                <Select value={joinWith} onChange={(event) => setJoinWith(event.target.value)} aria-label="Datei zum Anhängen">
+                  <option value="">Datei wählen…</option>
+                  {others
+                    .filter((entry) => entry.id !== asset.id)
+                    .map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.name}
                       </option>
                     ))}
-                  </Select>
-                  <Button size="sm" variant="quiet" disabled={busy !== null}
-                    onClick={() => {
-                      const at = hasSelection ? span.start : (position ?? duration)
-                      void apply(`${silenceLength} s Stille eingefügt`, (a) => insertSilence(a, at, silenceLength))
-                    }}>
-                    {hasSelection ? 'Am Auswahlbeginn' : position !== null ? 'An Abspielstelle' : 'Am Ende'}
-                  </Button>
-                </div>
-                <p className="text-small text-muted leading-[1.4]">
-                  Fügt eine lautlose Pause an der gewünschten Stelle ein.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* -- Studio Rack Unit 2: Pitch, Stretch & BPM -------------------- */}
-          <div className="mt-[16px] rounded-card border border-line bg-canvas p-[16px] shadow-xs flex flex-col gap-[16px]">
-            <div className="flex flex-wrap items-baseline justify-between gap-[8px] border-b border-line pb-[10px]">
-              <div>
-                <p className="text-small font-semibold text-ink">Tonhöhe, Tempo & Rhythmus (Pitch, Stretch & BPM)</p>
-                <p className="text-small text-muted">
-                  Tonhöhe transponieren ohne Tempoverlust, Tempo anpassen ohne Tonhöhenänderung und Song-BPM ermitteln.
-                  {hasSelection ? ' Wirkt auf den markierten Ausschnitt.' : ' Wirkt auf die gesamte Datei.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-[16px] lg:grid-cols-2">
-              {/* Tonhöhe */}
-              <div className="flex flex-col gap-[10px] rounded-nav bg-panel-soft p-[14px] ring-1 ring-line/60">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-small font-medium text-ink">Tonhöhe (Halbtöne)</span>
-                  <span className="value text-small text-ink font-semibold">
-                    {semitones === 0 ? 'Original (0)' : `${semitones > 0 ? '+' : ''}${semitones} Halbtöne`}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={-12}
-                  max={12}
-                  step={1}
-                  value={semitones}
-                  onChange={(e) => {
-                    const val = Number(e.target.value)
-                    setSemitones(val)
-                    if (val !== 0) enable('pitch')
+                </Select>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  disabled={!joinWith || idle}
+                  onClick={() => {
+                    const other = others.find((entry) => entry.id === joinWith)
+                    if (!other?.audio) {
+                      setError('Diese Datei ist noch nicht dekodiert — einmal auswählen, dann geht es.')
+                      return
+                    }
+                    void apply(`${other.name} angehängt`, (a) => concatAudio([a, other.audio!], 0.05))
                   }}
-                  className="w-full accent-ink cursor-pointer"
-                />
-                <div className="flex flex-wrap gap-[6px]">
-                  {[-12, -2, -1, 0, 1, 2, 12].map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => {
-                        setSemitones(st)
-                        if (st !== 0) enable('pitch')
-                      }}
-                      className={`press px-[8px] py-[3px] rounded-nav text-micro value font-semibold transition-colors ${
-                        semitones === st
-                          ? 'bg-ink text-on-ink shadow-xs'
-                          : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
-                      }`}
-                    >
-                      {st === 0 ? '0' : st > 0 ? `+${st}` : st}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-[8px] pt-[2px]">
-                  <Button
-                    size="sm"
-                    variant="quiet"
-                    disabled={busy !== null || semitones === 0}
-                    onClick={applyPitchShift}
-                  >
-                    Tonhöhe fest anwenden
-                  </Button>
-                </div>
-              </div>
-
-              {/* Tempo */}
-              <div className="flex flex-col gap-[10px] rounded-nav bg-panel-soft p-[14px] ring-1 ring-line/60">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-small font-medium text-ink">Tempo (Time-Stretch)</span>
-                  <span className="value text-small text-ink font-semibold">
-                    {tempo === 1 ? 'Original (1,00×)' : `${comma(tempo, 2)}×`}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={2.0}
-                  step={0.05}
-                  value={tempo}
-                  onChange={(e) => {
-                    const val = Number(e.target.value)
-                    setTempo(val)
-                    if (val !== 1) enable('tempo')
-                  }}
-                  className="w-full accent-ink cursor-pointer"
-                />
-                <div className="flex flex-wrap gap-[6px]">
-                  {[0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        setTempo(t)
-                        if (t !== 1) enable('tempo')
-                      }}
-                      className={`press px-[8px] py-[3px] rounded-nav text-micro value font-semibold transition-colors ${
-                        Math.abs(tempo - t) < 0.001
-                          ? 'bg-ink text-on-ink shadow-xs'
-                          : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
-                      }`}
-                    >
-                      {t === 1 ? '1×' : `${comma(t, 2)}×`}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-[8px] pt-[2px]">
-                  <Button
-                    size="sm"
-                    variant="quiet"
-                    disabled={busy !== null || tempo === 1}
-                    onClick={applyTimeStretch}
-                  >
-                    Tempo fest anwenden
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Tap-Tempo & BPM Detektor Console */}
-            <div className="flex flex-wrap items-center justify-between gap-[12px] rounded-nav bg-panel-soft p-[12px] ring-1 ring-line/60">
-              <div className="flex flex-col gap-[2px]">
-                <span className="text-small font-semibold text-ink">BPM-Detektor / Tap-Tempo</span>
-                <span className="text-small text-muted">
-                  Klicke im Takt oder drücke die Taste T auf der Tastatur.
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-[10px]">
-                <button
-                  type="button"
-                  onClick={handleTap}
-                  className="press rounded-pill bg-ink px-[16px] py-[7px] text-small font-semibold text-on-ink shadow-sm hover:opacity-90 active:scale-95 transition-transform"
                 >
-                  Takt klopfen (Tap)
-                </button>
+                  Anhängen
+                </Button>
+              </Module>
+            ) : null}
+          </>
+        )
+
+      case 'pegel':
+        return (
+          <>
+            <ToolHeading title="Pegel" hint={`Gilt für ${where}. Zu hören sofort, geschrieben mit „Übernehmen“.`} />
+            <Slider
+              label="Lautstärke"
+              display={`${gain > 0 ? '+' : ''}${comma(gain)} dB`}
+              min={-24}
+              max={12}
+              step={0.5}
+              value={gain}
+              onChange={(event) => setGain(Number(event.target.value))}
+            />
+            <Module title="Normalisieren" hint="Hebt die lauteste Stelle genau auf den Zielwert.">
+              <ChoiceRow
+                value={targetPeakDb}
+                columns={3}
+                onChange={setTargetPeakDb}
+                options={[
+                  { value: -0.3, label: '−0,3', title: 'Bis knapp unter die Grenze' },
+                  { value: -1, label: '−1,0', title: 'Was Spotify und Apple verlangen' },
+                  { value: -2, label: '−2,0', title: 'Reserve für weitere Bearbeitung' },
+                ]}
+              />
+              <Button
+                size="sm"
+                variant="quiet"
+                disabled={idle}
+                onClick={() => void apply(`Auf ${comma(targetPeakDb)} dBFS normalisiert`, (a) => normalizePeak(a, targetPeakDb))}
+              >
+                Auf {comma(targetPeakDb)} dBFS bringen
+              </Button>
+            </Module>
+            <Module>
+              <Toggle
+                label="Blenden am Anfang und Ende"
+                checked={Boolean(on.fade)}
+                onChange={toggle('fade')}
+                hint="Die Kurve steht in der Welle, bevor sie gerechnet ist."
+              />
+              <Slider
+                label="Einblenden"
+                display={`${comma(fadeIn, 2)} s`}
+                min={0}
+                max={Math.min(5, duration)}
+                step={0.05}
+                value={fadeIn}
+                onChange={(event) => {
+                  setFadeIn(Number(event.target.value))
+                  enable('fade')
+                }}
+              />
+              <Slider
+                label="Ausblenden"
+                display={`${comma(fadeOut, 2)} s`}
+                min={0}
+                max={Math.min(5, duration)}
+                step={0.05}
+                value={fadeOut}
+                onChange={(event) => {
+                  setFadeOut(Number(event.target.value))
+                  enable('fade')
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setFadeIn(Math.min(1, duration / 2))
+                  setFadeOut(Math.min(2, duration / 2))
+                  enable('fade')
+                }}
+                className="press self-start rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+              >
+                Üblich: 1 s ein, 2 s aus
+              </button>
+            </Module>
+          </>
+        )
+
+      case 'klang':
+        return (
+          <>
+            <ToolHeading title="Klang" hint={`Gilt für ${where}. Ein Regler schaltet seinen Block ein.`} />
+            <Module>
+              <Toggle label="Tiefen entfernen" checked={Boolean(on.highpass)} onChange={toggle('highpass')} hint="Rumpeln, Trittschall, Brummen. Für Stimme 80–120 Hz." />
+              <Slider label="unter" display={`${highpassHz} Hz`} min={20} max={400} step={5} value={highpassHz}
+                onChange={(event) => { setHighpassHz(Number(event.target.value)); enable('highpass') }} />
+            </Module>
+            <Module>
+              <Toggle label="Höhen entfernen" checked={Boolean(on.lowpass)} onChange={toggle('lowpass')} hint="Zischen und Rauschen oben, oder der Klang „durchs Telefon“." />
+              <Slider label="über" display={`${comma(lowpassHz / 1000)} kHz`} min={1000} max={20000} step={250} value={lowpassHz}
+                onChange={(event) => { setLowpassHz(Number(event.target.value)); enable('lowpass') }} />
+            </Module>
+            <Module>
+              <Toggle label="Bass und Höhen" checked={Boolean(on.tone)} onChange={toggle('tone')} hint="Kuhschwanz-Filter bei 120 Hz und 6 kHz." />
+              <Slider label="Bass" display={`${bassDb > 0 ? '+' : ''}${bassDb} dB`} min={-12} max={12} step={1} value={bassDb}
+                onChange={(event) => { setBassDb(Number(event.target.value)); enable('tone') }} />
+              <Slider label="Höhen" display={`${trebleDb > 0 ? '+' : ''}${trebleDb} dB`} min={-12} max={12} step={1} value={trebleDb}
+                onChange={(event) => { setTrebleDb(Number(event.target.value)); enable('tone') }} />
+            </Module>
+            <Module>
+              <Toggle label="Kompressor" checked={Boolean(on.comp)} onChange={toggle('comp')} hint="Laute Stellen zurück, leise näher heran; gleicht den Pegel danach aus." />
+              <Slider label="Ab" display={`${compThreshold} dBFS`} min={-50} max={-3} step={1} value={compThreshold}
+                onChange={(event) => { setCompThreshold(Number(event.target.value)); enable('comp') }} />
+              <Slider label="Verhältnis" display={`${comma(compRatio)}:1`} min={1.5} max={10} step={0.5} value={compRatio}
+                onChange={(event) => { setCompRatio(Number(event.target.value)); enable('comp') }} />
+            </Module>
+          </>
+        )
+
+      case 'saeubern':
+        return (
+          <>
+            <ToolHeading title="Säubern" hint={`Klicks, Rauschen und Pausen. Gilt für ${where}.`} />
+            <Module>
+              <Toggle
+                label="Klicks und Knackser entfernen"
+                checked={clickLive}
+                onChange={toggle('clicks')}
+                hint={
+                  clickLive && clickReady && declicked
+                    ? declicked.repaired === 0
+                      ? 'Nichts gefunden, was wie ein Klick aussieht.'
+                      : `${declicked.repaired} ${declicked.repaired === 1 ? 'Stelle' : 'Stellen'} ausgebessert.`
+                    : 'Alte Platten, Kabelknacken, Schmatzen am Mikrofon. Schläge und Konsonanten bleiben.'
+                }
+              />
+              <ChoiceRow
+                value={clickStrength}
+                columns={3}
+                onChange={(value) => {
+                  setClickStrength(value)
+                  enable('clicks')
+                }}
+                options={[
+                  { value: 'sanft', label: 'Sanft' },
+                  { value: 'mittel', label: 'Mittel' },
+                  { value: 'stark', label: 'Stark' },
+                ]}
+              />
+              {clickLive && !clickReady ? <p className="text-small text-prose">Wird gesucht …</p> : null}
+            </Module>
+            <Module>
+              {noise ? (
+                <Toggle label="Rauschen entfernen" checked={Boolean(on.noise)} onChange={toggle('noise')} hint="Aus dem gelernten Rauschprofil, sofort zu hören." />
+              ) : (
+                <ToolHeading title="Rauschen entfernen" hint="Erst eine Stelle wählen, an der nur das Rauschen zu hören ist, und daraus lernen." />
+              )}
+              <Button
+                size="sm"
+                variant="quiet"
+                disabled={idle || !hasSelection}
+                onClick={() => {
+                  setNoise(learnNoise(copyRange(current, span.start, span.end)))
+                  enable('noise')
+                  log('ton', `Rauschprofil aus ${(span.end - span.start).toFixed(2)} s gelernt`)
+                }}
+              >
+                {noise ? 'Neu lernen aus der Auswahl' : 'Aus der Auswahl lernen'}
+              </Button>
+              {noise ? (
+                <ChoiceRow
+                  value={noiseCut}
+                  columns={4}
+                  onChange={(value) => {
+                    setNoiseCut(value)
+                    enable('noise')
+                  }}
+                  options={[6, 12, 18, 24].map((value) => ({ value, label: `${value} dB`, title: `Rauschen bis ${value} dB leiser` }))}
+                />
+              ) : null}
+            </Module>
+            <Module title="Stille entfernen" hint="Was leiser ist als die Schwelle und länger als ein Atemzug, fällt weg.">
+              <ChoiceRow
+                value={silenceThresholdDb}
+                columns={3}
+                onChange={setSilenceThresholdDb}
+                options={[
+                  { value: -40, label: '−40', title: 'Auch Atmen und leises Rauschen' },
+                  { value: -50, label: '−50', title: 'Üblich' },
+                  { value: -60, label: '−60', title: 'Nur völlige Stille' },
+                ]}
+              />
+              <p className="text-small text-prose">
+                {silence.length === 0
+                  ? 'Keine Stille unter dieser Schwelle gefunden.'
+                  : `${silence.length} ${silence.length === 1 ? 'Stelle' : 'Stellen'}, zusammen ${comma(
+                      silence.reduce((sum, range) => sum + (range.endSeconds - range.startSeconds), 0),
+                    )} s.`}
+              </p>
+              {silence.length > 0 ? (
+                <Button size="sm" variant="quiet" disabled={idle}
+                  onClick={() => void apply(`Stille entfernt (${silenceThresholdDb} dBFS)`, (a) => removeSilence(a, silenceThresholdDb))}>
+                  {silence.length === 1 ? 'Diese Stelle entfernen' : `Alle ${silence.length} entfernen`}
+                </Button>
+              ) : null}
+            </Module>
+            <Module title="Gleichspannung" hint="Rückt eine verschobene Nulllinie zurück in die Mitte.">
+              <Button size="sm" variant="quiet" disabled={idle} onClick={() => void apply('DC-Offset entfernt', removeDcOffset)}>
+                DC-Offset entfernen
+              </Button>
+            </Module>
+          </>
+        )
+
+      case 'raum':
+        return (
+          <>
+            <ToolHeading title="Raum" hint={`Echo und Hall. Gilt für ${where}; klingt über das Ende hinaus nach.`} />
+            <Module>
+              <Toggle label="Echo" checked={Boolean(on.echo)} onChange={toggle('echo')} />
+              <Slider label="Abstand" display={`${echoDelay} ms`} min={40} max={1200} step={10} value={echoDelay}
+                onChange={(event) => { setEchoDelay(Number(event.target.value)); enable('echo') }} />
+              <Slider label="Wiederholen" display={`${Math.round(echoFeedback * 100)} %`} min={0} max={0.85} step={0.05} value={echoFeedback}
+                onChange={(event) => { setEchoFeedback(Number(event.target.value)); enable('echo') }} />
+              <Slider label="Anteil" display={`${Math.round(echoMix * 100)} %`} min={0.05} max={1} step={0.05} value={echoMix}
+                onChange={(event) => { setEchoMix(Number(event.target.value)); enable('echo') }} />
+            </Module>
+            <Module>
+              <Toggle label="Hall" checked={Boolean(on.room)} onChange={toggle('room')} />
+              <Slider label="Raumgrösse" display={`${comma(roomSeconds)} s`} min={0.3} max={5} step={0.1} value={roomSeconds}
+                onChange={(event) => { setRoomSeconds(Number(event.target.value)); enable('room') }} />
+              <Slider label="Anteil" display={`${Math.round(roomMix * 100)} %`} min={0.05} max={1} step={0.05} value={roomMix}
+                onChange={(event) => { setRoomMix(Number(event.target.value)); enable('room') }} />
+            </Module>
+          </>
+        )
+
+      case 'tempo':
+        return (
+          <>
+            <ToolHeading title="Tonhöhe und Tempo" hint={`Gilt für ${where}. Zu hören über einen schnellen Schieber; gerechnet wird mit dem Phasenvocoder.`} />
+            <Module>
+              <Slider
+                label="Tonhöhe"
+                display={semitones === 0 ? 'Original' : `${semitones > 0 ? '+' : ''}${semitones} Halbtöne`}
+                min={-12}
+                max={12}
+                step={1}
+                value={semitones}
+                onChange={(event) => {
+                  const value = Number(event.target.value)
+                  setSemitones(value)
+                  if (value !== 0) enable('pitch')
+                }}
+              />
+              <ChoiceRow
+                value={semitones}
+                columns={5}
+                onChange={(value) => {
+                  setSemitones(value)
+                  if (value !== 0) enable('pitch')
+                }}
+                options={[-12, -1, 0, 1, 12].map((value) => ({ value, label: value === 0 ? '0' : value > 0 ? `+${value}` : `−${-value}` }))}
+              />
+              <Button size="sm" variant="quiet" disabled={idle || semitones === 0} onClick={applyPitchShift}>
+                Tonhöhe übernehmen
+              </Button>
+            </Module>
+            <Module>
+              <Slider
+                label="Tempo"
+                display={tempo === 1 ? 'Original' : `${comma(tempo, 2)}×`}
+                min={0.5}
+                max={2}
+                step={0.05}
+                value={tempo}
+                onChange={(event) => {
+                  const value = Number(event.target.value)
+                  setTempo(value)
+                  if (value !== 1) enable('tempo')
+                }}
+              />
+              <ChoiceRow
+                value={tempo}
+                columns={5}
+                onChange={(value) => {
+                  setTempo(value)
+                  if (value !== 1) enable('tempo')
+                }}
+                options={[0.5, 0.75, 1, 1.25, 1.5].map((value) => ({ value, label: `${comma(value, value === 1 ? 0 : 2)}×` }))}
+              />
+              <Button size="sm" variant="quiet" disabled={idle || tempo === 1} onClick={applyTimeStretch}>
+                Tempo übernehmen
+              </Button>
+            </Module>
+            <Module title="Tempo klopfen" hint="Im Takt tippen, oder T auf der Tastatur.">
+              <div className="flex items-center gap-[12px]">
+                <Button size="sm" onClick={handleTap}>
+                  Tippen
+                </Button>
+                <span className="value text-body text-ink">{tappedBpm ? `${tappedBpm} BPM` : '— BPM'}</span>
                 {tapTimes.length > 0 ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
+                  <button
+                    type="button"
                     onClick={() => {
                       setTapTimes([])
                       setTappedBpm(null)
                     }}
+                    className="press ml-auto rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
                   >
-                    Zurücksetzen
-                  </Button>
-                ) : null}
-                {tappedBpm ? (
-                  <div className="flex items-center gap-[10px] pl-[4px] text-small">
-                    <span className="value text-[15px] font-bold text-ink bg-canvas px-[10px] py-[3px] rounded-pill ring-1 ring-line shadow-xs">
-                      {tappedBpm} BPM
-                    </span>
-                    <span className="text-muted text-micro hidden sm:inline">
-                      1/4: {(60000 / tappedBpm).toFixed(0)} ms · 1/8: {(30000 / tappedBpm).toFixed(0)} ms
-                    </span>
-                  </div>
+                    Neu
+                  </button>
                 ) : null}
               </div>
-            </div>
-          </div>
+              {tappedBpm ? (
+                <p className="value text-small text-prose">
+                  1/4 = {Math.round(60000 / tappedBpm)} ms · 1/8 = {Math.round(30000 / tappedBpm)} ms
+                </p>
+              ) : null}
+            </Module>
+          </>
+        )
 
-          {/* -- Studio Rack Unit 3: Klang (Filter, EQ, Dynamics, Space) ----- */}
-          <Reveal label={`Klang: Filter, Bass und Höhen, Kompressor, Klicks, Rauschen, Echo, Hall${hasSelection ? ' — gilt für den Ausschnitt' : ''}`} className="mt-[16px]">
-            <div className="grid gap-[12px] sm:grid-cols-2 pt-[10px]">
-              {/* Tiefen entfernen */}
-              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
-                <Toggle label="Tiefen entfernen" checked={Boolean(on.highpass)} onChange={toggle('highpass')}
-                  hint="Rumpeln, Trittschall, Brummen. Für Stimme 80–120 Hz." />
-                <Slider label="unter" display={`${highpassHz} Hz`}
-                  min={20} max={400} step={5} value={highpassHz}
-                  onChange={(event) => {
-                    setHighpassHz(Number(event.target.value))
-                    enable('highpass')
-                  }} />
-              </div>
-
-              {/* Höhen entfernen */}
-              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
-                <Toggle label="Höhen entfernen" checked={Boolean(on.lowpass)} onChange={toggle('lowpass')}
-                  hint="Zischen und Rauschen oben, oder der Klang „durchs Telefon“." />
-                <Slider label="über" display={`${comma(lowpassHz / 1000)} kHz`}
-                  min={1000} max={20000} step={250} value={lowpassHz}
-                  onChange={(event) => {
-                    setLowpassHz(Number(event.target.value))
-                    enable('lowpass')
-                  }} />
-              </div>
-
-              {/* Bass und Höhen */}
-              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
-                <Toggle label="Bass und Höhen" checked={Boolean(on.tone)} onChange={toggle('tone')}
-                  hint="Kuhschwanz-Filter bei 120 Hz und 6 kHz." />
-                <div className="grid grid-cols-2 gap-[12px]">
-                  <Slider label="Bass" display={`${bassDb > 0 ? '+' : ''}${bassDb} dB`}
-                    min={-12} max={12} step={1} value={bassDb}
-                    onChange={(event) => {
-                      setBassDb(Number(event.target.value))
-                      enable('tone')
-                    }} />
-                  <Slider label="Höhen" display={`${trebleDb > 0 ? '+' : ''}${trebleDb} dB`}
-                    min={-12} max={12} step={1} value={trebleDb}
-                    onChange={(event) => {
-                      setTrebleDb(Number(event.target.value))
-                      enable('tone')
-                    }} />
-                </div>
-              </div>
-
-              {/* Kompressor */}
-              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
-                <Toggle label="Kompressor" checked={Boolean(on.comp)} onChange={toggle('comp')}
-                  hint="Laute Stellen zurücknehmen, leise näher heran; gleicht den Pegel danach aus." />
-                <div className="grid grid-cols-2 gap-[12px]">
-                  <Slider label="Ab" display={`${compThreshold} dBFS`}
-                    min={-50} max={-3} step={1} value={compThreshold}
-                    onChange={(event) => {
-                      setCompThreshold(Number(event.target.value))
-                      enable('comp')
-                    }} />
-                  <Slider label="Verhältnis" display={`${comma(compRatio)}:1`}
-                    min={1.5} max={10} step={0.5} value={compRatio}
-                    onChange={(event) => {
-                      setCompRatio(Number(event.target.value))
-                      enable('comp')
-                    }} />
-                </div>
-              </div>
-
-              {/* Klicks und Knackser entfernen */}
-              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs sm:col-span-2">
-                <Toggle label="Klicks und Knackser entfernen" checked={clickLive} onChange={toggle('clicks')}
-                  hint={clickLive && clickReady && declicked
-                    ? declicked.repaired === 0
-                      ? 'Nichts gefunden, was wie ein Klick aussieht.'
-                      : `${declicked.repaired} ${declicked.repaired === 1 ? 'Stelle' : 'Stellen'} ausgebessert — für alte Platten, Kabelknacken, Schmatzen am Mikrofon.`
-                    : 'Für alte Platten, Kabelknacken, Schmatzen am Mikrofon. Schläge und Konsonanten bleiben.'} />
-                <div className="flex flex-wrap items-center gap-[8px] pt-[2px]">
-                  {(['sanft', 'mittel', 'stark'] as const).map((value) => (
-                    <button key={value} type="button" aria-pressed={clickStrength === value}
-                      onClick={() => {
-                        setClickStrength(value)
-                        enable('clicks')
-                      }}
-                      className={`press rounded-pill px-[14px] py-[4px] text-small font-medium transition-all ${
-                        clickStrength === value
-                          ? 'bg-ink text-on-ink shadow-xs'
-                          : 'bg-panel-soft text-ink ring-1 ring-line hover:bg-panel-mid'
-                      }`}>
-                      {value[0].toUpperCase() + value.slice(1)}
-                    </button>
-                  ))}
-                  {clickLive && !clickReady ? <span className="text-small text-muted">wird gesucht …</span> : null}
-                </div>
-              </div>
-
-              {/* Rauschen entfernen */}
-              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs sm:col-span-2">
-                {noise ? (
-                  <Toggle label="Rauschen entfernen" checked={Boolean(on.noise)} onChange={toggle('noise')}
-                    hint="Rauschprofil gelernt. Eingeschaltet ist die Aufnahme sofort ohne es zu hören." />
-                ) : (
-                  <>
-                    <p className="text-small font-semibold text-ink">Rauschen entfernen</p>
-                    <p className="text-small leading-[1.45] text-muted">
-                      Erst eine Stelle auswählen, an der nur das Rauschen zu hören ist, und daraus lernen.
-                    </p>
-                  </>
-                )}
-                <div className="flex flex-wrap items-center gap-[8px] pt-[2px]">
-                  <Button size="sm" variant="quiet" disabled={busy !== null || !hasSelection}
-                    onClick={() => {
-                      if (!current) return
-                      setNoise(learnNoise(copyRange(current, span.start, span.end)))
-                      enable('noise')
-                      log('ton', `Rauschprofil aus ${(span.end - span.start).toFixed(2)} s gelernt`)
-                    }}>
-                    {noise ? 'Neu lernen aus der Auswahl' : 'Rauschprofil aus der Auswahl'}
-                  </Button>
-                  {noise ? (
-                    <Select value={noiseCut}
-                      onChange={(event) => {
-                        setNoiseCut(Number(event.target.value))
-                        enable('noise')
-                      }}
-                      aria-label="Stärke" className="w-auto! py-[6px] text-small">
-                      {[6, 12, 18, 24].map((value) => (
-                        <option key={value} value={value}>bis {value} dB</option>
-                      ))}
-                    </Select>
-                  ) : null}
-                </div>
-              </div>
-
-              {/* Echo */}
-              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
-                <Toggle label="Echo" checked={Boolean(on.echo)} onChange={toggle('echo')} />
-                <div className="grid grid-cols-3 gap-[10px] pt-[4px]">
-                  <Slider label="Abstand" display={`${echoDelay} ms`} min={40} max={1200} step={10} value={echoDelay}
-                    onChange={(event) => {
-                      setEchoDelay(Number(event.target.value))
-                      enable('echo')
-                    }} />
-                  <Slider label="Wiederholen" display={`${Math.round(echoFeedback * 100)} %`} min={0} max={0.85} step={0.05} value={echoFeedback}
-                    onChange={(event) => {
-                      setEchoFeedback(Number(event.target.value))
-                      enable('echo')
-                    }} />
-                  <Slider label="Anteil" display={`${Math.round(echoMix * 100)} %`} min={0.05} max={1} step={0.05} value={echoMix}
-                    onChange={(event) => {
-                      setEchoMix(Number(event.target.value))
-                      enable('echo')
-                    }} />
-                </div>
-              </div>
-
-              {/* Hall */}
-              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
-                <Toggle label="Hall" checked={Boolean(on.room)} onChange={toggle('room')} />
-                <div className="grid grid-cols-2 gap-[12px] pt-[4px]">
-                  <Slider label="Raumgrösse" display={`${comma(roomSeconds)} s`} min={0.3} max={5} step={0.1} value={roomSeconds}
-                    onChange={(event) => {
-                      setRoomSeconds(Number(event.target.value))
-                      enable('room')
-                    }} />
-                  <Slider label="Anteil" display={`${Math.round(roomMix * 100)} %`} min={0.05} max={1} step={0.05} value={roomMix}
-                    onChange={(event) => {
-                      setRoomMix(Number(event.target.value))
-                      enable('room')
-                    }} />
-                </div>
-              </div>
-            </div>
-          </Reveal>
-
-          {/* -- Studio Rack Unit 4: Kanäle & Routing ------------------------- */}
-          <Reveal label="Kanäle und Abtastrate" className="mt-[16px]">
-            <div className="grid gap-[16px] rounded-card border border-line bg-canvas p-[16px] shadow-xs sm:grid-cols-2 mt-[10px]">
-              <Field label="Kanäle" hint="Mono spart die Hälfte; Stereo verdoppelt einen Mono-Kanal.">
-                <div className="flex flex-wrap gap-[8px]">
-                  <Button size="sm" variant="quiet" disabled={busy !== null || current.channels.length === 1}
-                    onClick={() => void apply('Auf Mono gelegt', (a) => setChannels(a, 1))}>
-                    Mono
-                  </Button>
-                  <Button size="sm" variant="quiet" disabled={busy !== null || current.channels.length === 2}
-                    onClick={() => void apply('Auf Stereo gelegt', (a) => setChannels(a, 2))}>
-                    Stereo
-                  </Button>
-                  {current.channels.length === 2 ? (
-                    <Button size="sm" variant="quiet" disabled={busy !== null}
-                      onClick={() => void apply('Kanäle getauscht', (a) => channelTrick(a, 'swap'))}>
-                      L/R tauschen
-                    </Button>
-                  ) : null}
-                </div>
-              </Field>
-
-              <Field label="Abtastrate" hint="Lineare Interpolation — gut fürs Musikalische, kein Studio-Konverter.">
-                <div className="flex flex-wrap gap-[8px]">
-                  {[22050, 44100, 48000].map((rate) => (
-                    <Button key={rate} size="sm" variant="quiet"
-                      disabled={busy !== null || current.sampleRate === rate}
-                      onClick={() => void apply(`${rate / 1000} kHz`, (a) => resampleAudio(a, rate))}>
-                      {rate / 1000} kHz
-                    </Button>
-                  ))}
-                </div>
-              </Field>
-            </div>
-          </Reveal>
-
-          {/* -- Studio Master Bounce & Export Bar ---------------------------- */}
-          <div className="mt-[16px] flex flex-wrap items-center justify-between gap-[10px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
-            <div className="flex flex-wrap items-center gap-[8px]">
-              <Button disabled={!bytes || busy !== null}
-                onClick={() => bytes && saveBytes(bytes, outputName, 'audio/wav')}>
+      case 'ausgabe':
+        return (
+          <>
+            <ToolHeading title="Ausgabe" hint="Gespeichert wird als WAV; die Ausgangsdatei bleibt, wie sie war." />
+            <Module title="Bittiefe">
+              <ChoiceRow
+                value={bitDepth}
+                columns={3}
+                onChange={setBitDepth}
+                options={[
+                  { value: 16, label: '16 bit' },
+                  { value: 24, label: '24 bit' },
+                  { value: 32, label: '32 Float' },
+                ]}
+              />
+              {bytes ? <p className="value text-small text-prose">{formatBytes(bytes.byteLength)}</p> : null}
+            </Module>
+            <div className="flex flex-col gap-[4px]">
+              <Button size="sm" disabled={!bytes || idle} onClick={save}>
                 Als WAV speichern
                 <ArrowRight />
               </Button>
-              <Button variant="quiet" disabled={!bytes || busy !== null} onClick={keep}>
+              <Button size="sm" variant="quiet" disabled={!bytes || idle} onClick={keep}>
                 In die Sitzung übernehmen
               </Button>
             </div>
-
-            <div className="flex flex-wrap items-center gap-[10px]">
-              <div className="flex items-center gap-[6px]">
-                <span className="text-small text-muted font-medium">Bittiefe:</span>
-                <Select
-                  value={bitDepth}
-                  onChange={(event) => setBitDepth(Number(event.target.value) as WavBitDepth)}
-                  aria-label="Bittiefe"
-                  className="w-auto! py-[6px] text-small"
-                >
-                  <option value={16}>16 bit</option>
-                  <option value={24}>24 bit</option>
-                  <option value={32}>32 bit Float</option>
-                </Select>
+            <Module title="Kanäle" hint="Mono spart die Hälfte; Stereo verdoppelt einen Mono-Kanal.">
+              <div className="grid grid-cols-3 gap-[4px]">
+                <Button size="sm" variant="quiet" disabled={idle || current.channels.length === 1} onClick={() => void apply('Auf Mono gelegt', (a) => setChannels(a, 1))}>
+                  Mono
+                </Button>
+                <Button size="sm" variant="quiet" disabled={idle || current.channels.length === 2} onClick={() => void apply('Auf Stereo gelegt', (a) => setChannels(a, 2))}>
+                  Stereo
+                </Button>
+                <Button size="sm" variant="quiet" disabled={idle || current.channels.length !== 2} onClick={() => void apply('Kanäle getauscht', (a) => channelTrick(a, 'swap'))}>
+                  L/R tauschen
+                </Button>
               </div>
-              {bytes ? (
-                <span className="value text-small font-semibold text-ink bg-panel-soft px-[8px] py-[4px] rounded-nav ring-1 ring-line/60">
-                  {formatBytes(bytes.byteLength)}
-                </span>
-              ) : null}
-              {busy ? <span className="text-small text-muted font-medium">{busy}…</span> : null}
-            </div>
-          </div>
-        </Card>
-      </div>
+            </Module>
+            <Module title="Abtastrate" hint="Lineare Interpolation — gut fürs Musikalische, kein Studio-Wandler.">
+              <ChoiceRow
+                value={current.sampleRate}
+                columns={3}
+                onChange={(rate) => {
+                  if (rate !== current.sampleRate) void apply(`${comma(rate / 1000)} kHz`, (a) => resampleAudio(a, rate))
+                }}
+                options={[22050, 44100, 48000].map((rate) => ({ value: rate, label: `${comma(rate / 1000)} kHz` }))}
+              />
+            </Module>
+          </>
+        )
 
-      <aside className="flex flex-col gap-[16px]">
-        <Card tone="cream" size="compact">
-          <div className="flex items-center justify-between border-b border-line pb-[8px]">
-            <SectionHead rule={false}>Verlauf</SectionHead>
+      case 'verlauf':
+        return (
+          <>
+            <ToolHeading
+              title="Verlauf"
+              hint={history.length === 0 ? 'Noch unverändert. Jeder Schritt landet hier und ist mit Strg/Cmd + Z zurückzunehmen.' : 'Der unterste ist der neueste. Die Ausgangsdatei bleibt unangetastet.'}
+            />
             {history.length > 0 ? (
-              <span className="rounded-nav bg-panel-soft px-[6px] py-[1px] text-micro font-semibold text-ink">
-                {history.length} {history.length === 1 ? 'Schritt' : 'Schritte'}
-              </span>
-            ) : null}
-          </div>
-          {history.length === 0 ? (
-            <p className="mt-[8px] text-small leading-[1.5] text-muted">
-              Noch unverändert. Strg/Cmd + Z nimmt jeden Schritt zurück; die Ausgangsdatei bleibt
-              unangetastet.
-            </p>
-          ) : (
-            <ol className="mt-[8px] flex flex-col gap-[6px] text-small">
-              {history.map((step, index) => {
-                const isLatest = index === history.length - 1
-                return (
+              <ol className="flex flex-col text-small">
+                <li className="flex items-baseline gap-[8px] border-t border-line py-[6px] text-prose">
+                  <span className="value w-[2ch] shrink-0 text-right">0</span>
+                  <span className="min-w-0 flex-1 truncate">{asset.name}</span>
+                </li>
+                {history.map((entry, index) => (
                   <li
-                    key={`${step.label}-${index}`}
-                    className={`flex items-baseline gap-[8px] rounded-nav px-[8px] py-[4px] transition-colors ${
-                      isLatest ? 'bg-canvas/90 text-ink font-medium shadow-2xs ring-1 ring-line/60' : 'text-muted'
-                    }`}
+                    key={`${entry.label}-${index}`}
+                    className={`flex items-baseline gap-[8px] border-t border-line py-[6px] ${index === history.length - 1 ? 'font-semibold text-ink' : 'text-prose'}`}
                   >
-                    <span className="value shrink-0 text-micro">{index + 1}.</span>
-                    <span className="min-w-0 flex-1 truncate">{step.label}</span>
+                    <span className="value w-[2ch] shrink-0 text-right">{index + 1}</span>
+                    <span className="min-w-0 flex-1">{entry.label}</span>
                   </li>
-                )
-              })}
-            </ol>
-          )}
-        </Card>
-
-        {others.length > 1 ? (
-          <Card tone="cream" size="compact">
-            <SectionHead>Anhängen</SectionHead>
-            <p className="mt-[8px] text-small leading-[1.5] text-prose/85">
-              Eine zweite Aufnahme hinten anfügen, mit kurzer Überblendung.
-            </p>
-            <div className="mt-[12px] flex flex-col gap-[8px]">
-              <Select value={joinWith} onChange={(event) => setJoinWith(event.target.value)}>
-                <option value="">Datei wählen…</option>
-                {others.filter((entry) => entry.id !== asset.id).map((entry) => (
-                  <option key={entry.id} value={entry.id}>{entry.name}</option>
                 ))}
-              </Select>
-              <Button size="sm" disabled={!joinWith || busy !== null}
-                onClick={() => {
-                  const other = others.find((entry) => entry.id === joinWith)
-                  if (!other?.audio) {
-                    setError('Diese Datei ist noch nicht dekodiert — einmal auswählen, dann geht es.')
-                    return
-                  }
-                  void apply(`${other.name} angehängt`, (a) => concatAudio([a, other.audio!], 0.05))
-                }}>
-                Anhängen
+              </ol>
+            ) : null}
+            {future.length > 0 ? (
+              <p className="text-small text-prose">
+                {future.length} {future.length === 1 ? 'Schritt lässt' : 'Schritte lassen'} sich wiederholen.
+              </p>
+            ) : null}
+            {history.length > 0 && decoded ? (
+              <Button size="sm" variant="quiet" disabled={idle} onClick={() => void apply('Zurück zum Original', () => decoded)}>
+                Zurück zum Original
               </Button>
+            ) : null}
+          </>
+        )
+    }
+  })()
+
+  return (
+    <div className="flex flex-col gap-[16px]">
+      <EditorShell
+        title={asset.name}
+        subtitle={`${formatTimecode(duration)} · ${current.channels.length === 1 ? 'Mono' : 'Stereo'} · ${comma(current.sampleRate / 1000)} kHz · Spitze ${comma(peakDb(current))} dBFS`}
+        actions={
+          <>
+            <IconButton label="Rückgängig (Strg+Z)" onClick={undo} disabled={history.length === 0}>
+              {IconUndo}
+            </IconButton>
+            <IconButton label="Wiederholen (Strg+Umschalt+Z)" onClick={redo} disabled={future.length === 0}>
+              {IconRedo}
+            </IconButton>
+            <Button size="sm" onClick={save} disabled={!bytes || idle} className="ml-[8px]">
+              Speichern
+            </Button>
+          </>
+        }
+        tools={tools}
+        tool={tool}
+        onTool={(id) => setTool(id as ToolId)}
+        stageClassName="bg-stage min-h-[280px] sm:min-h-[clamp(340px,46vh,580px)]"
+        stage={
+          <SoundStage
+            audio={shown}
+            start={viewStart}
+            end={viewEnd}
+            position={positionInView}
+            selection={liveInView}
+            fades={fadesInView}
+            surfaceRef={frameRef}
+            surface={{
+              'aria-label': 'Wellenform — ziehen wählt einen Ausschnitt',
+              onPointerDown: (event) => {
+                event.currentTarget.setPointerCapture(event.pointerId)
+                const at = secondsAt(event.clientX)
+                setDragging({ start: at, end: at })
+              },
+              onPointerMove: (event) => {
+                if (!dragging) return
+                setDragging((value) => (value ? { ...value, end: secondsAt(event.clientX) } : value))
+              },
+              onPointerUp: () => {
+                if (!dragging) return
+                const next = { start: Math.min(dragging.start, dragging.end), end: Math.max(dragging.start, dragging.end) }
+                setDragging(null)
+                // A click rather than a drag clears the selection.
+                setSelection(next.end - next.start < 0.02 ? null : next)
+              },
+            }}
+          />
+        }
+        underStage={
+          <>
+            {/* The transport: what a studio has under its arrangement. */}
+            <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] px-[12px] py-[8px]">
+              <div className="flex items-center gap-[4px]">
+                <button
+                  type="button"
+                  onClick={() => (playing ? stop() : void play())}
+                  aria-label={playing ? 'Anhalten (Leertaste)' : hasSelection ? 'Auswahl abspielen (Leertaste)' : 'Abspielen (Leertaste)'}
+                  title={playing ? 'Anhalten (Leertaste)' : hasSelection ? 'Auswahl abspielen (Leertaste)' : 'Abspielen (Leertaste)'}
+                  className="press inline-flex h-[36px] w-[36px] items-center justify-center rounded-pill bg-ink text-on-ink hover:bg-ink-hover"
+                >
+                  {playing ? IconPause : IconPlay}
+                </button>
+                <IconButton label="Stopp" onClick={() => stop()} disabled={!playing}>
+                  {IconStop}
+                </IconButton>
+                <IconButton
+                  label={loop ? 'Schleife aus' : 'In Schleife spielen'}
+                  active={loop}
+                  onClick={() => {
+                    stop()
+                    setLoop((value) => !value)
+                  }}
+                >
+                  {IconLoop}
+                </IconButton>
+              </div>
+              <p className="value whitespace-nowrap text-body text-ink">
+                {formatTimecode(position ?? (hasSelection ? span.start : 0))}
+                <span className="text-small text-muted"> / {formatTimecode(duration)}</span>
+              </p>
+              {hasSelection ? (
+                <p className="value whitespace-nowrap text-small text-prose">
+                  Auswahl {comma(span.end - span.start, 2)} s
+                </p>
+              ) : null}
+              <div className="ml-auto flex items-center gap-[4px]">
+                {hasSelection && !(view && Math.abs(view.start - span.start) < 1e-3 && Math.abs(view.end - span.end) < 1e-3) ? (
+                  <Button size="sm" variant="quiet" onClick={() => setView({ start: span.start, end: span.end })}>
+                    Auswahl zeigen
+                  </Button>
+                ) : null}
+                {view ? (
+                  <Button size="sm" variant="quiet" onClick={() => setView(null)}>
+                    Ganz zeigen
+                  </Button>
+                ) : null}
+                <IconButton label="Herauszoomen" onClick={() => zoomBy(2)} disabled={!view}>
+                  {IconZoomOut}
+                </IconButton>
+                <IconButton label="Hineinzoomen (oder Mausrad)" onClick={() => zoomBy(0.5)} disabled={duration <= 0.06}>
+                  {IconZoomIn}
+                </IconButton>
+              </div>
             </div>
-          </Card>
-        ) : null}
+            {/* What is switched on, in one sentence, with the one decision it
+                asks for: keep it or not. */}
+            {liveParts.length > 0 || noiseLive ? (
+              <div className="rise flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line bg-panel-soft px-[12px] py-[8px]">
+                <p className="min-w-0 flex-1 text-small text-prose">
+                  <span className="font-semibold text-ink">Zu hören:</span> {liveParts.join(' · ')}
+                  {noiseLive && !noiseReady ? ' — Rauschminderung wird gerechnet …' : ''}
+                </p>
+                <div role="group" aria-label="Vergleich" className="flex rounded-pill bg-raised p-[2px] ring-1 ring-inset ring-line">
+                  {([false, true] as const).map((value) => (
+                    <button
+                      key={String(value)}
+                      type="button"
+                      aria-pressed={compare === value}
+                      onClick={() => setCompare(value)}
+                      className={`press rounded-pill px-[12px] py-[3px] text-small ${compare === value ? 'bg-ink text-on-ink' : 'text-ink hover:bg-panel-mid'}`}
+                    >
+                      {value ? 'Vorher' : 'Nachher'}
+                    </button>
+                  ))}
+                </div>
+                <Button size="sm" disabled={idle || (noiseLive && !noiseReady && liveParts.length === 1)} onClick={() => void commit()}>
+                  Übernehmen
+                </Button>
+                <button
+                  type="button"
+                  disabled={idle}
+                  onClick={() => {
+                    setOn({})
+                    setGain(0)
+                    setCompare(false)
+                  }}
+                  className="press rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink disabled:opacity-40"
+                >
+                  Alles aus
+                </button>
+              </div>
+            ) : null}
+          </>
+        }
+        inspector={inspector}
+        status={
+          <>
+            {busy ? (
+              <span className="flex items-center gap-[8px] text-ink">
+                <span aria-hidden className="pulse-dot h-[7px] w-[7px] rounded-pill bg-ink" />
+                {busy} …
+              </span>
+            ) : (
+              <span className="hidden sm:inline">Ziehen wählt aus · Mausrad zoomt · Umschalt + Mausrad schiebt · Leertaste spielt</span>
+            )}
+            <span className="ml-auto">
+              {history.length > 0 ? `${history.length} ${history.length === 1 ? 'Schritt' : 'Schritte'} · ` : ''}Läuft auf diesem Gerät
+            </span>
+          </>
+        }
+      />
 
-
-      </aside>
+      {error ? (
+        <Notice tone="error" title="Ging nicht">
+          {error}
+        </Notice>
+      ) : null}
     </div>
+  )
+}
+
+/** One group in the inspector: a hairline above, a name if it needs one. */
+function Module({ title, hint, children }: { title?: string; hint?: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-[10px] border-t border-line pt-[12px]">
+      {title ? <ToolHeading title={title} hint={hint} /> : null}
+      {children}
+    </section>
   )
 }
