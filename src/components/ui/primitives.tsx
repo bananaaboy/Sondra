@@ -192,9 +192,13 @@ export function Field({
 const CONTROL =
   'w-full rounded-nav border-0 bg-raised px-[12px] py-[8px] text-small text-prose outline-none ring-1 ring-inset ring-line focus:ring-ink'
 
-/** A choice off a printed list, so it keeps the form's own face. */
+/**
+ * A choice off a printed list, so it keeps the form's own face. The native
+ * arrow goes with the native look, so it draws its own (`sondra-select`) —
+ * without one a list read as a text field.
+ */
 export function Select({ className = '', ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={`${CONTROL} appearance-none pr-[32px] ${className}`} {...props} />
+  return <select className={`${CONTROL} sondra-select cursor-pointer appearance-none pr-[32px] ${className}`} {...props} />
 }
 
 /** Something typed in, so it is set in the face of things typed in. */

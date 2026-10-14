@@ -2,20 +2,20 @@
 name: Sondra
 description: Ein Medienstudio, das im Tab rechnet — ein ruhiges, flaches Blatt, auf dem jede Zahl gemessen ist.
 colors:
-  canvas: "#f2eee4"
-  raised: "#fdfbf6"
-  panel-soft: "#edf5ef"
-  panel-mid: "#e4f0e7"
-  panel-strong: "#d3e9da"
-  panel-cool: "#e1edf1"
-  ink: "#0f3e1c"
-  ink-hover: "#17552b"
+  canvas: "#f8faf8"
+  raised: "#ffffff"
+  panel-soft: "#e0f0e5"
+  panel-mid: "#d2e8d9"
+  panel-strong: "#c8e1cf"
+  panel-cool: "#e5eff3"
+  ink: "#0b4a22"
+  ink-hover: "#073517"
   on-ink: "#ffffff"
-  prose: "#162019"
-  muted: "#5a6b5f"
-  line: "#d3cdbf"
-  rule: "#bcc4b6"
-  faint: "#8f9c91"
+  prose: "#111a14"
+  muted: "#4e6355"
+  line: "#cbd7cf"
+  rule: "#a7bca9"
+  faint: "#799081"
   stage: "#15181a"
   stage-soft: "#1d2124"
   stage-line: "#515a5d"
@@ -268,6 +268,13 @@ ist neu gemessen (Messregel). Die Fläche oben auf der Startseite steht auf
 einem einheitlichen, ruhigen Ton (`bg-panel-soft`), und das Symbol einer
 Werkzeugkachel sitzt auf einem eigenen kleinen Feld, das beim Zeigen die Tinte annimmt.
 
+**Am 13.10.2026 (1.0.17) heller,** auf „mehr Kontrast im hellen Modus": das
+Blatt fast weiss (`#f8faf8`), Felder reinweiss, Tinte `#0b4a22`, Graphit
+dunkler. **Am 14.10.2026 die Tönungen wieder grün** (`#e0f0e5`, `#d2e8d9`,
+`#c8e1cf`): auf dem fast weissen Blatt war die Fläche oben auf der
+Startseite kaum noch zu sehen („das Grün siehst du fast nicht"). Gemessen
+(APCA) auf allen drei: gedämpft ≥ Lc 60,9, Fliesstext ≥ 83, Tinte ≥ 72.
+
 ### Primary
 
 - **Waldtinte** (`{colors.ink}`): die einzige gesättigte Farbe im System und
@@ -280,7 +287,8 @@ Werkzeugkachel sitzt auf einem eigenen kleinen Feld, das beim Zeigen die Tinte a
 
 ### Neutral
 
-- **Warmes Papier** (`{colors.canvas}`): das Blatt selbst, Grund der ganzen App. Beige, auf ausdrücklichen Wunsch.
+- **Blatt** (`{colors.canvas}`): Grund der ganzen App. Seit 1.0.17 fast weiss
+  mit einem Hauch Grün; das Beige von vorher steht oben in der Geschichte.
 - **Feld** (`{colors.raised}`): Weiss erscheint nur, wo ein Feld ausfüllbar ist
   oder wo eine Fläche eine eigene Mechanik hat — Eingaben, der Editorrahmen,
   die Reiterleiste. Nicht als Karte; eine Karte gibt es hier nicht.

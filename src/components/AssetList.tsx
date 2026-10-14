@@ -167,10 +167,13 @@ export function SessionMenu() {
         </svg>
       </button>
 
+      {/* Beside the button, in the header's own row — below it, the pill
+          lay over the tool tabs. Where the row has no room for it, the
+          button's own pulse and its count say the same. */}
       {arrived !== null && !open ? (
         <div
           role="status"
-          className="rise absolute right-0 top-[calc(100%+8px)] z-30 flex max-w-[280px] items-center gap-[6px] rounded-nav bg-ink px-[10px] py-[6px] text-micro font-semibold text-on-ink shadow-md"
+          className="rise absolute right-[calc(100%+8px)] top-1/2 z-30 hidden max-w-[280px] -translate-y-1/2 items-center gap-[6px] rounded-nav bg-ink py-[6px] pl-[10px] pr-[6px] text-small text-on-ink lg:flex"
         >
           <span className="truncate">In der Sitzung: {arrived}</span>
           <button
@@ -181,7 +184,7 @@ export function SessionMenu() {
             }}
             aria-label="Hinweis schliessen"
             title="Hinweis schliessen"
-            className="flex h-4 w-4 shrink-0 items-center justify-center rounded hover:bg-white/20 transition-colors"
+            className="grid h-[20px] w-[20px] shrink-0 place-items-center rounded-[6px] transition-colors hover:bg-on-ink/20"
           >
             <svg viewBox="0 0 14 14" className="h-3 w-3" fill="none" aria-hidden>
               <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
