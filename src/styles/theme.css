@@ -425,6 +425,37 @@ select option {
   border-radius: 999px;
 }
 
+/* Zerschneiden: the cuts on the stage. Wavesurfer sets its handles' colour
+   inline, dark for a pale page — on stage black they vanished, and a cut you
+   cannot see is a cut you cannot grab. */
+.sondra-stage-wave ::part(region-handle-left) {
+  border-left-color: rgb(238 241 240 / 0.55) !important;
+}
+.sondra-stage-wave ::part(region-handle-right) {
+  border-right-color: rgb(238 241 240 / 0.55) !important;
+}
+/* The plan: where the cuts will fall, before they are made. Dashed, so it
+   never reads as a cut that is already there. */
+.sondra-stage-wave ::part(marker) {
+  border-left-style: dashed !important;
+  border-left-width: 1px !important;
+  pointer-events: none !important;
+}
+.sondra-stage-wave ::part(region-content) {
+  padding: 6px 6px 0;
+  font-family: var(--font-value);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-stage-ink);
+  opacity: 0.8;
+}
+.sondra-stage-wave ::part(timeline) {
+  border-bottom: 1px solid var(--color-stage-line);
+  background: var(--color-stage-soft);
+  margin-bottom: 8px;
+}
+
 @keyframes sondra-pulse {
   0%,
   100% {

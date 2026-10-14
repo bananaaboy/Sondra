@@ -200,16 +200,44 @@ function setStatus(next: FfmpegStatus): void {
 const absolute = (url: string) => new URL(url, window.location.href).href
 
 /**
+ * A run the core did not survive: it threw from inside WebAssembly, or it
+ * stopped answering. Kept apart from an ordinary non-zero exit, because the
+ * same job may well finish on the single-threaded core — a failed exit says
+ * something about the file, a crash usually says something about the build.
+ */
+export class FfmpegCrash extends Error {
+  /** True when the core went silent rather than throwing. */
+  readonly hung: boolean
+  constructor(message: string, hung = false) {
+    super(message)
+    this.name = 'FfmpegCrash'
+    this.hung = hung
+  }
+}
+
+export interface LoadOptions {
+  /**
+   * Load the single-threaded core even where the multi-threaded one could run.
+   * The pthread build has failure modes of its own — x264 presets other than
+   * `medium` deadlock in it — and the plain core is the safe second attempt.
+   */
+  singleThread?: boolean
+}
+
+/**
  * Loads the core, once. Concurrent callers share the same promise so two panels
  * starting at the same time do not each pull down a copy of the binary.
  */
-export async function loadFfmpeg(): Promise<FFmpeg> {
+export async function loadFfmpeg({ singleThread = false }: LoadOptions = {}): Promise<FFmpeg> {
+  // A caller that wants the plain core while the threaded one is up gets a
+  // fresh start; the next ordinary caller keeps whatever is loaded.
+  if (singleThread && instance && status.multiThreaded) await unloadFfmpeg()
   if (instance && status.loaded) return instance
   if (loading) return loading
 
   loading = (async () => {
     const caps = detectCapabilities()
-    const multiThreaded = caps.ffmpegMultiThread
+    const multiThreaded = caps.ffmpegMultiThread && !singleThread
     const ffmpeg = new FFmpeg()
 
     setBoot({
@@ -305,6 +333,29 @@ export interface RunOptions {
   consumeInput?: boolean
   /** Folders to create before the inputs are written, e.g. `fonts` for libass. */
   folders?: string[]
+  /**
+   * Seconds without a single line or progress report after which the core
+   * counts as hung. FFmpeg reports twice a second while it works, so a long
+   * silence is a deadlock, not a slow file. Off unless asked for.
+   */
+  stallSeconds?: number
+}
+
+/** Calls `onStall` once nothing has been heard for `seconds`. */
+function stallWatch(seconds: number | undefined, onStall: () => void) {
+  if (!seconds) return { touch: () => undefined, stop: () => undefined }
+  let last = performance.now()
+  const timer = window.setInterval(() => {
+    if (performance.now() - last < seconds * 1000) return
+    window.clearInterval(timer)
+    onStall()
+  }, 1000)
+  return {
+    touch: () => {
+      last = performance.now()
+    },
+    stop: () => window.clearInterval(timer),
+  }
 }
 
 export interface RunResult {
@@ -343,13 +394,20 @@ export function runFfmpeg(options: RunOptions): Promise<RunResult> {
   return enqueue(() => runFfmpegNow(options))
 }
 
-async function runFfmpegNow({ input, output, args, signal, consumeInput = false, folders = [] }: RunOptions): Promise<RunResult> {
+async function runFfmpegNow({ input, output, args, signal, consumeInput = false, folders = [], stallSeconds }: RunOptions): Promise<RunResult> {
   const ffmpeg = await loadFfmpeg()
   const logs: string[] = []
+  let stalled = false
+  const watch = stallWatch(stallSeconds, () => {
+    stalled = true
+    void unloadFfmpeg()
+  })
   const stopLogging = onFfmpegLog((line) => {
+    watch.touch()
     logs.push(line)
     if (logs.length > 500) logs.shift()
   })
+  const stopWatching = onFfmpegProgress(() => watch.touch())
 
   const abort = () => {
     // Terminating is the only way to interrupt a running core; the next call
@@ -373,15 +431,17 @@ async function runFfmpegNow({ input, output, args, signal, consumeInput = false,
 
     let code: number
     try {
+      watch.touch()
       code = await ffmpeg.exec(args)
     } catch (failure) {
       if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+      if (stalled) throw new FfmpegCrash(`FFmpeg reagiert nicht mehr.\n${logs.slice(-8).join('\n')}`, true)
       // A crash inside the core arrives as whatever the WebAssembly runtime
       // threw — sometimes not even an Error. What FFmpeg printed last is the
       // only useful part, and the core is reloaded, as after a failed exit.
       await unloadFfmpeg().catch(() => undefined)
       const reason = failure instanceof Error ? failure.message : String(failure)
-      throw new Error(`FFmpeg ist abgestürzt (${reason}).\n${logs.slice(-8).join('\n')}`)
+      throw new FfmpegCrash(`FFmpeg ist abgestürzt (${reason}).\n${logs.slice(-8).join('\n')}`)
     }
     if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
     if (code !== 0) {
@@ -402,6 +462,8 @@ async function runFfmpegNow({ input, output, args, signal, consumeInput = false,
     }
     return { files, logs }
   } finally {
+    watch.stop()
+    stopWatching()
     stopLogging()
     signal?.removeEventListener('abort', abort)
     // Best-effort cleanup; a failed run may not have created every file.
@@ -438,6 +500,8 @@ export interface DiskRunOptions {
   extraInputs?: Record<string, Uint8Array>
   signal?: AbortSignal
   onProgress?: (fraction: number) => void
+  /** As for `runFfmpeg`. */
+  stallSeconds?: number
 }
 
 /**
@@ -453,14 +517,23 @@ export function runFfmpegOnDisk(options: DiskRunOptions): Promise<RunResult> {
   return enqueue(() => runOnDiskNow(options))
 }
 
-async function runOnDiskNow({ source, name, args, output, extraInputs = {}, signal, onProgress }: DiskRunOptions): Promise<RunResult> {
+async function runOnDiskNow({ source, name, args, output, extraInputs = {}, signal, onProgress, stallSeconds }: DiskRunOptions): Promise<RunResult> {
   const ffmpeg = await loadFfmpeg()
   const logs: string[] = []
+  let stalled = false
+  const watch = stallWatch(stallSeconds, () => {
+    stalled = true
+    void unloadFfmpeg()
+  })
   const stopLogging = onFfmpegLog((line) => {
+    watch.touch()
     logs.push(line)
     if (logs.length > 500) logs.shift()
   })
-  const stopProgress = onProgress ? onFfmpegProgress(onProgress) : () => undefined
+  const stopProgress = onFfmpegProgress((fraction) => {
+    watch.touch()
+    onProgress?.(fraction)
+  })
   const abort = () => void unloadFfmpeg()
   signal?.addEventListener('abort', abort, { once: true })
   let mounted = false
@@ -471,12 +544,14 @@ async function runOnDiskNow({ source, name, args, output, extraInputs = {}, sign
     for (const [extra, bytes] of Object.entries(extraInputs)) await ffmpeg.writeFile(extra, bytes.slice())
     let code: number
     try {
+      watch.touch()
       code = await ffmpeg.exec(args(diskPath(name)))
     } catch (failure) {
       if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+      if (stalled) throw new FfmpegCrash(`FFmpeg reagiert nicht mehr.\n${logs.slice(-8).join('\n')}`, true)
       await unloadFfmpeg().catch(() => undefined)
       const reason = failure instanceof Error ? failure.message : String(failure)
-      throw new Error(`FFmpeg ist abgestürzt (${reason}).\n${logs.slice(-8).join('\n')}`)
+      throw new FfmpegCrash(`FFmpeg ist abgestürzt (${reason}).\n${logs.slice(-8).join('\n')}`)
     }
     if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
     if (code !== 0) {
@@ -492,6 +567,7 @@ async function runOnDiskNow({ source, name, args, output, extraInputs = {}, sign
     }
     return { files, logs }
   } finally {
+    watch.stop()
     stopLogging()
     stopProgress()
     signal?.removeEventListener('abort', abort)

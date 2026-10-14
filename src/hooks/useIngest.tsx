@@ -15,8 +15,17 @@ import { kindFromMime, useSession } from '../state/store'
 
 const MEDIA_PATTERN = /^(audio|video)\//
 
-/** Everything this app can open, for the picker's accept list. */
-export const ACCEPTED_FILES = 'audio/*,video/*,.mkv,.flac,.opus,.m4a,.ts,.aac,.wma,.aiff,.aif'
+/** Pictures, for the picture tool's own picker — what its decoder reads. */
+export const IMAGE_ACCEPT = 'image/*,.heic,.heif,.avif,.webp'
+
+/**
+ * Everything this app can open, for the picker's accept list.
+ *
+ * Pictures belong in it: the picture tool is one of the tools. Without them a
+ * system file dialog opened on a filter of sound and video, and a photo could
+ * only be picked by switching that filter to „All files" by hand.
+ */
+export const ACCEPTED_FILES = `audio/*,video/*,.mkv,.flac,.opus,.m4a,.ts,.aac,.wma,.aiff,.aif,${IMAGE_ACCEPT}`
 
 export function useIngestFiles() {
   const addAsset = useSession((state) => state.addAsset)
@@ -73,7 +82,7 @@ export function useIngestFiles() {
  * Returns the input element to render — it has to exist in the tree for the
  * click to count as user-initiated — and the function that opens it.
  */
-export function useFilePicker(source = 'geöffnet') {
+export function useFilePicker(source = 'geöffnet', accept = ACCEPTED_FILES) {
   const { ingest, busy } = useIngestFiles()
   const ref = useRef<HTMLInputElement>(null)
 
@@ -82,7 +91,7 @@ export function useFilePicker(source = 'geöffnet') {
       ref={ref}
       type="file"
       multiple
-      accept={ACCEPTED_FILES}
+      accept={accept}
       className="sr-only"
       onChange={(event) => {
         if (event.target.files?.length) void ingest(event.target.files, source)

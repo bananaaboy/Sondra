@@ -12,6 +12,7 @@
     "dev:service": "node scripts/dev-service.mjs",
     "typecheck": "tsc -b --noEmit",
     "verify:loudness": "esbuild scripts/verify-loudness.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-loudness.mjs && node node_modules/.verify-loudness.mjs",
+    "verify:convert": "esbuild scripts/verify-convert.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-convert.mjs && node node_modules/.verify-convert.mjs",
     "verify:tempo": "esbuild scripts/verify-tempo.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-tempo.mjs && node node_modules/.verify-tempo.mjs",
     "verify": "npm run verify:loudness && npm run verify:tempo && npm run verify:harmony && npm run verify:resolve && npm run verify:extractors && npm run verify:ytdlp",
     "verify:harmony": "esbuild scripts/verify-harmony.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-harmony.mjs && node node_modules/.verify-harmony.mjs",

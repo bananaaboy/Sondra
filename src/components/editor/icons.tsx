@@ -80,3 +80,106 @@ export const IconBatch = (
     <path d="M6.5 6.5h11v11h-11zM13.5 6.5V3.5h-11v11h3" />
   </EditorIcon>
 )
+
+/* -- the sound editor ------------------------------------------------------ */
+
+export const IconCut = (
+  <EditorIcon>
+    <circle cx="5.8" cy="14.6" r="2.3" />
+    <circle cx="14.2" cy="14.6" r="2.3" />
+    <path d="M7.4 12.9L14.6 2.8M12.6 12.9L5.4 2.8" />
+  </EditorIcon>
+)
+
+export const IconLevel = (
+  <EditorIcon>
+    <path d="M4 17V10M8 17V5M12 17V8M16 17V12M2.5 17h15" />
+  </EditorIcon>
+)
+
+export const IconEq = (
+  <EditorIcon>
+    <path d="M5 3v5.5m0 3V17M10 3v1.5m0 3V17M15 3v8.5m0 3V17M3.2 10h3.6M8.2 6h3.6M13.2 13h3.6" />
+  </EditorIcon>
+)
+
+export const IconClean = (
+  <EditorIcon>
+    <path d="M2.5 12h2.2l1.6-3.5 2.2 7 2-6 1.4 2.5h2.6" />
+    <path d="M15.5 2.8v4M13.5 4.8h4" />
+  </EditorIcon>
+)
+
+export const IconRoom = (
+  <EditorIcon>
+    <path d="M3.5 10h.01" strokeWidth="2.2" />
+    <path d="M6.8 7.2a4 4 0 010 5.6M9.6 4.6a7.6 7.6 0 010 10.8M12.4 2a11.2 11.2 0 010 16" />
+  </EditorIcon>
+)
+
+export const IconTempo = (
+  <EditorIcon>
+    <path d="M6.2 17.2h7.6L11.6 2.8H8.4zM10 12.5l4.6-6.3M7.2 13.5h5.6" />
+  </EditorIcon>
+)
+
+export const IconHistory = (
+  <EditorIcon>
+    <path d="M3.6 10a6.4 6.4 0 101.9-4.6M3.6 3.4v2.8h2.8M10 6.4V10l2.6 1.6" />
+  </EditorIcon>
+)
+
+export const IconPlay = (
+  <EditorIcon>
+    <path d="M6 4.2v11.6L15.5 10z" fill="currentColor" stroke="none" />
+  </EditorIcon>
+)
+
+export const IconPause = (
+  <EditorIcon>
+    <path d="M6 4.5h2.6v11H6zM11.4 4.5H14v11h-2.6z" fill="currentColor" stroke="none" />
+  </EditorIcon>
+)
+
+export const IconStop = (
+  <EditorIcon>
+    <path d="M5.2 5.2h9.6v9.6H5.2z" fill="currentColor" stroke="none" />
+  </EditorIcon>
+)
+
+export const IconLoop = (
+  <EditorIcon>
+    <path d="M4 9.5V8a3 3 0 013-3h8.5m0 0L13 2.5M15.5 5L13 7.5M16 10.5V12a3 3 0 01-3 3H4.5m0 0L7 12.5M4.5 15L7 17.5" />
+  </EditorIcon>
+)
+
+export const IconToStart = (
+  <EditorIcon>
+    <path d="M5 4.5v11" />
+    <path d="M15 4.5v11L7.5 10z" fill="currentColor" stroke="none" />
+  </EditorIcon>
+)
+
+export const IconZoomIn = (
+  <EditorIcon>
+    <path d="M8.8 3.5a5.3 5.3 0 110 10.6 5.3 5.3 0 010-10.6zM12.7 12.7L17 17M8.8 6.6v4.4M6.6 8.8H11" />
+  </EditorIcon>
+)
+
+export const IconZoomOut = (
+  <EditorIcon>
+    <path d="M8.8 3.5a5.3 5.3 0 110 10.6 5.3 5.3 0 010-10.6zM12.7 12.7L17 17M6.6 8.8H11" />
+  </EditorIcon>
+)
+
+export const IconUndo = (
+  <EditorIcon>
+    <path d="M7 5L3.5 8.5 7 12M3.5 8.5H12a4.5 4.5 0 010 9h-1" />
+  </EditorIcon>
+)
+
+export const IconRedo = (
+  <EditorIcon>
+    <path d="M13 5l3.5 3.5L13 12M16.5 8.5H8a4.5 4.5 0 000 9h1" />
+  </EditorIcon>
+)

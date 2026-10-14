@@ -620,6 +620,34 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Datei". Die Werkzeuge sind dadurch einspaltig oder behalten nur ihre eigene
   Seitenspalte. Das Menü trägt die eine Schattenstufe; auf dem Handy liegt es
   fest unter der Kopfzeile über die volle Breite.
+- **Ton und Zerschneiden sind Studios** (14.10.2026, auf „mega cluttered,
+  soll studiomässig sein"). Vorher vier Racks und eine Seitenspalte
+  untereinander, jedes mit allen Reglern offen. Jetzt:
+  - **Ton** steht im Editorrahmen wie Bilder und Video: Schiene mit acht
+    Werkzeugen (Schnitt, Pegel, Klang, Säubern, Raum, Tempo, Ausgabe,
+    Verlauf), daneben nur die Regler des einen. Die Welle liegt auf der
+    **Tonbühne** (`editor/SoundStage.tsx`): Stage-Schwarz, Zeitlineal oben,
+    Signal in `stage-accent`, Auswahl und Abspielkopf als Linien in
+    `stage-ink`. Darunter die Transportleiste (runder Abspielknopf in Tinte,
+    Stopp, Schleife, Zeit in Mono, Zoom), darunter — nur wenn etwas an ist —
+    die eine Zeile „Zu hören: …" mit Vorher/Nachher und „Übernehmen".
+    Leertaste spielt und hält an.
+  - **Zerschneiden** in zwei Rahmen. Oben das Schneiden: sechs Verfahren
+    in einer Umschaltreihe (Anschläge, Stärkste, Takt mit Triolen und
+    Verschiebung, Pausen, Gleich, Länge), darunter nur die Regler des
+    gewählten, darunter auf `panel-soft` was alle teilen (Vorlauf,
+    Mindestlänge, Nulldurchgang). **Wo geschnitten wird, steht vorher als
+    dünne Linie in `stage-accent` auf der Welle**, und neben dem Knopf
+    „ergibt N Pads“ (`lib/chop.ts`, `planChop`). Ein gezogener Bereich kann
+    ein Pad werden oder „Darin schneiden“ — nur dort, der Rest bleibt.
+    Unten **Pads und Pattern als ein Rack** (14.10.2026, „zusammenführen“):
+    das 4 × 4-Feld ist aufgegangen in den Zeilen — jede beginnt mit dem Pad
+    selbst (Taste, kleine Welle, Länge; antippen spielt und wählt), dann M,
+    Klavierrolle und die Schritte. Rechts die Spalte mit Reitern Pad · Alle
+    Pads · Export · Vorgaben; im Pad-Reiter auch sein Schnitt (Anfang und
+    Ende in ±1/±10 ms, Halbieren, Mit nächstem verbinden).
+  Die Rahmen tragen keine Karte und keinen Schatten: `bg-raised`,
+  Haarlinien-Ring, Zwischenlinien.
 - **Pattern** (`StepSequencer`): das Channel-Rack-Raster unter den Pads. Eine
   Zeile je Pad mit „M" (stumm) und dem Padnamen, der das Pad anspielt; 16
   oder 32 Zellen zu 24 × 28 px mit 5 px Rundung, in Vierergruppen abwechselnd
@@ -633,14 +661,14 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Pad ist entweder gestept oder gerollt, wie ein Kanal in FL Studio; gerollt
   zeigt seine Zeile die Töne in klein.
 - **Ein gezogener Bereich ist eine Frage** (Zerschneiden): er erscheint
-  dunkler getönt mit „Auswahl hören", „Als Pad anlegen" und „Verwerfen",
-  und wird erst auf Bestätigung ein Pad. Ein verirrter Zug hinterliess vorher
+  heller auf der Bühne, mit einer schwebenden Leiste „Hören", „Als Pad
+  anlegen" und „Verwerfen", und wird erst auf Bestätigung ein Pad. Ein verirrter Zug hinterliess vorher
   ein Pad. Pads löschen: im Pad-Block oder mit Entf.
 - **Einstellen heisst hören** (Ton-Editor): jeder Klang-Block ist ein
   Schalter, ein bewegter Regler schaltet ihn ein, und die Wiedergabe läuft
   durch dieselbe Web-Audio-Kette (`lib/liveSound.ts`), die „Übernehmen" danach
   offline rendert — was zu hören war, steht in der Datei. Eine Leiste unter
-  der Welle sagt in einem Satz, was gerade zu hören ist, mit Vorher/Nachher.
+  dem Transport sagt in einem Satz, was gerade zu hören ist, mit Vorher/Nachher.
   Tempo und Tonhöhe hört man live über einen körnigeren Schieber; übernommen
   rechnet der Phasenvocoder, und der Hinweis sagt das.
 - **Blenden sind zu sehen, bevor sie da sind:** im Ton-Editor in der Welle
@@ -799,7 +827,23 @@ Inspektor, darunter eine Statuszeile. Die Bühne bewegt sich nie und scrollt
 nie; ein Werkzeugwechsel tauscht nur die Spalte rechts und spielt dort `rise`.
 Der Schachbrettgrund (`stage-checks`) ist die eine Stelle, an der ein
 dekoratives Muster seinen Platz verdient — er ist die einzige Art, „dieses
-Pixel ist durchsichtig" von „dieses Pixel ist grau" zu unterscheiden.
+Pixel ist durchsichtig" von „dieses Pixel ist grau" zu unterscheiden. Der
+Ton-Editor hat nichts Durchsichtiges und steht auf glattem Stage-Schwarz,
+etwas niedriger (`stageClassName`). Ab `lg` scrollt der Inspektor in sich
+selbst, statt die Zeile zu strecken: ein Werkzeug mit vier Blöcken machte
+vorher die Bühne so hoch wie die Blöcke und schob den Transport unter die
+Falz. Die Schiene läuft über die volle Höhe der Bühne.
+
+**Weitere Wege (Downloader).** Die Wege, die das Feld oben nicht von selbst
+nimmt, stehen als drei getönte Kacheln offen auf der Seite — Datei oder
+Stream, YouTube in voller Auflösung, Eigener Dienst —, nicht mehr hinter
+einer grauen Zeile „Mehr Wege", hinter der sie niemand fand. Im Fenster
+„Dienst einrichten" fragt Weg 2 wieder, was schon da ist: womit (yt-dlp,
+cobalt mit Node.js, cobalt mit Docker) und ob Node.js (bei cobalt auch Git)
+schon installiert ist; die Befehle darunter sind dann genau die für diesen
+Rechner. Weg 3 (vorhandenen Dienst verbinden) ist sichtbar, nicht gefaltet.
+Dialoge hängen am `body` (Portal): einer in einem zugeklappten Abschnitt
+öffnete sich sonst unsichtbar.
 
 ### Motion
 
