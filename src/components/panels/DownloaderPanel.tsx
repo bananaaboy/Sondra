@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { IN_DESKTOP_APP } from '../../lib/desktop'
-import { saveBytes } from '../../lib/download'
+import { isPortalUrl, saveBytes } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { decodeWithBrowser } from '../../lib/audio'
 import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
@@ -34,7 +34,7 @@ import {
 } from '../../lib/studio'
 import { serviceConnection } from '../../lib/serviceState'
 import { kindFromMime, useSession } from '../../state/store'
-import { Button, Card, Notice, Progress, Reveal, TextInput } from '../ui/primitives'
+import { ArrowRight, Button, Card, Notice, Progress, Reveal, TextInput } from '../ui/primitives'
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { AdvancedDownloader } from './DownloaderAdvanced'
 
@@ -862,6 +862,21 @@ export function DownloaderPanel() {
             </Button>
           </div>
 
+          {isPortalUrl(url) && !IN_DESKTOP_APP ? (
+            <div className="flex flex-wrap items-center justify-between gap-[8px] rounded-nav bg-panel-soft px-[12px] py-[8px] text-small text-ink">
+              <span>YouTube blockiert direkte Webbrowser-Downloads ohne Software.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('sondra:open-setup-dialog'))
+                }}
+                className="font-medium underline hover:text-ink cursor-pointer"
+              >
+                Anleitung & Optionen ansehen
+              </button>
+            </div>
+          ) : null}
+
           {/* Download-Optionen & Format-Wahl */}
           <div className="mt-[12px] flex flex-col gap-[12px] rounded-card bg-panel-soft p-[14px]">
             <div className="flex flex-wrap items-center justify-between gap-[8px]">
@@ -994,34 +1009,82 @@ export function DownloaderPanel() {
             stays in full — that one is binding — and the result names the
             path that answered, so the explanation can wait a click. */}
         <Reveal label="Welche Wege probiert werden" className="mt-[12px]">
-          {IN_DESKTOP_APP ? (
-            <p className="mb-[8px] text-small leading-[1.5] text-muted">
-              In der App fragt Sondra zuerst ihren eigenen Dienst: yt-dlp auf diesem Rechner, in voller
-              Auflösung und für die Portale, die yt-dlp kennt. Beim ersten Mal fragt sie, ob yt-dlp
-              geladen werden soll. Geht das nicht, bleiben die Wege unten.
-            </p>
-          ) : null}
-          <p className="text-small leading-[1.5] text-muted">
-            Der Dienst versucht drei Wege in dieser Reihenfolge: einen Anbieter, falls für diese
-            Installation einer hinterlegt ist; sonst YouTube direkt, was einem Server nur die Fassung
-            mit Bild und Ton in einem gibt, in der Regel 360p; sonst jede Adresse, die schon auf eine
-            Datei zeigt. Welcher Weg geantwortet hat, steht beim Ergebnis. Für volle Auflösung ohne
-            Anbieter führt der Weg über das eigene Gerät; das steht weiter unten.
-          </p>
+          <div className="flex flex-col gap-[8px] text-small leading-[1.5] text-muted">
+            {IN_DESKTOP_APP ? (
+              <p>
+                In der Desktop-App nutzt Sondra direkt yt-dlp auf Ihrem Rechner. Das lädt YouTube und
+                Portale in voller Auflösung ohne fremde Server.
+              </p>
+            ) : (
+              <>
+                <p>
+                  <strong className="text-ink">1. Direkte Mediendateien:</strong> Dateien wie .mp4, .mp3,
+                  Podcasts und HLS-Streams (.m3u8) lädt der Webbrowser direkt herunter.
+                </p>
+                <p>
+                  <strong className="text-ink">2. YouTube & geschützte Portale:</strong> Werden von
+                  YouTube für Webseiten blockiert. Sie funktionieren erst nach Start der{' '}
+                  <a
+                    href="https://www.sondra.lizge.ch/download.html"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="font-medium underline hover:text-ink"
+                  >
+                    Sondra Windows-App
+                  </a>{' '}
+                  oder der lokalen yt-dlp-Brücke auf Ihrem PC.
+                </p>
+              </>
+            )}
+          </div>
         </Reveal>
       </Card>
 
       {error ? (
-        <Notice tone="error" title="Hat nicht geklappt">
-          <p>{error.message}</p>
-          {!IN_DESKTOP_APP && (error.code === 'youtube.sabr' || error.code === 'no-extractor' || error.code === 'youtube.signin') ? (
-            <p className="mt-[8px]">
-              Unter <span className="text-ink">Mehr Wege</span> steht, wie Sie yt-dlp auf Ihrem
-              Rechner starten. Das ist eine Datei und ein Doppelklick, und danach geht alles: volle
-              Auflösung, ohne diesen Dienst.
-            </p>
-          ) : null}
-        </Notice>
+        !IN_DESKTOP_APP &&
+        (isPortalUrl(url) ||
+          error.code === 'youtube.sabr' ||
+          error.code === 'no-extractor' ||
+          error.code === 'youtube.signin' ||
+          error.message.toLowerCase().includes('youtube') ||
+          error.message.toLowerCase().includes('anmeldung')) ? (
+          <Notice tone="error" title="YouTube-Download im Webbrowser blockiert">
+            <p className="leading-[1.5]">{error.message}</p>
+            <div className="mt-[12px] rounded-nav bg-panel-soft p-[14px] text-ink">
+              <p className="text-small font-semibold">
+                Warum klappt der direkte Download hier nicht?
+              </p>
+              <p className="mt-[4px] text-small leading-[1.5] text-muted">
+                YouTube verlangt eine Anmeldung und lässt Abrufe von Webseiten und externen Servern nicht durch.
+                Damit YouTube-Downloads funktionieren, wählen Sie einen der folgenden Wege:
+              </p>
+              <div className="mt-[10px] flex flex-wrap gap-[8px]">
+                <a
+                  href="https://www.sondra.lizge.ch/download.html"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="inline-flex items-center gap-[6px] rounded-nav bg-ink px-[12px] py-[6px] text-small font-medium text-on-ink hover:opacity-90"
+                >
+                  Sondra Windows-App herunterladen (Empfohlen)
+                  <ArrowRight />
+                </a>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('sondra:open-setup-dialog'))
+                  }}
+                >
+                  Lokale Brücke einrichten
+                </Button>
+              </div>
+            </div>
+          </Notice>
+        ) : (
+          <Notice tone="error" title="Hat nicht geklappt">
+            <p>{error.message}</p>
+          </Notice>
+        )
       ) : null}
 
       {result ? (
@@ -1428,7 +1491,7 @@ export function DownloaderPanel() {
 
       {/* The complete panel — instances, keys, cookies, playlists, full
           resolution — exactly as it was, just no longer the front door. */}
-      <Reveal label="Optionen: eigener Dienst, Stream-Wege, yt-dlp auf dem eigenen Gerät">
+      <Reveal label="Mehr Wege & Downloader-Optionen (yt-dlp, HLS, eigene Instanz)">
         <AdvancedDownloader url={url} />
       </Reveal>
     </div>

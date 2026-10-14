@@ -60,31 +60,16 @@ import {
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { formatBytes, sanitizeFilename } from '../../lib/format'
 import {
-  BRIDGE_PORT,
-  bridgeScript,
-  MIRROR_PORT,
-  mirrorScript,
-  composeFile,
   DEFAULT_PORT,
   localSteps,
-  manualPrerequisite,
-  NODE_DOWNLOAD,
-  nodeOnlyUnixScript,
-  nodeOnlyWindowsScript,
-  nodeUnixScript,
-  nodeWindowsScript,
   localCandidates,
   oneLiner,
   rememberedInstances,
   rememberInstance,
-  unixScript,
-  windowsScript,
-  ytdlpCookieCommand,
   ytdlpSteps,
   ytdlpUnixLauncher,
   ytdlpWindowsLauncher,
   launcherFilename,
-  YTDLP_RELEASES,
 } from '../../lib/selfhost'
 import { detectPlatform } from '../../lib/platform'
 import { serviceConnection, setServiceConnection } from '../../lib/serviceState'
@@ -204,24 +189,26 @@ export function AdvancedDownloader({ url }: { url: string }) {
   const [serviceInfo, setServiceInfo] = useState<ServiceInfo | null>(() => serviceConnection().info)
   const [checking, setChecking] = useState(false)
   const [searching, setSearching] = useState(false)
-  const [setupOpen, setSetupOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [known, setKnown] = useState<string[]>(() => rememberedInstances())
   const [localWay, setLocalWay] = useState<'ytdlp' | 'node' | 'docker'>('ytdlp')
   // What is already on this machine. Both start off, because assuming a
   // stranger has a developer's toolchain is how instructions end up skipping
   // the step they most needed to include.
-  const [hasNode, setHasNode] = useState(false)
-  const [hasGit, setHasGit] = useState(false)
+  const hasNode = false
+  const hasGit = false
   /** Setup lives in a dialog, so the page itself stays short. */
   const [setupDialog, setSetupDialog] = useState(false)
-  /** Hands over the mirror, with this site's own address already in it. */
-  const saveMirror = () =>
-    saveBytes(
-      new TextEncoder().encode(mirrorScript(window.location.origin)),
-      'sondra-spiegel.mjs',
-      'text/javascript',
-    )
+
+  /** Listen for external requests to open setup dialog */
+  useEffect(() => {
+    const handler = () => {
+      setServiceEnabled(true)
+      setSetupDialog(true)
+    }
+    window.addEventListener('sondra:open-setup-dialog', handler)
+    return () => window.removeEventListener('sondra:open-setup-dialog', handler)
+  }, [])
 
   /** The last hand-run check, kept verbatim so it can be read or pasted. */
   const [probe, setProbe] = useState<string | null>(null)
@@ -244,17 +231,12 @@ export function AdvancedDownloader({ url }: { url: string }) {
   }
 
   const platform = detectPlatform()
-  // Empty on a page that is already local: there is nothing to mirror then, and
-  // the launcher would be a step that buys nothing.
-  const hostedOrigin = pageIsLocal() ? '' : window.location.origin
   const localCommand =
     localWay === 'docker'
       ? oneLiner()
       : localWay === 'ytdlp'
         ? ytdlpSteps({ hasNode, platform, origin: window.location.origin }).join('\n')
         : localSteps({ hasNode, hasGit, platform, origin: window.location.origin }).join('\n')
-  /** Node is missing and this system has no install command worth printing. */
-  const needsNodeByHand = localWay !== 'docker' && manualPrerequisite({ hasNode, platform })
   const connected = serviceInfo !== null
   const endpointLabel = service.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
@@ -414,7 +396,7 @@ export function AdvancedDownloader({ url }: { url: string }) {
     updateService({ endpoint })
     setServiceInfo(info)
     setKnown(rememberInstance(endpoint))
-    setSetupOpen(false)
+    setSetupDialog(false)
     setError(null)
     setServiceConnection({ endpoint, info, searching: false })
   }
@@ -485,7 +467,7 @@ export function AdvancedDownloader({ url }: { url: string }) {
     try {
       await navigator.clipboard.writeText(localCommand)
       setCopied(true)
-      setTimeout(() => setCopied(false), 4000)
+      setTimeout(() => setCopied(false), 5000)
     } catch {
       // Clipboard access can be refused; the command is on screen either way.
     }
@@ -502,8 +484,8 @@ export function AdvancedDownloader({ url }: { url: string }) {
         log('dienst', `Instanz gefunden: ${found.endpoint} — ${found.info.version}`)
       } else if (!controller.signal.aborted) {
         setError(
-          `Fünf Minuten lang kam auf Port ${DEFAULT_PORT} keine Antwort. Läuft Docker? ` +
-            '„Läuft schon — suchen“ prüft jederzeit erneut.',
+          `Fünf Minuten lang kam auf Port ${DEFAULT_PORT} keine Antwort. ` +
+            'Prüfen Sie, ob der Befehl im Terminal ausgeführt wurde.',
         )
       }
     } finally {
@@ -873,8 +855,8 @@ export function AdvancedDownloader({ url }: { url: string }) {
             label="YouTube und externe Downloader"
             hint={
               serviceEnabled
-                ? undefined
-                : 'Aus. Ohne sie gehen eigene Dateien, offene Archive, Podcast-Feeds und HLS-Streams mit CORS-Freigabe — YouTube nicht.'
+                ? 'Aktiviert. Verbindet sich mit der Desktop-App oder der lokalen Brücke.'
+                : 'Aus. Direkte Mediendateien funktionieren ohne Dienst. YouTube erfordert die Desktop-App oder eine lokale Brücke.'
             }
             
             checked={serviceEnabled}
@@ -920,12 +902,10 @@ export function AdvancedDownloader({ url }: { url: string }) {
                       Verbunden mit <span className="font-mono text-small">{endpointLabel}</span>
                     </>
                   ) : waiting ? (
-                    'Wartet auf den Dienst — läuft er, wird er hier von selbst auftauchen.'
+                    'Wartet auf den Dienst — läuft er, verbindet sich Sondra automatisch.'
                   ) : (
                     <>
-                      Noch kein Dienst. Sondra schaut alle paar Sekunden auf{' '}
-                      <span className="font-mono text-small">localhost:{DEFAULT_PORT}</span> nach und
-                      verbindet sich von selbst, sobald dort einer antwortet.
+                      Kein lokaler Dienst aktiv. Starten Sie die Sondra Desktop-App oder die lokale Brücke.
                     </>
                   )}
                 </p>
@@ -937,12 +917,12 @@ export function AdvancedDownloader({ url }: { url: string }) {
               </div>
 
               <div className="flex flex-wrap items-center gap-[8px]">
-                <Button size="sm" variant="quiet" onClick={() => setSetupDialog(true)}>
-                  {connected ? 'Dienst ändern' : 'Dienst einrichten'}
+                <Button size="sm" onClick={() => setSetupDialog(true)}>
+                  {connected ? 'Einstellungen' : 'Dienst einrichten (Anleitung)'}
                 </Button>
                 {!connected ? (
-                  <Button size="sm" onClick={runProbe}>
-                    {pageIsLocal() ? 'Jetzt prüfen' : 'Verbinden und Zugriff erlauben'}
+                  <Button size="sm" variant="quiet" onClick={runProbe}>
+                    {pageIsLocal() ? 'Verbindung prüfen' : 'Verbinden und Zugriff erlauben'}
                   </Button>
                 ) : null}
                 {connected ? (
@@ -1047,580 +1027,189 @@ export function AdvancedDownloader({ url }: { url: string }) {
                     </div>
                   </>
                 ) : (
-                  /* What is left once the browser is ruled out: somebody has to
-                     run a service. Either someone you know, or you. There is no
-                     third option — see the note in the first card for why. */
-                  <div className="flex flex-col gap-[12px]">
-                    <div className="rounded-card bg-raised p-[20px] ring-1 ring-inset ring-ink/20">
-                      <p className="text-small font-semibold text-ink">Eine fremde Instanz benutzen</p>
+                  <div className="flex flex-col gap-[16px]">
+                    <div className="rounded-card bg-panel-soft p-[14px]">
+                      <p className="text-small font-semibold text-ink">
+                        YouTube im Browser freischalten
+                      </p>
                       <p className="mt-[4px] text-small leading-[1.5] text-muted">
-                        Wenn Sie eine Adresse haben — von jemandem, der so einen Dienst betreibt —
-                        genügt sie hier. Kein Programm, kein Terminal, kein Konto.
+                        YouTube blockiert direkte Downloads über Webseiten. Wählen Sie eine dieser beiden Lösungen:
                       </p>
-                      <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
-                        <TextInput
-                          type="url"
-                          inputMode="url"
-                          className="min-w-[200px] flex-1"
-                          placeholder="https://meine-instanz.example/"
-                          value={service.endpoint}
-                          onChange={(event) => {
-                            updateService({ endpoint: event.target.value })
-                            setServiceInfo(null)
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') void checkService()
-                          }}
-                        />
-                        <Button
-                          size="sm"
-                          onClick={checkService}
-                          disabled={checking || waiting || !service.endpoint.trim()}
-                        >
-                          {checking ? 'Prüft…' : 'Verbinden'}
-                        </Button>
-                      </div>
-                      {known.length > 0 ? (
-                        <div className="mt-[8px] flex flex-wrap items-center gap-[8px]">
-                          <span className="text-small text-muted">Zuletzt benutzt</span>
-                          {known.map((entry) => (
-                            <button
-                              key={entry}
-                              type="button"
-                              onClick={() => {
-                                updateService({ endpoint: entry })
-                                setServiceInfo(null)
-                              }}
-                              title={entry}
-                              className="max-w-[200px] truncate bg-panel-soft px-[12px] py-[4px] text-small text-ink hover:bg-panel-mid"
-                            >
-                              {entry.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-
-
-                      <details className="mt-[8px] border-t border-line pt-[8px]">
-                        <summary className="cursor-pointer list-none text-small text-muted underline underline-offset-2 hover:text-ink">
-                          Warum gibt es nichts Leichteres?
-                        </summary>
-                        <p className="mt-[8px] text-small leading-[1.5] text-muted">
-                        Ein Browser kommt an YouTube nicht heran.
-                        Die Server, auf denen die Videodaten liegen, nehmen Anfragen nur von
-                        youtube.com selbst an — mit oder ohne Link in der Hand. Holen muss also
-                        immer ein Server, und den betreibt entweder jemand, den Sie kennen, oder
-                        Sie selbst. Öffentliche Verzeichnisse solcher Dienste gibt es derzeit keine
-                        mehr; die bekannten Listen sind abgeschaltet, nachdem automatisierte Abrufe
-                        die Betreiber leergesaugt hatten. Der offizielle Dienst führt YouTube nicht
-                        mehr und verlangt eine Bot-Prüfung, die diese Seite nicht lösen kann.
-                        Der Dienst gehört dann jemand anderem, sieht Ihren Link und Ihre IP, und
-                        kann langsam oder morgen weg sein.
-                      </p>
-                      </details>
                     </div>
-                    <div className="rounded-card bg-raised p-[20px]">
-                      <p className="mb-[12px] text-small font-semibold text-ink">
-                        Eigenen Dienst betreiben
+
+                    {/* Weg 1: Desktop App */}
+                    <div className="rounded-card border border-ink/20 bg-canvas p-[16px] shadow-sm">
+                      <p className="text-small font-semibold text-ink">Weg 1: Sondra Windows-App (Empfohlen)</p>
+                      <p className="mt-[4px] text-small leading-[1.5] text-muted">
+                        Beste und einfachste Lösung: Die Desktop-App bringt yt-dlp bereits mit, benötigt kein Terminal
+                        und lädt Videos sofort in voller Auflösung herunter.
                       </p>
-                      {/* No fold in here: the dialog is already the fold. */}
-                      <>
-                        <div className="mt-[12px]">
-                          {/* Two ways to the same service. Node leads because it is
-                              the one that cannot fail for reasons outside your
-                              control: Docker Desktop on Windows needs WSL2, which
-                              needs a virtual machine, and that stack has open bugs
-                              no amount of reinstalling gets past. */}
-                          <div
-                            role="radiogroup"
-                            aria-label="Art der Installation"
-                            className="flex flex-wrap gap-[2px] rounded-nav bg-panel-soft p-[4px]"
+                      <div className="mt-[12px]">
+                        <a
+                          href="https://www.sondra.lizge.ch/download.html"
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="inline-flex items-center gap-[6px] rounded-nav bg-ink px-[14px] py-[8px] text-small font-medium text-on-ink hover:opacity-90"
+                        >
+                          Sondra für Windows herunterladen
+                          <ArrowRight />
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Weg 2: Terminal Bridge */}
+                    <div className="rounded-card border border-line bg-panel-soft p-[16px]">
+                      <p className="text-small font-semibold text-ink">Weg 2: Lokale Brücke im Terminal starten</p>
+                      <p className="mt-[4px] text-small leading-[1.5] text-muted">
+                        Damit dieser Webbrowser YouTube-Videos herunterladen kann, führen Sie den folgenden Befehl im Terminal aus:
+                      </p>
+
+                      <div className="mt-[12px] rounded-nav bg-canvas p-[12px] ring-1 ring-inset ring-line">
+                        <span className="block mb-[6px] text-micro text-muted">
+                          Befehl ({platform === 'windows' ? 'PowerShell / Eingabeaufforderung' : 'Terminal'}):
+                        </span>
+                        <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-micro leading-[1.6] text-ink select-all">
+                          {localCommand}
+                        </pre>
+                      </div>
+
+                      <div className="mt-[12px] flex flex-wrap items-center gap-[10px]">
+                        <Button size="sm" onClick={startAndWait}>
+                          {copied
+                            ? 'Befehle kopiert!'
+                            : localWay === 'docker'
+                              ? 'Befehl kopieren'
+                              : 'Befehle kopieren'}
+                          {!copied ? <ArrowRight /> : null}
+                        </Button>
+
+                        {platform === 'windows' ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveBytes(
+                                new TextEncoder().encode(ytdlpWindowsLauncher(window.location.origin)),
+                                launcherFilename(platform),
+                                'text/plain',
+                              )
+                            }
+                            className="text-small text-muted underline hover:text-ink cursor-pointer"
                           >
-                            {(
-                              [
-                                { id: 'ytdlp', label: 'Mit yt-dlp — empfohlen' },
-                                { id: 'node', label: 'cobalt' },
-                                { id: 'docker', label: 'cobalt mit Docker' },
-                              ] as const
-                            ).map((choice) => (
+                            Oder als Starterdatei ({launcherFilename(platform)}) herunterladen
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              saveBytes(
+                                new TextEncoder().encode(ytdlpUnixLauncher(window.location.origin, platform)),
+                                launcherFilename(platform),
+                                'text/plain',
+                              )
+                            }
+                            className="text-small text-muted underline hover:text-ink cursor-pointer"
+                          >
+                            Oder als Starterdatei ({launcherFilename(platform)}) herunterladen
+                          </button>
+                        )}
+                      </div>
+
+                      {waiting ? (
+                        <div className="mt-[10px] flex items-center gap-[8px] rounded-nav bg-panel-mid px-[12px] py-[8px] text-small text-ink">
+                          <span className="inline-block size-[8px] shrink-0 animate-pulse rounded-full bg-ink" />
+                          <span className="flex-1">
+                            Befehle im Terminal ausführen. Sondra lauscht im Hintergrund und verbindet sich automatisch, sobald die Brücke läuft...
+                          </span>
+                          <Button size="sm" variant="quiet" onClick={stopWaiting}>
+                            Abbrechen
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="mt-[8px] text-micro text-muted">
+                          Kopieren, in PowerShell oder Terminal einfügen und Enter drücken. Sondra verbindet sich automatisch.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Option 3: Externe oder bestehende Instanz */}
+                    <Reveal label="Bestehenden Server oder Docker-Instanz verbinden">
+                      <div className="mt-[8px] flex flex-col gap-[12px] rounded-card bg-panel-soft p-[14px]">
+                        <p className="text-small text-muted">
+                          Haben Sie bereits einen eigenen Server oder eine laufende Instanz?
+                        </p>
+                        <div className="flex flex-wrap items-center gap-[8px]">
+                          <TextInput
+                            type="url"
+                            inputMode="url"
+                            className="min-w-[200px] flex-1"
+                            placeholder="http://localhost:7447 oder https://instanz.example/"
+                            value={service.endpoint}
+                            onChange={(event) => {
+                              updateService({ endpoint: event.target.value })
+                              setServiceInfo(null)
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') void checkService()
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={checkService}
+                            disabled={checking || waiting || !service.endpoint.trim()}
+                          >
+                            {checking ? 'Prüft…' : 'Verbinden'}
+                          </Button>
+                          <Button size="sm" variant="quiet" onClick={searchLocal} disabled={searching}>
+                            {searching ? 'Sucht…' : 'Port prüfen'}
+                          </Button>
+                        </div>
+
+                        {known.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-[8px]">
+                            <span className="text-small text-muted">Zuletzt:</span>
+                            {known.map((entry) => (
                               <button
-                                key={choice.id}
+                                key={entry}
                                 type="button"
-                                role="radio"
-                                aria-checked={localWay === choice.id}
-                                onClick={() => setLocalWay(choice.id)}
-                                className={`px-[16px] py-[8px] text-small transition-colors ${
-                                  localWay === choice.id ? 'bg-ink text-on-ink' : 'text-ink hover:bg-panel-mid'
-                                }`}
+                                onClick={() => {
+                                  updateService({ endpoint: entry })
+                                  setServiceInfo(null)
+                                }}
+                                title={entry}
+                                className="max-w-[200px] truncate rounded-nav bg-panel-mid px-[8px] py-[3px] text-micro text-ink hover:bg-canvas"
                               >
-                                {choice.label}
+                                {entry.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                               </button>
                             ))}
                           </div>
+                        ) : null}
 
-                          {localWay !== 'docker' ? (
-                            /* Asking beats assuming. The commands below are then
-                               the ones for this machine and no others, so the list
-                               can be pasted start to finish without anyone having
-                               to work out which half applies to them. */
-                            <div className="mt-[16px] rounded-nav bg-panel-soft p-[16px]">
-                              <p className="mb-[8px] text-small font-semibold text-ink">
-                                Was ist auf diesem Rechner schon da?
-                              </p>
-                              <div className="flex flex-col gap-[8px]">
-                                <Toggle
-                                  label="Node.js"
-                                  hint={
-                                    hasNode
-                                      ? undefined
-                                      : 'Aus: die Anleitung fängt mit dem Installieren an.'
-                                  }
-                                  checked={hasNode}
-                                  onChange={setHasNode}
-                                />
-                                {localWay === 'node' ? (
-                                  <Toggle
-                                    label="Git"
-                                    hint={
-                                      hasGit
-                                        ? undefined
-                                        : 'Aus: der Quelltext kommt als Archiv, Git wird nicht gebraucht.'
-                                    }
-                                    checked={hasGit}
-                                    onChange={setHasGit}
-                                  />
-                                ) : null}
-                              </div>
-                              <p className="mt-[8px] text-small leading-[1.5] text-muted">
-                                Nicht sicher? Beide aus lassen — dann steht alles da, und ein Schritt,
-                                der schon erledigt ist, schadet nicht.
-                              </p>
-                              {!pageIsLocal() ? (
-                                <p className="mt-[8px] border-t border-line pt-[8px] text-small leading-[1.5] text-prose/85">
-                                  Noch eines vorweg: Sobald der Dienst läuft, fragt der Browser,
-                                  ob diese Seite auf Ihren Rechner zugreifen darf. Erlauben Sie
-                                  es — ohne diese Erlaubnis bleibt der Dienst unerreichbar, egal
-                                  wie richtig er läuft.
-                                </p>
-                              ) : null}
-                            </div>
-                          ) : null}
-
-                          <p className="mt-[12px] text-small leading-[1.5] text-muted">
-                            {localWay === 'ytdlp' ? (
-                              <>
-                                Der kürzeste Weg: yt-dlp ist{' '}
-                                <a
-                                  className="underline underline-offset-2 hover:text-ink"
-                                  href={YTDLP_RELEASES}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                >
-                                  eine einzelne Programmdatei
-                                </a>{' '}
-                                ohne Installation, das Skript daneben ist die Brücke zu dieser Seite.
-                                Kein Paketmanager, kein Quelltext, kein ffmpeg — Bild und Ton kommen
-                                getrennt hier an, und das FFmpeg in dieser Seite setzt sie zusammen.
-                                yt-dlp kennt außerdem mehr Umwege als cobalt und kommt bei Videos
-                                durch, bei denen der andere Weg aufgibt.
-                              </>
-                            ) : localWay === 'node' ? (
-                              <>
-                                Node.js ist ein gewöhnlicher Installer, ohne virtuelle Maschine — genau
-                                das ist der Unterschied zu Docker Desktop, das unter Windows WSL2
-                                voraussetzt und daran auch scheitern kann.
-                                {!hasGit ? (
-                                  <>
-                                    {' '}
-                                    <span className="text-prose/85">
-                                      Ohne Git kommt der Quelltext als Archiv. Die drei{' '}
-                                      <code className="font-mono">.git</code>-Zeilen darin sind kein
-                                      Git: der Dienst liest daraus nur seine eigene Versionsangabe und
-                                      startet sonst nicht. Drei Textdateien genügen ihm.
-                                    </span>
-                                  </>
-                                ) : null}
-                              </>
-                            ) : (
-                              <>
-                                Ein Befehl, danach läuft es dauerhaft mit. Braucht{' '}
-                                <a
-                                  className="underline underline-offset-2 hover:text-ink"
-                                  href="https://docs.docker.com/get-docker/"
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                >
-                                  Docker
-                                </a>
-                                , unter Windows also auch WSL2 und eine virtuelle Maschine.
-                              </>
-                            )}
-                          </p>
-
-                          {waiting ? (
-                            <div className="mt-[12px] flex flex-wrap items-center gap-[12px]">
-                              <p className="min-w-0 flex-1 text-small leading-[1.5] text-prose/85">
-                                Ist kopiert. Jetzt ins Terminal einfügen und ausführen — Sondra schaut
-                                weiter nach und verbindet sich selbst, sobald der Dienst antwortet.
-                              </p>
-                              <Button size="sm" variant="quiet" onClick={stopWaiting}>
-                                Abbrechen
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
-                              <Button size="sm" onClick={startAndWait} disabled={searching}>
-                                {copied
-                                  ? 'Kopiert — einfügen und ausführen'
-                                  : localWay === 'docker'
-                                    ? 'Befehl kopieren'
-                                    : 'Befehle kopieren'}
-                                <ArrowRight />
-                              </Button>
-                              <Button size="sm" variant="quiet" onClick={searchLocal} disabled={searching}>
-                                {searching ? 'Sucht…' : 'Läuft schon — suchen'}
-                              </Button>
-                            </div>
-                          )}
-
-                          {needsNodeByHand ? (
-                            /* No package manager worth guessing at on this system,
-                               so the one step that cannot be a command says so
-                               plainly instead of being silently left out. */
-                            <div className="mt-[8px] flex flex-wrap items-center gap-[12px] rounded-nav bg-panel-soft px-[12px] py-[8px]">
-                              <p className="min-w-0 flex-1 text-small leading-[1.5] text-prose/85">
-                                Zuerst Node.js installieren — über die Paketverwaltung Ihres Systems
-                                oder mit dem LTS-Installer. Danach gelten die Befehle darunter.
-                              </p>
-                              <Button
-                                size="sm"
-                                variant="quiet"
-                                onClick={() => window.open(NODE_DOWNLOAD, '_blank', 'noopener')}
-                              >
-                                Node.js holen
-                              </Button>
-                            </div>
-                          ) : null}
-
-                          {localWay === 'ytdlp' ? (
-                            /* The four commands below are mechanical, and
-                               "open a terminal" is where most people stop. One
-                               file that does all of it is the same setup with
-                               the part that scares people removed. */
-                            <div className="mt-[12px] rounded-card bg-panel-mid p-[16px]">
-                              <p className="text-small font-semibold text-ink">
-                                Der kurze Weg: eine Datei
-                              </p>
-                              <p className="mt-[8px] text-small leading-[1.5] text-prose/85">
-                                {platform === 'windows'
-                                  ? 'Herunterladen, doppelklicken, fertig. Die Datei holt yt-dlp und startet alles; der Browser öffnet sich von selbst.'
-                                  : 'Herunterladen, dann im Terminal einmal starten. Die Datei holt yt-dlp und startet alles; der Browser öffnet sich von selbst.'}
-                              </p>
-                              <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    saveBytes(
-                                      new TextEncoder().encode(
-                                        platform === 'windows'
-                                          ? ytdlpWindowsLauncher(window.location.origin)
-                                          : ytdlpUnixLauncher(window.location.origin, platform),
-                                      ),
-                                      launcherFilename(platform),
-                                      'text/plain',
-                                    )
-                                  }
-                                >
-                                  {launcherFilename(platform)} herunterladen
-                                  <ArrowRight />
-                                </Button>
-                                {platform !== 'windows' ? (
-                                  <code className="rounded-nav bg-raised px-[8px] py-[8px] font-mono text-micro text-prose">
-                                    bash {launcherFilename(platform)}
-                                  </code>
-                                ) : null}
-                              </div>
-                              <p className="mt-[8px] text-small leading-[1.5] text-muted">
-                                Node.js muss auf dem Rechner sein — das ist das Einzige, was die
-                                Datei nicht selbst holen kann. Fehlt es, sagt sie es und öffnet die
-                                richtige Seite.
-                              </p>
-                              {/* The route with nothing to run at all. Worth
-                                  naming, because for a one-off download it is
-                                  genuinely less work than any setup. */}
-                              <p className="mt-[8px] border-t border-ink/10 pt-[8px] text-small leading-[1.5] text-muted">
-                                Gar kein Node? Dann reicht auch{' '}
-                                <a
-                                  className="text-ink underline underline-offset-2"
-                                  href={YTDLP_RELEASES}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                >
-                                  yt-dlp allein
-                                </a>{' '}
-                                — Video damit herunterladen und die fertige Datei hier ins Fenster
-                                ziehen. Für einmalige Sachen ist das der kürzeste Weg überhaupt.
-                              </p>
-                            </div>
-                          ) : null}
-
-                          <code
-                            className={`mt-[8px] block rounded-nav bg-panel-soft px-[12px] py-[8px] font-mono text-micro leading-[1.6] whitespace-pre-wrap text-prose ${
-                              localWay === 'ytdlp' ? 'hidden' : ''
-                            }`}
-                          >
-                            {localCommand}
-                          </code>
-
-                          {localWay === 'ytdlp' ? (
-                            <Reveal label="Lieber die Befehle selbst eingeben" className="mt-[12px]">
-                              <code className="block rounded-nav bg-panel-soft px-[12px] py-[8px] font-mono text-micro leading-[1.6] whitespace-pre-wrap text-prose">
-                                {localCommand}
-                              </code>
-                            </Reveal>
-                          ) : null}
-
-                          {localWay === 'ytdlp' ? (
-                            /* The one failure everybody hits, with its remedy
-                               next to it rather than after a web search. */
-                            <details className="mt-[8px] rounded-nav bg-panel-soft px-[12px] py-[8px]">
-                              <summary className="cursor-pointer list-none text-small text-ink underline underline-offset-2">
-                                Falls YouTube „bestätigen, dass Sie kein Bot sind" verlangt
-                              </summary>
-                              <p className="mt-[8px] text-small leading-[1.5] text-prose/85">
-                                Dann will YouTube eine Anmeldung sehen. yt-dlp darf die Sitzung aus
-                                einem Browser auf diesem Rechner lesen — starten Sie die Brücke mit
-                                dem Browser, in dem Sie bei YouTube angemeldet sind:
-                              </p>
-                              <code className="mt-[8px] block rounded-nav bg-raised px-[8px] py-[8px] font-mono text-micro leading-[1.6] whitespace-pre-wrap text-prose">
-                                {ytdlpCookieCommand(window.location.origin)}
-                              </code>
-                              <p className="mt-[8px] text-small leading-[1.5] text-muted">
-                                Statt <code className="font-mono">firefox</code> geht auch chrome,
-                                edge, brave, opera oder safari. Das heißt allerdings, dass der Abruf
-                                als Sie geschieht — angemeldet, Ihrem Konto zurechenbar.
-                              </p>
-                            </details>
-                          ) : null}
-
-                          <p className="mt-[8px] text-small leading-[1.5] text-muted">
-                            {localWay === 'ytdlp' ? (
-                              <>
-                                Der Dienst hört danach nur auf{' '}
-                                <code className="font-mono">localhost:{DEFAULT_PORT}</code>. Das
-                                Fenster muss offen bleiben, solange er läuft.
-                              </>
-                            ) : localWay !== 'docker' ? (
-                              <>
-                                Unter Windows nehmen Sie besser das fertige Skript unten: PowerShell
-                                schreibt eine Datei mit <code className="font-mono">&gt;</code> in einer
-                                Kodierung, die der Dienst nicht liest. Das Fenster muss offen bleiben,
-                                solange der Dienst läuft.
-                              </>
-                            ) : (
-                              <>
-                                Der Dienst hört danach nur auf{' '}
-                                <code className="font-mono">localhost:{DEFAULT_PORT}</code> und ist von
-                                außen nicht erreichbar.
-                              </>
-                            )}{' '}
-                            Lesen Sie, was Sie ausführen, bevor Sie es tun — das gilt für alles, was
-                            eine Webseite Ihnen dafür in die Hand gibt.
-                          </p>
-
-                          {localWay === 'node' ? (
-                            <p className="mt-[8px] text-small leading-[1.5] text-muted">
-                              Meldet <code className="font-mono">corepack</code> einen Fehler — etwa{' '}
-                              <code className="font-mono">EPERM</code>, wenn Node über nvm verwaltet
-                              wird —, einfach weitermachen. Die Zeile besorgt nur pnpm; ist es schon
-                              da, läuft der Rest unverändert durch.
-                            </p>
-                          ) : null}
-
+                        <div className="mt-[4px] flex items-center gap-[8px]">
+                          <span className="text-micro text-muted">Art:</span>
                           <button
                             type="button"
-                            onClick={() => setSetupOpen((value) => !value)}
-                            aria-expanded={setupOpen}
-                            /* The yt-dlp way is three lines that fit on the
-                               screen. A script file to run three lines is a
-                               file to explain, verify and delete. */
-                            hidden={localWay === 'ytdlp'}
-                            className="mt-[8px] rounded-nav text-small text-muted underline underline-offset-2 hover:text-ink"
+                            onClick={() => setLocalWay('ytdlp')}
+                            className={`rounded-nav px-[8px] py-[3px] text-micro ${localWay === 'ytdlp' ? 'bg-ink text-on-ink' : 'bg-panel-mid text-ink'}`}
                           >
-                            {setupOpen ? 'Weniger' : 'Lieber fertige Dateien statt Befehlen?'}
+                            yt-dlp
                           </button>
-
-                          {setupOpen && localWay !== 'ytdlp' ? (
-                            <div className="mt-[8px] flex flex-col gap-[8px] text-small leading-[1.5] text-prose/85">
-                              <p className="text-muted">
-                                Ein Skript, das den Ordner anlegt und den Dienst startet. Alles hier
-                                entsteht im Browser, nichts wird nachgeladen.
-                              </p>
-                              <div className="flex flex-wrap gap-[8px]">
-                                {localWay === 'node' ? (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="quiet"
-                                      onClick={() =>
-                                        saveBytes(
-                                          new TextEncoder().encode(
-                                            hasGit
-                                            ? nodeWindowsScript(DEFAULT_PORT, hostedOrigin)
-                                            : nodeOnlyWindowsScript(DEFAULT_PORT, hostedOrigin),
-                                          ),
-                                          hasGit ? 'cobalt-ohne-docker.ps1' : 'cobalt-nur-node.ps1',
-                                          'text/plain',
-                                        )
-                                      }
-                                    >
-                                      Skript für Windows
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="quiet"
-                                      onClick={() =>
-                                        saveBytes(
-                                          new TextEncoder().encode(
-                                            hasGit
-                                            ? nodeUnixScript(DEFAULT_PORT, hostedOrigin)
-                                            : nodeOnlyUnixScript(DEFAULT_PORT, hostedOrigin),
-                                          ),
-                                          hasGit ? 'cobalt-ohne-docker.sh' : 'cobalt-nur-node.sh',
-                                          'text/x-shellscript',
-                                        )
-                                      }
-                                    >
-                                      Skript für macOS/Linux
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="quiet"
-                                      onClick={() =>
-                                        saveBytes(
-                                          new TextEncoder().encode(composeFile()),
-                                          'docker-compose.yml',
-                                          'text/yaml',
-                                        )
-                                      }
-                                    >
-                                      docker-compose.yml
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="quiet"
-                                      onClick={() =>
-                                        saveBytes(
-                                          new TextEncoder().encode(unixScript()),
-                                          'cobalt-starten.sh',
-                                          'text/x-shellscript',
-                                        )
-                                      }
-                                    >
-                                      Skript für macOS/Linux
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="quiet"
-                                      onClick={() =>
-                                        saveBytes(
-                                          new TextEncoder().encode(windowsScript()),
-                                          'cobalt-starten.ps1',
-                                          'text/plain',
-                                        )
-                                      }
-                                    >
-                                      Skript für Windows
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                              {!pageIsLocal() ? (
-                                <div className="rounded-nav bg-panel-soft p-[16px] ring-1 ring-inset ring-ink/20">
-                                  <p className="text-small font-semibold text-ink">
-                                    Sondra lokal öffnen — der sichere Weg
-                                  </p>
-                                  <p className="mt-[4px] text-small leading-[1.5] text-muted">
-                                    Solange diese Seite aus dem Netz kommt und der Dienst auf Ihrem
-                                    Rechner läuft, steht eine Browsersperre dazwischen. Der Spiegel
-                                    liefert dieselbe Seite von Ihrem Rechner aus — dann liegen beide
-                                    auf derselben Maschine und die Sperre entfällt. Keine
-                                    Abhängigkeiten, nichts wird gespeichert, und der mehrfädige
-                                    FFmpeg-Kern bleibt erhalten.
-                                  </p>
-                                  <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
-                                    <Button size="sm" onClick={saveMirror}>
-                                      Spiegel herunterladen
-                                    </Button>
-                                    <code className="rounded-nav bg-raised px-[8px] py-[4px] font-mono text-micro text-prose">
-                                      node sondra-spiegel.mjs
-                                    </code>
-                                  </div>
-                                  <p className="mt-[8px] text-small leading-[1.5] text-muted">
-                                    Dann <code className="font-mono">localhost:{MIRROR_PORT}</code>{' '}
-                                    öffnen. Von dort aus findet Sondra den Dienst ohne jede
-                                    Erlaubnis.
-                                  </p>
-                                </div>
-                              ) : null}
-
-                              {!pageIsLocal() ? (
-                                <div className="rounded-nav bg-panel-soft p-[16px]">
-                                  <p className="text-small font-semibold text-ink">
-                                    Falls der Browser nicht nach Erlaubnis fragt
-                                  </p>
-                                  <p className="mt-[4px] text-small leading-[1.5] text-muted">
-                                    Ältere Browser kennen die Abfrage nicht. Dann muss der Dienst
-                                    selbst für die Anfrage bürgen, und dafür gibt es diese Brücke:
-                                    eine Datei, ein Befehl, keine Abhängigkeiten. Sie läuft vor dem
-                                    Dienst und beantwortet die Rückfrage des Browsers.
-                                  </p>
-                                  <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
-                                    <Button
-                                      size="sm"
-                                      variant="quiet"
-                                      onClick={() =>
-                                        saveBytes(
-                                          new TextEncoder().encode(bridgeScript()),
-                                          'sondra-bruecke.mjs',
-                                          'text/javascript',
-                                        )
-                                      }
-                                    >
-                                      Brücke herunterladen
-                                    </Button>
-                                    <code className="rounded-nav bg-raised px-[8px] py-[4px] font-mono text-micro text-prose">
-                                      node sondra-bruecke.mjs
-                                    </code>
-                                  </div>
-                                  <p className="mt-[8px] text-small leading-[1.5] text-muted">
-                                    Läuft dann auf{' '}
-                                    <code className="font-mono">localhost:{BRIDGE_PORT}</code> —
-                                    Sondra sucht dort von selbst mit, es ist nichts einzutragen.
-                                  </p>
-                                </div>
-                              ) : null}
-                              <p className="text-muted">
-                                Auf einem eigenen Server statt auf dem Laptop geht es genauso; die
-                                Originalanleitung steht unter{' '}
-                                <a
-                                  className="underline underline-offset-2 hover:text-ink"
-                                  href="https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md"
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                >
-                                  cobalt/docs/run-an-instance.md
-                                </a>
-                                .
-                              </p>
-                            </div>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => setLocalWay('docker')}
+                            className={`rounded-nav px-[8px] py-[3px] text-micro ${localWay === 'docker' ? 'bg-ink text-on-ink' : 'bg-panel-mid text-ink'}`}
+                          >
+                            Docker
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLocalWay('node')}
+                            className={`rounded-nav px-[8px] py-[3px] text-micro ${localWay === 'node' ? 'bg-ink text-on-ink' : 'bg-panel-mid text-ink'}`}
+                          >
+                            Node.js
+                          </button>
                         </div>
-                      </>
-                    </div>
+                      </div>
+                    </Reveal>
                   </div>
                 )}
 
