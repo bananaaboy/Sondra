@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { getAudioContext, resumeAudioContext } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
@@ -47,6 +48,9 @@ export function StepSequencer({
   baseName,
   onPreviewPad,
   onBounce,
+  head,
+  aside,
+  note,
 }: {
   slices: Slice[]
   buffers: () => { forward: AudioBuffer; reversed: AudioBuffer | null } | null
@@ -56,6 +60,17 @@ export function StepSequencer({
   /** Plays a pad, optionally transposed — the roll auditions its keys. */
   onPreviewPad: (index: number, semitone?: number) => void
   onBounce: (audio: AudioData, name: string) => void
+  /**
+   * The start of each row: the pad itself. Pads and pattern used to be two
+   * blocks — a 4 × 4 grid of pads and, below it, the same sixteen pads again
+   * as row names. Now the row name is the pad: it plays, it is chosen, and its
+   * steps run straight on from it, as in a channel rack.
+   */
+  head: (slice: Slice, row: number) => ReactNode
+  /** Beside the rows: the settings of the chosen pad and of the kit. */
+  aside?: ReactNode
+  /** A line under the title, for what the rows do not show. */
+  note?: string
 }) {
   const rows = slices.slice(0, PAD_KEYS.length)
   const [pattern, setPattern] = useState<Pattern>(() => ({
@@ -221,10 +236,12 @@ export function StepSequencer({
   if (rows.length === 0) return null
 
   return (
-    <section aria-label="Pattern" className="flex flex-col overflow-hidden bg-raised ring-1 ring-inset ring-line">
+    <section aria-label="Pads und Pattern" className="flex flex-col overflow-hidden bg-raised ring-1 ring-inset ring-line">
       <header className="flex flex-wrap items-baseline gap-x-[16px] gap-y-[4px] border-b border-line px-[16px] py-[8px]">
-        <p className="text-small font-semibold text-ink">Pattern</p>
-        <p className="text-small text-prose">Feld anklicken setzt einen Schlag · Leertaste spielt · M schaltet stumm</p>
+        <p className="text-small font-semibold text-ink">Pads und Pattern</p>
+        <p className="text-small text-prose">
+          {note ?? 'Pad antippen spielt und wählt · Feld setzt einen Schlag · Leertaste spielt das Pattern'}
+        </p>
       </header>
 
       <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px] border-b border-line px-[16px] py-[10px]">
@@ -269,33 +286,30 @@ export function StepSequencer({
         )}
       </div>
 
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+      <div className="min-w-0">
       {/* The grid scrolls sideways on a phone rather than shrinking the cells
-          below what a thumb can hit. */}
+          below what a thumb can hit; the pads stay put at the left edge. */}
       <div className="overflow-x-auto px-[16px] py-[14px]">
         <div className="flex min-w-max flex-col gap-[4px]">
           {rows.map((slice, row) => {
             const muted = Boolean(pattern.muted[slice.id])
             const cells = pattern.cells[slice.id] ?? []
             return (
-              <div key={slice.id} className={`flex items-center gap-[4px] ${muted ? 'opacity-45' : ''}`}>
+              <div key={slice.id} className="flex items-center gap-[4px]">
+                <div className="sticky left-0 z-[1] flex shrink-0 items-center gap-[4px] bg-raised pr-[4px]">
+                {head(slice, row)}
                 <button
                   type="button"
                   aria-pressed={muted}
+                  aria-label={`Pad ${row + 1} stumm`}
                   title={muted ? 'Stumm — klicken zum Einschalten' : 'Stummschalten'}
                   onClick={() => setPattern((value) => ({ ...value, muted: { ...value.muted, [slice.id]: !muted } }))}
-                  className={`press h-[28px] w-[28px] shrink-0 rounded-nav text-micro font-semibold ${
-                    muted ? 'bg-ink text-on-ink' : 'bg-panel-soft text-muted hover:text-ink'
+                  className={`press h-[34px] w-[28px] shrink-0 rounded-nav text-micro font-semibold ${
+                    muted ? 'bg-ink text-on-ink' : 'bg-panel-soft text-prose hover:text-ink'
                   }`}
                 >
                   M
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onPreviewPad(row)}
-                  className="press h-[28px] w-[76px] shrink-0 truncate rounded-nav bg-raised px-[8px] text-left text-small text-ink ring-1 ring-inset ring-line hover:bg-panel-soft"
-                  title="Pad anhören"
-                >
-                  <span className="value text-muted">{PAD_KEYS[row]}</span> Pad {row + 1}
                 </button>
                 <button
                   type="button"
@@ -303,7 +317,7 @@ export function StepSequencer({
                   aria-label={`Klavierrolle für Pad ${row + 1}`}
                   title="Klavierrolle: Töne setzen"
                   onClick={() => (rollFor === slice.id ? setRollFor(null) : openRoll(slice.id))}
-                  className={`press grid h-[28px] w-[28px] shrink-0 place-items-center rounded-nav ${
+                  className={`press grid h-[34px] w-[28px] shrink-0 place-items-center rounded-nav ${
                     rollFor === slice.id
                       ? 'bg-ink text-on-ink'
                       : hasRoll(pattern, slice.id)
@@ -317,14 +331,16 @@ export function StepSequencer({
                     <rect x="3" y="11" width="5" height="2" rx="0.6" />
                   </svg>
                 </button>
+                </div>
+                <div className={`flex items-center ${muted ? 'opacity-45' : ''}`}>
                 {hasRoll(pattern, slice.id) ? (
                   // A rolled pad shows its notes in miniature; a click opens it.
                   <button
                     type="button"
                     onClick={() => openRoll(slice.id)}
                     title="Klavierrolle öffnen"
-                    className="relative h-[28px] shrink-0 rounded-[5px] bg-panel-soft hover:bg-panel-mid"
-                    style={{ width: pattern.steps * 27 + Math.floor((pattern.steps - 1) / 4) * 5 - 3 }}
+                    className="relative h-[34px] shrink-0 rounded-[5px] bg-panel-soft hover:bg-panel-mid"
+                    style={{ width: pattern.steps * 29 + Math.floor((pattern.steps - 1) / 4) * 5 - 3 }}
                   >
                     {(pattern.notes[slice.id] ?? []).map((note, index) => (
                       <span
@@ -333,7 +349,7 @@ export function StepSequencer({
                         style={{
                           left: `${(note.step / pattern.steps) * 100}%`,
                           width: `${(note.length / pattern.steps) * 100}%`,
-                          top: `${Math.min(24, Math.max(2, 13 - note.semitone))}px`,
+                          top: `${Math.min(30, Math.max(2, 16 - note.semitone))}px`,
                         }}
                       />
                     ))}
@@ -354,7 +370,7 @@ export function StepSequencer({
                         aria-pressed={on}
                         aria-label={`Pad ${row + 1}, Schritt ${step + 1}`}
                         onClick={() => toggleCell(slice.id, step)}
-                        className={`h-[28px] w-[24px] rounded-[5px] transition-colors ${step % 4 === 0 && step > 0 ? 'ml-[5px]' : ''} ${
+                        className={`h-[34px] w-[26px] rounded-[5px] transition-colors ${step % 4 === 0 && step > 0 ? 'ml-[5px]' : ''} ${
                           on
                             ? 'bg-ink'
                             : beat
@@ -366,6 +382,7 @@ export function StepSequencer({
                   })}
                 </div>
                 )}
+                </div>
               </div>
             )
           })}
@@ -418,6 +435,10 @@ export function StepSequencer({
           </div>
         </div>
       ) : null}
+
+      </div>
+      {aside ? <div className="flex min-w-0 flex-col border-t border-line lg:border-l lg:border-t-0">{aside}</div> : null}
+      </div>
 
       <footer className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line px-[16px] py-[10px]">
         <span className="text-small text-prose">Ausgabe</span>

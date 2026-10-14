@@ -434,6 +434,13 @@ select option {
 .sondra-stage-wave ::part(region-handle-right) {
   border-right-color: rgb(238 241 240 / 0.55) !important;
 }
+/* The plan: where the cuts will fall, before they are made. Dashed, so it
+   never reads as a cut that is already there. */
+.sondra-stage-wave ::part(marker) {
+  border-left-style: dashed !important;
+  border-left-width: 1px !important;
+  pointer-events: none !important;
+}
 .sondra-stage-wave ::part(region-content) {
   padding: 6px 6px 0;
   font-family: var(--font-value);
