@@ -17,6 +17,7 @@
  */
 
 import { IN_DESKTOP_APP } from './desktop'
+import { opusArgs } from './convert'
 
 export type DownloadMode = 'auto' | 'audio' | 'mute'
 export type VideoQuality = 'max' | '2160' | '1440' | '1080' | '720' | '480' | '360'
@@ -654,7 +655,7 @@ export function localJobArgs(job: LocalJob, inputs: string[], output: string): s
       return [
         ...args,
         '-vn',
-        ...(job.audioCopy ? ['-c:a', 'copy'] : ['-c:a', audioEncoder(job.audioFormat)]),
+        ...(job.audioCopy ? ['-c:a', 'copy'] : job.audioFormat === 'opus' ? opusArgs('160k') : ['-c:a', audioEncoder(job.audioFormat)]),
         output,
       ]
     case 'gif':

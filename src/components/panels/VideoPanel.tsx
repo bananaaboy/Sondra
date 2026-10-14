@@ -1266,7 +1266,7 @@ function VideoInspector({
         {ops.container === 'mp4'
           ? 'H.264 in MP4 — läuft überall, auch auf älteren Geräten.'
           : ops.container === 'webm'
-            ? 'VP9 in WebM — kleiner bei gleicher Qualität, aber langsamer zu rechnen.'
+            ? 'VP8 in WebM — offenes Format, spielt in jedem Browser.'
             : 'GIF — ohne Ton, 15 Bilder pro Sekunde, für kurze Schnipsel.'}
       </p>
       <Button

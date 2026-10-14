@@ -69,6 +69,35 @@ export interface OutputFormat {
 
 const bitrate = (settings: ConvertSettings) => `${settings.audioBitrateKbps}k`
 
+/**
+ * Opus through libopus, held at complexity 4.
+ *
+ * Measured against the shipped core in October 2026, in the browser and under
+ * Node alike: libopus encodes mono at any complexity, but stereo or surround at
+ * complexity 5 and above takes the whole core down in the first frame with
+ * „memory access out of bounds". Up to 4 it runs clean, at every bitrate from
+ * 64 to 320 kbit/s and for an hour as well as for a second. The difference in
+ * sound at the bitrates offered here is below what anyone hears; the
+ * difference between a file and a crash is not.
+ *
+ * Every Opus encode in the app goes through this, not only the converter.
+ */
+export const opusArgs = (rate: string) => ['-c:a', 'libopus', '-b:a', rate, '-vbr', 'on', '-compression_level', '4']
+
+/**
+ * WebM pictures as VP8.
+ *
+ * VP9 was the WebM codec here and it never finished: libvpx-vp9 in this core
+ * crashes on the first frame single-threaded and hangs multi-threaded, whatever
+ * the deadline or speed. VP8 encodes clean and plays in every browser that
+ * plays WebM. Constant quality wants a crf *and* a ceiling; the x264 scale of
+ * the quality slider is mapped onto VP8's, so 23 stays „a good compromise".
+ */
+export function vp8Args(x264Crf: number): string[] {
+  const crf = Math.max(4, Math.min(50, Math.round(x264Crf * 0.9 - 10)))
+  return ['-c:v', 'libvpx', '-crf', String(crf), '-b:v', '8M', '-deadline', 'good', '-cpu-used', '4']
+}
+
 export const OUTPUT_FORMATS: OutputFormat[] = [
   {
     id: 'mp3',
@@ -103,7 +132,7 @@ export const OUTPUT_FORMATS: OutputFormat[] = [
     kind: 'audio',
     mime: 'audio/ogg',
     lossless: false,
-    codecArgs: (s) => ['-c:a', 'libopus', '-b:a', bitrate(s), '-vbr', 'on'],
+    codecArgs: (s) => opusArgs(bitrate(s)),
     sampleRates: [48000],
   },
   {
@@ -177,27 +206,13 @@ export const OUTPUT_FORMATS: OutputFormat[] = [
   },
   {
     id: 'webm',
-    label: 'WebM (VP9)',
-    hint: 'Kleiner fürs Web',
+    label: 'WebM (VP8)',
+    hint: 'Offen, fürs Web',
     extension: 'webm',
     kind: 'video',
     mime: 'video/webm',
     lossless: false,
-    codecArgs: (s) => [
-      '-c:v',
-      'libvpx-vp9',
-      '-crf',
-      String(s.videoCrf),
-      // VP9 needs an explicit zero bitrate to run in constant-quality mode.
-      '-b:v',
-      '0',
-      '-row-mt',
-      '1',
-      '-c:a',
-      'libopus',
-      '-b:a',
-      bitrate(s),
-    ],
+    codecArgs: (s) => [...vp8Args(s.videoCrf), ...opusArgs(bitrate(s))],
     sampleRates: [48000],
   },
   {
@@ -253,7 +268,7 @@ export function buildConvertArgs(
     if (format.kind === 'video') {
       if (settings.videoHeight !== 'source') {
         // -2 keeps the aspect ratio and rounds to an even width, which both
-        // H.264 and VP9 require.
+        // H.264 and VP8 require.
         videoFilters.push(`scale=-2:${settings.videoHeight}`)
       }
       if (settings.frameRate !== 'source') videoFilters.push(`fps=${settings.frameRate}`)

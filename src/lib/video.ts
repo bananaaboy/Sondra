@@ -13,6 +13,8 @@
  * because it rewrites timestamps the earlier filters still rely on.
  */
 
+import { opusArgs, vp8Args } from './convert'
+
 export type VideoContainer = 'mp4' | 'webm' | 'gif'
 
 export interface VideoPreset {
@@ -301,8 +303,10 @@ export function buildVideoJob(
   }
 
   if (ops.container === 'webm') {
-    args.push('-c:v', 'libvpx-vp9', '-crf', String(preset.crf + 8), '-b:v', '0', '-row-mt', '1')
-    if (!ops.mute) args.push('-c:a', 'libopus', '-b:a', '128k')
+    // VP8 and Opus at complexity 4: VP9 and full-complexity libopus crash
+    // this core (see `vp8Args` and `opusArgs` in lib/convert.ts).
+    args.push(...vp8Args(preset.crf))
+    if (!ops.mute) args.push(...opusArgs('128k'))
     return { args, extension: 'webm', mime: 'video/webm', copyOnly: false }
   }
 

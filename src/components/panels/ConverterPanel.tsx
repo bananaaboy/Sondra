@@ -19,7 +19,8 @@ import {
   VIDEO_PRESETS,
 } from '../../lib/convert'
 import { saveBytes } from '../../lib/download'
-import { loadFfmpeg, onFfmpegProgress, runFfmpeg, sanitize } from '../../lib/ffmpegClient'
+import { ConversionError, runConversion } from '../../lib/convertRun'
+import { onFfmpegProgress, sanitize } from '../../lib/ffmpegClient'
 import { formatBytes, withExtension } from '../../lib/format'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { createZip } from '../../lib/zip'
@@ -442,6 +443,13 @@ const STATE_MARK: Record<QueueState, string> = {
   error: '✕',
 }
 
+/** Any failure as a sentence and, where there is one, FFmpeg's own account. */
+function describe(failure: unknown): { message: string; detail: string } {
+  if (failure instanceof ConversionError) return { message: failure.message, detail: failure.detail }
+  const text = failure instanceof Error ? failure.message : String(failure)
+  return { message: text.split('\n')[0], detail: text.includes('\n') ? text : '' }
+}
+
 export function ConverterPanel() {
   const asset = useActiveAsset()
   const settings = useSession((state) => state.convert)
@@ -452,7 +460,7 @@ export function ConverterPanel() {
 
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ message: string; detail: string } | null>(null)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -589,20 +597,15 @@ export function ConverterPanel() {
 
     const started = performance.now()
     try {
-      await loadFfmpeg()
-      const inputName = `in_${sanitize(asset.name)}`
-      const outputName = `out.${format.extension}`
-      const args = buildConvertArgs(inputName, outputName, settings)
-      log('konverter', `ffmpeg ${args.join(' ')}`)
-
-      const { files } = await runFfmpeg({
-        input: { [inputName]: asset.bytes },
-        output: [outputName],
-        args,
+      if (command) log('konverter', command)
+      const { bytes, retried } = await runConversion(asset, settings, {
         signal: controller.signal,
+        onRetry: (reason) => {
+          setProgress(0)
+          log('konverter', `${reason} — zweiter Versuch mit einem Faden, das dauert länger`, 'warn')
+        },
       })
-
-      const bytes = files[outputName]
+      if (retried) log('konverter', 'Im zweiten Versuch fertig geworden')
       setOutcome({
         name: withExtension(asset.name, format.extension),
         bytes,
@@ -635,9 +638,9 @@ export function ConverterPanel() {
       if (failure instanceof DOMException && failure.name === 'AbortError') {
         log('konverter', 'Abgebrochen', 'warn')
       } else {
-        const message = failure instanceof Error ? failure.message : String(failure)
-        setError(message)
-        log('konverter', message, 'error')
+        const reported = describe(failure)
+        setError(reported)
+        log('konverter', reported.message, 'error')
       }
     } finally {
       setRunning(false)
@@ -665,26 +668,20 @@ export function ConverterPanel() {
       setQueue((current) => current?.map((item) => (item.id === id ? { ...item, ...patch } : item)) ?? null)
 
     try {
-      await loadFfmpeg()
       for (const entry of chosen) {
         if (controller.signal.aborted) break
         mark(entry.id, { state: 'running' })
-        const inputName = `in_${sanitize(entry.name)}`
-        const outputName = `out.${format.extension}`
         try {
-          const { files } = await runFfmpeg({
-            input: { [inputName]: entry.bytes },
-            output: [outputName],
-            args: buildConvertArgs(inputName, outputName, settings),
+          const { bytes } = await runConversion(entry, settings, {
             signal: controller.signal,
+            onRetry: (reason) => log('konverter', `${entry.name}: ${reason} — zweiter Versuch mit einem Faden`, 'warn'),
           })
-          const bytes = files[outputName]
           produced.push({ name: withExtension(entry.name, format.extension), data: bytes })
           mark(entry.id, { state: 'done', outputBytes: bytes.byteLength })
         } catch (failure) {
           if (controller.signal.aborted) break
           // One bad file should not abandon the other nineteen.
-          const message = failure instanceof Error ? failure.message.split('\n')[0] : String(failure)
+          const { message } = describe(failure)
           mark(entry.id, { state: 'error', message })
           log('konverter', `${entry.name}: ${message}`, 'error')
         }
@@ -695,9 +692,9 @@ export function ConverterPanel() {
         log('konverter', `${produced.length} von ${chosen.length} Dateien umgewandelt`)
       }
     } catch (failure) {
-      const message = failure instanceof Error ? failure.message : String(failure)
-      setError(message)
-      log('konverter', message, 'error')
+      const reported = describe(failure)
+      setError(reported)
+      log('konverter', reported.message, 'error')
     } finally {
       releaseWakeLock()
       setRunning(false)
@@ -1281,7 +1278,12 @@ export function ConverterPanel() {
 
         {error ? (
           <Notice tone="error" title="Umwandlung fehlgeschlagen">
-            <pre className="whitespace-pre-wrap font-mono text-small leading-[1.5]">{error}</pre>
+            <p className="max-w-[34em]">{error.message}</p>
+            {error.detail ? (
+              <Reveal label="Was FFmpeg gemeldet hat" className="mt-[8px]">
+                <pre className="whitespace-pre-wrap font-mono text-small leading-[1.5] text-muted">{error.detail}</pre>
+              </Reveal>
+            ) : null}
           </Notice>
         ) : null}
 
