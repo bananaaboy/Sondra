@@ -149,7 +149,7 @@ function DefenderDialog({
       <div className="flex flex-col gap-[20px] p-[24px] sm:p-[32px]">
         <div className="flex items-start justify-between gap-[16px]">
           <h3 className="m-0 text-subheading font-semibold text-ink">
-            Warum warnt Windows Defender / SmartScreen?
+            Warum Windows warnt
           </h3>
           <button
             type="button"
@@ -163,27 +163,44 @@ function DefenderDialog({
           </button>
         </div>
 
-        <div className="rounded-[10px] bg-[#0078d7] p-[16px] text-white">
-          <div className="text-[15px] font-semibold">„Der Computer wurde durch Windows geschützt“</div>
-          <div className="mt-[4px] text-[13px] opacity-90">
+        {/* What Windows will say, quoted — in the page's own face. It was a
+            box in Windows blue, a colour this palette does not have. */}
+        <figure className="m-0 flex flex-col gap-[4px] rounded-card bg-panel-soft p-[16px]">
+          <blockquote className="m-0 text-body font-semibold text-ink">„Der Computer wurde durch Windows geschützt“</blockquote>
+          <figcaption className="text-small text-prose">
             Microsoft Defender SmartScreen hat den Start einer unbekannten App verhindert.
-          </div>
-        </div>
+          </figcaption>
+        </figure>
 
-        <p className="m-0 text-body font-medium text-ink">
-          Keine Sorge: Die Datei ist 100% sauber, virenfrei und werbefrei.
+        <p className="m-0 text-small leading-[1.55] text-prose">
+          Die Warnung sagt nichts über den Inhalt der Datei. Windows kennt den Herausgeber nicht, weil das Setup nicht
+          signiert ist — eine Signatur setzt ein kostenpflichtiges Zertifikat voraus. Neue, selten geladene Programme
+          stuft SmartScreen deshalb vorsorglich als „unbekannt“ ein.
         </p>
 
-        <p className="m-0 text-small text-prose leading-[1.55]">
-          Microsoft SmartScreen stuft neue oder seltener geladene Programme automatisch als „unbekannter Herausgeber“ ein, wenn sie nicht mit einem teuren Firmenzertifikat (mehrere hundert Euro jährlich) signiert sind. Da Sondra ein freies Open-Source-Projekt ist, schlägt SmartScreen rein vorsorglich an.
-        </p>
-
-        <div className="rounded-[10px] border border-line bg-panel-soft p-[16px]">
-          <div className="text-small font-semibold text-ink">So startest du die Installation:</div>
-          <ol className="m-0 mt-[8px] list-decimal pl-[20px] text-small text-prose space-y-[4px]">
-            <li>Klicke im blauen Windows-Fenster auf <strong>„Weitere Informationen“</strong>.</li>
-            <li>Klicke danach unten rechts auf den Button <strong>„Trotzdem ausführen“</strong>.</li>
+        <div className="flex flex-col gap-[8px] border-t border-line pt-[12px]">
+          <p className="m-0 text-small font-semibold text-ink">So starten Sie die Installation</p>
+          <ol className="m-0 list-decimal space-y-[4px] pl-[20px] text-small text-prose">
+            <li>
+              Im blauen Fenster auf <strong className="font-semibold text-ink">„Weitere Informationen“</strong> klicken.
+            </li>
+            <li>
+              Danach unten rechts auf <strong className="font-semibold text-ink">„Trotzdem ausführen“</strong>.
+            </li>
           </ol>
+          <p className="m-0 text-small leading-[1.55] text-muted">
+            Ist die intelligente App-Steuerung eingeschaltet, blockiert Windows unsignierte Setups ganz.
+            {MICROSOFT_STORE ? (
+              <>
+                {' '}
+                Dann installieren Sie Sondra über den{' '}
+                <a href={MICROSOFT_STORE} target="_blank" rel="noreferrer" className="text-ink underline underline-offset-2">
+                  Microsoft Store
+                </a>
+                .
+              </>
+            ) : null}
+          </p>
         </div>
 
         <div className="mt-[8px] flex flex-wrap items-center gap-[12px]">
@@ -195,12 +212,12 @@ function DefenderDialog({
             className="press inline-flex items-center gap-[8px] rounded-nav bg-ink px-[20px] py-[12px] text-body font-semibold text-on-ink hover:bg-ink-hover"
           >
             <DownloadIcon />
-            Alles klar, Download starten
+            Setup laden
           </a>
           <button
             type="button"
             onClick={onClose}
-            className="press rounded-nav border border-line px-[16px] py-[12px] text-body font-medium text-prose hover:bg-panel-soft"
+            className="press rounded-nav px-[16px] py-[12px] text-body text-ink ring-1 ring-inset ring-rule hover:bg-panel-soft"
           >
             Abbrechen
           </button>
