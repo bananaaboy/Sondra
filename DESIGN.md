@@ -632,14 +632,20 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
     Stopp, Schleife, Zeit in Mono, Zoom), darunter — nur wenn etwas an ist —
     die eine Zeile „Zu hören: …" mit Vorher/Nachher und „Übernehmen".
     Leertaste spielt und hält an.
-  - **Zerschneiden** in drei Rahmen: oben das Schneiden (Datei, Tempo, eine
-    Umschaltreihe Auto 16 · Anschläge · Takt · Gleich mit nur den Reglern des
-    gewählten Verfahrens, ein Knopf), die Welle auf Stage-Schwarz mit
-    Zeitlineal und der Taste jedes Schnitts im Schnitt selbst, darunter der
-    Transport. In der Mitte das **Padfeld 4 × 4 wie an der MPC** — leere
-    Plätze bleiben als blasse Fläche mit ihrer Taste stehen —, daneben eine
-    Spalte mit Reitern Pad · Alle Pads · Export · Vorgaben statt zweier
-    gestapelter Karten. Unten das Pattern im selben Rahmen.
+  - **Zerschneiden** in zwei Rahmen. Oben das Schneiden: sechs Verfahren
+    in einer Umschaltreihe (Anschläge, Stärkste, Takt mit Triolen und
+    Verschiebung, Pausen, Gleich, Länge), darunter nur die Regler des
+    gewählten, darunter auf `panel-soft` was alle teilen (Vorlauf,
+    Mindestlänge, Nulldurchgang). **Wo geschnitten wird, steht vorher als
+    dünne Linie in `stage-accent` auf der Welle**, und neben dem Knopf
+    „ergibt N Pads“ (`lib/chop.ts`, `planChop`). Ein gezogener Bereich kann
+    ein Pad werden oder „Darin schneiden“ — nur dort, der Rest bleibt.
+    Unten **Pads und Pattern als ein Rack** (14.10.2026, „zusammenführen“):
+    das 4 × 4-Feld ist aufgegangen in den Zeilen — jede beginnt mit dem Pad
+    selbst (Taste, kleine Welle, Länge; antippen spielt und wählt), dann M,
+    Klavierrolle und die Schritte. Rechts die Spalte mit Reitern Pad · Alle
+    Pads · Export · Vorgaben; im Pad-Reiter auch sein Schnitt (Anfang und
+    Ende in ±1/±10 ms, Halbieren, Mit nächstem verbinden).
   Die Rahmen tragen keine Karte und keinen Schatten: `bg-raised`,
   Haarlinien-Ring, Zwischenlinien.
 - **Pattern** (`StepSequencer`): das Channel-Rack-Raster unter den Pads. Eine

@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin, { type Region } from 'wavesurfer.js/plugins/regions'
 import TimelinePlugin from 'wavesurfer.js/plugins/timeline'
@@ -33,8 +34,8 @@ import {
 } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
 import { clamp, dbToGain, formatTimecode } from '../../lib/format'
-import { detectAutoChop16, detectOnsets, divideEvenly } from '../../lib/onsets'
-import { beatGrid, estimateTempo, snapToZeroCrossing, type TempoEstimate } from '../../lib/tempo'
+import { DEFAULT_CHOP, MAX_PLANNED, describeMethod, planChop, type ChopMethod, type ChopPlan, type ChopSettings } from '../../lib/chop'
+import { estimateTempo, snapToZeroCrossing, type TempoEstimate } from '../../lib/tempo'
 import { withAlpha, type ResolvedTheme } from '../../lib/theme'
 import { encodeWav, type AudioData } from '../../lib/wav'
 import { renderSliceInWorker } from '../../lib/workerClient'
@@ -63,7 +64,7 @@ const MAX_PADS = 16
  * nothing about which one holds the snare. Twenty-odd peak values do, and they
  * cost one pass over a quarter-second of samples.
  */
-function PadWave({ audio, from, to }: { audio: AudioData; from: number; to: number }) {
+function PadWave({ audio, from, to, className = 'h-[26px] w-full' }: { audio: AudioData; from: number; to: number; className?: string }) {
   const peaks = useMemo(() => {
     const mono = audio.channels[0]
     const start = Math.max(0, Math.floor(from * audio.sampleRate))
@@ -82,7 +83,7 @@ function PadWave({ audio, from, to }: { audio: AudioData; from: number; to: numb
   }, [audio, from, to])
 
   return (
-    <svg viewBox="0 0 22 10" preserveAspectRatio="none" className="h-[26px] w-full" aria-hidden>
+    <svg viewBox="0 0 22 10" preserveAspectRatio="none" className={className} aria-hidden>
       {peaks.map((value, index) => (
         <rect
           key={index}
@@ -99,12 +100,17 @@ function PadWave({ audio, from, to }: { audio: AudioData; from: number; to: numb
   )
 }
 
+/** Slice lengths in beats. The thirds are triplets: three in the time of two. */
 const GRID_DIVISIONS: { value: number; label: string }[] = [
+  { value: 0.125, label: '1/32' },
   { value: 0.25, label: '1/16' },
+  { value: 1 / 3, label: '1/8 T' },
   { value: 0.5, label: '1/8' },
-  { value: 1, label: '1/4 (Beat)' },
+  { value: 2 / 3, label: '1/4 T' },
+  { value: 1, label: '1/4' },
   { value: 2, label: '1/2' },
-  { value: 4, label: 'Takt' },
+  { value: 4, label: '1 Takt' },
+  { value: 8, label: '2 Takte' },
 ]
 
 const MODE_LABELS: Record<PlayMode, string> = {
@@ -116,14 +122,17 @@ const MODE_LABELS: Record<PlayMode, string> = {
 const MODE_SHORT: Record<PlayMode, string> = { oneshot: 'One-Shot', gate: 'Gate', loop: 'Schleife' }
 
 /** How a file is cut. One at a time on screen, with only its own settings. */
-type Method = 'auto' | 'hits' | 'grid' | 'even'
-
-const METHODS: { value: Method; label: string; title: string }[] = [
-  { value: 'auto', label: 'Auto 16', title: 'Die 16 stärksten Schläge, auf alle 16 Pads' },
+const METHODS: { value: ChopMethod; label: string; title: string }[] = [
   { value: 'hits', label: 'Anschläge', title: 'An jedem Lautstärkesprung — meistens die beste Wahl' },
-  { value: 'grid', label: 'Takt', title: 'Auf dem Raster des erkannten Tempos' },
-  { value: 'even', label: 'Gleich', title: 'In gleich lange Teile' },
+  { value: 'auto', label: 'Stärkste', title: 'Nur die stärksten Schläge, so viele wie gewünscht' },
+  { value: 'grid', label: 'Takt', title: 'Auf dem Raster des Tempos, auch in Triolen' },
+  { value: 'silence', label: 'Pausen', title: 'Zwischen den Pausen — für Sprache, Gesang, einzelne Klänge' },
+  { value: 'even', label: 'Gleich', title: 'In gleich viele Teile' },
+  { value: 'length', label: 'Länge', title: 'In Teile fester Länge' },
 ]
+
+/** The planned cuts, drawn on the stage before anything is cut. */
+const isPlanMark = (id: string) => id.startsWith('plan-')
 
 /** The column beside the pads: one job at a time, like the editors' inspector. */
 type Side = 'pad' | 'kit' | 'export' | 'vorgaben'
@@ -139,6 +148,7 @@ const STAGE_MUTED = '#aab5b2'
 const SLICE_COLOR = withAlpha(STAGE_INK, 0.05)
 const ACTIVE_COLOR = withAlpha(STAGE_ACCENT, 0.2)
 const PENDING_COLOR = withAlpha(STAGE_INK, 0.2)
+const PLAN_COLOR = withAlpha(STAGE_ACCENT, 0.85)
 
 // The theme is still handed in by the dashboard; the stage ignores it on purpose.
 export function SamplerPanel(_props: { theme: ResolvedTheme }) {
@@ -175,18 +185,23 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
   // Defaults a freshly cut slice inherits.
   const [defaultMode, setDefaultMode] = useState<PlayMode>('oneshot')
   const [choke, setChoke] = useState(true)
-  const [snap, setSnap] = useState(true)
   const [fadeMs, setFadeMs] = useState(4)
   const [normalize, setNormalize] = useState(false)
   const [preserveDuration, setPreserveDuration] = useState(true)
 
   const [tempo, setTempo] = useState<TempoEstimate | null>(null)
   const [bpm, setBpm] = useState(120)
-  const [division, setDivision] = useState(1)
-  const [sliceCount, setSliceCount] = useState(16)
-  const [sensitivity, setSensitivity] = useState(1.4)
   const [zoom, setZoom] = useState(0)
-  const [method, setMethod] = useState<Method>('hits')
+  /** How to cut, for every method at once — switching method keeps the rest. */
+  const [chop, setChopState] = useState<ChopSettings>(DEFAULT_CHOP)
+  /** Whether the planned cuts are drawn: from the first change until they are made. */
+  const [planShown, setPlanShown] = useState(true)
+  const setChop = (patch: Partial<ChopSettings>) => {
+    setChopState((value) => ({ ...value, ...patch }))
+    setPlanShown(true)
+  }
+  /** Re-reads the regions into the pads; set by the wavesurfer effect. */
+  const syncRef = useRef<(() => void) | null>(null)
   const [side, setSide] = useState<Side>('pad')
   /** Wavesurfer rejects most calls until it has decoded the audio. */
   const [waveReady, setWaveReady] = useState(false)
@@ -261,7 +276,7 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
         const previous = new Map(current.map((slice) => [slice.id, slice]))
         return regions
           .getRegions()
-          .filter((region) => region.id !== pendingRef.current)
+          .filter((region) => region.id !== pendingRef.current && !isPlanMark(region.id))
           .map((region) => {
             const existing = previous.get(region.id)
             // Dragging a region must not reset the pad's own settings.
@@ -279,8 +294,11 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
       })
     }
 
+    syncRef.current = sync
+
     const pendingColor = PENDING_COLOR
     regions.on('region-created', (region: Region) => {
+      if (isPlanMark(region.id)) return
       if (!cuttingRef.current) {
         // Dragged by hand: held back until „Als Pad anlegen“. A new drag
         // replaces the previous one that was never confirmed.
@@ -294,10 +312,12 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
       sync()
     })
     regions.on('region-updated', (region: Region) => {
+      if (isPlanMark(region.id)) return
       if (region.id === pendingRef.current) setPending({ id: region.id, start: region.start, end: region.end })
       else sync()
     })
     regions.on('region-removed', (region: Region) => {
+      if (isPlanMark(region.id)) return
       if (region.id === pendingRef.current) {
         pendingRef.current = null
         setPending(null)
@@ -310,6 +330,7 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
     wave.on('finish', () => setWavePlaying(false))
     regions.on('region-clicked', (region: Region, event: MouseEvent) => {
       event.stopPropagation()
+      if (isPlanMark(region.id)) return
       if (region.id === pendingRef.current) {
         triggerRef.current?.(region.id)
         return
@@ -331,6 +352,7 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
       setWaveReady(false)
       setPending(null)
       pendingRef.current = null
+      syncRef.current = null
       setWavePlaying(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -576,51 +598,78 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
   useEffect(() => stopAll, [stopAll])
 
   /* --- chopping ----------------------------------------------------------- */
-  const applyCuts = useCallback(
-    (points: number[], label: string) => {
-      const regions = regionsRef.current
-      if (!regions || !audio) return
+  const planSettings = useMemo(() => ({ ...chop, bpm }), [chop, bpm])
+  const tempoOffset = tempo?.offsetSeconds ?? 0
+  const [plan, setPlan] = useState<ChopPlan | null>(null)
 
-      const cuts = snap ? points.map((at) => snapToZeroCrossing(audio, at)) : points
-      const unique = [...new Set(cuts.map((at) => Math.max(0, Math.min(duration, at))))].sort((a, b) => a - b)
+  // Planned on a pause: hits and silence read the whole file, and a slider
+  // dragged across its range would otherwise plan forty times.
+  useEffect(() => {
+    if (!audio) {
+      setPlan(null)
+      return
+    }
+    const timer = window.setTimeout(() => setPlan(planChop(audio, planSettings, { tempoOffsetSeconds: tempoOffset })), 120)
+    return () => window.clearTimeout(timer)
+  }, [audio, planSettings, tempoOffset])
 
-      cuttingRef.current = true
-      regions.clearRegions()
-      let made = 0
-      unique.forEach((start, index) => {
-        // Each slice runs to the next cut, so they tile the file with no gaps.
-        const end = index + 1 < unique.length ? unique[index + 1] : duration
-        if (end - start < 0.015) return
-        regions.addRegion({ start, end, color: SLICE_COLOR, drag: true, resize: true })
-        made += 1
-      })
-      cuttingRef.current = false
-      log('sampler', `${label}: ${made} Slices${snap ? ', an Nulldurchgänge gerastet' : ''}`)
-    },
-    [audio, duration, log, snap],
-  )
+  // The plan on the stage, as dashed marks: where the cuts will fall, before
+  // anything is cut. Gone once the cuts are made, back with the next change.
+  useEffect(() => {
+    const regions = regionsRef.current
+    if (!regions || !waveReady) return
+    for (const region of [...regions.getRegions()]) if (isPlanMark(region.id)) region.remove()
+    if (!planShown || !plan) return
+    const marks = new Set<number>()
+    for (const slice of plan.slices) {
+      if (slice.start > 0.001) marks.add(slice.start)
+      // Pauses left out end before the next one starts; their ends are cuts too.
+      if (chop.method === 'silence' && chop.dropSilence && slice.end < duration - 0.001) marks.add(slice.end)
+    }
+    let index = 0
+    for (const at of marks) {
+      regions.addRegion({ id: `plan-${index}`, start: at, end: at, color: PLAN_COLOR, drag: false, resize: false })
+      index += 1
+    }
+  }, [plan, planShown, waveReady, chop.method, chop.dropSilence, duration])
 
-  const chopAuto16 = () => {
-    if (!audio) return
-    applyCuts(detectAutoChop16(audio, sensitivity, 16), 'Auto-Chop 16')
-  }
-
-  const chopTransients = () => {
-    if (!audio) return
-    applyCuts(detectOnsets(audio), 'Transienten')
-  }
-
-  const chopGrid = () => {
-    if (!audio) return
-    applyCuts(
-      beatGrid({ bpm, offsetSeconds: tempo?.offsetSeconds ?? 0, beatsPerSlice: division, durationSeconds: duration }),
-      `Raster ${bpm} BPM`,
+  /**
+   * Makes the plan into pads — over the whole file, or only inside a range,
+   * where the pads already outside it stay as they are.
+   */
+  const applyPlan = (range: { start: number; end: number } | null = null) => {
+    const regions = regionsRef.current
+    if (!regions || !audio) return
+    const result = planChop(audio, planSettings, { range, tempoOffsetSeconds: tempoOffset })
+    cuttingRef.current = true
+    for (const region of [...regions.getRegions()]) {
+      if (isPlanMark(region.id) || region.id === pendingRef.current) continue
+      if (!range || (region.start >= range.start && region.end <= range.end)) {
+        region.remove()
+      } else if (region.start < range.start && region.end > range.end) {
+        // Spans the whole range: what lies before it and after it both stay.
+        const tail = region.end
+        region.setOptions({ start: region.start, end: range.start })
+        regions.addRegion({ start: range.end, end: tail, color: SLICE_COLOR, drag: true, resize: true })
+      } else if (region.start < range.start && region.end > range.start) {
+        region.setOptions({ start: region.start, end: range.start })
+      } else if (region.start < range.end && region.end > range.end) {
+        region.setOptions({ start: range.end, end: region.end })
+      }
+    }
+    for (const slice of result.slices) {
+      regions.addRegion({ start: slice.start, end: slice.end, color: SLICE_COLOR, drag: true, resize: true })
+    }
+    cuttingRef.current = false
+    syncRef.current?.()
+    setPlanShown(false)
+    if (range) regions.getRegions().find((entry) => entry.id === pendingRef.current)?.remove()
+    log(
+      'sampler',
+      `${describeMethod(planSettings)}${range ? ' im Bereich' : ''}: ${result.slices.length} Pads${
+        result.capped ? ` (auf ${MAX_PLANNED} begrenzt)` : ''
+      }${planSettings.snap ? ', an Nulldurchgänge gerastet' : ''}`,
     )
-  }
-
-  const chopEven = () => {
-    if (!audio) return
-    applyCuts(divideEvenly(duration, sliceCount), `${sliceCount} gleiche Teile`)
   }
 
   /* --- per-pad editing ---------------------------------------------------- */
@@ -807,38 +856,107 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
 
   const confident = (tempo?.confidence ?? 0) >= 0.5
 
-  const runChop = () => {
-    if (method === 'auto') chopAuto16()
-    else if (method === 'hits') chopTransients()
-    else if (method === 'grid') chopGrid()
-    else chopEven()
-  }
-  const chopLabel =
-    method === 'auto' ? '16 Pads belegen' : method === 'grid' ? 'Nach Takt schneiden' : method === 'even' ? `In ${sliceCount} Teile` : 'Schneiden'
-
-  const padRun = slices.slice(0, MAX_PADS)
-
   if (!asset) {
     return (
       <Card tone="keylime">
         <h2 className="display-md mt-[8px] mb-[12px]">Zerlegen und auf Tasten legen</h2>
         <p className="mb-[16px] max-w-[62ch] text-body leading-[1.55] text-prose/85">
-          Einen Loop oder eine Aufnahme an Schlägen, im Takt oder in gleiche Teile schneiden — jedes
-          Stück liegt danach auf einer Taste und im Pattern.
+          Einen Loop oder eine Aufnahme an Schlägen, im Takt, an Pausen oder in gleiche Teile schneiden —
+          jedes Stück liegt danach auf einer Taste und im Pattern.
         </p>
         <FileDrop />
       </Card>
     )
   }
 
-  /* -- the column beside the pads ------------------------------------------- */
+  /* -- per-pad cutting ---------------------------------------------------------- */
+  const regionOf = (id: string) => regionsRef.current?.getRegions().find((region) => region.id === id)
+
+  /** Two pads where there was one; the new half keeps the pad's settings. */
+  const splitPad = (slice: Slice, index: number) => {
+    const regions = regionsRef.current
+    const region = regionOf(slice.id)
+    if (!regions || !region || !audio) return
+    const half = (slice.start + slice.end) / 2
+    const middle = chop.snap ? snapToZeroCrossing(audio, half) : half
+    if (middle - slice.start < 0.015 || slice.end - middle < 0.015) return
+    cuttingRef.current = true
+    region.setOptions({ start: slice.start, end: middle })
+    const added = regions.addRegion({ start: middle, end: slice.end, color: SLICE_COLOR, drag: true, resize: true })
+    cuttingRef.current = false
+    syncRef.current?.()
+    const { id: _id, start: _start, end: _end, ...settings } = slice
+    setSlices((current) => current.map((entry) => (entry.id === added.id ? { ...entry, ...settings } : entry)))
+    log('sampler', `Pad ${index + 1} geteilt`)
+  }
+
+  /** One pad where there were two: this one runs on to the end of the next. */
+  const joinNext = (slice: Slice, index: number) => {
+    const next = slices[index + 1]
+    const region = regionOf(slice.id)
+    const following = next ? regionOf(next.id) : undefined
+    if (!next || !region || !following) return
+    region.setOptions({ start: slice.start, end: next.end })
+    following.remove()
+    log('sampler', `Pad ${index + 1} mit Pad ${index + 2} verbunden`)
+  }
+
+  /** Moves one edge by a few milliseconds — where a drag is too coarse. */
+  const nudge = (slice: Slice, edge: 'start' | 'end', deltaMs: number) => {
+    const region = regionOf(slice.id)
+    if (!region) return
+    const delta = deltaMs / 1000
+    const start = edge === 'start' ? clamp(slice.start + delta, 0, slice.end - 0.015) : slice.start
+    const end = edge === 'end' ? clamp(slice.end + delta, slice.start + 0.015, duration) : slice.end
+    region.setOptions({ start, end })
+    updateSlice(slice.id, { start, end })
+  }
+
+  /* -- the head of each pattern row: the pad itself ----------------------------- */
+  const padHead = (slice: Slice, index: number) => {
+    const key = PAD_KEYS[index]
+    const isPlaying = playing.includes(index)
+    const isSelected = slice.id === activeSlice
+    return (
+      <button
+        type="button"
+        aria-label={`Pad ${index + 1}, Taste ${key.toUpperCase()} — spielen und wählen`}
+        aria-pressed={isSelected}
+        onPointerDown={() => {
+          setActiveSlice(slice.id)
+          setSide((value) => (value === 'kit' || value === 'vorgaben' ? 'pad' : value))
+          triggerPad(index)
+        }}
+        onPointerUp={() => {
+          if (slice.mode !== 'oneshot') stopPad(index)
+        }}
+        onPointerLeave={() => {
+          if (slice.mode === 'gate') stopPad(index)
+        }}
+        className={`press flex h-[34px] w-[152px] shrink-0 items-center gap-[8px] rounded-nav px-[8px] text-left transition-colors duration-[var(--dur-fast)] ${
+          isPlaying
+            ? 'bg-ink text-on-ink'
+            : isSelected
+              ? 'bg-panel-strong text-ink ring-2 ring-inset ring-ink'
+              : 'bg-panel-mid text-ink hover:bg-panel-strong'
+        }`}
+      >
+        <span className="value w-[1.1em] shrink-0 text-small font-bold leading-none">{key.toUpperCase()}</span>
+        <span className="min-w-0 flex-1">{audio ? <PadWave audio={audio} from={slice.start} to={slice.end} className="h-[18px] w-full" /> : null}</span>
+        <span className="value shrink-0 text-micro leading-none opacity-80">{(slice.end - slice.start).toFixed(2).replace('.', ',')}</span>
+      </button>
+    )
+  }
+
+  /* -- the column beside the rows ----------------------------------------------- */
+  const ms = (seconds: number) => `${Math.round(seconds * 1000)} ms`
   const sideContent = (() => {
     if (side === 'pad') {
       if (!selected) {
         return (
           <p className="text-small leading-[1.5] text-prose">
-            Ein Pad antippen oder seine Taste drücken — hier stehen dann Tonhöhe, Pegel, Panorama,
-            Hüllkurve und Verhalten.
+            Ein Pad antippen oder seine Taste drücken — hier stehen dann Tonhöhe, Pegel, Panorama, Hüllkurve,
+            Verhalten und sein Schnitt.
           </p>
         )
       }
@@ -917,6 +1035,39 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
             />
           </div>
           <Toggle label="Rückwärts" checked={selected.reverse} onChange={(value) => updateSlice(selected.id, { reverse: value })} />
+
+          {/* The pad's own cut: where a drag on the stage is too coarse. */}
+          <div className="flex flex-col gap-[8px] border-t border-line pt-[12px]">
+            <span className="text-small font-semibold text-ink">Schnitt dieses Pads</span>
+            {(['start', 'end'] as const).map((edge) => (
+              <div key={edge} className="flex items-center gap-[6px]">
+                <span className="w-[4.5em] text-small text-prose">{edge === 'start' ? 'Anfang' : 'Ende'}</span>
+                <span className="value flex-1 text-small text-ink">{formatTimecode(edge === 'start' ? selected.start : selected.end)}</span>
+                {[-10, -1, 1, 10].map((delta) => (
+                  <button
+                    key={delta}
+                    type="button"
+                    onClick={() => nudge(selected, edge, delta)}
+                    title={`${delta > 0 ? '+' : '−'}${Math.abs(delta)} ms`}
+                    className="press value h-[28px] min-w-[34px] rounded-nav bg-panel-soft px-[4px] text-micro text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+                  >
+                    {delta > 0 ? '+' : '−'}
+                    {Math.abs(delta)}
+                  </button>
+                ))}
+              </div>
+            ))}
+            <p className="value text-small text-prose">Länge {ms(selected.end - selected.start)}</p>
+            <div className="grid grid-cols-2 gap-[4px]">
+              <Button size="sm" variant="quiet" onClick={() => splitPad(selected, selectedIndex)} disabled={selected.end - selected.start < 0.04}>
+                Halbieren
+              </Button>
+              <Button size="sm" variant="quiet" onClick={() => joinNext(selected, selectedIndex)} disabled={selectedIndex >= slices.length - 1}>
+                Mit nächstem verbinden
+              </Button>
+            </div>
+          </div>
+
           {rendered?.id === selected.id ? (
             <AudioPreview sources={[{ id: rendered.id, label: 'Wie exportiert', audio: rendered.audio }]} waveHeight={40} />
           ) : (
@@ -966,7 +1117,7 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
             </div>
           </div>
           <div className="border-t border-line pt-[12px]">
-            <Button size="sm" variant="quiet" onClick={() => regionsRef.current?.clearRegions()}>
+            <Button size="sm" variant="quiet" onClick={() => regionsRef.current?.getRegions().filter((region) => !isPlanMark(region.id)).forEach((region) => region.remove())}>
               Alle Schnitte entfernen
             </Button>
           </div>
@@ -1036,13 +1187,97 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           value={fadeMs}
           onChange={(event) => setFadeMs(Number(event.target.value))}
         />
-        <Toggle label="An Nulldurchgänge rasten" hint="Vermeidet Knackser an den Kanten." checked={snap} onChange={setSnap} />
         <Toggle label="Neuer Anschlag stoppt den alten" hint="Choke, wie an einer MPC." checked={choke} onChange={setChoke} />
         <Toggle label="Länge beim Transponieren halten" hint="Phasenvocoder beim Export." checked={preserveDuration} onChange={setPreserveDuration} />
         <Toggle label="Auf −0,3 dBFS normalisieren" checked={normalize} onChange={setNormalize} />
       </>
     )
   })()
+
+  /* -- how to cut: the options of the chosen method ------------------------------ */
+  const keepsAttack = chop.method === 'hits' || chop.method === 'auto' || chop.method === 'silence'
+  const methodOptions = (() => {
+    switch (chop.method) {
+      case 'hits':
+        return (
+          <>
+            <Slider label="Empfindlichkeit" display={chop.sensitivity.toFixed(1).replace('.', ',')} min={0.5} max={3} step={0.1} value={chop.sensitivity}
+              onChange={(event) => setChop({ sensitivity: Number(event.target.value) })} title="Höher: nur deutliche Schläge" />
+            <Slider label="Mindestabstand" display={`${chop.minGapMs} ms`} min={20} max={1000} step={10} value={chop.minGapMs}
+              onChange={(event) => setChop({ minGapMs: Number(event.target.value) })} title="Kürzester Abstand zwischen zwei Schnitten" />
+          </>
+        )
+      case 'auto':
+        return (
+          <>
+            <OptionGroup label="Anzahl">
+              <ChoiceRow value={chop.count} onChange={(count) => setChop({ count })} options={[4, 8, 12, 16, 24, 32].map((value) => ({ value, label: String(value) }))} />
+            </OptionGroup>
+            <Slider label="Empfindlichkeit" display={chop.sensitivity.toFixed(1).replace('.', ',')} min={0.5} max={3} step={0.1} value={chop.sensitivity}
+              onChange={(event) => setChop({ sensitivity: Number(event.target.value) })} />
+          </>
+        )
+      case 'grid':
+        return (
+          <>
+            <OptionGroup label={`Tempo${confident ? '' : ' — nachhören'}`}>
+              <div className="flex items-center gap-[2px] self-start rounded-nav bg-panel-soft p-[2px] ring-1 ring-inset ring-line">
+                <button type="button" onClick={() => { setBpm((value) => Math.max(30, Math.round(value / 2))); setPlanShown(true) }}
+                  className="press rounded-[7px] px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid" title="Halbes Tempo">÷2</button>
+                <input type="number" value={bpm} min={30} max={300} step={0.1} aria-label="Tempo in BPM"
+                  onChange={(event) => { setBpm(Number(event.target.value) || 120); setPlanShown(true) }}
+                  className="value w-[6ch] min-w-0 bg-transparent text-center text-small text-ink outline-none" />
+                <button type="button" onClick={() => { setBpm((value) => Math.min(300, Math.round(value * 2))); setPlanShown(true) }}
+                  className="press rounded-[7px] px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid" title="Doppeltes Tempo">×2</button>
+                <span className="px-[6px] text-small text-prose">BPM</span>
+              </div>
+            </OptionGroup>
+            <OptionGroup label="Raster" wide>
+              <ChoiceRow value={chop.beatsPerSlice} onChange={(beatsPerSlice) => setChop({ beatsPerSlice })} options={GRID_DIVISIONS} />
+            </OptionGroup>
+            <Slider label="Verschieben" display={`${chop.gridOffsetMs > 0 ? '+' : ''}${chop.gridOffsetMs} ms`} min={-250} max={250} step={1} value={chop.gridOffsetMs}
+              onChange={(event) => setChop({ gridOffsetMs: Number(event.target.value) })} title="Das ganze Raster früher oder später" />
+          </>
+        )
+      case 'silence':
+        return (
+          <>
+            <OptionGroup label="Was als Pause gilt">
+              <ChoiceRow value={chop.silenceDb} onChange={(silenceDb) => setChop({ silenceDb })}
+                options={[-35, -45, -55, -65].map((value) => ({ value, label: `${value.toString().replace('-', '−')} dB` }))} />
+            </OptionGroup>
+            <Slider label="Pause ab" display={`${chop.silenceMs} ms`} min={30} max={1500} step={10} value={chop.silenceMs}
+              onChange={(event) => setChop({ silenceMs: Number(event.target.value) })} />
+            <div className="flex items-end">
+              <Toggle label="Pausen weglassen" hint="Jedes Pad beginnt mit seinem Klang und endet mit ihm." checked={chop.dropSilence}
+                onChange={(dropSilence) => setChop({ dropSilence })} />
+            </div>
+          </>
+        )
+      case 'even':
+        return (
+          <OptionGroup label="Teile" wide>
+            <ChoiceRow value={chop.count} onChange={(count) => setChop({ count })} options={[2, 3, 4, 6, 8, 12, 16, 24, 32, 64].map((value) => ({ value, label: String(value) }))} />
+          </OptionGroup>
+        )
+      case 'length':
+        return (
+          <>
+            <Slider label="Länge je Teil" display={chop.lengthMs >= 1000 ? `${(chop.lengthMs / 1000).toFixed(2).replace('.', ',')} s` : `${chop.lengthMs} ms`}
+              min={50} max={4000} step={10} value={chop.lengthMs} onChange={(event) => setChop({ lengthMs: Number(event.target.value) })} />
+            <OptionGroup label="Oder im Takt">
+              <ChoiceRow
+                value={-1}
+                onChange={(beats) => setChop({ lengthMs: Math.round((60000 / bpm) * beats) })}
+                options={[0.25, 0.5, 1, 4].map((beats) => ({ value: beats, label: beats === 4 ? '1 Takt' : `1/${4 / beats}`, title: `${Math.round((60000 / bpm) * beats)} ms bei ${Math.round(bpm)} BPM` }))}
+              />
+            </OptionGroup>
+          </>
+        )
+    }
+  })()
+
+  const planCount = plan?.slices.length ?? 0
 
   return (
     <div className="flex flex-col gap-[16px]">
@@ -1067,71 +1302,38 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           ) : null}
         </header>
 
-        {/* How to cut: one method at a time, and only its own settings. */}
-        <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px] border-b border-line px-[16px] py-[10px]">
-          <ChoiceRow value={method} onChange={setMethod} options={METHODS} />
-          <div className="flex min-w-0 flex-wrap items-center gap-[8px]">
-            {method === 'auto' ? (
-              <label className="flex items-center gap-[8px] text-small text-prose">
-                Empfindlichkeit
-                <input
-                  type="range"
-                  min={0.5}
-                  max={3}
-                  step={0.1}
-                  value={sensitivity}
-                  onChange={(event) => setSensitivity(Number(event.target.value))}
-                  className="w-[120px]"
-                />
-                <span className="value w-[3ch] text-ink">{sensitivity.toFixed(1).replace('.', ',')}</span>
-              </label>
-            ) : method === 'hits' ? (
-              <span className="text-small text-prose">An jedem Lautstärkesprung.</span>
-            ) : method === 'grid' ? (
-              <>
-                <div className="flex items-center gap-[2px] rounded-nav bg-panel-soft p-[2px] ring-1 ring-inset ring-line">
-                  <button
-                    type="button"
-                    onClick={() => setBpm((value) => Math.max(30, Math.round(value / 2)))}
-                    className="press rounded-[7px] px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid"
-                    title="Halbes Tempo"
-                  >
-                    ÷2
-                  </button>
-                  <input
-                    type="number"
-                    value={bpm}
-                    min={30}
-                    max={300}
-                    step={0.1}
-                    onChange={(event) => setBpm(Number(event.target.value) || 120)}
-                    aria-label="Tempo in BPM"
-                    className="value w-[6ch] min-w-0 bg-transparent text-center text-small text-ink outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setBpm((value) => Math.min(300, Math.round(value * 2)))}
-                    className="press rounded-[7px] px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid"
-                    title="Doppeltes Tempo"
-                  >
-                    ×2
-                  </button>
-                </div>
-                <span className="text-small text-prose">BPM{confident ? '' : ' — nachhören'}</span>
-                <ChoiceRow
-                  value={division}
-                  onChange={setDivision}
-                  options={GRID_DIVISIONS.map((entry) => ({ value: entry.value, label: entry.label.replace(' (Beat)', '') }))}
-                />
-              </>
-            ) : (
-              <ChoiceRow value={sliceCount} onChange={setSliceCount} options={[2, 4, 8, 12, 16].map((count) => ({ value: count, label: String(count) }))} />
-            )}
+        {/* How to cut: the method, its own options, and what every method shares. */}
+        <div className="flex flex-col border-b border-line">
+          <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px] px-[16px] pt-[12px]">
+            <ChoiceRow value={chop.method} onChange={(method) => setChop({ method })} options={METHODS} />
+            <div className="ml-auto flex items-center gap-[12px]">
+              {audio && plan ? (
+                <span className="value text-small text-prose" aria-live="polite">
+                  ergibt {planCount}
+                  {plan.capped ? '+' : ''} {planCount === 1 ? 'Pad' : 'Pads'}
+                </span>
+              ) : null}
+              <Button size="sm" onClick={() => applyPlan()} disabled={!audio || planCount === 0}>
+                Schneiden
+                <ArrowRight />
+              </Button>
+            </div>
           </div>
-          <Button size="sm" onClick={runChop} disabled={!audio} className="ml-auto">
-            {chopLabel}
-            <ArrowRight />
-          </Button>
+          <div className="grid gap-x-[24px] gap-y-[12px] px-[16px] py-[12px] sm:grid-cols-2 lg:grid-cols-4">{methodOptions}</div>
+          <div className="grid gap-x-[24px] gap-y-[12px] border-t border-line bg-panel-soft px-[16px] py-[12px] sm:grid-cols-2 lg:grid-cols-4">
+            {keepsAttack ? (
+              <Slider label="Vorlauf" display={`${chop.preRollMs} ms`} min={0} max={40} step={1} value={chop.preRollMs}
+                onChange={(event) => setChop({ preRollMs: Number(event.target.value) })} title="Jeder Schnitt so viel früher — der Anlauf eines Schlags bleibt auf seinem Pad" />
+            ) : null}
+            <Slider label="Mindestlänge" display={`${chop.minLengthMs} ms`} min={0} max={1000} step={10} value={chop.minLengthMs}
+              onChange={(event) => setChop({ minLengthMs: Number(event.target.value) })} title="Kürzere Stücke gehen im vorigen auf" />
+            <div className="flex items-end">
+              <Toggle label="An Nulldurchgänge rasten" hint="Keine Knackser an den Kanten." checked={chop.snap} onChange={(snap) => setChop({ snap })} />
+            </div>
+            <p className="self-end text-small leading-[1.45] text-prose">
+              Gestrichelt auf der Welle: wo geschnitten wird. Einen Bereich ziehen schneidet nur darin.
+            </p>
+          </div>
         </div>
 
         {/* The stage: the file, its cuts, and the range being asked about. */}
@@ -1143,7 +1345,7 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
             <p className="py-[96px] text-center text-small text-stage-muted">{status === 'decoding' ? 'Wird dekodiert …' : 'Warten auf den Ton …'}</p>
           ) : null}
           {pending ? (
-            /* A dragged range is a question, not a pad yet. */
+            /* A dragged range is a question, not a pad yet — or the place to cut. */
             <div className="rise absolute left-[12px] top-[30px] z-10 flex flex-wrap items-center gap-[6px] bg-stage/90 p-[6px] pl-[12px] ring-1 ring-inset ring-stage-line backdrop-blur-[6px]">
               <span className="value mr-[4px] text-small text-stage-ink">
                 {formatTimecode(pending.start)} – {formatTimecode(pending.end)} · {(pending.end - pending.start).toFixed(2).replace('.', ',')} s
@@ -1152,15 +1354,23 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
                 Hören
               </button>
               <button type="button" onClick={confirmPending} className="press rounded-nav bg-stage-ink px-[10px] py-[5px] text-small font-semibold text-stage hover:bg-stage-ink/85" title="Eingabetaste">
-                Als Pad anlegen
+                Als ein Pad
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPlan({ start: pending.start, end: pending.end })}
+                className="press rounded-nav px-[10px] py-[5px] text-small text-stage-ink ring-1 ring-inset ring-stage-line hover:bg-stage-line"
+                title={`${describeMethod(planSettings)}, nur in diesem Bereich`}
+              >
+                Darin schneiden ({METHODS.find((entry) => entry.value === chop.method)?.label})
               </button>
               <button type="button" onClick={discardPending} className="press rounded-nav px-[10px] py-[5px] text-small text-stage-muted hover:text-stage-ink">
                 Verwerfen
               </button>
             </div>
           ) : audio && slices.length === 0 ? (
-            <p className="pointer-events-none absolute inset-x-[12px] bottom-[20px] mx-auto w-fit max-w-[calc(100%-24px)] bg-stage/85 px-[12px] py-[6px] text-center text-small text-stage-ink ring-1 ring-inset ring-stage-line backdrop-blur-[6px]">
-              Oben ein Verfahren wählen — oder über die Welle ziehen und den Bereich als Pad anlegen.
+            <p className="pointer-events-none absolute inset-x-[12px] bottom-[20px] z-10 mx-auto w-fit max-w-[calc(100%-24px)] bg-stage/85 px-[12px] py-[6px] text-center text-small text-stage-ink ring-1 ring-inset ring-stage-line backdrop-blur-[6px]">
+              Die gestrichelten Linien zeigen, wo geschnitten würde — „Schneiden“ macht Pads daraus.
             </p>
           ) : null}
         </div>
@@ -1213,109 +1423,7 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
         </div>
       </section>
 
-      {/* ---- the pads and what is set on them ------------------------------- */}
-      {slices.length > 0 ? (
-        <section className="grid overflow-hidden bg-raised ring-1 ring-inset ring-line lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]" aria-label="Pads">
-          <div className="flex flex-col gap-[12px] p-[16px]">
-            <div className="flex flex-wrap items-baseline justify-between gap-[8px]">
-              <p className="text-small font-semibold text-ink">Pads</p>
-              <p className="text-small text-prose">
-                {slices.length > MAX_PADS
-                  ? `Die ersten ${MAX_PADS} von ${slices.length} liegen auf Tasten; exportiert werden alle.`
-                  : 'Antippen spielt und wählt.'}
-              </p>
-            </div>
-            {/* Four by four, as on the hardware — empty places stay visible,
-                so the grid reads as an instrument, not as a list. */}
-            <div className="grid w-full max-w-[600px] grid-cols-4 gap-[8px]">
-              {PAD_KEYS.map((key, index) => {
-                const slice = padRun[index]
-                if (!slice) {
-                  return (
-                    <div key={key} aria-hidden className="flex aspect-square items-start rounded-card bg-panel-soft p-[10px]">
-                      <span className="value text-small text-faint">{key.toUpperCase()}</span>
-                    </div>
-                  )
-                }
-                const isPlaying = playing.includes(index)
-                const isSelected = slice.id === activeSlice
-                return (
-                  <button
-                    key={slice.id}
-                    type="button"
-                    aria-label={`Pad ${index + 1}, Taste ${key.toUpperCase()}`}
-                    aria-pressed={isSelected}
-                    onPointerDown={() => {
-                      setActiveSlice(slice.id)
-                      setSide((value) => (value === 'kit' || value === 'vorgaben' ? 'pad' : value))
-                      triggerPad(index)
-                    }}
-                    onPointerUp={() => {
-                      if (slice.mode !== 'oneshot') stopPad(index)
-                    }}
-                    onPointerLeave={() => {
-                      if (slice.mode === 'gate') stopPad(index)
-                    }}
-                    className={`press flex aspect-square flex-col justify-between rounded-card p-[10px] text-left transition-colors duration-[var(--dur-fast)] ${
-                      isPlaying
-                        ? 'bg-ink text-on-ink'
-                        : isSelected
-                          ? 'bg-panel-strong text-ink ring-2 ring-inset ring-ink'
-                          : 'bg-panel-mid text-ink hover:bg-panel-strong'
-                    }`}
-                  >
-                    <span className="flex items-baseline justify-between gap-[4px]">
-                      <span className="value text-body font-bold leading-none">{key.toUpperCase()}</span>
-                      <span className="value text-micro leading-none opacity-80">
-                        {[
-                          slice.reverse ? 'rückw.' : '',
-                          slice.mode === 'loop' ? 'Schl.' : slice.mode === 'gate' ? 'Gate' : '',
-                          slice.semitones !== 0 ? (slice.semitones > 0 ? `+${slice.semitones}` : `−${-slice.semitones}`) : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                      </span>
-                    </span>
-                    {audio ? <PadWave audio={audio} from={slice.start} to={slice.end} /> : null}
-                    <span className="value text-micro leading-none opacity-80">{(slice.end - slice.start).toFixed(2).replace('.', ',')} s</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-col border-t border-line lg:border-l lg:border-t-0">
-            <div role="tablist" aria-label="Einstellungen" className="flex gap-[4px] border-b border-line p-[8px]">
-              {(
-                [
-                  { id: 'pad', label: selected ? `Pad ${selectedIndex + 1}` : 'Pad' },
-                  { id: 'kit', label: 'Alle Pads' },
-                  { id: 'export', label: 'Export' },
-                  { id: 'vorgaben', label: 'Vorgaben' },
-                ] as const
-              ).map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={side === entry.id}
-                  onClick={() => setSide(entry.id)}
-                  className={`press flex-1 rounded-nav px-[6px] py-[7px] text-small ${
-                    side === entry.id ? 'bg-ink text-on-ink' : 'text-prose hover:bg-panel-soft'
-                  }`}
-                >
-                  {entry.label}
-                </button>
-              ))}
-            </div>
-            <div key={side} role="tabpanel" className="rise flex flex-col gap-[14px] p-[16px]">
-              {sideContent}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* ---- pattern -------------------------------------------------------- */}
+      {/* ---- pads and pattern, one rack ------------------------------------- */}
       {slices.length > 0 ? (
         <StepSequencer
           slices={slices}
@@ -1323,6 +1431,42 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           initialBpm={bpm}
           choke={choke}
           baseName={baseName}
+          note={
+            slices.length > MAX_PADS
+              ? `Die ersten ${MAX_PADS} von ${slices.length} Pads liegen auf Tasten und im Pattern; exportiert werden alle.`
+              : undefined
+          }
+          head={padHead}
+          aside={
+            <>
+              <div role="tablist" aria-label="Einstellungen" className="flex gap-[4px] border-b border-line p-[8px]">
+                {(
+                  [
+                    { id: 'pad', label: selected ? `Pad ${selectedIndex + 1}` : 'Pad' },
+                    { id: 'kit', label: 'Alle Pads' },
+                    { id: 'export', label: 'Export' },
+                    { id: 'vorgaben', label: 'Vorgaben' },
+                  ] as const
+                ).map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={side === entry.id}
+                    onClick={() => setSide(entry.id)}
+                    className={`press flex-1 rounded-nav px-[6px] py-[7px] text-small ${
+                      side === entry.id ? 'bg-ink text-on-ink' : 'text-prose hover:bg-panel-soft'
+                    }`}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+              <div key={side} role="tabpanel" className="rise flex flex-col gap-[14px] p-[16px]">
+                {sideContent}
+              </div>
+            </>
+          }
           onPreviewPad={(index, semitone) => {
             if (!slices[index]) return
             // A key auditioned in the roll only sounds; selecting the pad
@@ -1336,6 +1480,16 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           }}
         />
       ) : null}
+    </div>
+  )
+}
+
+/** A labelled control in the options row, for the ones that are not sliders. */
+function OptionGroup({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
+  return (
+    <div className={`flex min-w-0 flex-col gap-[6px] ${wide ? 'sm:col-span-2' : ''}`}>
+      <span className="text-small text-prose">{label}</span>
+      {children}
     </div>
   )
 }

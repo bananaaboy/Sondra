@@ -117,10 +117,12 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
 - **Ton und Zerschneiden sind Studios.** Ton im Editorrahmen
   (`EditorShell`, acht Werkzeuge in der Schiene, je eines im Inspektor) auf
   der Tonbühne (`editor/SoundStage.tsx`: Stage-Schwarz, Zeitlineal,
-  Transport darunter, Leertaste spielt). Zerschneiden in drei Rahmen:
-  Schneiden (ein Verfahren auf einmal) über Bühne und Transport, Padfeld
-  4 × 4 mit Reiter-Spalte, Pattern. Keine Racks und keine gestapelten Karten
-  mehr — „mega cluttered" war der Befund.
+  Transport darunter, Leertaste spielt). Zerschneiden in zwei Rahmen:
+  Schneiden (sechs Verfahren in `lib/chop.ts`, der Plan steht vorher auf
+  der Welle, ein gezogener Bereich lässt sich allein schneiden) über Bühne
+  und Transport; darunter Pads und Pattern als ein Rack — jede Zeile beginnt
+  mit dem Pad — mit Reiter-Spalte. Keine gestapelten Karten mehr — „mega
+  cluttered" war der Befund.
 - **Der Downloader zeigt alle Wege offen** („Weitere Wege", drei Kacheln),
   und die Brücken-Anleitung fragt, ob Node.js (bei cobalt auch Git) schon da
   ist. Nach `winget install` liest PowerShell den PATH neu ein, sonst kennt
