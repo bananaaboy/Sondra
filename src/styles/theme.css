@@ -281,9 +281,7 @@ body {
 }
 
 @utility field-glow {
-  background:
-    radial-gradient(90% 130% at 100% 0%, var(--color-panel-strong), transparent 70%),
-    linear-gradient(120deg, var(--color-panel-soft), var(--color-panel-mid));
+  background: var(--color-panel-soft);
 }
 
 /* The sheet grows with the desk, but only so far.

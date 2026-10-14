@@ -168,12 +168,26 @@ export function SessionMenu() {
       </button>
 
       {arrived !== null && !open ? (
-        <span
-          aria-hidden
-          className="rise pointer-events-none absolute right-0 top-[calc(100%+8px)] z-30 max-w-[260px] truncate rounded-nav bg-ink px-[10px] py-[6px] text-micro font-semibold text-on-ink"
+        <div
+          role="status"
+          className="rise absolute right-0 top-[calc(100%+8px)] z-30 flex max-w-[280px] items-center gap-[6px] rounded-nav bg-ink px-[10px] py-[6px] text-micro font-semibold text-on-ink shadow-md"
         >
-          In der Sitzung: {arrived}
-        </span>
+          <span className="truncate">In der Sitzung: {arrived}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setArrived(null)
+            }}
+            aria-label="Hinweis schliessen"
+            title="Hinweis schliessen"
+            className="flex h-4 w-4 shrink-0 items-center justify-center rounded hover:bg-white/20 transition-colors"
+          >
+            <svg viewBox="0 0 14 14" className="h-3 w-3" fill="none" aria-hidden>
+              <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       ) : null}
 
       {open ? (

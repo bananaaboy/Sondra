@@ -53,6 +53,16 @@ export const ACTIONS: ToolAction[] = [
   },
 
   {
+    id: 'shortcuts',
+    panel: 'start',
+    group: 'holen',
+    label: 'Tastenkürzel & Gesten anzeigen',
+    hint: 'Schnellübersicht aller Tastaturbefehle, Pads und Mausgesten',
+    kinds: [],
+    keywords: ['tasten', 'kürzel', 'shortcuts', 'keyboard', 'hotkeys', 'hilfe', 'bedienung', 'tastenkuerzel', 'gesten'],
+  },
+
+  {
     id: 'player',
     panel: 'player',
     group: 'video',

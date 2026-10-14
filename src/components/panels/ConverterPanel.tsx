@@ -6,7 +6,7 @@
  * no network call in it.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   BITRATES,
@@ -24,7 +24,7 @@ import { formatBytes, withExtension } from '../../lib/format'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { createZip } from '../../lib/zip'
 import { formatTimecode } from '../../lib/format'
-import { decodeWithBrowser } from '../../lib/audio'
+import { decodeWithBrowser, getAudioContext, resumeAudioContext, toAudioBuffer } from '../../lib/audio'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { kindFromMime, useActiveAsset, useSession } from '../../state/store'
 import type { AssetKind } from '../../state/store'
@@ -518,6 +518,56 @@ export function ConverterPanel() {
   const [trimOpen, setTrimOpen] = useState(false)
   const duration = asset?.durationSeconds ?? (audio ? audio.channels[0].length / audio.sampleRate : null)
 
+  const [auditioning, setAuditioning] = useState(false)
+  const auditionSourceRef = useRef<AudioBufferSourceNode | null>(null)
+
+  const stopAudition = useCallback(() => {
+    if (auditionSourceRef.current) {
+      try {
+        auditionSourceRef.current.stop()
+      } catch {
+        // Already stopped
+      }
+      auditionSourceRef.current.disconnect()
+      auditionSourceRef.current = null
+    }
+    setAuditioning(false)
+  }, [])
+
+  const startAudition = useCallback(async () => {
+    stopAudition()
+    let data = audio
+    if (!data) {
+      await decode()
+      return
+    }
+    await resumeAudioContext()
+    const ctx = getAudioContext()
+    const buf = toAudioBuffer(data, ctx)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.connect(ctx.destination)
+
+    const startSec = settings.trimStartSeconds ?? 0
+    const endSec = settings.trimEndSeconds ?? (duration ?? buf.duration)
+    const playDuration = Math.max(0.1, endSec - startSec)
+
+    src.onended = () => {
+      setAuditioning(false)
+      auditionSourceRef.current = null
+    }
+
+    auditionSourceRef.current = src
+    src.start(0, startSec, playDuration)
+    setAuditioning(true)
+  }, [audio, decode, duration, settings.trimEndSeconds, settings.trimStartSeconds, stopAudition])
+
+  useEffect(() => {
+    return () => {
+      stopAudition()
+    }
+  }, [stopAudition])
+
   const command = useMemo(() => {
     if (!asset) return null
     const input = `in_${sanitize(asset.name)}`
@@ -910,59 +960,269 @@ export function ConverterPanel() {
                 ) : null}
               </div>
 
-              <div className="mt-[28px]">
+              <div className="mt-[28px] rounded-card bg-panel-soft p-[16px]">
                 <Toggle
                   label="Zuschneiden"
-                  hint="Nur einen Ausschnitt umwandeln. Bildgenau, weil am Ausgang gesucht wird."
+                  hint="Nur einen präzisen Ausschnitt umwandeln. Bildgenau und verlustarm."
                   checked={trimOpen}
                   onChange={(value) => {
                     setTrimOpen(value)
                     if (value && !duration) void decode()
-                    if (!value) setConvert({ trimStartSeconds: null, trimEndSeconds: null })
+                    if (!value) {
+                      stopAudition()
+                      setConvert({ trimStartSeconds: null, trimEndSeconds: null })
+                    }
                   }}
                 />
 
                 {trimOpen ? (
                   duration ? (
-                    <div className="mt-[16px] grid gap-[20px] sm:grid-cols-2">
-                      <Slider
-                        label="Anfang"
-                        display={formatTimecode(settings.trimStartSeconds ?? 0)}
-                        min={0}
-                        max={duration}
-                        step={0.01}
-                        value={settings.trimStartSeconds ?? 0}
-                        onChange={(event) => {
-                          const start = Number(event.target.value)
-                          setConvert({
-                            trimStartSeconds: start,
-                            // Keep the end after the start, or ffmpeg writes nothing.
-                            trimEndSeconds: Math.max(start + 0.1, settings.trimEndSeconds ?? duration),
-                          })
-                        }}
-                      />
-                      <Slider
-                        label="Ende"
-                        display={formatTimecode(settings.trimEndSeconds ?? duration)}
-                        min={0}
-                        max={duration}
-                        step={0.01}
-                        value={settings.trimEndSeconds ?? duration}
-                        onChange={(event) => {
-                          const end = Number(event.target.value)
-                          setConvert({
-                            trimEndSeconds: end,
-                            trimStartSeconds: Math.min(end - 0.1, settings.trimStartSeconds ?? 0),
-                          })
-                        }}
-                      />
-                      <p className="value text-small text-muted sm:col-span-2">
-                        Ausschnitt{' '}
-                        {formatTimecode(
-                          (settings.trimEndSeconds ?? duration) - (settings.trimStartSeconds ?? 0),
-                        )}{' '}
-                        von {formatTimecode(duration)}
-                      </p>
+                    <div className="mt-[16px] flex flex-col gap-[16px]">
+                      {/* Visual Trim Bar */}
+                      <div className="flex flex-col gap-[6px]">
+                        <div className="flex justify-between text-micro text-muted">
+                          <span>00:00.0</span>
+                          <span className="font-semibold text-ink">
+                            Ausschnitt: {formatTimecode((settings.trimEndSeconds ?? duration) - (settings.trimStartSeconds ?? 0))} ({Math.round((((settings.trimEndSeconds ?? duration) - (settings.trimStartSeconds ?? 0)) / duration) * 100)} %)
+                          </span>
+                          <span>{formatTimecode(duration)}</span>
+                        </div>
+                        <div className="relative h-[22px] w-full overflow-hidden rounded-nav bg-panel-mid ring-1 ring-line">
+                          {/* Dimmed left area */}
+                          <div
+                            className="absolute top-0 bottom-0 left-0 bg-ink/10"
+                            style={{ width: `${Math.max(0, Math.min(100, ((settings.trimStartSeconds ?? 0) / duration) * 100))}%` }}
+                          />
+                          {/* Active cut area */}
+                          <div
+                            className="absolute top-0 bottom-0 bg-ink text-on-ink flex items-center justify-center font-mono text-[10px] font-bold shadow-inner"
+                            style={{
+                              left: `${Math.max(0, Math.min(100, ((settings.trimStartSeconds ?? 0) / duration) * 100))}%`,
+                              width: `${Math.max(0.5, Math.min(100, (((settings.trimEndSeconds ?? duration) - (settings.trimStartSeconds ?? 0)) / duration) * 100))}%`,
+                            }}
+                          >
+                            <span className="truncate px-1">
+                              {formatTimecode(settings.trimStartSeconds ?? 0)} – {formatTimecode(settings.trimEndSeconds ?? duration)}
+                            </span>
+                          </div>
+                          {/* Dimmed right area */}
+                          <div
+                            className="absolute top-0 bottom-0 right-0 bg-ink/10"
+                            style={{ width: `${Math.max(0, Math.min(100, (1 - (settings.trimEndSeconds ?? duration) / duration) * 100))}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Presets */}
+                      <div className="flex flex-wrap items-center gap-[6px]">
+                        <span className="text-micro font-medium text-muted">Schnellauswahl:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            stopAudition()
+                            setConvert({ trimStartSeconds: 0, trimEndSeconds: duration })
+                          }}
+                          className="rounded-nav bg-canvas px-[8px] py-[3px] text-micro font-medium text-ink ring-1 ring-line hover:bg-panel-mid"
+                        >
+                          Ganze Datei
+                        </button>
+                        {duration > 30 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              stopAudition()
+                              setConvert({ trimStartSeconds: 0, trimEndSeconds: 30 })
+                            }}
+                            className="rounded-nav bg-canvas px-[8px] py-[3px] text-micro font-medium text-ink ring-1 ring-line hover:bg-panel-mid"
+                          >
+                            Erste 30s
+                          </button>
+                        ) : null}
+                        {duration > 60 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              stopAudition()
+                              setConvert({ trimStartSeconds: 0, trimEndSeconds: 60 })
+                            }}
+                            className="rounded-nav bg-canvas px-[8px] py-[3px] text-micro font-medium text-ink ring-1 ring-line hover:bg-panel-mid"
+                          >
+                            Erste 60s
+                          </button>
+                        ) : null}
+                        {duration > 30 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              stopAudition()
+                              setConvert({ trimStartSeconds: Math.max(0, duration - 30), trimEndSeconds: duration })
+                            }}
+                            className="rounded-nav bg-canvas px-[8px] py-[3px] text-micro font-medium text-ink ring-1 ring-line hover:bg-panel-mid"
+                          >
+                            Letzte 30s
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {/* Precision Start & End Controls */}
+                      <div className="grid gap-[16px] sm:grid-cols-2">
+                        {/* Start Card */}
+                        <div className="flex flex-col gap-[8px] rounded-nav bg-canvas p-[12px] ring-1 ring-line">
+                          <div className="flex items-center justify-between">
+                            <span className="text-small font-semibold text-ink">Startzeit</span>
+                            <span className="font-mono text-small font-bold text-ink">
+                              {formatTimecode(settings.trimStartSeconds ?? 0)}
+                            </span>
+                          </div>
+                          <Slider
+                            label=""
+                            display={formatTimecode(settings.trimStartSeconds ?? 0)}
+                            min={0}
+                            max={duration}
+                            step={0.01}
+                            value={settings.trimStartSeconds ?? 0}
+                            onChange={(event) => {
+                              stopAudition()
+                              const start = Number(event.target.value)
+                              setConvert({
+                                trimStartSeconds: start,
+                                trimEndSeconds: Math.max(start + 0.1, settings.trimEndSeconds ?? duration),
+                              })
+                            }}
+                          />
+                          <div className="flex items-center justify-between gap-[6px]">
+                            <div className="flex gap-[4px]">
+                              {[-5, -1, -0.1, 0.1, 1, 5].map((delta) => (
+                                <button
+                                  key={`start-${delta}`}
+                                  type="button"
+                                  onClick={() => {
+                                    stopAudition()
+                                    const current = settings.trimStartSeconds ?? 0
+                                    const next = Math.max(0, Math.min((settings.trimEndSeconds ?? duration) - 0.1, current + delta))
+                                    setConvert({ trimStartSeconds: Math.round(next * 100) / 100 })
+                                  }}
+                                  className="rounded px-[5px] py-[2px] font-mono text-[11px] text-ink bg-panel-soft hover:bg-panel-mid"
+                                >
+                                  {delta > 0 ? `+${delta}s` : `${delta}s`}
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min={0}
+                              max={duration}
+                              aria-label="Startzeit in Sekunden"
+                              value={Math.round((settings.trimStartSeconds ?? 0) * 10) / 10}
+                              onChange={(e) => {
+                                stopAudition()
+                                const val = Number(e.target.value)
+                                if (!isNaN(val)) {
+                                  setConvert({
+                                    trimStartSeconds: Math.max(0, Math.min((settings.trimEndSeconds ?? duration) - 0.1, val)),
+                                  })
+                                }
+                              }}
+                              className="w-[60px] rounded border border-line bg-canvas px-1 py-0.5 text-right font-mono text-micro text-ink"
+                            />
+                          </div>
+                        </div>
+
+                        {/* End Card */}
+                        <div className="flex flex-col gap-[8px] rounded-nav bg-canvas p-[12px] ring-1 ring-line">
+                          <div className="flex items-center justify-between">
+                            <span className="text-small font-semibold text-ink">Endzeit</span>
+                            <span className="font-mono text-small font-bold text-ink">
+                              {formatTimecode(settings.trimEndSeconds ?? duration)}
+                            </span>
+                          </div>
+                          <Slider
+                            label=""
+                            display={formatTimecode(settings.trimEndSeconds ?? duration)}
+                            min={0}
+                            max={duration}
+                            step={0.01}
+                            value={settings.trimEndSeconds ?? duration}
+                            onChange={(event) => {
+                              stopAudition()
+                              const end = Number(event.target.value)
+                              setConvert({
+                                trimEndSeconds: end,
+                                trimStartSeconds: Math.min(end - 0.1, settings.trimStartSeconds ?? 0),
+                              })
+                            }}
+                          />
+                          <div className="flex items-center justify-between gap-[6px]">
+                            <div className="flex gap-[4px]">
+                              {[-5, -1, -0.1, 0.1, 1, 5].map((delta) => (
+                                <button
+                                  key={`end-${delta}`}
+                                  type="button"
+                                  onClick={() => {
+                                    stopAudition()
+                                    const current = settings.trimEndSeconds ?? duration
+                                    const next = Math.max((settings.trimStartSeconds ?? 0) + 0.1, Math.min(duration, current + delta))
+                                    setConvert({ trimEndSeconds: Math.round(next * 100) / 100 })
+                                  }}
+                                  className="rounded px-[5px] py-[2px] font-mono text-[11px] text-ink bg-panel-soft hover:bg-panel-mid"
+                                >
+                                  {delta > 0 ? `+${delta}s` : `${delta}s`}
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min={0}
+                              max={duration}
+                              aria-label="Endzeit in Sekunden"
+                              value={Math.round((settings.trimEndSeconds ?? duration) * 10) / 10}
+                              onChange={(e) => {
+                                stopAudition()
+                                const val = Number(e.target.value)
+                                if (!isNaN(val)) {
+                                  setConvert({
+                                    trimEndSeconds: Math.min(duration, Math.max((settings.trimStartSeconds ?? 0) + 0.1, val)),
+                                  })
+                                }
+                              }}
+                              className="w-[60px] rounded border border-line bg-canvas px-1 py-0.5 text-right font-mono text-micro text-ink"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Audition Playback Button */}
+                      <div className="flex flex-wrap items-center gap-[10px] pt-[4px]">
+                        <Button
+                          size="sm"
+                          variant="quiet"
+                          onClick={() => {
+                            if (auditioning) {
+                              stopAudition()
+                            } else {
+                              void startAudition()
+                            }
+                          }}
+                        >
+                          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden>
+                            {auditioning ? (
+                              <path d="M4 3h3v10H4V3zm5 0h3v10H9V3z" />
+                            ) : (
+                              <path d="M4 3.5v9l8-4.5-8-4.5z" />
+                            )}
+                          </svg>
+                          {auditioning
+                            ? 'Ausschnitt anhalten'
+                            : decodeStatus === 'decoding'
+                            ? 'Audio wird dekodiert…'
+                            : 'Ausschnitt vorhören'}
+                        </Button>
+                        <span className="text-micro text-muted">
+                          Spielt exakt von {formatTimecode(settings.trimStartSeconds ?? 0)} bis {formatTimecode(settings.trimEndSeconds ?? duration)} ab.
+                        </span>
+                      </div>
                     </div>
                   ) : (
                     <p className="mt-[16px] text-small text-muted">

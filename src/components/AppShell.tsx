@@ -54,9 +54,11 @@ export function Logo({ as = 'h1' }: { as?: 'h1' | 'span' }) {
     <Tag className="m-0 flex items-center gap-[8px] text-ink">
       <Mark />
       <span className="font-wordmark text-[25px] font-light tracking-[-0.01em]">Sondra</span>
-      <span className="value rounded-pill border border-line bg-panel-soft px-[7px] py-[1.5px] text-[11px] font-medium tracking-normal text-muted">
-        v{APP_VERSION}
-      </span>
+      {IN_DESKTOP_APP ? null : (
+        <span className="value rounded-pill border border-line bg-panel-soft px-[7px] py-[1.5px] text-[11px] font-medium tracking-normal text-muted">
+          v{APP_VERSION}
+        </span>
+      )}
       <span className="sr-only"> — Ton, Video und Bilder bearbeiten</span>
     </Tag>
   )

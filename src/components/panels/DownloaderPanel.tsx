@@ -35,9 +35,89 @@ import {
 import { serviceConnection } from '../../lib/serviceState'
 import { kindFromMime, useSession } from '../../state/store'
 import { Button, Card, Notice, Progress, Reveal, TextInput } from '../ui/primitives'
+import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { AdvancedDownloader } from './DownloaderAdvanced'
 
-/* -------------------------------------------------------------------------- */
+export type AudioOutputFormat = 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus' | 'original'
+
+const AUDIO_FORMAT_CONFIGS: { id: AudioOutputFormat; label: string; desc: string; ext: string; mime: string }[] = [
+  { id: 'mp3', label: 'MP3', desc: '320 kbps (Standard)', ext: 'mp3', mime: 'audio/mpeg' },
+  { id: 'wav', label: 'WAV', desc: 'Verlustfrei (PCM)', ext: 'wav', mime: 'audio/wav' },
+  { id: 'm4a', label: 'M4A', desc: 'AAC 256k (Apple / Mobile)', ext: 'm4a', mime: 'audio/mp4' },
+  { id: 'flac', label: 'FLAC', desc: 'Verlustfrei komprimiert', ext: 'flac', mime: 'audio/flac' },
+  { id: 'opus', label: 'OPUS', desc: '160k (Kompakt & Klar)', ext: 'opus', mime: 'audio/ogg' },
+  { id: 'original', label: 'Original', desc: 'Audiostream unverändert', ext: 'm4a', mime: 'audio/mp4' },
+]
+
+async function processDownloadedAudio(
+  bytes: Uint8Array,
+  inputExt: string,
+  targetFormat: AudioOutputFormat,
+  hasVideo: boolean,
+  meta: { title?: string | null; artist?: string | null; coverUrl?: string | null },
+  signal?: AbortSignal,
+  onStatus?: (status: string) => void,
+): Promise<{ bytes: Uint8Array; ext: string; mime: string }> {
+  const cleanInExt = (inputExt || 'mp4').replace(/^\./, '').toLowerCase()
+
+  if (!hasVideo && (targetFormat === 'original' || cleanInExt === targetFormat)) {
+    const tagged = await tagAudioFile(bytes, cleanInExt, meta, signal)
+    const mimeMap: Record<string, string> = {
+      mp3: 'audio/mpeg',
+      wav: 'audio/wav',
+      m4a: 'audio/mp4',
+      flac: 'audio/flac',
+      opus: 'audio/ogg',
+      ogg: 'audio/ogg',
+    }
+    return { bytes: tagged, ext: cleanInExt, mime: mimeMap[cleanInExt] || 'audio/mp4' }
+  }
+
+  await loadFfmpeg()
+  const inName = `dl_in_${Date.now()}.${cleanInExt}`
+  const outExt = targetFormat === 'original' ? (cleanInExt === 'webm' ? 'opus' : 'm4a') : targetFormat
+  const outName = `dl_out_${Date.now()}.${outExt}`
+
+  const args: string[] = ['-i', inName, '-vn']
+  if (targetFormat === 'mp3') {
+    args.push('-b:a', '320k')
+  } else if (targetFormat === 'm4a') {
+    args.push('-c:a', 'aac', '-b:a', '256k')
+  } else if (targetFormat === 'flac') {
+    args.push('-c:a', 'flac')
+  } else if (targetFormat === 'opus') {
+    args.push('-c:a', 'libopus', '-b:a', '160k')
+  } else if (targetFormat === 'wav') {
+    // wav default PCM
+  } else {
+    args.push('-c:a', 'aac', '-b:a', '256k')
+  }
+  args.push(outName)
+
+  onStatus?.(`Tonspur wird als ${outExt.toUpperCase()} extrahiert …`)
+  const { files } = await runFfmpeg({
+    input: { [inName]: bytes },
+    output: [outName],
+    args,
+    signal,
+  })
+
+  let outBytes = files[outName]
+  if (!outBytes || outBytes.byteLength === 0) {
+    throw new Error(`Audio-Extraktion nach ${outExt.toUpperCase()} fehlgeschlagen.`)
+  }
+
+  outBytes = await tagAudioFile(outBytes, outExt, meta, signal)
+
+  const mimeMap: Record<string, string> = {
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    m4a: 'audio/mp4',
+    flac: 'audio/flac',
+    opus: 'audio/ogg',
+  }
+  return { bytes: outBytes, ext: outExt, mime: mimeMap[outExt] || 'audio/mp4' }
+}
 
 /**
  * The one place where Sondra is not local, said loudly.
@@ -291,11 +371,15 @@ export function DownloaderPanel() {
   const [taken, setTaken] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const batchAbortRef = useRef<AbortController | null>(null)
+  const resolvingMapRef = useRef<Map<number, Promise<void>>>(new Map())
+  const itemAbortControllers = useRef<Map<number, AbortController>>(new Map())
   const online = useOnline()
 
   useEffect(() => () => {
     abortRef.current?.abort()
     batchAbortRef.current?.abort()
+    itemAbortControllers.current.forEach((c) => c.abort())
+    itemAbortControllers.current.clear()
   }, [])
 
   const [autoTranscribe, setAutoTranscribe] = useState(false)
@@ -305,6 +389,10 @@ export function DownloaderPanel() {
   const [filterAudioOnly, setFilterAudioOnly] = useState(false)
   const filterAudioOnlyRef = useRef(false)
   filterAudioOnlyRef.current = filterAudioOnly
+
+  const [targetAudioFormat, setTargetAudioFormat] = useState<AudioOutputFormat>('mp3')
+  const targetAudioFormatRef = useRef<AudioOutputFormat>('mp3')
+  targetAudioFormatRef.current = targetAudioFormat
 
   const triggerAutoTranscribe = useCallback(
     async (assetName: string, assetBytes: Uint8Array) => {
@@ -374,9 +462,18 @@ export function DownloaderPanel() {
             status: 'pending',
           }))
           setBatchEntries(playlistItems)
-          // Resolve first items up to concurrency in the background
-          const initialIndices = playlistItems.slice(0, concurrency).map((_, i) => i)
-          void Promise.all(initialIndices.map((i) => resolveBatchItem(i, controller.signal, playlistItems)))
+
+          // Alle Einträge im Hintergrund auflösen (mit maximal concurrency parallelen Workern)
+          let cursor = 0
+          const workerCount = Math.min(concurrency, playlistItems.length)
+          const workers = Array.from({ length: workerCount }, async () => {
+            while (cursor < playlistItems.length) {
+              if (controller.signal.aborted) break
+              const i = cursor++
+              await resolveBatchItem(i, controller.signal, playlistItems)
+            }
+          })
+          void Promise.all(workers)
           return
         }
         setResult(found)
@@ -401,65 +498,72 @@ export function DownloaderPanel() {
       status: 'pending',
     }))
     setBatchEntries(initial)
+    setLooking(false)
 
-    try {
-      let cursor = 0
-      const workerCount = Math.min(concurrency, targets.length)
-      const workers = Array.from({ length: workerCount }, async () => {
-        while (cursor < targets.length) {
-          if (controller.signal.aborted) break
-          const i = cursor++
-          await resolveBatchItem(i, controller.signal, initial)
-        }
-      })
-      await Promise.all(workers)
-    } finally {
-      setLooking(false)
-    }
+    let cursor = 0
+    const workerCount = Math.min(concurrency, targets.length)
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (cursor < targets.length) {
+        if (controller.signal.aborted) break
+        const i = cursor++
+        await resolveBatchItem(i, controller.signal, initial)
+      }
+    })
+    void Promise.all(workers)
   }
 
   const resolveBatchItem = async (
     index: number,
     signal?: AbortSignal,
     fallbackEntries?: BatchItem[],
-  ) => {
+  ): Promise<void> => {
+    const inFlight = resolvingMapRef.current.get(index)
+    if (inFlight) return inFlight
+
     const list = batchEntriesRef.current ?? fallbackEntries
     const entry = list?.[index]
     if (!entry || entry.status === 'ready' || entry.status === 'done') return
 
-    setBatchEntries((prev) =>
-      prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'resolving', error: undefined } : e)) : null,
-    )
+    const task = (async () => {
+      setBatchEntries((prev) =>
+        prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'resolving', error: undefined } : e)) : null,
+      )
 
-    try {
-      const res = await resolveViaService(entry.url, signal)
-      if (res.isPlaylist) return
-      const audioStream = res.streams.find((s) => !s.hasVideo && s.hasAudio)
-      const bestStream = filterAudioOnlyRef.current && audioStream
-        ? audioStream
-        : res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
-      setBatchEntries((prev) =>
-        prev
-          ? prev.map((e, idx) =>
-              idx === index
-                ? {
-                    ...e,
-                    status: 'ready',
-                    result: res,
-                    selectedStreamId: bestStream?.id ?? res.streams[0]?.id,
-                  }
-                : e,
-            )
-          : null,
-      )
-      log('holen', `${res.title} — bereit`)
-    } catch (cause) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') return
-      const msg = cause instanceof StudioError ? cause.message : cause instanceof Error ? cause.message : String(cause)
-      setBatchEntries((prev) =>
-        prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'error', error: msg } : e)) : null,
-      )
-    }
+      try {
+        const res = await resolveViaService(entry.url, signal)
+        if (res.isPlaylist) return
+        const audioStream = res.streams.find((s) => !s.hasVideo && s.hasAudio)
+        const bestStream = filterAudioOnlyRef.current && audioStream
+          ? audioStream
+          : res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
+        setBatchEntries((prev) =>
+          prev
+            ? prev.map((e, idx) =>
+                idx === index
+                  ? {
+                      ...e,
+                      status: 'ready',
+                      result: res,
+                      selectedStreamId: bestStream?.id ?? res.streams[0]?.id,
+                    }
+                  : e,
+              )
+            : null,
+        )
+        log('holen', `${res.title} — bereit`)
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return
+        const msg = cause instanceof StudioError ? cause.message : cause instanceof Error ? cause.message : String(cause)
+        setBatchEntries((prev) =>
+          prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'error', error: msg } : e)) : null,
+        )
+      } finally {
+        resolvingMapRef.current.delete(index)
+      }
+    })()
+
+    resolvingMapRef.current.set(index, task)
+    return task
   }
 
   const take = async (stream: StudioStream) => {
@@ -476,7 +580,30 @@ export function DownloaderPanel() {
         onProgress: setProgress,
       })
       let finalBytes = bytes
-      if (!stream.hasVideo && stream.hasAudio) {
+      let finalExt = stream.ext
+      let finalMime = stream.mime
+      let finalKind = kindFromMime(stream.mime, stream.label)
+
+      if (filterAudioOnly) {
+        setBusy(`Wandle in ${targetAudioFormat.toUpperCase()} um …`)
+        const audioRes = await processDownloadedAudio(
+          bytes,
+          stream.ext,
+          targetAudioFormat,
+          stream.hasVideo,
+          {
+            title: result.title,
+            artist: result.author,
+            coverUrl: result.thumbnail,
+          },
+          controller.signal,
+          (status) => setBusy(status),
+        )
+        finalBytes = audioRes.bytes
+        finalExt = audioRes.ext
+        finalMime = audioRes.mime
+        finalKind = 'audio'
+      } else if (!stream.hasVideo && stream.hasAudio) {
         finalBytes = await tagAudioFile(
           bytes,
           stream.ext,
@@ -488,20 +615,25 @@ export function DownloaderPanel() {
           controller.signal,
         )
       }
-      const name = filenameFor(result, stream, { mode: stealthMode })
+
+      let name = filenameFor(result, stream, { mode: stealthMode })
+      if (filterAudioOnly) {
+        name = name.replace(/\.[a-zA-Z0-9]+$/, '') + `.${finalExt}`
+      }
+
       addAsset({
         name,
         bytes: finalBytes,
-        mime: stream.mime,
+        mime: finalMime,
         sizeBytes: finalBytes.byteLength,
-        kind: kindFromMime(stream.mime, name),
+        kind: finalKind,
         audio: null,
         durationSeconds: result.durationSeconds,
         origin: 'download',
       })
       log('holen', `${name} geladen (${formatBytes(finalBytes.byteLength)})`)
-      setTaken({ name, bytes: finalBytes, mime: stream.mime })
-      recordDownload(url, result.title, result.author ?? '', stream.ext, finalBytes.byteLength)
+      setTaken({ name, bytes: finalBytes, mime: finalMime })
+      recordDownload(url, result.title, result.author ?? '', finalExt, finalBytes.byteLength)
       if (autoTranscribe) {
         void triggerAutoTranscribe(name, finalBytes)
       }
@@ -524,7 +656,7 @@ export function DownloaderPanel() {
     let entry = batchEntriesRef.current?.[index]
     if (!entry) return
 
-    if (entry.status === 'pending' || !entry.result) {
+    if (entry.status !== 'ready' || !entry.result) {
       await resolveBatchItem(index, externalSignal)
       entry = batchEntriesRef.current?.[index]
       if (!entry || !entry.result) return
@@ -536,7 +668,10 @@ export function DownloaderPanel() {
     if (!stream) return
 
     const controller = externalSignal ? null : new AbortController()
-    if (controller) abortRef.current = controller
+    if (controller) {
+      itemAbortControllers.current.set(index, controller)
+      abortRef.current = controller
+    }
     const signal = externalSignal || controller!.signal
 
     setBatchEntries((prev) =>
@@ -559,7 +694,35 @@ export function DownloaderPanel() {
         },
       })
       let finalBytes = bytes
-      if (!stream.hasVideo && stream.hasAudio) {
+      let finalExt = stream.ext
+      let finalMime = stream.mime
+      let finalKind = kindFromMime(stream.mime, stream.label)
+
+      if (filterAudioOnlyRef.current) {
+        setBatchEntries((prev) =>
+          prev
+            ? prev.map((e, idx) =>
+                idx === index ? { ...e, status: 'downloading', progress: { loaded: stream.bytes ?? 0, total: stream.bytes } } : e,
+              )
+            : null,
+        )
+        const audioRes = await processDownloadedAudio(
+          bytes,
+          stream.ext,
+          targetAudioFormatRef.current,
+          stream.hasVideo,
+          {
+            title: entry.result.title,
+            artist: entry.result.author,
+            coverUrl: entry.result.thumbnail,
+          },
+          signal,
+        )
+        finalBytes = audioRes.bytes
+        finalExt = audioRes.ext
+        finalMime = audioRes.mime
+        finalKind = 'audio'
+      } else if (!stream.hasVideo && stream.hasAudio) {
         finalBytes = await tagAudioFile(
           bytes,
           stream.ext,
@@ -571,13 +734,18 @@ export function DownloaderPanel() {
           signal,
         )
       }
-      const name = filenameFor(entry.result, stream, { mode: stealthModeRef.current })
+
+      let name = filenameFor(entry.result, stream, { mode: stealthModeRef.current })
+      if (filterAudioOnlyRef.current) {
+        name = name.replace(/\.[a-zA-Z0-9]+$/, '') + `.${finalExt}`
+      }
+
       addAsset({
         name,
         bytes: finalBytes,
-        mime: stream.mime,
+        mime: finalMime,
         sizeBytes: finalBytes.byteLength,
-        kind: kindFromMime(stream.mime, name),
+        kind: finalKind,
         audio: null,
         durationSeconds: entry.result.durationSeconds,
         origin: 'download',
@@ -594,13 +762,13 @@ export function DownloaderPanel() {
                     ...e,
                     status: 'done',
                     progress: null,
-                    taken: { name, bytes: finalBytes, mime: stream.mime },
+                    taken: { name, bytes: finalBytes, mime: finalMime },
                   }
                 : e,
             )
           : null,
       )
-      recordDownload(entry.url, entry.result.title, entry.result.author ?? '', stream.ext, finalBytes.byteLength)
+      recordDownload(entry.url, entry.result.title, entry.result.author ?? '', finalExt, finalBytes.byteLength)
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
       const msg =
@@ -617,6 +785,10 @@ export function DownloaderPanel() {
           : null,
       )
       log('holen', `Fehler beim Laden von ${entry.result?.title ?? entry.url}: ${msg}`, 'error')
+    } finally {
+      if (controller) {
+        itemAbortControllers.current.delete(index)
+      }
     }
   }
 
@@ -628,11 +800,12 @@ export function DownloaderPanel() {
     try {
       const indicesToProcess = batchEntriesRef.current
         .map((entry, idx) => ({ entry, idx }))
-        .filter(({ entry }) => entry.status === 'ready' || entry.status === 'pending')
+        .filter(({ entry }) => entry.status !== 'done' && entry.status !== 'downloading')
         .map(({ idx }) => idx)
 
       let cursor = 0
-      const activeWorkers = Math.min(concurrency, indicesToProcess.length)
+      const maxParallel = Math.max(1, Math.min(5, concurrency))
+      const activeWorkers = Math.min(maxParallel, indicesToProcess.length)
       const workers = Array.from({ length: activeWorkers }, async () => {
         while (cursor < indicesToProcess.length) {
           if (controller.signal.aborted) break
@@ -689,8 +862,61 @@ export function DownloaderPanel() {
             </Button>
           </div>
 
-          <div className="mt-[6px] flex flex-col gap-[6px]">
-            <div className="flex items-center gap-[10px]">
+          {/* Download-Optionen & Format-Wahl */}
+          <div className="mt-[12px] flex flex-col gap-[12px] rounded-card bg-panel-soft p-[14px]">
+            <div className="flex flex-wrap items-center justify-between gap-[8px]">
+              <span className="text-small font-semibold text-ink">Download-Modus:</span>
+              <div role="radiogroup" aria-label="Download-Modus" className="inline-flex rounded-nav bg-canvas p-[3px] ring-1 ring-line">
+                <button
+                  type="button"
+                  onClick={() => setFilterAudioOnly(false)}
+                  className={`rounded-nav px-[14px] py-[4px] text-small font-medium transition-colors ${
+                    !filterAudioOnly ? 'bg-ink text-on-ink shadow-sm' : 'text-muted hover:text-ink'
+                  }`}
+                >
+                  Video & Audio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterAudioOnly(true)}
+                  className={`rounded-nav px-[14px] py-[4px] text-small font-medium transition-colors ${
+                    filterAudioOnly ? 'bg-ink text-on-ink shadow-sm' : 'text-muted hover:text-ink'
+                  }`}
+                >
+                  Nur Tonspur (Audio)
+                </button>
+              </div>
+            </div>
+
+            {filterAudioOnly ? (
+              <div className="flex flex-col gap-[8px] border-t border-line/60 pt-[10px]">
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  <span className="text-small font-medium text-ink">Audioformat:</span>
+                  <div className="flex flex-wrap gap-[6px]">
+                    {AUDIO_FORMAT_CONFIGS.map((fmt) => (
+                      <button
+                        key={fmt.id}
+                        type="button"
+                        onClick={() => setTargetAudioFormat(fmt.id)}
+                        className={`rounded-nav px-[10px] py-[3px] text-small transition-all ${
+                          targetAudioFormat === fmt.id
+                            ? 'bg-ink text-on-ink font-semibold shadow-sm'
+                            : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
+                        }`}
+                        title={fmt.desc}
+                      >
+                        {fmt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-micro text-muted">
+                  {AUDIO_FORMAT_CONFIGS.find((f) => f.id === targetAudioFormat)?.desc} — Tonspur wird extrahiert und als {targetAudioFormat.toUpperCase()} abgespeichert.
+                </p>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px] border-t border-line/60 pt-[10px]">
               <label className="flex cursor-pointer items-center gap-[8px] text-small font-medium text-ink">
                 <input
                   type="checkbox"
@@ -698,40 +924,29 @@ export function DownloaderPanel() {
                   onChange={(e) => setAutoTranscribe(e.target.checked)}
                   className="rounded border-line text-ink focus:ring-ink"
                 />
-                Nach dem Download automatisch Untertitel generieren (.srt)
+                Automatisch Untertitel generieren (.srt)
               </label>
+
+              <div className="flex items-center gap-[8px]">
+                <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
+                  Dateiname:
+                </label>
+                <select
+                  id="stealth-mode-select"
+                  value={stealthMode}
+                  onChange={(e) => setStealthMode(e.target.value as StealthMode)}
+                  className="rounded-nav border border-line bg-canvas px-[8px] py-[3px] text-small text-ink focus:border-ink focus:outline-none"
+                >
+                  <option value="off">Originaltitel</option>
+                  <option value="standard">Standard (media_xxx)</option>
+                  <option value="full_security">Verschleiert (Hash)</option>
+                  <option value="teams_office">Office Dokument</option>
+                </select>
+              </div>
             </div>
 
-            <div className="flex items-center gap-[10px]">
-              <label className="flex cursor-pointer items-center gap-[8px] text-small font-medium text-ink">
-                <input
-                  type="checkbox"
-                  checked={filterAudioOnly}
-                  onChange={(e) => setFilterAudioOnly(e.target.checked)}
-                  className="rounded border-line text-ink focus:ring-ink"
-                />
-                Nur Tonspur (bevorzugt reine Audio-Streams)
-              </label>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-[10px]">
-              <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
-                Dateinamen-Verschleierung:
-              </label>
-              <select
-                id="stealth-mode-select"
-                value={stealthMode}
-                onChange={(e) => setStealthMode(e.target.value as StealthMode)}
-                className="rounded-nav border border-line bg-canvas px-[10px] py-[4px] text-small text-ink focus:border-ink focus:outline-none"
-              >
-                <option value="off">Aus (Originaltitel)</option>
-                <option value="standard">Standard (media_xxx.mp4)</option>
-                <option value="full_security">Maximale Sicherheit (reiner Hash-Code)</option>
-                <option value="teams_office">Unauffällig (Teams & Office Dokument)</option>
-              </select>
-            </div>
             {stealthMode !== 'off' ? (
-              <p className="text-small text-muted">
+              <p className="text-micro text-muted">
                 {stealthMode === 'standard' && 'Muster: media_7a8b9c.mp4 — neutraler Standardname'}
                 {stealthMode === 'full_security' && 'Muster: 7a8b9c0d1e2f.mp4 — minimaler Code ohne Wörter oder Zeitbezug'}
                 {stealthMode === 'teams_office' && 'Muster: Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4 — wirkt wie ein regulärer Office-Download'}
@@ -739,47 +954,36 @@ export function DownloaderPanel() {
             ) : null}
 
             {IN_DESKTOP_APP ? (
-              <div className="mt-[4px] flex flex-col gap-[4px] border-t border-line/60 pt-[8px]">
-                <div className="flex flex-wrap items-center gap-[10px]">
-                  <label htmlFor="adapter-select" className="text-small font-medium text-ink">
-                    Verbindung / Netzwerkkarte:
-                  </label>
-                  <select
-                    id="adapter-select"
-                    value={selectedAdapter}
-                    disabled={adapterLoading || adapters.length === 0}
-                    onChange={(e) => void changeAdapter(e.target.value)}
-                    className="rounded-nav border border-line bg-canvas px-[10px] py-[4px] text-small text-ink focus:border-ink focus:outline-none"
-                  >
-                    {adapters.length === 0 ? (
-                      <option value="default">Automatisch (Windows-Standard)</option>
-                    ) : (
-                      adapters.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => void fetchAdapters()}
-                    disabled={adapterLoading}
-                    title="Adapterliste aktualisieren"
-                    className="cursor-pointer text-small text-muted underline hover:text-ink disabled:opacity-50"
-                  >
-                    {adapterLoading ? 'Sucht…' : 'Neu suchen'}
-                  </button>
-                </div>
-                {selectedAdapter !== 'default' ? (
-                  <p className="text-small text-muted">
-                    Downloads laufen über diesen Adapter ({selectedAdapter}) — Ethernet bleibt unberührt.
-                  </p>
-                ) : (
-                  <p className="text-small text-muted">
-                    Standard: Windows entscheidet die Route. Schalte den Handy-Hotspot ein und wähle ihn hier aus, um Downloads über Mobilfunk zu leiten.
-                  </p>
-                )}
+              <div className="flex flex-wrap items-center gap-[10px] border-t border-line/60 pt-[8px]">
+                <label htmlFor="adapter-select" className="text-small font-medium text-ink">
+                  Verbindung / Route:
+                </label>
+                <select
+                  id="adapter-select"
+                  value={selectedAdapter}
+                  disabled={adapterLoading || adapters.length === 0}
+                  onChange={(e) => void changeAdapter(e.target.value)}
+                  className="rounded-nav border border-line bg-canvas px-[8px] py-[3px] text-small text-ink focus:border-ink focus:outline-none"
+                >
+                  {adapters.length === 0 ? (
+                    <option value="default">Automatisch (Windows-Standard)</option>
+                  ) : (
+                    adapters.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void fetchAdapters()}
+                  disabled={adapterLoading}
+                  title="Adapterliste aktualisieren"
+                  className="cursor-pointer text-small text-muted underline hover:text-ink disabled:opacity-50"
+                >
+                  {adapterLoading ? 'Sucht…' : 'Neu suchen'}
+                </button>
               </div>
             ) : null}
           </div>
@@ -866,23 +1070,30 @@ export function DownloaderPanel() {
           </div>
 
           <div className="mt-[16px] flex flex-col gap-[8px]">
+            {filterAudioOnly ? (
+              <p className="text-small text-muted">
+                Audiospur wird als <span className="font-semibold text-ink">{targetAudioFormat.toUpperCase()}</span> extrahiert:
+              </p>
+            ) : null}
             {(filterAudioOnly && result.streams.some((s) => !s.hasVideo && s.hasAudio)
               ? result.streams.filter((s) => !s.hasVideo && s.hasAudio)
               : result.streams
             ).map((stream) => (
               <div
                 key={stream.id}
-                // A list of options, so a rule between them rather than a box
-                // around each.
                 className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line px-[4px] py-[12px]"
               >
                 <span className="min-w-0 flex-1 text-small text-ink">{stream.label}</span>
                 <span className="value text-small text-muted">
-                  {stream.ext.toUpperCase()}
+                  {filterAudioOnly ? targetAudioFormat.toUpperCase() : stream.ext.toUpperCase()}
                   {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
                 </span>
                 <Button size="sm" disabled={busy !== null} onClick={() => void take(stream)}>
-                  {busy === stream.label ? 'Lädt …' : 'Laden'}
+                  {busy === stream.label
+                    ? 'Lädt …'
+                    : filterAudioOnly
+                    ? `${targetAudioFormat.toUpperCase()} laden`
+                    : 'Laden'}
                 </Button>
               </div>
             ))}
@@ -961,7 +1172,7 @@ export function DownloaderPanel() {
                 >
                   {[1, 2, 3, 4, 5].map((n) => (
                     <option key={n} value={n}>
-                      {n} {n === 1 ? 'Download' : 'Downloads'}
+                      {n} gleichzeitig{n === 3 ? ' (Standard)' : ''}
                     </option>
                   ))}
                 </select>
@@ -973,6 +1184,8 @@ export function DownloaderPanel() {
                   onClick={() => {
                     batchAbortRef.current?.abort()
                     abortRef.current?.abort()
+                    itemAbortControllers.current.forEach((c) => c.abort())
+                    itemAbortControllers.current.clear()
                     setBatchBusy(false)
                   }}
                 >
@@ -983,8 +1196,7 @@ export function DownloaderPanel() {
                 size="sm"
                 disabled={
                   batchBusy ||
-                  looking ||
-                  !batchEntries.some((e) => e.status === 'ready' || e.status === 'pending')
+                  !batchEntries.some((e) => e.status !== 'done' && e.status !== 'downloading')
                 }
                 onClick={() => void downloadAllBatch()}
               >
@@ -1028,11 +1240,25 @@ export function DownloaderPanel() {
 
                     <div className="flex flex-wrap items-center gap-[8px]">
                       {entry.status === 'pending' ? (
-                        <span className="value text-small text-muted">In Warteschlange</span>
+                        <>
+                          <span className="value text-small text-muted">Bereit</span>
+                          <Button
+                            size="sm"
+                            disabled={batchBusy}
+                            onClick={() => void takeBatchItem(index)}
+                          >
+                            Laden
+                          </Button>
+                        </>
                       ) : null}
 
                       {entry.status === 'resolving' ? (
-                        <span className="value text-small text-muted">Wird gesucht …</span>
+                        <>
+                          <span className="value text-small text-muted">Wird gesucht …</span>
+                          <Button size="sm" variant="quiet" disabled>
+                            Laden
+                          </Button>
+                        </>
                       ) : null}
 
                       {entry.status === 'ready' && entry.result ? (
@@ -1076,6 +1302,10 @@ export function DownloaderPanel() {
                         </>
                       ) : null}
 
+                      {entry.status === 'downloading' ? (
+                        <span className="value text-small text-muted">Wird geladen …</span>
+                      ) : null}
+
                       {entry.status === 'done' && entry.taken ? (
                         <div className="flex items-center gap-[8px]">
                           <span className="value text-small font-medium text-ink">In der Sitzung</span>
@@ -1087,6 +1317,17 @@ export function DownloaderPanel() {
                             Speichern
                           </Button>
                         </div>
+                      ) : null}
+
+                      {entry.status === 'error' ? (
+                        <Button
+                          size="sm"
+                          variant="quiet"
+                          disabled={batchBusy}
+                          onClick={() => void takeBatchItem(index)}
+                        >
+                          Erneut versuchen
+                        </Button>
                       ) : null}
                     </div>
                   </div>

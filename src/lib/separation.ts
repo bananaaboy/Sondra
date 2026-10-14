@@ -53,8 +53,8 @@ export const DEFAULT_SEPARATION: SeparationOptions = {
   hopSize: 1024,
   timeKernel: 17,
   freqKernel: 17,
-  maskExponent: 2,
-  vocalFocus: 0.55,
+  maskExponent: 2.8,
+  vocalFocus: 0.65,
   segmentSeconds: 24,
   overlapSeconds: 1,
 }
@@ -243,17 +243,29 @@ function buildMasks(
       const bassBand = bass[b]
       const nonBass = 1 - bassBand
 
-      const vocalScore = harmonicShare * centred * vocalBand * nonBass
+      // Non-linear contrast enhancement for stereo centre purity
+      const centrePurity = Math.pow(centred, 1.8 + focus * 1.4)
+      const hScore = Math.pow(harmonicShare, 1.2)
+      const pScore = Math.pow(percussiveShare, 1.2)
+
+      const vocalScore = hScore * centrePurity * vocalBand * nonBass
       // Bass carries the pluck as well as the note, so it draws on both layers.
-      const bassScore = (0.8 * harmonicShare + 0.2 * percussiveShare) * bassBand
-      const drumScore = percussiveShare * (1 - 0.6 * bassBand)
-      const otherScore = harmonicShare * (1 - centred * vocalBand) * nonBass
+      const bassScore = (0.85 * hScore + 0.15 * pScore) * bassBand
+      const drumScore = pScore * (1 - 0.65 * bassBand)
+      const otherScore = hScore * (1 - centrePurity * vocalBand) * nonBass
 
       const total = vocalScore + bassScore + drumScore + otherScore + epsilon
-      masks.vocals[i] = vocalScore / total
-      masks.bass[i] = bassScore / total
-      masks.drums[i] = drumScore / total
-      masks.other[i] = otherScore / total
+      // Soft thresholding / contrast sharpening
+      const v = Math.pow(vocalScore / total, 1.15)
+      const bs = Math.pow(bassScore / total, 1.15)
+      const d = Math.pow(drumScore / total, 1.15)
+      const o = Math.pow(otherScore / total, 1.15)
+      const sum = v + bs + d + o + epsilon
+
+      masks.vocals[i] = v / sum
+      masks.bass[i] = bs / sum
+      masks.drums[i] = d / sum
+      masks.other[i] = o / sum
     }
   }
 

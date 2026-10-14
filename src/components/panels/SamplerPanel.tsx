@@ -824,131 +824,140 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
               ) : null}
 
               {/* ---- chop controls ------------------------------------------ */}
-              <div className="mt-[16px] grid gap-[12px] sm:grid-cols-2 xl:grid-cols-4">
-                <div className="flex flex-col gap-[8px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-ink/20">
-                  <span className="text-small font-semibold text-ink">
-                    Auto-Chop 16
-                  </span>
-                  <p className="text-small leading-[1.4] text-muted">
-                    Findet die 16 stärksten Hits und belegt die 16 Pads sauber.
-                  </p>
-                  <div className="mt-[4px] flex flex-col gap-[2px]">
-                    <div className="flex justify-between text-micro text-muted">
-                      <span>Empfindlichkeit</span>
-                      <span className="value text-ink">{sensitivity.toFixed(1)}</span>
+              <div className="mt-[16px]">
+                <div className="mb-[10px] flex items-center justify-between">
+                  <span className="text-small font-semibold text-ink">Schnittverfahren</span>
+                  <span className="text-micro text-muted">Automatisch, nach Anschlag, Takt oder gleichmäßig</span>
+                </div>
+                <div className="grid gap-[12px] sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="flex flex-col justify-between rounded-card bg-panel-soft p-[14px] ring-1 ring-inset ring-ink/15">
+                    <div className="flex flex-col gap-[6px]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-small font-semibold text-ink">Auto-Chop 16</span>
+                        <Badge tone="forest">16 Pads</Badge>
+                      </div>
+                      <p className="text-micro leading-[1.4] text-muted">
+                        Findet die 16 stärksten Hits und belegt alle 16 Pads sauber.
+                      </p>
+                      <div className="mt-[4px] flex flex-col gap-[2px]">
+                        <div className="flex justify-between text-micro text-muted">
+                          <span>Empfindlichkeit</span>
+                          <span className="value text-ink">{sensitivity.toFixed(1)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={3.0}
+                          step={0.1}
+                          value={sensitivity}
+                          onChange={(e) => setSensitivity(Number(e.target.value))}
+                          aria-label="Empfindlichkeit"
+                          className="w-full"
+                        />
+                      </div>
                     </div>
-                    <input
-                      type="range"
-                      min={0.5}
-                      max={3.0}
-                      step={0.1}
-                      value={sensitivity}
-                      onChange={(e) => setSensitivity(Number(e.target.value))}
-                      aria-label="Empfindlichkeit"
-                      className="w-full"
-                    />
+                    <Button size="sm" onClick={chopAuto16} disabled={!audio} className="mt-[12px] w-full">
+                      16 Pads belegen
+                    </Button>
                   </div>
-                  <Button size="sm" onClick={chopAuto16} disabled={!audio} className="mt-auto">
-                    16 Pads belegen
-                  </Button>
-                </div>
 
-                <div className="flex flex-col gap-[8px] rounded-card bg-panel-soft p-[16px]">
-                  <span className="text-small font-semibold text-ink">
-                    Nach Anschlägen
-                  </span>
-                  <p className="text-small leading-[1.4] text-muted">
-                    Schneidet, wo etwas anfängt. Meistens die richtige Wahl.
-                  </p>
-                  <Button size="sm" variant="quiet" onClick={chopTransients} disabled={!audio} className="mt-auto">
-                    Schneiden
-                  </Button>
-                </div>
-
-                <div className="flex flex-col gap-[8px] rounded-card bg-panel-soft p-[16px]">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-small font-semibold text-ink">
-                      Nach Takt
-                    </span>
-                    {tempo ? (
-                      <span className="value text-micro text-muted">
-                        {confident ? 'erkannt' : 'unsicher'}
-                      </span>
-                    ) : null}
+                  <div className="flex flex-col justify-between rounded-card bg-panel-soft p-[14px] ring-1 ring-inset ring-line">
+                    <div className="flex flex-col gap-[6px]">
+                      <span className="text-small font-semibold text-ink">Nach Anschlägen</span>
+                      <p className="text-micro leading-[1.4] text-muted">
+                        Schneidet an Lautstärkesprüngen (Transienten). Meistens die beste Wahl.
+                      </p>
+                    </div>
+                    <Button size="sm" variant="quiet" onClick={chopTransients} disabled={!audio} className="mt-[12px] w-full">
+                      Schneiden
+                    </Button>
                   </div>
-                  <div className="flex items-center gap-[4px]">
-                    <button
-                      type="button"
-                      onClick={() => setBpm((value) => Math.max(30, Math.round(value / 2)))}
-                      className="rounded-nav bg-panel-soft px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid"
-                      title="Halbes Tempo"
-                    >
-                      ÷2
-                    </button>
-                    <input
-                      type="number"
-                      value={bpm}
-                      min={30}
-                      max={300}
-                      step={0.1}
-                      onChange={(event) => setBpm(Number(event.target.value) || 120)}
-                      aria-label="Tempo in BPM"
-                      className="value w-full min-w-0 rounded-nav bg-panel-soft px-[8px] py-[4px] text-center text-small text-ink outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setBpm((value) => Math.min(300, Math.round(value * 2)))}
-                      className="rounded-nav bg-panel-soft px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid"
-                      title="Doppeltes Tempo"
-                    >
-                      ×2
-                    </button>
-                  </div>
-                  <Select
-                    value={division}
-                    onChange={(event) => setDivision(Number(event.target.value))}
-                    aria-label="Rasterweite"
-                    className="py-[8px] text-small"
-                  >
-                    {GRID_DIVISIONS.map((entry) => (
-                      <option key={entry.label} value={entry.value}>
-                        {entry.label}
-                      </option>
-                    ))}
-                  </Select>
-                  <Button size="sm" variant="quiet" onClick={chopGrid} disabled={!audio}>
-                    Schneiden
-                  </Button>
-                </div>
 
-                <div className="flex flex-col gap-[8px] rounded-card bg-panel-soft p-[16px]">
-                  <span className="text-small font-semibold text-ink">
-                    Gleiche Teile
-                  </span>
-                  <Select
-                    value={sliceCount}
-                    onChange={(event) => setSliceCount(Number(event.target.value))}
-                    aria-label="Anzahl der Teile"
-                    className="py-[8px] text-small"
-                  >
-                    {[2, 4, 8, 12, 16].map((count) => (
-                      <option key={count} value={count}>
-                        {count} Teile
-                      </option>
-                    ))}
-                  </Select>
-                  <Button size="sm" variant="quiet" onClick={chopEven} disabled={!audio} className="mt-auto">
-                    Schneiden
-                  </Button>
+                  <div className="flex flex-col justify-between rounded-card bg-panel-soft p-[14px] ring-1 ring-inset ring-line">
+                    <div className="flex flex-col gap-[6px]">
+                      <div className="flex items-baseline justify-between gap-1">
+                        <span className="text-small font-semibold text-ink">Nach Takt</span>
+                        {tempo ? (
+                          <span className="value text-micro text-muted">
+                            {confident ? `${Math.round(bpm)} BPM` : `${Math.round(bpm)} BPM?`}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-[4px]">
+                        <button
+                          type="button"
+                          onClick={() => setBpm((value) => Math.max(30, Math.round(value / 2)))}
+                          className="rounded-nav bg-panel px-[8px] py-[3px] text-micro text-ink hover:bg-panel-mid"
+                          title="Halbes Tempo"
+                        >
+                          ÷2
+                        </button>
+                        <input
+                          type="number"
+                          value={bpm}
+                          min={30}
+                          max={300}
+                          step={0.1}
+                          onChange={(event) => setBpm(Number(event.target.value) || 120)}
+                          aria-label="Tempo in BPM"
+                          className="value w-full min-w-0 rounded-nav bg-panel px-[6px] py-[3px] text-center text-small text-ink outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setBpm((value) => Math.min(300, Math.round(value * 2)))}
+                          className="rounded-nav bg-panel px-[8px] py-[3px] text-micro text-ink hover:bg-panel-mid"
+                          title="Doppeltes Tempo"
+                        >
+                          ×2
+                        </button>
+                      </div>
+                      <Select
+                        value={division}
+                        onChange={(event) => setDivision(Number(event.target.value))}
+                        aria-label="Rasterweite"
+                        className="py-[4px] text-micro"
+                      >
+                        {GRID_DIVISIONS.map((entry) => (
+                          <option key={entry.label} value={entry.value}>
+                            {entry.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <Button size="sm" variant="quiet" onClick={chopGrid} disabled={!audio} className="mt-[12px] w-full">
+                      Nach Takt schneiden
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-col justify-between rounded-card bg-panel-soft p-[14px] ring-1 ring-inset ring-line">
+                    <div className="flex flex-col gap-[6px]">
+                      <span className="text-small font-semibold text-ink">Gleiche Teile</span>
+                      <p className="text-micro leading-[1.4] text-muted">
+                        Teilt die gesamte Audiodatei mathematisch gleichmäßig auf.
+                      </p>
+                      <Select
+                        value={sliceCount}
+                        onChange={(event) => setSliceCount(Number(event.target.value))}
+                        aria-label="Anzahl der Teile"
+                        className="py-[4px] text-micro"
+                      >
+                        {[2, 4, 8, 12, 16].map((count) => (
+                          <option key={count} value={count}>
+                            {count} Teile
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <Button size="sm" variant="quiet" onClick={chopEven} disabled={!audio} className="mt-[12px] w-full">
+                      Gleichmäßig teilen
+                    </Button>
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
+              <div className="mt-[14px] flex flex-wrap items-center gap-[8px] border-t border-line/30 pt-[12px]">
                 <Button size="sm" variant="quiet" disabled={!waveReady} onClick={() => void waveRef.current?.playPause()}>
                   {wavePlaying ? 'Pause' : 'Alles hören'}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => regionsRef.current?.clearRegions()}>
-                  Leeren
                 </Button>
                 <Button
                   size="sm"
@@ -959,6 +968,9 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
                   }}
                 >
                   Stopp (Leertaste)
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => regionsRef.current?.clearRegions()}>
+                  Schnitte leeren
                 </Button>
                 <label className="ml-auto flex items-center gap-[8px] text-small text-muted">
                   Zoom
@@ -1039,37 +1051,48 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
               })}
             </div>
 
-            {/* The chosen pad comes first: what was cut is what goes on. All
-                chops at once is a pack, and a pack belongs in a ZIP — only a
-                handful are offered for the session, never a few hundred. */}
-            <div className="mt-[16px] flex flex-wrap gap-[8px]">
-              {selected ? (
-                <>
-                  <Button size="sm" onClick={() => exportOne(selected, selectedIndex, 'file')} disabled={rendering}>
-                    Pad {selectedIndex + 1} als WAV
-                    <ArrowRight />
+            {/* Export Toolbar: Pad, Kit und Marker */}
+            <div className="mt-[16px] flex flex-col gap-[10px] border-t border-line/40 pt-[14px]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-small font-semibold text-ink">Exportieren</span>
+                {!selected ? (
+                  <span className="text-micro text-muted">Pad im Raster auswählen für Einzel-Export</span>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-[12px]">
+                {selected ? (
+                  <div className="flex flex-wrap items-center gap-[6px]">
+                    <Button size="sm" onClick={() => exportOne(selected, selectedIndex, 'file')} disabled={rendering}>
+                      Pad {selectedIndex + 1} als WAV
+                      <ArrowRight />
+                    </Button>
+                    <Button size="sm" variant="quiet" onClick={() => exportOne(selected, selectedIndex, 'session')} disabled={rendering}>
+                      Pad {selectedIndex + 1} in die Sitzung
+                    </Button>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap items-center gap-[6px]">
+                  <Button size="sm" variant="quiet" onClick={() => renderAll('zip')} disabled={rendering}>
+                    {rendering ? 'Rendert…' : `Alle ${slices.length} als ZIP`}
                   </Button>
-                  <Button size="sm" variant="quiet" onClick={() => exportOne(selected, selectedIndex, 'session')} disabled={rendering}>
-                    Pad {selectedIndex + 1} in die Sitzung
+                  {slices.length <= MAX_PADS ? (
+                    <Button size="sm" variant="quiet" onClick={() => renderAll('session')} disabled={rendering}>
+                      Alle {slices.length} in die Sitzung
+                    </Button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-[6px] sm:ml-auto">
+                  <Button size="sm" variant="ghost" onClick={exportCue} disabled={rendering}>
+                    CUE-Sheet (.cue)
                   </Button>
-                </>
-              ) : (
-                <span className="self-center text-small text-muted">Pad antippen, um ihn einzeln zu speichern.</span>
-              )}
-              <Button size="sm" variant="quiet" onClick={() => renderAll('zip')} disabled={rendering}>
-                {rendering ? 'Rendert…' : `Alle ${slices.length} als ZIP`}
-              </Button>
-              {slices.length <= MAX_PADS ? (
-                <Button size="sm" variant="quiet" onClick={() => renderAll('session')} disabled={rendering}>
-                  Alle {slices.length} in die Sitzung
-                </Button>
-              ) : null}
-              <Button size="sm" variant="quiet" onClick={exportCue} disabled={rendering}>
-                CUE-Sheet (.cue)
-              </Button>
-              <Button size="sm" variant="quiet" onClick={exportAudacity} disabled={rendering}>
-                Audacity Labels (.txt)
-              </Button>
+                  <Button size="sm" variant="ghost" onClick={exportAudacity} disabled={rendering}>
+                    Audacity Labels (.txt)
+                  </Button>
+                </div>
+              </div>
             </div>
 
             {rendering ? (
@@ -1110,16 +1133,26 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
         ) : null}
       </div>
 
-      {/* ---- sidebar: the selected pad, then defaults --------------------- */}
+      {/* ---- sidebar: selected pad, then kit tools and defaults ---------- */}
       <aside className="flex flex-col gap-[16px]">
+        {/* Card 1: Pad-Einstellungen (nur das ausgewählte Pad) */}
         <Card tone="mint" size="compact">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <SectionHead>{selected ? `Pad ${selectedIndex + 1}` : 'Pad'}</SectionHead>
+            <div className="flex items-center gap-[8px]">
+              <SectionHead>{selected ? `Pad ${selectedIndex + 1}` : 'Pad-Einstellungen'}</SectionHead>
+              {selected ? (
+                <>
+                  <Badge tone="forest">{(selected.end - selected.start).toFixed(3)} s</Badge>
+                  <Badge>{formatTimecode(selected.start)}</Badge>
+                </>
+              ) : null}
+            </div>
             {selected ? (
               <button
                 type="button"
                 onClick={applyToAll}
                 className="rounded-nav text-small text-muted underline-offset-2 hover:text-ink hover:underline"
+                title="Werte dieses Pads auf alle anderen Pads übertragen"
               >
                 Auf alle übertragen
               </button>
@@ -1127,179 +1160,132 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
           </div>
 
           {selected ? (
-            <div className="mt-[12px] flex flex-wrap gap-[8px]">
-              <Button size="sm" variant="quiet" onClick={() => triggerPad(selectedIndex)}>
-                Anhören
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => deletePad(selected.id)} title="Entf">
-                Pad löschen
-              </Button>
-            </div>
-          ) : null}
-
-          {selected ? (
-            <div className="mt-[12px] flex flex-col gap-[16px]">
-              <div className="flex flex-wrap gap-[4px]">
-                <Badge>{formatTimecode(selected.start)}</Badge>
-                <Badge tone="forest">{(selected.end - selected.start).toFixed(3)} s</Badge>
-              </div>
-
-              <Slider
-                label="Tonhöhe"
-                display={`${selected.semitones > 0 ? '+' : ''}${selected.semitones} HT`}
-                min={-24}
-                max={24}
-                step={1}
-                value={selected.semitones}
-                onChange={(event) => updateSlice(selected.id, { semitones: Number(event.target.value) })}
-              />
-              <Slider
-                label="Pegel"
-                display={`${selected.gainDb > 0 ? '+' : ''}${selected.gainDb.toFixed(1)} dB`}
-                min={-24}
-                max={12}
-                step={0.5}
-                value={selected.gainDb}
-                onChange={(event) => updateSlice(selected.id, { gainDb: Number(event.target.value) })}
-              />
-              <Slider
-                label="Panorama"
-                display={selected.pan === 0 ? 'Mitte' : `${Math.round(Math.abs(selected.pan) * 100)} % ${selected.pan < 0 ? 'links' : 'rechts'}`}
-                min={-1}
-                max={1}
-                step={0.05}
-                value={selected.pan}
-                onChange={(event) => updateSlice(selected.id, { pan: Number(event.target.value) })}
-              />
-              <div className="grid grid-cols-2 gap-[12px]">
-                <Slider
-                  label="Anschwellen"
-                  display={`${selected.attackMs} ms`}
-                  min={0}
-                  max={500}
-                  step={5}
-                  value={selected.attackMs}
-                  onChange={(event) => updateSlice(selected.id, { attackMs: Number(event.target.value) })}
-                />
-                <Slider
-                  label="Ausklingen"
-                  display={`${selected.releaseMs} ms`}
-                  min={0}
-                  max={1000}
-                  step={10}
-                  value={selected.releaseMs}
-                  onChange={(event) => updateSlice(selected.id, { releaseMs: Number(event.target.value) })}
-                />
-              </div>
-              <Field label="Verhalten">
-                <Select
-                  value={selected.mode}
-                  onChange={(event) => updateSlice(selected.id, { mode: event.target.value as PlayMode })}
-                >
-                  {(Object.keys(MODE_LABELS) as PlayMode[]).map((mode) => (
-                    <option key={mode} value={mode}>
-                      {MODE_LABELS[mode]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Toggle
-                label="Rückwärts"
-                checked={selected.reverse}
-                onChange={(value) => updateSlice(selected.id, { reverse: value })}
-              />
-
-              {/* The pads play at varispeed and without fades, because that has
-                  to be instant. The export goes through the phase vocoder and
-                  the blends, so it can sound different — this is that version. */}
-              {rendered?.id === selected.id ? (
-                <AudioPreview
-                  sources={[{ id: rendered.id, label: 'Wie exportiert', audio: rendered.audio }]}
-                  waveHeight={40}
-                />
-              ) : (
-                <Button
-                  size="sm"
-                  variant="quiet"
-                  disabled={rendering}
-                  onClick={async () => {
-                    setRendering(true)
-                    try {
-                      const piece = await buildSlice(selected)
-                      if (piece) setRendered({ id: selected.id, audio: piece })
-                    } finally {
-                      setRendering(false)
-                      setProgress(null)
-                    }
-                  }}
-                >
-                  {rendering ? 'Rendert…' : 'So anhören, wie es exportiert wird'}
+            <>
+              <div className="mt-[12px] flex flex-wrap gap-[8px]">
+                <Button size="sm" variant="quiet" onClick={() => triggerPad(selectedIndex)}>
+                  Anhören
                 </Button>
-              )}
-            </div>
+                <Button size="sm" variant="ghost" onClick={() => deletePad(selected.id)} title="Pad löschen (Entf)">
+                  Pad löschen
+                </Button>
+              </div>
+
+              <div className="mt-[14px] flex flex-col gap-[14px]">
+                <Slider
+                  label="Tonhöhe"
+                  display={`${selected.semitones > 0 ? '+' : ''}${selected.semitones} HT`}
+                  min={-24}
+                  max={24}
+                  step={1}
+                  value={selected.semitones}
+                  onChange={(event) => updateSlice(selected.id, { semitones: Number(event.target.value) })}
+                />
+                <Slider
+                  label="Pegel"
+                  display={`${selected.gainDb > 0 ? '+' : ''}${selected.gainDb.toFixed(1)} dB`}
+                  min={-24}
+                  max={12}
+                  step={0.5}
+                  value={selected.gainDb}
+                  onChange={(event) => updateSlice(selected.id, { gainDb: Number(event.target.value) })}
+                />
+                <Slider
+                  label="Panorama"
+                  display={selected.pan === 0 ? 'Mitte' : `${Math.round(Math.abs(selected.pan) * 100)} % ${selected.pan < 0 ? 'links' : 'rechts'}`}
+                  min={-1}
+                  max={1}
+                  step={0.05}
+                  value={selected.pan}
+                  onChange={(event) => updateSlice(selected.id, { pan: Number(event.target.value) })}
+                />
+                <div className="grid grid-cols-2 gap-[12px]">
+                  <Slider
+                    label="Anschwellen"
+                    display={`${selected.attackMs} ms`}
+                    min={0}
+                    max={500}
+                    step={5}
+                    value={selected.attackMs}
+                    onChange={(event) => updateSlice(selected.id, { attackMs: Number(event.target.value) })}
+                  />
+                  <Slider
+                    label="Ausklingen"
+                    display={`${selected.releaseMs} ms`}
+                    min={0}
+                    max={1000}
+                    step={10}
+                    value={selected.releaseMs}
+                    onChange={(event) => updateSlice(selected.id, { releaseMs: Number(event.target.value) })}
+                  />
+                </div>
+                <Field label="Verhalten (Modus)">
+                  <Select
+                    value={selected.mode}
+                    onChange={(event) => updateSlice(selected.id, { mode: event.target.value as PlayMode })}
+                  >
+                    {(Object.keys(MODE_LABELS) as PlayMode[]).map((mode) => (
+                      <option key={mode} value={mode}>
+                        {MODE_LABELS[mode]}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Toggle
+                  label="Rückwärts abspielen"
+                  checked={selected.reverse}
+                  onChange={(value) => updateSlice(selected.id, { reverse: value })}
+                />
+
+                {rendered?.id === selected.id ? (
+                  <AudioPreview
+                    sources={[{ id: rendered.id, label: 'Wie exportiert', audio: rendered.audio }]}
+                    waveHeight={40}
+                  />
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    disabled={rendering}
+                    onClick={async () => {
+                      setRendering(true)
+                      try {
+                        const piece = await buildSlice(selected)
+                        if (piece) setRendered({ id: selected.id, audio: piece })
+                      } finally {
+                        setRendering(false)
+                        setProgress(null)
+                      }
+                    }}
+                  >
+                    {rendering ? 'Rendert…' : 'So anhören, wie es exportiert wird'}
+                  </Button>
+                )}
+              </div>
+            </>
           ) : (
             <p className="mt-[12px] text-small leading-[1.5] text-muted">
-              Ein Pad anklicken oder eine Taste drücken, um es hier einzustellen. Tonhöhe, Pegel,
-              Richtung und Verhalten gelten je Pad.
+              Wählen Sie ein Pad im Raster aus oder drücken Sie eine Taste (1–4, Q–R, A–F, Y–V), um dessen Tonhöhe, Pegel, Panorama, Hüllkurve und Verhalten anzupassen.
             </p>
           )}
         </Card>
 
+        {/* Card 2: Kit-Werkzeuge & Voreinstellungen */}
         <Card tone="cream" size="compact">
-          <SectionHead>Voreinstellungen</SectionHead>
-          <div className="mt-[12px] flex flex-col gap-[16px]">
-            <Field label="Neue Pads spielen als">
-              <Select value={defaultMode} onChange={(event) => setDefaultMode(event.target.value as PlayMode)}>
-                {(Object.keys(MODE_LABELS) as PlayMode[]).map((mode) => (
-                  <option key={mode} value={mode}>
-                    {MODE_LABELS[mode]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Slider
-              label="Blende"
-              display={`${fadeMs} ms`}
-              min={0}
-              max={60}
-              step={1}
-              value={fadeMs}
-              onChange={(event) => setFadeMs(Number(event.target.value))}
-            />
-            <Toggle
-              label="An Nulldurchgänge rasten"
-              hint="Verschiebt Schnitte um wenige Millisekunden und spart die Klicks."
-              checked={snap}
-              onChange={setSnap}
-            />
-            <Toggle
-              label="Neuer Anschlag stoppt den alten"
-              checked={choke}
-              onChange={setChoke}
-            />
-            <Toggle
-              label="Länge beim Transponieren halten"
-              hint="Phasenvocoder beim Export. Die Pads spielen immer per Abspielrate."
-              checked={preserveDuration}
-              onChange={setPreserveDuration}
-            />
-            <Toggle label="Auf −0,3 dBFS normalisieren" checked={normalize} onChange={setNormalize} />
-          </div>
-        </Card>
+          <SectionHead>Kit-Werkzeuge & Voreinstellungen</SectionHead>
 
-        {slices.length > 0 ? (
-          <Card tone="mint" size="compact">
-            <SectionHead>Alle {slices.length} Pads anpassen</SectionHead>
-            <div className="mt-[12px] flex flex-col gap-[12px]">
+          {slices.length > 0 ? (
+            <div className="mt-[14px] flex flex-col gap-[12px]">
+              <span className="text-small font-semibold text-ink">Alle {slices.length} Pads anpassen</span>
+
               <div>
-                <span className="text-micro font-medium text-muted">Tonhöhe (Halbtöne)</span>
+                <span className="text-micro font-medium text-muted">Tonhöhe transponieren</span>
                 <div className="mt-[4px] flex flex-wrap gap-[6px]">
                   <button
                     type="button"
                     onClick={() => transposeAll(-12)}
                     className="press rounded-pill bg-raised px-[8px] py-[3px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
                   >
-                    −12 (Oktave)
+                    −12
                   </button>
                   <button
                     type="button"
@@ -1327,12 +1313,13 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
                     onClick={() => transposeAll(12)}
                     className="press rounded-pill bg-raised px-[8px] py-[3px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
                   >
-                    +12 (Oktave)
+                    +12
                   </button>
                 </div>
               </div>
+
               <div>
-                <span className="text-micro font-medium text-muted">Abspielmodus</span>
+                <span className="text-micro font-medium text-muted">Abspielmodus für alle Pads</span>
                 <div className="mt-[4px] flex gap-[6px]">
                   <button
                     type="button"
@@ -1350,10 +1337,55 @@ export function SamplerPanel({ theme }: { theme: ResolvedTheme }) {
                   </button>
                 </div>
               </div>
-            </div>
-          </Card>
-        ) : null}
 
+              <div className="my-[4px] border-t border-line/40" />
+            </div>
+          ) : null}
+
+          <div className="mt-[14px] flex flex-col gap-[14px]">
+            <span className="text-small font-semibold text-ink">Voreinstellungen</span>
+
+            <Field label="Standard-Modus für neue Pads">
+              <Select value={defaultMode} onChange={(event) => setDefaultMode(event.target.value as PlayMode)}>
+                {(Object.keys(MODE_LABELS) as PlayMode[]).map((mode) => (
+                  <option key={mode} value={mode}>
+                    {MODE_LABELS[mode]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Slider
+              label="Blende an Schnittkanten"
+              display={`${fadeMs} ms`}
+              min={0}
+              max={60}
+              step={1}
+              value={fadeMs}
+              onChange={(event) => setFadeMs(Number(event.target.value))}
+            />
+
+            <Toggle
+              label="An Nulldurchgänge rasten"
+              hint="Vermeidet Knackser an den Schnittkanten."
+              checked={snap}
+              onChange={setSnap}
+            />
+            <Toggle
+              label="Neuer Anschlag stoppt alten"
+              hint="Choking zwischen Pads."
+              checked={choke}
+              onChange={setChoke}
+            />
+            <Toggle
+              label="Länge beim Transponieren halten"
+              hint="Phasenvocoder beim Export."
+              checked={preserveDuration}
+              onChange={setPreserveDuration}
+            />
+            <Toggle label="Auf −0,3 dBFS normalisieren" checked={normalize} onChange={setNormalize} />
+          </div>
+        </Card>
       </aside>
     </div>
   )

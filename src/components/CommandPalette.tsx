@@ -112,7 +112,9 @@ export function CommandPalette() {
     const row = rows[index]
     if (!row) return
     if (row.kind === 'file') setActiveAsset(row.file.id)
-    else setPanel(row.action.panel)
+    else if (row.action.id === 'shortcuts') {
+      window.dispatchEvent(new Event('sondra:tastenkuerzel'))
+    } else setPanel(row.action.panel)
     setOpen(false)
   }
 

@@ -248,19 +248,116 @@ export function MixPanel() {
               </Button>
             </div>
 
-            <div className="mt-[20px] grid gap-x-[32px] gap-y-[16px] sm:grid-cols-2 lg:grid-cols-3">
-              <Slider label="Musik" display={decibels(settings.musicDb)} min={-30} max={0} step={0.5} value={settings.musicDb} onChange={(event) => update({ musicDb: Number(event.target.value) })} />
-              <Slider label="Beim Sprechen leiser um" display={decibels(-settings.duckDb).replace('−', '')} min={0} max={30} step={0.5} value={settings.duckDb} onChange={(event) => update({ duckDb: Number(event.target.value) })} />
-              <Slider label="Empfindlichkeit" display={`${Math.round(settings.sensitivity * 100)} %`} min={0} max={1} step={0.05} value={settings.sensitivity} onChange={(event) => update({ sensitivity: Number(event.target.value) })} />
-              <Slider label="Wird leiser in" display={`${settings.attackMs} ms`} min={20} max={600} step={10} value={settings.attackMs} onChange={(event) => update({ attackMs: Number(event.target.value) })} />
-              <Slider label="Kommt zurück in" display={`${settings.releaseMs} ms`} min={100} max={3000} step={50} value={settings.releaseMs} onChange={(event) => update({ releaseMs: Number(event.target.value) })} />
-              <div className="flex flex-col gap-[16px]">
-                <Slider label="Musik vorher" display={seconds(settings.leadIn)} min={0} max={10} step={0.5} value={settings.leadIn} onChange={(event) => update({ leadIn: Number(event.target.value) })} />
-                <Slider label="Ausklang danach" display={seconds(settings.tail)} min={0} max={15} step={0.5} value={settings.tail} onChange={(event) => update({ tail: Number(event.target.value) })} />
-              </div>
+            {/* Schnell-Presets */}
+            <div className="mt-[20px] flex flex-wrap items-center gap-[6px]">
+              <span className="text-small font-medium text-muted">Vorgaben:</span>
+              {[
+                { label: 'Podcast / Talk', settings: { musicDb: -14, duckDb: 16, sensitivity: 0.5, attackMs: 120, releaseMs: 600 } },
+                { label: 'Radio / Moderation', settings: { musicDb: -10, duckDb: 14, sensitivity: 0.6, attackMs: 80, releaseMs: 400 } },
+                { label: 'Hintergrund / Dezent', settings: { musicDb: -18, duckDb: 8, sensitivity: 0.4, attackMs: 200, releaseMs: 800 } },
+                { label: 'Voiceover / Stark', settings: { musicDb: -8, duckDb: 22, sensitivity: 0.7, attackMs: 60, releaseMs: 350 } },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => update(preset.settings)}
+                  className="rounded-nav bg-panel-soft px-[10px] py-[4px] text-small font-medium text-ink hover:bg-panel-mid transition-colors ring-1 ring-line"
+                >
+                  {preset.label}
+                </button>
+              ))}
             </div>
-            <div className="mt-[16px] max-w-[420px]">
-              <Toggle label="Musik wiederholen, wenn sie kürzer ist" checked={settings.loopMusic} onChange={(value) => update({ loopMusic: value })} />
+
+            {/* 3 Thematische Karten */}
+            <div className="mt-[16px] grid gap-[16px] md:grid-cols-3">
+              {/* Karte 1: Lautstaerke & Ducking */}
+              <div className="flex flex-col gap-[14px] rounded-card bg-panel-soft p-[16px] ring-1 ring-line">
+                <span className="text-small font-semibold text-ink">Lautstärke & Absenkung</span>
+                <Slider
+                  label="Musikpegel"
+                  display={decibels(settings.musicDb)}
+                  min={-30}
+                  max={0}
+                  step={0.5}
+                  value={settings.musicDb}
+                  onChange={(event) => update({ musicDb: Number(event.target.value) })}
+                />
+                <Slider
+                  label="Beim Sprechen leiser um"
+                  display={decibels(-settings.duckDb).replace('−', '')}
+                  min={0}
+                  max={30}
+                  step={0.5}
+                  value={settings.duckDb}
+                  onChange={(event) => update({ duckDb: Number(event.target.value) })}
+                />
+                <Slider
+                  label="Sprach-Empfindlichkeit"
+                  display={`${Math.round(settings.sensitivity * 100)} %`}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={settings.sensitivity}
+                  onChange={(event) => update({ sensitivity: Number(event.target.value) })}
+                />
+              </div>
+
+              {/* Karte 2: Dynamik & Uebergaenge */}
+              <div className="flex flex-col gap-[14px] rounded-card bg-panel-soft p-[16px] ring-1 ring-line">
+                <span className="text-small font-semibold text-ink">Dynamik & Übergänge</span>
+                <Slider
+                  label="Wird leiser in (Attack)"
+                  display={`${settings.attackMs} ms`}
+                  min={20}
+                  max={600}
+                  step={10}
+                  value={settings.attackMs}
+                  onChange={(event) => update({ attackMs: Number(event.target.value) })}
+                />
+                <Slider
+                  label="Kommt zurück in (Release)"
+                  display={`${settings.releaseMs} ms`}
+                  min={100}
+                  max={3000}
+                  step={50}
+                  value={settings.releaseMs}
+                  onChange={(event) => update({ releaseMs: Number(event.target.value) })}
+                />
+                <p className="mt-auto text-micro text-muted">
+                  Kurze Zeiten reagieren direkt auf jedes Wort; längere Zeiten gleiten sanft.
+                </p>
+              </div>
+
+              {/* Karte 3: Arrangement & Vor-/Nachlauf */}
+              <div className="flex flex-col gap-[14px] rounded-card bg-panel-soft p-[16px] ring-1 ring-line">
+                <span className="text-small font-semibold text-ink">Vor- & Nachlauf</span>
+                <Slider
+                  label="Musik vor Sprachbeginn"
+                  display={seconds(settings.leadIn)}
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  value={settings.leadIn}
+                  onChange={(event) => update({ leadIn: Number(event.target.value) })}
+                />
+                <Slider
+                  label="Ausklang nach Sprache"
+                  display={seconds(settings.tail)}
+                  min={0}
+                  max={15}
+                  step={0.5}
+                  value={settings.tail}
+                  onChange={(event) => update({ tail: Number(event.target.value) })}
+                />
+                <div className="mt-auto pt-[4px]">
+                  <Toggle
+                    label="Musik wiederholen (Loop)"
+                    hint="Wiederholt die Musik, falls sie kürzer als die Stimme ist."
+                    checked={settings.loopMusic}
+                    onChange={(value) => update({ loopMusic: value })}
+                  />
+                </div>
+              </div>
             </div>
           </>
         )}
