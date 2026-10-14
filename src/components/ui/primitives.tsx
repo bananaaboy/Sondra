@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
 type Tone = 'cream' | 'keylime' | 'mint' | 'sage' | 'slate'
@@ -415,7 +416,11 @@ export function Dialog({
     if (!open && node.open) node.close()
   }, [open])
 
-  return (
+  // Portalled to the body: a modal dialog still renders nothing while any
+  // ancestor is hidden, and the one in the downloader lives in a section that
+  // is folded away until someone opens it — the button outside that asked
+  // for the dialog then opened an invisible one.
+  return createPortal(
     <dialog
       ref={ref}
       onClose={onClose}
@@ -440,6 +445,7 @@ export function Dialog({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-[24px] py-[20px]">{children}</div>
       </div>
-    </dialog>
+    </dialog>,
+    document.body,
   )
 }
