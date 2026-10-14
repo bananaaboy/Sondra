@@ -114,6 +114,17 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Downloader nannte den Weg automatisch und stellte daneben drei Knöpfe zur
   Handauswahl. Jetzt steht der gewählte Weg als Satz da, die Handauswahl ist
   ein Klick dahinter. Weggenommen wird dabei nichts.
+- **Ton und Zerschneiden sind Studios.** Ton im Editorrahmen
+  (`EditorShell`, acht Werkzeuge in der Schiene, je eines im Inspektor) auf
+  der Tonbühne (`editor/SoundStage.tsx`: Stage-Schwarz, Zeitlineal,
+  Transport darunter, Leertaste spielt). Zerschneiden in drei Rahmen:
+  Schneiden (ein Verfahren auf einmal) über Bühne und Transport, Padfeld
+  4 × 4 mit Reiter-Spalte, Pattern. Keine Racks und keine gestapelten Karten
+  mehr — „mega cluttered" war der Befund.
+- **Der Downloader zeigt alle Wege offen** („Weitere Wege", drei Kacheln),
+  und die Brücken-Anleitung fragt, ob Node.js (bei cobalt auch Git) schon da
+  ist. Nach `winget install` liest PowerShell den PATH neu ein, sonst kennt
+  dasselbe Fenster `node` nicht.
 - **Einstellen heisst hören.** Im Ton-Editor ist jeder Effekt ein Schalter,
   ein Regler schaltet ihn ein, und die Wiedergabe läuft durch dieselbe Kette,
   die „Übernehmen" offline rendert. Blenden stehen in der Welle selbst bzw.
@@ -184,9 +195,20 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Firefox) oder ohne Ton (AC-3/DTS im MKV), macht `lib/playable.ts` eine
   Vorschau: umpacken, nur den Ton wandeln, oder klein neu rechnen — so wenig
   wie nötig, mit Fortschritt auf der Bühne und „Ohne Vorschau weiter".
-  Geschnitten wird immer das Original. **libopus in Stereo stürzt in diesem
-  FFmpeg-Build ab** (gemessen, auch unter Node; der Tab stirbt) — für
-  Vorschauen Vorbis oder AAC.
+  Geschnitten wird immer das Original. **libopus stürzt in Stereo ab
+  Komplexität 5 ab** (gemessen am 14.10.2026, auch unter Node; der Tab
+  stirbt) — bis 4 läuft es bei jeder Bitrate. Jede Opus-Kodierung geht
+  deshalb über `opusArgs` in `lib/convert.ts` (`-compression_level 4`).
+  **VP9 kommt in diesem Build nie an** (einfädig Absturz, mehrfädig Hänger);
+  WebM ist VP8 (`vp8Args`). Für Vorschauen weiter Vorbis oder AAC.
+- **Umwandeln muss eine Datei liefern** (`lib/convertRun.ts`): gewählte
+  Dateien liest FFmpeg über WORKERFS statt sie zu kopieren; stürzt der
+  mehrfädige Kern ab oder schweigt er 90 s, folgt ein zweiter Versuch auf dem
+  einfädigen (`loadFfmpeg({ singleThread: true })`, `FfmpegCrash`). Was
+  dann noch scheitert, steht als Satz da, FFmpegs Zeilen einen Klick
+  dahinter. `npm run verify:convert` schickt jedes Format mit den üblichen
+  Einstellungen durch den echten Kern, jeden Lauf in eigenem Prozess — ein
+  Absturz dort beendet den Prozess wie sonst den Tab.
 - **Abspielen** (`PlayerPanel.tsx`, `lib/player.ts`): der Media Player,
   nur zum Ansehen und Anhören. Dateien werden nie in die Sitzung gelesen,
   sondern über eine Object-URL auf dem File abgespielt; solange das Werkzeug
