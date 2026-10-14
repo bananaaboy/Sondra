@@ -697,14 +697,30 @@ export function AudioEditorPanel() {
     <div className="grid gap-[16px] lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex flex-col gap-[16px]">
         <Card tone="keylime">
-          <div className="flex flex-wrap items-baseline justify-between gap-[12px]">
-            <span className="value text-small text-muted">
-              {formatTimecode(duration)} · {current.channels.length === 1 ? 'Mono' : 'Stereo'} ·{' '}
-              {(current.sampleRate / 1000).toFixed(1)} kHz · Spitze {peakDb(current).toFixed(1)} dBFS
-            </span>
+          {/* Studio Monitor Info Header */}
+          <div className="flex flex-wrap items-center justify-between gap-[10px] border-b border-line/60 pb-[10px]">
+            <div className="flex flex-wrap items-center gap-[8px]">
+              <span className="rounded-nav bg-panel-soft px-[8px] py-[3px] text-small font-semibold text-ink">
+                {formatTimecode(duration)} · {current.channels.length === 1 ? 'Mono' : 'Stereo'}
+              </span>
+              <span className="rounded-nav bg-panel-soft px-[8px] py-[3px] text-micro value text-muted">
+                {(current.sampleRate / 1000).toFixed(1)} kHz
+              </span>
+              <span className="rounded-nav bg-panel-soft px-[8px] py-[3px] text-micro value text-muted">
+                Spitze {peakDb(current).toFixed(1)} dBFS
+              </span>
+            </div>
+            <div className="flex items-center gap-[6px]">
+              <Button size="sm" variant="ghost" disabled={history.length === 0} onClick={undo} title="Rückgängig (Strg/Cmd + Z)">
+                Rückgängig
+              </Button>
+              <Button size="sm" variant="ghost" disabled={future.length === 0} onClick={redo} title="Wiederholen (Strg/Cmd + Shift + Z)">
+                Wiederholen
+              </Button>
+            </div>
           </div>
 
-          {/* -- the waveform, and the selection on it ----------------------- */}
+          {/* Waveform Rack Display */}
           <div
             ref={frameRef}
             onPointerDown={(event) => {
@@ -726,26 +742,28 @@ export function AudioEditorPanel() {
               // A click rather than a drag clears the selection.
               setSelection(next.end - next.start < 0.02 ? null : next)
             }}
-            className="relative mt-[16px] cursor-text touch-none bg-panel-soft p-[12px] select-none"
+            className="relative mt-[12px] cursor-text touch-none rounded-card border border-line bg-panel-soft p-[12px] select-none shadow-inner"
           >
             <Waveform audio={shown} height={130} position={positionInView} selection={liveInView} fades={fadesInView} />
           </div>
 
-          {/* -- what is heard live, and writing it in ------------------------ */}
+          {/* Live Preview Monitor */}
           {liveParts.length > 0 || noiseLive ? (
-            <div className="mt-[8px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-l-2 border-ink pl-[12px]">
+            <div className="mt-[10px] flex flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-nav bg-keylime/20 border border-keylime/40 px-[12px] py-[8px] text-ink">
               <p className="min-w-0 flex-1 text-small text-prose">
                 <span className="font-semibold text-ink">Live zu hören:</span> {liveParts.join(' · ')}
                 {noiseLive && !noiseReady ? <span className="text-muted"> — Rauschminderung wird gerechnet…</span> : null}
               </p>
-              <div role="group" aria-label="Vergleich" className="flex rounded-pill bg-panel-soft p-[2px]">
+              <div role="group" aria-label="Vergleich" className="flex rounded-pill bg-canvas ring-1 ring-line p-[2px]">
                 {([false, true] as const).map((value) => (
                   <button
                     key={String(value)}
                     type="button"
                     aria-pressed={compare === value}
                     onClick={() => setCompare(value)}
-                    className={`press rounded-pill px-[12px] py-[4px] text-small ${compare === value ? 'bg-ink text-on-ink' : 'text-ink hover:bg-panel-mid'}`}
+                    className={`press rounded-pill px-[12px] py-[3px] text-small font-medium transition-all ${
+                      compare === value ? 'bg-ink text-on-ink' : 'text-ink hover:bg-panel-mid'
+                    }`}
                   >
                     {value ? 'Vorher' : 'Nachher'}
                   </button>
@@ -765,61 +783,55 @@ export function AudioEditorPanel() {
             </div>
           ) : null}
 
-          <div className="mt-[8px] flex flex-wrap items-center gap-[8px]">
-            <Button size="sm" onClick={() => void play()}>
-              {hasSelection ? 'Auswahl hören' : 'Alles hören'}
-            </Button>
-            <Button size="sm" variant="quiet" onClick={() => stop()}>
-              Stopp
-            </Button>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={loop}
-              onClick={() => {
-                stop()
-                setLoop((value) => !value)
-              }}
-              className={`press rounded-pill px-[12px] py-[6px] text-small ${loop ? 'bg-ink text-on-ink' : 'bg-panel-soft text-ink hover:bg-panel-mid'}`}
-            >
-              Schleife
-            </button>
-            {hasSelection && !(view && Math.abs(view.start - span.start) < 1e-3 && Math.abs(view.end - span.end) < 1e-3) ? (
-              <Button size="sm" variant="ghost" onClick={() => setView({ start: span.start, end: span.end })}>
-                Auf Auswahl zoomen
+          {/* Studio Transport Bar */}
+          <div className="mt-[10px] flex flex-wrap items-center justify-between gap-[10px] rounded-nav bg-panel-soft/90 px-[12px] py-[8px] border border-line/70">
+            <div className="flex flex-wrap items-center gap-[8px]">
+              <Button size="sm" onClick={() => void play()}>
+                {hasSelection ? 'Auswahl hören' : 'Alles hören'}
               </Button>
-            ) : null}
-            {view ? (
-              <Button size="sm" variant="ghost" onClick={() => setView(null)}>
-                Ganz zeigen
+              <Button size="sm" variant="quiet" onClick={() => stop()}>
+                Stopp
               </Button>
-            ) : null}
-            <span className="value text-small text-muted">
-              {hasSelection
-                ? `${formatTimecode(span.start)} – ${formatTimecode(span.end)} · ${(span.end - span.start).toFixed(2)} s`
-                : 'Über die Wellenform ziehen wählt einen Ausschnitt'}
-            </span>
-            <div className="ml-auto flex gap-[8px]">
-              <Button size="sm" variant="ghost" disabled={history.length === 0} onClick={undo}>
-                Rückgängig
-              </Button>
-              <Button size="sm" variant="ghost" disabled={future.length === 0} onClick={redo}>
-                Wiederholen
-              </Button>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={loop}
+                onClick={() => {
+                  stop()
+                  setLoop((value) => !value)
+                }}
+                className={`press rounded-pill px-[12px] py-[6px] text-small font-medium transition-colors ${
+                  loop ? 'bg-ink text-on-ink shadow-xs' : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
+                }`}
+              >
+                Schleife
+              </button>
+              {hasSelection && !(view && Math.abs(view.start - span.start) < 1e-3 && Math.abs(view.end - span.end) < 1e-3) ? (
+                <Button size="sm" variant="ghost" onClick={() => setView({ start: span.start, end: span.end })}>
+                  Auf Auswahl zoomen
+                </Button>
+              ) : null}
+              {view ? (
+                <Button size="sm" variant="ghost" onClick={() => setView(null)}>
+                  Ganz zeigen
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="flex items-center gap-[8px]">
+              <span className="value text-small text-muted">
+                {hasSelection
+                  ? `${formatTimecode(span.start)} – ${formatTimecode(span.end)} · ${(span.end - span.start).toFixed(2)} s`
+                  : 'Über die Wellenform ziehen wählt einen Ausschnitt'}
+              </span>
             </div>
           </div>
 
-          {error ? (
-            <div className="mt-[16px]">
-              <Notice tone="error" title="Ging nicht">{error}</Notice>
-            </div>
-          ) : null}
-
-          {/* -- cutting & editing toolbar ----------------------------------- */}
-          <div className="mt-[16px] flex flex-col gap-[10px]">
+          {/* Selection & Edit Toolbar */}
+          <div className="mt-[10px] flex flex-col gap-[10px]">
             {hasSelection ? (
-              <div className="flex flex-wrap items-center gap-[8px] rounded-nav bg-panel-soft p-[10px] ring-1 ring-inset ring-line/80">
-                <span className="text-micro font-semibold uppercase tracking-wider text-muted px-[4px]">
+              <div className="flex flex-wrap items-center gap-[8px] rounded-card border border-line bg-canvas p-[12px] shadow-xs">
+                <span className="text-micro font-bold uppercase tracking-wider text-muted px-[4px]">
                   Auswahl:
                 </span>
                 <Button size="sm" disabled={busy !== null}
@@ -895,8 +907,14 @@ export function AudioEditorPanel() {
             </div>
           </div>
 
-          {/* -- Card 1: level, mastering & silence --------------------------- */}
-          <div className="mt-[20px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-line/70 flex flex-col gap-[16px]">
+          {error ? (
+            <div className="mt-[16px]">
+              <Notice tone="error" title="Ging nicht">{error}</Notice>
+            </div>
+          ) : null}
+
+          {/* -- Studio Rack Unit 1: Pegel, Blenden & Stille ----------------- */}
+          <div className="mt-[16px] rounded-card border border-line bg-canvas p-[16px] shadow-xs flex flex-col gap-[16px]">
             <div className="flex flex-wrap items-baseline justify-between gap-[8px] border-b border-line pb-[10px]">
               <div>
                 <p className="text-small font-semibold text-ink">Pegel, Blenden & Stille</p>
@@ -906,9 +924,9 @@ export function AudioEditorPanel() {
               </div>
             </div>
 
-            <div className="grid gap-[20px] sm:grid-cols-2">
+            <div className="grid gap-[16px] lg:grid-cols-2">
               {/* Pegel & Normalisierung */}
-              <div className="flex flex-col gap-[10px]">
+              <div className="flex flex-col gap-[12px] rounded-nav bg-panel-soft p-[14px] ring-1 ring-line/60">
                 <Slider
                   label={hasSelection ? 'Pegel im Ausschnitt' : 'Pegel'}
                   display={`${gain > 0 ? '+' : ''}${gain.toFixed(1)} dB`}
@@ -952,10 +970,10 @@ export function AudioEditorPanel() {
               </div>
 
               {/* Blenden */}
-              <div className="flex flex-col gap-[8px]">
+              <div className="flex flex-col gap-[10px] rounded-nav bg-panel-soft p-[14px] ring-1 ring-line/60">
                 <Toggle label="Blenden am Anfang und Ende" checked={Boolean(on.fade)} onChange={toggle('fade')}
                   hint="Die Kurve steht auf der Wellenform, zu hören ist sie sofort." />
-                <div className="grid grid-cols-2 gap-[12px]">
+                <div className="grid grid-cols-2 gap-[12px] pt-[4px]">
                   <Slider label="Einblenden" display={`${comma(fadeIn, 2)} s`}
                     min={0} max={Math.min(5, duration)} step={0.05} value={fadeIn}
                     onChange={(event) => {
@@ -973,8 +991,8 @@ export function AudioEditorPanel() {
             </div>
 
             {/* Stille verwalten */}
-            <div className="grid gap-[16px] border-t border-line/70 pt-[14px] sm:grid-cols-2">
-              <div className="flex flex-col gap-[6px]">
+            <div className="grid gap-[16px] border-t border-line/60 pt-[14px] sm:grid-cols-2">
+              <div className="flex flex-col gap-[8px] rounded-nav bg-panel-soft p-[12px] ring-1 ring-line/50">
                 <div className="flex flex-wrap items-center gap-[8px]">
                   <span className="text-small font-semibold text-ink">Stille entfernen:</span>
                   <Select
@@ -1007,7 +1025,7 @@ export function AudioEditorPanel() {
                 </p>
               </div>
 
-              <div className="flex flex-col gap-[6px]">
+              <div className="flex flex-col gap-[8px] rounded-nav bg-panel-soft p-[12px] ring-1 ring-line/50">
                 <div className="flex flex-wrap items-center gap-[8px]">
                   <span className="text-small font-semibold text-ink">Stille einfügen:</span>
                   <Select
@@ -1037,8 +1055,8 @@ export function AudioEditorPanel() {
             </div>
           </div>
 
-          {/* -- Card 2: pitch shift, time stretch & BPM counter (deduplicated) - */}
-          <div className="mt-[16px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-line/70 flex flex-col gap-[16px]">
+          {/* -- Studio Rack Unit 2: Pitch, Stretch & BPM -------------------- */}
+          <div className="mt-[16px] rounded-card border border-line bg-canvas p-[16px] shadow-xs flex flex-col gap-[16px]">
             <div className="flex flex-wrap items-baseline justify-between gap-[8px] border-b border-line pb-[10px]">
               <div>
                 <p className="text-small font-semibold text-ink">Tonhöhe, Tempo & Rhythmus (Pitch, Stretch & BPM)</p>
@@ -1049,9 +1067,9 @@ export function AudioEditorPanel() {
               </div>
             </div>
 
-            <div className="grid gap-[20px] sm:grid-cols-2">
+            <div className="grid gap-[16px] lg:grid-cols-2">
               {/* Tonhöhe */}
-              <div className="flex flex-col gap-[10px]">
+              <div className="flex flex-col gap-[10px] rounded-nav bg-panel-soft p-[14px] ring-1 ring-line/60">
                 <div className="flex items-baseline justify-between">
                   <span className="text-small font-medium text-ink">Tonhöhe (Halbtöne)</span>
                   <span className="value text-small text-ink font-semibold">
@@ -1069,7 +1087,7 @@ export function AudioEditorPanel() {
                     setSemitones(val)
                     if (val !== 0) enable('pitch')
                   }}
-                  className="w-full"
+                  className="w-full accent-ink cursor-pointer"
                 />
                 <div className="flex flex-wrap gap-[6px]">
                   {[-12, -2, -1, 0, 1, 2, 12].map((st) => (
@@ -1082,8 +1100,8 @@ export function AudioEditorPanel() {
                       }}
                       className={`press px-[8px] py-[3px] rounded-nav text-micro value font-semibold transition-colors ${
                         semitones === st
-                          ? 'bg-ink text-on-ink'
-                          : 'bg-raised text-ink ring-1 ring-inset ring-line hover:bg-panel-mid'
+                          ? 'bg-ink text-on-ink shadow-xs'
+                          : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
                       }`}
                     >
                       {st === 0 ? '0' : st > 0 ? `+${st}` : st}
@@ -1103,7 +1121,7 @@ export function AudioEditorPanel() {
               </div>
 
               {/* Tempo */}
-              <div className="flex flex-col gap-[10px]">
+              <div className="flex flex-col gap-[10px] rounded-nav bg-panel-soft p-[14px] ring-1 ring-line/60">
                 <div className="flex items-baseline justify-between">
                   <span className="text-small font-medium text-ink">Tempo (Time-Stretch)</span>
                   <span className="value text-small text-ink font-semibold">
@@ -1121,7 +1139,7 @@ export function AudioEditorPanel() {
                     setTempo(val)
                     if (val !== 1) enable('tempo')
                   }}
-                  className="w-full"
+                  className="w-full accent-ink cursor-pointer"
                 />
                 <div className="flex flex-wrap gap-[6px]">
                   {[0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0].map((t) => (
@@ -1134,8 +1152,8 @@ export function AudioEditorPanel() {
                       }}
                       className={`press px-[8px] py-[3px] rounded-nav text-micro value font-semibold transition-colors ${
                         Math.abs(tempo - t) < 0.001
-                          ? 'bg-ink text-on-ink'
-                          : 'bg-raised text-ink ring-1 ring-inset ring-line hover:bg-panel-mid'
+                          ? 'bg-ink text-on-ink shadow-xs'
+                          : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
                       }`}
                     >
                       {t === 1 ? '1×' : `${comma(t, 2)}×`}
@@ -1155,8 +1173,8 @@ export function AudioEditorPanel() {
               </div>
             </div>
 
-            {/* Tap-Tempo & BPM Detektor Footer */}
-            <div className="flex flex-wrap items-center justify-between gap-[12px] border-t border-line/70 pt-[14px]">
+            {/* Tap-Tempo & BPM Detektor Console */}
+            <div className="flex flex-wrap items-center justify-between gap-[12px] rounded-nav bg-panel-soft p-[12px] ring-1 ring-line/60">
               <div className="flex flex-col gap-[2px]">
                 <span className="text-small font-semibold text-ink">BPM-Detektor / Tap-Tempo</span>
                 <span className="text-small text-muted">
@@ -1185,7 +1203,7 @@ export function AudioEditorPanel() {
                 ) : null}
                 {tappedBpm ? (
                   <div className="flex items-center gap-[10px] pl-[4px] text-small">
-                    <span className="value text-[15px] font-bold text-ink bg-raised px-[10px] py-[3px] rounded-pill ring-1 ring-inset ring-line">
+                    <span className="value text-[15px] font-bold text-ink bg-canvas px-[10px] py-[3px] rounded-pill ring-1 ring-line shadow-xs">
                       {tappedBpm} BPM
                     </span>
                     <span className="text-muted text-micro hidden sm:inline">
@@ -1197,12 +1215,11 @@ export function AudioEditorPanel() {
             </div>
           </div>
 
-          {/* -- sound: filters, dynamics, noise, space --------------------------- */}
-          {/* Every block is a switch. Moving a slider switches it on, and what
-              is on plays live — „Übernehmen“ under the waveform writes it in. */}
+          {/* -- Studio Rack Unit 3: Klang (Filter, EQ, Dynamics, Space) ----- */}
           <Reveal label={`Klang: Filter, Bass und Höhen, Kompressor, Klicks, Rauschen, Echo, Hall${hasSelection ? ' — gilt für den Ausschnitt' : ''}`} className="mt-[16px]">
-            <div className="grid gap-[20px] rounded-card bg-panel-soft p-[16px] sm:grid-cols-2">
-              <div className="flex flex-col gap-[8px]">
+            <div className="grid gap-[12px] sm:grid-cols-2 pt-[10px]">
+              {/* Tiefen entfernen */}
+              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
                 <Toggle label="Tiefen entfernen" checked={Boolean(on.highpass)} onChange={toggle('highpass')}
                   hint="Rumpeln, Trittschall, Brummen. Für Stimme 80–120 Hz." />
                 <Slider label="unter" display={`${highpassHz} Hz`}
@@ -1213,7 +1230,8 @@ export function AudioEditorPanel() {
                   }} />
               </div>
 
-              <div className="flex flex-col gap-[8px]">
+              {/* Höhen entfernen */}
+              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
                 <Toggle label="Höhen entfernen" checked={Boolean(on.lowpass)} onChange={toggle('lowpass')}
                   hint="Zischen und Rauschen oben, oder der Klang „durchs Telefon“." />
                 <Slider label="über" display={`${comma(lowpassHz / 1000)} kHz`}
@@ -1224,7 +1242,8 @@ export function AudioEditorPanel() {
                   }} />
               </div>
 
-              <div className="flex flex-col gap-[8px]">
+              {/* Bass und Höhen */}
+              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
                 <Toggle label="Bass und Höhen" checked={Boolean(on.tone)} onChange={toggle('tone')}
                   hint="Kuhschwanz-Filter bei 120 Hz und 6 kHz." />
                 <div className="grid grid-cols-2 gap-[12px]">
@@ -1243,7 +1262,8 @@ export function AudioEditorPanel() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-[8px]">
+              {/* Kompressor */}
+              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
                 <Toggle label="Kompressor" checked={Boolean(on.comp)} onChange={toggle('comp')}
                   hint="Laute Stellen zurücknehmen, leise näher heran; gleicht den Pegel danach aus." />
                 <div className="grid grid-cols-2 gap-[12px]">
@@ -1262,41 +1282,47 @@ export function AudioEditorPanel() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-[8px] sm:col-span-2">
+              {/* Klicks und Knackser entfernen */}
+              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs sm:col-span-2">
                 <Toggle label="Klicks und Knackser entfernen" checked={clickLive} onChange={toggle('clicks')}
                   hint={clickLive && clickReady && declicked
                     ? declicked.repaired === 0
                       ? 'Nichts gefunden, was wie ein Klick aussieht.'
                       : `${declicked.repaired} ${declicked.repaired === 1 ? 'Stelle' : 'Stellen'} ausgebessert — für alte Platten, Kabelknacken, Schmatzen am Mikrofon.`
                     : 'Für alte Platten, Kabelknacken, Schmatzen am Mikrofon. Schläge und Konsonanten bleiben.'} />
-                <div className="flex flex-wrap items-center gap-[8px]">
+                <div className="flex flex-wrap items-center gap-[8px] pt-[2px]">
                   {(['sanft', 'mittel', 'stark'] as const).map((value) => (
                     <button key={value} type="button" aria-pressed={clickStrength === value}
                       onClick={() => {
                         setClickStrength(value)
                         enable('clicks')
                       }}
-                      className={`press rounded-pill px-[12px] py-[5px] text-small ${clickStrength === value ? 'bg-ink text-on-ink' : 'bg-panel-mid text-prose hover:bg-panel-strong'}`}>
+                      className={`press rounded-pill px-[14px] py-[4px] text-small font-medium transition-all ${
+                        clickStrength === value
+                          ? 'bg-ink text-on-ink shadow-xs'
+                          : 'bg-panel-soft text-ink ring-1 ring-line hover:bg-panel-mid'
+                      }`}>
                       {value[0].toUpperCase() + value.slice(1)}
                     </button>
                   ))}
-                  {clickLive && !clickReady ? <span className="text-small text-prose">wird gesucht …</span> : null}
+                  {clickLive && !clickReady ? <span className="text-small text-muted">wird gesucht …</span> : null}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-[8px] sm:col-span-2">
+              {/* Rauschen entfernen */}
+              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs sm:col-span-2">
                 {noise ? (
                   <Toggle label="Rauschen entfernen" checked={Boolean(on.noise)} onChange={toggle('noise')}
                     hint="Rauschprofil gelernt. Eingeschaltet ist die Aufnahme sofort ohne es zu hören." />
                 ) : (
                   <>
-                    <p className="text-small text-prose">Rauschen entfernen</p>
+                    <p className="text-small font-semibold text-ink">Rauschen entfernen</p>
                     <p className="text-small leading-[1.45] text-muted">
                       Erst eine Stelle auswählen, an der nur das Rauschen zu hören ist, und daraus lernen.
                     </p>
                   </>
                 )}
-                <div className="flex flex-wrap items-center gap-[8px]">
+                <div className="flex flex-wrap items-center gap-[8px] pt-[2px]">
                   <Button size="sm" variant="quiet" disabled={busy !== null || !hasSelection}
                     onClick={() => {
                       if (!current) return
@@ -1321,9 +1347,10 @@ export function AudioEditorPanel() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-[8px]">
+              {/* Echo */}
+              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
                 <Toggle label="Echo" checked={Boolean(on.echo)} onChange={toggle('echo')} />
-                <div className="grid grid-cols-3 gap-[12px]">
+                <div className="grid grid-cols-3 gap-[10px] pt-[4px]">
                   <Slider label="Abstand" display={`${echoDelay} ms`} min={40} max={1200} step={10} value={echoDelay}
                     onChange={(event) => {
                       setEchoDelay(Number(event.target.value))
@@ -1342,9 +1369,10 @@ export function AudioEditorPanel() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-[8px]">
+              {/* Hall */}
+              <div className="flex flex-col gap-[8px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
                 <Toggle label="Hall" checked={Boolean(on.room)} onChange={toggle('room')} />
-                <div className="grid grid-cols-2 gap-[12px]">
+                <div className="grid grid-cols-2 gap-[12px] pt-[4px]">
                   <Slider label="Raumgrösse" display={`${comma(roomSeconds)} s`} min={0.3} max={5} step={0.1} value={roomSeconds}
                     onChange={(event) => {
                       setRoomSeconds(Number(event.target.value))
@@ -1360,9 +1388,9 @@ export function AudioEditorPanel() {
             </div>
           </Reveal>
 
-          {/* -- channels and sample rate --------------------------------------- */}
+          {/* -- Studio Rack Unit 4: Kanäle & Routing ------------------------- */}
           <Reveal label="Kanäle und Abtastrate" className="mt-[16px]">
-            <div className="grid gap-[16px] rounded-card bg-panel-soft p-[16px] sm:grid-cols-2">
+            <div className="grid gap-[16px] rounded-card border border-line bg-canvas p-[16px] shadow-xs sm:grid-cols-2 mt-[10px]">
               <Field label="Kanäle" hint="Mono spart die Hälfte; Stereo verdoppelt einen Mono-Kanal.">
                 <div className="flex flex-wrap gap-[8px]">
                   <Button size="sm" variant="quiet" disabled={busy !== null || current.channels.length === 1}
@@ -1396,48 +1424,75 @@ export function AudioEditorPanel() {
             </div>
           </Reveal>
 
-          {/* -- export --------------------------------------------------------- */}
-          <div className="mt-[16px] flex flex-wrap items-center gap-[8px]">
-            <Button disabled={!bytes || busy !== null}
-              onClick={() => bytes && saveBytes(bytes, outputName, 'audio/wav')}>
-              Als WAV speichern
-              <ArrowRight />
-            </Button>
-            <Button variant="quiet" disabled={!bytes || busy !== null} onClick={keep}>
-              In die Sitzung übernehmen
-            </Button>
-            <Select
-              value={bitDepth}
-              onChange={(event) => setBitDepth(Number(event.target.value) as WavBitDepth)}
-              aria-label="Bittiefe"
-              className="w-auto! py-[8px] text-small"
-            >
-              <option value={16}>16 bit</option>
-              <option value={24}>24 bit</option>
-              <option value={32}>32 bit Float</option>
-            </Select>
-            {bytes ? <span className="value text-small text-muted">{formatBytes(bytes.byteLength)}</span> : null}
-            {busy ? <span className="text-small text-muted">{busy}…</span> : null}
+          {/* -- Studio Master Bounce & Export Bar ---------------------------- */}
+          <div className="mt-[16px] flex flex-wrap items-center justify-between gap-[10px] rounded-card border border-line bg-canvas p-[14px] shadow-xs">
+            <div className="flex flex-wrap items-center gap-[8px]">
+              <Button disabled={!bytes || busy !== null}
+                onClick={() => bytes && saveBytes(bytes, outputName, 'audio/wav')}>
+                Als WAV speichern
+                <ArrowRight />
+              </Button>
+              <Button variant="quiet" disabled={!bytes || busy !== null} onClick={keep}>
+                In die Sitzung übernehmen
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-[10px]">
+              <div className="flex items-center gap-[6px]">
+                <span className="text-small text-muted font-medium">Bittiefe:</span>
+                <Select
+                  value={bitDepth}
+                  onChange={(event) => setBitDepth(Number(event.target.value) as WavBitDepth)}
+                  aria-label="Bittiefe"
+                  className="w-auto! py-[6px] text-small"
+                >
+                  <option value={16}>16 bit</option>
+                  <option value={24}>24 bit</option>
+                  <option value={32}>32 bit Float</option>
+                </Select>
+              </div>
+              {bytes ? (
+                <span className="value text-small font-semibold text-ink bg-panel-soft px-[8px] py-[4px] rounded-nav ring-1 ring-line/60">
+                  {formatBytes(bytes.byteLength)}
+                </span>
+              ) : null}
+              {busy ? <span className="text-small text-muted font-medium">{busy}…</span> : null}
+            </div>
           </div>
         </Card>
       </div>
 
       <aside className="flex flex-col gap-[16px]">
         <Card tone="cream" size="compact">
-          <SectionHead rule={false}>Verlauf</SectionHead>
+          <div className="flex items-center justify-between border-b border-line pb-[8px]">
+            <SectionHead rule={false}>Verlauf</SectionHead>
+            {history.length > 0 ? (
+              <span className="rounded-nav bg-panel-soft px-[6px] py-[1px] text-micro font-semibold text-ink">
+                {history.length} {history.length === 1 ? 'Schritt' : 'Schritte'}
+              </span>
+            ) : null}
+          </div>
           {history.length === 0 ? (
             <p className="mt-[8px] text-small leading-[1.5] text-muted">
               Noch unverändert. Strg/Cmd + Z nimmt jeden Schritt zurück; die Ausgangsdatei bleibt
               unangetastet.
             </p>
           ) : (
-            <ol className="mt-[8px] flex flex-col gap-[4px] text-small">
-              {history.map((step, index) => (
-                <li key={`${step.label}-${index}`} className="flex gap-[8px] text-muted">
-                  <span className="value shrink-0">{index + 1}.</span>
-                  <span className="text-prose/85">{step.label}</span>
-                </li>
-              ))}
+            <ol className="mt-[8px] flex flex-col gap-[6px] text-small">
+              {history.map((step, index) => {
+                const isLatest = index === history.length - 1
+                return (
+                  <li
+                    key={`${step.label}-${index}`}
+                    className={`flex items-baseline gap-[8px] rounded-nav px-[8px] py-[4px] transition-colors ${
+                      isLatest ? 'bg-canvas/90 text-ink font-medium shadow-2xs ring-1 ring-line/60' : 'text-muted'
+                    }`}
+                  >
+                    <span className="value shrink-0 text-micro">{index + 1}.</span>
+                    <span className="min-w-0 flex-1 truncate">{step.label}</span>
+                  </li>
+                )
+              })}
             </ol>
           )}
         </Card>
