@@ -182,37 +182,80 @@ export function StemsPanel() {
                 </div>
               ) : null}
 
-              {/* Four expert dials, defaulted sensibly and folded away. They
-                  used to be the first thing on screen, ahead of the button
-                  that uses them — which puts a decision in front of anyone
-                  who only wanted the thing to run. */}
-              <details className="mt-[20px] rounded-card bg-panel-soft p-[16px]">
+              {/* Presets fuer Spurentrennung */}
+              <div className="mt-[20px] flex flex-col gap-[8px]">
+                <span className="text-small font-semibold text-ink">Trennungs-Modus:</span>
+                <div className="flex flex-wrap gap-[8px]">
+                  {[
+                    {
+                      label: 'Ausgewogen (Standard)',
+                      desc: 'Optimale Balance aus Gesang, Beat und Begleitung',
+                      patch: { vocalFocus: 0.65, maskExponent: 2.8, fftSize: 4096, hopSize: 1024, timeKernel: 17, freqKernel: 17 },
+                    },
+                    {
+                      label: 'Vocal-Fokus (Gesang isolieren)',
+                      desc: 'Maximale Mittenschärfe gegen Übersprechen von Begleitinstrumenten',
+                      patch: { vocalFocus: 0.85, maskExponent: 3.5, fftSize: 4096, hopSize: 1024, timeKernel: 17, freqKernel: 17 },
+                    },
+                    {
+                      label: 'Karaoke / Instrumental',
+                      desc: 'Aggressive Gesangsabsenkung für saubere Backingtracks',
+                      patch: { vocalFocus: 0.85, maskExponent: 3.5, fftSize: 4096, hopSize: 1024, timeKernel: 17, freqKernel: 17 },
+                    },
+                    {
+                      label: 'Beat & Rhythmus',
+                      desc: 'Schnelle Transientenverarbeitung für Drums und Perkussion',
+                      patch: { vocalFocus: 0.50, maskExponent: 3.0, fftSize: 2048, hopSize: 512, timeKernel: 9, freqKernel: 9 },
+                    },
+                  ].map((preset) => {
+                    const active = options.vocalFocus === preset.patch.vocalFocus && options.maskExponent === preset.patch.maskExponent && options.fftSize === preset.patch.fftSize
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setSeparation(preset.patch)}
+                        title={preset.desc}
+                        className={`rounded-nav px-[12px] py-[6px] text-small font-medium transition-all ${
+                          active
+                            ? 'bg-ink text-on-ink shadow-sm'
+                            : 'bg-panel-soft text-ink ring-1 ring-line hover:bg-panel-mid'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Feineinstellungen */}
+              <details className="mt-[16px] rounded-card bg-panel-soft p-[16px]">
                 <summary className="cursor-pointer list-none text-small font-semibold text-ink">
-                  Feineinstellungen
+                  Feinjustierung
                   <span className="ml-[8px] font-normal text-muted">
-                    für Ausnahmefälle — die Vorgaben passen meistens
+                    Mittenschärfe, Filterhärte und FFT-Auflösung
                   </span>
                 </summary>
                 <div className="mt-[16px] grid gap-[20px] sm:grid-cols-2">
                   <Slider
-                    label="Mittenschärfe"
+                    label="Mittenschärfe (Vocal Focus)"
                     display={options.vocalFocus.toFixed(2)}
                     min={0}
-                    max={0.9}
+                    max={0.95}
                     step={0.05}
                     value={options.vocalFocus}
                     onChange={(event) => setSeparation({ vocalFocus: Number(event.target.value) })}
                   />
                   <Slider
-                    label="Maskenhärte"
+                    label="Maskenhärte (Steilheit)"
                     display={options.maskExponent.toFixed(1)}
                     min={1}
-                    max={4}
-                    step={0.5}
+                    max={4.5}
+                    step={0.1}
                     value={options.maskExponent}
                     onChange={(event) => setSeparation({ maskExponent: Number(event.target.value) })}
                   />
-                  <Field label="Auflösung" hint="Größer trennt Töne feiner, verschmiert aber Transienten.">
+                  <Field label="Auflösung (FFT)" hint="Größer trennt Töne feiner, kleiner schont Transienten.">
                     <Select
                       value={options.fftSize}
                       onChange={(event) => {
@@ -220,12 +263,12 @@ export function StemsPanel() {
                         setSeparation({ fftSize, hopSize: fftSize / 4 })
                       }}
                     >
-                      <option value={2048}>2048 — transientenfreundlich</option>
-                      <option value={4096}>4096 — ausgewogen</option>
-                      <option value={8192}>8192 — feine Tonhöhen</option>
+                      <option value={2048}>2048 — transientenfreundlich (Beat / Drums)</option>
+                      <option value={4096}>4096 — ausgewogen (Musik)</option>
+                      <option value={8192}>8192 — feine Tonhöhen (Orchester / Solo)</option>
                     </Select>
                   </Field>
-                  <Field label="Medianfenster" hint="Länge der Harmonisch-/Perkussiv-Filter.">
+                  <Field label="Filterfenster" hint="Länge der Harmonisch-/Perkussiv-Filter.">
                     <Select
                       value={options.timeKernel}
                       onChange={(event) => {
@@ -233,7 +276,7 @@ export function StemsPanel() {
                         setSeparation({ timeKernel: kernel, freqKernel: kernel })
                       }}
                     >
-                      <option value={9}>9 — schnell</option>
+                      <option value={9}>9 — schnell & knackig</option>
                       <option value={17}>17 — Standard</option>
                       <option value={31}>31 — gründlich</option>
                     </Select>

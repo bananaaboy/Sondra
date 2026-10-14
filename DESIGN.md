@@ -264,11 +264,9 @@ ist tiefes Waldschwarz (`#0a110d`) statt Grau, mit hellerer Tinte
 (`#a6ecb9`). Das Papier bleibt auf Wunsch Beige (`#f2eee4`, eine Spur
 wärmer als vorher), und Weiss ist nirgends grell: Felder stehen auf warmem
 Weiss (`#fdfbf6`). Waldtinte `#0f3e1c` und alle Rollen sind geblieben; jede Paarung
-ist neu gemessen (Messregel). Zwei kleine Farbmomente sind dazugekommen: die
-Fläche oben auf der Startseite trägt einen Verlauf aus ihren eigenen
-Tönungen (`field-glow`, Minze sammelt sich in der Ecke der zwei Handlungen),
-und das Symbol einer Werkzeugkachel sitzt auf einem eigenen kleinen Feld, das
-beim Zeigen die Tinte annimmt.
+ist neu gemessen (Messregel). Die Fläche oben auf der Startseite steht auf
+einem einheitlichen, ruhigen Ton (`bg-panel-soft`), und das Symbol einer
+Werkzeugkachel sitzt auf einem eigenen kleinen Feld, das beim Zeigen die Tinte annimmt.
 
 ### Primary
 

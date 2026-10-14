@@ -12,12 +12,12 @@
  * vocal — is what people actually want to lift, and YIN does that honestly.
  */
 
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { saveBytes } from '../../lib/download'
 import { formatTimecode } from '../../lib/format'
 import { PITCH_CLASSES } from '../../lib/chroma'
-import { writeMidi } from '../../lib/midi'
+import { chordsToMidiNotes, writeMidi } from '../../lib/midi'
 import { midiName, type Note } from '../../lib/pitch'
 import { estimateTempo } from '../../lib/tempo'
 import { analyseHarmonyInWorker, type HarmonyOutcome } from '../../lib/workerClient'
@@ -112,6 +112,7 @@ export function HarmonyPanel() {
   // you disagree with them and want to see the evidence.
   const [mode, setMode] = useState<ViewMode>('einfach')
   const [transcribe, setTranscribe] = useState(true)
+  const [transcribed, setTranscribed] = useState(true)
   const [chordWindow, setChordWindow] = useState(0.5)
   const [clarity, setClarity] = useState(0.4)
   const [minimumNote, setMinimumNote] = useState(0.06)
@@ -121,14 +122,17 @@ export function HarmonyPanel() {
   const [progress, setProgress] = useState<number | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [result, setResult] = useState<HarmonyOutcome | null>(null)
-  // Simple mode skips the pitch tracker, so a result from it has no notes —
-  // which is not the same thing as a file with no melody in it. Without this
-  // flag, switching to the detailed view after a simple run reported "no melody
-  // found" for something that was never looked for.
-  const [transcribed, setTranscribed] = useState(false)
   const [bpm, setBpm] = useState(120)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  const analyzedConfigRef = useRef<string | null>(null)
+
+  const isConfigStale = useMemo(() => {
+    if (!result || !analyzedConfigRef.current) return false
+    const currentConfig = JSON.stringify({ chordWindow, clarity, minimumNote, quantize, transcribe })
+    return currentConfig !== analyzedConfigRef.current
+  }, [chordWindow, clarity, minimumNote, quantize, result, transcribe])
 
   const analyse = async () => {
     if (!asset) return
@@ -137,7 +141,6 @@ export function HarmonyPanel() {
     setRunning(true)
     setError(null)
     setResult(null)
-    setTranscribed(mode === 'detail' && transcribe)
 
     try {
       const decoded = audio ?? (await decode())
@@ -151,9 +154,8 @@ export function HarmonyPanel() {
         decoded,
         {
           chordWindow,
-          // The pitch tracker is the expensive half and simple mode does not
-          // show its result, so it is skipped there.
-          transcribe: mode === 'detail' && transcribe,
+          // Always calculate transcription if transcribe is checked so both views are immediately complete
+          transcribe,
           minimumClarity: clarity,
           minimumNoteSeconds: minimumNote,
           quantizeSeconds: quantize > 0 ? (60 / tempo.bpm) * quantize : 0,
@@ -165,11 +167,13 @@ export function HarmonyPanel() {
         controller.signal,
       )
 
+      analyzedConfigRef.current = JSON.stringify({ chordWindow, clarity, minimumNote, quantize, transcribe })
       setResult(outcome)
+      setTranscribed(transcribe)
       log(
         'harmonie',
         `${outcome.key.label} (${outcome.key.camelot}), ${outcome.chords.length} Akkorde` +
-          (transcribe ? `, ${outcome.notes.length} Noten` : ''),
+          (transcribe && outcome.notes.length > 0 ? `, ${outcome.notes.length} Noten` : ''),
       )
     } catch (failure) {
       if (!(failure instanceof DOMException && failure.name === 'AbortError')) {
@@ -185,12 +189,33 @@ export function HarmonyPanel() {
     }
   }
 
-  const exportMidi = () => {
+  const exportChordsMidi = () => {
+    if (!result || result.chords.length === 0) return
+    const chordNotes = chordsToMidiNotes(result.chords)
+    if (chordNotes.length === 0) return
+    const base = asset?.name.replace(/\.[^.]+$/, '') ?? 'harmonie'
+    const bytes = writeMidi(chordNotes, { bpm, trackName: `${base} Akkorde` })
+    saveBytes(bytes, `${base}-akkorde.mid`, 'audio/midi')
+    log('harmonie', `${result.chords.filter((c) => c.root !== null).length} Akkorde als MIDI exportiert`)
+  }
+
+  const exportMelodyMidi = () => {
     if (!result || result.notes.length === 0) return
     const base = asset?.name.replace(/\.[^.]+$/, '') ?? 'melodie'
-    const bytes = writeMidi(result.notes, { bpm, trackName: base })
-    saveBytes(bytes, `${base}.mid`, 'audio/midi')
-    log('harmonie', `${result.notes.length} Noten als MIDI gespeichert`)
+    const bytes = writeMidi(result.notes, { bpm, trackName: `${base} Melodie` })
+    saveBytes(bytes, `${base}-melodie.mid`, 'audio/midi')
+    log('harmonie', `${result.notes.length} Noten als MIDI exportiert`)
+  }
+
+  const exportFullMidi = () => {
+    if (!result) return
+    const chordNotes = chordsToMidiNotes(result.chords)
+    const allNotes = [...chordNotes, ...result.notes]
+    if (allNotes.length === 0) return
+    const base = asset?.name.replace(/\.[^.]+$/, '') ?? 'harmonie-melodie'
+    const bytes = writeMidi(allNotes, { bpm, trackName: `${base} Komplett` })
+    saveBytes(bytes, `${base}-komplett.mid`, 'audio/midi')
+    log('harmonie', `Akkorde und Melodie zusammen als MIDI exportiert`)
   }
 
   const confident = (result?.key.confidence ?? 0) >= 0.4
@@ -247,10 +272,19 @@ export function HarmonyPanel() {
                     Abbrechen
                   </Button>
                 ) : null}
-                {mode === 'detail' && result && result.notes.length > 0 ? (
-                  <Button size="sm" variant="quiet" onClick={exportMidi}>
-                    MIDI speichern ({result.notes.length} Noten)
-                  </Button>
+                {result ? (
+                  <div className="flex flex-wrap gap-[6px]">
+                    {result.chords.some((c) => c.root !== null) ? (
+                      <Button size="sm" variant="quiet" onClick={exportChordsMidi}>
+                        Akkorde als MIDI (.mid)
+                      </Button>
+                    ) : null}
+                    {result.notes.length > 0 ? (
+                      <Button size="sm" variant="quiet" onClick={exportMelodyMidi}>
+                        Melodie als MIDI ({result.notes.length})
+                      </Button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
 
@@ -286,6 +320,26 @@ export function HarmonyPanel() {
                 <AudioPreview sources={[{ id: 'source', label: 'Original', audio }]} waveHeight={44} />
               </div>
             ) : null}
+            <div className="mt-[16px] flex flex-wrap items-center justify-between gap-[8px] border-t border-line/60 pt-[12px]">
+              <span className="text-small text-muted">Als MIDI exportieren:</span>
+              <div className="flex flex-wrap gap-[6px]">
+                {result.chords.some((c) => c.root !== null) ? (
+                  <Button size="sm" variant="quiet" onClick={exportChordsMidi}>
+                    Akkorde als MIDI (.mid)
+                  </Button>
+                ) : null}
+                {result.notes.length > 0 ? (
+                  <Button size="sm" variant="quiet" onClick={exportMelodyMidi}>
+                    Melodie als MIDI (.mid)
+                  </Button>
+                ) : null}
+                {result.chords.some((c) => c.root !== null) && result.notes.length > 0 ? (
+                  <Button size="sm" variant="quiet" onClick={exportFullMidi}>
+                    Beides zusammen (.mid)
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           </Card>
         ) : null}
 
@@ -335,7 +389,12 @@ export function HarmonyPanel() {
 
             {result.chords.length > 0 ? (
               <Card tone="mint" size="compact">
-                <SectionHead>Akkorde · {result.chords.filter((span) => span.root !== null).length}</SectionHead>
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <SectionHead>Akkorde · {result.chords.filter((span) => span.root !== null).length}</SectionHead>
+                  <Button size="sm" variant="quiet" onClick={exportChordsMidi}>
+                    Akkordfolge als MIDI (.mid)
+                  </Button>
+                </div>
                 <div className="mt-[16px] flex flex-wrap gap-[4px]">
                   {result.chords.map((span, index) => (
                     <span
@@ -364,23 +423,22 @@ export function HarmonyPanel() {
                 <div className="mt-[16px]">
                   <NoteRoll notes={result.notes} />
                 </div>
-                <div className="mt-[16px]">
-                  <Button size="sm" onClick={exportMidi}>
-                    Als MIDI speichern
+                <div className="mt-[16px] flex flex-wrap gap-[8px]">
+                  <Button size="sm" onClick={exportMelodyMidi}>
+                    Melodie als MIDI speichern
                     <ArrowRight />
                   </Button>
+                  {result.chords.some((c) => c.root !== null) ? (
+                    <Button size="sm" variant="quiet" onClick={exportFullMidi}>
+                      Akkorde + Melodie zusammen als MIDI
+                    </Button>
+                  ) : null}
                 </div>
               </Card>
-            ) : !transcribed ? (
-              <Notice title="Melodie noch nicht analysiert">
-                Die einfache Ansicht überspringt die Melodieerkennung, weil sie der aufwendige Teil
-                ist. Noch einmal auf „Analysieren“ tippen, dann wird sie mitgerechnet.
-              </Notice>
-            ) : transcribe ? (
-              <Notice title="Keine Melodie gefunden">
-                Der Tonhöhenverfolger arbeitet einstimmig. Auf einem vollen Mix findet er selten
-                etwas Brauchbares — trennen Sie vorher im Reiter „Spuren“ den Gesang heraus, oder
-                senken Sie unten die geforderte Klarheit.
+            ) : transcribed ? (
+              <Notice title="Keine einstimmige Melodie isoliert">
+                Auf einem vollen Mix oder akkordlastigen Abschnitten findet der einstimmige Melodieverfolger keine isolierte Melodie-Linie.
+                Nutzen Sie oben die Schaltfläche „Akkordfolge als MIDI (.mid)“, um die erkannte Akkordfolge in Ihrer DAW einzuspielen, oder trennen Sie vorher im Reiter „Spuren“ den Gesang heraus.
               </Notice>
             ) : null}
           </>
@@ -391,6 +449,18 @@ export function HarmonyPanel() {
         {mode === 'detail' ? (
         <Card tone="mint" size="compact">
           <SectionHead>Einstellungen</SectionHead>
+          {isConfigStale ? (
+            <div className="mt-[10px] flex items-center justify-between rounded-nav bg-panel-mid px-[10px] py-[6px] text-micro text-ink">
+              <span>Werte geändert</span>
+              <button
+                type="button"
+                onClick={analyse}
+                className="font-semibold text-ink underline underline-offset-2 hover:opacity-80"
+              >
+                Neu berechnen
+              </button>
+            </div>
+          ) : null}
           <div className="mt-[12px] flex flex-col gap-[16px]">
             <Field label="Akkordfenster" hint="Kürzer folgt schnellen Wechseln, länger ist ruhiger.">
               <Select value={chordWindow} onChange={(event) => setChordWindow(Number(event.target.value))}>

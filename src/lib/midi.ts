@@ -7,7 +7,39 @@
  * without asking questions.
  */
 
+import type { ChordSpan } from './key'
 import type { Note } from './pitch'
+
+/**
+ * Converts chord spans into polyphonic MIDI notes with 4 voices per chord:
+ * Root bass in octave 3 (MIDI 48+root) and a full triad in octave 4 (60+root, 60+root+third, 60+root+fifth).
+ */
+export function chordsToMidiNotes(chords: ChordSpan[]): Note[] {
+  const notes: Note[] = []
+  for (const span of chords) {
+    if (span.root === null) continue
+    const root = span.root // 0..11 (0 = C, 1 = C#, 2 = D, etc.)
+    const isMinor = span.quality === 'moll'
+    const third = isMinor ? 3 : 4
+    const fifth = 7
+
+    const bass = 48 + root
+    const triadRoot = 60 + root
+    const triadThird = 60 + root + third
+    const triadFifth = 60 + root + fifth
+
+    const chordPitches = [bass, triadRoot, triadThird, triadFifth]
+    for (const pitch of chordPitches) {
+      notes.push({
+        midi: pitch,
+        startSeconds: span.startSeconds,
+        endSeconds: span.endSeconds,
+        velocity: 82,
+      })
+    }
+  }
+  return notes
+}
 
 /** Ticks per quarter note. 480 is the common DAW default. */
 const TICKS_PER_QUARTER = 480

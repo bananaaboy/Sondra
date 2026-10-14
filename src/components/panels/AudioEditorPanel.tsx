@@ -397,6 +397,8 @@ export function AudioEditorPanel() {
       return audio
     })
     if (done) {
+      if (on.pitch) setSemitones(0)
+      if (on.tempo) setTempo(1)
       setOn({})
       setGain(0)
       setCompare(false)
@@ -416,6 +418,7 @@ export function AudioEditorPanel() {
     }).then((ok) => {
       if (ok) {
         setOn((s) => ({ ...s, pitch: false }))
+        setSemitones(0)
       }
     })
   }
@@ -433,6 +436,7 @@ export function AudioEditorPanel() {
     }).then((ok) => {
       if (ok) {
         setOn((s) => ({ ...s, tempo: false }))
+        setTempo(1)
       }
     })
   }
@@ -811,13 +815,13 @@ export function AudioEditorPanel() {
             </div>
           ) : null}
 
-          {/* -- cutting ------------------------------------------------------ */}
-          <div className="mt-[16px] flex flex-wrap gap-[8px]">
-            {/* The two cuts exist only once there is something to cut. Shown
-                greyed out beforehand they were two dead buttons on every visit,
-                and the line above already says how to make a selection. */}
+          {/* -- cutting & editing toolbar ----------------------------------- */}
+          <div className="mt-[16px] flex flex-col gap-[10px]">
             {hasSelection ? (
-              <>
+              <div className="flex flex-wrap items-center gap-[8px] rounded-nav bg-panel-soft p-[10px] ring-1 ring-inset ring-line/80">
+                <span className="text-micro font-semibold uppercase tracking-wider text-muted px-[4px]">
+                  Auswahl:
+                </span>
                 <Button size="sm" disabled={busy !== null}
                   onClick={() => void apply('Ausschnitt behalten', (a) => sliceAudio(a, span.start, span.end))}>
                   Nur den Ausschnitt behalten
@@ -858,179 +862,194 @@ export function AudioEditorPanel() {
                   }}>
                   Hier ausblenden
                 </Button>
-              </>
-            ) : null}
-            {clipboard ? (
-              <Button size="sm" variant="quiet" disabled={busy !== null} onClick={paste} title="Strg/Cmd + V">
-                {hasSelection ? 'Auswahl ersetzen' : 'Einfügen'} ({durationOf(clipboard).toFixed(1)} s)
-              </Button>
-            ) : null}
-            <Button size="sm" variant="quiet" disabled={busy !== null}
-              onClick={() => void apply('Umgekehrt', reverseAudio)}>
-              Umkehren
-            </Button>
-            <Button size="sm" variant="quiet" disabled={busy !== null || !current}
-              onClick={() => void apply('1 s am Anfang eingeblendet', (a) => fadeRange(a, 0, Math.min(1.0, durationOf(a)), 'in'))}
-              title="Sanftes Einblenden der ersten Sekunde">
-              Fade In (1s)
-            </Button>
-            <Button size="sm" variant="quiet" disabled={busy !== null || !current}
-              onClick={() => {
-                if (!current) return
-                const dur = durationOf(current)
-                void apply('2 s am Ende ausgeblendet', (a) => fadeRange(a, Math.max(0, dur - 2.0), dur, 'out'))
-              }}
-              title="Sanftes Ausblenden der letzten zwei Sekunden">
-              Fade Out (2s)
-            </Button>
-            {selection ? (
-              <Button size="sm" variant="ghost" onClick={() => setSelection(null)}>
-                Auswahl aufheben
-              </Button>
-            ) : null}
-          </div>
-
-          {/* -- level and shape ---------------------------------------------- */}
-          <div className="mt-[20px] grid gap-[16px] border-t border-line pt-[16px] sm:grid-cols-2">
-            <div>
-              <Slider
-                label={hasSelection ? 'Pegel im Ausschnitt' : 'Pegel'}
-                display={`${gain > 0 ? '+' : ''}${gain.toFixed(1)} dB`}
-                min={-24} max={12} step={0.5} value={gain}
-                onChange={(event) => setGain(Number(event.target.value))}
-              />
-              <div className="mt-[8px] flex flex-wrap items-center gap-[6px]">
-                <Select
-                  value={targetPeakDb}
-                  onChange={(e) => setTargetPeakDb(Number(e.target.value))}
-                  aria-label="Ziel-Pegel Normalisierung"
-                  className="w-auto! py-[4px] text-small"
-                >
-                  <option value={-0.3}>−0,3 dBFS (Spitze)</option>
-                  <option value={-1.0}>−1,0 dBFS (Spotify / Apple)</option>
-                  <option value={-2.0}>−2,0 dBFS (Headroom)</option>
-                </Select>
-                <Button
-                  size="sm"
-                  variant="quiet"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    void apply(
-                      `Auf ${targetPeakDb > 0 ? '+' : ''}${targetPeakDb.toFixed(1).replace('.', ',')} dBFS normalisiert`,
-                      (a) => normalizePeak(a, targetPeakDb),
-                    )
-                  }
-                >
-                  Normalisieren
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy !== null}
-                  onClick={() => void apply('DC-Offset entfernt', removeDcOffset)}
-                  title="Gleichspannungs-Versatz auf Nullachse zentrieren"
-                >
-                  DC-Offset weg
+                <Button size="sm" variant="ghost" onClick={() => setSelection(null)}>
+                  Auswahl aufheben
                 </Button>
               </div>
-            </div>
+            ) : null}
 
-            <div className="flex flex-col gap-[8px]">
-              <Toggle label="Blenden am Anfang und Ende" checked={Boolean(on.fade)} onChange={toggle('fade')}
-                hint="Die Kurve steht auf der Wellenform, zu hören ist sie sofort." />
-              <div className="grid grid-cols-2 gap-[12px]">
-                <Slider label="Einblenden" display={`${comma(fadeIn, 2)} s`}
-                  min={0} max={Math.min(5, duration)} step={0.05} value={fadeIn}
-                  onChange={(event) => {
-                    setFadeIn(Number(event.target.value))
-                    enable('fade')
-                  }} />
-                <Slider label="Ausblenden" display={`${comma(fadeOut, 2)} s`}
-                  min={0} max={Math.min(5, duration)} step={0.05} value={fadeOut}
-                  onChange={(event) => {
-                    setFadeOut(Number(event.target.value))
-                    enable('fade')
-                  }} />
-              </div>
+            <div className="flex flex-wrap items-center gap-[8px]">
+              {clipboard ? (
+                <Button size="sm" variant="quiet" disabled={busy !== null} onClick={paste} title="Strg/Cmd + V">
+                  {hasSelection ? 'Auswahl ersetzen' : 'Einfügen'} ({durationOf(clipboard).toFixed(1)} s)
+                </Button>
+              ) : null}
+              <Button size="sm" variant="quiet" disabled={busy !== null}
+                onClick={() => void apply('Umgekehrt', reverseAudio)}>
+                Umkehren
+              </Button>
+              <Button size="sm" variant="quiet" disabled={busy !== null || !current}
+                onClick={() => void apply('1 s am Anfang eingeblendet', (a) => fadeRange(a, 0, Math.min(1.0, durationOf(a)), 'in'))}
+                title="Sanftes Einblenden der ersten Sekunde">
+                Fade In (1s)
+              </Button>
+              <Button size="sm" variant="quiet" disabled={busy !== null || !current}
+                onClick={() => {
+                  if (!current) return
+                  const dur = durationOf(current)
+                  void apply('2 s am Ende ausgeblendet', (a) => fadeRange(a, Math.max(0, dur - 2.0), dur, 'out'))
+                }}
+                title="Sanftes Ausblenden der letzten zwei Sekunden">
+                Fade Out (2s)
+              </Button>
             </div>
           </div>
 
-          {/* -- silence ------------------------------------------------------- */}
-          <div className="mt-[20px] flex flex-wrap items-center gap-[12px] border-t border-line pt-[16px]">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-[8px]">
-                <p className="text-small font-semibold text-ink">
+          {/* -- Card 1: level, mastering & silence --------------------------- */}
+          <div className="mt-[20px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-line/70 flex flex-col gap-[16px]">
+            <div className="flex flex-wrap items-baseline justify-between gap-[8px] border-b border-line pb-[10px]">
+              <div>
+                <p className="text-small font-semibold text-ink">Pegel, Blenden & Stille</p>
+                <p className="text-small text-muted">
+                  Lautstärke anpassen, Spitzen normalisieren und Pausen präzise schneiden.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-[20px] sm:grid-cols-2">
+              {/* Pegel & Normalisierung */}
+              <div className="flex flex-col gap-[10px]">
+                <Slider
+                  label={hasSelection ? 'Pegel im Ausschnitt' : 'Pegel'}
+                  display={`${gain > 0 ? '+' : ''}${gain.toFixed(1)} dB`}
+                  min={-24} max={12} step={0.5} value={gain}
+                  onChange={(event) => setGain(Number(event.target.value))}
+                />
+                <div className="flex flex-wrap items-center gap-[6px] pt-[2px]">
+                  <Select
+                    value={targetPeakDb}
+                    onChange={(e) => setTargetPeakDb(Number(e.target.value))}
+                    aria-label="Ziel-Pegel Normalisierung"
+                    className="w-auto! py-[4px] text-small"
+                  >
+                    <option value={-0.3}>−0,3 dBFS (Spitze)</option>
+                    <option value={-1.0}>−1,0 dBFS (Spotify / Apple)</option>
+                    <option value={-2.0}>−2,0 dBFS (Headroom)</option>
+                  </Select>
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      void apply(
+                        `Auf ${targetPeakDb > 0 ? '+' : ''}${targetPeakDb.toFixed(1).replace('.', ',')} dBFS normalisiert`,
+                        (a) => normalizePeak(a, targetPeakDb),
+                      )
+                    }
+                  >
+                    Normalisieren
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy !== null}
+                    onClick={() => void apply('DC-Offset entfernt', removeDcOffset)}
+                    title="Gleichspannungs-Versatz auf Nullachse zentrieren"
+                  >
+                    DC-Offset weg
+                  </Button>
+                </div>
+              </div>
+
+              {/* Blenden */}
+              <div className="flex flex-col gap-[8px]">
+                <Toggle label="Blenden am Anfang und Ende" checked={Boolean(on.fade)} onChange={toggle('fade')}
+                  hint="Die Kurve steht auf der Wellenform, zu hören ist sie sofort." />
+                <div className="grid grid-cols-2 gap-[12px]">
+                  <Slider label="Einblenden" display={`${comma(fadeIn, 2)} s`}
+                    min={0} max={Math.min(5, duration)} step={0.05} value={fadeIn}
+                    onChange={(event) => {
+                      setFadeIn(Number(event.target.value))
+                      enable('fade')
+                    }} />
+                  <Slider label="Ausblenden" display={`${comma(fadeOut, 2)} s`}
+                    min={0} max={Math.min(5, duration)} step={0.05} value={fadeOut}
+                    onChange={(event) => {
+                      setFadeOut(Number(event.target.value))
+                      enable('fade')
+                    }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Stille verwalten */}
+            <div className="grid gap-[16px] border-t border-line/70 pt-[14px] sm:grid-cols-2">
+              <div className="flex flex-col gap-[6px]">
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  <span className="text-small font-semibold text-ink">Stille entfernen:</span>
+                  <Select
+                    value={silenceThresholdDb}
+                    onChange={(e) => setSilenceThresholdDb(Number(e.target.value))}
+                    aria-label="Schwellenwert für Stille"
+                    className="w-auto! py-[2px] text-micro"
+                  >
+                    <option value={-40}>−40 dBFS (Atmung / Rauschen)</option>
+                    <option value={-50}>−50 dBFS (Standard)</option>
+                    <option value={-60}>−60 dBFS (Nur absolute Stille)</option>
+                  </Select>
+                  {silence.length > 0 ? (
+                    <Button
+                      size="sm"
+                      variant="quiet"
+                      disabled={busy !== null}
+                      onClick={() => void apply(`Stille entfernt (${silenceThresholdDb} dBFS)`, (a) => removeSilence(a, silenceThresholdDb))}
+                    >
+                      Entfernen ({silence.length})
+                    </Button>
+                  ) : null}
+                </div>
+                <p className="text-small text-muted leading-[1.4]">
                   {silence.length === 0
                     ? 'Keine nennenswerte Stille gefunden.'
-                    : `${silence.length} stille Stelle${silence.length === 1 ? '' : 'n'} (${silence
+                    : `${silence.length} Stelle${silence.length === 1 ? '' : 'n'} (${silence
                         .reduce((sum, r) => sum + (r.endSeconds - r.startSeconds), 0)
-                        .toFixed(1)} s)`}
+                        .toFixed(1)} s Gesamtstille)`}
                 </p>
-                <span className="text-micro text-muted">Schwelle:</span>
-                <Select
-                  value={silenceThresholdDb}
-                  onChange={(e) => setSilenceThresholdDb(Number(e.target.value))}
-                  aria-label="Schwellenwert für Stille"
-                  className="w-auto! py-[2px] text-micro"
-                >
-                  <option value={-40}>−40 dBFS (Atmung / Rauschen)</option>
-                  <option value={-50}>−50 dBFS (Standard)</option>
-                  <option value={-60}>−60 dBFS (Nur absolute Stille)</option>
-                </Select>
               </div>
-              <p className="mt-[4px] text-small leading-[1.45] text-muted">
-                Unter {silenceThresholdDb} dBFS und länger als 0,35 s. An den Rändern bleiben 50 ms Puffer stehen.
-              </p>
+
+              <div className="flex flex-col gap-[6px]">
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  <span className="text-small font-semibold text-ink">Stille einfügen:</span>
+                  <Select
+                    value={silenceLength}
+                    onChange={(event) => setSilenceLength(Number(event.target.value))}
+                    aria-label="Länge der Stille"
+                    className="w-auto! py-[2px] text-small"
+                  >
+                    {[0.25, 0.5, 1, 2, 5].map((value) => (
+                      <option key={value} value={value}>
+                        {value.toString().replace('.', ',')} s
+                      </option>
+                    ))}
+                  </Select>
+                  <Button size="sm" variant="quiet" disabled={busy !== null}
+                    onClick={() => {
+                      const at = hasSelection ? span.start : (position ?? duration)
+                      void apply(`${silenceLength} s Stille eingefügt`, (a) => insertSilence(a, at, silenceLength))
+                    }}>
+                    {hasSelection ? 'Am Auswahlbeginn' : position !== null ? 'An Abspielstelle' : 'Am Ende'}
+                  </Button>
+                </div>
+                <p className="text-small text-muted leading-[1.4]">
+                  Fügt eine lautlose Pause an der gewünschten Stelle ein.
+                </p>
+              </div>
             </div>
-            {silence.length > 0 ? (
-              <Button
-                size="sm"
-                variant="quiet"
-                disabled={busy !== null}
-                onClick={() => void apply(`Stille entfernt (${silenceThresholdDb} dBFS)`, (a) => removeSilence(a, silenceThresholdDb))}
-              >
-                Stille entfernen
-              </Button>
-            ) : null}
           </div>
 
-          {/* -- a pause, put in ------------------------------------------------ */}
-          <div className="mt-[16px] flex flex-wrap items-center gap-[8px] border-t border-line pt-[16px]">
-            <span className="text-small text-prose">Stille einfügen</span>
-            <Select
-              value={silenceLength}
-              onChange={(event) => setSilenceLength(Number(event.target.value))}
-              aria-label="Länge der Stille"
-              className="w-auto! py-[6px] text-small"
-            >
-              {[0.25, 0.5, 1, 2, 5].map((value) => (
-                <option key={value} value={value}>
-                  {value.toString().replace('.', ',')} s
-                </option>
-              ))}
-            </Select>
-            <Button size="sm" variant="quiet" disabled={busy !== null}
-              onClick={() => {
-                const at = hasSelection ? span.start : (position ?? duration)
-                void apply(`${silenceLength} s Stille eingefügt`, (a) => insertSilence(a, at, silenceLength))
-              }}>
-              {hasSelection ? 'Am Auswahlbeginn' : position !== null ? 'An der Abspielstelle' : 'Am Ende'}
-            </Button>
-          </div>
-
-          {/* -- pitch shift & time stretch --------------------------------- */}
-          <div className="mt-[20px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-line/70">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-[10px]">
+          {/* -- Card 2: pitch shift, time stretch & BPM counter (deduplicated) - */}
+          <div className="mt-[16px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-line/70 flex flex-col gap-[16px]">
+            <div className="flex flex-wrap items-baseline justify-between gap-[8px] border-b border-line pb-[10px]">
               <div>
-                <p className="text-small font-semibold text-ink">Tonhöhe & Tempo (Pitch-Shift & Time-Stretch)</p>
+                <p className="text-small font-semibold text-ink">Tonhöhe, Tempo & Rhythmus (Pitch, Stretch & BPM)</p>
                 <p className="text-small text-muted">
-                  Tonhöhe transponieren ohne Tempoverlust oder Tempo anpassen ohne Micky-Maus-Stimmen.
+                  Tonhöhe transponieren ohne Tempoverlust, Tempo anpassen ohne Tonhöhenänderung und Song-BPM ermitteln.
                   {hasSelection ? ' Wirkt auf den markierten Ausschnitt.' : ' Wirkt auf die gesamte Datei.'}
                 </p>
               </div>
             </div>
 
-            <div className="mt-[14px] grid gap-[20px] sm:grid-cols-2">
+            <div className="grid gap-[20px] sm:grid-cols-2">
               {/* Tonhöhe */}
               <div className="flex flex-col gap-[10px]">
                 <div className="flex items-baseline justify-between">
@@ -1071,7 +1090,7 @@ export function AudioEditorPanel() {
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-[8px] pt-[4px]">
+                <div className="flex items-center gap-[8px] pt-[2px]">
                   <Button
                     size="sm"
                     variant="quiet"
@@ -1123,7 +1142,7 @@ export function AudioEditorPanel() {
                     </button>
                   ))}
                 </div>
-                <div className="flex items-center gap-[8px] pt-[4px]">
+                <div className="flex items-center gap-[8px] pt-[2px]">
                   <Button
                     size="sm"
                     variant="quiet"
@@ -1135,22 +1154,20 @@ export function AudioEditorPanel() {
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* -- Tap-Tempo & BPM Tool --------------------------------------- */}
-          <div className="mt-[16px] rounded-card bg-panel-soft p-[14px] ring-1 ring-inset ring-line/70">
-            <div className="flex flex-wrap items-center justify-between gap-[10px]">
-              <div>
-                <p className="text-small font-semibold text-ink">BPM-Detektor / Tap-Tempo (Takt mitklopfen)</p>
-                <p className="text-small text-muted">
-                  Klicke im Takt oder drücke die Taste T auf der Tastatur, um das Song-Tempo zu messen.
-                </p>
+            {/* Tap-Tempo & BPM Detektor Footer */}
+            <div className="flex flex-wrap items-center justify-between gap-[12px] border-t border-line/70 pt-[14px]">
+              <div className="flex flex-col gap-[2px]">
+                <span className="text-small font-semibold text-ink">BPM-Detektor / Tap-Tempo</span>
+                <span className="text-small text-muted">
+                  Klicke im Takt oder drücke die Taste T auf der Tastatur.
+                </span>
               </div>
-              <div className="flex items-center gap-[8px]">
+              <div className="flex flex-wrap items-center gap-[10px]">
                 <button
                   type="button"
                   onClick={handleTap}
-                  className="press rounded-pill bg-ink px-[16px] py-[6px] text-small font-semibold text-on-ink shadow-sm hover:opacity-90 active:scale-95 transition-transform"
+                  className="press rounded-pill bg-ink px-[16px] py-[7px] text-small font-semibold text-on-ink shadow-sm hover:opacity-90 active:scale-95 transition-transform"
                 >
                   Takt klopfen (Tap)
                 </button>
@@ -1166,25 +1183,18 @@ export function AudioEditorPanel() {
                     Zurücksetzen
                   </Button>
                 ) : null}
+                {tappedBpm ? (
+                  <div className="flex items-center gap-[10px] pl-[4px] text-small">
+                    <span className="value text-[15px] font-bold text-ink bg-raised px-[10px] py-[3px] rounded-pill ring-1 ring-inset ring-line">
+                      {tappedBpm} BPM
+                    </span>
+                    <span className="text-muted text-micro hidden sm:inline">
+                      1/4: {(60000 / tappedBpm).toFixed(0)} ms · 1/8: {(30000 / tappedBpm).toFixed(0)} ms
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
-
-            {tappedBpm ? (
-              <div className="mt-[10px] flex flex-wrap items-center gap-[16px] border-t border-line/60 pt-[8px] text-small">
-                <span className="value text-[16px] font-bold text-ink">
-                  {tappedBpm} BPM
-                </span>
-                <span className="text-muted">
-                  ({tapTimes.length} {tapTimes.length === 1 ? 'Schlag' : 'Schläge'})
-                </span>
-                <span className="text-muted">
-                  1/4 Note: {(60000 / tappedBpm).toFixed(0)} ms
-                </span>
-                <span className="text-muted">
-                  1/8 Note: {(30000 / tappedBpm).toFixed(0)} ms
-                </span>
-              </div>
-            ) : null}
           </div>
 
           {/* -- sound: filters, dynamics, noise, space --------------------------- */}
@@ -1350,31 +1360,9 @@ export function AudioEditorPanel() {
             </div>
           </Reveal>
 
-          {/* -- the expert half ------------------------------------------------ */}
-          <Reveal label="Tonhöhe, Tempo, Kanäle und Abtastrate" className="mt-[16px]">
+          {/* -- channels and sample rate --------------------------------------- */}
+          <Reveal label="Kanäle und Abtastrate" className="mt-[16px]">
             <div className="grid gap-[16px] rounded-card bg-panel-soft p-[16px] sm:grid-cols-2">
-              <div className="flex flex-col gap-[8px]">
-                <Toggle label="Tonhöhe" checked={Boolean(on.pitch)} onChange={toggle('pitch')}
-                  hint="Länge bleibt gleich. Live klingt es etwas körniger; übernommen rechnet ein Phasenvocoder." />
-                <Slider label="Halbtöne" display={`${semitones > 0 ? '+' : ''}${semitones}`}
-                  min={-12} max={12} step={1} value={semitones}
-                  onChange={(event) => {
-                    setSemitones(Number(event.target.value))
-                    enable('pitch')
-                  }} />
-              </div>
-
-              <div className="flex flex-col gap-[8px]">
-                <Toggle label="Tempo" checked={Boolean(on.tempo)} onChange={toggle('tempo')}
-                  hint="Tonhöhe bleibt gleich. Gilt für die ganze Aufnahme." />
-                <Slider label="Faktor" display={tempo === 1 ? 'unverändert' : `${comma(tempo, 2)}×`}
-                  min={0.5} max={2} step={0.05} value={tempo}
-                  onChange={(event) => {
-                    setTempo(Number(event.target.value))
-                    enable('tempo')
-                  }} />
-              </div>
-
               <Field label="Kanäle" hint="Mono spart die Hälfte; Stereo verdoppelt einen Mono-Kanal.">
                 <div className="flex flex-wrap gap-[8px]">
                   <Button size="sm" variant="quiet" disabled={busy !== null || current.channels.length === 1}

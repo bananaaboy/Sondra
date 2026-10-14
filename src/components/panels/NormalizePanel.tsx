@@ -27,10 +27,8 @@ import {
   Button,
   Card,
   SectionHead,
-  Field,
   Notice,
   Progress,
-  Select,
   Slider,
   Stat,
   Toggle,
@@ -272,62 +270,71 @@ export function NormalizePanel() {
                 <Waveform audio={audio} height={84} />
               </div>
 
-              <div className="mt-[20px] grid gap-[16px] sm:grid-cols-2">
-                <Field label="Verfahren">
-                  <Select
-                    value={settings.mode}
-                    onChange={(event) =>
-                      setNormalization({ mode: event.target.value as 'lufs' | 'peak' })
-                    }
-                  >
-                    <option value="lufs">Lautheit (LUFS)</option>
-                    <option value="peak">Spitzenpegel (dBFS)</option>
-                  </Select>
-                </Field>
+              <div className="mt-[20px] flex flex-col gap-[16px]">
+                {/* Modus & Preset-Leiste */}
+                <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft p-[16px]">
+                  <div className="flex flex-wrap items-center justify-between gap-[8px]">
+                    <span className="text-small font-semibold text-ink">Ziel-Verfahren:</span>
+                    <div role="radiogroup" aria-label="Verfahren" className="inline-flex rounded-nav bg-canvas p-[3px] ring-1 ring-line">
+                      <button
+                        type="button"
+                        onClick={() => setNormalization({ mode: 'lufs' })}
+                        className={`rounded-nav px-[12px] py-[3px] text-small font-medium transition-colors ${
+                          settings.mode === 'lufs' ? 'bg-ink text-on-ink shadow-sm' : 'text-muted hover:text-ink'
+                        }`}
+                      >
+                        Lautheit (LUFS)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNormalization({ mode: 'peak' })}
+                        className={`rounded-nav px-[12px] py-[3px] text-small font-medium transition-colors ${
+                          settings.mode === 'peak' ? 'bg-ink text-on-ink shadow-sm' : 'text-muted hover:text-ink'
+                        }`}
+                      >
+                        Spitzenpegel (dBFS)
+                      </button>
+                    </div>
+                  </div>
 
-                <Field label="Vorgabe">
-                  <Select
-                    value={
-                      LOUDNESS_PRESETS.find(
-                        (preset) =>
-                          preset.lufs === settings.targetLufs &&
-                          preset.ceiling === settings.truePeakCeilingDbtp,
-                      )?.id ?? 'custom'
-                    }
-                    onChange={(event) => {
-                      const preset = LOUDNESS_PRESETS.find((p) => p.id === event.target.value)
-                      if (preset) {
-                        setNormalization({
-                          targetLufs: preset.lufs,
-                          truePeakCeilingDbtp: preset.ceiling,
-                        })
-                      }
-                    }}
-                  >
-                    <option value="custom">Eigene Werte</option>
-                    {LOUDNESS_PRESETS.map((preset) => (
-                      <option key={preset.id} value={preset.id}>
-                        {preset.label} · {preset.lufs} LUFS
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
+                  {/* Vorgaben Pills */}
+                  {settings.mode === 'lufs' ? (
+                    <div className="flex flex-col gap-[6px] border-t border-line/60 pt-[10px]">
+                      <span className="text-micro font-medium text-muted">Standard-Vorgaben:</span>
+                      <div className="flex flex-wrap gap-[6px]">
+                        {[
+                          { id: 'streaming', label: 'Streaming (-14 LUFS)', lufs: -14, ceiling: -1 },
+                          { id: 'podcast', label: 'Podcast (-16 LUFS)', lufs: -16, ceiling: -1 },
+                          { id: 'broadcast', label: 'Broadcast EBU (-23 LUFS)', lufs: -23, ceiling: -1 },
+                          { id: 'club', label: 'Club / Laut (-9 LUFS)', lufs: -9, ceiling: -0.3 },
+                        ].map((preset) => {
+                          const active = settings.targetLufs === preset.lufs && settings.truePeakCeilingDbtp === preset.ceiling
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => setNormalization({ targetLufs: preset.lufs, truePeakCeilingDbtp: preset.ceiling })}
+                              className={`rounded-nav px-[10px] py-[4px] text-small font-medium transition-all ${
+                                active
+                                  ? 'bg-ink text-on-ink shadow-sm'
+                                  : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
 
-                {/* The method and the preset are real choices; these refine
-                   them. Folded, because a preset that is about to be adjusted
-                   by hand is not much of a preset. */}
-                <details className="sm:col-span-2 rounded-card bg-panel-soft p-[16px]">
-                  <summary className="cursor-pointer list-none text-small font-semibold text-ink">
-                    Feineinstellungen
-                    <span className="ml-[8px] font-normal text-muted">
-                      Zielwert, Grenze und wie Spitzen behandelt werden
-                    </span>
-                  </summary>
-                  <div className="mt-[16px] flex flex-col gap-[20px]">
-                  <div className="sm:col-span-2 grid gap-[20px] sm:grid-cols-2">
+                {/* Direkte Schieberegler (Prominent und sichtbar) */}
+                <div className="grid gap-[16px] rounded-card bg-panel-soft p-[16px] sm:grid-cols-2">
+                  <div className="flex flex-col gap-[8px]">
                     {settings.mode === 'lufs' ? (
                       <Slider
-                        label="Zielwert"
+                        label="Zielwert (LUFS)"
                         display={`${settings.targetLufs} LUFS`}
                         min={-31}
                         max={-6}
@@ -337,7 +344,7 @@ export function NormalizePanel() {
                       />
                     ) : (
                       <Slider
-                        label="Zielwert"
+                        label="Zielwert (dBFS)"
                         display={`${settings.targetPeakDbfs} dBFS`}
                         min={-12}
                         max={0}
@@ -346,6 +353,23 @@ export function NormalizePanel() {
                         onChange={(event) => setNormalization({ targetPeakDbfs: Number(event.target.value) })}
                       />
                     )}
+                    {before ? (
+                      <span className="text-micro text-muted">
+                        Geplante Änderung:{' '}
+                        <strong className="text-ink">
+                          {settings.mode === 'lufs'
+                            ? `${(settings.targetLufs - before.integratedLufs) > 0 ? '+' : ''}${(settings.targetLufs - before.integratedLufs).toFixed(1)} dB`
+                            : `${(settings.targetPeakDbfs - before.samplePeakDbfs) > 0 ? '+' : ''}${(settings.targetPeakDbfs - before.samplePeakDbfs).toFixed(1)} dB`}
+                        </strong>
+                      </span>
+                    ) : (
+                      <span className="text-micro text-muted">
+                        {settings.mode === 'lufs' ? 'Gleichmäßige empfundene Lautstärke' : 'Absoluter Höchstwert'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-[8px]">
                     <Slider
                       label="True-Peak-Grenze"
                       display={`${settings.truePeakCeilingDbtp} dBTP`}
@@ -357,22 +381,29 @@ export function NormalizePanel() {
                         setNormalization({ truePeakCeilingDbtp: Number(event.target.value) })
                       }
                     />
+                    <span className="text-micro text-muted">
+                      Verhindert Verzerrungen bei D/A-Wandlung & MP3-Kompression
+                    </span>
                   </div>
+                </div>
 
+                {/* Dynamik & Sicherheit Toggles */}
+                <div className="flex flex-col gap-[10px] rounded-card bg-panel-soft p-[14px]">
                   <Toggle
                     label="Übersteuerung verhindern"
-                    hint="Nimmt die Verstärkung zurück, statt die Grenze zu überschreiten."
+                    hint="Nimmt die Gesamtverstärkung sanft zurück, falls Spitzen die True-Peak-Grenze überschreiten würden."
                     checked={settings.preventClipping}
                     onChange={(value) => setNormalization({ preventClipping: value })}
                   />
-                  <Toggle
-                    label="Limiter statt Rücknahme"
-                    hint="Hält den Zielwert und begrenzt nur die Spitzen. Lauter, aber ein Eingriff."
-                    checked={settings.useLimiter}
-                    onChange={(value) => setNormalization({ useLimiter: value })}
-                  />
+                  <div className="border-t border-line/60 pt-[8px]">
+                    <Toggle
+                      label="Limiter statt Lautstärkerücknahme"
+                      hint="Hält den Zielwert exakt und begrenzt nur die höchsten Spitzen. Ergibt ein lauteres Gesamtergebnis."
+                      checked={settings.useLimiter}
+                      onChange={(value) => setNormalization({ useLimiter: value })}
+                    />
                   </div>
-                </details>
+                </div>
               </div>
 
               <div className="mt-[20px] flex flex-col gap-[12px]">

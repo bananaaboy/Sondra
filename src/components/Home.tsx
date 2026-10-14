@@ -242,7 +242,7 @@ export function Home() {
       ) : (
         /* One block: what the page is, and how to start. The tint holds both,
            so the headline is not a sentence floating beside a box. */
-        <section className="field-glow flex flex-col gap-[24px] rounded-card p-[24px] sm:flex-row sm:items-center sm:justify-between sm:gap-[40px] sm:p-[40px]">
+        <section className="bg-panel-soft flex flex-col gap-[24px] rounded-card p-[24px] sm:flex-row sm:items-center sm:justify-between sm:gap-[40px] sm:p-[40px]">
           <div className="flex max-w-[40em] flex-col gap-[12px]">
             <h2 className="display-md sm:display-lg">Ton, Video und Bilder bearbeiten</h2>
             <p className="text-body leading-[1.55] text-prose">
