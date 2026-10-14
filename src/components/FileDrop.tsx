@@ -11,9 +11,18 @@ import { useState } from 'react'
 import { useFilePicker, useIngestFiles } from '../hooks/useIngest'
 import { ArrowRight, Button } from './ui/primitives'
 
-export function FileDrop({ compact = false }: { compact?: boolean }) {
+export function FileDrop({
+  compact = false,
+  accept,
+  prompt = 'Datei hierher ziehen — Ton oder Video, beliebig viele',
+}: {
+  compact?: boolean
+  /** The picker's filter, where a tool takes one kind of file. */
+  accept?: string
+  prompt?: string
+}) {
   const { ingest } = useIngestFiles()
-  const { input, open, busy } = useFilePicker('geöffnet')
+  const { input, open, busy } = useFilePicker('geöffnet', accept)
   const [dragging, setDragging] = useState(false)
 
   return (
@@ -36,7 +45,7 @@ export function FileDrop({ compact = false }: { compact?: boolean }) {
     >
       {input}
       {!compact ? (
-        <p className="text-body text-prose">Datei hierher ziehen — Ton oder Video, beliebig viele</p>
+        <p className="text-body text-prose">{prompt}</p>
       ) : null}
       <Button size={compact ? 'sm' : 'md'} onClick={open} disabled={busy}>
         {busy ? 'Wird gelesen…' : 'Datei auswählen'}
