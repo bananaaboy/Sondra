@@ -23,6 +23,18 @@ Abspielen
   Windows' Browser-Kern nicht abspielt (etwa AVI oder DTS-Ton), macht Sondra
   abspielbar.
 
+Ton
+  Unter „Ton“ links ein Werkzeug wählen — Schnitt, Pegel, Klang, Säubern,
+  Raum, Tempo, Ausgabe, Verlauf —, rechts stehen nur seine Regler. Was ein
+  Regler tut, ist sofort zu hören; „Übernehmen“ schreibt es in die Datei.
+  Über die Welle ziehen wählt einen Ausschnitt, die Leertaste spielt.
+
+Zerschneiden
+  Ein Verfahren wählen — Anschläge, Stärkste, Takt, Pausen, Gleich oder
+  Länge —, wo geschnitten wird, steht vorher als Linie auf der Welle.
+  „Schneiden“ legt die Pads an; jede Zeile im Pattern beginnt mit ihrem Pad.
+  Die Tasten 1–4, Q–R, A–F und Y–V spielen die Pads.
+
 Bildschirm aufnehmen
   Unter „Bildschirm“ einen Bildschirm oder ein Fenster aus der Liste wählen
   und „Aufnahme starten“. Mit „Ton des Rechners“ wird alles aufgenommen, was
