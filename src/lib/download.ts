@@ -554,3 +554,13 @@ export async function streamToDisk(
     throw error
   }
 }
+
+export const PORTAL_HOSTS = /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com)$/i
+
+export function isPortalUrl(value: string): boolean {
+  try {
+    return PORTAL_HOSTS.test(new URL(value.trim()).hostname)
+  } catch {
+    return false
+  }
+}
