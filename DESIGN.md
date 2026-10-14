@@ -648,6 +648,21 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
     Ende in ±1/±10 ms, Halbieren, Mit nächstem verbinden).
   Die Rahmen tragen keine Karte und keinen Schatten: `bg-raised`,
   Haarlinien-Ring, Zwischenlinien.
+- **Abspielen ist ein Player, kein Editor** (14.10.2026, auf „sieht kaputt
+  aus, soll wie der Rest sein"). Der Rahmen ist gerundet, ein Film steht auf
+  Schwarz, Musik auf Stage-Schwarz; die Steuerung liegt über dem Bild auf
+  einem Verlauf. Alles darauf sind die Stage-Tokens — `stage/80` für Knöpfe
+  über dem Bild, `stage-accent` für Fortschritt und die Aktiv-Marke unter
+  einem Symbol —, kein Glas und kein Weiss mit Tinte darauf. Ein Symbol ist
+  um die Mitte gezeichnet und einmal gross gegengeprüft (das alte Zahnrad
+  sass schief). Musik zeigt ihren Titel auf der Bühne, darüber den
+  **Visualizer in `stage-accent`** (ruhend: Punkte in `stage-line`); unter
+  einem Film gibt es keinen — der leere Balken darunter war das Kaputte.
+  Das Einstellungsmenü liegt über dem Bild, wenn der Rahmen 400 px hoch ist,
+  sonst **darunter** (Handy, Musik), statt sich auf drei Zeilen zu quetschen.
+  Auf dem Handy kein grosser Mittelknopf: die Leiste hat ihren eigenen. Der
+  leere Zustand ist dieselbe Ablagefläche wie in jedem Werkzeug; die Liste
+  hat Linien, die laufende Zeile `panel-soft`, die Nummer in Tinte.
 - **Pattern** (`StepSequencer`): das Channel-Rack-Raster unter den Pads. Eine
   Zeile je Pad mit „M" (stumm) und dem Padnamen, der das Pad anspielt; 16
   oder 32 Zellen zu 24 × 28 px mit 5 px Rundung, in Vierergruppen abwechselnd
