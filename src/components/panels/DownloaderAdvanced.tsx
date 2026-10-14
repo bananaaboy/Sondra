@@ -63,6 +63,14 @@ import {
   DEFAULT_PORT,
   localSteps,
   localCandidates,
+  manualPrerequisite,
+  composeFile,
+  nodeOnlyUnixScript,
+  nodeOnlyWindowsScript,
+  nodeUnixScript,
+  nodeWindowsScript,
+  unixScript,
+  windowsScript,
   oneLiner,
   rememberedInstances,
   rememberInstance,
@@ -74,6 +82,7 @@ import {
 import { detectPlatform } from '../../lib/platform'
 import { serviceConnection, setServiceConnection } from '../../lib/serviceState'
 import { kindFromMime, useSession } from '../../state/store'
+import { ChoiceRow } from '../editor/EditorShell'
 import {
   ArrowRight,
   Badge,
@@ -84,7 +93,6 @@ import {
   Field,
   Notice,
   Progress,
-  Reveal,
   Select,
   TextInput,
   Toggle,
@@ -195,8 +203,8 @@ export function AdvancedDownloader({ url }: { url: string }) {
   // What is already on this machine. Both start off, because assuming a
   // stranger has a developer's toolchain is how instructions end up skipping
   // the step they most needed to include.
-  const hasNode = false
-  const hasGit = false
+  const [hasNode, setHasNode] = useState(false)
+  const [hasGit, setHasGit] = useState(false)
   /** Setup lives in a dialog, so the page itself stays short. */
   const [setupDialog, setSetupDialog] = useState(false)
 
@@ -231,12 +239,17 @@ export function AdvancedDownloader({ url }: { url: string }) {
   }
 
   const platform = detectPlatform()
+  // Empty on a page that is already local: the scripts then start the service
+  // alone, without also serving a copy of this page.
+  const hostedOrigin = pageIsLocal() ? '' : window.location.origin
   const localCommand =
     localWay === 'docker'
       ? oneLiner()
       : localWay === 'ytdlp'
         ? ytdlpSteps({ hasNode, platform, origin: window.location.origin }).join('\n')
         : localSteps({ hasNode, hasGit, platform, origin: window.location.origin }).join('\n')
+  /** Node is missing and this system has no install command worth printing. */
+  const needsNodeByHand = localWay !== 'docker' && manualPrerequisite({ hasNode, platform })
   const connected = serviceInfo !== null
   const endpointLabel = service.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
@@ -1033,12 +1046,12 @@ export function AdvancedDownloader({ url }: { url: string }) {
                         YouTube im Browser freischalten
                       </p>
                       <p className="mt-[4px] text-small leading-[1.5] text-muted">
-                        YouTube blockiert direkte Downloads über Webseiten. Wählen Sie eine dieser beiden Lösungen:
+                        YouTube blockiert direkte Downloads über Webseiten. Einer dieser drei Wege führt hin:
                       </p>
                     </div>
 
                     {/* Weg 1: Desktop App */}
-                    <div className="rounded-card border border-ink/20 bg-canvas p-[16px] shadow-sm">
+                    <div className="rounded-card bg-raised p-[16px] ring-1 ring-inset ring-rule">
                       <p className="text-small font-semibold text-ink">Weg 1: Sondra Windows-App (Empfohlen)</p>
                       <p className="mt-[4px] text-small leading-[1.5] text-muted">
                         Beste und einfachste Lösung: Die Desktop-App bringt yt-dlp bereits mit, benötigt kein Terminal
@@ -1057,159 +1070,203 @@ export function AdvancedDownloader({ url }: { url: string }) {
                       </div>
                     </div>
 
-                    {/* Weg 2: Terminal Bridge */}
-                    <div className="rounded-card border border-line bg-panel-soft p-[16px]">
-                      <p className="text-small font-semibold text-ink">Weg 2: Lokale Brücke im Terminal starten</p>
-                      <p className="mt-[4px] text-small leading-[1.5] text-muted">
-                        Damit dieser Webbrowser YouTube-Videos herunterladen kann, führen Sie den folgenden Befehl im Terminal aus:
+                    {/* Weg 2: a bridge on this machine. What it runs and what
+                        is already installed are asked, not assumed, so the
+                        commands below are the ones for this machine and can be
+                        pasted start to finish. */}
+                    <div className="rounded-card bg-panel-soft p-[16px]">
+                      <p className="text-small font-semibold text-ink">Weg 2: Lokale Brücke im Terminal</p>
+                      <p className="mt-[4px] max-w-[34em] text-small leading-[1.5] text-prose">
+                        Ein kleiner Dienst auf diesem Rechner holt die Videos, diese Seite setzt sie zusammen.
                       </p>
 
-                      <div className="mt-[12px] rounded-nav bg-canvas p-[12px] ring-1 ring-inset ring-line">
-                        <span className="block mb-[6px] text-micro text-muted">
-                          Befehl ({platform === 'windows' ? 'PowerShell / Eingabeaufforderung' : 'Terminal'}):
+                      <div className="mt-[14px] grid gap-[12px] sm:grid-cols-[9em_minmax(0,1fr)] sm:items-center">
+                        <span className="text-small text-prose">Womit</span>
+                        <ChoiceRow
+                          value={localWay}
+                          onChange={setLocalWay}
+                          options={[
+                            { value: 'ytdlp', label: 'yt-dlp — empfohlen', title: 'Eine Programmdatei, kein Quelltext' },
+                            { value: 'node', label: 'cobalt mit Node.js', title: 'Quelltext von cobalt, mit Node.js gestartet' },
+                            { value: 'docker', label: 'cobalt mit Docker', title: 'Ein Befehl, braucht Docker' },
+                          ]}
+                        />
+                        {localWay !== 'docker' ? (
+                          <>
+                            <span className="text-small text-prose">Node.js</span>
+                            <ChoiceRow
+                              value={hasNode ? 'ja' : 'nein'}
+                              onChange={(value) => setHasNode(value === 'ja')}
+                              options={[
+                                { value: 'nein', label: 'Noch nicht installiert' },
+                                { value: 'ja', label: 'Schon installiert' },
+                              ]}
+                            />
+                          </>
+                        ) : null}
+                        {localWay === 'node' ? (
+                          <>
+                            <span className="text-small text-prose">Git</span>
+                            <ChoiceRow
+                              value={hasGit ? 'ja' : 'nein'}
+                              onChange={(value) => setHasGit(value === 'ja')}
+                              options={[
+                                { value: 'nein', label: 'Nicht installiert' },
+                                { value: 'ja', label: 'Schon installiert' },
+                              ]}
+                            />
+                          </>
+                        ) : null}
+                      </div>
+                      <p className="mt-[8px] max-w-[34em] text-small leading-[1.5] text-prose">
+                        {localWay === 'docker'
+                          ? 'Braucht Docker — unter Windows also auch WSL2. Läuft danach dauerhaft mit.'
+                          : hasNode
+                            ? 'Die Anleitung lässt das Installieren von Node.js weg.'
+                            : needsNodeByHand
+                              ? 'Node.js kommt auf diesem System von Hand: einmal von nodejs.org installieren, dann die Zeilen unten.'
+                              : 'Die erste Zeile installiert Node.js. Nicht sicher? So lassen — ein erledigter Schritt schadet nicht.'}
+                      </p>
+
+                      <div className="mt-[12px] rounded-nav bg-raised p-[12px] ring-1 ring-inset ring-line">
+                        <span className="mb-[6px] block text-micro text-muted">
+                          {platform === 'windows' ? 'PowerShell' : 'Terminal'}
                         </span>
-                        <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-micro leading-[1.6] text-ink select-all">
+                        <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-small leading-[1.6] text-ink select-all">
                           {localCommand}
                         </pre>
                       </div>
 
                       <div className="mt-[12px] flex flex-wrap items-center gap-[10px]">
                         <Button size="sm" onClick={startAndWait}>
-                          {copied
-                            ? 'Befehle kopiert!'
-                            : localWay === 'docker'
-                              ? 'Befehl kopieren'
-                              : 'Befehle kopieren'}
+                          {copied ? 'Kopiert — Sondra wartet auf den Dienst' : localWay === 'docker' ? 'Befehl kopieren' : 'Befehle kopieren'}
                           {!copied ? <ArrowRight /> : null}
                         </Button>
 
-                        {platform === 'windows' ? (
+                        {localWay === 'ytdlp' ? (
                           <button
                             type="button"
                             onClick={() =>
                               saveBytes(
-                                new TextEncoder().encode(ytdlpWindowsLauncher(window.location.origin)),
+                                new TextEncoder().encode(
+                                  platform === 'windows'
+                                    ? ytdlpWindowsLauncher(window.location.origin)
+                                    : ytdlpUnixLauncher(window.location.origin, platform),
+                                ),
                                 launcherFilename(platform),
                                 'text/plain',
                               )
                             }
-                            className="text-small text-muted underline hover:text-ink cursor-pointer"
+                            className="press cursor-pointer rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
                           >
-                            Oder als Starterdatei ({launcherFilename(platform)}) herunterladen
+                            Oder als Starterdatei ({launcherFilename(platform)}) — Doppelklick genügt
                           </button>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              saveBytes(
-                                new TextEncoder().encode(ytdlpUnixLauncher(window.location.origin, platform)),
-                                launcherFilename(platform),
-                                'text/plain',
-                              )
-                            }
-                            className="text-small text-muted underline hover:text-ink cursor-pointer"
-                          >
-                            Oder als Starterdatei ({launcherFilename(platform)}) herunterladen
-                          </button>
+                          /* cobalt's lines are shell lines; PowerShell runs
+                             them badly. A finished script is the honest way
+                             on Windows, and a choice everywhere else. */
+                          <span className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-small text-prose">
+                            Als fertige Datei:
+                            {(localWay === 'node'
+                              ? [
+                                  {
+                                    name: hasGit ? 'cobalt-ohne-docker.ps1' : 'cobalt-nur-node.ps1',
+                                    text: () =>
+                                      hasGit ? nodeWindowsScript(DEFAULT_PORT, hostedOrigin) : nodeOnlyWindowsScript(DEFAULT_PORT, hostedOrigin),
+                                  },
+                                  {
+                                    name: hasGit ? 'cobalt-ohne-docker.sh' : 'cobalt-nur-node.sh',
+                                    text: () =>
+                                      hasGit ? nodeUnixScript(DEFAULT_PORT, hostedOrigin) : nodeOnlyUnixScript(DEFAULT_PORT, hostedOrigin),
+                                  },
+                                ]
+                              : [
+                                  { name: 'docker-compose.yml', text: () => composeFile() },
+                                  { name: 'cobalt-starten.ps1', text: () => windowsScript() },
+                                  { name: 'cobalt-starten.sh', text: () => unixScript() },
+                                ]
+                            ).map((file) => (
+                              <button
+                                key={file.name}
+                                type="button"
+                                onClick={() => saveBytes(new TextEncoder().encode(file.text()), file.name, 'text/plain')}
+                                className="press cursor-pointer rounded-nav font-mono text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                              >
+                                {file.name}
+                              </button>
+                            ))}
+                          </span>
                         )}
                       </div>
 
                       {waiting ? (
                         <div className="mt-[10px] flex items-center gap-[8px] rounded-nav bg-panel-mid px-[12px] py-[8px] text-small text-ink">
-                          <span className="inline-block size-[8px] shrink-0 animate-pulse rounded-full bg-ink" />
+                          <span className="pulse-dot inline-block size-[8px] shrink-0 rounded-pill bg-ink" />
                           <span className="flex-1">
-                            Befehle im Terminal ausführen. Sondra lauscht im Hintergrund und verbindet sich automatisch, sobald die Brücke läuft...
+                            Im Terminal ausführen. Sondra verbindet sich von selbst, sobald der Dienst antwortet.
                           </span>
                           <Button size="sm" variant="quiet" onClick={stopWaiting}>
                             Abbrechen
                           </Button>
                         </div>
                       ) : (
-                        <p className="mt-[8px] text-micro text-muted">
-                          Kopieren, in PowerShell oder Terminal einfügen und Enter drücken. Sondra verbindet sich automatisch.
+                        <p className="mt-[8px] text-small text-prose">
+                          Kopieren, in {platform === 'windows' ? 'PowerShell' : 'ein Terminal'} einfügen, Enter. Sondra verbindet sich von selbst.
                         </p>
                       )}
                     </div>
 
-                    {/* Option 3: Externe oder bestehende Instanz */}
-                    <Reveal label="Bestehenden Server oder Docker-Instanz verbinden">
-                      <div className="mt-[8px] flex flex-col gap-[12px] rounded-card bg-panel-soft p-[14px]">
-                        <p className="text-small text-muted">
-                          Haben Sie bereits einen eigenen Server oder eine laufende Instanz?
-                        </p>
-                        <div className="flex flex-wrap items-center gap-[8px]">
-                          <TextInput
-                            type="url"
-                            inputMode="url"
-                            className="min-w-[200px] flex-1"
-                            placeholder="http://localhost:7447 oder https://instanz.example/"
-                            value={service.endpoint}
-                            onChange={(event) => {
-                              updateService({ endpoint: event.target.value })
-                              setServiceInfo(null)
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') void checkService()
-                            }}
-                          />
-                          <Button
-                            size="sm"
-                            onClick={checkService}
-                            disabled={checking || waiting || !service.endpoint.trim()}
-                          >
-                            {checking ? 'Prüft…' : 'Verbinden'}
-                          </Button>
-                          <Button size="sm" variant="quiet" onClick={searchLocal} disabled={searching}>
-                            {searching ? 'Sucht…' : 'Port prüfen'}
-                          </Button>
-                        </div>
-
-                        {known.length > 0 ? (
-                          <div className="flex flex-wrap items-center gap-[8px]">
-                            <span className="text-small text-muted">Zuletzt:</span>
-                            {known.map((entry) => (
-                              <button
-                                key={entry}
-                                type="button"
-                                onClick={() => {
-                                  updateService({ endpoint: entry })
-                                  setServiceInfo(null)
-                                }}
-                                title={entry}
-                                className="max-w-[200px] truncate rounded-nav bg-panel-mid px-[8px] py-[3px] text-micro text-ink hover:bg-canvas"
-                              >
-                                {entry.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-
-                        <div className="mt-[4px] flex items-center gap-[8px]">
-                          <span className="text-micro text-muted">Art:</span>
-                          <button
-                            type="button"
-                            onClick={() => setLocalWay('ytdlp')}
-                            className={`rounded-nav px-[8px] py-[3px] text-micro ${localWay === 'ytdlp' ? 'bg-ink text-on-ink' : 'bg-panel-mid text-ink'}`}
-                          >
-                            yt-dlp
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setLocalWay('docker')}
-                            className={`rounded-nav px-[8px] py-[3px] text-micro ${localWay === 'docker' ? 'bg-ink text-on-ink' : 'bg-panel-mid text-ink'}`}
-                          >
-                            Docker
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setLocalWay('node')}
-                            className={`rounded-nav px-[8px] py-[3px] text-micro ${localWay === 'node' ? 'bg-ink text-on-ink' : 'bg-panel-mid text-ink'}`}
-                          >
-                            Node.js
-                          </button>
-                        </div>
+                    {/* Weg 3: somebody already runs one — a server, a Docker
+                        container, a friend's instance. Visible, not folded:
+                        the people who have one are the people looking for it. */}
+                    <div className="rounded-card bg-panel-soft p-[16px]">
+                      <p className="text-small font-semibold text-ink">Weg 3: Vorhandenen Dienst verbinden</p>
+                      <p className="mt-[4px] max-w-[34em] text-small leading-[1.5] text-prose">
+                        Ein eigener Server, ein Docker-Container oder eine Instanz, deren Adresse Sie bekommen haben.
+                      </p>
+                      <div className="mt-[12px] flex flex-wrap items-center gap-[8px]">
+                        <TextInput
+                          type="url"
+                          inputMode="url"
+                          className="min-w-[200px] flex-1"
+                          placeholder={`http://localhost:${DEFAULT_PORT} oder https://instanz.example/`}
+                          value={service.endpoint}
+                          onChange={(event) => {
+                            updateService({ endpoint: event.target.value })
+                            setServiceInfo(null)
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') void checkService()
+                          }}
+                        />
+                        <Button size="sm" onClick={checkService} disabled={checking || waiting || !service.endpoint.trim()}>
+                          {checking ? 'Prüft…' : 'Verbinden'}
+                        </Button>
+                        <Button size="sm" variant="quiet" onClick={searchLocal} disabled={searching}>
+                          {searching ? 'Sucht…' : 'Auf diesem Rechner suchen'}
+                        </Button>
                       </div>
-                    </Reveal>
+
+                      {known.length > 0 ? (
+                        <div className="mt-[10px] flex flex-wrap items-center gap-[8px]">
+                          <span className="text-small text-prose">Zuletzt</span>
+                          {known.map((entry) => (
+                            <button
+                              key={entry}
+                              type="button"
+                              onClick={() => {
+                                updateService({ endpoint: entry })
+                                setServiceInfo(null)
+                              }}
+                              title={entry}
+                              className="press max-w-[220px] truncate rounded-nav bg-panel-mid px-[10px] py-[4px] font-mono text-small text-ink hover:bg-panel-strong"
+                            >
+                              {entry.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 )}
 

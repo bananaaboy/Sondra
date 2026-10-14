@@ -556,6 +556,25 @@ export function nodeInstallCommand(platform: Platform): string | null {
   return null
 }
 
+/**
+ * Installing Node, and making it usable in the same window.
+ *
+ * winget writes Node's folder into the system PATH, but a PowerShell that is
+ * already open keeps the PATH it started with — so the `node` line further
+ * down failed with „not recognized" in exactly the window the instructions
+ * were pasted into. Reading the PATH back in fixes that without asking anyone
+ * to open a second window.
+ */
+export function nodeInstallSteps(platform: Platform): string[] {
+  const install = nodeInstallCommand(platform)
+  if (!install) return []
+  if (platform !== 'windows') return [install]
+  return [
+    install,
+    "$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')",
+  ]
+}
+
 export interface LocalSetup {
   /** Node is already installed. When false, getting it comes first. */
   hasNode: boolean
@@ -584,10 +603,7 @@ export function localSteps({
 }: LocalSetup): string[] {
   const steps: string[] = []
 
-  if (!hasNode) {
-    const install = nodeInstallCommand(platform)
-    if (install) steps.push(install)
-  }
+  if (!hasNode) steps.push(...nodeInstallSteps(platform))
 
   steps.push(...(hasGit ? nodeSteps(port) : nodeOnlySteps(port)))
 
@@ -825,10 +841,7 @@ export function ytdlpSteps({
   origin: string
 }): string[] {
   const steps: string[] = []
-  if (!hasNode) {
-    const install = nodeInstallCommand(platform)
-    if (install) steps.push(install)
-  }
+  if (!hasNode) steps.push(...nodeInstallSteps(platform))
 
   const { asset, saveAs } = YTDLP_BINARY[platform]
   const site = origin.replace(/\/$/, '')
