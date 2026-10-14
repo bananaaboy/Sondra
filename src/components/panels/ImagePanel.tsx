@@ -34,6 +34,7 @@ import {
 import { createZip } from '../../lib/zip'
 import { useActiveAssetOfKind, useAssetsOfKind, useSession } from '../../state/store'
 import { FileDrop } from '../FileDrop'
+import { IMAGE_ACCEPT } from '../../hooks/useIngest'
 import {
   ASPECTS,
   CropOverlay,
@@ -176,6 +177,11 @@ export function ImagePanel() {
   }, [asset?.id])
 
   /* -- how much room the stage has ---------------------------------------- */
+  // Keyed on whether there is a picture at all: the stage only exists once
+  // one is open. With an empty dependency list this ran once, against the
+  // drop zone, found no stage, and never measured again — so a picture opened
+  // in the tool was decoded, sized and then drawn at zero pixels.
+  const hasPicture = Boolean(asset)
   useLayoutEffect(() => {
     const node = stageRef.current
     if (!node) return
@@ -184,7 +190,7 @@ export function ImagePanel() {
     const observer = new ResizeObserver(measure)
     observer.observe(node)
     return () => observer.disconnect()
-  }, [])
+  }, [hasPicture])
 
   /* -- the picture on screen ----------------------------------------------- */
   // While the crop tool is open the stage has to show what is being thrown
@@ -366,7 +372,7 @@ export function ImagePanel() {
   if (!asset) {
     return (
       <div className="flex flex-col gap-[16px]">
-        <FileDrop />
+        <FileDrop accept={IMAGE_ACCEPT} prompt="Bild hierher ziehen — Foto, Grafik, Bildschirmfoto" />
         <p className="text-center text-small text-muted">
           JPEG, PNG, WebP, GIF und meist auch AVIF und HEIC. Alles wird hier im Tab gerechnet.
         </p>
