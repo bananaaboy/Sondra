@@ -38,7 +38,7 @@ import { ArrowRight, Button, Card, Notice, Progress, Reveal, TextInput } from '.
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { AdvancedDownloader } from './DownloaderAdvanced'
 
-export type AudioOutputFormat = 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus' | 'original'
+export type AudioOutputFormat = 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus'
 
 const AUDIO_FORMAT_CONFIGS: { id: AudioOutputFormat; label: string; desc: string; ext: string; mime: string }[] = [
   { id: 'mp3', label: 'MP3', desc: '320 kbps (Standard)', ext: 'mp3', mime: 'audio/mpeg' },
@@ -46,8 +46,91 @@ const AUDIO_FORMAT_CONFIGS: { id: AudioOutputFormat; label: string; desc: string
   { id: 'm4a', label: 'M4A', desc: 'AAC 256k (Apple / Mobile)', ext: 'm4a', mime: 'audio/mp4' },
   { id: 'flac', label: 'FLAC', desc: 'Verlustfrei komprimiert', ext: 'flac', mime: 'audio/flac' },
   { id: 'opus', label: 'OPUS', desc: '160k (Kompakt & Klar)', ext: 'opus', mime: 'audio/ogg' },
-  { id: 'original', label: 'Original', desc: 'Audiostream unverändert', ext: 'm4a', mime: 'audio/mp4' },
 ]
+
+interface StreamGroup {
+  id: string
+  title: string
+  badge?: string
+  isAudio: boolean
+  streams: StudioStream[]
+}
+
+function groupStreams(streams: StudioStream[]): StreamGroup[] {
+  const groups = new Map<string, StreamGroup>()
+
+  for (const s of streams) {
+    const isAudioOnly = !s.hasVideo && s.hasAudio
+    if (isAudioOnly) {
+      if (!groups.has('audio')) {
+        groups.set('audio', {
+          id: 'audio',
+          title: 'Nur Tonspur (Audio)',
+          badge: 'Audio',
+          isAudio: true,
+          streams: [],
+        })
+      }
+      groups.get('audio')!.streams.push(s)
+      continue
+    }
+
+    // Video streams
+    const resMatch = s.label.match(/(2160p|1440p|1080p|720p|480p|360p|240p|144p)/i)
+    const resKey = resMatch ? resMatch[1].toLowerCase() : s.height ? `${s.height}p` : 'video'
+    let title = resKey.toUpperCase()
+    let badge: string | undefined = undefined
+
+    if (resKey === '2160p') {
+      title = '2160p (4K UHD)'
+      badge = '4K'
+    } else if (resKey === '1440p') {
+      title = '1440p (2K QHD)'
+      badge = '2K'
+    } else if (resKey === '1080p') {
+      title = '1080p (Full HD)'
+      badge = 'Full HD'
+    } else if (resKey === '720p') {
+      title = '720p (HD)'
+      badge = 'HD'
+    } else if (resKey === '480p') {
+      title = '480p (Standard)'
+      badge = 'SD'
+    } else if (resKey === '360p') {
+      title = '360p (Kompakt)'
+    } else if (resKey === '240p') {
+      title = '240p (Niedrig)'
+    } else if (resKey === '144p') {
+      title = '144p (Minimal)'
+    } else if (resKey === 'video') {
+      title = s.label || 'Video'
+    }
+
+    if (!groups.has(resKey)) {
+      groups.set(resKey, {
+        id: resKey,
+        title,
+        badge,
+        isAudio: false,
+        streams: [],
+      })
+    }
+    groups.get(resKey)!.streams.push(s)
+  }
+
+  // Sort streams inside each group: highest size/bitrate first
+  for (const group of groups.values()) {
+    group.streams.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
+  }
+
+  // Order groups descending by resolution, audio last
+  const resOrder = ['2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p', 'video', 'audio']
+  return Array.from(groups.values()).sort((a, b) => {
+    const idxA = resOrder.indexOf(a.id)
+    const idxB = resOrder.indexOf(b.id)
+    return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB)
+  })
+}
 
 async function processDownloadedAudio(
   bytes: Uint8Array,
@@ -60,7 +143,7 @@ async function processDownloadedAudio(
 ): Promise<{ bytes: Uint8Array; ext: string; mime: string }> {
   const cleanInExt = (inputExt || 'mp4').replace(/^\./, '').toLowerCase()
 
-  if (!hasVideo && (targetFormat === 'original' || cleanInExt === targetFormat)) {
+  if (!hasVideo && cleanInExt === targetFormat) {
     const tagged = await tagAudioFile(bytes, cleanInExt, meta, signal)
     const mimeMap: Record<string, string> = {
       mp3: 'audio/mpeg',
@@ -75,7 +158,7 @@ async function processDownloadedAudio(
 
   await loadFfmpeg()
   const inName = `dl_in_${Date.now()}.${cleanInExt}`
-  const outExt = targetFormat === 'original' ? (cleanInExt === 'webm' ? 'opus' : 'm4a') : targetFormat
+  const outExt = targetFormat
   const outName = `dl_out_${Date.now()}.${outExt}`
 
   const args: string[] = ['-i', inName, '-vn']
@@ -1132,34 +1215,105 @@ export function DownloaderPanel() {
             </div>
           </div>
 
-          <div className="mt-[16px] flex flex-col gap-[8px]">
+          <div className="mt-[16px] flex flex-col gap-[12px]">
             {filterAudioOnly ? (
-              <p className="text-small text-muted">
-                Audiospur wird als <span className="font-semibold text-ink">{targetAudioFormat.toUpperCase()}</span> extrahiert:
-              </p>
-            ) : null}
-            {(filterAudioOnly && result.streams.some((s) => !s.hasVideo && s.hasAudio)
-              ? result.streams.filter((s) => !s.hasVideo && s.hasAudio)
-              : result.streams
-            ).map((stream) => (
-              <div
-                key={stream.id}
-                className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line px-[4px] py-[12px]"
-              >
-                <span className="min-w-0 flex-1 text-small text-ink">{stream.label}</span>
-                <span className="value text-small text-muted">
-                  {filterAudioOnly ? targetAudioFormat.toUpperCase() : stream.ext.toUpperCase()}
-                  {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
-                </span>
-                <Button size="sm" disabled={busy !== null} onClick={() => void take(stream)}>
-                  {busy === stream.label
-                    ? 'Lädt …'
-                    : filterAudioOnly
-                    ? `${targetAudioFormat.toUpperCase()} laden`
-                    : 'Laden'}
-                </Button>
+              <div className="rounded-nav bg-panel-soft p-[12px] text-ink">
+                <p className="text-small font-semibold">
+                  Audiospur wird als <span className="underline font-bold text-ink">{targetAudioFormat.toUpperCase()}</span> gespeichert:
+                </p>
+                <p className="mt-[2px] text-micro text-muted">
+                  Wählen Sie die gewünschte Audioquelle (höhere Bitrate = bessere Tonqualität):
+                </p>
               </div>
-            ))}
+            ) : null}
+
+            {(() => {
+              const displayedStreams =
+                filterAudioOnly && result.streams.some((s) => !s.hasVideo && s.hasAudio)
+                  ? result.streams.filter((s) => !s.hasVideo && s.hasAudio)
+                  : result.streams
+              const groups = groupStreams(displayedStreams)
+
+              return groups.map((group) => {
+                const isAudioGroup = group.isAudio
+                return (
+                  <div
+                    key={group.id}
+                    className="rounded-card border border-line bg-canvas p-[14px] shadow-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-[8px] mb-[10px]">
+                      <div className="flex items-center gap-[8px]">
+                        <span className="text-subheading font-semibold text-ink">
+                          {isAudioGroup && filterAudioOnly ? 'Verfügbare Audio-Quellen' : group.title}
+                        </span>
+                        {group.badge ? (
+                          <span className="rounded-nav bg-panel-soft px-[8px] py-[2px] text-micro font-medium text-ink">
+                            {group.badge}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="text-micro text-muted">
+                        {group.streams.length} {group.streams.length === 1 ? 'Variante' : 'Varianten'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[8px]">
+                      {group.streams.map((stream, idx) => {
+                        const bitrateMatch = stream.label.match(/(\d+\s*kbit\/s)/i)
+                        const bitrateLabel = bitrateMatch ? bitrateMatch[1] : null
+                        const isBestInGroup = idx === 0 && stream.bytes && group.streams.length > 1
+
+                        return (
+                          <div
+                            key={stream.id}
+                            className="flex items-center justify-between gap-[10px] rounded-nav bg-panel-soft px-[12px] py-[8px] ring-1 ring-line/70 hover:ring-ink/30 transition-all"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-[6px] flex-wrap">
+                                <span className="font-semibold text-small text-ink">
+                                  {filterAudioOnly ? targetAudioFormat.toUpperCase() : stream.ext.toUpperCase()}
+                                </span>
+                                {bitrateLabel ? (
+                                  <span className="rounded-nav bg-canvas px-[6px] py-[1px] text-micro font-medium text-ink">
+                                    {bitrateLabel}
+                                  </span>
+                                ) : null}
+                                {stream.label.includes('mit Ton') ? (
+                                  <span className="rounded-nav bg-canvas px-[6px] py-[1px] text-micro text-muted">
+                                    Bild & Ton
+                                  </span>
+                                ) : null}
+                                {isBestInGroup ? (
+                                  <span className="rounded-nav bg-keylime/40 text-ink px-[6px] py-[1px] text-micro font-medium">
+                                    {isAudioGroup ? 'Beste Qualität' : 'Beste'}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="value text-micro text-muted mt-[2px]">
+                                {stream.bytes ? formatBytes(stream.bytes) : 'Größe dynamisch'}
+                                {filterAudioOnly && !isAudioGroup ? ' · Video-Audiospur' : ''}
+                              </p>
+                            </div>
+
+                            <Button
+                              size="sm"
+                              disabled={busy !== null}
+                              onClick={() => void take(stream)}
+                            >
+                              {busy === stream.label
+                                ? 'Lädt …'
+                                : filterAudioOnly
+                                ? `${targetAudioFormat.toUpperCase()} laden`
+                                : 'Laden'}
+                            </Button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })
+            })()}
           </div>
 
           {taken && !busy ? (
