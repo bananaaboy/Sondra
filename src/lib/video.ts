@@ -15,7 +15,7 @@
 
 import { opusArgs, vp8Args } from './convert'
 
-export type VideoContainer = 'mp4' | 'webm' | 'gif'
+export type VideoContainer = 'mp4' | 'webm' | 'gif' | 'webp'
 
 export interface VideoPreset {
   id: string
@@ -64,6 +64,8 @@ export interface VideoOps {
   /** Bring the sound to −16 LUFS, the level most platforms play at. */
   loudnorm: boolean
   reverse: boolean
+  fps?: number
+  width?: number
 }
 
 export type VideoLook = 'none' | 'mono' | 'sepia' | 'vivid' | 'warm' | 'cool'
@@ -115,6 +117,8 @@ export const DEFAULT_VIDEO_OPS: VideoOps = {
   volumeDb: 0,
   loudnorm: false,
   reverse: false,
+  fps: 15,
+  width: 480,
 }
 
 /** Whether anything in the picture or sound settings asks for re-encoding. */
@@ -277,14 +281,37 @@ export function buildVideoJob(
   if (ops.loudnorm) audioFilters.push('loudnorm=I=-16:TP=-1.5:LRA=11')
 
   if (ops.container === 'gif') {
-    // One palette for the whole clip, generated from the clip itself: the
-    // default 216-colour web palette is what makes converted GIFs look like
-    // they came from 1998.
-    const width = source ? Math.min(640, source.width) : 640
-    const chain = [...filters, 'fps=15', `scale=${Math.max(2, Math.round(width / 2) * 2)}:-2:flags=lanczos`].join(',')
-    args.push('-filter_complex', `${chain},split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer`)
-    args.push('-loop', '0')
+    const fps = ops.fps ?? 15
+    const width = ops.width ?? 480
+    if (trimmed) args.push(...cutArgs)
+    args.push(
+      '-vf',
+      `fps=${fps},scale=${width}:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer`,
+      '-loop',
+      '0',
+    )
     return { args, extension: 'gif', mime: 'image/gif', copyOnly: false }
+  }
+
+  if (ops.container === 'webp') {
+    const fps = ops.fps ?? 15
+    const width = ops.width ?? 480
+    if (trimmed) args.push(...cutArgs)
+    args.push(
+      '-vcodec',
+      'libwebp',
+      '-filter:v',
+      `fps=${fps},scale=${width}:-1`,
+      '-lossless',
+      '0',
+      '-compression_level',
+      '4',
+      '-q:v',
+      '70',
+      '-loop',
+      '0',
+    )
+    return { args, extension: 'webp', mime: 'image/webp', copyOnly: false }
   }
 
   // Nothing but a cut: copy the streams instead of re-encoding them. Minutes

@@ -37,7 +37,8 @@ import { clamp, dbToGain, formatTimecode } from '../../lib/format'
 import { DEFAULT_CHOP, MAX_PLANNED, describeMethod, planChop, type ChopMethod, type ChopPlan, type ChopSettings } from '../../lib/chop'
 import { estimateTempo, snapToZeroCrossing, type TempoEstimate } from '../../lib/tempo'
 import { withAlpha, type ResolvedTheme } from '../../lib/theme'
-import { encodeWav, type AudioData } from '../../lib/wav'
+import { encodeWav, mixToMono, type AudioData } from '../../lib/wav'
+import { detectTransients } from '../../lib/audio/transients'
 import { renderSliceInWorker } from '../../lib/workerClient'
 import { SLICE_DEFAULTS, startVoice, type PlayMode, type Slice, type Voice } from '../../lib/pattern'
 import { StepSequencer } from './StepSequencer'
@@ -671,6 +672,47 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
         result.capped ? ` (auf ${MAX_PLANNED} begrenzt)` : ''
       }${planSettings.snap ? ', an Nulldurchgänge gerastet' : ''}`,
     )
+  }
+
+  const autoSliceTransients = () => {
+    const regions = regionsRef.current
+    if (!regions || !audio) return
+
+    const mono = mixToMono(audio).channels[0]
+    const rawCuts = detectTransients(mono, audio.sampleRate, MAX_PADS, 1.5)
+
+    // Handle either sample indices or time offsets
+    const isSampleIndices = rawCuts.some((p) => p > duration + 0.001)
+    const cutsInSeconds = isSampleIndices ? rawCuts.map((p) => p / audio.sampleRate) : rawCuts
+
+    // Snap to zero crossing if snap setting is active, and clamp to [0, duration]
+    const snapped = chop.snap
+      ? cutsInSeconds.map((at) => snapToZeroCrossing(audio, at))
+      : cutsInSeconds
+    const points = [...new Set([0, ...snapped.map((at) => clamp(at, 0, duration))])].sort((a, b) => a - b).slice(0, MAX_PADS)
+
+    cuttingRef.current = true
+    for (const region of [...regions.getRegions()]) {
+      if (region.id !== pendingRef.current) {
+        region.remove()
+      }
+    }
+
+    let padCount = 0
+    for (let i = 0; i < points.length; i += 1) {
+      const start = points[i]
+      const end = i + 1 < points.length ? points[i + 1] : duration
+      if (end - start >= 0.015) {
+        regions.addRegion({ start, end, color: SLICE_COLOR, drag: true, resize: true })
+        padCount += 1
+      }
+    }
+
+    cuttingRef.current = false
+    syncRef.current?.()
+    setPlanShown(false)
+    if (pendingRef.current) regions.getRegions().find((entry) => entry.id === pendingRef.current)?.remove()
+    log('sampler', `Auto-Slice: ${padCount} Transienten erkannt und auf ${padCount} Pads gelegt`)
   }
 
   /* --- per-pad editing ---------------------------------------------------- */
@@ -1316,6 +1358,9 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px] px-[16px] pt-[12px]">
             <ChoiceRow value={chop.method} onChange={(method) => setChop({ method })} options={METHODS} />
             <div className="ml-auto flex items-center gap-[12px]">
+              <Button size="sm" variant="quiet" onClick={autoSliceTransients} disabled={!audio} title="Erkennt bis zu 16 Transienten und belegt die 16 Pads">
+                Auto-Slice (Transienten)
+              </Button>
               {audio && plan ? (
                 <span className="value text-small text-prose" aria-live="polite">
                   ergibt {planCount}

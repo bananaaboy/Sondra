@@ -33,7 +33,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, boundedFetch, DEFAULT_USER_AGENT } from '../api/extractors.js'
+import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, isSpotifyUrl, boundedFetch, DEFAULT_USER_AGENT } from '../api/extractors.js'
 
 export function getNetworkAdapters() {
   const nets = os.networkInterfaces()
@@ -391,7 +391,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
     const bindAddr = getBindAddress(body.bindAddress)
     let directMedia = null
-    if (isAniworldUrl(target) || isHosterUrl(target) || isBilibiliUrl(target)) {
+    if (isAniworldUrl(target) || isHosterUrl(target) || isBilibiliUrl(target) || isSpotifyUrl(target)) {
       try {
         directMedia = await extractDirectMedia(target, { localAddress: bindAddr })
         if (directMedia && directMedia.isPlaylist) {
@@ -408,7 +408,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     }
 
     const tool = await ytdlp()
-    const isPlaylistTarget = /[?&]list=|\/playlist\b|\/sets\/|\/album\//i.test(target)
+    const isPlaylistTarget = !isSpotifyUrl(target) && /[?&]list=|\/playlist\b|\/sets\/|\/album\//i.test(target)
     if (tool && isPlaylistTarget) {
       const plResult = await run(tool.bin, ['--flat-playlist', '-J', '--no-warnings', ...commonYtdlpArgs(bindAddr), ...cookieArgs(), '--', target])
       if (plResult.code === 0 && plResult.stdout) {
@@ -436,7 +436,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       return { status: 'error', error: { code: fetchesTool ? 'error.api.ytdlp.missing' : 'error.api.ytdlp.missing.store' } }
     }
 
-    const queryUrl = directMedia ? directMedia.url : target
+    const queryUrl = directMedia?.isSpotifyTrack ? directMedia.searchQuery : (directMedia ? directMedia.url : target)
     const referer = directMedia?.referer ?? null
 
     let result = tool ? await probe(tool.bin, queryUrl, referer, bindAddr) : { code: -1, stdout: '', stderr: '' }
@@ -467,6 +467,22 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     // If yt-dlp probe failed or is not available, but direct extraction succeeded:
     if (result.code !== 0 && directMedia) {
       const stem = String(directMedia.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+      if (directMedia.previewUrl) {
+        return {
+          status: 'tunnel',
+          url: remember({
+            bin: null,
+            url: directMedia.previewUrl,
+            referer: 'https://open.spotify.com/',
+            filename: `${stem} (Preview).mp3`,
+            format: { format_id: 'preview', ext: 'mp3' },
+            mime: 'audio/mpeg',
+            directFetch: true,
+            bindAddress: bindAddr,
+          }),
+          filename: `${stem} (Preview).mp3`,
+        }
+      }
       if (directMedia.isHls) {
         return {
           status: 'local-processing',
@@ -511,6 +527,9 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     let info
     try {
       info = JSON.parse(result.stdout)
+      if (Array.isArray(info.entries) && info.entries.length > 0) {
+        info = info.entries[0]
+      }
     } catch {
       return { status: 'error', error: { code: 'error.api.fetch.empty' } }
     }
@@ -521,11 +540,12 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const maxHeight = quality === 'max' ? 0 : Number(quality) || 0
     const titleCandidate = (directMedia?.title && directMedia.title !== 'master') ? directMedia.title : (info.title ?? 'download')
     const stem = String(titleCandidate).replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
-    const mode = String(body.downloadMode ?? 'auto')
+    const mode = directMedia?.isSpotifyTrack && (!body.downloadMode || body.downloadMode === 'auto') ? 'audio' : String(body.downloadMode ?? 'auto')
+    const targetSourceUrl = info.webpage_url || (info.id ? `https://www.youtube.com/watch?v=${info.id}` : queryUrl)
     const job = (format, mime, customName = null) =>
       remember({
         bin: tool.bin,
-        url: queryUrl,
+        url: targetSourceUrl,
         referer,
         format,
         mime,

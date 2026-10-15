@@ -10,7 +10,7 @@
 
 import { fromAudioBuffer, type AudioData } from './wav'
 
-export { mixToMono } from './wav'
+export { mixToMono, fromAudioBuffer } from './wav'
 
 let sharedContext: AudioContext | null = null
 

@@ -21,6 +21,7 @@ import {
   isBilibiliUrl,
   isHosterUrl,
   isPodcastOrRssUrl,
+  isSpotifyUrl,
   parsePodcastFeed,
 } from './extractors.js'
 
@@ -243,7 +244,7 @@ export default async function handler(request, response) {
    * AniWorld, SerienStream (s.to) & Direkt-Hoster (VOE, Filemoon, Vidmoly, etc.)
    */
   const targetStr = target.toString()
-  if (isAniworldUrl(targetStr) || isHosterUrl(targetStr) || isBilibiliUrl(targetStr)) {
+  if (isAniworldUrl(targetStr) || isHosterUrl(targetStr) || isBilibiliUrl(targetStr) || isSpotifyUrl(targetStr)) {
     try {
       const media = await extractDirectMedia(targetStr, {
         localAddress: request.body?.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
@@ -255,6 +256,34 @@ export default async function handler(request, response) {
           title: media.title,
           author: media.seriesTitle,
           items: media.items,
+        })
+        return
+      }
+      if (media && media.isSpotifyTrack) {
+        const streams = []
+        if (media.previewUrl) {
+          streams.push({
+            id: 'preview',
+            label: 'Spotify Preview (30s MP3)',
+            hasVideo: false,
+            hasAudio: true,
+            width: null,
+            height: null,
+            ext: 'mp3',
+            mime: 'audio/mpeg',
+            bytes: null,
+            token: sign(media.previewUrl, { ref: 'https://open.spotify.com/' }),
+          })
+        }
+        response.status(200).json({
+          status: 'stream',
+          kind: 'stream',
+          title: media.title,
+          author: media.artist || 'Spotify',
+          thumb: media.thumbnail,
+          duration: media.duration,
+          searchQuery: media.searchQuery,
+          streams,
         })
         return
       }

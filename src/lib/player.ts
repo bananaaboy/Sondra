@@ -162,6 +162,13 @@ export interface PlayerSettings {
   eqLow: number
   eqMid: number
   eqHigh: number
+  eqBand1: number
+  eqBand2: number
+  eqBand3: number
+  eqBand4: number
+  eqBand5: number
+  eqEnabled: boolean
+  eqPreset: string
   karaoke: boolean
   visualizer: boolean
   visualizerMode: VisualizerMode
@@ -187,6 +194,13 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   eqLow: 0,
   eqMid: 0,
   eqHigh: 0,
+  eqBand1: 0,
+  eqBand2: 0,
+  eqBand3: 0,
+  eqBand4: 0,
+  eqBand5: 0,
+  eqEnabled: true,
+  eqPreset: 'Flat',
   karaoke: false,
   visualizer: true,
   visualizerMode: 'bars',
@@ -225,6 +239,13 @@ export function rememberedSettings(): PlayerSettings {
       eqLow: within(saved.eqLow, -12, 12, d.eqLow),
       eqMid: within(saved.eqMid, -12, 12, d.eqMid),
       eqHigh: within(saved.eqHigh, -12, 12, d.eqHigh),
+      eqBand1: within(saved.eqBand1 ?? saved.eqLow, -12, 12, d.eqBand1),
+      eqBand2: within(saved.eqBand2, -12, 12, d.eqBand2),
+      eqBand3: within(saved.eqBand3 ?? saved.eqMid, -12, 12, d.eqBand3),
+      eqBand4: within(saved.eqBand4, -12, 12, d.eqBand4),
+      eqBand5: within(saved.eqBand5 ?? saved.eqHigh, -12, 12, d.eqBand5),
+      eqEnabled: saved.eqEnabled !== false,
+      eqPreset: typeof saved.eqPreset === 'string' ? saved.eqPreset : d.eqPreset,
       karaoke: saved.karaoke === true,
       visualizer: saved.visualizer !== false,
       visualizerMode: oneOf(saved.visualizerMode, ['bars', 'wave', 'radial'] as const, d.visualizerMode),

@@ -565,3 +565,23 @@ export function isPortalUrl(value: string): boolean {
     return false
   }
 }
+
+export function isSupportedUrl(value: string): boolean {
+  try {
+    const trimmed = value.trim()
+    if (!/^https?:\/\//i.test(trimmed)) return false
+    const parsed = new URL(trimmed)
+    if (parsed.hostname !== 'localhost' && !parsed.hostname.includes('.')) return false
+    if (isPortalUrl(trimmed)) return true
+    if (
+      /\.(mp4|m4v|webm|mkv|mov|avi|wmv|flv|mp3|wav|m4a|flac|ogg|opus|aac|m3u8|mpd|ts|m3u|rss|xml)$/i.test(
+        parsed.pathname,
+      )
+    ) {
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
