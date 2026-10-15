@@ -358,12 +358,15 @@ check('Podcast: Author', parsedRss?.seriesTitle, 'Sondra Studio')
 check('Podcast: Episode 1 Titel', parsedRss?.items?.[0]?.title, 'Episode 1: Web Audio & MIDI')
 check('Podcast: Episode 1 URL', parsedRss?.items?.[0]?.url, 'https://storage.example/ep1.mp3')
 
-server.close()
+if (typeof server.closeAllConnections === 'function') {
+  server.closeAllConnections()
+}
+await new Promise((resolve) => server.close(resolve))
 
 if (failures > 0) {
   console.error(`\nFEHLER: ${failures} Test(s) fehlgeschlagen!`)
-  process.exit(1)
+  process.exitCode = 1
 } else {
   console.log('\nOK: Alle Extractor-Tests bestanden! VOE, FileMoon, Vidmoly, Dood, Streamtape, Vidoza, AniWorld und Podcast/RSS funktionieren einwandfrei.')
-  process.exit(0)
+  process.exitCode = 0
 }

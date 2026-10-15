@@ -1,5 +1,6 @@
 import { CommandPalette } from './components/CommandPalette'
 import { Dashboard } from './components/Dashboard'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { DropOverlay, Footer, Header } from './components/AppShell'
 import { useFfmpegPrefetch } from './hooks/useFfmpegPrefetch'
@@ -16,15 +17,17 @@ export default function App() {
   usePanelRoute()
 
   return (
-    <div className="flex min-h-dvh flex-col bg-canvas">
-      <Header themeChoice={choice} onThemeChange={setChoice} />
-      <main className="flex-1">
-        <Dashboard theme={resolved} />
-      </main>
-      <Footer />
-      <DropOverlay visible={dragging} />
-      <CommandPalette />
-      <ShortcutHelp />
-    </div>
+    <ErrorBoundary>
+      <div className="flex min-h-dvh flex-col bg-canvas">
+        <Header themeChoice={choice} onThemeChange={setChoice} />
+        <main className="flex-1">
+          <Dashboard theme={resolved} />
+        </main>
+        <Footer />
+        <DropOverlay visible={dragging} />
+        <CommandPalette />
+        <ShortcutHelp />
+      </div>
+    </ErrorBoundary>
   )
 }
