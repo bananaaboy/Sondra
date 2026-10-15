@@ -62,7 +62,7 @@ import {
   IconTransform,
   IconTrim,
 } from '../editor/icons'
-import { Button, Notice, Progress, Select, Slider, Toggle } from '../ui/primitives'
+import { Button, Notice, Progress, Select, Slider, Toggle, RotateIcon } from '../ui/primitives'
 
 type ToolId = 'trim' | 'crop' | 'transform' | 'look' | 'fade' | 'size' | 'speed' | 'audio' | 'harvest' | 'export'
 
@@ -1088,10 +1088,12 @@ function VideoInspector({
         <ToolHeading title="Drehen und spiegeln" hint="Für hochkant aufgenommene Handyvideos." />
         <div className="grid grid-cols-2 gap-[4px]">
           <Button size="sm" variant="quiet" onClick={() => turn(270)}>
-            ↺ Links
+            <RotateIcon direction="left" />
+            Links
           </Button>
           <Button size="sm" variant="quiet" onClick={() => turn(90)}>
-            ↻ Rechts
+            <RotateIcon direction="right" />
+            Rechts
           </Button>
         </div>
         <Toggle label="Waagrecht spiegeln" checked={ops.flipH} onChange={() => mirror('h')} />

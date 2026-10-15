@@ -64,19 +64,19 @@ function findYtDlp() {
 const YTDLP = findYtDlp()
 
 async function main() {
-  console.log(`🎯 Ziel: ${targetUrl}`)
+  console.log(`Ziel: ${targetUrl}`)
 
   let directSource = null
   if (isAniworldUrl(targetUrl) || isHosterUrl(targetUrl)) {
     try {
       directSource = await extractDirectMedia(targetUrl)
     } catch (err) {
-      console.warn(`⚠️ Direktextraktion warnte: ${err?.message ?? err}`)
+      console.warn(`Direktextraktion warnte: ${err?.message ?? err}`)
     }
   }
 
   if (directSource && directSource.isPlaylist) {
-    console.log(`📋 Playlist / Staffel erkannt: ${directSource.title} (${directSource.items?.length ?? 0} Episoden)`)
+    console.log(`Playlist / Staffel erkannt: ${directSource.title} (${directSource.items?.length ?? 0} Episoden)`)
     for (const item of directSource.items || []) {
       console.log(`  - ${item.title}: ${item.url}`)
     }
@@ -91,8 +91,8 @@ async function main() {
   const extraArgs = []
 
   if (directSource && directSource.url) {
-    console.log(`✅ Gefunden über Extraktor: ${directSource.title}`)
-    console.log(`🔗 Stream-URL: ${directSource.url}`)
+    console.log(`Gefunden über Extraktor: ${directSource.title}`)
+    console.log(`Stream-URL: ${directSource.url}`)
     finalUrl = directSource.url
     if (directSource.referer) {
       extraArgs.push('--referer', directSource.referer)
@@ -111,26 +111,26 @@ async function main() {
     finalUrl,
   ]
 
-  console.log(`\n🚀 Starte yt-dlp: ${YTDLP}\n`)
+  console.log(`\nStarte yt-dlp: ${YTDLP}\n`)
   let child
   try {
     child = spawn(YTDLP, ytdlpArgs, { stdio: 'inherit' })
   } catch (err) {
-    console.error(`❌ Konnte yt-dlp nicht starten: ${err.message}`)
+    console.error(`Konnte yt-dlp nicht starten: ${err.message}`)
     process.exit(1)
   }
 
   child.on('error', (err) => {
-    console.error(`❌ Fehler beim Ausführen von yt-dlp: ${err.message}`)
+    console.error(`Fehler beim Ausführen von yt-dlp: ${err.message}`)
     console.error('Tipp: Installieren Sie yt-dlp (z.B. winget install yt-dlp.yt-dlp) oder nutzen Sie die Sondra-Desktop-App.')
     process.exit(1)
   })
 
   child.on('close', (code) => {
     if (code === 0) {
-      console.log('\n🎉 Download erfolgreich abgeschlossen!')
+      console.log('\nDownload erfolgreich abgeschlossen!')
     } else {
-      console.error(`\n❌ yt-dlp beendete mit Fehlercode ${code}`)
+      console.error(`\nyt-dlp beendete mit Fehlercode ${code}`)
     }
     process.exit(code ?? 1)
   })

@@ -45,6 +45,7 @@ import {
   Slider,
   Stat,
   Toggle,
+  RowMark,
 } from '../ui/primitives'
 import { ZipSave } from '../ZipSave'
 
@@ -435,13 +436,6 @@ interface QueueItem {
   state: QueueState
   outputBytes: number | null
   message?: string
-}
-
-const STATE_MARK: Record<QueueState, string> = {
-  pending: '·',
-  running: '▸',
-  done: '✓',
-  error: '✕',
 }
 
 /** Any failure as a sentence and, where there is one, FFmpeg's own account. */
@@ -1303,14 +1297,7 @@ export function ConverterPanel() {
                   key={item.id}
                   className="flex flex-wrap items-center gap-[12px] rounded-card bg-raised px-[16px] py-[12px]"
                 >
-                  <span
-                    aria-hidden
-                    className={`value w-[14px] shrink-0 text-center text-small ${
-                      item.state === 'running' ? 'text-ink pulse-dot' : 'text-muted'
-                    }`}
-                  >
-                    {STATE_MARK[item.state]}
-                  </span>
+                  <RowMark state={item.state} />
                   <span className="min-w-0 flex-1 truncate text-body text-ink">{item.name}</span>
                   {item.outputBytes !== null ? (
                     <span className="value shrink-0 text-small text-muted">
