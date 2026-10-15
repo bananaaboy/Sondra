@@ -33,7 +33,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { extractDirectMedia, isAniworldUrl, isHosterUrl, boundedFetch } from '../api/extractors.js'
+import { extractDirectMedia, isAniworldUrl, isHosterUrl, boundedFetch, DEFAULT_USER_AGENT } from '../api/extractors.js'
 
 export function getNetworkAdapters() {
   const nets = os.networkInterfaces()
@@ -67,17 +67,25 @@ const SERVICES = [
   'facebook', 'reddit', 'dailymotion', 'bilibili', 'streamable', 'tumblr', 'bluesky', 'loom',
   'pinterest', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
   'aniworld', 'serienstream', 'filemoon', 'voe', 'vidmoly', 'streamtape', 'vidoza', 'doodstream',
+  'spotify', 'applepodcasts', 'threads', 'snapchat', 'patreon', 'vk', 'rumble', 'odysee',
+  'archive', 'kick', 'substack', 'peertube', 'orf', '3sat', 'ok', 'rutube',
 ]
 
 /* -- choosing formats (the same rules as the bridge) ------------------------ */
 
 const MIME = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', m4a: 'audio/mp4', mp3: 'audio/mpeg', ogg: 'audio/ogg', opus: 'audio/ogg', wav: 'audio/wav', flac: 'audio/flac' }
 /** yt-dlp's own last error line, for the page to show when no code fits. */
-const detailOf = (stderr) =>
-  (stderr.trim().split('\n').filter((line) => /error/i.test(line)).pop() ?? stderr.trim().split('\n').pop() ?? '')
-    .replace(/^ERROR:\s*/, '')
+const detailOf = (stderr) => {
+  const lines = stderr.trim().split('\n')
+  const errorLine = lines.filter((line) => /error/i.test(line) && !/Traceback|File "|DownloadError:/i.test(line)).pop()
+    ?? lines.filter((line) => /error/i.test(line)).pop()
+    ?? lines.pop()
+    ?? ''
+  return errorLine
+    .replace(/^ERROR:\s*(?:\[[^\]]+\]\s*)?/, '')
     .replace(/\s*(See|Also see)\s+https?:\/\/\S+.*$/i, '')
     .slice(0, 240)
+}
 
 const failure = (stderr) => ({ status: 'error', error: { code: errorCode(stderr), detail: detailOf(stderr) } })
 
@@ -103,10 +111,19 @@ function scoreAudio(f) {
 function pickVideo(formats, maxHeight) {
   const fits = formats.filter((f) => isVideoOnly(f) && isPlain(f) && (!maxHeight || heightOf(f) <= maxHeight))
   const pool = fits.length > 0 ? fits : formats.filter((f) => isVideoOnly(f) && isPlain(f))
-  return pool.sort((a, b) => scoreVideo(b) - scoreVideo(a))[0] ?? null
+  if (pool.length > 0) return pool.sort((a, b) => scoreVideo(b) - scoreVideo(a))[0]
+  // Progressive stream fallback for TikTok, Instagram, Twitter/X, Threads, Loom
+  const progFits = formats.filter((f) => isProgressive(f) && isPlain(f) && (!maxHeight || heightOf(f) <= maxHeight))
+  const progPool = progFits.length > 0 ? progFits : formats.filter((f) => isProgressive(f) && isPlain(f))
+  return progPool.sort((a, b) => scoreVideo(b) - scoreVideo(a))[0] ?? null
 }
-const pickAudio = (formats) =>
-  formats.filter((f) => isAudioOnly(f) && isPlain(f)).sort((a, b) => scoreAudio(b) - scoreAudio(a))[0] ?? null
+function pickAudio(formats) {
+  const audioOnly = formats.filter((f) => isAudioOnly(f) && isPlain(f)).sort((a, b) => scoreAudio(b) - scoreAudio(a))
+  if (audioOnly.length > 0) return audioOnly[0]
+  // Progressive stream fallback for audio extraction from TikTok, Twitter/X, Instagram, Threads, Loom
+  const withAudio = formats.filter((f) => f.acodec && f.acodec !== 'none' && isPlain(f))
+  return withAudio.sort((a, b) => (b.abr ?? b.tbr ?? 0) - (a.abr ?? a.tbr ?? 0))[0] ?? null
+}
 function pickProgressive(formats, maxHeight) {
   const pool = formats.filter((f) => isProgressive(f) && isPlain(f) && (!maxHeight || heightOf(f) <= maxHeight))
   return pool.sort((a, b) => heightOf(b) - heightOf(a) || (b.tbr ?? 0) - (a.tbr ?? 0))[0] ?? null
@@ -124,14 +141,21 @@ function errorCode(stderr) {
   if (/nsig extraction failed|signature extraction failed|please update|latest version|unable to extract (initial )?player|requested format is not available/.test(text)) {
     return 'error.api.ytdlp.outdated'
   }
-  if (text.includes('not a bot') || text.includes('sign in to confirm') || text.includes('403') || text.includes('forbidden')) {
+  if (/429|too many requests|rate[- ]?limit|temporarily blocked|quota exceeded/i.test(text)) {
+    return 'error.api.rate_exceeded'
+  }
+  if (/confirm your age|age-restricted|age gate|requires age verification/i.test(text)) {
+    return 'error.api.content.video.age'
+  }
+  if (/not available in your country|geo[-_ ]?(?:block|restrict)|restricted in your (?:country|region)|not available in your region|georestricted/i.test(text)) {
+    return 'error.api.content.video.region'
+  }
+  if (/not a bot|sign in to confirm|confirm that you are not a bot|login required|sign in if you have been granted access/i.test(text)) {
     return 'error.api.ytdlp.signin'
   }
   if (text.includes('unsupported url') || text.includes('is not a valid url')) return 'error.api.link.unsupported'
   if (text.includes('private video') || text.includes('members-only')) return 'error.api.content.video.private'
-  if (text.includes('confirm your age') || text.includes('age-restricted')) return 'error.api.content.video.age'
-  if (text.includes('not available in your country') || text.includes('geo')) return 'error.api.content.video.region'
-  if (text.includes('video unavailable') || text.includes('has been removed')) return 'error.api.content.video.unavailable'
+  if (text.includes('video unavailable') || text.includes('has been removed') || text.includes('this video has been deleted')) return 'error.api.content.video.unavailable'
   if (text.includes('no video formats') || text.includes('unable to extract')) return 'error.api.link.unsupported'
   return 'error.api.fetch.fail'
 }
@@ -170,8 +194,8 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const browser = readSettings().cookies
     return browser ? ['--cookies-from-browser', String(browser)] : []
   }
-  const getBindAddress = () => {
-    const chosen = readSettings().bindAddress
+  const getBindAddress = (explicitAddr = null) => {
+    const chosen = explicitAddr || readSettings().bindAddress
     if (!chosen || chosen === 'default') return null
     const isTest = Boolean(process.env.SONDRA_TEST_STUB)
     const active = getNetworkAdapters().some((a) => a.address === chosen)
@@ -181,10 +205,17 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     }
     return String(chosen)
   }
-  const sourceArgs = () => {
-    const chosen = getBindAddress()
-    return chosen ? ['--source-address', chosen] : []
+  const sourceArgs = (explicitAddr = null) => {
+    const chosen = getBindAddress(explicitAddr)
+    return chosen ? ['--source-address', chosen, '--force-ipv4'] : []
   }
+  const commonYtdlpArgs = (explicitAddr = null) => [
+    ...sourceArgs(explicitAddr),
+    '--user-agent', DEFAULT_USER_AGENT,
+    '--socket-timeout', '20',
+    '--retries', '3',
+    '--fragment-retries', '3',
+  ]
 
   /* -- finding yt-dlp ------------------------------------------------------ */
 
@@ -349,16 +380,16 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
   /* -- the API -------------------------------------------------------------- */
 
-  async function probe(bin, target, referer = null) {
+  async function probe(bin, target, referer = null, explicitBindAddr = null) {
     const extra = referer ? ['--referer', referer] : []
-    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...sourceArgs(), ...extra, ...cookieArgs(), '--', target])
+    return run(bin, ['-J', '--no-warnings', '--no-playlist', ...commonYtdlpArgs(explicitBindAddr), ...extra, ...cookieArgs(), '--', target])
   }
 
   async function resolve(body) {
     const target = String(body.url ?? '').trim()
     if (!/^https?:\/\//i.test(target)) return { status: 'error', error: { code: 'error.api.link.invalid' } }
 
-    const bindAddr = getBindAddress()
+    const bindAddr = getBindAddress(body.bindAddress)
     let directMedia = null
     if (isAniworldUrl(target) || isHosterUrl(target)) {
       try {
@@ -377,9 +408,9 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     }
 
     const tool = await ytdlp()
-    const isPlaylistTarget = /[?&]list=|\/playlist\b/i.test(target)
+    const isPlaylistTarget = /[?&]list=|\/playlist\b|\/sets\/|\/album\//i.test(target)
     if (tool && isPlaylistTarget) {
-      const plResult = await run(tool.bin, ['--flat-playlist', '-J', '--no-warnings', ...sourceArgs(), ...cookieArgs(), '--', target])
+      const plResult = await run(tool.bin, ['--flat-playlist', '-J', '--no-warnings', ...commonYtdlpArgs(bindAddr), ...cookieArgs(), '--', target])
       if (plResult.code === 0 && plResult.stdout) {
         try {
           const plInfo = JSON.parse(plResult.stdout)
@@ -408,17 +439,17 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const queryUrl = directMedia ? directMedia.url : target
     const referer = directMedia?.referer ?? null
 
-    let result = tool ? await probe(tool.bin, queryUrl, referer) : { code: -1, stdout: '', stderr: '' }
+    let result = tool ? await probe(tool.bin, queryUrl, referer, bindAddr) : { code: -1, stdout: '', stderr: '' }
 
     // A sign-in that cannot be read is forgotten, and the video tried without.
     if (tool && result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.cookies') {
       log(`Anmeldung aus ${readSettings().cookies} nicht lesbar: ${detailOf(result.stderr)}`)
       writeSettings({ cookies: null })
-      result = await probe(tool.bin, queryUrl, referer)
+      result = await probe(tool.bin, queryUrl, referer, bindAddr)
     }
     // Too old for the site: update once, then try again.
     if (tool && result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.outdated' && (await update())) {
-      result = await probe(tool.bin, queryUrl, referer)
+      result = await probe(tool.bin, queryUrl, referer, bindAddr)
     }
     if (tool && result.code !== 0 && errorCode(result.stderr) === 'error.api.ytdlp.signin') {
       // A sign-in that was chosen and still does not do: ask again next time.
@@ -428,7 +459,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         const browser = await ask.signIn()
         if (browser) {
           writeSettings({ cookies: browser })
-          result = await probe(tool.bin, queryUrl, referer)
+          result = await probe(tool.bin, queryUrl, referer, bindAddr)
         }
       }
     }
@@ -436,18 +467,39 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     // If yt-dlp probe failed or is not available, but direct extraction succeeded:
     if (result.code !== 0 && directMedia) {
       const stem = String(directMedia.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+      if (directMedia.isHls) {
+        return {
+          status: 'local-processing',
+          type: 'remux',
+          tunnel: [
+            remember({
+              bin: null,
+              url: directMedia.url,
+              referer: directMedia.referer,
+              filename: `${stem}.mp4`,
+              format: { format_id: 'best' },
+              mime: 'application/vnd.apple.mpegurl',
+              directFetch: true,
+              bindAddress: bindAddr,
+            }),
+          ],
+          output: { filename: `${stem}.mp4`, type: 'video/mp4' },
+          isHLS: true,
+        }
+      }
       return {
         status: 'tunnel',
         url: remember({
-          bin: tool?.bin ?? null,
+          bin: null,
           url: directMedia.url,
           referer: directMedia.referer,
+          filename: `${stem}.mp4`,
           format: { format_id: 'best' },
-          mime: directMedia.isHls ? 'application/x-mpegurl' : 'video/mp4',
-          directFetch: !tool?.bin,
+          mime: 'video/mp4',
+          directFetch: true,
           bindAddress: bindAddr,
         }),
-        filename: `${stem}.${directMedia.isHls ? 'm3u8' : 'mp4'}`,
+        filename: `${stem}.mp4`,
       }
     }
 
@@ -470,17 +522,27 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const titleCandidate = (directMedia?.title && directMedia.title !== 'master') ? directMedia.title : (info.title ?? 'download')
     const stem = String(titleCandidate).replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
     const mode = String(body.downloadMode ?? 'auto')
-    const job = (format, mime) => remember({ bin: tool.bin, url: queryUrl, referer, format, mime, bindAddress: bindAddr })
+    const job = (format, mime, customName = null) =>
+      remember({
+        bin: tool.bin,
+        url: queryUrl,
+        referer,
+        format,
+        mime,
+        filename: customName || `${stem}.${format.ext ?? 'mp4'}`,
+        bindAddress: bindAddr,
+      })
 
     if (mode === 'audio') {
       const audio = pickAudio(formats)
       if (!audio) return { status: 'error', error: { code: 'error.api.fetch.empty' } }
       const wanted = String(body.audioFormat ?? 'best')
+      const targetMime = mimeOf(audio)
       return {
         status: 'local-processing',
         type: 'audio',
-        tunnel: [job(audio, 'audio/mp4')],
-        output: { filename: `${stem}.${wanted === 'best' ? 'm4a' : wanted}`, type: 'audio/mp4' },
+        tunnel: [job(audio, targetMime, `${stem}.${audio.ext ?? 'm4a'}`)],
+        output: { filename: `${stem}.${wanted === 'best' ? (audio.ext ?? 'm4a') : wanted}`, type: 'audio/mp4' },
         audio: { format: wanted, copy: wanted === 'best' },
         isHLS: isHls(audio),
       }
@@ -492,7 +554,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       return {
         status: 'local-processing',
         type: 'mute',
-        tunnel: [job(video, 'video/mp4')],
+        tunnel: [job(video, 'video/mp4', `${stem} (${heightOf(video)}p, ohne Ton).mp4`)],
         output: { filename: `${stem} (${heightOf(video)}p, ohne Ton).mp4`, type: 'video/mp4' },
         isHLS: isHls(video),
       }
@@ -517,7 +579,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     return {
       status: 'local-processing',
       type: 'merge',
-      tunnel: [job(video, 'video/mp4'), job(audio, 'audio/mp4')],
+      tunnel: [job(video, 'video/mp4', `${stem} (${heightOf(video)}p, Video).mp4`), job(audio, 'audio/mp4', `${stem} (${heightOf(video)}p, Audio).m4a`)],
       output: { filename: `${stem} (${heightOf(video)}p).mp4`, type: 'video/mp4' },
       isHLS: isHls(video),
     }
@@ -539,22 +601,42 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     return h ? `b[height<=${h}]/b` : 'b'
   }
 
-  function tunnel(job, res, cors) {
+  function tunnel(job, req, res, cors) {
+    const filename = job.filename || 'download.mp4'
+    const encodedFilename = encodeURIComponent(filename).replace(/['()]/g, escape)
+    const disposition = `attachment; filename="${filename.replace(/"/g, '')}"; filename*=UTF-8''${encodedFilename}`
+
     if (!job.bin || job.directFetch) {
       let cancelled = false
       res.on('close', () => { cancelled = true })
+
+      const reqHeaders = {
+        ...(job.referer ? { Referer: job.referer } : {}),
+        'User-Agent': DEFAULT_USER_AGENT,
+      }
+      if (req?.headers?.range) {
+        reqHeaders.Range = req.headers.range
+      }
+
       boundedFetch(job.url, {
-        headers: {
-          ...(job.referer ? { Referer: job.referer } : {}),
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        },
+        headers: reqHeaders,
         localAddress: job.bindAddress ?? getBindAddress(),
       }).then(async (up) => {
-        if (!up.ok) return send(res, 502, { status: 'error', error: { code: 'error.api.fetch.fail' } }, cors)
-        const headers = { 'content-type': job.mime || 'video/mp4', 'cache-control': 'no-store', ...cors }
+        if (!up.ok && up.status !== 206) return send(res, 502, { status: 'error', error: { code: 'error.api.fetch.fail' } }, cors)
+        const contentType = up.headers.get('content-type') || job.mime || 'application/octet-stream'
+        const headers = {
+          'content-type': contentType,
+          'cache-control': 'no-store',
+          'content-disposition': disposition,
+          'accept-ranges': 'bytes',
+          ...cors,
+        }
         const cl = up.headers.get('content-length')
         if (cl) headers['content-length'] = cl
-        res.writeHead(200, headers)
+        const cr = up.headers.get('content-range')
+        if (cr) headers['content-range'] = cr
+
+        res.writeHead(up.status === 206 ? 206 : 200, headers)
         const reader = up.body?.getReader()
         if (!reader) return res.end()
         for (;;) {
@@ -581,7 +663,13 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     })
 
     const attempt = (selector, exact) => {
-      const headers = { 'content-type': job.mime, 'cache-control': 'no-store', ...cors, 'access-control-expose-headers': 'Estimated-Content-Length' }
+      const headers = {
+        'content-type': job.mime,
+        'cache-control': 'no-store',
+        'content-disposition': disposition,
+        ...cors,
+        'access-control-expose-headers': 'Estimated-Content-Length, Content-Disposition',
+      }
       // The exact size only for the exact format — a wrong length breaks the
       // transfer in the browser.
       if (exact && size > 0) headers['content-length'] = String(size)
@@ -592,7 +680,19 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
       child = spawn(
         job.bin,
-        [...formatArgs, '-o', '-', '--no-part', '--no-warnings', '--quiet', '--no-playlist', ...sourceArgs(), ...refererArgs, ...cookieArgs(), '--', job.url],
+        [
+          ...formatArgs,
+          '-o', '-',
+          '--no-part',
+          '--no-warnings',
+          '--quiet',
+          '--no-playlist',
+          ...commonYtdlpArgs(job.bindAddress),
+          ...refererArgs,
+          ...cookieArgs(),
+          '--',
+          job.url,
+        ],
         { windowsHide: true },
       )
       let sent = 0
@@ -698,7 +798,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     if (req.method === 'GET' && url.pathname === '/tunnel') {
       const job = jobs.get(url.searchParams.get('id') ?? '')
       if (!job || job.expires < Date.now()) return send(res, 404, { status: 'error', error: { code: 'error.api.tunnel.missing' } }, cors)
-      return tunnel(job, res, cors)
+      return tunnel(job, req, res, cors)
     }
 
     if (req.method === 'POST' && url.pathname === '/') {

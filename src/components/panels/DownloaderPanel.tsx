@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { IN_DESKTOP_APP } from '../../lib/desktop'
+import { useIngestFiles } from '../../hooks/useIngest'
 import { opusArgs } from '../../lib/convert'
 import { isPortalUrl, saveBytes } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
@@ -406,6 +407,57 @@ export function DownloaderPanel() {
   const stealthModeRef = useRef<StealthMode>(stealthMode)
   stealthModeRef.current = stealthMode
 
+  const { ingest: ingestFile } = useIngestFiles()
+  const [isDragOver, setIsDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFiles = async (files: FileList | File[]) => {
+    const list = Array.from(files)
+    if (list.length === 0) return
+    const textFiles = list.filter((f) => f.type.startsWith('text/') || /\.(txt|m3u|m3u8|csv|json)$/i.test(f.name))
+    const mediaFiles = list.filter((f) => !textFiles.includes(f))
+
+    if (textFiles.length > 0) {
+      const urls: string[] = []
+      for (const tf of textFiles) {
+        try {
+          const content = await tf.text()
+          const matched = content.match(/https?:\/\/[^\s"'<>]+/gi)
+          if (matched) urls.push(...matched)
+        } catch {}
+      }
+      if (urls.length > 0) {
+        const unique = Array.from(new Set(urls))
+        setUrl(unique.join('\n'))
+        log('holen', `${unique.length} ${unique.length === 1 ? 'Adresse' : 'Adressen'} aus ${textFiles[0].name} übernommen`)
+        void look(unique.join('\n'))
+      }
+    }
+
+    if (mediaFiles.length > 0) {
+      log('holen', `${mediaFiles.length} ${mediaFiles.length === 1 ? 'Datei' : 'Dateien'} per Drag & Drop übernommen`)
+      await ingestFile(mediaFiles, 'per Drag & Drop hinzugefügt')
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+
+    const text = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')
+    if (text && /^https?:\/\//i.test(text.trim())) {
+      const trimmed = text.trim()
+      setUrl(trimmed)
+      void look(trimmed)
+      return
+    }
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      void handleFiles(e.dataTransfer.files)
+    }
+  }
+
   const [adapters, setAdapters] = useState<NetworkAdapter[]>([])
   const [selectedAdapter, setSelectedAdapter] = useState<string>('default')
   const [adapterLoading, setAdapterLoading] = useState(false)
@@ -562,10 +614,16 @@ export function DownloaderPanel() {
 
   const look = async (overrideUrl?: string) => {
     const targetSource = overrideUrl ?? url
-    const targets = targetSource
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
+    let targets = targetSource
+      .split(/\r?\n+/)
+      .map((s) => s.trim().replace(/^["'<]|["'>]$/g, ''))
       .filter((s) => s.length > 0)
+    if (targets.length === 1 && /\s+https?:\/\//i.test(targets[0])) {
+      const extracted = targets[0].match(/https?:\/\/[^\s"'<>]+/gi)
+      if (extracted && extracted.length > 1) {
+        targets = extracted
+      }
+    }
     if (targets.length === 0) return
 
     abortRef.current?.abort()
@@ -659,11 +717,19 @@ export function DownloaderPanel() {
 
       try {
         const res = await resolveViaService(entry.url, signal)
-        if (res.isPlaylist) return
+        if (res.isPlaylist) {
+          setBatchEntries((prev) =>
+            prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'error', error: 'Verschachtelte Playlist nicht unterstützt' } : e)) : null,
+          )
+          return
+        }
         const audioStream = res.streams.find((s) => !s.hasVideo && s.hasAudio)
-        const bestStream = filterAudioOnlyRef.current && audioStream
-          ? audioStream
-          : res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
+        const lowestVideoWithAudio = res.streams
+          .filter((s) => s.hasVideo && s.hasAudio)
+          .sort((a, b) => (a.height ?? 9999) - (b.height ?? 9999))[0]
+        const bestStream = filterAudioOnlyRef.current
+          ? (audioStream || lowestVideoWithAudio || res.streams[0])
+          : (res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0])
         setBatchEntries((prev) =>
           prev
             ? prev.map((e, idx) =>
@@ -980,7 +1046,7 @@ export function DownloaderPanel() {
                 setBatchEntries(null)
                 setProgress(null)
               }}
-              placeholder="https://... YouTube, AniWorld, Podcast-RSS-Feed oder direkte Mediendatei"
+              placeholder="https://... YouTube, Spotify, Apple Podcasts, AniWorld, Mediathek, Instagram, TikTok oder Datei"
               inputMode="url"
               aria-label="Adresse zum Herunterladen"
               className="flex-1"
@@ -990,9 +1056,55 @@ export function DownloaderPanel() {
             </Button>
           </div>
 
+          {/* Drag & Drop Zone */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault()
+              setIsDragOver(true)
+            }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+            className={`mt-[6px] flex flex-col items-center justify-center gap-[6px] rounded-nav border-2 border-dashed p-[14px] text-center transition-colors ${
+              isDragOver ? 'border-ink bg-panel-strong ring-2 ring-ink/20' : 'border-line/70 hover:border-ink/40 bg-panel-soft/60'
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                if (e.target.files) void handleFiles(e.target.files)
+                e.target.value = ''
+              }}
+            />
+            <div className="flex items-center gap-[8px] flex-wrap justify-center">
+              <span className="text-small font-semibold text-ink">Dateien oder Links per Drag & Drop ablegen</span>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-nav bg-panel px-[8px] py-[3px] text-micro font-medium text-ink ring-1 ring-line hover:bg-panel-strong transition-colors"
+              >
+                Datei wählen
+              </button>
+            </div>
+            <p className="text-micro text-muted max-w-[560px]">
+              Mediendateien (.mp4, .mp3, .wav etc.) landen direkt in der Sitzung. Textdateien (.txt, .m3u) mit Download-Links werden sofort ausgelesen und aufgelöst.
+            </p>
+          </div>
+
+          <div className="mt-[4px] flex flex-wrap items-center gap-[6px] text-micro text-muted">
+            <span className="font-semibold text-ink">Unterstützte Dienste:</span>
+            {['YouTube', 'Spotify', 'Apple Podcasts', 'AniWorld / SerienStream', 'TikTok', 'Instagram', 'Threads', 'Mediatheken (ARD, ZDF, Arte, SRF, ORF, 3sat)', 'Twitch', 'SoundCloud', 'Bandcamp', 'Vimeo', 'Reddit', 'Snapchat', 'Patreon', 'Rumble', 'Kick', 'Archive.org', 'Podcast-RSS', 'Direkte Downloads'].map((name) => (
+              <span key={name} className="rounded-nav bg-panel px-[6px] py-[2px] text-ink font-medium">
+                {name}
+              </span>
+            ))}
+          </div>
+
           {isPortalUrl(url) && !IN_DESKTOP_APP ? (
             <p className="text-small leading-[1.5] text-prose">
-              YouTube lässt sich aus dem Browser allein oft nicht oder nur in kleiner Auflösung laden; voll geht es mit der App
+              Portalinhalte lassen sich aus dem Browser allein oft nicht oder nur in kleiner Auflösung laden; voll geht es mit der App
               oder einer Brücke auf diesem Rechner.{' '}
               <button
                 type="button"
