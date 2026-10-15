@@ -10,7 +10,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, isPodcastOrRssUrl } from '../api/extractors.js'
+import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, isPodcastOrRssUrl, isSpotifyUrl } from '../api/extractors.js'
 
 function findYtDlp() {
   const local = ['yt-dlp.exe', 'yt-dlp', 'yt-dlp_linux', 'yt-dlp_macos']
@@ -106,15 +106,15 @@ export async function testService(serviceName, customUrl = null) {
   }
 
   try {
-    // 1. Native Extractor Path (AniWorld, SerienStream, Hosters, Podcasts, Bilibili)
-    if (isAniworldUrl(target) || isHosterUrl(target) || isPodcastOrRssUrl(target) || isBilibiliUrl(target)) {
+    // 1. Native Extractor Path (AniWorld, SerienStream, Hosters, Podcasts, Bilibili, Spotify)
+    if (isAniworldUrl(target) || isHosterUrl(target) || isPodcastOrRssUrl(target) || isBilibiliUrl(target) || isSpotifyUrl(target)) {
       result.extractor = 'native'
       const extracted = await extractDirectMedia(target)
       if (!extracted) throw new Error('Extraktor gab null zurück.')
       result.ok = true
       result.title = extracted.title || 'Ohne Titel'
-      result.directUrl = extracted.url || extracted.items?.[0]?.url || 'Playlist/Feed'
-      result.format = extracted.format || (extracted.isHls ? 'HLS (m3u8)' : extracted.isPlaylist ? `Feed (${extracted.items?.length ?? 0} Folgen)` : 'Direkt-MP4')
+      result.directUrl = extracted.url || extracted.items?.[0]?.url || extracted.previewUrl || 'Playlist/Feed'
+      result.format = extracted.format || (extracted.isHls ? 'HLS (m3u8)' : extracted.isPlaylist ? `Feed (${extracted.items?.length ?? 0} Folgen)` : extracted.isSpotifyTrack ? 'Spotify Track Audio' : 'Direkt-MP4')
       result.durationMs = Date.now() - start
       return result
     }
@@ -146,14 +146,12 @@ export async function testService(serviceName, customUrl = null) {
 const args = process.argv.slice(2)
 if (args[0] === '--list') {
   console.log(JSON.stringify(Object.keys(SERVICE_URLS), null, 2))
-  process.exit(0)
-}
-
-if (args.length > 0) {
+  process.exitCode = 0
+} else if (args.length > 0) {
   const service = args[0]
   const custom = args[1] || null
   testService(service, custom).then((res) => {
     console.log(JSON.stringify(res, null, 2))
-    process.exit(res.ok ? 0 : 1)
+    process.exitCode = res.ok ? 0 : 1
   })
 }

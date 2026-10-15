@@ -219,7 +219,11 @@ export function unpackPackedJs(source) {
 export async function boundedFetch(url, options = {}, redirectCount = 0) {
   const localAddr = options.localAddress && options.localAddress !== 'default' ? String(options.localAddress) : null
   if (!localAddr && typeof globalThis.fetch === 'function') {
-    return globalThis.fetch(url, options)
+    try {
+      return await globalThis.fetch(url, options)
+    } catch {
+      // Fall through to transport.request with rejectUnauthorized: false
+    }
   }
 
   const parsed = typeof url === 'string' ? new URL(url) : url
