@@ -46,6 +46,7 @@ import {
   Stat,
   Toggle,
 } from '../ui/primitives'
+import { ZipSave } from '../ZipSave'
 
 /** The extension a file already carries, for the badge on the left. */
 function extensionOf(name: string): string {
@@ -1325,14 +1326,11 @@ export function ConverterPanel() {
 
             {archive ? (
               <div className="mt-[20px]">
-                <Button
-                  onClick={() =>
-                    saveBytes(archive, `sondra-${format.extension}-${queue.length}.zip`, 'application/zip')
-                  }
-                >
-                  Alle als ZIP speichern ({formatBytes(archive.byteLength)})
-                  <ArrowRight />
-                </Button>
+                <ZipSave
+                  suggestion={`sondra-${format.extension}-${queue.length}`}
+                  label={`Alle als ZIP speichern (${formatBytes(archive.byteLength)})`}
+                  onSave={({ file }) => saveBytes(archive, file, 'application/zip')}
+                />
               </div>
             ) : null}
           </Card>

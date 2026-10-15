@@ -716,6 +716,15 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Lautstärke und Spuren trennen hatten getönte Kästen mit Doppelpunkt-
   Etiketten und Browser-Häkchen; eine Liste mehrerer Einträge hat Linien
   zwischen den Zeilen, keinen Kasten je Zeile.
+- **Ein ZIP hat einen Namen, den man ihm gibt** (15.10.2026, „dem ZIP einen
+  eigenen Namen geben"): `ZipSave` — Etikett „Name des ZIP", ein Feld mit
+  dem Vorschlag als Platzhalter und `.zip` dahinter, der Knopf daneben (in
+  schmalen Spalten darunter). Leer gelassen gilt der Vorschlag; Getipptes
+  wird bereinigt (`zipName`: unerlaubte Zeichen vor Leerraum fallen weg,
+  zwischen Wörtern werden sie zum Strich), und der Ordner im ZIP heisst wie
+  das ZIP. Doppelte Dateinamen werden „Name (2)". Überall gleich: Sitzung,
+  Liste mehrerer Downloads, Zerschneiden, Bilder, Spuren trennen,
+  Umwandeln, Lautstärke, Mischen.
 - **Jede Ton-Aufgabe hat ihr Symbol** (Startseite, `ACTION_ICONS` in
   `Home.tsx`): 16er-Raster, Strich 1,35, runde Enden, wie die Werkzeug-
   symbole. Dreizehn Kacheln mit derselben Welle lasen sich wie keine.

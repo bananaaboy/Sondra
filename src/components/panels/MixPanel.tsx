@@ -22,6 +22,7 @@ import { useFilePicker } from '../../hooks/useIngest'
 import { useSession, type Asset } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
 import { ArrowRight, Button, Card, Field, Notice, Progress, Select, Slider, Toggle } from '../ui/primitives'
+import { ZipSave } from '../ZipSave'
 
 const SETTINGS_KEY = 'sondra:mischen'
 
@@ -423,27 +424,29 @@ export function MixPanel() {
             <Button variant="quiet" disabled={Boolean(writing)} onClick={() => saveBytes(encodeWav(result.mix.audio, 24), `${stem} (gemischt).wav`, 'audio/wav')}>
               Als WAV speichern
             </Button>
-            <Button
-              variant="quiet"
-              disabled={Boolean(writing) || !decoded}
-              onClick={() => {
-                if (!decoded) return
-                const zipData = createZip([
-                  { name: '01_Stimme_Roh.wav', data: encodeWav(decoded.voice, 24) },
-                  { name: '02_Musik_Bearbeitet.wav', data: encodeWav(decoded.music, 24) },
-                  { name: '03_Master_Geduckt.wav', data: encodeWav(result.mix.audio, 24) },
-                ])
-                saveBytes(zipData, `${stem}-spuren.zip`, 'application/zip')
-                log('mischen', 'Einzelspuren als ZIP exportiert')
-              }}
-            >
-              Einzelspuren als ZIP
-            </Button>
             {voice?.kind === 'video' ? (
               <Button variant="quiet" disabled={Boolean(writing)} onClick={() => void intoVideo()}>
                 Unter das Video legen
               </Button>
             ) : null}
+          </div>
+          <div className="mt-[16px] border-t border-line pt-[12px]">
+            <ZipSave
+              suggestion={`${stem}-spuren`}
+              label="Einzelspuren als ZIP"
+              variant="quiet"
+              disabled={Boolean(writing) || !decoded}
+              onSave={({ file, stem: folder }) => {
+                if (!decoded) return
+                const zipData = createZip([
+                  { name: `${folder}/01_Stimme_Roh.wav`, data: encodeWav(decoded.voice, 24) },
+                  { name: `${folder}/02_Musik_Bearbeitet.wav`, data: encodeWav(decoded.music, 24) },
+                  { name: `${folder}/03_Master_Geduckt.wav`, data: encodeWav(result.mix.audio, 24) },
+                ])
+                saveBytes(zipData, file, 'application/zip')
+                log('mischen', 'Einzelspuren als ZIP exportiert')
+              }}
+            />
           </div>
           {voice?.kind === 'video' ? (
             <p className="mt-[8px] max-w-[64ch] text-small leading-[1.55] text-prose">

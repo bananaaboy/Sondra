@@ -24,6 +24,8 @@ import { useKept } from '../hooks/useKeptSession'
 import { useActiveAsset, useSession } from '../state/store'
 import { AudioPreview } from './AudioPreview'
 import { Badge, Toggle } from './ui/primitives'
+import { createZip, uniqueEntryNames } from '../lib/zip'
+import { ZipSave } from './ZipSave'
 
 /** Playback of the selected file, decoded only once the menu is open. */
 function SelectedPlayer() {
@@ -133,6 +135,18 @@ export function SessionMenu() {
   if (assets.length === 0) return null
 
   const totalBytes = assets.reduce((sum, asset) => sum + asset.sizeBytes, 0)
+
+  // A file picked from disk keeps its bytes too; the original is only the
+  // fallback for one whose bytes did not survive.
+  const saveSessionZip = async (file: string) => {
+    const entries = await Promise.all(
+      assets.map(async (asset) => ({
+        name: asset.name,
+        data: asset.bytes.byteLength > 0 || !asset.source ? asset.bytes : new Uint8Array(await asset.source.arrayBuffer()),
+      })),
+    )
+    saveBytes(createZip(uniqueEntryNames(entries)), file, 'application/zip')
+  }
 
   return (
     <div ref={rootRef} className="relative">
@@ -298,6 +312,19 @@ export function SessionMenu() {
           >
             {picker.busy ? 'Wird gelesen…' : 'Weitere Datei öffnen'}
           </button>
+
+          {/* The whole session in one archive, under a name of one's own. */}
+          {assets.length > 1 ? (
+            <div className="border-t border-line pt-[12px]">
+              <ZipSave
+                stacked
+                variant="quiet"
+                suggestion={`sondra-sitzung-${new Date().toISOString().slice(0, 10)}`}
+                label={`Alle ${assets.length} als ZIP speichern`}
+                onSave={({ file }) => void saveSessionZip(file)}
+              />
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[4px] border-t border-line pt-[12px] text-small text-muted">
             <span>

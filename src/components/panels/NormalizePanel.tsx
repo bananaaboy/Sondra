@@ -34,6 +34,7 @@ import {
   Toggle,
 } from '../ui/primitives'
 import { ChoiceRow } from '../editor/EditorShell'
+import { ZipSave } from '../ZipSave'
 
 /** Horizontal LUFS gauge: measured value against the target. */
 const BATCH_KINDS = ['audio', 'video'] as const
@@ -457,10 +458,11 @@ export function NormalizePanel() {
             </ul>
             {archive ? (
               <div className="mt-[20px]">
-                <Button onClick={() => saveBytes(archive, `sondra-normalisiert-${rows.length}.zip`, 'application/zip')}>
-                  Alle als ZIP speichern
-                  <ArrowRight />
-                </Button>
+                <ZipSave
+                  suggestion={`sondra-normalisiert-${rows.length}`}
+                  label="Alle als ZIP speichern"
+                  onSave={({ file }) => saveBytes(archive, file, 'application/zip')}
+                />
               </div>
             ) : null}
           </Card>

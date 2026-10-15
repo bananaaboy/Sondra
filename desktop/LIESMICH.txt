@@ -82,6 +82,10 @@ Sitzung
   nach dem Schliessen oder einem Update wieder angeboten („Letzte Sitzung:
   Wiederherstellen“). Abschalten lässt sich das unter dem Dateinamen oben
   rechts; dabei wird das Gespeicherte gelöscht.
+  Ebendort speichert „Alle als ZIP speichern“ die ganze Sitzung in ein
+  Archiv. Wo Sondra ein ZIP anbietet — Sitzung, mehrere Downloads, Pads,
+  Bilder, Spuren —, steht davor das Feld „Name des ZIP“; leer gelassen
+  gilt der Vorschlag.
 
 Aktualisieren
   Sondra sucht kurz nach dem Start und dann alle sechs Stunden selbst nach

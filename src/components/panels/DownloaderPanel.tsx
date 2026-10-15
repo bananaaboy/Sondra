@@ -39,6 +39,8 @@ import { ArrowRight, Button, Card, Notice, Progress, Reveal, Select, TextInput, 
 import { ChoiceRow } from '../editor/EditorShell'
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { AdvancedDownloader } from './DownloaderAdvanced'
+import { createZip, uniqueEntryNames } from '../../lib/zip'
+import { ZipSave } from '../ZipSave'
 
 export type AudioOutputFormat = 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus'
 
@@ -481,6 +483,8 @@ export function DownloaderPanel() {
   const [looking, setLooking] = useState(false)
   const [result, setResult] = useState<StudioResult | null>(null)
   const [batchEntries, setBatchEntries] = useState<BatchItem[] | null>(null)
+  /** A playlist's or season's own title, as the archive's suggested name. */
+  const [batchTitle, setBatchTitle] = useState<string | null>(null)
   const batchEntriesRef = useRef<BatchItem[] | null>(null)
   batchEntriesRef.current = batchEntries
 
@@ -571,6 +575,7 @@ export function DownloaderPanel() {
     setError(null)
     setResult(null)
     setBatchEntries(null)
+    setBatchTitle(null)
     setTaken(null)
 
     if (targets.length === 1) {
@@ -584,6 +589,7 @@ export function DownloaderPanel() {
             status: 'pending',
           }))
           setBatchEntries(playlistItems)
+          setBatchTitle(found.title || null)
 
           // Alle Einträge im Hintergrund auflösen (mit maximal concurrency parallelen Workern)
           let cursor = 0
@@ -1427,6 +1433,25 @@ export function DownloaderPanel() {
               </Button>
             </div>
           </div>
+
+          {/* Everything already loaded, as one archive under a name of one's
+              own — instead of a save prompt per file. */}
+          {batchEntries.filter((entry) => entry.taken).length > 1 ? (
+            <div className="border-b border-line py-[12px]">
+              <ZipSave
+                suggestion={batchTitle ?? `downloads-${new Date().toISOString().slice(0, 10)}`}
+                label={`${batchEntries.filter((entry) => entry.taken).length} geladene als ZIP speichern`}
+                variant="quiet"
+                onSave={({ file }) => {
+                  const files = uniqueEntryNames(
+                    batchEntries.flatMap((entry) => (entry.taken ? [{ name: entry.taken.name, data: entry.taken.bytes }] : [])),
+                  )
+                  saveBytes(createZip(files), file, 'application/zip')
+                  log('holen', `${files.length} Dateien als ${file} gespeichert`)
+                }}
+              />
+            </div>
+          ) : null}
 
           {/* One row per entry, divided by a line — they were boxes on a
               tint, a card per row. */}
