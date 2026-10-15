@@ -33,6 +33,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
+import { extractDirectMedia, isAniworldUrl, isHosterUrl, boundedFetch } from '../api/extractors.js'
 
 export function getNetworkAdapters() {
   const nets = os.networkInterfaces()
