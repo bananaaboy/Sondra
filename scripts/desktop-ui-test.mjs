@@ -410,7 +410,7 @@ try {
     await page.getByLabel(/Adresse.*Herunterladen/).fill('https://www.sondra.lizge.ch/icon-512.png')
     await page.getByRole('button', { name: 'Nachsehen', exact: true }).click()
     const before = await sessionCount()
-    await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 60_000 })
+    await page.getByRole('button', { name: 'Laden', exact: true }).first().click({ timeout: 60_000 })
     await page.waitForFunction(
       (count) => {
         const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
@@ -428,7 +428,7 @@ try {
     await page.getByLabel(/Adresse.*Herunterladen/).fill('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4')
     await page.getByRole('button', { name: 'Nachsehen', exact: true }).click()
     const before = await sessionCount()
-    await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 120_000 })
+    await page.getByRole('button', { name: 'Laden', exact: true }).first().click({ timeout: 120_000 })
     await page.waitForFunction(
       (count) => {
         const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''
@@ -512,7 +512,7 @@ try {
     await page.getByLabel(/Adresse.*Herunterladen/).fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
     await page.getByRole('button', { name: 'Nachsehen', exact: true }).click()
     await page.waitForFunction(
-      () => /Laden|Hat nicht geklappt/.test(document.querySelector('main')?.innerText ?? ''),
+      () => /\bLaden\b|Hat nicht geklappt/.test(document.querySelector('main')?.innerText ?? ''),
       null,
       { timeout: 60_000 },
     )
@@ -520,7 +520,7 @@ try {
       return `YouTube lehnt diesen Rechner ab: ${(await mainText()).match(/Hat nicht geklappt (.{0,120})/)?.[1]}`
     }
     const before = await sessionCount()
-    await page.getByRole('button', { name: 'Laden' }).first().click()
+    await page.getByRole('button', { name: 'Laden', exact: true }).first().click()
     await page.waitForFunction(
       (count) => {
         const text = document.querySelector('header button[title="Dateien dieser Sitzung"]')?.textContent ?? ''

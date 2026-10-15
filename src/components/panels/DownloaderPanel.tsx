@@ -1153,13 +1153,14 @@ export function DownloaderPanel() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
+                aria-label="Textdatei mit Links auswählen"
                 className="inline-flex items-center gap-[6px] text-micro text-muted hover:text-ink transition-colors cursor-pointer"
                 title=".txt- oder .m3u-Datei mit Download-Links auswählen"
               >
                 <span className="font-semibold text-ink bg-panel px-[5px] py-[1px] rounded-nav border border-line/60">
                   📄 .txt / .m3u
                 </span>
-                <span>Textdatei mit Links hier ablegen oder hochladen</span>
+                <span>Textdatei mit Links hier ablegen oder auswählen</span>
               </button>
               <input
                 ref={fileInputRef}
