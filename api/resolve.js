@@ -18,6 +18,7 @@ import {
   DEFAULT_USER_AGENT,
   extractDirectMedia,
   isAniworldUrl,
+  isBilibiliUrl,
   isHosterUrl,
   isPodcastOrRssUrl,
   parsePodcastFeed,
@@ -242,7 +243,7 @@ export default async function handler(request, response) {
    * AniWorld, SerienStream (s.to) & Direkt-Hoster (VOE, Filemoon, Vidmoly, etc.)
    */
   const targetStr = target.toString()
-  if (isAniworldUrl(targetStr) || isHosterUrl(targetStr)) {
+  if (isAniworldUrl(targetStr) || isHosterUrl(targetStr) || isBilibiliUrl(targetStr)) {
     try {
       const media = await extractDirectMedia(targetStr, {
         localAddress: request.body?.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,

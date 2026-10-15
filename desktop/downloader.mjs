@@ -33,7 +33,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { extractDirectMedia, isAniworldUrl, isHosterUrl, boundedFetch, DEFAULT_USER_AGENT } from '../api/extractors.js'
+import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, boundedFetch, DEFAULT_USER_AGENT } from '../api/extractors.js'
 
 export function getNetworkAdapters() {
   const nets = os.networkInterfaces()
@@ -391,7 +391,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
     const bindAddr = getBindAddress(body.bindAddress)
     let directMedia = null
-    if (isAniworldUrl(target) || isHosterUrl(target)) {
+    if (isAniworldUrl(target) || isHosterUrl(target) || isBilibiliUrl(target)) {
       try {
         directMedia = await extractDirectMedia(target, { localAddress: bindAddr })
         if (directMedia && directMedia.isPlaylist) {

@@ -27,6 +27,16 @@ const DOOD_HOSTS =
   /(?:^|\.)(?:dood\.(?:to|so|ws|wf|re|pm|la|li|watch|cx|yt|stream)|doodstream\.(?:com|co)|dsvplay\.com|myvidplay\.com|playmogo\.com|d0o0d\.com|dooood\.com|ds2play\.com)$/i
 const STREAMTAPE_HOSTS = /(?:^|\.)(?:streamtape\.(?:com|net|to|xyz)|streamta\.pe|streamadblocker\.com)$/i
 const VIDOZA_HOSTS = /(?:^|\.)(?:vidoza\.(?:net|org|co))$/i
+const BILIBILI_HOSTS = /(?:^|\.)(?:bilibili\.com|b23\.tv)$/i
+
+export function isBilibiliUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    return BILIBILI_HOSTS.test(u.hostname)
+  } catch {
+    return false
+  }
+}
 
 export function isAniworldUrl(rawUrl) {
   try {
@@ -1118,6 +1128,12 @@ export async function extractDirectMedia(rawUrl, options = {}) {
   if (isAniworldUrl(rawUrl)) {
     return extractAniworld(rawUrl, options)
   }
+  if (isPodcastOrRssUrl(rawUrl)) {
+    return extractPodcast(rawUrl, options)
+  }
+  if (isBilibiliUrl(rawUrl)) {
+    return extractBilibili(rawUrl, options)
+  }
   return extractDirectHoster(rawUrl, options)
 }
 
@@ -1221,4 +1237,108 @@ export function parsePodcastFeed(xmlText, feedUrl = '') {
     items,
   }
 }
+
+export async function extractPodcast(rawUrl, options = {}) {
+  let feedUrl = rawUrl
+
+  // Apple Podcasts: podcasts.apple.com/.../id123456789
+  if (/podcasts\.apple\.com/i.test(rawUrl)) {
+    const idMatch = rawUrl.match(/\/id(\d+)/i)
+    if (idMatch) {
+      const itunesUrl = `https://itunes.apple.com/lookup?id=${idMatch[1]}&entity=podcast`
+      try {
+        const itunesRes = await boundedFetch(itunesUrl, { ...options, headers: { 'User-Agent': DEFAULT_USER_AGENT } })
+        if (itunesRes.ok) {
+          const itunesData = JSON.parse(await itunesRes.text())
+          if (itunesData.results?.[0]?.feedUrl) {
+            feedUrl = itunesData.results[0].feedUrl
+          }
+        }
+      } catch {}
+    }
+  }
+
+  const feedRes = await boundedFetch(feedUrl, { ...options, headers: { 'User-Agent': DEFAULT_USER_AGENT } })
+  if (!feedRes.ok) return null
+  const xml = await feedRes.text()
+  return parsePodcastFeed(xml, feedUrl)
+}
+
+export async function extractBilibili(rawUrl, options = {}) {
+  let targetUrl = rawUrl
+  try {
+    const u = new URL(rawUrl)
+    if (u.hostname.includes('b23.tv')) {
+      const resp = await boundedFetch(rawUrl, {
+        ...options,
+        method: 'HEAD',
+        headers: { 'User-Agent': 'curl/8.0' },
+      })
+      if (resp.url) targetUrl = resp.url
+    }
+  } catch {}
+
+  const bvidMatch = targetUrl.match(/(BV[a-zA-Z0-9]+)/i)
+  const aidMatch = targetUrl.match(/(?:av|\/video\/av)(\d+)/i)
+  if (!bvidMatch && !aidMatch) return null
+
+  const queryParam = bvidMatch ? `bvid=${encodeURIComponent(bvidMatch[1])}` : `aid=${encodeURIComponent(aidMatch[1])}`
+  const viewApiUrl = `https://api.bilibili.com/x/web-interface/view?${queryParam}`
+
+  const viewRes = await boundedFetch(viewApiUrl, {
+    ...options,
+    headers: { 'User-Agent': 'curl/8.0' },
+  })
+  if (!viewRes.ok) return null
+  const viewData = JSON.parse(await viewRes.text())
+  if (viewData.code !== 0 || !viewData.data) return null
+
+  const data = viewData.data
+  const title = data.title || 'Bilibili Video'
+  const bvid = data.bvid || (bvidMatch ? bvidMatch[1] : '')
+  const aid = data.aid || (aidMatch ? aidMatch[1] : '')
+
+  let pageIndex = 0
+  try {
+    const u = new URL(targetUrl)
+    const p = parseInt(u.searchParams.get('p'), 10)
+    if (!isNaN(p) && p > 0) pageIndex = p - 1
+  } catch {}
+
+  const pages = Array.isArray(data.pages) && data.pages.length > 0 ? data.pages : null
+  const page = pages && pages[pageIndex] ? pages[pageIndex] : pages ? pages[0] : null
+  const cid = page?.cid || data.cid
+
+  if (!cid) return null
+
+  const playApiUrl = `https://api.bilibili.com/x/player/playurl?${bvid ? `bvid=${encodeURIComponent(bvid)}` : `avid=${encodeURIComponent(aid)}`}&cid=${cid}&qn=80&type=mp4&platform=html5`
+  const playRes = await boundedFetch(playApiUrl, {
+    ...options,
+    headers: {
+      'User-Agent': 'curl/8.0',
+      'Referer': 'https://www.bilibili.com',
+    },
+  })
+  if (!playRes.ok) return null
+  const playData = JSON.parse(await playRes.text())
+  if (playData.code !== 0 || !playData.data) return null
+
+  const durl = playData.data.durl
+  const streamUrl = durl && durl[0]?.url
+  if (!streamUrl) return null
+
+  const format = playData.data.format || 'mp4'
+  const isHls = Boolean(streamUrl && streamUrl.includes('.m3u8'))
+
+  return {
+    title: page?.part && pages.length > 1 ? `${title} - ${page.part}` : title,
+    url: streamUrl,
+    format,
+    isHls,
+    referer: 'https://www.bilibili.com',
+    hoster: 'Bilibili',
+    duration: data.duration,
+  }
+}
+
 
