@@ -230,6 +230,14 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Rahmen ist gerundet — ein Ort zum Ansehen, keine Messfläche —, die eine
   Farbe darauf ist `stage-accent`. Fensterfüllend braucht `:root.player-fill`,
   sonst hält die Einblende-Animation des Panels das `fixed` gefangen.
+  **Der Player hängt nicht im Panel mit `key`** (`Dashboard.tsx`): der
+  `key={panel}`, der die Einblendung neu startet, baute ihn bei jedem
+  Werkzeugwechsel ab — der Film stand still, und die kleine Leiste „läuft
+  weiter“ erschien nie. Der Visualizer gehört der Musik (nur dann läuft der
+  Ton durch Web Audio dafür), das Menü fällt unter den Rahmen, wenn der
+  niedriger als 400 px ist. WAV (PCM 8/16/24 bit, 32 bit Float) spielt der
+  Browser selbst — `browserPlaysAudio` kannte PCM nicht, und jede WAV ging
+  erst durch FFmpeg.
 - **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
   Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
   über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,

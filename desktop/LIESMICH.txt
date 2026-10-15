@@ -21,7 +21,22 @@ Abspielen
   Hinter dem Zahnrad: Qualität, Tempo, Untertitel, Tonspur, Bild, Ton und
   Wiedergabe. Kinomodus (T), fensterfüllend (W) und Vollbild (F). Was
   Windows' Browser-Kern nicht abspielt (etwa AVI oder DTS-Ton), macht Sondra
-  abspielbar.
+  abspielbar. Wer während der Wiedergabe ein anderes Werkzeug öffnet, hört
+  weiter: unten rechts steht eine kleine Leiste mit Pause und „Öffnen“. Bei
+  Musik zeigt die Bühne den Titel und, wenn unter „Ton“ eingeschaltet, einen
+  Visualizer.
+
+Ton
+  Unter „Ton“ links ein Werkzeug wählen — Schnitt, Pegel, Klang, Säubern,
+  Raum, Tempo, Ausgabe, Verlauf —, rechts stehen nur seine Regler. Was ein
+  Regler tut, ist sofort zu hören; „Übernehmen“ schreibt es in die Datei.
+  Über die Welle ziehen wählt einen Ausschnitt, die Leertaste spielt.
+
+Zerschneiden
+  Ein Verfahren wählen — Anschläge, Stärkste, Takt, Pausen, Gleich oder
+  Länge —, wo geschnitten wird, steht vorher als Linie auf der Welle.
+  „Schneiden“ legt die Pads an; jede Zeile im Pattern beginnt mit ihrem Pad.
+  Die Tasten 1–4, Q–R, A–F und Y–V spielen die Pads.
 
 Bildschirm aufnehmen
   Unter „Bildschirm“ einen Bildschirm oder ein Fenster aus der Liste wählen
@@ -32,7 +47,9 @@ Bildschirm aufnehmen
 Windows-SmartScreen
   Das Setup ist nicht signiert. Beim ersten Start kann Windows „Der Computer
   wurde durch Windows geschützt“ zeigen: „Weitere Informationen“ und dann
-  „Trotzdem ausführen“.
+  „Trotzdem ausführen“. Ist die intelligente App-Steuerung eingeschaltet,
+  blockiert Windows unsignierte Setups ganz; dann Sondra Studio über den
+  Microsoft Store installieren.
 
 Herunterladen von Videoportalen
   Sondra startet dafür selbst einen Dienst auf diesem Rechner
@@ -45,6 +62,10 @@ Herunterladen von Videoportalen
   eigener Dienst, benutzt Sondra diesen. Solange die App läuft, kann auch die
   Website sondra.lizge.ch im Browser diesen Dienst benutzen; andere Websites
   bekommen keine Antwort.
+  Unter „Was laden“ wählen Sie Video mit Ton oder nur den Ton (MP3, WAV, M4A,
+  FLAC oder Opus). Mehrere Adressen, durch Komma oder Zeilen getrennt, werden
+  eine Liste zum Laden. „Zuletzt geladen“ merkt sich die letzten Adressen nur
+  auf diesem Rechner.
 
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →

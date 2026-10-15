@@ -315,27 +315,39 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
 
       {/* Keyed on the panel so every switch replays the entrance rather than
           swapping content in place, which reads as a jump. */}
-      <div key={panel} role="tabpanel" aria-label={current?.label} className="panel-root rise flex min-w-0 flex-col gap-[16px]">
-        {panel === 'player' ? null : !ready ? (
-          <NothingLoaded label={current?.label ?? ''} summary={current?.summary ?? ''} />
-        ) : (
-          <Suspense fallback={<ToolLoading />}>
-            {panel === 'start' ? <Home /> : null}
-            {panel === 'downloader' ? <DownloaderPanel /> : null}
-            {panel === 'converter' ? <ConverterPanel /> : null}
-            {panel === 'audio' ? <AudioEditorPanel /> : null}
-            {panel === 'video' ? <VideoPanel /> : null}
-            {panel === 'images' ? <ImagePanel /> : null}
-            {panel === 'stems' ? <StemsPanel /> : null}
-            {panel === 'normalize' ? <NormalizePanel /> : null}
-            {panel === 'sampler' ? <SamplerPanel theme={theme} /> : null}
-            {panel === 'harmony' ? <HarmonyPanel /> : null}
-            {panel === 'mic' ? <MicPanel /> : null}
-            {panel === 'subtitles' ? <SubtitlesPanel /> : null}
-            {panel === 'screen' ? <ScreenPanel /> : null}
-            {panel === 'mix' ? <MixPanel /> : null}
-          </Suspense>
-        )}
+      {panel === 'player' ? null : (
+        <div key={panel} role="tabpanel" aria-label={current?.label} className="panel-root rise flex min-w-0 flex-col gap-[16px]">
+          {!ready ? (
+            <NothingLoaded label={current?.label ?? ''} summary={current?.summary ?? ''} />
+          ) : (
+            <Suspense fallback={<ToolLoading />}>
+              {panel === 'start' ? <Home /> : null}
+              {panel === 'downloader' ? <DownloaderPanel /> : null}
+              {panel === 'converter' ? <ConverterPanel /> : null}
+              {panel === 'audio' ? <AudioEditorPanel /> : null}
+              {panel === 'video' ? <VideoPanel /> : null}
+              {panel === 'images' ? <ImagePanel /> : null}
+              {panel === 'stems' ? <StemsPanel /> : null}
+              {panel === 'normalize' ? <NormalizePanel /> : null}
+              {panel === 'sampler' ? <SamplerPanel theme={theme} /> : null}
+              {panel === 'harmony' ? <HarmonyPanel /> : null}
+              {panel === 'mic' ? <MicPanel /> : null}
+              {panel === 'subtitles' ? <SubtitlesPanel /> : null}
+              {panel === 'screen' ? <ScreenPanel /> : null}
+              {panel === 'mix' ? <MixPanel /> : null}
+            </Suspense>
+          )}
+        </div>
+      )}
+
+      {/* The player lives outside the keyed panel: a key change would unmount
+          it, and a film playing on while another tool is open would stop
+          the moment the tool opened. Shown, it is the tab panel itself. */}
+      <div
+        role={panel === 'player' ? 'tabpanel' : undefined}
+        aria-label={panel === 'player' ? current?.label : undefined}
+        className={panel === 'player' ? 'panel-root rise flex min-w-0 flex-col gap-[16px]' : 'contents'}
+      >
         <Suspense fallback={null}>
           <PlayerPanel hidden={panel !== 'player'} />
         </Suspense>

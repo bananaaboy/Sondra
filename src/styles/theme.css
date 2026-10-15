@@ -37,12 +37,15 @@
    being ink and started being paint.
    --------------------------------------------------------------------------- */
 @theme {
-  /* Light palette — crisp, high-contrast, modern studio finish. */
+  /* Light palette — crisp, high-contrast, modern studio finish. The three
+     tints are green enough to read against the near-white canvas: at
+     #f0f4f1 the start page's opening block all but vanished (14.10.2026).
+     Measured (APCA): muted ≥ Lc 60.9, prose ≥ 83, ink ≥ 72 on all three. */
   --color-canvas: #f8faf8;
   --color-raised: #ffffff;
-  --color-panel-soft: #f0f4f1;
-  --color-panel-mid: #e4ece6;
-  --color-panel-strong: #d2e4d6;
+  --color-panel-soft: #e0f0e5;
+  --color-panel-mid: #d2e8d9;
+  --color-panel-strong: #c8e1cf;
   --color-panel-cool: #e5eff3;
   --color-ink: #0b4a22;
   --color-ink-hover: #073517;
@@ -209,9 +212,9 @@
 
   --color-canvas: #f8faf8;
   --color-raised: #ffffff;
-  --color-panel-soft: #f0f4f1;
-  --color-panel-mid: #e4ece6;
-  --color-panel-strong: #d2e4d6;
+  --color-panel-soft: #e0f0e5;
+  --color-panel-mid: #d2e8d9;
+  --color-panel-strong: #c8e1cf;
   --color-panel-cool: #e5eff3;
   --color-ink: #0b4a22;
   --color-ink-hover: #073517;
@@ -414,6 +417,19 @@ input[type='range']:disabled {
   cursor: not-allowed;
 }
 
+/* The select's own arrow, drawn as two halves of a square in the theme's
+   muted ink, so it follows light and dark. */
+select.sondra-select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-muted) 50%),
+    linear-gradient(135deg, var(--color-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 17px) 52%,
+    calc(100% - 12px) 52%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
 /* Native controls inherit the theme rather than the OS palette. */
 select option {
   background: var(--color-raised);
@@ -441,8 +457,11 @@ select option {
   border-left-width: 1px !important;
   pointer-events: none !important;
 }
+/* The timeline lies over the top 22 px of the wave; a pad's key starts under
+   it, or the „0" of the ruler and the „1" of the first pad share a spot. */
 .sondra-stage-wave ::part(region-content) {
-  padding: 6px 6px 0;
+  display: inline-block;
+  padding: 28px 6px 0;
   font-family: var(--font-value);
   font-size: 11px;
   font-weight: 700;

@@ -161,6 +161,7 @@ function Group({ title, children }: { title?: string; children: ReactNode }) {
 
 export function SettingsMenu({
   kind,
+  placement = 'over',
   settings,
   update,
   quality,
@@ -174,6 +175,8 @@ export function SettingsMenu({
   onClose,
 }: {
   kind: 'video' | 'audio'
+  /** Over the picture, or underneath it when the frame is too low to hold it. */
+  placement?: 'over' | 'below'
   settings: PlayerSettings
   update: (patch: Partial<PlayerSettings>) => void
   quality: QualityState
@@ -251,7 +254,11 @@ export function SettingsMenu({
       ref={box}
       role="menu"
       aria-label="Einstellungen"
-      className="pop absolute bottom-[68px] right-[12px] z-30 flex max-h-[min(460px,calc(100%-84px))] w-[320px] max-w-[calc(100%-24px)] flex-col overflow-hidden rounded-card bg-stage/95 text-stage-ink shadow-[0_18px_50px_-12px_rgb(0_0_0/0.7)] ring-1 ring-stage-line/70 backdrop-blur-md"
+      className={`pop flex flex-col overflow-hidden rounded-card bg-stage text-stage-ink ring-1 ring-inset ring-stage-line ${
+        placement === 'over'
+          ? 'absolute bottom-[68px] right-[12px] z-30 max-h-[min(460px,calc(100%-84px))] w-[320px] max-w-[calc(100%-24px)] shadow-[0_18px_50px_-12px_rgb(0_0_0/0.7)]'
+          : 'relative w-full sm:ml-auto sm:w-[360px]'
+      }`}
     >
       {page !== 'main' ? (
         <button type="button" onClick={() => setPage('main')} className={`${ROW} border-b border-stage-line/60 font-semibold`}>
@@ -395,7 +402,7 @@ export function SettingsMenu({
                 />
               ))}
             </Group>
-            <Group title="Klang & Equalizer Presets">
+            <Group title="Klang">
               <div className="flex flex-wrap gap-[6px] px-[16px] py-[8px]">
                 {EQ_PRESETS.map((preset) => {
                   const active =
@@ -415,10 +422,9 @@ export function SettingsMenu({
                           eqHigh: preset.eqHigh,
                         })
                       }
-                      className={`press rounded-pill px-[10px] py-[4px] text-micro font-medium transition-colors ${
-                        active
-                          ? 'bg-stage-ink text-stage-on-ink font-semibold'
-                          : 'bg-stage-line/50 text-stage-ink hover:bg-stage-line'
+                      aria-pressed={active}
+                      className={`press rounded-pill px-[10px] py-[5px] text-small leading-none transition-colors duration-[var(--dur-fast)] ${
+                        active ? 'bg-stage-ink font-semibold text-stage' : 'text-stage-ink ring-1 ring-inset ring-stage-line hover:bg-stage-soft'
                       }`}
                     >
                       {preset.name}
@@ -475,19 +481,21 @@ export function SettingsMenu({
             <Group>
               <Switch
                 label="Instrumental / Karaoke"
-                hint="Gesang in Echtzeit dämpfen (Mid-Side Phasenauslöschung der Mitten-Vokale)"
+                hint="Dämpft die Stimme in der Mitte des Stereobilds — klappt bei vielen Studioaufnahmen"
                 on={settings.karaoke}
                 onChange={(karaoke) => update({ karaoke })}
               />
-              <Switch
-                label="Audio-Visualizer"
-                hint="Echtzeit-Frequenz- und Wellenanzeige"
-                on={settings.visualizer}
-                onChange={(visualizer) => update({ visualizer })}
-              />
-              {settings.visualizer ? (
-                <div className="flex items-center justify-between border-t border-stage-line/30 px-[16px] py-[8px]">
-                  <span className="text-small text-stage-ink">Visualizer-Stil</span>
+              {kind === 'audio' ? (
+                <Switch
+                  label="Visualizer"
+                  hint="Zeigt auf der Bühne, was gerade klingt"
+                  on={settings.visualizer}
+                  onChange={(visualizer) => update({ visualizer })}
+                />
+              ) : null}
+              {kind === 'audio' && settings.visualizer ? (
+                <div className="flex items-center justify-between gap-[12px] px-[16px] pb-[10px] pt-[2px]">
+                  <span className="text-small text-stage-muted">Darstellung</span>
                   <div className="flex gap-[4px]">
                     {([
                       { id: 'bars', label: 'Balken' },
@@ -498,10 +506,11 @@ export function SettingsMenu({
                         key={m.id}
                         type="button"
                         onClick={() => update({ visualizerMode: m.id })}
-                        className={`press rounded-pill px-[8px] py-[3px] text-micro font-medium ${
+                        aria-pressed={settings.visualizerMode === m.id}
+                        className={`press rounded-pill px-[10px] py-[5px] text-small leading-none transition-colors duration-[var(--dur-fast)] ${
                           settings.visualizerMode === m.id
-                            ? 'bg-stage-ink text-stage-on-ink font-semibold'
-                            : 'bg-stage-line/50 text-stage-muted hover:bg-stage-line'
+                            ? 'bg-stage-ink font-semibold text-stage'
+                            : 'text-stage-ink ring-1 ring-inset ring-stage-line hover:bg-stage-soft'
                         }`}
                       >
                         {m.label}

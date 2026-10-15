@@ -91,16 +91,17 @@ const ForwardIcon = () => (
     <path d="M4 5.5L8.5 10 4 14.5M9 5.5L13.5 10 9 14.5" />
   </Glyph>
 )
+/** Skip marks: a bar and a triangle, the corners rounded by their own stroke. */
 const PrevIcon = () => (
-  <Glyph filled>
-    <rect x="4" y="4.5" width="2" height="11" rx="1" />
-    <path d="M15.6 5.2c0-.7-.8-1.1-1.4-.7L8.2 9.2c-.5.4-.5 1.2 0 1.6l7.4 4.7c.6.4 1.4 0 1.4-.7z" />
+  <Glyph>
+    <path d="M5.2 4.8v10.4" />
+    <path d="M15.2 5.6v8.8L8.6 10z" fill="currentColor" />
   </Glyph>
 )
 const NextIcon = () => (
-  <Glyph filled>
-    <rect x="14" y="4.5" width="2" height="11" rx="1" />
-    <path d="M4.4 5.2c0-.7.8-1.1 1.4-.7L11.8 9.2c.5.4.5 1.2 0 1.6l-7.4 4.7c-.6.4-1.4 0-1.4-.7z" />
+  <Glyph>
+    <path d="M14.8 4.8v10.4" />
+    <path d="M4.8 5.6v8.8l6.6-4.4z" fill="currentColor" />
   </Glyph>
 )
 const VolumeIcon = ({ level }: { level: number }) => (
@@ -116,10 +117,11 @@ const CaptionIcon = () => (
     <path d="M8.8 8.2H7.2a1.8 1.8 0 00-1.8 1.8v0a1.8 1.8 0 001.8 1.8h1.6M14.6 8.2h-1.6a1.8 1.8 0 00-1.8 1.8v0a1.8 1.8 0 001.8 1.8h1.6" />
   </Glyph>
 )
+/** Six teeth, drawn around the centre — the old outline sat off it. */
 const GearIcon = () => (
   <Glyph>
-    <circle cx="10" cy="10" r="2.6" />
-    <path d="M16.2 11.8l1.2.9-1.6 2.8-1.4-.6a6 6 0 01-1.6.9l-.2 1.5H9.4l-.2-1.5a6 6 0 01-1.6-.9l-1.4.6-1.6-2.8 1.2-.9a6 6 0 010-1.8l-1.2-.9 1.6-2.8 1.4.6a6 6 0 011.6-.9l.2-1.5h3.2l.2 1.5a6 6 0 011.6.9l1.4-.6 1.6 2.8-1.2.9a6 6 0 010 1.8z" />
+    <circle cx="10" cy="10" r="2.4" />
+    <path d="M8.03 4.76L8.34 2.58A7.6 7.6 0 0 1 11.66 2.58L11.97 4.76A5.6 5.6 0 0 1 13.55 5.67L15.59 4.86A7.6 7.6 0 0 1 17.25 7.73L15.53 9.09A5.6 5.6 0 0 1 15.53 10.91L17.25 12.27A7.6 7.6 0 0 1 15.59 15.14L13.55 14.33A5.6 5.6 0 0 1 11.97 15.24L11.66 17.42A7.6 7.6 0 0 1 8.34 17.42L8.03 15.24A5.6 5.6 0 0 1 6.45 14.33L4.41 15.14A7.6 7.6 0 0 1 2.75 12.27L4.47 10.91A5.6 5.6 0 0 1 4.47 9.09L2.75 7.73A7.6 7.6 0 0 1 4.41 4.86L6.45 5.67A5.6 5.6 0 0 1 8.03 4.76Z" />
   </Glyph>
 )
 const PipIcon = () => (
@@ -134,12 +136,16 @@ const TheaterIcon = () => (
     <path d="M6 5v10M14 5v10" />
   </Glyph>
 )
-/** The browser window: a frame with its bar, filled. */
+/** The browser window: a frame with its bar, and the picture growing into it — or shrinking back. */
 const WindowIcon = ({ on }: { on: boolean }) => (
   <Glyph>
     <rect x="2.4" y="3.6" width="15.2" height="12.8" rx="2.2" />
     <path d="M2.4 7h15.2" />
-    {on ? <path d="M6 9.5l2 2-2 2M14 9.5l-2 2 2 2" /> : <path d="M8 9.5L6 11.5l2 2M12 9.5l2 2-2 2" />}
+    {on ? (
+      <path d="M6 14l2.4-2M8.4 12H6.6M8.4 12v1.8M14 9.4l-2.4 2M11.6 11.4h1.8M11.6 11.4V9.6" />
+    ) : (
+      <path d="M7.2 13.6l5.6-4M7.2 13.6h2.2M7.2 13.6v-2.2M12.8 9.6h-2.2M12.8 9.6v2.2" />
+    )}
   </Glyph>
 )
 const FullIcon = ({ on }: { on: boolean }) => (
@@ -734,7 +740,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     })
   }, [captions, sourceUrl, current?.subtitles.length])
 
-  // Parametric EQ, Bass-Boost, Night mode, and FFT visualizer through Web Audio
+  // Equalizer, bass boost, karaoke, night mode and the visualizer's analyser,
+  // through Web Audio. The visualizer belongs to a sound file's stage; a film
+  // has its picture and does not route through the graph for it.
+  const showVisualizer = settings.visualizer && current?.kind === 'audio'
   interface AudioNodes {
     node: HTMLVideoElement
     source: MediaElementAudioSourceNode
@@ -761,7 +770,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
       settings.eqMid !== 0 ||
       settings.eqHigh !== 0 ||
       settings.karaoke ||
-      settings.visualizer
+      showVisualizer
 
     if (!wanted && graph.current?.node !== node) return
     try {
@@ -854,92 +863,106 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     settings.eqMid,
     settings.eqHigh,
     settings.karaoke,
-    settings.visualizer,
+    showVisualizer,
     sourceUrl,
   ])
 
+  // The visualizer draws on the sound stage at the canvas's own size, in the
+  // stage's one colour. The analyser is read every frame rather than once:
+  // a new title builds a new graph, and a captured one would go silent.
+  // Paused it draws its resting floor once (again on a resize); out of
+  // sight it does not draw at all.
   useEffect(() => {
-    if (!settings.visualizer) return
+    if (!showVisualizer || hidden) return
     const canvas = visualizerCanvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const analyser = graph.current?.analyser
-    if (!analyser) return
-
-    let animId: number
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-    const timeData = new Uint8Array(bufferLength)
-
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !ctx) return
+    const styles = getComputedStyle(document.documentElement)
+    const accent = styles.getPropertyValue('--color-stage-accent').trim() || '#8fe0a6'
+    const rest = styles.getPropertyValue('--color-stage-line').trim() || '#515a5d'
     const mode = settings.visualizerMode ?? 'bars'
+    let frequency = new Uint8Array(0)
+    let wave = new Uint8Array(0)
+    let frame = 0
 
     const render = () => {
-      animId = requestAnimationFrame(render)
-      const w = canvas.width
-      const h = canvas.height
+      if (playing) frame = requestAnimationFrame(render)
+      const ratio = window.devicePixelRatio || 1
+      const w = canvas.clientWidth
+      const h = canvas.clientHeight
+      if (w === 0 || h === 0) return
+      if (canvas.width !== Math.round(w * ratio) || canvas.height !== Math.round(h * ratio)) {
+        canvas.width = Math.round(w * ratio)
+        canvas.height = Math.round(h * ratio)
+      }
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
       ctx.clearRect(0, 0, w, h)
+      const analyser = graph.current?.analyser ?? null
+      const live = playing && analyser !== null
+      if (analyser && frequency.length !== analyser.frequencyBinCount) {
+        frequency = new Uint8Array(analyser.frequencyBinCount)
+        wave = new Uint8Array(analyser.frequencyBinCount)
+      }
+      if (live) {
+        analyser.getByteFrequencyData(frequency)
+        analyser.getByteTimeDomainData(wave)
+      }
+      ctx.fillStyle = live ? accent : rest
+      ctx.strokeStyle = live ? accent : rest
 
       if (mode === 'wave') {
-        analyser.getByteTimeDomainData(timeData)
         ctx.lineWidth = 2
-        ctx.strokeStyle = playing ? 'rgba(195, 244, 208, 0.95)' : 'rgba(255, 255, 255, 0.25)'
+        ctx.lineJoin = 'round'
         ctx.beginPath()
-        const sliceWidth = w / bufferLength
-        let x = 0
-        for (let i = 0; i < bufferLength; i++) {
-          const v = playing ? timeData[i] / 128.0 : 1.0
-          const y = (v * h) / 2
+        const points = Math.max(2, wave.length)
+        for (let i = 0; i < points; i += 1) {
+          const v = live ? (wave[i] - 128) / 128 : 0
+          const x = (i / (points - 1)) * w
+          const y = h / 2 + v * (h / 2 - 2)
           if (i === 0) ctx.moveTo(x, y)
           else ctx.lineTo(x, y)
-          x += sliceWidth
         }
         ctx.stroke()
       } else if (mode === 'radial') {
-        analyser.getByteFrequencyData(dataArray)
-        const centerX = w / 2
-        const centerY = h / 2
-        const radius = Math.min(w, h) * 0.18
-        const bars = 40
-        const step = Math.max(1, Math.floor(bufferLength / bars))
-
-        ctx.strokeStyle = playing ? 'rgba(195, 244, 208, 0.85)' : 'rgba(255, 255, 255, 0.2)'
+        const bars = 48
+        const radius = Math.min(w, h) * 0.22
+        const reach = Math.min(w, h) / 2 - radius - 2
         ctx.lineWidth = 2.5
-        for (let i = 0; i < bars; i++) {
-          const val = playing ? dataArray[i * step] / 255 : 0
-          const barLen = val * (Math.min(w, h) * 0.28) + 2
-          const angle = (i * 2 * Math.PI) / bars
-          const x1 = centerX + Math.cos(angle) * radius
-          const y1 = centerY + Math.sin(angle) * radius
-          const x2 = centerX + Math.cos(angle) * (radius + barLen)
-          const y2 = centerY + Math.sin(angle) * (radius + barLen)
+        ctx.lineCap = 'round'
+        for (let i = 0; i < bars; i += 1) {
+          const v = live ? frequency[Math.floor((i / bars) * frequency.length * 0.7)] / 255 : 0
+          const angle = (i / bars) * Math.PI * 2 - Math.PI / 2
+          const inner = radius
+          const outer = radius + 3 + v * reach
           ctx.beginPath()
-          ctx.moveTo(x1, y1)
-          ctx.lineTo(x2, y2)
+          ctx.moveTo(w / 2 + Math.cos(angle) * inner, h / 2 + Math.sin(angle) * inner)
+          ctx.lineTo(w / 2 + Math.cos(angle) * outer, h / 2 + Math.sin(angle) * outer)
           ctx.stroke()
         }
       } else {
-        // 'bars'
-        analyser.getByteFrequencyData(dataArray)
-        const bars = 48
-        const barWidth = Math.max(2, Math.floor(w / bars) - 2)
-        const step = Math.max(1, Math.floor(bufferLength / bars))
-
-        for (let i = 0; i < bars; i++) {
-          const val = playing ? dataArray[i * step] / 255 : 0
-          const barHeight = Math.max(2, val * (h - 4))
-          const x = i * (barWidth + 2)
-          const y = h - barHeight
-
-          ctx.fillStyle = playing ? 'rgba(195, 244, 208, 0.85)' : 'rgba(255, 255, 255, 0.2)'
-          ctx.fillRect(x, y, barWidth, barHeight)
+        // Bars from the floor, as many as fit at a steady pitch. The top of
+        // the spectrum is mostly air; the lower seven tenths carry the music.
+        const pitch = 8
+        const bars = Math.max(8, Math.floor(w / pitch))
+        const width = pitch - 3
+        for (let i = 0; i < bars; i += 1) {
+          const v = live ? frequency[Math.floor((i / bars) * frequency.length * 0.7)] / 255 : 0
+          const height = Math.max(2, v * h * 0.86)
+          ctx.beginPath()
+          ctx.roundRect(i * pitch + (w - bars * pitch) / 2 + 1.5, h - height, width, height, [2, 2, 0, 0])
+          ctx.fill()
         }
       }
     }
 
     render()
-    return () => cancelAnimationFrame(animId)
-  }, [settings.visualizer, settings.visualizerMode, playing])
+    const observer = playing ? null : new ResizeObserver(render)
+    observer?.observe(canvas)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
+    }
+  }, [showVisualizer, hidden, settings.visualizerMode, playing, current?.id])
 
   // A playing film keeps the screen awake.
   useEffect(() => {
@@ -1032,6 +1055,21 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const isVideo = current?.kind === 'video'
   const controlsShown = !isVideo || !playing || !idle || menuOpen
   const immersive = fullscreen || fill
+
+  // How tall the frame is, for where the settings menu fits: over the picture
+  // when there is room for it, underneath when the frame is a phone's strip.
+  const [frameHeight, setFrameHeight] = useState(0)
+  const hasCurrent = current !== null
+  useEffect(() => {
+    const node = frameRef.current
+    if (!node) return
+    const measure = () => setFrameHeight(node.clientHeight)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasCurrent])
+  const menuBelow = !immersive && frameHeight > 0 && frameHeight < 400
 
 
   /* -- keys ------------------------------------------------------------------------------ */
@@ -1362,46 +1400,33 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
   if (!current) {
     if (hidden) return null
+    // The same door as every other tool's — but this one never reads the
+    // file into the session: it is played where it lies.
     return (
       <div className="flex flex-col gap-[24px]">
         {fileInputs}
-        <div
-          onDragOver={(event) => {
-            event.preventDefault()
-            setDragging(true)
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={() => setDragging(false)}
-          className={`relative flex min-h-[clamp(320px,52vh,560px)] flex-col items-center justify-center gap-[20px] overflow-hidden rounded-card bg-stage px-[24px] py-[48px] text-center text-stage-ink transition-shadow duration-[var(--dur-fast)] ${
-            dragging ? 'ring-2 ring-inset ring-stage-accent' : ''
-          }`}
-        >
-          {/* A soft light behind the call to action — the one colour on the
-              stage, as elsewhere on it. */}
+        <div className="flex flex-col gap-[12px]">
           <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-60"
-            style={{ background: 'radial-gradient(60% 70% at 50% 100%, color-mix(in srgb, var(--color-stage-accent) 22%, transparent), transparent 70%)' }}
-          />
-          <span className="relative grid h-[72px] w-[72px] place-items-center rounded-pill bg-white/10 text-white">
-            <PlayIcon size={30} />
-          </span>
-          <div className="relative flex max-w-[36em] flex-col gap-[10px]">
-            <h2 className="text-heading-sm font-bold tracking-[-0.015em] text-white">Video oder Musik hierher ziehen</h2>
-            <p className="text-body text-stage-muted">
-              Auch grosse Filme: direkt von der Festplatte abgespielt, nicht hochgeladen. Mehrere auf einmal werden eine
-              Wiedergabeliste, eine .srt daneben der Untertitel.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => pickRef.current?.click()}
-            className="press relative inline-flex items-center gap-[8px] rounded-pill bg-white px-[22px] py-[12px] text-body font-semibold text-stage hover:bg-stage-accent"
+            onDragOver={(event) => {
+              event.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={() => setDragging(false)}
+            className={`flex flex-col items-center gap-[12px] rounded-card p-[28px] text-center transition-colors duration-[var(--dur-fast)] ${
+              dragging ? 'bg-panel-mid ring-2 ring-inset ring-ink' : 'bg-panel-soft ring-1 ring-inset ring-line'
+            }`}
           >
-            Dateien öffnen
-            <ArrowRight />
-          </button>
-          <p className="relative text-small text-stage-muted">MP4 · MKV · AVI · MOV · WebM · MP3 · FLAC · WAV und mehr</p>
+            <p className="text-body text-prose">Video oder Musik hierher ziehen — mehrere werden eine Wiedergabeliste</p>
+            <Button onClick={() => pickRef.current?.click()}>
+              Dateien auswählen
+              <ArrowRight />
+            </Button>
+          </div>
+          <p className="max-w-[62ch] text-small text-muted">
+            Auch grosse Filme öffnen sofort: abgespielt wird direkt von der Festplatte, nichts wird hochgeladen oder in die Sitzung
+            gelesen. Eine .srt oder .vtt mit gleichem Namen wird der Untertitel. MP4, MKV, AVI, MOV, WebM, MP3, FLAC, WAV und mehr.
+          </p>
         </div>
         {sessionRow}
       </div>
@@ -1413,7 +1438,9 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const captionLabels = current.subtitles.map((track) => track.label)
   const pictureFilter = `brightness(${settings.brightness}) contrast(${settings.contrast}) saturate(${settings.saturation})`
   const title = current.name.replace(/\.[^.]+$/, '')
+  const extension = /\.([a-z0-9]{2,5})$/i.exec(current.name)?.[1]?.toUpperCase() ?? null
   const meta = [
+    extension,
     formatBytes(current.size),
     size ? `${size.width} × ${size.height}` : null,
     duration > 0 ? clock(duration) : null,
@@ -1422,30 +1449,50 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   ].filter(Boolean)
   const sideBySide = !theater
 
+  const settingsMenu = (
+    <SettingsMenu
+      kind={current.kind}
+      placement={menuBelow ? 'below' : 'over'}
+      settings={settings}
+      update={updateSettings}
+      quality={qualityState}
+      onQuality={(quality) => void chooseQuality(quality)}
+      onProbe={() => void probe(current)}
+      captions={{ tracks: captionLabels, current: captions }}
+      onCaption={setCaptions}
+      onLoadCaptions={() => subtitlePickRef.current?.click()}
+      audio={trackState}
+      onAudio={(at) => void chooseAudio(at)}
+      onClose={() => setMenuOpen(false)}
+    />
+  )
+
   const playlist = (
-    <section className="flex min-w-0 flex-col gap-[8px]">
-      <div className="flex items-baseline justify-between gap-[12px]">
+    <section aria-label="Wiedergabeliste" className="flex min-w-0 flex-col gap-[8px]">
+      <div className="flex items-baseline justify-between gap-[12px] border-b border-line pb-[8px]">
         <h3 className="text-small font-semibold text-ink">Als Nächstes</h3>
         <span className="value text-small text-muted">
           {index + 1} / {items.length}
         </span>
       </div>
-      <ol className="flex flex-col gap-[4px]">
+      <ol className="flex flex-col gap-[2px]">
         {items.map((item, at) => {
           const here = item.id === currentId
           return (
-            <li key={item.id} className="group/item flex max-w-none items-center">
+            <li key={item.id} className="group/item flex max-w-none items-center gap-[2px]">
               <button
                 type="button"
                 onClick={() => setCurrentId(item.id)}
                 aria-current={here ? 'true' : undefined}
-                className={`press flex min-w-0 flex-1 items-center gap-[12px] rounded-nav p-[8px] text-left text-small transition-colors duration-[var(--dur-fast)] ${
-                  here ? 'bg-panel-mid' : 'hover:bg-panel-soft'
+                className={`press flex min-w-0 flex-1 items-center gap-[12px] rounded-nav px-[8px] py-[6px] text-left text-small transition-colors duration-[var(--dur-fast)] ${
+                  here ? 'bg-panel-soft' : 'hover:bg-panel-soft'
                 }`}
               >
-                <span className={`grid h-[36px] w-[36px] shrink-0 place-items-center rounded-nav ${here ? 'bg-ink text-on-ink' : 'bg-panel-soft text-ink'}`}>
+                <span
+                  className={`grid h-[32px] w-[32px] shrink-0 place-items-center rounded-nav ${here ? 'bg-ink text-on-ink' : 'text-muted'}`}
+                >
                   {here && playing ? (
-                    <span className="flex h-[14px] items-center gap-[2px]" aria-hidden>
+                    <span className="flex h-[12px] items-center gap-[2px]" aria-hidden>
                       {[0, 1, 2].map((bar) => (
                         <span key={bar} className="eq-bar h-full w-[3px] rounded-pill bg-current" style={{ animationDelay: `${bar * 0.18}s` }} />
                       ))}
@@ -1467,7 +1514,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 aria-label={`${item.name} aus der Liste nehmen`}
                 title="Aus der Liste nehmen"
                 onClick={() => remove(item.id)}
-                className="press grid h-[32px] w-[32px] shrink-0 place-items-center rounded-pill text-muted opacity-60 hover:bg-panel-soft hover:text-ink hover:opacity-100 focus-visible:opacity-100 group-hover/item:opacity-100"
+                className="press grid h-[32px] w-[32px] shrink-0 place-items-center rounded-nav text-muted opacity-70 hover:bg-panel-soft hover:text-ink hover:opacity-100 focus-visible:opacity-100 group-hover/item:opacity-100"
               >
                 <svg viewBox="0 0 16 16" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
                   <path d="M4 4l8 8M12 4l-8 8" />
@@ -1477,45 +1524,38 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
           )
         })}
       </ol>
-      <button
-        type="button"
-        onClick={() => pickRef.current?.click()}
-        className="press flex items-center justify-center gap-[8px] rounded-nav p-[10px] text-small text-ink ring-1 ring-inset ring-rule hover:bg-panel-soft"
-      >
-        + Weitere Dateien
-      </button>
+      <Button size="sm" variant="quiet" className="self-start" onClick={() => pickRef.current?.click()}>
+        Weitere Dateien
+      </Button>
     </section>
   )
 
+  // Playing on while another tool is open: a small stage of its own in the
+  // corner — it floats over the sheet, so it carries the one shadow.
   const miniBar =
     hidden && current ? (
-      <div className="fixed bottom-4 right-4 left-4 z-50 flex items-center gap-3 rounded-card bg-stage/95 p-3 text-white shadow-2xl ring-1 ring-white/15 backdrop-blur-md sm:left-auto sm:right-6 sm:w-[420px]">
+      <div className="fixed inset-x-[12px] bottom-[12px] z-50 flex items-center gap-[12px] rounded-card bg-stage p-[10px] text-stage-ink ring-1 ring-inset ring-stage-line elevate-lift sm:left-auto sm:right-[24px] sm:w-[400px]">
         <button
           type="button"
           onClick={toggle}
           aria-label={playing ? 'Pause' : 'Abspielen'}
-          className="press grid h-10 w-10 shrink-0 place-items-center rounded-pill bg-white/15 text-white hover:bg-white/25"
+          className="press grid h-[40px] w-[40px] shrink-0 place-items-center rounded-pill bg-stage-ink text-stage hover:bg-stage-accent"
         >
-          {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+          {playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
         </button>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-small font-semibold text-white">{title}</p>
-          <div className="flex items-center justify-between text-micro text-white/60">
-            <span>{clock(time)}</span>
-            <span>{clock(duration)}</span>
+        <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
+          <p className="truncate text-small font-semibold">{title}</p>
+          <div className="h-[3px] w-full overflow-hidden rounded-pill bg-stage-line">
+            <div className="h-full bg-stage-accent" style={{ width: `${duration > 0 ? (time / duration) * 100 : 0}%` }} />
           </div>
-          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-pill bg-white/20">
-            <div
-              className="h-full bg-stage-accent transition-[width] duration-[var(--dur-fast)]"
-              style={{ width: `${duration > 0 ? (time / duration) * 100 : 0}%` }}
-            />
-          </div>
+          <p className="value text-micro leading-none text-stage-muted">
+            {clock(time)} / {clock(duration)}
+          </p>
         </div>
         <button
           type="button"
           onClick={() => setPanel('player')}
-          title="Im Player öffnen"
-          className="press shrink-0 rounded-pill bg-white/15 px-3 py-1.5 text-micro font-medium text-white hover:bg-white/25"
+          className="press shrink-0 rounded-nav px-[12px] py-[8px] text-small text-stage-ink ring-1 ring-inset ring-stage-line hover:bg-stage-soft"
         >
           Öffnen
         </button>
@@ -1544,6 +1584,11 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         .sondra-player.controls-up video::-webkit-media-text-track-container {
           transform: translateY(-72px);
         }
+        @media (max-width: 639px) {
+          .sondra-player.controls-up video::-webkit-media-text-track-container {
+            transform: translateY(-58px);
+          }
+        }
       `}</style>
 
       <div className={`grid gap-[20px] ${sideBySide ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
@@ -1555,13 +1600,13 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
             onPointerMove={wake}
             onPointerDown={wake}
             onPointerLeave={() => playing && setIdle(true)}
-            className={`sondra-player group/player isolate overflow-hidden bg-black text-white ${controlsShown && isVideo ? 'controls-up' : ''} ${
+            className={`sondra-player group/player isolate overflow-hidden text-white ${isVideo ? 'bg-black' : 'bg-stage'} ${controlsShown && isVideo ? 'controls-up' : ''} ${
               fullscreen ? 'relative h-screen' : fill ? 'fixed inset-0 z-[60] h-[100dvh]' : 'relative rounded-card elevate-lift'
             } ${!controlsShown ? 'cursor-none' : ''}`}
           >
             <div
               className={`relative flex items-center justify-center ${
-                immersive ? 'h-full' : isVideo ? (theater ? 'aspect-video max-h-[82vh] w-full' : 'aspect-video max-h-[72vh] w-full') : 'h-[300px] sm:h-[340px]'
+                immersive ? 'h-full' : isVideo ? (theater ? 'aspect-video max-h-[82vh] w-full' : 'aspect-video max-h-[72vh] w-full') : 'h-[300px] sm:h-[360px]'
               }`}
               onClick={(event) => {
                 if (event.target !== event.currentTarget && event.target !== videoRef.current) return
@@ -1671,24 +1716,30 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 ))}
               </video>
 
-              {/* A sound file: the mark's five bars, moving while it plays. */}
+              {/* A sound file: what plays, over its picture of the sound — the
+                  visualizer, or the mark's five bars when that is switched off.
+                  The bottom stays free for the controls. */}
               {!isVideo ? (
-                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[18px] px-[24px] text-center">
-                  <div
-                    aria-hidden
-                    className="absolute inset-0 opacity-70"
-                    style={{ background: 'radial-gradient(55% 75% at 50% 45%, color-mix(in srgb, var(--color-stage-accent) 20%, transparent), transparent 70%)' }}
-                  />
-                  <span className="relative flex h-[64px] items-center gap-[7px]" aria-hidden>
-                    {[0.55, 0.9, 1, 0.75, 0.45].map((height, bar) => (
-                      <span
-                        key={bar}
-                        className={`w-[10px] rounded-pill bg-stage-accent ${playing ? 'eq-bar' : ''}`}
-                        style={{ height: `${height * 100}%`, animationDelay: `${bar * 0.14}s`, opacity: playing ? 1 : 0.55 }}
-                      />
-                    ))}
-                  </span>
-                  <p className="relative max-w-full truncate text-subheading font-semibold text-white">{title}</p>
+                <div className="pointer-events-none absolute inset-x-0 top-0 bottom-[84px] flex flex-col gap-[16px] px-[20px] pt-[20px] sm:px-[28px] sm:pt-[28px]">
+                  <div className="relative grid min-h-0 flex-1 place-items-center">
+                    {showVisualizer ? (
+                      <canvas ref={visualizerCanvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
+                    ) : (
+                      <span className="flex h-[56px] items-center gap-[7px]" aria-hidden>
+                        {[0.55, 0.9, 1, 0.75, 0.45].map((height, bar) => (
+                          <span
+                            key={bar}
+                            className={`w-[9px] rounded-pill ${playing ? 'eq-bar bg-stage-accent' : 'bg-stage-line'}`}
+                            style={{ height: `${height * 100}%`, animationDelay: `${bar * 0.14}s` }}
+                          />
+                        ))}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-[2px]">
+                    <p className="truncate text-subheading font-semibold text-stage-ink">{title}</p>
+                    <p className="value truncate text-small text-stage-muted">{meta.join(' · ')}</p>
+                  </div>
                 </div>
               ) : null}
 
@@ -1696,7 +1747,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               {flash ? (
                 <span
                   key={flash.key}
-                  className="flash-out pointer-events-none absolute grid h-[64px] w-[64px] place-items-center rounded-pill bg-black/50 text-white backdrop-blur-sm"
+                  className="flash-out pointer-events-none absolute grid h-[56px] w-[56px] place-items-center rounded-pill bg-stage/80 text-stage-ink"
                   aria-hidden
                   onAnimationEnd={() => setFlash(null)}
                 >
@@ -1704,15 +1755,18 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 </span>
               ) : null}
 
-              {/* Paused: one large way back in. */}
+              {/* Paused: one large way back in. A phone's bar already has its
+                  play button right below, and the frame is too low for both. */}
               {!playing && !waiting && isVideo && sourceUrl && !failed && duration > 0 && !flash ? (
                 <button
                   type="button"
                   aria-label="Abspielen"
                   onClick={toggle}
-                  className="press absolute grid h-[76px] w-[76px] place-items-center rounded-pill bg-black/45 text-white ring-1 ring-white/25 backdrop-blur-md transition-transform duration-[var(--dur-fast)] hover:scale-105 hover:bg-black/60"
+                  className="press absolute hidden h-[68px] w-[68px] place-items-center rounded-pill bg-stage/80 text-stage-ink ring-1 ring-inset ring-white/15 transition-[transform,background-color] duration-[var(--dur-fast)] hover:scale-105 hover:bg-stage sm:grid"
                 >
-                  <PlayIcon size={32} />
+                  <span className="translate-x-[2px]">
+                    <PlayIcon size={28} />
+                  </span>
                 </button>
               ) : null}
 
@@ -1730,7 +1784,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                       <button
                         type="button"
                         onClick={() => known && void make(current, known, { reason: 'needed', remedy: 'picture', height: null, audioIndex: 0 })}
-                        className="press rounded-pill bg-white px-[20px] py-[10px] text-small font-semibold text-stage hover:bg-stage-accent"
+                        className="press rounded-nav bg-stage-ink px-[16px] py-[10px] text-small font-semibold text-stage hover:bg-stage-accent"
                       >
                         Umwandeln und abspielen
                       </button>
@@ -1741,11 +1795,11 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                         {STAND_TEXT[version.remedy].doing}
                         <span className="value ml-[10px] text-stage-muted">{Math.round(version.fraction * 100)} %</span>
                       </p>
-                      <div className="h-[4px] w-full max-w-[300px] overflow-hidden rounded-pill bg-white/15" aria-hidden>
+                      <div className="h-[4px] w-full max-w-[300px] overflow-hidden rounded-pill bg-stage-line" aria-hidden>
                         <div className="h-full rounded-pill bg-stage-accent transition-[width] duration-[var(--dur-fast)]" style={{ width: `${version.fraction * 100}%` }} />
                       </div>
                       {known ? <p className="max-w-[46ch] text-small leading-[1.5] text-stage-muted">{STAND_TEXT[version.remedy].why(known)}</p> : null}
-                      <button type="button" onClick={stopJob} className="press rounded-pill px-[16px] py-[8px] text-small ring-1 ring-inset ring-white/30 hover:bg-white/10">
+                      <button type="button" onClick={stopJob} className="press rounded-nav px-[14px] py-[8px] text-small ring-1 ring-inset ring-stage-line hover:bg-stage-soft">
                         Abbrechen
                       </button>
                     </>
@@ -1770,7 +1824,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   <button
                     type="button"
                     onClick={() => setFill(false)}
-                    className="press pointer-events-auto shrink-0 rounded-pill bg-black/45 px-[14px] py-[6px] text-small ring-1 ring-white/20 backdrop-blur-md hover:bg-black/65"
+                    className="press pointer-events-auto shrink-0 rounded-nav bg-stage/80 px-[12px] py-[8px] text-small ring-1 ring-inset ring-white/15 hover:bg-stage"
                   >
                     Zurück zur Seite <span className="value text-white/60">Esc</span>
                   </button>
@@ -1779,7 +1833,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
             ) : null}
 
             {resume !== null && !waiting ? (
-              <div className={`pop absolute left-[14px] z-10 flex items-center gap-[2px] rounded-pill bg-black/65 p-[4px] text-small text-white ring-1 ring-white/15 backdrop-blur-md ${immersive ? 'top-[64px]' : 'top-[14px]'}`}>
+              <div className={`pop absolute left-[12px] z-10 flex items-center gap-[2px] rounded-nav bg-stage/90 p-[4px] text-small text-stage-ink ring-1 ring-inset ring-white/10 ${immersive ? 'top-[64px]' : 'top-[12px]'}`}>
                 <button
                   type="button"
                   onClick={() => {
@@ -1787,11 +1841,11 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     setResume(null)
                     void video()?.play().catch(() => undefined)
                   }}
-                  className="press rounded-pill px-[12px] py-[6px] hover:bg-white/15"
+                  className="press rounded-[7px] px-[10px] py-[6px] hover:bg-white/10"
                 >
                   Weiter bei <span className="value">{clock(resume)}</span>
                 </button>
-                <button type="button" onClick={() => setResume(null)} className="press rounded-pill px-[10px] py-[6px] text-white/75 hover:bg-white/15 hover:text-white">
+                <button type="button" onClick={() => setResume(null)} className="press rounded-[7px] px-[10px] py-[6px] text-stage-muted hover:bg-white/10 hover:text-stage-ink">
                   Von vorn
                 </button>
               </div>
@@ -1799,13 +1853,13 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
             {version?.reason === 'chosen' && version.error && !version.started ? (
               <div
-                className={`pop absolute right-[14px] z-10 flex max-w-[calc(100%-28px)] items-center gap-[10px] rounded-pill bg-black/75 py-[6px] pl-[14px] pr-[6px] text-small text-white ring-1 ring-white/15 backdrop-blur-md ${immersive ? 'top-[64px]' : 'top-[14px]'}`}
+                className={`pop absolute right-[12px] z-10 flex max-w-[calc(100%-24px)] items-center gap-[10px] rounded-nav bg-stage/90 py-[4px] pl-[12px] pr-[4px] text-small text-stage-ink ring-1 ring-inset ring-white/10 ${immersive ? 'top-[64px]' : 'top-[12px]'}`}
                 role="alert"
               >
                 <span className="truncate">
                   {version.height ? `${version.height}p` : 'Tonspur'} nicht möglich: {version.error}
                 </span>
-                <button type="button" onClick={() => dropVersion(current.id)} className="press shrink-0 rounded-pill px-[10px] py-[2px] text-white/75 hover:bg-white/15 hover:text-white">
+                <button type="button" onClick={() => dropVersion(current.id)} className="press shrink-0 rounded-[7px] px-[10px] py-[6px] text-stage-muted hover:bg-white/10 hover:text-stage-ink">
                   Schliessen
                 </button>
               </div>
@@ -1813,13 +1867,13 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
             {making && version?.reason === 'chosen' ? (
               <div
-                className={`pop absolute right-[14px] z-10 flex items-center gap-[10px] rounded-pill bg-black/65 py-[6px] pl-[14px] pr-[6px] text-small text-white ring-1 ring-white/15 backdrop-blur-md ${immersive ? 'top-[64px]' : 'top-[14px]'}`}
+                className={`pop absolute right-[12px] z-10 flex items-center gap-[10px] rounded-nav bg-stage/90 py-[4px] pl-[12px] pr-[4px] text-small text-stage-ink ring-1 ring-inset ring-white/10 ${immersive ? 'top-[64px]' : 'top-[12px]'}`}
                 role="status"
               >
                 <span>
-                  {version.height ? `${version.height}p wird erstellt` : 'Tonspur wird umgestellt'} <span className="value text-white/70">{Math.round(version.fraction * 100)} %</span>
+                  {version.height ? `${version.height}p wird erstellt` : 'Tonspur wird umgestellt'} <span className="value text-stage-muted">{Math.round(version.fraction * 100)} %</span>
                 </span>
-                <button type="button" onClick={stopJob} className="press rounded-pill px-[10px] py-[2px] text-white/75 hover:bg-white/15 hover:text-white">
+                <button type="button" onClick={stopJob} className="press rounded-[7px] px-[10px] py-[6px] text-stage-muted hover:bg-white/10 hover:text-stage-ink">
                   Abbrechen
                 </button>
               </div>
@@ -1864,7 +1918,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                       value={settings.muted ? 0 : settings.volume}
                       aria-label="Lautstärke"
                       onChange={(event) => updateSettings({ volume: Number(event.target.value), muted: false })}
-                      style={{ '--color-ink': '#ffffff', width: 80, marginLeft: 6 } as CSSProperties}
+                      style={{ '--color-ink': 'var(--color-stage-ink)', width: 80, marginLeft: 6 } as CSSProperties}
                     />
                   </span>
                 </div>
@@ -1873,43 +1927,48 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   type="button"
                   onClick={() => setRemaining((value) => !value)}
                   title="Zwischen Laufzeit und Restzeit wechseln"
-                  className="press value ml-[4px] min-w-0 truncate rounded-pill px-[8px] py-[6px] text-small text-white hover:bg-white/10"
+                  className="press value ml-[2px] shrink-0 whitespace-nowrap rounded-pill px-[8px] py-[6px] text-small text-white hover:bg-white/10"
                 >
                   {remaining ? `−${clock(Math.max(0, duration - time))}` : clock(time)}
-                  <span className="text-white/60"> / {clock(duration)}</span>
+                  <span className="text-white/70"> / {clock(duration)}</span>
                 </button>
 
-                {/* A-B Loop button */}
+                {/* A–B: the first press marks the start, the second the end,
+                    the third lets go. Two-handed practice, not an everyday
+                    control — so not on a phone's narrow bar. */}
                 <button
                   type="button"
                   onClick={toggleLoopAB}
+                  data-own-focus
+                  aria-pressed={loopA !== null && loopB !== null}
                   title={
                     loopA === null
-                      ? 'A-B Loop: Klick setzt Startpunkt A'
+                      ? 'Schleife A–B: hier beginnen'
                       : loopB === null
-                        ? `A gesetzt (${clock(loopA)}) — Klick setzt Endpunkt B`
-                        : `A-B Loop aktiv (${clock(loopA)}–${clock(loopB)}) — Klick zum Beenden`
+                        ? `Beginnt bei ${clock(loopA)} — hier enden lassen`
+                        : `Schleife ${clock(loopA)}–${clock(loopB)} — beenden`
                   }
-                  className={`press value ml-[6px] flex items-center gap-[4px] rounded-pill px-[8px] py-[4px] text-small transition-colors ${
-                    loopA !== null && loopB !== null
-                      ? 'bg-stage-accent text-white font-semibold ring-1 ring-white/30'
-                      : loopA !== null
-                        ? 'bg-white/20 text-white font-medium ring-1 ring-white/20'
-                        : 'text-white/70 hover:bg-white/10 hover:text-white'
-                  }`}
+                  className="press relative ml-[2px] hidden h-[40px] shrink-0 items-center gap-[6px] rounded-pill px-[10px] text-small text-white outline-none transition-colors duration-[var(--dur-fast)] hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white sm:flex"
                 >
-                  <span className="text-[11px] font-bold tracking-tight">A-B</span>
-                  {loopA !== null && loopB !== null ? (
-                    <span className="text-micro opacity-90">{clock(loopA)}–{clock(loopB)}</span>
-                  ) : loopA !== null ? (
-                    <span className="text-micro opacity-90">{clock(loopA)}→</span>
+                  <span className="font-semibold">{loopA !== null && loopB === null ? 'A …' : 'A–B'}</span>
+                  {loopA !== null ? (
+                    <span className="value hidden text-white/80 lg:inline">
+                      {clock(loopA)}
+                      {loopB !== null ? `–${clock(loopB)}` : ''}
+                    </span>
+                  ) : null}
+                  {loopA !== null ? (
+                    <span
+                      className={`absolute bottom-[5px] left-1/2 h-[3px] w-[14px] -translate-x-1/2 rounded-pill ${loopB !== null ? 'bg-stage-accent' : 'bg-white/60'}`}
+                      aria-hidden
+                    />
                   ) : null}
                 </button>
 
                 <span className="flex-1" />
 
                 {settings.rate !== 1 ? (
-                  <span className="value mr-[4px] hidden rounded-pill bg-white/15 px-[8px] py-[2px] text-micro sm:inline">{rateLabel(settings.rate)}</span>
+                  <span className="value mr-[4px] hidden rounded-pill px-[8px] py-[2px] text-small text-white ring-1 ring-inset ring-white/30 sm:inline">{rateLabel(settings.rate)}</span>
                 ) : null}
                 {isVideo ? (
                   <Control
@@ -1948,65 +2007,31 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               </div>
             </div>
 
-            {menuOpen ? (
-              <SettingsMenu
-                kind={current.kind}
-                settings={settings}
-                update={updateSettings}
-                quality={qualityState}
-                onQuality={(quality) => void chooseQuality(quality)}
-                onProbe={() => void probe(current)}
-                captions={{ tracks: captionLabels, current: captions }}
-                onCaption={setCaptions}
-                onLoadCaptions={() => subtitlePickRef.current?.click()}
-                audio={trackState}
-                onAudio={(at) => void chooseAudio(at)}
-                onClose={() => setMenuOpen(false)}
-              />
-            ) : null}
+            {menuOpen && !menuBelow ? settingsMenu : null}
           </div>
 
-          {/* Audio Visualizer */}
-          {settings.visualizer ? (
-            <div
-              className="group relative h-[44px] w-full cursor-pointer overflow-hidden rounded-card bg-stage/85 px-[12px] py-[6px] ring-1 ring-white/10 select-none transition-opacity hover:opacity-95"
-              onClick={() => {
-                const nextMode: Record<string, 'bars' | 'wave' | 'radial'> = {
-                  bars: 'wave',
-                  wave: 'radial',
-                  radial: 'bars',
-                }
-                updateSettings({ visualizerMode: nextMode[settings.visualizerMode] ?? 'bars' })
-              }}
-              title="Klicken: Stil wechseln (Balken · Welle · Radial)"
-            >
-              <canvas ref={visualizerCanvasRef} width={640} height={44} className="h-full w-full" />
-              <div className="pointer-events-none absolute right-[8px] top-[6px] rounded-pill bg-black/50 px-[6px] py-[1px] text-[10px] font-medium tracking-wide text-white/80 opacity-0 transition-opacity group-hover:opacity-100">
-                {settings.visualizerMode === 'bars' ? 'Balken' : settings.visualizerMode === 'wave' ? 'Oszilloskop' : 'Radial'}
-              </div>
-            </div>
-          ) : null}
+          {/* A frame too low for the menu — a phone, a sound file — opens it
+              underneath instead of squeezing it between title and controls. */}
+          {menuOpen && menuBelow ? settingsMenu : null}
 
-          {/* Under the picture: what it is, and where else it can go. */}
-          <div className="flex flex-wrap items-start justify-between gap-[12px]">
-            <div className="flex min-w-0 flex-col gap-[4px]">
-              <h2 className="truncate text-subheading font-semibold text-ink" title={current.name}>
-                {title}
-              </h2>
-              <p className="value text-small text-muted">{meta.join(' · ')}</p>
-            </div>
-            <div className="flex flex-wrap gap-[8px]">
-              <Button size="sm" variant="quiet" onClick={() => pickRef.current?.click()}>
-                Dateien öffnen
-              </Button>
-              <Button size="sm" variant="quiet" onClick={() => void openInEditor()}>
-                Bearbeiten
-              </Button>
-            </div>
+          {/* Under the picture: what it is, and where else it can go. A sound
+              file already says its name on the stage. */}
+          <div className={`flex flex-wrap items-start gap-[12px] ${isVideo ? 'justify-between' : 'justify-end'}`}>
+            {isVideo ? (
+              <div className="flex min-w-0 flex-col gap-[4px]">
+                <h2 className="truncate text-subheading font-semibold text-ink" title={current.name}>
+                  {title}
+                </h2>
+                <p className="value text-small text-muted">{meta.join(' · ')}</p>
+              </div>
+            ) : null}
+            <Button size="sm" variant="quiet" onClick={() => void openInEditor()}>
+              {current.kind === 'audio' ? 'Im Ton-Editor öffnen' : 'Im Video-Editor öffnen'}
+            </Button>
           </div>
           {current.size > 1.5e9 ? (
             <p className="text-small text-muted">
-              „Bearbeiten“ nimmt die Datei in die Sitzung und damit in den Speicher — bei{' '}
+              Der Editor nimmt die Datei in die Sitzung und damit in den Speicher — bei{' '}
               <span className="value">{formatBytes(current.size)}</span> kann das den Tab überfordern. Abspielen liest sie von der
               Festplatte.
             </p>

@@ -408,7 +408,7 @@ try {
   await step('Herunterladen: direkte Adresse', async () => {
     await go('herunterladen')
     await page.getByLabel(/Adresse.*Herunterladen/).fill('https://www.sondra.lizge.ch/icon-512.png')
-    await page.getByRole('button', { name: 'Nachsehen' }).click()
+    await page.getByRole('button', { name: 'Nachsehen', exact: true }).click()
     const before = await sessionCount()
     await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 60_000 })
     await page.waitForFunction(
@@ -426,7 +426,7 @@ try {
   await step('Herunterladen: Dienst der App mit yt-dlp', async () => {
     await go('herunterladen')
     await page.getByLabel(/Adresse.*Herunterladen/).fill('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4')
-    await page.getByRole('button', { name: 'Nachsehen' }).click()
+    await page.getByRole('button', { name: 'Nachsehen', exact: true }).click()
     const before = await sessionCount()
     await page.getByRole('button', { name: 'Laden' }).first().click({ timeout: 120_000 })
     await page.waitForFunction(
@@ -510,7 +510,7 @@ try {
   await step('Herunterladen: YouTube (nur Hinweis)', async () => {
     await go('herunterladen')
     await page.getByLabel(/Adresse.*Herunterladen/).fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
-    await page.getByRole('button', { name: 'Nachsehen' }).click()
+    await page.getByRole('button', { name: 'Nachsehen', exact: true }).click()
     await page.waitForFunction(
       () => /Laden|Hat nicht geklappt/.test(document.querySelector('main')?.innerText ?? ''),
       null,
