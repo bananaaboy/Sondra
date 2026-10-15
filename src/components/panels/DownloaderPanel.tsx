@@ -299,6 +299,8 @@ interface BatchItem {
   error?: string
   progress?: { loaded: number; total: number | null } | null
   taken?: { name: string; bytes: Uint8Array; mime: string }
+  groupId?: string
+  groupTitle?: string
 }
 
 interface NetworkAdapter {
@@ -537,6 +539,7 @@ export function DownloaderPanel() {
   const [batchEntries, setBatchEntries] = useState<BatchItem[] | null>(null)
   /** A playlist's or season's own title, as the archive's suggested name. */
   const [batchTitle, setBatchTitle] = useState<string | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const batchEntriesRef = useRef<BatchItem[] | null>(null)
   batchEntriesRef.current = batchEntries
 
@@ -641,13 +644,20 @@ export function DownloaderPanel() {
         const found = await resolveViaService(targets[0], controller.signal)
         if (found.isPlaylist) {
           log('holen', `Staffel / Playlist erkannt: ${found.title} (${found.items.length} Titel)`)
+          const gId = targets[0]
+          const gTitle = found.title || 'Playlist'
           const playlistItems: BatchItem[] = found.items.map((item) => ({
             url: item.url,
             titleHint: item.title,
             status: 'pending',
+            groupId: gId,
+            groupTitle: gTitle,
           }))
           setBatchEntries(playlistItems)
           setBatchTitle(found.title || null)
+          if (playlistItems.length > 3) {
+            setCollapsedGroups({ [gId]: true })
+          }
 
           // Alle Einträge im Hintergrund auflösen (mit maximal concurrency parallelen Workern)
           let cursor = 0
@@ -679,10 +689,19 @@ export function DownloaderPanel() {
     }
 
     // Mehrere Adressen: Batch-Modus
-    const initial: BatchItem[] = targets.map((u) => ({
-      url: u,
-      status: 'pending',
-    }))
+    const initial: BatchItem[] = targets.map((u, i) => {
+      let host = u
+      try {
+        host = new URL(u).hostname.replace(/^www\./, '')
+      } catch {}
+      return {
+        url: u,
+        titleHint: `Link ${i + 1} (${host})`,
+        status: 'pending',
+        groupId: u,
+        groupTitle: `Link ${i + 1} (${host})`,
+      }
+    })
     setBatchEntries(initial)
     setLooking(false)
 
@@ -718,9 +737,37 @@ export function DownloaderPanel() {
       try {
         const res = await resolveViaService(entry.url, signal)
         if (res.isPlaylist) {
-          setBatchEntries((prev) =>
-            prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'error', error: 'Verschachtelte Playlist nicht unterstützt' } : e)) : null,
-          )
+          if (res.items?.length) {
+            log('holen', `Playlist / Staffel aufgelöst: ${res.title} (${res.items.length} Titel)`)
+            const gId = entry.groupId || entry.url
+            const gTitle = res.title || entry.groupTitle || 'Playlist'
+            const expanded: BatchItem[] = res.items.map((item) => ({
+              url: item.url,
+              titleHint: item.title,
+              status: 'pending',
+              groupId: gId,
+              groupTitle: gTitle,
+            }))
+            setBatchEntries((prev) => {
+              if (!prev) return null
+              const copy = [...prev]
+              copy.splice(index, 1, ...expanded)
+              return copy
+            })
+            if (expanded.length > 3) {
+              setCollapsedGroups((prev) => ({ ...prev, [gId]: true }))
+            }
+            setTimeout(() => {
+              const cur = batchEntriesRef.current
+              if (cur) {
+                cur.forEach((it, idx) => {
+                  if (it.groupId === gId && it.status === 'pending') {
+                    void resolveBatchItem(idx, signal)
+                  }
+                })
+              }
+            }, 30)
+          }
           return
         }
         const audioStream = res.streams.find((s) => !s.hasVideo && s.hasAudio)
@@ -1565,154 +1612,315 @@ export function DownloaderPanel() {
             </div>
           ) : null}
 
-          {/* One row per entry, divided by a line — they were boxes on a
-              tint, a card per row. */}
-          <ol className="flex flex-col divide-y divide-line">
-            {batchEntries.map((entry, index) => {
-              const stream =
-                entry.result?.streams.find((s) => s.id === entry.selectedStreamId) ||
-                entry.result?.streams[0]
+          {/* Master toolbar for Collapsing / Expanding groups */}
+          <div className="flex flex-wrap items-center justify-between gap-[8px] bg-wash/50 px-[12px] py-[8px] rounded-field text-small border border-line">
+            <div className="flex items-center gap-[8px] text-muted">
+              <span>
+                {Array.from(new Set(batchEntries.map((e) => e.groupId || 'default'))).length > 1
+                  ? `${Array.from(new Set(batchEntries.map((e) => e.groupId || 'default'))).length} Listen / Quellen`
+                  : '1 Liste'}
+              </span>
+              <span>·</span>
+              <span className="font-medium text-ink">{batchEntries.length} Einträge gesamt</span>
+            </div>
+            <div className="flex items-center gap-[8px]">
+              <button
+                type="button"
+                onClick={() => {
+                  const allGroups = Array.from(new Set(batchEntries.map((e) => e.groupId || 'default')))
+                  const next: Record<string, boolean> = {}
+                  allGroups.forEach((g) => {
+                    next[g] = false
+                  })
+                  setCollapsedGroups(next)
+                }}
+                className="press text-caption font-semibold text-ink hover:underline"
+              >
+                Alle ausklappen ▼
+              </button>
+              <span>·</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const allGroups = Array.from(new Set(batchEntries.map((e) => e.groupId || 'default')))
+                  const next: Record<string, boolean> = {}
+                  allGroups.forEach((g) => {
+                    next[g] = true
+                  })
+                  setCollapsedGroups(next)
+                }}
+                className="press text-caption font-semibold text-muted hover:text-ink hover:underline"
+              >
+                Alle einklappen ▲
+              </button>
+            </div>
+          </div>
 
-              return (
-                <li key={`${index}-${entry.url}`} className="flex max-w-none flex-col gap-[8px] py-[12px]">
-                  <div className="flex flex-wrap items-center justify-between gap-[8px]">
-                    <div className="min-w-0 flex-1">
-                      {entry.result ? (
-                        <p className="truncate text-body font-medium text-ink">
-                          {stealthMode !== 'off'
-                            ? filenameFor(entry.result, stream || entry.result.streams[0], { mode: stealthMode })
-                            : entry.result.title}
-                        </p>
-                      ) : (
-                        <p className="truncate text-body font-medium text-ink">
-                          {entry.titleHint || entry.url}
-                        </p>
-                      )}
-                      {entry.result && stealthMode === 'off' ? (
-                        <p className="value text-small text-muted">
-                          {[entry.result.author, entry.result.durationSeconds ? formatDuration(entry.result.durationSeconds) : null]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </p>
-                      ) : null}
-                    </div>
+          {(() => {
+            const groupMap = new Map<
+              string,
+              { id: string; title: string; items: { entry: BatchItem; originalIndex: number }[] }
+            >()
+            batchEntries.forEach((entry, idx) => {
+              const gId = entry.groupId || 'default'
+              const gTitle =
+                entry.groupTitle ||
+                (entry.titleHint && !entry.titleHint.startsWith('http')
+                  ? entry.titleHint
+                  : batchTitle || 'Downloads')
+              if (!groupMap.has(gId)) {
+                groupMap.set(gId, { id: gId, title: gTitle, items: [] })
+              }
+              groupMap.get(gId)!.items.push({ entry, originalIndex: idx })
+            })
 
-                    <div className="flex flex-wrap items-center gap-[8px]">
-                      {entry.status === 'pending' ? (
-                        <>
-                          <span className="value text-small text-muted">Bereit</span>
-                          <Button
-                            size="sm"
-                            disabled={batchBusy}
-                            onClick={() => void takeBatchItem(index)}
+            const groups = Array.from(groupMap.values())
+
+            return (
+              <div className="flex flex-col gap-[16px]">
+                {groups.map((group) => {
+                  const isCollapsed = collapsedGroups[group.id] ?? (group.items.length > 3)
+                  const doneCount = group.items.filter((i) => i.entry.status === 'done').length
+                  const errorCount = group.items.filter((i) => i.entry.status === 'error').length
+                  const activeCount = group.items.filter(
+                    (i) => i.entry.status === 'downloading' || i.entry.status === 'resolving',
+                  ).length
+                  const visibleItems = isCollapsed ? group.items.slice(0, 3) : group.items
+
+                  return (
+                    <div
+                      key={group.id}
+                      className="rounded-card border border-line bg-wash/30 p-[12px] flex flex-col gap-[8px]"
+                    >
+                      {/* Group Header Bar with count, progress badge, and collapse toggle */}
+                      <div className="flex flex-wrap items-center justify-between gap-[8px] pb-[8px] border-b border-line">
+                        <div className="flex items-center gap-[8px] min-w-0">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCollapsedGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))
+                            }
+                            className="flex items-center gap-[6px] text-left hover:underline"
                           >
-                            Laden
-                          </Button>
-                        </>
-                      ) : null}
-
-                      {entry.status === 'resolving' ? (
-                        <>
-                          <span className="value text-small text-muted">Wird gesucht …</span>
-                          <Button size="sm" variant="quiet" disabled>
-                            Laden
-                          </Button>
-                        </>
-                      ) : null}
-
-                      {entry.status === 'ready' && entry.result ? (
-                        <>
-                          {entry.result.streams.length > 1 ? (
-                            <Select
-                              aria-label="Fassung"
-                              value={entry.selectedStreamId}
-                              disabled={batchBusy}
-                              onChange={(e) => {
-                                const val = e.target.value
-                                setBatchEntries((prev) =>
-                                  prev
-                                    ? prev.map((item, idx) =>
-                                        idx === index ? { ...item, selectedStreamId: val } : item
-                                      )
-                                    : null
-                                )
-                              }}
-                              className="w-auto! max-w-[280px] py-[6px]"
-                            >
-                              {entry.result.streams.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.label} ({s.ext.toUpperCase()}{s.bytes ? ` · ${formatBytes(s.bytes)}` : ''})
-                                </option>
-                              ))}
-                            </Select>
-                          ) : stream ? (
-                            <span className="value text-small text-muted">
-                              {stream.ext.toUpperCase()}
-                              {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
+                            <span className="text-body font-bold text-ink truncate">📁 {group.title}</span>
+                            <span className="rounded-full bg-accent/15 px-[8px] py-[1px] text-caption font-semibold text-accent shrink-0">
+                              {group.items.length} {group.items.length === 1 ? 'Titel' : 'Titel'}
                             </span>
-                          ) : null}
-
-                          <Button
-                            size="sm"
-                            disabled={batchBusy}
-                            onClick={() => void takeBatchItem(index)}
-                          >
-                            Laden
-                          </Button>
-                        </>
-                      ) : null}
-
-                      {entry.status === 'downloading' ? (
-                        <span className="value text-small text-muted">Wird geladen …</span>
-                      ) : null}
-
-                      {entry.status === 'done' && entry.taken ? (
+                          </button>
+                          <span className="text-small text-muted hidden sm:inline">
+                            ({doneCount}/{group.items.length} geladen
+                            {errorCount > 0 ? ` · ${errorCount} Fehler` : ''}
+                            {activeCount > 0 ? ` · ${activeCount} aktiv` : ''})
+                          </span>
+                        </div>
                         <div className="flex items-center gap-[8px]">
-                          <span className="value text-small font-medium text-ink">In der Sitzung</span>
                           <Button
                             size="sm"
                             variant="quiet"
-                            onClick={() => saveBytes(entry.taken!.bytes, entry.taken!.name, entry.taken!.mime)}
+                            onClick={() =>
+                              setCollapsedGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))
+                            }
                           >
-                            Speichern
+                            {isCollapsed ? `Ausklappen (${group.items.length}) ▼` : 'Kompakt einklappen ▲'}
                           </Button>
                         </div>
-                      ) : null}
+                      </div>
 
-                      {entry.status === 'error' ? (
-                        <Button
-                          size="sm"
-                          variant="quiet"
-                          disabled={batchBusy}
-                          onClick={() => void takeBatchItem(index)}
+                      {/* Items List */}
+                      <ol className="flex flex-col divide-y divide-line">
+                        {visibleItems.map(({ entry, originalIndex }) => {
+                          const stream =
+                            entry.result?.streams.find((s) => s.id === entry.selectedStreamId) ||
+                            entry.result?.streams[0]
+
+                          return (
+                            <li
+                              key={`${originalIndex}-${entry.url}`}
+                              className="flex max-w-none flex-col gap-[8px] py-[12px]"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-[8px]">
+                                <div className="min-w-0 flex-1">
+                                  {entry.result ? (
+                                    <p className="truncate text-body font-medium text-ink">
+                                      {stealthMode !== 'off'
+                                        ? filenameFor(entry.result, stream || entry.result.streams[0], {
+                                            mode: stealthMode,
+                                          })
+                                        : entry.result.title}
+                                    </p>
+                                  ) : (
+                                    <p className="truncate text-body font-medium text-ink">
+                                      {entry.titleHint || entry.url}
+                                    </p>
+                                  )}
+                                  {entry.result && stealthMode === 'off' ? (
+                                    <p className="value text-small text-muted">
+                                      {[
+                                        entry.result.author,
+                                        entry.result.durationSeconds
+                                          ? formatDuration(entry.result.durationSeconds)
+                                          : null,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                    </p>
+                                  ) : null}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-[8px]">
+                                  {entry.status === 'pending' ? (
+                                    <>
+                                      <span className="value text-small text-muted">Bereit</span>
+                                      <Button
+                                        size="sm"
+                                        disabled={batchBusy}
+                                        onClick={() => void takeBatchItem(originalIndex)}
+                                      >
+                                        Laden
+                                      </Button>
+                                    </>
+                                  ) : null}
+
+                                  {entry.status === 'resolving' ? (
+                                    <>
+                                      <span className="value text-small text-muted">Wird gesucht …</span>
+                                      <Button size="sm" variant="quiet" disabled>
+                                        Laden
+                                      </Button>
+                                    </>
+                                  ) : null}
+
+                                  {entry.status === 'ready' && entry.result ? (
+                                    <>
+                                      {entry.result.streams.length > 1 ? (
+                                        <Select
+                                          aria-label="Fassung"
+                                          value={entry.selectedStreamId}
+                                          disabled={batchBusy}
+                                          onChange={(e) => {
+                                            const val = e.target.value
+                                            setBatchEntries((prev) =>
+                                              prev
+                                                ? prev.map((item, idx) =>
+                                                    idx === originalIndex
+                                                      ? { ...item, selectedStreamId: val }
+                                                      : item,
+                                                  )
+                                                : null,
+                                            )
+                                          }}
+                                          className="w-auto! max-w-[280px] py-[6px]"
+                                        >
+                                          {entry.result.streams.map((s) => (
+                                            <option key={s.id} value={s.id}>
+                                              {s.label} ({s.ext.toUpperCase()}
+                                              {s.bytes ? ` · ${formatBytes(s.bytes)}` : ''})
+                                            </option>
+                                          ))}
+                                        </Select>
+                                      ) : stream ? (
+                                        <span className="value text-small text-muted">
+                                          {stream.ext.toUpperCase()}
+                                          {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
+                                        </span>
+                                      ) : null}
+
+                                      <Button
+                                        size="sm"
+                                        disabled={batchBusy}
+                                        onClick={() => void takeBatchItem(originalIndex)}
+                                      >
+                                        Laden
+                                      </Button>
+                                    </>
+                                  ) : null}
+
+                                  {entry.status === 'downloading' ? (
+                                    <span className="value text-small text-muted">Wird geladen …</span>
+                                  ) : null}
+
+                                  {entry.status === 'done' && entry.taken ? (
+                                    <div className="flex items-center gap-[8px]">
+                                      <span className="value text-small font-medium text-ink">In der Sitzung</span>
+                                      <Button
+                                        size="sm"
+                                        variant="quiet"
+                                        onClick={() =>
+                                          saveBytes(entry.taken!.bytes, entry.taken!.name, entry.taken!.mime)
+                                        }
+                                      >
+                                        Speichern
+                                      </Button>
+                                    </div>
+                                  ) : null}
+
+                                  {entry.status === 'error' ? (
+                                    <Button
+                                      size="sm"
+                                      variant="quiet"
+                                      disabled={batchBusy}
+                                      onClick={() => void takeBatchItem(originalIndex)}
+                                    >
+                                      Erneut versuchen
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              {entry.status === 'error' ? (
+                                <p className="flex gap-[8px] text-small leading-[1.5] text-prose">
+                                  <span className="font-semibold text-ink" aria-hidden>
+                                    !
+                                  </span>
+                                  {entry.error}
+                                </p>
+                              ) : null}
+
+                              {entry.status === 'downloading' && entry.progress ? (
+                                <Progress
+                                  value={
+                                    entry.progress.total
+                                      ? entry.progress.loaded / entry.progress.total
+                                      : null
+                                  }
+                                  label={`${formatBytes(entry.progress.loaded)}${
+                                    entry.progress.total ? ` von ${formatBytes(entry.progress.total)}` : ''
+                                  }`}
+                                />
+                              ) : null}
+                            </li>
+                          )
+                        })}
+                      </ol>
+
+                      {/* Collapsed footer toggle button */}
+                      {isCollapsed && group.items.length > 3 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCollapsedGroups((prev) => ({ ...prev, [group.id]: false }))
+                          }
+                          className="w-full py-[8px] text-center text-small font-medium text-muted hover:text-ink border-t border-dashed border-line bg-wash/40 hover:bg-wash transition-colors rounded-b-field"
                         >
-                          Erneut versuchen
-                        </Button>
+                          + {group.items.length - 3} weitere Einträge in dieser Liste ausklappen ▼
+                        </button>
+                      ) : !isCollapsed && group.items.length > 3 ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCollapsedGroups((prev) => ({ ...prev, [group.id]: true }))
+                          }
+                          className="w-full py-[6px] text-center text-small text-muted hover:text-ink border-t border-line"
+                        >
+                          ▲ Kompakt einklappen
+                        </button>
                       ) : null}
                     </div>
-                  </div>
-
-                  {entry.status === 'error' ? (
-                    <p className="flex gap-[8px] text-small leading-[1.5] text-prose">
-                      <span className="font-semibold text-ink" aria-hidden>
-                        !
-                      </span>
-                      {entry.error}
-                    </p>
-                  ) : null}
-
-                  {entry.status === 'downloading' && entry.progress ? (
-                    <Progress
-                      value={entry.progress.total ? entry.progress.loaded / entry.progress.total : null}
-                      label={`${formatBytes(entry.progress.loaded)}${
-                        entry.progress.total ? ` von ${formatBytes(entry.progress.total)}` : ''
-                      }`}
-                    />
-                  ) : null}
-                </li>
-              )
-            })}
-          </ol>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </Card>
       ) : null}
 

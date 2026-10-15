@@ -36,6 +36,7 @@ import {
   saveBytes,
   streamToDisk,
   TransferError,
+  isPortalUrl,
   type HlsPlaylist,
   type TransferProgress,
 } from '../../lib/download'
@@ -121,16 +122,6 @@ function writeServiceSettings(settings: ServiceSettings): void {
   }
 }
 
-/** Hosts a browser can never reach directly, so the hint can be specific. */
-const PORTAL_HOSTS = /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com)$/i
-
-function isPortalUrl(value: string): boolean {
-  try {
-    return PORTAL_HOSTS.test(new URL(value.trim()).hostname)
-  } catch {
-    return false
-  }
-}
 
 /**
  * Reads a stored value, falling back to the key this app used under its old

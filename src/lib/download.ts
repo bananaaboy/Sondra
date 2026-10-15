@@ -556,7 +556,7 @@ export async function streamToDisk(
 }
 
 export const PORTAL_HOSTS =
-  /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com|spotify\.com|podcasts\.apple\.com|threads\.net|snapchat\.com|patreon\.com|vk\.com|rumble\.com|odysee\.com|archive\.org|kick\.com|substack\.com|peertube\.[a-z]+|orf\.at|3sat\.de|ok\.ru|rutube\.ru|mixcloud\.com|bandcamp\.com|loom\.com|bluesky\.app|bsky\.app|aniworld\.to|s\.to|serienstream\.to|voe\.sx|filemoon\.(?:sx|to|in|nl|wf)|vidmoly\.(?:to|me|net)|doodstream\.com|dood\.(?:to|so|ws|wf)|streamtape\.com|vidoza\.net)$/i
+  /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|facebook\.com|fb\.watch|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com|streamable\.com|tumblr\.com|pinterest\.com|pin\.it|ardmediathek\.de|ard\.de|zdf\.de|arte\.tv|srf\.ch|spotify\.com|podcasts\.apple\.com|threads\.net|snapchat\.com|patreon\.com|vk\.com|rumble\.com|odysee\.com|archive\.org|kick\.com|substack\.com|peertube\.[a-z]+|orf\.at|3sat\.de|ok\.ru|rutube\.ru|mixcloud\.com|bandcamp\.com|loom\.com|bluesky\.app|bsky\.app|aniworld\.to|s\.to|serienstream\.to|voe\.sx|filemoon\.(?:sx|to|in|nl|wf)|vidmoly\.(?:to|me|net)|doodstream\.com|dood\.(?:to|so|ws|wf)|streamtape\.com|vidoza\.net)$/i
 
 export function isPortalUrl(value: string): boolean {
   try {
