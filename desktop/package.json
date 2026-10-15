@@ -68,6 +68,27 @@
       "deleteAppDataOnUninstall": false,
       "include": "installer.nsh"
     },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": ".build/icon.png",
+      "category": "public.app-category.music",
+      "artifactName": "Sondra-Mac-${arch}-${version}.${ext}"
+    },
     "linux": {
       "target": "dir"
     },

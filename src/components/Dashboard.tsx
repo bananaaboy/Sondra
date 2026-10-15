@@ -342,6 +342,20 @@ function renderTool(id: ToolPanelId, theme: ResolvedTheme) {
   }
 }
 
+function isToolReady(id: ToolPanelId, hasAssets: boolean): boolean {
+  if (hasAssets) return true
+  return (
+    id === 'start' ||
+    id === 'downloader' ||
+    id === 'video' ||
+    id === 'images' ||
+    id === 'audio' ||
+    id === 'mic' ||
+    id === 'screen' ||
+    id === 'mix'
+  )
+}
+
 export function Dashboard({ theme }: { theme: ResolvedTheme }) {
   usePrefetchTools()
   const panel = useSession((state) => state.panel)
@@ -359,21 +373,6 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     })
   }, [panel])
 
-  // The start screen and the downloader never wait for a file: one is the menu
-  // and the other is how files arrive. The three editors open on their own
-  // drop zone, which is a better empty state than a generic one.
-  const ready =
-    hasAssets ||
-    panel === 'start' ||
-    panel === 'downloader' ||
-    panel === 'video' ||
-    panel === 'images' ||
-    panel === 'audio' ||
-    panel === 'mic' ||
-    panel === 'screen' ||
-    panel === 'mix' ||
-    panel === 'player'
-
   return (
     <section id="studio" className="shell flex flex-col gap-[16px] pb-[16px] pt-[24px] sm:pt-[32px]">
       <RestoreOffer />
@@ -383,8 +382,8 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
       {TOOL_PANEL_IDS.map((id) => {
         if (!visitedPanels.has(id)) return null
         const isActive = panel === id
+        const isReady = isToolReady(id, hasAssets)
         const panelMeta = PANELS.find((entry) => entry.id === id)
-        const showEmptyState = isActive && !ready
 
         return (
           <div
@@ -395,8 +394,10 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
             hidden={!isActive}
             aria-hidden={!isActive}
           >
-            {showEmptyState ? (
-              <NothingLoaded label={panelMeta?.label ?? ''} summary={panelMeta?.summary ?? ''} />
+            {!isReady ? (
+              isActive ? (
+                <NothingLoaded label={panelMeta?.label ?? ''} summary={panelMeta?.summary ?? ''} />
+              ) : null
             ) : (
               <ErrorBoundary panel={id}>
                 <Suspense fallback={<ToolLoading />}>
