@@ -227,10 +227,11 @@ export function AudioEditorPanel() {
       setBusy(label)
       setError(null)
       await new Promise((resolve) => setTimeout(resolve, 16))
+      const maxHistorySteps = duration > 1800 ? 5 : duration > 600 ? 10 : 20
       try {
         const next = await operation(current)
         if (frameCount(next) === 0) throw new Error('Das hätte nichts übrig gelassen.')
-        setHistory((stack) => [...stack.slice(-19), { audio: current, label }])
+        setHistory((stack) => [...stack.slice(-(maxHistorySteps - 1)), { audio: current, label }])
         setFuture([])
         // A selection is a pair of timestamps, and an operation that changes
         // the length moves everything after it. Keeping the old marks would
@@ -249,28 +250,30 @@ export function AudioEditorPanel() {
         setBusy(null)
       }
     },
-    [current, log],
+    [current, duration, log],
   )
 
   const undo = useCallback(() => {
+    const maxHistorySteps = duration > 1800 ? 5 : duration > 600 ? 10 : 20
     setHistory((stack) => {
       const last = stack.at(-1)
       if (!last || !current) return stack
-      setFuture((ahead) => [{ audio: current, label: last.label }, ...ahead])
+      setFuture((ahead) => [{ audio: current, label: last.label }, ...ahead].slice(0, maxHistorySteps))
       setCurrent(last.audio)
       return stack.slice(0, -1)
     })
-  }, [current])
+  }, [current, duration])
 
   const redo = useCallback(() => {
+    const maxHistorySteps = duration > 1800 ? 5 : duration > 600 ? 10 : 20
     setFuture((ahead) => {
       const next = ahead[0]
       if (!next || !current) return ahead
-      setHistory((stack) => [...stack, { audio: current, label: next.label }])
+      setHistory((stack) => [...stack.slice(-(maxHistorySteps - 1)), { audio: current, label: next.label }])
       setCurrent(next.audio)
       return ahead.slice(1)
     })
-  }, [current])
+  }, [current, duration])
 
   // The clipboard handlers change with every render; the listener reads the
   // current ones through this ref instead of being re-attached each time.

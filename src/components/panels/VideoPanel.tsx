@@ -316,7 +316,53 @@ export function VideoPanel() {
   const abortRef = useRef<AbortController | null>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
 
-  const patch = (next: Partial<VideoOps>) => setOps((value) => ({ ...value, ...next }))
+  const [history, setHistory] = useState<VideoOps[]>([])
+  const [future, setFuture] = useState<VideoOps[]>([])
+
+  const patch = useCallback((next: Partial<VideoOps>) => {
+    setOps((current) => {
+      const updated = { ...current, ...next }
+      setHistory((stack) => [...stack.slice(-19), current])
+      setFuture([])
+      return updated
+    })
+  }, [])
+
+  const undo = useCallback(() => {
+    setHistory((stack) => {
+      const last = stack.at(-1)
+      if (!last) return stack
+      setFuture((ahead) => [ops, ...ahead].slice(0, 20))
+      setOps(last)
+      return stack.slice(0, -1)
+    })
+  }, [ops])
+
+  const redo = useCallback(() => {
+    setFuture((ahead) => {
+      const next = ahead[0]
+      if (!next) return ahead
+      setHistory((stack) => [...stack.slice(-19), ops])
+      setOps(next)
+      return ahead.slice(1)
+    })
+  }, [ops])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+      if (!(event.metaKey || event.ctrlKey)) return
+      const key = event.key.toLowerCase()
+      if (key === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) redo()
+        else undo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, redo])
 
   // What FFmpeg reads: the picked file where it lies, or the session's bytes.
   const fileBlob = useMemo(
@@ -331,6 +377,8 @@ export function VideoPanel() {
 
   useEffect(() => {
     setOps(DEFAULT_VIDEO_OPS)
+    setHistory([])
+    setFuture([])
     setOutcome(null)
     setError(null)
     setDuration(0)
@@ -677,6 +725,24 @@ export function VideoPanel() {
         }
         actions={
           <>
+            <IconButton
+              label="Rückgängig (Strg+Z)"
+              disabled={history.length === 0}
+              onClick={undo}
+            >
+              <svg viewBox="0 0 20 20" className="h-[17px] w-[17px]" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M4 8h8a4 4 0 010 8H9M4 8l3.5-3.5M4 8l3.5 3.5" />
+              </svg>
+            </IconButton>
+            <IconButton
+              label="Wiederholen (Strg+Umschalt+Z)"
+              disabled={future.length === 0}
+              onClick={redo}
+            >
+              <svg viewBox="0 0 20 20" className="h-[17px] w-[17px]" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M16 8H8a4 4 0 000 8h3M16 8l-3.5-3.5M16 8l-3.5 3.5" />
+              </svg>
+            </IconButton>
             <IconButton
               label="Alles zurücksetzen"
               onClick={() => {
