@@ -15,6 +15,7 @@ import {
   youtubeId,
 } from './_shared.js'
 import {
+  DEFAULT_USER_AGENT,
   extractDirectMedia,
   isAniworldUrl,
   isHosterUrl,
@@ -88,7 +89,10 @@ export function nameFrom(url, disposition) {
   const stated = filenameFrom(disposition)
   // Strip any path a server may have put in the header; the name is all we want.
   if (stated) return stated.split(/[\\/]/).pop() || 'download'
-  const last = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() ?? '')
+  let last = url.pathname.split('/').filter(Boolean).pop() ?? ''
+  try {
+    last = decodeURIComponent(last)
+  } catch {}
   return last && last.includes('.') ? last : 'download'
 }
 
@@ -116,8 +120,12 @@ export function sizeFrom(headers) {
  * can serve the file at all will answer correctly.
  */
 export async function probe(target) {
+  const headers = {
+    'User-Agent': DEFAULT_USER_AGENT,
+    Accept: '*/*',
+  }
   try {
-    const head = await fetch(target, { method: 'HEAD', redirect: 'follow' })
+    const head = await fetch(target, { method: 'HEAD', redirect: 'follow', headers })
     if (head.ok && head.headers.get('content-type')) return head
   } catch {
     // Fall through to the ranged GET below.
@@ -125,7 +133,7 @@ export async function probe(target) {
   const ranged = await fetch(target, {
     method: 'GET',
     redirect: 'follow',
-    headers: { Range: 'bytes=0-0' },
+    headers: { ...headers, Range: 'bytes=0-0' },
   })
   // The body is one byte and unused; releasing it keeps the socket from being
   // held open for the rest of the invocation.
@@ -160,7 +168,13 @@ export default async function handler(request, response) {
     return
   }
 
-  const body = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body ?? {})
+  let body = {}
+  try {
+    body = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : (request.body ?? {})
+  } catch {
+    response.status(400).json({ error: 'json', message: 'Ungültiges JSON im Anfragekörper.' })
+    return
+  }
   const raw = String(body.url ?? '').trim()
   if (!raw) {
     response.status(400).json({ error: 'empty', message: 'Es wurde keine Adresse übergeben.' })
@@ -247,6 +261,7 @@ export default async function handler(request, response) {
         const streams = []
         if (Array.isArray(media.streams) && media.streams.length > 0) {
           for (const s of media.streams) {
+            const safeUrl = s.url.startsWith('//') ? `https:${s.url}` : s.url
             streams.push({
               id: s.id,
               label: s.label || `${s.provider || 'Video'} (${s.language || 'Stream'})`,
@@ -257,10 +272,11 @@ export default async function handler(request, response) {
               ext: s.ext || (s.isHls ? 'mp4' : 'mp4'),
               mime: s.isHls ? 'application/x-mpegurl' : 'video/mp4',
               bytes: null,
-              token: sign(s.url, { ref: s.referer, isHls: s.isHls }),
+              token: sign(safeUrl, { ref: s.referer, isHls: Boolean(s.isHls) }),
             })
           }
         } else if (media.url) {
+          const safeUrl = media.url.startsWith('//') ? `https:${media.url}` : media.url
           streams.push({
             id: 'stream-0',
             label: `${media.hoster || 'Video'} · Stream (1080p)`,
@@ -271,7 +287,7 @@ export default async function handler(request, response) {
             ext: media.isHls ? 'mp4' : 'mp4',
             mime: media.isHls ? 'application/x-mpegurl' : 'video/mp4',
             bytes: null,
-            token: sign(media.url, { ref: media.referer, isHls: media.isHls }),
+            token: sign(safeUrl, { ref: media.referer, isHls: Boolean(media.isHls) }),
           })
         }
 
@@ -287,8 +303,16 @@ export default async function handler(request, response) {
         return
       }
     } catch {
-      // Fall through to probe below
+      // If error occurs, fall through to fallback error response
     }
+
+    response.status(422).json({
+      error: 'no-extractor',
+      message:
+        'Für dieses Video konnte kein aktiver Stream aufgelöst werden (die Quelle ist möglicherweise nicht mehr verfügbar oder geschützt). ' +
+        'Nutzen Sie die Sondra Windows-App oder die lokale yt-dlp-Brücke auf Ihrem PC, um das Video dennoch zu laden.',
+    })
+    return
   }
 
   /**
@@ -298,7 +322,7 @@ export default async function handler(request, response) {
     try {
       const feedRes = await fetch(targetStr, {
         headers: {
-          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+          'user-agent': DEFAULT_USER_AGENT,
           accept: 'application/rss+xml, application/xml, text/xml, text/plain, */*',
         },
       })
@@ -344,7 +368,10 @@ export default async function handler(request, response) {
       if (type.includes('xml') || type.includes('rss') || type.includes('atom') || target.pathname.endsWith('.xml') || target.pathname.endsWith('.rss')) {
         try {
           const feedRes = await fetch(target.toString(), {
-            headers: { accept: 'application/rss+xml, application/xml, text/xml, */*' },
+            headers: {
+              'User-Agent': DEFAULT_USER_AGENT,
+              accept: 'application/rss+xml, application/xml, text/xml, */*',
+            },
           })
           if (feedRes.ok) {
             const text = await feedRes.text()

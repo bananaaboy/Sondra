@@ -18,15 +18,15 @@ import { Readable } from 'node:stream'
 export const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
 
-const ANIWORLD_HOSTS = /^(?:www\.)?(?:aniworld\.to|s\.to|serienstream\.to)$/i
+const ANIWORLD_HOSTS = /^(?:[a-z0-9-]+\.)*(?:aniworld\.(?:to|la)|s\.to|serienstream\.(?:to|sx))$/i
 const VOE_HOSTS =
-  /(?:^|\.)(?:voe\.sx|tube\.sx|jamesbornmain\.com|chaliceguzzlerlandlord\.com|jeremyparticipantanything\.com|voe-network\.net)$/i
-const FILEMOON_HOSTS = /(?:^|\.)(?:filemoon\.(?:sx|to|in|nl|wf)|kerapoxy\.cc|moonmov\.pro)$/i
-const VIDMOLY_HOSTS = /(?:^|\.)(?:vidmoly\.(?:to|me|net))$/i
+  /(?:^|\.)(?:voe\.sx|tube\.sx|jamesbornmain\.com|chaliceguzzlerlandlord\.com|jeremyparticipantanything\.com|voe-network\.net|repackcloud\.com|playercdn\.net|launchingforgive\.com|youdadad\.com|generousscoundrel\.com|bigtitssexy\.com|greenteabear\.com|jilliandietrich\.com|leonaheavens\.com|tuktukstream\.com|stephaniecorneliussen\.net)$/i
+const FILEMOON_HOSTS = /(?:^|\.)(?:filemoon\.(?:sx|to|in|nl|wf|top|me)|kerapoxy\.cc|moonmov\.pro|moonplayer\.net|embedmoon\.xyz)$/i
+const VIDMOLY_HOSTS = /(?:^|\.)(?:vidmoly\.(?:to|me|net|in|org))$/i
 const DOOD_HOSTS =
-  /(?:^|\.)(?:dood\.(?:to|so|ws|wf|re|pm|la|li|watch|cx|yt|stream)|doodstream\.com|dsvplay\.com|myvidplay\.com|playmogo\.com|d0o0d\.com|dooood\.com|ds2play\.com)$/i
-const STREAMTAPE_HOSTS = /(?:^|\.)(?:streamtape\.(?:com|net|to)|streamta\.pe|streamadblocker\.com)$/i
-const VIDOZA_HOSTS = /(?:^|\.)(?:vidoza\.net)$/i
+  /(?:^|\.)(?:dood\.(?:to|so|ws|wf|re|pm|la|li|watch|cx|yt|stream)|doodstream\.(?:com|co)|dsvplay\.com|myvidplay\.com|playmogo\.com|d0o0d\.com|dooood\.com|ds2play\.com)$/i
+const STREAMTAPE_HOSTS = /(?:^|\.)(?:streamtape\.(?:com|net|to|xyz)|streamta\.pe|streamadblocker\.com)$/i
+const VIDOZA_HOSTS = /(?:^|\.)(?:vidoza\.(?:net|org|co))$/i
 
 export function isAniworldUrl(rawUrl) {
   try {
@@ -49,19 +49,10 @@ export function isAniworldSeasonUrl(rawUrl) {
   }
 }
 
-export function isVoeUrl(rawUrl) {
-  try {
-    const u = new URL(rawUrl)
-    return VOE_HOSTS.test(u.hostname) || u.pathname.startsWith('/e/')
-  } catch {
-    return false
-  }
-}
-
 export function isFilemoonUrl(rawUrl) {
   try {
     const u = new URL(rawUrl)
-    return FILEMOON_HOSTS.test(u.hostname) || u.hostname.includes('filemoon')
+    return FILEMOON_HOSTS.test(u.hostname) || u.hostname.includes('filemoon') || u.pathname.includes('/filemoon/')
   } catch {
     return false
   }
@@ -70,7 +61,7 @@ export function isFilemoonUrl(rawUrl) {
 export function isVidmolyUrl(rawUrl) {
   try {
     const u = new URL(rawUrl)
-    return VIDMOLY_HOSTS.test(u.hostname) || u.hostname.includes('vidmoly')
+    return VIDMOLY_HOSTS.test(u.hostname) || u.hostname.includes('vidmoly') || u.pathname.includes('/vidmoly/')
   } catch {
     return false
   }
@@ -83,7 +74,8 @@ export function isDoodstreamUrl(rawUrl) {
       DOOD_HOSTS.test(u.hostname) ||
       u.hostname.includes('dood') ||
       u.hostname.includes('dsvplay') ||
-      u.hostname.includes('playmogo')
+      u.hostname.includes('playmogo') ||
+      u.pathname.includes('/dood/')
     )
   } catch {
     return false
@@ -93,7 +85,11 @@ export function isDoodstreamUrl(rawUrl) {
 export function isStreamtapeUrl(rawUrl) {
   try {
     const u = new URL(rawUrl)
-    return STREAMTAPE_HOSTS.test(u.hostname) || u.hostname.includes('streamtape')
+    return (
+      STREAMTAPE_HOSTS.test(u.hostname) ||
+      u.hostname.includes('streamtape') ||
+      u.pathname.includes('/streamtape/')
+    )
   } catch {
     return false
   }
@@ -102,7 +98,28 @@ export function isStreamtapeUrl(rawUrl) {
 export function isVidozaUrl(rawUrl) {
   try {
     const u = new URL(rawUrl)
-    return VIDOZA_HOSTS.test(u.hostname) || u.hostname.includes('vidoza')
+    return VIDOZA_HOSTS.test(u.hostname) || u.hostname.includes('vidoza') || u.pathname.includes('/vidoza/')
+  } catch {
+    return false
+  }
+}
+
+export function isVoeUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    if (VOE_HOSTS.test(u.hostname) || u.hostname.includes('voe') || u.pathname.includes('/voe/')) return true
+    // Do not falsely claim other known hosters when pathname starts with /e/
+    if (
+      isFilemoonUrl(rawUrl) ||
+      isVidmolyUrl(rawUrl) ||
+      isDoodstreamUrl(rawUrl) ||
+      isStreamtapeUrl(rawUrl) ||
+      isVidozaUrl(rawUrl) ||
+      isAniworldUrl(rawUrl)
+    ) {
+      return false
+    }
+    return u.pathname.startsWith('/e/')
   } catch {
     return false
   }
@@ -301,7 +318,7 @@ export async function extractVoe(url, options = {}) {
     let html = await res.text()
 
     // 1. Follow any client-side redirect stub
-    const redirectMatch = html.match(/window\.location\.href\s*=\s*['"]([^'"]+)['"]/)
+    const redirectMatch = html.match(/(?:window\.)?location(?:\.href|\.replace)?\s*(?:=\s*|\()\s*['"]([^'"]+)['"]/i)
     if (redirectMatch && redirectMatch[1]) {
       try {
         currentUrl = new URL(redirectMatch[1], currentUrl).href
@@ -311,6 +328,9 @@ export async function extractVoe(url, options = {}) {
         /* continue with current HTML */
       }
     }
+
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i) || html.match(/property="og:title"\s+content="([^"]+)"/i)
+    const fallbackTitle = titleMatch ? titleMatch[1].replace(/ - VOE.*$/i, '').trim() : 'VOE Video'
 
     // 2. Decode modern application/json script tags
     const scriptMatches = html.matchAll(
@@ -337,7 +357,7 @@ export async function extractVoe(url, options = {}) {
         const streamUrl = data.source || data.direct_access_url
         if (streamUrl) {
           return {
-            title: data.title || 'VOE Video',
+            title: data.title || fallbackTitle,
             url: streamUrl,
             isHls: streamUrl.includes('.m3u8') || Boolean(data.source),
             referer: currentUrl,
@@ -347,6 +367,35 @@ export async function extractVoe(url, options = {}) {
       } catch {
         // Skip non-stream JSON payloads
       }
+    }
+
+    // 2b. Check for wc0 / sourcesContent script variable payload
+    const wcMatch = html.match(/(?:var|const|let)\s+(?:wc0|sourcesContent|payload)\s*=\s*['"]([A-Za-z0-9+/=@$^~%*!#&]+)['"]/)
+    if (wcMatch) {
+      try {
+        let step1 = rot13(wcMatch[1])
+        for (const pat of ['@$', '^^', '~@', '%?', '*~', '!!', '#&']) {
+          step1 = step1.replaceAll(pat, '')
+        }
+        const step2 = Buffer.from(step1, 'base64').toString('latin1')
+        const step3 = Array.from(step2)
+          .map((c) => String.fromCharCode(c.charCodeAt(0) - 3))
+          .join('')
+        const step4 = step3.split('').reverse().join('')
+        const step5 = Buffer.from(step4, 'base64').toString('utf-8')
+        const data = JSON.parse(step5)
+
+        const streamUrl = data.source || data.direct_access_url
+        if (streamUrl) {
+          return {
+            title: data.title || fallbackTitle,
+            url: streamUrl,
+            isHls: streamUrl.includes('.m3u8') || Boolean(data.source),
+            referer: currentUrl,
+            hoster: 'VOE',
+          }
+        }
+      } catch {}
     }
 
     // 3. Fallback: Check for inline HLS/MP4 definitions or wc0 variable
@@ -360,7 +409,7 @@ export async function extractVoe(url, options = {}) {
       }
       if (candidate.startsWith('http')) {
         return {
-          title: 'VOE Video',
+          title: fallbackTitle,
           url: candidate,
           isHls: true,
           referer: currentUrl,
@@ -379,7 +428,7 @@ export async function extractVoe(url, options = {}) {
       }
       if (candidate.startsWith('http')) {
         return {
-          title: 'VOE Video',
+          title: fallbackTitle,
           url: candidate,
           isHls: false,
           referer: currentUrl,
@@ -392,7 +441,7 @@ export async function extractVoe(url, options = {}) {
     const directM3u8 = html.match(/(https?:\/\/[^'"\s]+\.m3u8[^'"\s]*)/)
     if (directM3u8) {
       return {
-        title: 'VOE Video',
+        title: fallbackTitle,
         url: directM3u8[1],
         isHls: true,
         referer: currentUrl,
@@ -446,7 +495,12 @@ export async function extractFilemoon(url, options = {}) {
         const apiUrl = `${parsed.protocol}//${parsed.host}${pathPrefix}/api/videos/${code}`
         const apiRes = await fetchHtml(apiUrl, {
           ...options,
-          headers: { Referer: currentUrl, 'User-Agent': DEFAULT_USER_AGENT },
+          headers: {
+            Referer: currentUrl,
+            'User-Agent': DEFAULT_USER_AGENT,
+            Accept: 'application/json, text/javascript, */*',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
         })
         if (apiRes.ok) {
           const data = await apiRes.json()
@@ -455,23 +509,26 @@ export async function extractFilemoon(url, options = {}) {
             const key = Buffer.concat(pb.key_parts.map((p) => Buffer.from(p, 'base64url')))
             const iv = Buffer.from(pb.iv, 'base64url')
             const payload = Buffer.from(pb.payload, 'base64url')
-            const tag = payload.subarray(payload.length - 16)
-            const ciphertext = payload.subarray(0, payload.length - 16)
+            if (payload.length >= 16 && key.length === 32) {
+              const tag = payload.subarray(payload.length - 16)
+              const ciphertext = payload.subarray(0, payload.length - 16)
 
-            const decipher = createDecipheriv('aes-256-gcm', key, iv)
-            decipher.setAuthTag(tag)
-            const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
-            const parsedPb = JSON.parse(decrypted.toString('utf-8'))
-            const hls = parsedPb.sources?.find((s) => s.mime_type?.includes('mpegurl') || s.url?.includes('.m3u8')) ||
-              parsedPb.sources?.[0]
-            const streamUrl = hls?.url || hls?.file
-            if (streamUrl) {
-              return {
-                title: data.title || 'FileMoon Video',
-                url: streamUrl,
-                isHls: true,
-                referer: currentUrl,
-                hoster: 'Filemoon',
+              const decipher = createDecipheriv('aes-256-gcm', key, iv)
+              decipher.setAuthTag(tag)
+              const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+              const parsedPb = JSON.parse(decrypted.toString('utf-8'))
+              const hls = parsedPb.sources?.find((s) => s.mime_type?.includes('mpegurl') || s.url?.includes('.m3u8')) ||
+                parsedPb.sources?.[0]
+              const rawStreamUrl = hls?.url || hls?.file
+              if (rawStreamUrl) {
+                const streamUrl = new URL(rawStreamUrl, currentUrl).href
+                return {
+                  title: data.title || 'FileMoon Video',
+                  url: streamUrl,
+                  isHls: true,
+                  referer: currentUrl,
+                  hoster: 'Filemoon',
+                }
               }
             }
           }
@@ -493,9 +550,10 @@ export async function extractFilemoon(url, options = {}) {
     if (fileMatch && fileMatch[1]) {
       const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
       const title = titleMatch ? titleMatch[1].replace(/ - FileMoon.*$/i, '').trim() : 'FileMoon Video'
+      const streamUrl = new URL(fileMatch[1], currentUrl).href
       return {
         title,
-        url: fileMatch[1],
+        url: streamUrl,
         isHls: true,
         referer: currentUrl,
         hoster: 'Filemoon',
@@ -517,6 +575,7 @@ export async function extractVidmoly(url, options = {}) {
     const parsed = new URL(url)
     const embedMatch = parsed.pathname.match(/\/embed-([a-zA-Z0-9]+)\.html/) || parsed.pathname.match(/\/([a-zA-Z0-9]+)$/)
     const embedId = embedMatch ? embedMatch[1] : ''
+    const targetUrl = embedId && !parsed.pathname.includes('/embed-') ? `${parsed.origin}/embed-${embedId}.html` : url
 
     const headers = {
       'User-Agent': DEFAULT_USER_AGENT,
@@ -525,16 +584,20 @@ export async function extractVidmoly(url, options = {}) {
       ...options.headers,
     }
 
-    const res = await fetchHtml(url, { ...options, headers })
+    const res = await fetchHtml(targetUrl, { ...options, headers })
     if (!res.ok) return null
     const html = await res.text()
 
+    const unpacked = unpackPackedJs(html)
+    const searchTarget = unpacked ? `${html}\n${unpacked}` : html
+
     const match =
-      html.match(/sources\s*:\s*\[\s*\{\s*file\s*:\s*['"]([^'"]+)['"]/) ||
-      html.match(/file\s*:\s*['"](https?:\/\/[^'"]+\.m3u8[^'"]*)['"]/)
+      searchTarget.match(/sources\s*:\s*\[\s*\{\s*file\s*:\s*['"]([^'"]+)['"]/) ||
+      searchTarget.match(/file\s*:\s*['"](https?:\/\/[^'"]+\.m3u8[^'"]*)['"]/) ||
+      searchTarget.match(/['"](https?:\/\/[^'"]+\.m3u8[^'"]*)['"]/)
     if (!match) return null
 
-    const streamUrl = new URL(match[1], url).href
+    const streamUrl = new URL(match[1], targetUrl).href
     const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
     const title = titleMatch ? titleMatch[1].replace(/ - Vidmoly.*$/i, '').trim() : 'Vidmoly Video'
 
@@ -556,7 +619,10 @@ export async function extractVidmoly(url, options = {}) {
 
 export async function extractDoodstream(url, options = {}) {
   try {
-    const normalizedUrl = url.replace(/\/d\//, '/e/')
+    let normalizedUrl = url.replace(/\/(?:d|f)\//, '/e/')
+    if (!normalizedUrl.includes('/e/')) {
+      normalizedUrl = normalizedUrl.replace(/\/([a-zA-Z0-9]+)$/, '/e/$1')
+    }
     const res = await fetchHtml(normalizedUrl, options)
     if (!res.ok) return null
     const html = await res.text()
@@ -569,7 +635,7 @@ export async function extractDoodstream(url, options = {}) {
 
     const passRes = await fetchHtml(passUrl, {
       ...options,
-      headers: { Referer: normalizedUrl },
+      headers: { Referer: normalizedUrl, 'User-Agent': DEFAULT_USER_AGENT },
     })
     if (!passRes.ok) return null
     const baseStream = (await passRes.text()).trim()
@@ -578,7 +644,8 @@ export async function extractDoodstream(url, options = {}) {
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
     let token = ''
     for (let i = 0; i < 10; i++) token += alphabet.charAt(Math.floor(Math.random() * alphabet.length))
-    const finalUrl = `${baseStream}${token}?token=${passMatch[0].split('/').pop()}&expiry=${Date.now()}`
+    const rawUrl = `${baseStream}${token}?token=${passMatch[0].split('/').pop()}&expiry=${Date.now()}`
+    const finalUrl = rawUrl.startsWith('//') ? `https:${rawUrl}` : rawUrl
 
     const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
     const title = titleMatch ? titleMatch[1].replace(/ - Dood.*$/i, '').trim() : 'DoodStream Video'
@@ -608,13 +675,13 @@ export async function extractStreamtape(url, options = {}) {
 
     // Streamtape constructs URL in JavaScript by concatenating substrings
     const match =
-      html.match(/ById\(['"](?:norobotlink|robotlink)['"]\)\.innerHTML\s*=\s*([^;]+);/i) ||
+      html.match(/ById\(['"]([a-zA-Z0-9_]*link[a-zA-Z0-9_]*)['"]\)\.innerHTML\s*=\s*([^;]+);/i) ||
       html.match(/innerHTML\s*=\s*([^\n;]+norobotlink[^\n;]+)/i) ||
       html.match(/(['"]\/\/streamtape\.com\/get_video\?[^;]+)/i)
 
     let finalLink = null
     if (match) {
-      const expr = match[1]
+      const expr = match[2] || match[1]
       // Split on '+' and evaluate string substrings
       const parts = expr.split('+')
       let assembled = ''
@@ -630,14 +697,21 @@ export async function extractStreamtape(url, options = {}) {
         assembled += val
       }
       if (assembled) {
-        finalLink = (assembled.startsWith('//') ? `https:${assembled}` : assembled) + '&stream=1'
+        let link = assembled.startsWith('//') ? `https:${assembled}` : assembled
+        if (!link.startsWith('http')) link = `https://${link}`
+        if (!link.includes('stream=1')) link += (link.includes('?') ? '&' : '?') + 'stream=1'
+        finalLink = link
       }
     }
 
     if (!finalLink) {
       // Fallback: search get_video in page
       const gvMatch = html.match(/(https?:\/\/[^'"]+streamtape\.com\/get_video\?[^'"]+)/)
-      if (gvMatch) finalLink = gvMatch[1] + '&stream=1'
+      if (gvMatch) {
+        let link = gvMatch[1]
+        if (!link.includes('stream=1')) link += (link.includes('?') ? '&' : '?') + 'stream=1'
+        finalLink = link
+      }
     }
 
     if (!finalLink) return null
@@ -649,7 +723,7 @@ export async function extractStreamtape(url, options = {}) {
       title,
       url: finalLink,
       isHls: false,
-      referer: 'https://streamtape.com/',
+      referer: normalizedUrl || 'https://streamtape.com/',
       hoster: 'Streamtape',
     }
   } catch {
@@ -663,25 +737,28 @@ export async function extractStreamtape(url, options = {}) {
 
 export async function extractVidoza(url, options = {}) {
   try {
-    const res = await fetchHtml(url, options)
+    const targetUrl = url.replace(/\/([a-zA-Z0-9]+)(\.html)?$/, (m, id) => id.startsWith('embed-') ? m : `/embed-${id}.html`)
+    const res = await fetchHtml(targetUrl, options)
     if (!res.ok) return null
     const html = await res.text()
 
     const srcMatch =
       html.match(/<source\s+src=['"]([^'"]+)['"]\s+type=['"]video\/mp4['"]/i) ||
       html.match(/sourcesCode\s*:\s*\[\{\s*src\s*:\s*['"]([^'"]+)['"]/i) ||
-      html.match(/file\s*:\s*['"](https?:\/\/[^'"]+\.mp4[^'"]*)['"]/i)
+      html.match(/file\s*:\s*['"](https?:\/\/[^'"]+\.(?:mp4|m3u8)[^'"]*)['"]/i) ||
+      html.match(/file\s*:\s*['"]([^'"]+\.mp4[^'"]*)['"]/i)
 
     if (!srcMatch) return null
 
+    const streamUrl = new URL(srcMatch[1], targetUrl).href
     const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
     const title = titleMatch ? titleMatch[1].replace(/ - Vidoza.*$/i, '').trim() : 'Vidoza Video'
 
     return {
       title,
-      url: srcMatch[1],
-      isHls: false,
-      referer: 'https://vidoza.net/',
+      url: streamUrl,
+      isHls: streamUrl.includes('.m3u8'),
+      referer: targetUrl || 'https://vidoza.net/',
       hoster: 'Vidoza',
     }
   } catch {
@@ -717,6 +794,15 @@ async function resolveAniworldRedirect(redirectUrl, referer, options = {}) {
     if (res.url && res.url !== redirectUrl) {
       return res.url
     }
+    if (res.ok) {
+      const text = await res.text()
+      const metaMatch = text.match(/<meta[^>]+http-equiv=['"]refresh['"][^>]+content=['"]\d+;\s*url=['"]?([^'">]+)/i)
+      if (metaMatch) return new URL(metaMatch[1], redirectUrl).href
+      const jsMatch = text.match(/(?:window\.)?location(?:\.href|\.replace)?\s*(?:=\s*|\()\s*['"]([^'"]+)['"]/i)
+      if (jsMatch) return new URL(jsMatch[1], redirectUrl).href
+      const linkMatch = text.match(/<a\b[^>]+href=['"]([^'"]+)['"][^>]*>\s*(?:hier|click|weiter|redirect)/i)
+      if (linkMatch) return new URL(linkMatch[1], redirectUrl).href
+    }
     return null
   } catch {
     return null
@@ -735,6 +821,7 @@ export async function extractAniworldSeason(url, options = {}) {
 
     const pageUrl = new URL(url)
     const baseOrigin = pageUrl.origin
+    const isFilmPage = /\/filme(?:\/|$)/i.test(pageUrl.pathname)
 
     const seriesTitleMatch =
       html.match(/<div class="series-title"[^>]*>[\s\S]*?<h1[^>]*>[\s\S]*?<span>([^<]+)<\/span>/i) ||
@@ -746,18 +833,22 @@ export async function extractAniworldSeason(url, options = {}) {
       .trim()
 
     const seasonMatch = pageUrl.pathname.match(/staffel-(\d+)/i)
-    const seasonNum = seasonMatch ? Number(seasonMatch[1]) : 1
+    const seasonNum = seasonMatch ? Number(seasonMatch[1]) : isFilmPage ? 0 : 1
 
     const episodes = []
     const trMatches = html.matchAll(/<tr[^>]*data-episode-id=[\s\S]*?<\/tr>/gi)
 
     for (const trMatch of trMatches) {
       const tr = trMatch[0]
-      const linkMatch = tr.match(/href=['"](\/(?:anime|serie)\/stream\/[^/]+\/staffel-\d+\/episode-\d+)['"]/i)
+      const linkMatch =
+        tr.match(/href=['"](\/(?:anime|serie)\/stream\/[^/]+\/(?:staffel-\d+\/episode-\d+|filme\/film-\d+))['"]/i) ||
+        tr.match(/href=['"](\/(?:anime|serie)\/stream\/[^/]+\/[^'"]+)['"]/i)
       if (!linkMatch) continue
 
       const epUrl = `${baseOrigin}${linkMatch[1]}`
-      const epNumMatch = tr.match(/itemprop=['"]episodeNumber['"]\s+content=['"](\d+)['"]/i) || linkMatch[1].match(/episode-(\d+)/i)
+      const epNumMatch =
+        tr.match(/itemprop=['"]episodeNumber['"]\s+content=['"](\d+)['"]/i) ||
+        linkMatch[1].match(/(?:episode|film)-(\d+)/i)
       const epNum = epNumMatch ? Number(epNumMatch[1]) : episodes.length + 1
 
       const deTitleMatch = tr.match(/<strong>([^<]+)<\/strong>/i)
@@ -766,7 +857,9 @@ export async function extractAniworldSeason(url, options = {}) {
       const secondTitle = subTitleMatch ? subTitleMatch[1].replace(/&#039;/g, "'").replace(/&amp;/g, '&').trim() : ''
       const epName = germanTitle || secondTitle
 
-      const numTag = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`
+      const numTag = isFilmPage
+        ? `Film ${epNum}`
+        : `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`
       const fullTitle = `${seriesTitle} - ${numTag}${epName ? ` - ${epName}` : ''}`
 
       episodes.push({
@@ -779,13 +872,19 @@ export async function extractAniworldSeason(url, options = {}) {
 
     if (episodes.length === 0) {
       const epLinks = [
-        ...new Set([...html.matchAll(/href=['"](\/(?:anime|serie)\/stream\/[^/]+\/staffel-\d+\/episode-\d+)['"]/gi)].map((m) => m[1])),
+        ...new Set([
+          ...html.matchAll(
+            /href=['"](\/(?:anime|serie)\/stream\/[^/]+\/(?:staffel-\d+\/episode-\d+|filme\/film-\d+))['"]/gi,
+          ),
+        ].map((m) => m[1])),
       ]
       for (let i = 0; i < epLinks.length; i++) {
         const epPath = epLinks[i]
-        const epNumMatch = epPath.match(/episode-(\d+)/i)
+        const epNumMatch = epPath.match(/(?:episode|film)-(\d+)/i)
         const epNum = epNumMatch ? Number(epNumMatch[1]) : i + 1
-        const numTag = `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`
+        const numTag = isFilmPage
+          ? `Film ${epNum}`
+          : `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`
         episodes.push({
           episodeNumber: epNum,
           seasonNumber: seasonNum,
@@ -799,7 +898,7 @@ export async function extractAniworldSeason(url, options = {}) {
 
     return {
       isPlaylist: true,
-      title: `${seriesTitle} - Staffel ${seasonNum}`,
+      title: isFilmPage ? `${seriesTitle} - Filme` : `${seriesTitle} - Staffel ${seasonNum}`,
       seriesTitle,
       seasonNumber: seasonNum,
       count: episodes.length,
@@ -846,7 +945,6 @@ export async function extractAniworld(url, options = {}) {
     const epNum = epMatch ? Number(epMatch[1]) : filmMatch ? Number(filmMatch[1] || 1) : 1
 
     const numTag = filmMatch ? `Film ${epNum}` : `S${String(seasonNum).padStart(2, '0')}E${String(epNum).padStart(2, '0')}`
-    const epTitle = episodeGerman || episodeEnglish || numTag
     const compoundTitle = `${seriesTitle} - ${numTag}${episodeGerman ? ` - ${episodeGerman}` : episodeEnglish ? ` - ${episodeEnglish}` : ''}`
 
     // 2. Extract hoster elements
@@ -896,7 +994,7 @@ export async function extractAniworld(url, options = {}) {
     if (hosterEntries.length === 0) {
       // If it's a season or series page with episode links, return episode discovery
       const episodeLinkMatches = [
-        ...html.matchAll(/href=['"](\/(?:anime|serie)\/stream\/[^/]+\/staffel-\d+\/episode-\d+)['"]/gi),
+        ...html.matchAll(/href=['"](\/(?:anime|serie)\/stream\/[^/]+\/(?:staffel-\d+\/episode-\d+|filme\/film-\d+))['"]/gi),
       ]
       if (episodeLinkMatches.length > 0) {
         const firstEp = `${baseOrigin}${episodeLinkMatches[0][1]}`
@@ -917,16 +1015,21 @@ export async function extractAniworld(url, options = {}) {
 
     const sortedEntries = [...hosterEntries].sort((a, b) => scoreEntry(b) - scoreEntry(a))
 
-    // 4. Resolve the best available provider
+    // 4. Resolve the best available providers (collect up to 3 mirrors/languages)
     const resolvedStreams = []
+    const seenCombos = new Set()
     for (const entry of sortedEntries) {
+      const comboKey = `${entry.hosterName.toLowerCase()}-${entry.langKey}`
+      if (seenCombos.has(comboKey)) continue
+
       const embedUrl = await resolveAniworldRedirect(entry.redirectUrl, url, options)
       if (!embedUrl) continue
 
       const direct = await extractDirectHoster(embedUrl, options)
       if (direct && direct.url) {
+        seenCombos.add(comboKey)
         resolvedStreams.push({
-          id: `${entry.hosterName.toLowerCase()}-${entry.langKey}`,
+          id: comboKey,
           label: `${entry.hosterName} · ${entry.langLabel}`,
           provider: entry.hosterName,
           language: entry.langLabel,
@@ -935,8 +1038,7 @@ export async function extractAniworld(url, options = {}) {
           referer: direct.referer,
           ext: direct.isHls ? 'mp4' : direct.url.includes('.mp4') ? 'mp4' : 'm4a',
         })
-        // Break after collecting top working stream to keep resolve fast
-        if (resolvedStreams.length >= 1) break
+        if (resolvedStreams.length >= 3) break
       }
     }
 
@@ -965,17 +1067,44 @@ export async function extractAniworld(url, options = {}) {
 /* -------------------------------------------------------------------------- */
 
 export async function extractDirectHoster(rawUrl, options = {}) {
-  if (isVoeUrl(rawUrl)) return extractVoe(rawUrl, options)
-  if (isFilemoonUrl(rawUrl)) return extractFilemoon(rawUrl, options)
-  if (isVidmolyUrl(rawUrl)) return extractVidmoly(rawUrl, options)
-  if (isStreamtapeUrl(rawUrl)) return extractStreamtape(rawUrl, options)
-  if (isVidozaUrl(rawUrl)) return extractVidoza(rawUrl, options)
-  if (isDoodstreamUrl(rawUrl)) return extractDoodstream(rawUrl, options)
+  // Check specific distinct hosters first to avoid false positives
+  if (isFilemoonUrl(rawUrl)) {
+    const res = await extractFilemoon(rawUrl, options)
+    if (res) return res
+  }
+  if (isStreamtapeUrl(rawUrl)) {
+    const res = await extractStreamtape(rawUrl, options)
+    if (res) return res
+  }
+  if (isVidmolyUrl(rawUrl)) {
+    const res = await extractVidmoly(rawUrl, options)
+    if (res) return res
+  }
+  if (isVidozaUrl(rawUrl)) {
+    const res = await extractVidoza(rawUrl, options)
+    if (res) return res
+  }
+  if (isDoodstreamUrl(rawUrl)) {
+    const res = await extractDoodstream(rawUrl, options)
+    if (res) return res
+  }
+  if (isVoeUrl(rawUrl)) {
+    const res = await extractVoe(rawUrl, options)
+    if (res) return res
+  }
 
-  // Generic fallback: test VOE decoding (many unbranded clones)
+  // Generic fallback: test VOE decoding (many unbranded clones), FileMoon, and Streamtape
   try {
     const voeAttempt = await extractVoe(rawUrl, options)
     if (voeAttempt) return voeAttempt
+  } catch {}
+  try {
+    const fmAttempt = await extractFilemoon(rawUrl, options)
+    if (fmAttempt) return fmAttempt
+  } catch {}
+  try {
+    const stAttempt = await extractStreamtape(rawUrl, options)
+    if (stAttempt) return stAttempt
   } catch {}
 
   return null
@@ -1059,7 +1188,9 @@ export function parsePodcastFeed(xmlText, feedUrl = '') {
       if (mediaMatch) {
         epUrl = mediaMatch[1].trim()
       } else {
-        const linkMatch = itemXml.match(/<link[^>]+(?:rel=["']enclosure["']|type=["'](?:audio|video)\/[^"']+["'])[^>]+href=["']([^"']+)["']/i)
+        const linkMatch =
+          itemXml.match(/<link[^>]+(?:rel=["']enclosure["']|type=["'](?:audio|video)\/[^"']+["'])[^>]+href=["']([^"']+)["']/i) ||
+          itemXml.match(/<link[^>]*>([^<]+\.(?:mp3|m4a|ogg|opus|wav|flac|mp4))<\/link>/i)
         if (linkMatch) {
           epUrl = linkMatch[1].trim()
         }
@@ -1068,6 +1199,11 @@ export function parsePodcastFeed(xmlText, feedUrl = '') {
 
     if (epUrl) {
       epUrl = epUrl.replace(/&amp;/g, '&')
+      if (feedUrl) {
+        try {
+          epUrl = new URL(epUrl, feedUrl).href
+        } catch {}
+      }
       items.push({
         title: epTitle,
         url: epUrl,

@@ -314,9 +314,11 @@ const json = (res, status, body) => {
 
 const SERVICES = [
   'youtube', 'soundcloud', 'bandcamp', 'vimeo', 'twitch', 'twitter', 'tiktok', 'instagram',
-  'facebook', 'reddit', 'dailymotion', 'bilibili', 'ok', 'rutube', 'streamable', 'tumblr',
-  'bluesky', 'loom', 'pinterest', 'snapchat', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
+  'facebook', 'reddit', 'dailymotion', 'bilibili', 'streamable', 'tumblr', 'bluesky', 'loom',
+  'pinterest', 'mixcloud', 'ard', 'zdf', 'arte', 'srf',
   'aniworld', 'serienstream', 'filemoon', 'voe', 'vidmoly', 'streamtape', 'vidoza', 'doodstream',
+  'spotify', 'applepodcasts', 'threads', 'snapchat', 'patreon', 'vk', 'rumble', 'odysee',
+  'archive', 'kick', 'substack', 'peertube', 'orf', '3sat', 'ok', 'rutube',
 ]
 
 let versionLabel = 'yt-dlp'

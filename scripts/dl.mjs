@@ -47,7 +47,9 @@ function findYtDlp() {
 
   if (process.platform === 'win32') {
     const localAppData = process.env.LOCALAPPDATA || ''
+    const appData = process.env.APPDATA || ''
     const wingetLocations = [
+      path.join(appData, 'Sondra', 'yt-dlp.exe'),
       path.join(localAppData, 'Microsoft', 'WinGet', 'Links', 'yt-dlp.exe'),
       path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe', 'yt-dlp.exe'),
       path.join(localAppData, 'Microsoft', 'WindowsApps', 'yt-dlp.exe'),
@@ -73,17 +75,29 @@ async function main() {
     }
   }
 
+  if (directSource && directSource.isPlaylist) {
+    console.log(`📋 Playlist / Staffel erkannt: ${directSource.title} (${directSource.items?.length ?? 0} Episoden)`)
+    for (const item of directSource.items || []) {
+      console.log(`  - ${item.title}: ${item.url}`)
+    }
+    console.log('\nLade erste Episode:')
+    if (directSource.items?.[0]?.url) {
+      targetUrl = directSource.items[0].url
+      directSource = await extractDirectMedia(targetUrl).catch(() => null)
+    }
+  }
+
   let finalUrl = targetUrl
   const extraArgs = []
 
-  if (directSource) {
+  if (directSource && directSource.url) {
     console.log(`✅ Gefunden über Extraktor: ${directSource.title}`)
     console.log(`🔗 Stream-URL: ${directSource.url}`)
     finalUrl = directSource.url
     if (directSource.referer) {
       extraArgs.push('--referer', directSource.referer)
     }
-    const cleanTitle = directSource.title.replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+    const cleanTitle = (directSource.title || 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
     extraArgs.push('-o', `${cleanTitle}.%(ext)s`)
   }
 
@@ -98,7 +112,19 @@ async function main() {
   ]
 
   console.log(`\n🚀 Starte yt-dlp: ${YTDLP}\n`)
-  const child = spawn(YTDLP, ytdlpArgs, { stdio: 'inherit' })
+  let child
+  try {
+    child = spawn(YTDLP, ytdlpArgs, { stdio: 'inherit' })
+  } catch (err) {
+    console.error(`❌ Konnte yt-dlp nicht starten: ${err.message}`)
+    process.exit(1)
+  }
+
+  child.on('error', (err) => {
+    console.error(`❌ Fehler beim Ausführen von yt-dlp: ${err.message}`)
+    console.error('Tipp: Installieren Sie yt-dlp (z.B. winget install yt-dlp.yt-dlp) oder nutzen Sie die Sondra-Desktop-App.')
+    process.exit(1)
+  })
 
   child.on('close', (code) => {
     if (code === 0) {
