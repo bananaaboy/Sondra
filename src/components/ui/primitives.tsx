@@ -118,6 +118,49 @@ export function Mark({ state }: { state: 'blank' | 'measured' | 'warn' }) {
   )
 }
 
+/**
+ * Where one entry of a queue stands, in its margin: a point while it waits, a
+ * filled one while it runs, a drawn tick when it is done, `!` when it failed.
+ * Drawn, not typed — the tick and cross characters came out as emoji on some
+ * systems, and the app has none.
+ */
+export function RowMark({ state }: { state: 'pending' | 'running' | 'done' | 'error' }) {
+  return (
+    <span aria-hidden className="inline-flex w-[14px] shrink-0 items-center justify-center self-center">
+      {state === 'done' ? (
+        <svg viewBox="0 0 12 12" className="size-[12px] text-ink" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2.5 6.4 5 8.8l4.5-5.6" />
+        </svg>
+      ) : state === 'error' ? (
+        <span className="value text-small font-bold leading-none text-ink">!</span>
+      ) : state === 'running' ? (
+        <span className="pulse-dot size-[7px] rounded-pill bg-ink" />
+      ) : (
+        <span className="size-[5px] rounded-pill bg-faint" />
+      )}
+    </span>
+  )
+}
+
+/** A quarter turn, for the rotate buttons; mirrored for the left one. */
+export function RotateIcon({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 16 16"
+      className={`size-[16px] shrink-0 ${direction === 'left' ? '-scale-x-100' : ''}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12.6 9.2A5 5 0 1 1 11 4.3" />
+      <path d="M11.4 1.6 11.2 4.6 8.2 4.4" />
+    </svg>
+  )
+}
+
 /** A stamped field: a value the form carries rather than one it was given. */
 export function Badge({
   children,
@@ -201,9 +244,15 @@ export function Select({ className = '', ...props }: SelectHTMLAttributes<HTMLSe
   return <select className={`${CONTROL} sondra-select cursor-pointer appearance-none pr-[32px] ${className}`} {...props} />
 }
 
-/** Something typed in, so it is set in the face of things typed in. */
+/**
+ * Something typed in, so it is set in the face of things typed in. Its edge
+ * is a step darker than a list's and it shows the caret on hover: with the
+ * same hairline as `Select`, a field to type in read as one more drop-down.
+ */
+const FIELD = `${CONTROL.replace('ring-line', 'ring-rule hover:ring-muted')} cursor-text`
+
 export function TextInput({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={`${CONTROL} value ${className}`} {...props} />
+  return <input className={`${FIELD} value ${className}`} {...props} />
 }
 
 export function Slider({

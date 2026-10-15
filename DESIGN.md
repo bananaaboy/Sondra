@@ -515,7 +515,10 @@ und kein Schatten.
 **Symbole**: der projekteigene Strichsatz, 16 px in `components/panelMeta.tsx`,
 18–20 px in `components/editor/icons.tsx`, Strichstärke 1.35–1.4, ein Raster.
 Nur dort, wo das Symbol eine Information trägt. Keine Symbolbibliotheken, keine
-Emoji.
+Emoji — auch nicht als Zeichen im Text: ✓, ✕, ↺ oder 📋 kommen je nach System
+als bunte Emoji heraus. Ein Zustand in der Liste ist `RowMark` (Punkt,
+gefüllter Punkt, gezeichneter Haken, `!`), Drehen ist `RotateIcon`; Pfeile im
+Satz („vorher → nachher") und Tastennamen bleiben Schrift.
 
 ### Named Rules
 
@@ -569,7 +572,10 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
 
 - **Style:** Feldweiss, eckig, Haarlinien-Ring nach innen, `border: 0`, Small,
   8/12 px Innenraum. `TextInput` trägt zusätzlich `value` — was eingetippt
-  wird, steht in der Schrift der eingetragenen Dinge.
+  wird, steht in der Schrift der eingetragenen Dinge — und eine Kante in
+  `rule` statt `line`, beim Überfahren `muted` und den Textcursor: mit
+  derselben Haarlinie wie `Select` las sich ein Feld zum Tippen als Liste
+  (15.10.2026, „sieht nach Drop-down aus").
 - **Focus:** der Ring wechselt auf Tinte; das Feld verschiebt sich nicht.
 - **Field:** eine Zeile des Formulars — Haarlinie oben, Beschriftung, Feld,
   darunter der Hinweis in gedämpft. Unter 640 px stapeln Beschriftung und Feld,
@@ -725,6 +731,24 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   das ZIP. Doppelte Dateinamen werden „Name (2)". Überall gleich: Sitzung,
   Liste mehrerer Downloads, Zerschneiden, Bilder, Spuren trennen,
   Umwandeln, Lautstärke, Mischen.
+- **Die Adresse im Herunterladen ist ein Feld, das wie eines aussieht**
+  (15.10.2026): „Adresse" darüber, eine weisse Mulde von 48 px mit Kante in
+  `rule`, ein Linkzeichen am Anfang, „Nachsehen" in derselben Höhe daneben.
+  Vorher stand eine durchsichtige Zeile in einer gestrichelten Ablagefläche
+  mit Pille und Emoji in der Ecke. Eine Textdatei mit Links lässt sich
+  weiterhin auf die Stelle ziehen — dann färbt sie sich, und das Etikett sagt
+  „Loslassen …" —, oder über „auswählen" im Satz darunter laden. Die Dienste
+  stehen als ein Satz da (vier mit Namen, „Alle zeigen" für den Rest), nicht
+  als zwanzig Chips.
+- **Ein Link in der Zwischenablage ist ein Satz, kein Balken**: unter dem
+  Feld, das er füllen würde, ein Punkt in Tinte, „In der Zwischenablage",
+  die Adresse ohne `https://www.` in Mono, dann „Einfügen und nachsehen"
+  (unterstrichen) und „Nicht jetzt". Kein Rahmen, keine Fläche — als
+  getönter Balken über dem Feld sah er aus wie ein zweites Textfeld.
+- **Mehrere Listen beim Herunterladen** tragen ihren Namen als Überschrift
+  und „x von n geladen" in Mono, getrennt durch eine Linie; eingeklappt wird
+  auf drei Einträge, „n weitere zeigen" darunter. Kein Kasten je Liste, kein
+  Ordner-Emoji, keine Pfeile im Knopf.
 - **Jede Ton-Aufgabe hat ihr Symbol** (Startseite, `ACTION_ICONS` in
   `Home.tsx`): 16er-Raster, Strich 1,35, runde Enden, wie die Werkzeug-
   symbole. Dreizehn Kacheln mit derselben Welle lasen sich wie keine.

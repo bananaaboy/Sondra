@@ -32,6 +32,7 @@ import {
   Slider,
   Stat,
   Toggle,
+  RowMark,
 } from '../ui/primitives'
 import { ChoiceRow } from '../editor/EditorShell'
 import { ZipSave } from '../ZipSave'
@@ -47,8 +48,6 @@ interface BatchRow {
   after?: number
   message?: string
 }
-
-const ROW_MARK: Record<BatchRow['state'], string> = { pending: '·', running: '●', done: '✓', error: '!' }
 
 function LoudnessGauge({ report, target }: { report: LoudnessReport; target: number }) {
   const low = -40
@@ -443,9 +442,7 @@ export function NormalizePanel() {
             <ul className="mt-[16px] flex flex-col">
               {rows.map((row) => (
                 <li key={row.id} className="flex flex-wrap items-baseline gap-x-[12px] gap-y-[2px] border-t border-line py-[8px] first:border-t-0">
-                  <span aria-hidden className={`value w-[14px] shrink-0 text-center text-small ${row.state === 'running' ? 'pulse-dot text-ink' : 'text-muted'}`}>
-                    {ROW_MARK[row.state]}
-                  </span>
+                  <RowMark state={row.state} />
                   <span className="min-w-0 flex-1 truncate text-small text-prose">{row.name}</span>
                   {row.before !== undefined && row.after !== undefined ? (
                     <span className="value shrink-0 text-small text-ink">

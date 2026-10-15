@@ -54,7 +54,7 @@ import {
   IconSize,
   IconTransform,
 } from '../editor/icons'
-import { Button, Notice, Progress, Slider, TextInput, Toggle } from '../ui/primitives'
+import { Button, Notice, Progress, Slider, TextInput, Toggle, RotateIcon } from '../ui/primitives'
 import { ZipSave } from '../ZipSave'
 
 type ToolId = 'crop' | 'transform' | 'size' | 'color' | 'sharpen' | 'export' | 'batch'
@@ -652,10 +652,12 @@ function Inspector({
         <ToolHeading title="Drehen und spiegeln" hint="Vierteldrehungen — verlustfrei, nichts wird neu berechnet." />
         <div className="grid grid-cols-2 gap-[4px]">
           <Button size="sm" variant="quiet" onClick={() => turn(270)}>
-            ↺ Links
+            <RotateIcon direction="left" />
+            Links
           </Button>
           <Button size="sm" variant="quiet" onClick={() => turn(90)}>
-            ↻ Rechts
+            <RotateIcon direction="right" />
+            Rechts
           </Button>
         </div>
         <Toggle label="Waagrecht spiegeln" checked={ops.flipH} onChange={() => mirror('h')} />
