@@ -29,17 +29,47 @@ import {
   Field,
   Notice,
   Progress,
+  Reveal,
   Select,
   Slider,
   Toggle,
 } from '../ui/primitives'
+import { ChoiceRow } from '../editor/EditorShell'
 
 type Stems = Record<StemId, AudioData>
+
+const SEPARATION_PRESETS = [
+  {
+    id: 'balanced',
+    label: 'Ausgewogen',
+    desc: 'Gesang, Beat und Begleitung gleich gewichtet — der Ausgangspunkt.',
+    patch: { vocalFocus: 0.65, maskExponent: 2.8, fftSize: 4096, hopSize: 1024, timeKernel: 17, freqKernel: 17 },
+  },
+  {
+    id: 'vocals',
+    label: 'Gesang',
+    desc: 'Schärfere Mitte, härtere Masken: weniger Begleitung im Gesang — und ein saubereres Instrumental für Karaoke.',
+    patch: { vocalFocus: 0.85, maskExponent: 3.5, fftSize: 4096, hopSize: 1024, timeKernel: 17, freqKernel: 17 },
+  },
+  {
+    id: 'rhythm',
+    label: 'Rhythmus',
+    desc: 'Kürzere Fenster, die Anschläge von Schlagzeug und Perkussion sauber halten.',
+    patch: { vocalFocus: 0.5, maskExponent: 3.0, fftSize: 2048, hopSize: 512, timeKernel: 9, freqKernel: 9 },
+  },
+]
 
 export function StemsPanel() {
   const asset = useActiveAsset()
   const options = useSession((state) => state.separation)
   const setSeparation = useSession((state) => state.setSeparation)
+  const activePreset =
+    SEPARATION_PRESETS.find(
+      (preset) =>
+        options.vocalFocus === preset.patch.vocalFocus &&
+        options.maskExponent === preset.patch.maskExponent &&
+        options.fftSize === preset.patch.fftSize,
+    ) ?? null
   const addAsset = useSession((state) => state.addAsset)
   const log = useSession((state) => state.log)
   const { audio, decode } = useDecodedAudio(asset)
@@ -182,63 +212,28 @@ export function StemsPanel() {
                 </div>
               ) : null}
 
-              {/* Presets fuer Spurentrennung */}
-              <div className="mt-[20px] flex flex-col gap-[8px]">
-                <span className="text-small font-semibold text-ink">Trennungs-Modus:</span>
-                <div className="flex flex-wrap gap-[8px]">
-                  {[
-                    {
-                      label: 'Ausgewogen (Standard)',
-                      desc: 'Optimale Balance aus Gesang, Beat und Begleitung',
-                      patch: { vocalFocus: 0.65, maskExponent: 2.8, fftSize: 4096, hopSize: 1024, timeKernel: 17, freqKernel: 17 },
-                    },
-                    {
-                      label: 'Vocal-Fokus (Gesang isolieren)',
-                      desc: 'Maximale Mittenschärfe gegen Übersprechen von Begleitinstrumenten',
-                      patch: { vocalFocus: 0.85, maskExponent: 3.5, fftSize: 4096, hopSize: 1024, timeKernel: 17, freqKernel: 17 },
-                    },
-                    {
-                      label: 'Karaoke / Instrumental',
-                      desc: 'Aggressive Gesangsabsenkung für saubere Backingtracks',
-                      patch: { vocalFocus: 0.85, maskExponent: 3.5, fftSize: 4096, hopSize: 1024, timeKernel: 17, freqKernel: 17 },
-                    },
-                    {
-                      label: 'Beat & Rhythmus',
-                      desc: 'Schnelle Transientenverarbeitung für Drums und Perkussion',
-                      patch: { vocalFocus: 0.50, maskExponent: 3.0, fftSize: 2048, hopSize: 512, timeKernel: 9, freqKernel: 9 },
-                    },
-                  ].map((preset) => {
-                    const active = options.vocalFocus === preset.patch.vocalFocus && options.maskExponent === preset.patch.maskExponent && options.fftSize === preset.patch.fftSize
-                    return (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => setSeparation(preset.patch)}
-                        title={preset.desc}
-                        className={`rounded-nav px-[12px] py-[6px] text-small font-medium transition-all ${
-                          active
-                            ? 'bg-ink text-on-ink shadow-sm'
-                            : 'bg-panel-soft text-ink ring-1 ring-line hover:bg-panel-mid'
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    )
-                  })}
-                </div>
+              {/* Three ways to weight the separation, said in plain words with
+                  what each does underneath. „Vocal-Fokus" and „Karaoke" were
+                  the same numbers under two names and lit up together. */}
+              <div className="mt-[20px] flex flex-col gap-[8px] border-t border-line pt-[10px]">
+                <span className="text-small text-prose">Worauf es ankommt</span>
+                <ChoiceRow
+                  value={activePreset?.id ?? ''}
+                  options={SEPARATION_PRESETS.map((preset) => ({ value: preset.id, label: preset.label, title: preset.desc }))}
+                  onChange={(id) => {
+                    const preset = SEPARATION_PRESETS.find((entry) => entry.id === id)
+                    if (preset) setSeparation(preset.patch)
+                  }}
+                />
+                <span className="text-small leading-[1.45] text-muted">
+                  {activePreset ? activePreset.desc : 'Eigene Einstellung — siehe Feinjustierung.'}
+                </span>
               </div>
 
-              {/* Feineinstellungen */}
-              <details className="mt-[16px] rounded-card bg-panel-soft p-[16px]">
-                <summary className="cursor-pointer list-none text-small font-semibold text-ink">
-                  Feinjustierung
-                  <span className="ml-[8px] font-normal text-muted">
-                    Mittenschärfe, Filterhärte und FFT-Auflösung
-                  </span>
-                </summary>
-                <div className="mt-[16px] grid gap-[20px] sm:grid-cols-2">
+              <Reveal label="Feinjustierung" className="mt-[12px]">
+                <div className="grid gap-[20px] pb-[8px] pt-[4px] sm:grid-cols-2">
                   <Slider
-                    label="Mittenschärfe (Vocal Focus)"
+                    label="Mittenschärfe"
                     display={options.vocalFocus.toFixed(2)}
                     min={0}
                     max={0.95}
@@ -247,7 +242,7 @@ export function StemsPanel() {
                     onChange={(event) => setSeparation({ vocalFocus: Number(event.target.value) })}
                   />
                   <Slider
-                    label="Maskenhärte (Steilheit)"
+                    label="Maskenhärte"
                     display={options.maskExponent.toFixed(1)}
                     min={1}
                     max={4.5}
@@ -255,7 +250,7 @@ export function StemsPanel() {
                     value={options.maskExponent}
                     onChange={(event) => setSeparation({ maskExponent: Number(event.target.value) })}
                   />
-                  <Field label="Auflösung (FFT)" hint="Größer trennt Töne feiner, kleiner schont Transienten.">
+                  <Field label="Auflösung (FFT)" hint="Grösser trennt Töne feiner, kleiner schont Anschläge.">
                     <Select
                       value={options.fftSize}
                       onChange={(event) => {
@@ -282,7 +277,7 @@ export function StemsPanel() {
                     </Select>
                   </Field>
                 </div>
-              </details>
+              </Reveal>
 
               <div className="mt-[28px] flex flex-wrap items-center gap-[12px]">
                 <Button onClick={run} disabled={running}>

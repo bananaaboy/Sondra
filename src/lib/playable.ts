@@ -55,6 +55,13 @@ export function browserPlaysAudio(codec: string): boolean {
       return canPlay('audio/mp4; codecs="ac-3"')
     case 'eac3':
       return canPlay('audio/mp4; codecs="ec-3"')
+    // Plain PCM, as a WAV carries it: every browser plays 8, 16 and 24 bit
+    // and 32-bit float. Without this every WAV went through FFmpeg first.
+    case 'pcm_u8':
+    case 'pcm_s16le':
+    case 'pcm_s24le':
+    case 'pcm_f32le':
+      return canPlay('audio/wav')
     default:
       return false
   }
@@ -194,7 +201,8 @@ const firstOf = (facts: DiskFacts, type: StreamInfo['type']) => facts.streams.fi
 const CODEC_NAMES: Record<string, string> = {
   aac: 'AAC', mp3: 'MP3', ac3: 'AC-3', eac3: 'E-AC-3', dts: 'DTS', truehd: 'TrueHD', opus: 'Opus', vorbis: 'Vorbis',
   flac: 'FLAC', h264: 'H.264', hevc: 'H.265', vp9: 'VP9', vp8: 'VP8', av1: 'AV1', mpeg4: 'MPEG-4', mpeg2video: 'MPEG-2',
-  msmpeg4v3: 'DivX 3', wmv3: 'WMV', vc1: 'VC-1', wmav2: 'WMA', mp2: 'MP2', prores: 'ProRes',
+  msmpeg4v3: 'DivX 3', wmv3: 'WMV', vc1: 'VC-1', wmav2: 'WMA', mp2: 'MP2', prores: 'ProRes', alac: 'ALAC',
+  pcm_u8: 'PCM 8 bit', pcm_s16le: 'PCM 16 bit', pcm_s24le: 'PCM 24 bit', pcm_s32le: 'PCM 32 bit', pcm_f32le: 'PCM 32 bit Float',
 }
 
 export const codecName = (codec: string | null) => (codec ? CODEC_NAMES[codec] ?? codec.toUpperCase() : 'unbekannt')

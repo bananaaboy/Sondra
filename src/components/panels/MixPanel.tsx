@@ -116,7 +116,14 @@ export function MixPanel() {
   const key = voice && music ? `${voice.id}|${music.id}` : ''
 
   useEffect(() => {
-    if (!voice || !music || decoded?.key === key) return
+    // With one file the first picks are briefly the same file twice, and the
+    // read that starts then is cancelled a render later. A cancelled read
+    // must take its „Ton wird gelesen" with it, or the bar stays for good.
+    if (!voice || !music || voice.id === music.id) {
+      setDecoding(false)
+      return
+    }
+    if (decoded?.key === key) return
     let cancelled = false
     setDecoding(true)
     setError(null)
@@ -127,6 +134,7 @@ export function MixPanel() {
       .finally(() => !cancelled && setDecoding(false))
     return () => {
       cancelled = true
+      setDecoding(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])

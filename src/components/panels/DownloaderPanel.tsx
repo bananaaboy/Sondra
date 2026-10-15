@@ -35,7 +35,8 @@ import {
 } from '../../lib/studio'
 import { serviceConnection } from '../../lib/serviceState'
 import { kindFromMime, useSession } from '../../state/store'
-import { ArrowRight, Button, Card, Notice, Progress, Reveal, TextInput } from '../ui/primitives'
+import { ArrowRight, Button, Card, Notice, Progress, Reveal, Select, TextInput, Toggle } from '../ui/primitives'
+import { ChoiceRow } from '../editor/EditorShell'
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { AdvancedDownloader } from './DownloaderAdvanced'
 
@@ -66,7 +67,7 @@ function groupStreams(streams: StudioStream[]): StreamGroup[] {
       if (!groups.has('audio')) {
         groups.set('audio', {
           id: 'audio',
-          title: 'Nur Tonspur (Audio)',
+          title: 'Nur Ton',
           badge: 'Audio',
           isAudio: true,
           streams: [],
@@ -984,142 +985,116 @@ export function DownloaderPanel() {
           </div>
 
           {isPortalUrl(url) && !IN_DESKTOP_APP ? (
-            <div className="flex flex-wrap items-center justify-between gap-[8px] rounded-nav bg-panel-soft px-[12px] py-[8px] text-small text-ink">
-              <span>YouTube blockiert direkte Webbrowser-Downloads ohne Software.</span>
+            <p className="text-small leading-[1.5] text-prose">
+              YouTube lässt sich aus dem Browser allein oft nicht oder nur in kleiner Auflösung laden; voll geht es mit der App
+              oder einer Brücke auf diesem Rechner.{' '}
               <button
                 type="button"
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent('sondra:open-setup-dialog'))
                 }}
-                className="font-medium underline hover:text-ink cursor-pointer"
+                className="press rounded-nav text-ink underline underline-offset-2"
               >
-                Anleitung & Optionen ansehen
+                So richten Sie es ein
               </button>
-            </div>
+            </p>
           ) : null}
 
-          {/* Download-Optionen & Format-Wahl */}
-          <div className="mt-[12px] flex flex-col gap-[12px] rounded-card bg-panel-soft p-[14px]">
-            <div className="flex flex-wrap items-center justify-between gap-[8px]">
-              <span className="text-small font-semibold text-ink">Download-Modus:</span>
-              <div role="radiogroup" aria-label="Download-Modus" className="inline-flex rounded-nav bg-canvas p-[3px] ring-1 ring-line">
-                <button
-                  type="button"
-                  onClick={() => setFilterAudioOnly(false)}
-                  className={`rounded-nav px-[14px] py-[4px] text-small font-medium transition-colors ${
-                    !filterAudioOnly ? 'bg-ink text-on-ink shadow-sm' : 'text-muted hover:text-ink'
-                  }`}
-                >
-                  Video & Audio
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterAudioOnly(true)}
-                  className={`rounded-nav px-[14px] py-[4px] text-small font-medium transition-colors ${
-                    filterAudioOnly ? 'bg-ink text-on-ink shadow-sm' : 'text-muted hover:text-ink'
-                  }`}
-                >
-                  Nur Tonspur (Audio)
-                </button>
-              </div>
+          {/* What to fetch and how to name it, asked the way every form on
+              the page asks: a line, the question, the choices. It was a
+              tinted box with colon labels and the browser's own checkbox
+              and list — the one corner of the page in another hand. */}
+          <div className="mt-[8px] grid gap-x-[32px] gap-y-[4px] sm:grid-cols-2">
+            <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+              <span className="text-small text-prose">Was laden</span>
+              <ChoiceRow
+                value={filterAudioOnly ? 'audio' : 'video'}
+                options={[
+                  { value: 'video', label: 'Video mit Ton' },
+                  { value: 'audio', label: 'Nur Ton' },
+                ]}
+                onChange={(value) => setFilterAudioOnly(value === 'audio')}
+              />
+              {filterAudioOnly ? (
+                <>
+                  <ChoiceRow
+                    value={targetAudioFormat}
+                    options={AUDIO_FORMAT_CONFIGS.map((format) => ({ value: format.id, label: format.label, title: format.desc }))}
+                    onChange={setTargetAudioFormat}
+                  />
+                  <span className="text-small leading-[1.45] text-muted">
+                    {AUDIO_FORMAT_CONFIGS.find((format) => format.id === targetAudioFormat)?.desc}. Die Tonspur wird herausgelöst und
+                    so gespeichert.
+                  </span>
+                </>
+              ) : null}
             </div>
 
-            {filterAudioOnly ? (
-              <div className="flex flex-col gap-[8px] border-t border-line/60 pt-[10px]">
-                <div className="flex flex-wrap items-center gap-[8px]">
-                  <span className="text-small font-medium text-ink">Audioformat:</span>
-                  <div className="flex flex-wrap gap-[6px]">
-                    {AUDIO_FORMAT_CONFIGS.map((fmt) => (
-                      <button
-                        key={fmt.id}
-                        type="button"
-                        onClick={() => setTargetAudioFormat(fmt.id)}
-                        className={`rounded-nav px-[10px] py-[3px] text-small transition-all ${
-                          targetAudioFormat === fmt.id
-                            ? 'bg-ink text-on-ink font-semibold shadow-sm'
-                            : 'bg-canvas text-ink ring-1 ring-line hover:bg-panel-mid'
-                        }`}
-                        title={fmt.desc}
-                      >
-                        {fmt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-micro text-muted">
-                  {AUDIO_FORMAT_CONFIGS.find((f) => f.id === targetAudioFormat)?.desc} — Tonspur wird extrahiert und als {targetAudioFormat.toUpperCase()} abgespeichert.
-                </p>
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px] border-t border-line/60 pt-[10px]">
-              <label className="flex cursor-pointer items-center gap-[8px] text-small font-medium text-ink">
-                <input
-                  type="checkbox"
-                  checked={autoTranscribe}
-                  onChange={(e) => setAutoTranscribe(e.target.checked)}
-                  className="rounded border-line text-ink focus:ring-ink"
-                />
-                Automatisch Untertitel generieren (.srt)
+            <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+              <label htmlFor="stealth-mode-select" className="text-small text-prose">
+                Dateiname
               </label>
-
-              <div className="flex items-center gap-[8px]">
-                <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
-                  Dateiname:
-                </label>
-                <select
-                  id="stealth-mode-select"
-                  value={stealthMode}
-                  onChange={(e) => setStealthMode(e.target.value as StealthMode)}
-                  className="rounded-nav border border-line bg-canvas px-[8px] py-[3px] text-small text-ink focus:border-ink focus:outline-none"
-                >
-                  <option value="off">Originaltitel</option>
-                  <option value="standard">Standard (media_xxx)</option>
-                  <option value="full_security">Verschleiert (Hash)</option>
-                  <option value="teams_office">Office Dokument</option>
-                </select>
-              </div>
+              <Select id="stealth-mode-select" value={stealthMode} onChange={(e) => setStealthMode(e.target.value as StealthMode)}>
+                <option value="off">Originaltitel</option>
+                <option value="standard">Neutral (media_…)</option>
+                <option value="full_security">Nur Zeichen (Hash)</option>
+                <option value="teams_office">Wie eine Office-Datei</option>
+              </Select>
+              {stealthMode !== 'off' ? (
+                <span className="text-small leading-[1.45] text-muted">
+                  Zum Beispiel{' '}
+                  <span className="value">
+                    {stealthMode === 'standard'
+                      ? 'media_7a8b9c.mp4'
+                      : stealthMode === 'full_security'
+                        ? '7a8b9c0d1e2f.mp4'
+                        : 'Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4'}
+                  </span>
+                </span>
+              ) : null}
             </div>
 
-            {stealthMode !== 'off' ? (
-              <p className="text-micro text-muted">
-                {stealthMode === 'standard' && 'Muster: media_7a8b9c.mp4 — neutraler Standardname'}
-                {stealthMode === 'full_security' && 'Muster: 7a8b9c0d1e2f.mp4 — minimaler Code ohne Wörter oder Zeitbezug'}
-                {stealthMode === 'teams_office' && 'Muster: Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4 — wirkt wie ein regulärer Office-Download'}
-              </p>
-            ) : null}
+            <div className="border-t border-line pt-[10px] sm:col-span-2">
+              <Toggle
+                label="Untertitel dazu erstellen"
+                hint="Nach dem Laden schreibt Whisper auf diesem Gerät mit, als .srt neben der Datei."
+                checked={autoTranscribe}
+                onChange={setAutoTranscribe}
+              />
+            </div>
 
             {IN_DESKTOP_APP ? (
-              <div className="flex flex-wrap items-center gap-[10px] border-t border-line/60 pt-[8px]">
-                <label htmlFor="adapter-select" className="text-small font-medium text-ink">
-                  Verbindung / Route:
+              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
+                <label htmlFor="adapter-select" className="text-small text-prose">
+                  Netzwerk
                 </label>
-                <select
-                  id="adapter-select"
-                  value={selectedAdapter}
-                  disabled={adapterLoading || adapters.length === 0}
-                  onChange={(e) => void changeAdapter(e.target.value)}
-                  className="rounded-nav border border-line bg-canvas px-[8px] py-[3px] text-small text-ink focus:border-ink focus:outline-none"
-                >
-                  {adapters.length === 0 ? (
-                    <option value="default">Automatisch (Windows-Standard)</option>
-                  ) : (
-                    adapters.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => void fetchAdapters()}
-                  disabled={adapterLoading}
-                  title="Adapterliste aktualisieren"
-                  className="cursor-pointer text-small text-muted underline hover:text-ink disabled:opacity-50"
-                >
-                  {adapterLoading ? 'Sucht…' : 'Neu suchen'}
-                </button>
+                <div className="flex flex-wrap items-center gap-[12px]">
+                  <Select
+                    id="adapter-select"
+                    value={selectedAdapter}
+                    disabled={adapterLoading || adapters.length === 0}
+                    onChange={(e) => void changeAdapter(e.target.value)}
+                    className="w-auto! min-w-[260px]"
+                  >
+                    {adapters.length === 0 ? (
+                      <option value="default">Automatisch (Windows-Standard)</option>
+                    ) : (
+                      adapters.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))
+                    )}
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => void fetchAdapters()}
+                    disabled={adapterLoading}
+                    className="press rounded-nav text-small text-ink underline underline-offset-2 disabled:opacity-40"
+                  >
+                    {adapterLoading ? 'Sucht …' : 'Neu suchen'}
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
@@ -1393,7 +1368,7 @@ export function DownloaderPanel() {
         <Card tone="keylime" className="rise">
           <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line pb-[12px]">
             <div>
-              <h3 className="text-subheading text-ink">Mehrfach-Download ({batchEntries.length} Einträge)</h3>
+              <h3 className="text-subheading text-ink">{batchEntries.length} Einträge</h3>
               <p className="mt-[2px] text-small text-muted">
                 {batchEntries.filter((e) => e.status === 'done').length} von {batchEntries.length} geladen
                 {batchEntries.filter((e) => e.status === 'error').length > 0
@@ -1405,33 +1380,26 @@ export function DownloaderPanel() {
                     } wartend`
                   : ''}
                 {stealthMode !== 'off'
-                  ? ` · Verschleierung aktiv (${
-                      stealthMode === 'standard'
-                        ? 'Standard'
-                        : stealthMode === 'full_security'
-                        ? 'Maximale Sicherheit'
-                        : 'Teams / Office'
-                    })`
+                  ? ` · Dateinamen ${
+                      stealthMode === 'standard' ? 'neutral' : stealthMode === 'full_security' ? 'nur aus Zeichen' : 'wie Office-Dateien'
+                    }`
                   : ''}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-[8px]">
-              <div className="flex items-center gap-[6px] text-small text-muted">
-                <label htmlFor="concurrency-select" className="text-small text-muted">Gleichzeitig:</label>
-                <select
-                  id="concurrency-select"
-                  value={concurrency}
-                  disabled={batchBusy}
-                  onChange={(e) => setConcurrency(Number(e.target.value))}
-                  className="rounded-nav border border-line bg-canvas px-[8px] py-[4px] text-small font-medium text-ink focus:border-ink focus:outline-none"
-                >
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <option key={n} value={n}>
-                      {n} gleichzeitig{n === 3 ? ' (Standard)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                aria-label="Wie viele gleichzeitig laden"
+                value={concurrency}
+                disabled={batchBusy}
+                onChange={(e) => setConcurrency(Number(e.target.value))}
+                className="w-auto! py-[6px]"
+              >
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n} gleichzeitig
+                  </option>
+                ))}
+              </Select>
               {batchBusy ? (
                 <Button
                   size="sm"
@@ -1460,17 +1428,16 @@ export function DownloaderPanel() {
             </div>
           </div>
 
-          <div className="mt-[16px] flex flex-col gap-[12px]">
+          {/* One row per entry, divided by a line — they were boxes on a
+              tint, a card per row. */}
+          <ol className="flex flex-col divide-y divide-line">
             {batchEntries.map((entry, index) => {
               const stream =
                 entry.result?.streams.find((s) => s.id === entry.selectedStreamId) ||
                 entry.result?.streams[0]
 
               return (
-                <div
-                  key={`${index}-${entry.url}`}
-                  className="flex flex-col gap-[8px] rounded-nav border border-line bg-panel-soft p-[12px]"
-                >
+                <li key={`${index}-${entry.url}`} className="flex max-w-none flex-col gap-[8px] py-[12px]">
                   <div className="flex flex-wrap items-center justify-between gap-[8px]">
                     <div className="min-w-0 flex-1">
                       {entry.result ? (
@@ -1519,7 +1486,8 @@ export function DownloaderPanel() {
                       {entry.status === 'ready' && entry.result ? (
                         <>
                           {entry.result.streams.length > 1 ? (
-                            <select
+                            <Select
+                              aria-label="Fassung"
                               value={entry.selectedStreamId}
                               disabled={batchBusy}
                               onChange={(e) => {
@@ -1532,14 +1500,14 @@ export function DownloaderPanel() {
                                     : null
                                 )
                               }}
-                              className="rounded-nav border border-line bg-canvas px-[8px] py-[4px] text-small text-ink focus:border-ink focus:outline-none"
+                              className="w-auto! max-w-[280px] py-[6px]"
                             >
                               {entry.result.streams.map((s) => (
                                 <option key={s.id} value={s.id}>
                                   {s.label} ({s.ext.toUpperCase()}{s.bytes ? ` · ${formatBytes(s.bytes)}` : ''})
                                 </option>
                               ))}
-                            </select>
+                            </Select>
                           ) : stream ? (
                             <span className="value text-small text-muted">
                               {stream.ext.toUpperCase()}
@@ -1588,7 +1556,12 @@ export function DownloaderPanel() {
                   </div>
 
                   {entry.status === 'error' ? (
-                    <p className="text-small text-prose font-medium text-ink">{entry.error}</p>
+                    <p className="flex gap-[8px] text-small leading-[1.5] text-prose">
+                      <span className="font-semibold text-ink" aria-hidden>
+                        !
+                      </span>
+                      {entry.error}
+                    </p>
                   ) : null}
 
                   {entry.status === 'downloading' && entry.progress ? (
@@ -1599,10 +1572,10 @@ export function DownloaderPanel() {
                       }`}
                     />
                   ) : null}
-                </div>
+                </li>
               )
             })}
-          </div>
+          </ol>
         </Card>
       ) : null}
 
@@ -1611,8 +1584,8 @@ export function DownloaderPanel() {
         <Card tone="keylime">
           <div className="flex flex-wrap items-center justify-between gap-[8px] border-b border-line pb-[10px]">
             <div>
-              <h3 className="text-small font-semibold text-ink">Download-Verlauf (Zuletzt abgerufen)</h3>
-              <p className="text-small text-muted">Die letzten {history.length} Einträge auf diesem Gerät gemerkt.</p>
+              <h3 className="text-subheading text-ink">Zuletzt geladen</h3>
+              <p className="mt-[2px] text-small text-muted">Die letzten {history.length} Adressen, gemerkt nur auf diesem Gerät.</p>
             </div>
             <Button
               size="sm"
@@ -1629,19 +1602,19 @@ export function DownloaderPanel() {
               Verlauf leeren
             </Button>
           </div>
-          <div className="mt-[12px] flex flex-col divide-y divide-line/60">
+          <div className="flex flex-col divide-y divide-line">
             {history.map((item) => (
-              <div key={item.id} className="flex flex-wrap items-center justify-between gap-[8px] py-[8px]">
+              <div key={item.id} className="flex flex-col gap-[8px] py-[10px] sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-small font-semibold text-ink" title={item.title}>
+                  <p className="truncate text-small text-ink" title={item.title}>
                     {item.title}
                   </p>
-                  <p className="value text-micro text-muted">
+                  <p className="value truncate text-small text-muted">
                     {[
                       item.author,
                       item.format.toUpperCase(),
                       item.bytes ? formatBytes(item.bytes) : null,
-                      new Date(item.timestamp).toLocaleDateString(undefined, {
+                      new Date(item.timestamp).toLocaleString('de-CH', {
                         day: '2-digit',
                         month: '2-digit',
                         hour: '2-digit',
@@ -1660,9 +1633,8 @@ export function DownloaderPanel() {
                       setUrl(item.url)
                       void look(item.url)
                     }}
-                    title="URL erneut abrufen"
                   >
-                    Erneut abrufen
+                    Wieder nachsehen
                   </Button>
                   <Button
                     size="sm"
@@ -1670,9 +1642,8 @@ export function DownloaderPanel() {
                     onClick={() => {
                       void navigator.clipboard.writeText(item.url)
                     }}
-                    title="URL in Zwischenablage kopieren"
                   >
-                    Kopieren
+                    Adresse kopieren
                   </Button>
                 </div>
               </div>

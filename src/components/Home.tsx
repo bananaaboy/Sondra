@@ -32,10 +32,33 @@ import { ArrowRight, Button } from './ui/primitives'
 
 /* -------------------------------------------------------------------------- */
 
-/** Every tile borrows the icon of the tool it opens. */
+/** A tile borrows the icon of the tool it opens, unless it has its own below. */
 const ICONS: Record<PanelId, ReactNode> = Object.fromEntries(
   PANELS.map((panel) => [panel.id, panel.icon]),
 ) as Record<PanelId, ReactNode>
+
+/**
+ * The sound editor's jobs, each with its own mark. Borrowing the editor's
+ * icon put the same wave on thirteen tiles, and a field of identical marks
+ * reads as no marks at all.
+ */
+const ACTION_ICONS: Partial<Record<string, ReactNode>> = {
+  'audio-cut': <path d="M5 3.4v9.2M11 3.4v9.2M1.8 8h1.6M12.6 8h1.6M6.6 8l.8-2.4 1.2 4.8.8-2.4" />,
+  'audio-fade': <path d="M1.8 12.4L5.6 3.6h4.8l3.8 8.8M1.8 12.4h12.4" />,
+  'audio-gain': <path d="M3 12.6v-1.8M6 12.6V8.6M9 12.6V6.2M12 12.6V3.6" />,
+  'audio-silence': <path d="M1.6 8h.8l.9-2.8.9 5.6.9-2.8h4.6l.9-2.8.9 5.6.9-2.8h.8" />,
+  'audio-clipboard': <path d="M5.6 5.6h7v7h-7zM3.4 10.4v-7h7" />,
+  'audio-filter': <path d="M1.8 10.6c1.6 0 2-5.2 3.6-5.2s2 6.2 3.6 6.2 2.2-3.8 5.2-3.8" />,
+  'audio-noise': <path d="M1.8 8h1.6l1-2.6 1.4 5.2 1-2.6h1.4M10.6 5.2v.01M12.8 7.2v.01M10.8 10.4v.01M13.2 11.6v.01M12.4 3.8v.01" />,
+  'audio-dynamics': <path d="M3.4 8h.01M6 5.6a3.4 3.4 0 010 4.8M8.6 3.6a6.2 6.2 0 010 8.8M11.2 1.8a8.8 8.8 0 010 12.4" />,
+  'audio-reverse': <path d="M13.6 4.8H2.6m0 0l2-2m-2 2l2 2M2.6 11.2h1.6l.9-1.8 1.4 3.6 1.4-3.6.9 1.8h4.8" />,
+  'audio-join': <path d="M1.8 5.2h4.4v5.6H1.8zM9.8 5.2h4.4v5.6H9.8zM6.2 8h3.6" />,
+  'audio-pitch': <path d="M2 12.8h3V9.6h3V6.4h3V3.2h3" />,
+  'audio-tempo': <path d="M5.4 13.2L7 2.8h2l1.6 10.4zM4.4 13.2h7.2M8 10.2l3.4-5.2" />,
+  'audio-shape': <path d="M9.4 8a3.6 3.6 0 11-7.2 0 3.6 3.6 0 017.2 0zM13.8 8a3.6 3.6 0 11-7.2 0 3.6 3.6 0 017.2 0z" />,
+}
+
+const iconFor = (action: ToolAction): ReactNode => ACTION_ICONS[action.id] ?? ICONS[action.panel]
 
 /** The groups a visitor filters by. „Hereinholen" is the way in above. */
 const FILTERS: ToolGroup[] = ['ton', 'video', 'bild', 'musik']
@@ -77,7 +100,7 @@ function Tool({
             dimmed ? 'text-faint' : 'text-ink group-hover:bg-ink group-hover:text-on-ink'
           }`}
         >
-          <ToolIcon>{ICONS[action.panel]}</ToolIcon>
+          <ToolIcon>{iconFor(action)}</ToolIcon>
         </span>
         <span className="text-small font-semibold leading-[1.3] text-ink">{action.label}</span>
       </span>
@@ -154,7 +177,7 @@ function FileCard({ onOpen }: { onOpen: () => void }) {
               className="press flex items-center justify-between gap-[8px] rounded-nav bg-raised px-[14px] py-[12px] text-left text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink"
             >
               <span className="flex min-w-0 items-center gap-[8px]">
-                <ToolIcon>{ICONS[action.panel]}</ToolIcon>
+                <ToolIcon>{iconFor(action)}</ToolIcon>
                 <span className="truncate">{action.label}</span>
               </span>
               <ArrowRight />

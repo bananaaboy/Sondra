@@ -444,8 +444,9 @@ export function ImagePanel() {
         tools={tools}
         tool={tool}
         onTool={(id) => setTool(id as ToolId)}
+        // The zoom bar floats at the stage's foot; the picture ends above it.
         stage={
-          <div ref={stageRef} className="absolute inset-[16px] flex items-center justify-center overflow-auto">
+          <div ref={stageRef} className="absolute inset-x-[16px] top-[16px] bottom-[64px] flex items-center justify-center overflow-auto">
             {decodeError ? (
               <p className="max-w-[40ch] text-center text-small leading-[1.55] text-stage-muted">{decodeError}</p>
             ) : (
