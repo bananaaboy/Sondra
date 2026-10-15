@@ -1305,10 +1305,17 @@ function VideoInspector({
           >
             Auswahl als GIF
           </Button>
+          <Button
+            size="sm"
+            variant="quiet"
+            disabled={running}
+            onClick={() => void run((input) => buildVideoJob({ ...ops, container: 'webp' }, input, duration, frame), 'WebP wird gebaut', 'image')}
+          >
+            Auswahl als WebP
+          </Button>
         </div>
         <p className="text-small leading-[1.45] text-muted">
-          Das GIF übernimmt Schnitt, Ausschnitt und Drehung — aber keinen Ton, und es wird auf 15
-          Bilder pro Sekunde und 640 Pixel Breite gebracht.
+          GIF und WebP übernehmen Schnitt, Ausschnitt und Drehung — ohne Ton, animiert und optimiert.
         </p>
       </>
     )
@@ -1318,27 +1325,113 @@ function VideoInspector({
     { value: 'mp4', label: 'MP4' },
     { value: 'webm', label: 'WebM' },
     { value: 'gif', label: 'GIF' },
+    { value: 'webp', label: 'WebP' },
+  ]
+
+  const fpsOptions = [
+    { value: 10, label: '10 fps' },
+    { value: 15, label: '15 fps' },
+    { value: 24, label: '24 fps' },
+    { value: 30, label: '30 fps' },
+  ]
+
+  const widthOptions = [
+    { value: 320, label: '320px' },
+    { value: 480, label: '480px' },
+    { value: 640, label: '640px' },
+    { value: 720, label: '720px' },
   ]
 
   return (
     <>
       <ToolHeading title="Fertigstellen" hint="Alles, was Sie eingestellt haben, in einem Durchgang." />
-      <ChoiceRow
-        value={ops.container}
-        columns={3}
-        onChange={(value) => patch({ container: value })}
-        options={containers}
-      />
+      <div className="flex flex-col gap-[6px]">
+        <ChoiceRow
+          value={ops.container}
+          columns={4}
+          onChange={(value) => patch({ container: value })}
+          options={containers}
+        />
+        <Select
+          aria-label="Format"
+          value={ops.container}
+          onChange={(event) => patch({ container: event.target.value as VideoContainer })}
+        >
+          {containers.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </Select>
+      </div>
       <p className="text-small leading-[1.45] text-muted">
         {ops.container === 'mp4'
           ? 'H.264 in MP4 — läuft überall, auch auf älteren Geräten.'
           : ops.container === 'webm'
             ? 'VP8 in WebM — offenes Format, spielt in jedem Browser.'
-            : 'GIF — ohne Ton, 15 Bilder pro Sekunde, für kurze Schnipsel.'}
+            : ops.container === 'gif'
+              ? 'GIF — animierte Schleife mit Palette für saubere Farben ohne Artefakte.'
+              : 'WebP — animiertes WebP, modern, hoch komprimiert und verlustarm.'}
       </p>
+
+      {(ops.container === 'gif' || ops.container === 'webp') && (
+        <div className="flex flex-col gap-[12px] border-t border-line pt-[12px]">
+          <div className="flex flex-col gap-[4px]">
+            <span className="text-small font-medium text-ink">Bildrate (FPS)</span>
+            <ChoiceRow
+              value={ops.fps ?? 15}
+              columns={4}
+              onChange={(value) => patch({ fps: value })}
+              options={fpsOptions}
+            />
+            <Select
+              aria-label="Bildrate (FPS)"
+              value={ops.fps ?? 15}
+              onChange={(event) => patch({ fps: Number(event.target.value) })}
+            >
+              {fpsOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-[4px]">
+            <span className="text-small font-medium text-ink">Breite (Skalierung)</span>
+            <ChoiceRow
+              value={ops.width ?? 480}
+              columns={4}
+              onChange={(value) => patch({ width: value })}
+              options={widthOptions}
+            />
+            <Select
+              aria-label="Breite (Skalierung)"
+              value={ops.width ?? 480}
+              onChange={(event) => patch({ width: Number(event.target.value) })}
+            >
+              {widthOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      )}
+
       <Button
         disabled={running || duration <= 0}
-        onClick={() => void run((input) => buildVideoJob(ops, input, duration, frame), 'Video wird gerechnet', ops.container === 'gif' ? 'image' : 'video')}
+        onClick={() => {
+          const isAnim = ops.container === 'gif' || ops.container === 'webp'
+          const label =
+            ops.container === 'gif'
+              ? 'GIF wird gerechnet'
+              : ops.container === 'webp'
+                ? 'WebP wird gerechnet'
+                : 'Video wird gerechnet'
+          void run((input) => buildVideoJob(ops, input, duration, frame), label, isAnim ? 'image' : 'video')
+        }}
       >
         {running ? 'Läuft …' : 'Jetzt rechnen'}
       </Button>

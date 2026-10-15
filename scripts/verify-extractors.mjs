@@ -29,6 +29,7 @@ import {
   isStreamtapeUrl,
   isVidozaUrl,
   isPodcastOrRssUrl,
+  isSpotifyUrl,
   parsePodcastFeed,
 } from '../api/extractors.js'
 
@@ -59,6 +60,9 @@ check('URL: Vidmoly', isVidmolyUrl('https://vidmoly.to/embed-xyz.html'), true)
 check('URL: DoodStream', isDoodstreamUrl('https://dood.to/e/xyz123'), true)
 check('URL: Streamtape', isStreamtapeUrl('https://streamtape.com/e/68rB24M1gXszB12'), true)
 check('URL: Vidoza', isVidozaUrl('https://vidoza.net/embed-8x7y6z5w4v.html'), true)
+check('URL: Spotify Track', isSpotifyUrl('https://open.spotify.com/track/4HCOHRCSQelz2GPX8iTamO?si=274d78f4803a4df3'), true)
+check('URL: Spotify Album', isSpotifyUrl('https://open.spotify.com/album/4m2880jivSbbyEGAKfITCa'), true)
+check('URL: Spotify Playlist', isSpotifyUrl('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'), true)
 
 /* -------------------------------------------------------------------------- */
 /* 2. P.A.C.K.E.R Unpacker Check                                              */

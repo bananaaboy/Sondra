@@ -36,7 +36,7 @@ import {
 } from '../../lib/studio'
 import { serviceConnection } from '../../lib/serviceState'
 import { kindFromMime, useSession } from '../../state/store'
-import { ArrowRight, Button, Card, Notice, Progress, Reveal, Select, TextInput, Toggle } from '../ui/primitives'
+import { ArrowRight, Button, Card, Notice, Progress, Reveal, Select, Toggle } from '../ui/primitives'
 import { ChoiceRow } from '../editor/EditorShell'
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { AdvancedDownloader } from './DownloaderAdvanced'
@@ -550,6 +550,24 @@ export function DownloaderPanel() {
   const [progress, setProgress] = useState<{ loaded: number; total: number | null } | null>(null)
   /** What the last „Laden“ put into the session, so it can still be saved. */
   const [taken, setTaken] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null)
+  const [clipboardUrl, setClipboardUrl] = useState<string | null>(null)
+  const dismissedClipboardRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    const checkClipboard = async () => {
+      if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) return
+      try {
+        const text = (await navigator.clipboard.readText()).trim()
+        if (text && isPortalUrl(text) && text !== url.trim() && !dismissedClipboardRef.current.has(text)) {
+          setClipboardUrl(text)
+        }
+      } catch {}
+    }
+
+    void checkClipboard()
+    window.addEventListener('focus', checkClipboard)
+    return () => window.removeEventListener('focus', checkClipboard)
+  }, [url])
   const abortRef = useRef<AbortController | null>(null)
   const batchAbortRef = useRef<AbortController | null>(null)
   const resolvingMapRef = useRef<Map<number, Promise<void>>>(new Map())
@@ -1083,27 +1101,40 @@ export function DownloaderPanel() {
             void look()
           }}
         >
-          <div className="flex flex-col gap-[8px] sm:flex-row">
-            <TextInput
-              value={url}
-              onChange={(event) => {
-                setUrl(event.target.value)
-                setError(null)
-                setResult(null)
-                setBatchEntries(null)
-                setProgress(null)
-              }}
-              placeholder="https://... YouTube, Spotify, Apple Podcasts, AniWorld, Mediathek, Instagram, TikTok oder Datei"
-              inputMode="url"
-              aria-label="Adresse zum Herunterladen"
-              className="flex-1"
-            />
-            <Button type="submit" disabled={looking || url.trim().length === 0}>
-              {looking ? 'Wird gesucht …' : 'Nachsehen'}
-            </Button>
-          </div>
+          {/* Clipboard Link Erkennung */}
+          {clipboardUrl && clipboardUrl !== url.trim() ? (
+            <div className="flex items-center justify-between gap-[8px] rounded-nav bg-panel-soft px-[12px] py-[6px] text-micro text-ink border border-line">
+              <span className="truncate">
+                📋 Link in Zwischenablage: <span className="font-mono font-medium">{clipboardUrl.length > 55 ? clipboardUrl.slice(0, 55) + '…' : clipboardUrl}</span>
+              </span>
+              <div className="flex items-center gap-[6px] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUrl(clipboardUrl)
+                    setClipboardUrl(null)
+                    void look(clipboardUrl)
+                  }}
+                  className="rounded-nav bg-ink px-[8px] py-[2px] font-medium text-on-ink hover:opacity-90"
+                >
+                  Einfügen & Nachsehen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismissedClipboardRef.current.add(clipboardUrl)
+                    setClipboardUrl(null)
+                  }}
+                  className="rounded-nav p-[2px] text-muted hover:text-ink"
+                  title="Ausblenden"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          ) : null}
 
-          {/* Drag & Drop Zone */}
+          {/* Gestrichelte Suchleiste mit Info in der oberen inneren Ecke */}
           <div
             onDragOver={(e) => {
               e.preventDefault()
@@ -1111,33 +1142,57 @@ export function DownloaderPanel() {
             }}
             onDragLeave={() => setIsDragOver(false)}
             onDrop={handleDrop}
-            className={`mt-[6px] flex flex-col items-center justify-center gap-[6px] rounded-nav border-2 border-dashed p-[14px] text-center transition-colors ${
-              isDragOver ? 'border-ink bg-panel-strong ring-2 ring-ink/20' : 'border-line/70 hover:border-ink/40 bg-panel-soft/60'
+            className={`relative flex flex-col rounded-card border-2 border-dashed p-[8px] sm:p-[10px] transition-all ${
+              isDragOver
+                ? 'border-ink bg-panel-strong ring-2 ring-ink/20'
+                : 'border-line/80 hover:border-ink/50 bg-raised/70'
             }`}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="sr-only"
-              onChange={(e) => {
-                if (e.target.files) void handleFiles(e.target.files)
-                e.target.value = ''
-              }}
-            />
-            <div className="flex items-center gap-[8px] flex-wrap justify-center">
-              <span className="text-small font-semibold text-ink">Dateien oder Links per Drag & Drop ablegen</span>
+            {/* Kleine Info in der inneren oberen Ecke */}
+            <div className="flex items-center justify-between px-[4px] pb-[6px]">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="rounded-nav bg-panel px-[8px] py-[3px] text-micro font-medium text-ink ring-1 ring-line hover:bg-panel-strong transition-colors"
+                className="inline-flex items-center gap-[6px] text-micro text-muted hover:text-ink transition-colors cursor-pointer"
+                title=".txt- oder .m3u-Datei mit Download-Links auswählen"
               >
-                Datei wählen
+                <span className="font-semibold text-ink bg-panel px-[5px] py-[1px] rounded-nav border border-line/60">
+                  📄 .txt / .m3u
+                </span>
+                <span>Textdatei mit Links hier ablegen oder hochladen</span>
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.m3u,.m3u8,.csv,.json"
+                multiple
+                className="sr-only"
+                onChange={(e) => {
+                  if (e.target.files) void handleFiles(e.target.files)
+                  e.target.value = ''
+                }}
+              />
             </div>
-            <p className="text-micro text-muted max-w-[560px]">
-              Mediendateien (.mp4, .mp3, .wav etc.) landen direkt in der Sitzung. Textdateien (.txt, .m3u) mit Download-Links werden sofort ausgelesen und aufgelöst.
-            </p>
+
+            <div className="flex flex-col gap-[8px] sm:flex-row items-center">
+              <input
+                value={url}
+                onChange={(event) => {
+                  setUrl(event.target.value)
+                  setError(null)
+                  setResult(null)
+                  setBatchEntries(null)
+                  setProgress(null)
+                }}
+                placeholder="https://... YouTube, Spotify, Apple Podcasts, Mediathek, Instagram, TikTok oder Links einfügen"
+                inputMode="url"
+                aria-label="Adresse zum Herunterladen"
+                className="w-full bg-transparent px-[8px] py-[6px] text-small text-prose outline-none placeholder:text-muted/60 flex-1 font-mono"
+              />
+              <Button type="submit" disabled={looking || url.trim().length === 0} className="w-full sm:w-auto shrink-0">
+                {looking ? 'Wird gesucht …' : 'Nachsehen'}
+              </Button>
+            </div>
           </div>
 
           <div className="mt-[4px] flex flex-wrap items-center gap-[6px] text-micro text-muted">

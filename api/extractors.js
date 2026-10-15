@@ -28,6 +28,16 @@ const DOOD_HOSTS =
 const STREAMTAPE_HOSTS = /(?:^|\.)(?:streamtape\.(?:com|net|to|xyz)|streamta\.pe|streamadblocker\.com)$/i
 const VIDOZA_HOSTS = /(?:^|\.)(?:vidoza\.(?:net|org|co))$/i
 const BILIBILI_HOSTS = /(?:^|\.)(?:bilibili\.com|b23\.tv)$/i
+const SPOTIFY_HOSTS = /(?:^|\.)(?:spotify\.com|spoti\.fi|spotify\.link)$/i
+
+export function isSpotifyUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    return SPOTIFY_HOSTS.test(u.hostname)
+  } catch {
+    return false
+  }
+}
 
 export function isBilibiliUrl(rawUrl) {
   try {
@@ -1125,6 +1135,9 @@ export async function extractDirectHoster(rawUrl, options = {}) {
  * Handles AniWorld, SerienStream (s.to), and all embed hosters.
  */
 export async function extractDirectMedia(rawUrl, options = {}) {
+  if (isSpotifyUrl(rawUrl)) {
+    return extractSpotify(rawUrl, options)
+  }
   if (isAniworldUrl(rawUrl)) {
     return extractAniworld(rawUrl, options)
   }
@@ -1340,5 +1353,112 @@ export async function extractBilibili(rawUrl, options = {}) {
     duration: data.duration,
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Spotify Extractor (Tracks, Albums, Playlists)                             */
+/* -------------------------------------------------------------------------- */
+
+export async function extractSpotify(rawUrl, options = {}) {
+  try {
+    let target = rawUrl
+    if (/(?:spotify\.link|spoti\.fi)/i.test(target)) {
+      try {
+        const headRes = await boundedFetch(target, { method: 'HEAD', redirect: 'follow', ...options })
+        if (headRes?.url) target = headRes.url
+      } catch {}
+    }
+
+    const u = new URL(target)
+    const match = u.pathname.match(/\/(track|album|playlist|artist|episode|show)\/([a-zA-Z0-9]+)/i)
+    if (!match) return null
+
+    const type = match[1].toLowerCase()
+    const id = match[2]
+    const embedUrl = `https://open.spotify.com/embed/${type}/${id}`
+
+    let entity = null
+    try {
+      const res = await boundedFetch(embedUrl, {
+        headers: {
+          'User-Agent': DEFAULT_USER_AGENT,
+          'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
+        },
+        ...options,
+      })
+      if (res.ok) {
+        const html = await res.text()
+        const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/)
+        if (nextDataMatch) {
+          const parsed = JSON.parse(nextDataMatch[1])
+          entity = parsed.props?.pageProps?.state?.data?.entity || null
+        }
+      }
+    } catch {}
+
+    let oembed = null
+    if (!entity || !entity.title) {
+      try {
+        const oembedRes = await boundedFetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(target)}`, options)
+        if (oembedRes.ok) {
+          oembed = await oembedRes.json()
+        }
+      } catch {}
+    }
+
+    if (type === 'album' || type === 'playlist') {
+      const title = entity?.title || entity?.name || oembed?.title || 'Spotify Playlist'
+      const author = entity?.subtitle || (entity?.artists && entity.artists.map((a) => a.name).join(', ')) || 'Spotify'
+      const trackList = entity?.trackList || []
+      const items = trackList
+        .map((t, idx) => {
+          const trackId = t.uri ? t.uri.replace('spotify:track:', '') : t.id || ''
+          const artist = t.subtitle || (t.artists && t.artists.map((a) => a.name).join(', ')) || ''
+          return {
+            title: t.title ? (artist ? `${t.title} - ${artist}` : t.title) : `Track ${idx + 1}`,
+            url: trackId ? `https://open.spotify.com/track/${trackId}` : null,
+            duration: t.duration ? Math.round(t.duration / 1000) : null,
+          }
+        })
+        .filter((item) => item.url)
+
+      return {
+        isPlaylist: true,
+        type,
+        id,
+        title,
+        seriesTitle: author,
+        thumbnail: oembed?.thumbnail_url || null,
+        items,
+      }
+    }
+
+    const title = entity?.title || entity?.name || oembed?.title || 'Spotify Track'
+    let artists = ''
+    if (entity?.artists && Array.isArray(entity.artists)) {
+      artists = entity.artists.map((a) => a.name).join(', ')
+    } else if (entity?.subtitle) {
+      artists = entity.subtitle
+    }
+
+    const searchTerms = [title, artists].filter(Boolean).join(' ')
+    const searchQuery = `ytsearch1:${searchTerms} audio`.trim()
+
+    return {
+      isSpotifyTrack: true,
+      type: 'track',
+      id,
+      title: artists ? `${artists} - ${title}` : title,
+      trackTitle: title,
+      artist: artists,
+      duration: entity?.duration ? Math.round(entity.duration / 1000) : null,
+      thumbnail: oembed?.thumbnail_url || null,
+      searchQuery,
+      previewUrl: entity?.audioPreview?.url || null,
+    }
+  } catch {
+    return null
+  }
+}
+
 
 

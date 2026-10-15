@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 
 import { useIngestFiles } from '../../hooks/useIngest'
 import { getAudioContext, resumeAudioContext } from '../../lib/audio'
+import { EqualizerRack, EQUALIZER_PRESETS, type EqualizerPresetName } from '../../lib/audio/equalizer'
 import { createKaraokeProcessor, type KaraokeProcessor } from '../../lib/audioKaraoke'
 import { diskPath, probeDisk, runFfmpegOnDisk, unloadFfmpeg, type DiskFacts, type StreamInfo } from '../../lib/ffmpegClient'
 import { formatBytes } from '../../lib/format'
@@ -46,6 +47,7 @@ import {
 } from '../../lib/player'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { useSession, type Asset } from '../../state/store'
+import { EqualizerDrawer } from '../player/EqualizerDrawer'
 import { SettingsMenu, type Quality, type QualityState, type TrackState } from '../player/SettingsMenu'
 import { ArrowRight, Button } from '../ui/primitives'
 
@@ -154,6 +156,15 @@ const FullIcon = ({ on }: { on: boolean }) => (
   </Glyph>
 )
 
+const EqIcon = () => (
+  <Glyph>
+    <path d="M4 3.5v13M10 3.5v13M16 3.5v13" />
+    <circle cx="4" cy="7" r="2" fill="currentColor" />
+    <circle cx="10" cy="13" r="2" fill="currentColor" />
+    <circle cx="16" cy="9.5" r="2" fill="currentColor" />
+  </Glyph>
+)
+
 /** A control over the picture: no ground of its own until pointed at. */
 function Control({
   label,
@@ -162,6 +173,7 @@ function Control({
   disabled,
   wideOnly = false,
   toggle,
+  eqToggle,
   children,
 }: {
   label: string
@@ -170,6 +182,7 @@ function Control({
   disabled?: boolean
   wideOnly?: boolean
   toggle?: string
+  eqToggle?: string
   children: ReactNode
 }) {
   return (
@@ -182,6 +195,7 @@ function Control({
       onClick={onClick}
       data-own-focus
       data-settings-toggle={toggle}
+      data-eq-toggle={eqToggle}
       className={`press ${wideOnly ? 'hidden sm:grid' : 'grid'} relative h-[40px] w-[40px] shrink-0 place-items-center rounded-pill text-white outline-none transition-colors duration-[var(--dur-fast)] hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-35 disabled:hover:bg-transparent`}
     >
       {children}
@@ -383,6 +397,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [fill, setFill] = useState(false)
   const [idle, setIdle] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [eqDrawerOpen, setEqDrawerOpen] = useState(false)
   const [remaining, setRemaining] = useState(false)
   const [loopA, setLoopA] = useState<number | null>(null)
   const [loopB, setLoopB] = useState<number | null>(null)
@@ -438,6 +453,55 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
       }),
     [],
   )
+
+  const setEqGain = useCallback(
+    (bandIndex: number, gain: number) => {
+      const clamped = Math.max(-12, Math.min(12, Math.round(gain * 2) / 2))
+      const patch: Partial<PlayerSettings> = {}
+      if (bandIndex === 0) {
+        patch.eqBand1 = clamped
+        patch.eqLow = clamped
+      } else if (bandIndex === 1) {
+        patch.eqBand2 = clamped
+      } else if (bandIndex === 2) {
+        patch.eqBand3 = clamped
+        patch.eqMid = clamped
+      } else if (bandIndex === 3) {
+        patch.eqBand4 = clamped
+      } else if (bandIndex === 4) {
+        patch.eqBand5 = clamped
+        patch.eqHigh = clamped
+      }
+      patch.eqPreset = 'Custom'
+      updateSettings(patch)
+    },
+    [updateSettings],
+  )
+
+  const selectEqPreset = useCallback(
+    (preset: EqualizerPresetName) => {
+      const values = EQUALIZER_PRESETS[preset]
+      if (values) {
+        updateSettings({
+          eqBand1: values[0],
+          eqBand2: values[1],
+          eqBand3: values[2],
+          eqBand4: values[3],
+          eqBand5: values[4],
+          eqLow: values[0],
+          eqMid: values[2],
+          eqHigh: values[4],
+          eqPreset: preset,
+          eqEnabled: true,
+        })
+      }
+    },
+    [updateSettings],
+  )
+
+  const resetEq = useCallback(() => {
+    selectEqPreset('Flat')
+  }, [selectEqPreset])
 
   /* -- adding files ------------------------------------------------------------ */
 
@@ -748,9 +812,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     node: HTMLVideoElement
     source: MediaElementAudioSourceNode
     bass: BiquadFilterNode
-    eqLow: BiquadFilterNode
-    eqMid: BiquadFilterNode
-    eqHigh: BiquadFilterNode
+    equalizer: EqualizerRack
     karaoke: KaraokeProcessor
     squeeze: DynamicsCompressorNode
     gain: GainNode
@@ -762,10 +824,18 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   useEffect(() => {
     const node = videoRef.current
     if (!node) return
+    const eqActive =
+      settings.eqEnabled &&
+      (settings.eqBand1 !== 0 ||
+        settings.eqBand2 !== 0 ||
+        settings.eqBand3 !== 0 ||
+        settings.eqBand4 !== 0 ||
+        settings.eqBand5 !== 0)
     const wanted =
       settings.boost > 1 ||
       settings.night ||
       settings.bassBoost > 0 ||
+      eqActive ||
       settings.eqLow !== 0 ||
       settings.eqMid !== 0 ||
       settings.eqHigh !== 0 ||
@@ -783,21 +853,16 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         bass.frequency.value = 90
         bass.gain.value = settings.bassBoost
 
-        const eqLow = context.createBiquadFilter()
-        eqLow.type = 'lowshelf'
-        eqLow.frequency.value = 100
-        eqLow.gain.value = settings.eqLow
-
-        const eqMid = context.createBiquadFilter()
-        eqMid.type = 'peaking'
-        eqMid.frequency.value = 1000
-        eqMid.Q.value = 1.0
-        eqMid.gain.value = settings.eqMid
-
-        const eqHigh = context.createBiquadFilter()
-        eqHigh.type = 'highshelf'
-        eqHigh.frequency.value = 10000
-        eqHigh.gain.value = settings.eqHigh
+        const equalizer = new EqualizerRack(context, {
+          initialGains: [
+            settings.eqBand1,
+            settings.eqBand2,
+            settings.eqBand3,
+            settings.eqBand4,
+            settings.eqBand5,
+          ],
+          enabled: settings.eqEnabled,
+        })
 
         const karaoke = createKaraokeProcessor(context)
         karaoke.setEnabled(settings.karaoke)
@@ -815,10 +880,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         analyser.smoothingTimeConstant = 0.8
 
         source.connect(bass)
-        bass.connect(eqLow)
-        eqLow.connect(eqMid)
-        eqMid.connect(eqHigh)
-        eqHigh.connect(karaoke.input)
+        bass.connect(equalizer.input)
+        equalizer.output.connect(karaoke.input)
 
         if (settings.night) {
           karaoke.output.connect(squeeze)
@@ -830,15 +893,20 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         gain.connect(analyser)
         analyser.connect(context.destination)
 
-        graph.current = { node, source, bass, eqLow, eqMid, eqHigh, karaoke, squeeze, gain, analyser }
+        graph.current = { node, source, bass, equalizer, karaoke, squeeze, gain, analyser }
         void resumeAudioContext()
       }
 
       const g = graph.current!
       g.bass.gain.value = settings.bassBoost
-      g.eqLow.gain.value = settings.eqLow
-      g.eqMid.gain.value = settings.eqMid
-      g.eqHigh.gain.value = settings.eqHigh
+      g.equalizer.setEnabled(settings.eqEnabled)
+      g.equalizer.setGains([
+        settings.eqBand1,
+        settings.eqBand2,
+        settings.eqBand3,
+        settings.eqBand4,
+        settings.eqBand5,
+      ])
       g.karaoke.setEnabled(settings.karaoke)
       g.gain.gain.value = settings.boost * (settings.night ? 1.6 : 1)
 
@@ -862,6 +930,12 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     settings.eqLow,
     settings.eqMid,
     settings.eqHigh,
+    settings.eqBand1,
+    settings.eqBand2,
+    settings.eqBand3,
+    settings.eqBand4,
+    settings.eqBand5,
+    settings.eqEnabled,
     settings.karaoke,
     showVisualizer,
     sourceUrl,
@@ -1449,6 +1523,26 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   ].filter(Boolean)
   const sideBySide = !theater
 
+  const equalizerDrawer = (
+    <EqualizerDrawer
+      placement={menuBelow ? 'below' : 'over'}
+      enabled={settings.eqEnabled}
+      gains={[
+        settings.eqBand1,
+        settings.eqBand2,
+        settings.eqBand3,
+        settings.eqBand4,
+        settings.eqBand5,
+      ]}
+      activePreset={settings.eqPreset}
+      onToggleEnabled={(enabled) => updateSettings({ eqEnabled: enabled })}
+      onGainChange={setEqGain}
+      onSelectPreset={selectEqPreset}
+      onReset={resetEq}
+      onClose={() => setEqDrawerOpen(false)}
+    />
+  )
+
   const settingsMenu = (
     <SettingsMenu
       kind={current.kind}
@@ -1979,7 +2073,38 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     <CaptionIcon />
                   </Control>
                 ) : null}
-                <Control label="Einstellungen" active={menuOpen} toggle="ja" onClick={() => setMenuOpen((value) => !value)}>
+                <Control
+                  label={eqDrawerOpen ? 'Equalizer schliessen' : 'Equalizer (5-Band)'}
+                  active={
+                    eqDrawerOpen ||
+                    (settings.eqEnabled &&
+                      (settings.eqBand1 !== 0 ||
+                        settings.eqBand2 !== 0 ||
+                        settings.eqBand3 !== 0 ||
+                        settings.eqBand4 !== 0 ||
+                        settings.eqBand5 !== 0))
+                  }
+                  eqToggle="ja"
+                  onClick={() => {
+                    setEqDrawerOpen((open) => {
+                      if (!open && menuOpen) setMenuOpen(false)
+                      return !open
+                    })
+                  }}
+                >
+                  <EqIcon />
+                </Control>
+                <Control
+                  label="Einstellungen"
+                  active={menuOpen}
+                  toggle="ja"
+                  onClick={() =>
+                    setMenuOpen((value) => {
+                      if (!value && eqDrawerOpen) setEqDrawerOpen(false)
+                      return !value
+                    })
+                  }
+                >
                   <span className={`grid place-items-center transition-transform duration-[var(--dur-base)] ${menuOpen ? 'rotate-45' : ''}`}>
                     <GearIcon />
                   </span>
@@ -2007,11 +2132,13 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               </div>
             </div>
 
+            {eqDrawerOpen && !menuBelow ? equalizerDrawer : null}
             {menuOpen && !menuBelow ? settingsMenu : null}
           </div>
 
           {/* A frame too low for the menu — a phone, a sound file — opens it
               underneath instead of squeezing it between title and controls. */}
+          {eqDrawerOpen && menuBelow ? equalizerDrawer : null}
           {menuOpen && menuBelow ? settingsMenu : null}
 
           {/* Under the picture: what it is, and where else it can go. A sound

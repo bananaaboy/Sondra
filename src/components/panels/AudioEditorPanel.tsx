@@ -14,19 +14,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { getAudioContext, resumeAudioContext, sliceAudio, applyFades, reverseAudio, toAudioBuffer } from '../../lib/audio'
+import { getAudioContext, resumeAudioContext, sliceAudio, applyFades, reverseAudio, toAudioBuffer, fromAudioBuffer } from '../../lib/audio'
+import { detectSilenceRegions, stripSilence } from '../../lib/audio/silence'
 import { saveBytes } from '../../lib/download'
 import {
   channelTrick,
   concatAudio,
   cutRange,
-  detectSilence,
   durationOf,
   frameCount,
   normalizePeak,
   peakDb,
   removeDcOffset,
-  removeSilence,
   resampleAudio,
   setChannels,
 } from '../../lib/edit'
@@ -126,7 +125,9 @@ export function AudioEditorPanel() {
   const [view, setView] = useState<{ start: number; end: number } | null>(null)
   const [loop, setLoop] = useState(false)
   const [silenceLength, setSilenceLength] = useState(1)
-  const [silenceThresholdDb, setSilenceThresholdDb] = useState(-50)
+  const [silenceThresholdDb, setSilenceThresholdDb] = useState(-45)
+  const [silenceModalOpen, setSilenceModalOpen] = useState(false)
+  const silenceDialogRef = useRef<HTMLDialogElement | null>(null)
   const [targetPeakDb, setTargetPeakDb] = useState(-0.3)
   const [tapTimes, setTapTimes] = useState<number[]>([])
   const [tappedBpm, setTappedBpm] = useState<number | null>(null)
@@ -708,12 +709,40 @@ export function AudioEditorPanel() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Found only while its tool is open: it scans every sample, and it used to
-  // run on each render — sixty times a second while the file played.
-  const silence = useMemo(
-    () => (current && tool === 'saeubern' ? detectSilence(current, silenceThresholdDb) : []),
-    [current, tool, silenceThresholdDb],
-  )
+  const currentBuffer = useMemo(() => {
+    if (!current) return null
+    return toAudioBuffer(current, getAudioContext())
+  }, [current])
+
+  const detectedSilenceRegions = useMemo(() => {
+    if (!currentBuffer || (!silenceModalOpen && tool !== 'saeubern')) return []
+    return detectSilenceRegions(currentBuffer, silenceThresholdDb, 300)
+  }, [currentBuffer, silenceModalOpen, tool, silenceThresholdDb])
+
+  const totalSilenceDuration = useMemo(() => {
+    return detectedSilenceRegions.reduce((sum, r) => sum + r.duration, 0)
+  }, [detectedSilenceRegions])
+
+  const handleConfirmStripSilence = useCallback(async () => {
+    if (!current) return
+    setSilenceModalOpen(false)
+    const ctx = getAudioContext()
+    await apply(`Stille entfernt (${silenceThresholdDb} dBFS)`, (audioData) => {
+      const inBuf = toAudioBuffer(audioData, ctx)
+      const outBuf = stripSilence(inBuf, ctx, silenceThresholdDb, 300)
+      return fromAudioBuffer(outBuf)
+    })
+  }, [apply, current, silenceThresholdDb])
+
+  useEffect(() => {
+    const node = silenceDialogRef.current
+    if (!node) return
+    if (silenceModalOpen && !node.open) {
+      node.showModal()
+    } else if (!silenceModalOpen && node.open) {
+      node.close()
+    }
+  }, [silenceModalOpen])
 
   /** Zooms around the playhead, the selection, or the middle of the view. */
   const zoomBy = (factor: number) => {
@@ -1067,29 +1096,14 @@ export function AudioEditorPanel() {
                 />
               ) : null}
             </Module>
-            <Module title="Stille entfernen" hint="Was leiser ist als die Schwelle und länger als ein Atemzug, fällt weg.">
-              <ChoiceRow
-                value={silenceThresholdDb}
-                columns={3}
-                onChange={setSilenceThresholdDb}
-                options={[
-                  { value: -40, label: '−40', title: 'Auch Atmen und leises Rauschen' },
-                  { value: -50, label: '−50', title: 'Üblich' },
-                  { value: -60, label: '−60', title: 'Nur völlige Stille' },
-                ]}
-              />
-              <p className="text-small text-prose">
-                {silence.length === 0
-                  ? 'Keine Stille unter dieser Schwelle gefunden.'
-                  : `${silence.length} ${silence.length === 1 ? 'Stelle' : 'Stellen'}, zusammen ${comma(
-                      silence.reduce((sum, range) => sum + (range.endSeconds - range.startSeconds), 0),
-                    )} s.`}
-              </p>
-              {silence.length > 0 ? (
-                <Button size="sm" variant="quiet" disabled={idle}
-                  onClick={() => void apply(`Stille entfernt (${silenceThresholdDb} dBFS)`, (a) => removeSilence(a, silenceThresholdDb))}>
-                  {silence.length === 1 ? 'Diese Stelle entfernen' : `Alle ${silence.length} entfernen`}
-                </Button>
+            <Module title="Stille entfernen" hint="Erkennt stille Abschnitte automatisch und schneidet sie mit sanften 5-ms-Überblendungen heraus.">
+              <Button size="sm" variant="quiet" disabled={idle} onClick={() => setSilenceModalOpen(true)}>
+                Stille entfernen …
+              </Button>
+              {detectedSilenceRegions.length > 0 ? (
+                <p className="text-small text-prose">
+                  {detectedSilenceRegions.length} {detectedSilenceRegions.length === 1 ? 'stiller Abschnitt' : 'stille Abschnitte'} ({comma(totalSilenceDuration, 2)} s) bei {silenceThresholdDb} dBFS erkannt.
+                </p>
               ) : null}
             </Module>
             <Module title="Gleichspannung" hint="Rückt eine verschobene Nulllinie zurück in die Mitte.">
@@ -1313,6 +1327,9 @@ export function AudioEditorPanel() {
             <IconButton label="Wiederholen (Strg+Umschalt+Z)" onClick={redo} disabled={future.length === 0}>
               {IconRedo}
             </IconButton>
+            <Button size="sm" variant="quiet" onClick={() => setSilenceModalOpen(true)} disabled={idle || !current} className="ml-[4px]">
+              Stille entfernen
+            </Button>
             <Button size="sm" onClick={save} disabled={!bytes || idle} className="ml-[8px]">
               Speichern
             </Button>
@@ -1471,6 +1488,94 @@ export function AudioEditorPanel() {
           {error}
         </Notice>
       ) : null}
+
+      <dialog
+        ref={silenceDialogRef}
+        onClose={() => setSilenceModalOpen(false)}
+        onClick={(e) => {
+          if (e.target === silenceDialogRef.current) setSilenceModalOpen(false)
+        }}
+        className="m-auto w-[min(480px,calc(100vw-32px))] rounded-card bg-raised p-0 text-prose backdrop:bg-ink/50 backdrop:backdrop-blur-[3px] ring-1 ring-inset ring-line shadow-2xl"
+      >
+        <div className="flex flex-col gap-[16px] p-[20px]">
+          <div className="flex items-start justify-between gap-[12px]">
+            <div>
+              <h3 className="text-body font-semibold text-ink">Stille entfernen</h3>
+              <p className="mt-[2px] text-small text-muted">
+                Erkennt stille Abschnitte automatisch und schneidet sie mit sanften 5-ms-Überblendungen heraus.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSilenceModalOpen(false)}
+              aria-label="Schließen"
+              className="grid h-[24px] w-[24px] place-items-center rounded-nav text-muted hover:bg-panel-soft hover:text-ink"
+            >
+              <svg viewBox="0 0 14 14" className="h-3.5 w-3.5" fill="none" aria-hidden>
+                <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-[8px] rounded-card bg-panel-soft p-[14px] ring-1 ring-inset ring-line/50">
+            <Slider
+              label="Schwellenwert"
+              display={`${silenceThresholdDb} dBFS`}
+              min={-60}
+              max={-25}
+              step={1}
+              value={silenceThresholdDb}
+              onChange={(e) => setSilenceThresholdDb(Number(e.target.value))}
+            />
+            <div className="flex justify-between text-micro text-muted">
+              <span>−60 dB (nur Stille)</span>
+              <span>−45 dB (Standard)</span>
+              <span>−25 dB (aggressiv)</span>
+            </div>
+          </div>
+
+          <div className="rounded-card bg-panel-mid p-[12px] ring-1 ring-inset ring-line/70">
+            <span className="text-micro font-semibold uppercase tracking-[0.05em] text-muted">
+              Vorschau
+            </span>
+            <p className="mt-[4px] text-small text-ink">
+              {detectedSilenceRegions.length === 0 ? (
+                <span className="text-muted">Keine stillen Abschnitte unter {silenceThresholdDb} dBFS gefunden (mind. 300 ms Dauer).</span>
+              ) : (
+                <>
+                  <strong className="font-semibold text-ink">{detectedSilenceRegions.length}</strong>{' '}
+                  {detectedSilenceRegions.length === 1 ? 'stiller Abschnitt' : 'stille Abschnitte'} erkannt, zusammen{' '}
+                  <strong className="font-semibold text-ink">{comma(totalSilenceDuration, 2)} s</strong>.
+                </>
+              )}
+            </p>
+            {detectedSilenceRegions.length > 0 && current ? (
+              <p className="mt-[4px] text-micro text-muted">
+                Dauer nach Zuschnitt: {formatTimecode(Math.max(0, duration - totalSilenceDuration))} (vorher {formatTimecode(duration)})
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex items-center justify-end gap-[8px] pt-[4px]">
+            <Button
+              size="sm"
+              variant="quiet"
+              onClick={() => setSilenceModalOpen(false)}
+            >
+              Abbrechen
+            </Button>
+            <Button
+              size="sm"
+              disabled={detectedSilenceRegions.length === 0 || idle}
+              onClick={() => void handleConfirmStripSilence()}
+            >
+              {detectedSilenceRegions.length > 0
+                ? `${detectedSilenceRegions.length === 1 ? 'Abschnitt' : 'Abschnitte'} entfernen`
+                : 'Stille entfernen'}
+            </Button>
+          </div>
+        </div>
+      </dialog>
     </div>
   )
 }
