@@ -21,6 +21,7 @@
 import http from 'node:http'
 
 import { filenameFrom, finalUrlFrom, looksLikeMedia, nameFrom, probe, sizeFrom } from '../api/resolve.js'
+import { allowedTarget, getSecret } from '../api/_shared.js'
 
 let failures = 0
 
@@ -163,6 +164,47 @@ check('Weiterleitung: Name von endgültiger Adresse', nameFrom(finalUrl, ''), 'r
 const page = await probe(new URL(`${base}/seite`))
 check('Seite wird weiterhin erkannt', looksLikeMedia(page.headers.get('content-type') ?? '', new URL(`${base}/seite`), ''), false)
 
-server.close()
+/* -- SSRF & Security checks ------------------------------------------------ */
+
+check('SSRF: localhost blocked', allowedTarget('https://localhost/video.mp4'), null)
+check('SSRF: localhost with dot blocked', allowedTarget('https://localhost./video.mp4'), null)
+check('SSRF: sub.localhost blocked', allowedTarget('https://sub.localhost/video.mp4'), null)
+check('SSRF: 127.0.0.1 blocked', allowedTarget('https://127.0.0.1/video.mp4'), null)
+check('SSRF: 10.0.0.1 blocked', allowedTarget('https://10.0.0.1/video.mp4'), null)
+check('SSRF: 172.16.0.1 blocked', allowedTarget('https://172.16.0.1/video.mp4'), null)
+check('SSRF: 192.168.1.1 blocked', allowedTarget('https://192.168.1.1/video.mp4'), null)
+check('SSRF: 169.254.169.254 blocked', allowedTarget('https://169.254.169.254/latest/meta-data'), null)
+check('SSRF: IPv6 loopback blocked', allowedTarget('https://[::1]/video.mp4'), null)
+check('SSRF: IPv6 link-local blocked', allowedTarget('https://[fe80::1]/video.mp4'), null)
+check('SSRF: IPv6 ULA blocked', allowedTarget('https://[fc00::1]/video.mp4'), null)
+check('SSRF: metadata.google.internal blocked', allowedTarget('https://metadata.google.internal/'), null)
+check('SSRF: single-label host blocked', allowedTarget('https://metadata/computeMetadata/v1/'), null)
+check('SSRF: HTTP refused (only HTTPS)', allowedTarget('http://example.com/audio.mp3'), null)
+check('SSRF: credentials refused', allowedTarget('https://user:pass@example.com/audio.mp3'), null)
+check('SSRF: non-standard port refused', allowedTarget('https://example.com:22/audio.mp3'), null)
+check('SSRF: public HTTPS domain allowed', allowedTarget('https://example.com/audio.mp3')?.href, 'https://example.com/audio.mp3')
+
+let prodSecretError = false
+try {
+  const origEnv = process.env.NODE_ENV
+  const origSecret = process.env.SONDRA_SECRET
+  try {
+    process.env.NODE_ENV = 'production'
+    delete process.env.SONDRA_SECRET
+    delete process.env.VERCEL_ENV
+    getSecret()
+  } finally {
+    process.env.NODE_ENV = origEnv
+    if (origSecret) process.env.SONDRA_SECRET = origSecret
+  }
+} catch {
+  prodSecretError = true
+}
+check('SONDRA_SECRET in production enforced', prodSecretError, true)
+
+if (typeof server.closeAllConnections === 'function') {
+  server.closeAllConnections()
+}
+await new Promise((resolve) => server.close(resolve))
 console.log(failures === 0 ? '\nAlle Prüfungen bestanden.' : `\n${failures} fehlgeschlagen.`)
-process.exit(failures === 0 ? 0 : 1)
+process.exitCode = failures === 0 ? 0 : 1

@@ -5,6 +5,7 @@
 
 import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
 
+import { ErrorBoundary } from './ErrorBoundary'
 import { detectCapabilities, hasWebGpuAdapter, suggestedThreads } from '../lib/capabilities'
 import { onServiceConnection, serviceConnection, type ServiceConnection } from '../lib/serviceState'
 import { loadFfmpeg, onFfmpegStatus, type FfmpegStatus } from '../lib/ffmpegClient'
@@ -289,11 +290,75 @@ function NothingLoaded({ label, summary }: { label: string; summary: string }) {
 
 /* -------------------------------------------------------------------------- */
 
+const TOOL_PANEL_IDS = [
+  'start',
+  'downloader',
+  'converter',
+  'audio',
+  'video',
+  'images',
+  'stems',
+  'normalize',
+  'sampler',
+  'harmony',
+  'mic',
+  'subtitles',
+  'screen',
+  'mix',
+] as const
+
+type ToolPanelId = (typeof TOOL_PANEL_IDS)[number]
+
+function renderTool(id: ToolPanelId, theme: ResolvedTheme) {
+  switch (id) {
+    case 'start':
+      return <Home />
+    case 'downloader':
+      return <DownloaderPanel />
+    case 'converter':
+      return <ConverterPanel />
+    case 'audio':
+      return <AudioEditorPanel />
+    case 'video':
+      return <VideoPanel />
+    case 'images':
+      return <ImagePanel />
+    case 'stems':
+      return <StemsPanel />
+    case 'normalize':
+      return <NormalizePanel />
+    case 'sampler':
+      return <SamplerPanel theme={theme} />
+    case 'harmony':
+      return <HarmonyPanel />
+    case 'mic':
+      return <MicPanel />
+    case 'subtitles':
+      return <SubtitlesPanel />
+    case 'screen':
+      return <ScreenPanel />
+    case 'mix':
+      return <MixPanel />
+  }
+}
+
 export function Dashboard({ theme }: { theme: ResolvedTheme }) {
   usePrefetchTools()
   const panel = useSession((state) => state.panel)
   const hasAssets = useSession((state) => state.assets.length > 0)
   const current = PANELS.find((entry) => entry.id === panel)
+
+  const [visitedPanels, setVisitedPanels] = useState<Set<string>>(() => new Set([panel]))
+
+  useEffect(() => {
+    setVisitedPanels((prev) => {
+      if (prev.has(panel)) return prev
+      const next = new Set(prev)
+      next.add(panel)
+      return next
+    })
+  }, [panel])
+
   // The start screen and the downloader never wait for a file: one is the menu
   // and the other is how files arrive. The three editors open on their own
   // drop zone, which is a better empty state than a generic one.
@@ -313,44 +378,48 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     <section id="studio" className="shell flex flex-col gap-[16px] pb-[16px] pt-[24px] sm:pt-[32px]">
       <RestoreOffer />
 
-      {/* Keyed on the panel so every switch replays the entrance rather than
-          swapping content in place, which reads as a jump. */}
-      {panel === 'player' ? null : (
-        <div key={panel} role="tabpanel" aria-label={current?.label} className="panel-root rise flex min-w-0 flex-col gap-[16px]">
-          {!ready ? (
-            <NothingLoaded label={current?.label ?? ''} summary={current?.summary ?? ''} />
-          ) : (
-            <Suspense fallback={<ToolLoading />}>
-              {panel === 'start' ? <Home /> : null}
-              {panel === 'downloader' ? <DownloaderPanel /> : null}
-              {panel === 'converter' ? <ConverterPanel /> : null}
-              {panel === 'audio' ? <AudioEditorPanel /> : null}
-              {panel === 'video' ? <VideoPanel /> : null}
-              {panel === 'images' ? <ImagePanel /> : null}
-              {panel === 'stems' ? <StemsPanel /> : null}
-              {panel === 'normalize' ? <NormalizePanel /> : null}
-              {panel === 'sampler' ? <SamplerPanel theme={theme} /> : null}
-              {panel === 'harmony' ? <HarmonyPanel /> : null}
-              {panel === 'mic' ? <MicPanel /> : null}
-              {panel === 'subtitles' ? <SubtitlesPanel /> : null}
-              {panel === 'screen' ? <ScreenPanel /> : null}
-              {panel === 'mix' ? <MixPanel /> : null}
-            </Suspense>
-          )}
-        </div>
-      )}
+      {/* Visited tool panels remain mounted so switching between them preserves state
+          (cuts, slices, patterns, settings). Only the active panel is visible. */}
+      {TOOL_PANEL_IDS.map((id) => {
+        if (!visitedPanels.has(id)) return null
+        const isActive = panel === id
+        const panelMeta = PANELS.find((entry) => entry.id === id)
+        const showEmptyState = isActive && !ready
 
-      {/* The player lives outside the keyed panel: a key change would unmount
-          it, and a film playing on while another tool is open would stop
-          the moment the tool opened. Shown, it is the tab panel itself. */}
+        return (
+          <div
+            key={id}
+            role={isActive ? 'tabpanel' : undefined}
+            aria-label={panelMeta?.label}
+            className={isActive ? 'panel-root rise flex min-w-0 flex-col gap-[16px]' : 'hidden'}
+            hidden={!isActive}
+            aria-hidden={!isActive}
+          >
+            {showEmptyState ? (
+              <NothingLoaded label={panelMeta?.label ?? ''} summary={panelMeta?.summary ?? ''} />
+            ) : (
+              <ErrorBoundary panel={id}>
+                <Suspense fallback={<ToolLoading />}>
+                  {renderTool(id, theme)}
+                </Suspense>
+              </ErrorBoundary>
+            )}
+          </div>
+        )
+      })}
+
+      {/* The player lives outside the tool panels list: it has a floating minibar
+          when another tool is open so playback continues uninterrupted. */}
       <div
         role={panel === 'player' ? 'tabpanel' : undefined}
         aria-label={panel === 'player' ? current?.label : undefined}
         className={panel === 'player' ? 'panel-root rise flex min-w-0 flex-col gap-[16px]' : 'contents'}
       >
-        <Suspense fallback={null}>
-          <PlayerPanel hidden={panel !== 'player'} />
-        </Suspense>
+        <ErrorBoundary panel="player">
+          <Suspense fallback={null}>
+            <PlayerPanel hidden={panel !== 'player'} />
+          </Suspense>
+        </ErrorBoundary>
       </div>
 
       <MachineRow />
