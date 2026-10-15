@@ -51,6 +51,7 @@ import { FileDrop } from '../FileDrop'
 import { ChoiceRow, IconButton } from '../editor/EditorShell'
 import { IconPause, IconPlay, IconStop, IconZoomIn, IconZoomOut } from '../editor/icons'
 import { ArrowRight, Button, Card, Progress, Slider, Toggle } from '../ui/primitives'
+import { ZipSave } from '../ZipSave'
 
 
 /** Four rows of four, in the order they sit on the keyboard. */
@@ -811,7 +812,7 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
     }
   }
 
-  const renderAll = async (destination: 'session' | 'zip') => {
+  const renderAll = async (destination: 'session' | 'zip', archive?: { file: string; stem: string }) => {
     setRendering(true)
     const files: { name: string; piece: AudioData; bytes: Uint8Array }[] = []
     try {
@@ -822,9 +823,12 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
       }
       if (files.length === 0) return
       if (destination === 'zip') {
+        // The folder inside takes the archive's name, so a renamed ZIP unpacks
+        // into a folder of the same name.
+        const folder = archive?.stem ?? baseName
         saveBytes(
-          createZip(files.map(({ name, bytes }) => ({ name: `${baseName}/${name}`, data: bytes }))),
-          `${baseName}-chops.zip`,
+          createZip(files.map(({ name, bytes }) => ({ name: `${folder}/${name}`, data: bytes }))),
+          archive?.file ?? `${baseName}-chops.zip`,
           'application/zip',
         )
         log('sampler', `${files.length} Chops als ZIP gespeichert`)
@@ -1142,9 +1146,14 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           ) : null}
           <div className={`flex flex-col gap-[4px] ${selected ? 'border-t border-line pt-[12px]' : ''}`}>
             <span className="text-small text-prose">Alle {slices.length} Pads</span>
-            <Button size="sm" variant={selected ? 'quiet' : 'primary'} onClick={() => renderAll('zip')} disabled={rendering}>
-              {rendering ? 'Rendert…' : 'Als ZIP speichern'}
-            </Button>
+            <ZipSave
+              stacked
+              suggestion={`${baseName}-chops`}
+              label={rendering ? 'Rendert …' : 'Als ZIP speichern'}
+              variant={selected ? 'quiet' : 'primary'}
+              disabled={rendering}
+              onSave={(archive) => void renderAll('zip', archive)}
+            />
             {slices.length <= MAX_PADS ? (
               <Button size="sm" variant="quiet" onClick={() => renderAll('session')} disabled={rendering}>
                 In die Sitzung

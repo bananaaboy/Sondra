@@ -35,6 +35,7 @@ import {
   Toggle,
 } from '../ui/primitives'
 import { ChoiceRow } from '../editor/EditorShell'
+import { ZipSave } from '../ZipSave'
 
 type Stems = Record<StemId, AudioData>
 
@@ -143,15 +144,15 @@ export function StemsPanel() {
   }
 
   /** All stems in one archive, rather than five separate save prompts. */
-  const exportAll = () => {
+  const stemBase = asset?.name.replace(/\.[^.]+$/, '') ?? 'audio'
+  const exportAll = (archive: { file: string; stem: string }) => {
     if (!stems) return
-    const base = asset?.name.replace(/\.[^.]+$/, '') ?? 'audio'
     const files = STEM_IDS.map((id) => ({
-      name: `${base}/${id}.wav`,
+      name: `${archive.stem}/${id}.wav`,
       data: encodeWav(stems[id], 24),
     }))
-    if (instrumental) files.push({ name: `${base}/instrumental.wav`, data: encodeWav(instrumental, 24) })
-    saveBytes(createZip(files), `${base}-stems.zip`, 'application/zip')
+    if (instrumental) files.push({ name: `${archive.stem}/instrumental.wav`, data: encodeWav(instrumental, 24) })
+    saveBytes(createZip(files), archive.file, 'application/zip')
     log('spuren', `${files.length} Spuren als ZIP gespeichert`)
   }
 
@@ -310,12 +311,10 @@ export function StemsPanel() {
           <Card tone="slate">
             <div className="flex flex-wrap items-baseline justify-between gap-3">
               <SectionHead>Spuren</SectionHead>
-              <div className="flex flex-wrap items-center gap-[8px]">
-                {engine ? <Badge>{engine}</Badge> : null}
-                <Button size="sm" onClick={exportAll}>
-                  Alle als ZIP
-                </Button>
-              </div>
+              {engine ? <Badge>{engine}</Badge> : null}
+            </div>
+            <div className="mt-[12px]">
+              <ZipSave suggestion={`${stemBase}-stems`} label="Alle als ZIP" onSave={exportAll} />
             </div>
 
             <div className="mt-[16px] flex flex-col gap-[12px]">

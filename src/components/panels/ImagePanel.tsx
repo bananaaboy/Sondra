@@ -31,7 +31,7 @@ import {
   type ImageFormat,
   type ImageOps,
 } from '../../lib/image'
-import { createZip } from '../../lib/zip'
+import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { useActiveAssetOfKind, useAssetsOfKind, useSession } from '../../state/store'
 import { FileDrop } from '../FileDrop'
 import { IMAGE_ACCEPT } from '../../hooks/useIngest'
@@ -55,6 +55,7 @@ import {
   IconTransform,
 } from '../editor/icons'
 import { Button, Notice, Progress, Slider, TextInput, Toggle } from '../ui/primitives'
+import { ZipSave } from '../ZipSave'
 
 type ToolId = 'crop' | 'transform' | 'size' | 'color' | 'sharpen' | 'export' | 'batch'
 
@@ -341,7 +342,7 @@ export function ImagePanel() {
    * nonsense. Everything else — size, orientation, colour, format — is a rule
    * rather than a gesture and travels fine.
    */
-  const runBatch = async () => {
+  const runBatch = async (archive: { file: string; stem: string }) => {
     if (images.length === 0) return
     setBusy('Stapel läuft')
     setBatch({ done: 0, total: images.length })
@@ -358,7 +359,7 @@ export function ImagePanel() {
         after += produced.bytes.byteLength
         setBatch({ done: index + 1, total: images.length })
       }
-      saveBytes(createZip(files.map((file) => ({ name: file.name, data: file.bytes }))), 'bilder.zip', 'application/zip')
+      saveBytes(createZip(uniqueEntryNames(files.map((file) => ({ name: file.name, data: file.bytes })))), archive.file, 'application/zip')
       log('bilder', `${files.length} Bilder verarbeitet — ${formatBytes(before)} → ${formatBytes(after)}`)
     } catch (cause) {
       setFailure(cause instanceof Error ? cause.message : String(cause))
@@ -545,7 +546,7 @@ export function ImagePanel() {
             images={images.length}
             batch={batch}
             busy={busy}
-            onBatch={() => void runBatch()}
+            onBatch={(archive) => void runBatch(archive)}
           />
         }
         status={
@@ -613,7 +614,7 @@ function Inspector({
   images: number
   batch: { done: number; total: number } | null
   busy: string | null
-  onBatch: () => void
+  onBatch: (archive: { file: string; stem: string }) => void
 }) {
   if (tool === 'crop') {
     return (
@@ -789,9 +790,13 @@ function Inspector({
           selten auf das nächste. Größe, Drehung, Farbe und Format gelten für alle.
         </Notice>
         {batch ? <Progress value={batch.done / batch.total} label={`${batch.done} von ${batch.total}`} /> : null}
-        <Button onClick={onBatch} disabled={busy !== null}>
-          {busy ? 'Läuft …' : 'Alle verarbeiten und als ZIP laden'}
-        </Button>
+        <ZipSave
+          stacked
+          suggestion="bilder"
+          label={busy ? 'Läuft …' : 'Alle verarbeiten und als ZIP laden'}
+          disabled={busy !== null}
+          onSave={onBatch}
+        />
       </>
     )
   }

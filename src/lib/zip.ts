@@ -206,3 +206,47 @@ export function createZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
 
   return bytes.subarray(0, offset) as Uint8Array<ArrayBuffer>
 }
+
+/**
+ * The name an archive is saved under: what was typed, made safe for every
+ * file system, with exactly one `.zip` on the end — or the suggestion, when
+ * the field was left empty. `stem` is the same name without the extension,
+ * for the folder the files sit in inside the archive.
+ */
+export function zipName(typed: string, suggestion: string): { file: string; stem: string } {
+  const clean = (value: string) =>
+    value
+      .trim()
+      .replace(/\.zip$/i, '')
+      // Reserved on Windows or anywhere; control characters never belong in a
+      // name. Before a space or at the end such a character just goes („Mix:
+      // Live?" → „Mix Live"); between words it becomes a dash („A/B" → „A-B").
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\\/:*?"<>|\u0000-\u001f]+(?=\s|$)/g, '')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-')
+      .replace(/\s+/g, ' ')
+      // Windows drops a trailing dot or space without a word.
+      .replace(/^[\s.]+|[\s.]+$/g, '')
+      .slice(0, 120)
+  let stem = clean(typed) || clean(suggestion) || 'sondra'
+  // Device names Windows will not take as a file name, extension or not.
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(stem)) stem = `${stem}_`
+  return { file: `${stem}.zip`, stem }
+}
+
+/**
+ * Two entries with one name overwrite each other when the archive is
+ * unpacked. The later ones become „Name (2).ext", „Name (3).ext".
+ */
+export function uniqueEntryNames(entries: ZipEntry[]): ZipEntry[] {
+  const taken = new Set<string>()
+  return entries.map((entry) => {
+    let name = entry.name
+    const dot = name.lastIndexOf('.')
+    const [base, extension] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, '']
+    for (let count = 2; taken.has(name.toLowerCase()); count += 1) name = `${base} (${count})${extension}`
+    taken.add(name.toLowerCase())
+    return name === entry.name ? entry : { ...entry, name }
+  })
+}
