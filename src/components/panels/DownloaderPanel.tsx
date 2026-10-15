@@ -376,6 +376,33 @@ function WayTile({
 /** Opens the setup dialog, which lives in the advanced downloader. */
 const openSetup = () => window.dispatchEvent(new CustomEvent('sondra:open-setup-dialog'))
 
+// What the address field answers to, for the line under it: the first few by
+// name, the rest a click away. It was twenty chips under the field on every
+// visit.
+const SERVICES = [
+  'YouTube',
+  'Spotify',
+  'Apple Podcasts',
+  'Mediatheken (ARD, ZDF, Arte, SRF, ORF, 3sat)',
+  'TikTok',
+  'Instagram',
+  'AniWorld / SerienStream',
+  'Threads',
+  'Twitch',
+  'SoundCloud',
+  'Bandcamp',
+  'Vimeo',
+  'Reddit',
+  'Snapchat',
+  'Patreon',
+  'Rumble',
+  'Kick',
+  'Archive.org',
+  'Podcast-RSS',
+  'direkte Dateiadressen',
+]
+const SERVICES_NAMED = 4
+
 export function DownloaderPanel() {
   const addAsset = useSession((state) => state.addAsset)
   const log = useSession((state) => state.log)
@@ -411,6 +438,7 @@ export function DownloaderPanel() {
 
   const { ingest: ingestFile } = useIngestFiles()
   const [isDragOver, setIsDragOver] = useState(false)
+  const [showServices, setShowServices] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFiles = async (files: FileList | File[]) => {
@@ -1101,40 +1129,12 @@ export function DownloaderPanel() {
             void look()
           }}
         >
-          {/* Clipboard Link Erkennung */}
-          {clipboardUrl && clipboardUrl !== url.trim() ? (
-            <div className="flex items-center justify-between gap-[8px] rounded-nav bg-panel-soft px-[12px] py-[6px] text-micro text-ink border border-line">
-              <span className="truncate">
-                📋 Link in Zwischenablage: <span className="font-mono font-medium">{clipboardUrl.length > 55 ? clipboardUrl.slice(0, 55) + '…' : clipboardUrl}</span>
-              </span>
-              <div className="flex items-center gap-[6px] shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUrl(clipboardUrl)
-                    setClipboardUrl(null)
-                    void look(clipboardUrl)
-                  }}
-                  className="rounded-nav bg-ink px-[8px] py-[2px] font-medium text-on-ink hover:opacity-90"
-                >
-                  Einfügen & Nachsehen
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    dismissedClipboardRef.current.add(clipboardUrl)
-                    setClipboardUrl(null)
-                  }}
-                  className="rounded-nav p-[2px] text-muted hover:text-ink"
-                  title="Ausblenden"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Gestrichelte Suchleiste mit Info in der oberen inneren Ecke */}
+          {/* The address, as a field that looks like one: its name above,
+              a white well with a visible edge, a link sign where the text
+              starts, the caret on hover. It was a transparent line inside a
+              dashed drop zone with a pill and an emoji in its corner, and
+              read as anything but a place to type. A text file of links can
+              still be dropped anywhere on it. */}
           <div
             onDragOver={(e) => {
               e.preventDefault()
@@ -1142,67 +1142,129 @@ export function DownloaderPanel() {
             }}
             onDragLeave={() => setIsDragOver(false)}
             onDrop={handleDrop}
-            className={`relative flex flex-col rounded-card border-2 border-dashed p-[8px] sm:p-[10px] transition-all ${
-              isDragOver
-                ? 'border-ink bg-panel-strong ring-2 ring-ink/20'
-                : 'border-line/80 hover:border-ink/50 bg-raised/70'
+            className={`-mx-[8px] flex flex-col gap-[6px] rounded-card px-[8px] pb-[8px] pt-[4px] transition-colors ${
+              isDragOver ? 'bg-panel-soft ring-2 ring-inset ring-ink' : ''
             }`}
           >
-            {/* Kleine Info in der inneren oberen Ecke */}
-            <div className="flex items-center justify-between px-[4px] pb-[6px]">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label="Textdatei mit Links auswählen"
-                className="inline-flex items-center gap-[6px] text-micro text-muted hover:text-ink transition-colors cursor-pointer"
-                title=".txt- oder .m3u-Datei mit Download-Links auswählen"
-              >
-                <span className="font-semibold text-ink bg-panel px-[5px] py-[1px] rounded-nav border border-line/60">
-                  📄 .txt / .m3u
+            <label htmlFor="download-address" className="text-small text-prose">
+              {isDragOver ? 'Loslassen, um die Links aus der Datei zu übernehmen' : 'Adresse'}
+            </label>
+            <div className="flex flex-col gap-[8px] sm:flex-row">
+              <div className="relative min-w-0 flex-1">
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  className="pointer-events-none absolute left-[14px] top-1/2 size-[18px] -translate-y-1/2 text-muted"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1" />
+                  <path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1" />
+                </svg>
+                <input
+                  id="download-address"
+                  value={url}
+                  onChange={(event) => {
+                    setUrl(event.target.value)
+                    setError(null)
+                    setResult(null)
+                    setBatchEntries(null)
+                    setProgress(null)
+                  }}
+                  placeholder="Link hier einfügen"
+                  type="text"
+                  inputMode="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="Adresse zum Herunterladen"
+                  aria-describedby="download-address-hint"
+                  className="value h-[48px] w-full cursor-text rounded-nav border-0 bg-raised pl-[42px] pr-[12px] text-body text-prose outline-none ring-1 ring-inset ring-rule placeholder:font-sans placeholder:text-muted hover:ring-muted focus:ring-2 focus:ring-ink"
+                />
+              </div>
+              <Button type="submit" disabled={looking || url.trim().length === 0} className="h-[48px] shrink-0 py-0 sm:w-auto">
+                {looking ? 'Wird gesucht …' : 'Nachsehen'}
+              </Button>
+            </div>
+
+            {/* A link found in the clipboard, offered as a sentence under the
+                field it would fill — not as a second bordered bar above it,
+                which looked like another input. */}
+            {clipboardUrl && clipboardUrl !== url.trim() ? (
+              <div role="status" className="rise flex flex-wrap items-center gap-x-[16px] gap-y-[2px] pt-[2px] text-small">
+                <span className="flex min-w-0 max-w-full items-center gap-[8px] text-prose">
+                  <span aria-hidden className="size-[7px] shrink-0 rounded-pill bg-ink" />
+                  <span className="shrink-0">In der Zwischenablage</span>
+                  <span className="value min-w-0 truncate text-ink" title={clipboardUrl}>
+                    {clipboardUrl.replace(/^https?:\/\/(www\.)?/, '')}
+                  </span>
                 </span>
-                <span>Textdatei mit Links hier ablegen oder auswählen</span>
-              </button>
+                <span className="flex items-center gap-[16px] pl-[15px] sm:pl-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUrl(clipboardUrl)
+                      setClipboardUrl(null)
+                      void look(clipboardUrl)
+                    }}
+                    className="press rounded-nav font-semibold text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                  >
+                    Einfügen und nachsehen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dismissedClipboardRef.current.add(clipboardUrl)
+                      setClipboardUrl(null)
+                    }}
+                    className="press rounded-nav text-muted hover:text-ink"
+                  >
+                    Nicht jetzt
+                  </button>
+                </span>
+              </div>
+            ) : null}
+
+            <div id="download-address-hint" className="flex flex-col gap-[2px] text-small leading-[1.5] text-muted [&_p]:max-w-none">
+              <p>
+                Geht mit YouTube, Spotify, Apple Podcasts, den Mediatheken und {SERVICES.length - SERVICES_NAMED} weiteren.{' '}
+                <button
+                  type="button"
+                  aria-expanded={showServices}
+                  onClick={() => setShowServices((open) => !open)}
+                  className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                >
+                  {showServices ? 'Weniger' : 'Alle zeigen'}
+                </button>
+              </p>
+              {showServices ? <p className="text-prose">{SERVICES.join(' · ')}</p> : null}
+              <p>
+                Mehrere Adressen durch Komma trennen. Eine Textdatei mit Links (.txt, .m3u) aufs Feld ziehen oder{' '}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                >
+                  auswählen
+                </button>
+                .
+              </p>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".txt,.m3u,.m3u8,.csv,.json"
                 multiple
                 className="sr-only"
+                tabIndex={-1}
+                aria-hidden
                 onChange={(e) => {
                   if (e.target.files) void handleFiles(e.target.files)
                   e.target.value = ''
                 }}
               />
             </div>
-
-            <div className="flex flex-col gap-[8px] sm:flex-row items-center">
-              <input
-                value={url}
-                onChange={(event) => {
-                  setUrl(event.target.value)
-                  setError(null)
-                  setResult(null)
-                  setBatchEntries(null)
-                  setProgress(null)
-                }}
-                placeholder="https://... YouTube, Spotify, Apple Podcasts, Mediathek, Instagram, TikTok oder Links einfügen"
-                inputMode="url"
-                aria-label="Adresse zum Herunterladen"
-                className="w-full bg-transparent px-[8px] py-[6px] text-small text-prose outline-none placeholder:text-muted/60 flex-1 font-mono"
-              />
-              <Button type="submit" disabled={looking || url.trim().length === 0} className="w-full sm:w-auto shrink-0">
-                {looking ? 'Wird gesucht …' : 'Nachsehen'}
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-[4px] flex flex-wrap items-center gap-[6px] text-micro text-muted">
-            <span className="font-semibold text-ink">Unterstützte Dienste:</span>
-            {['YouTube', 'Spotify', 'Apple Podcasts', 'AniWorld / SerienStream', 'TikTok', 'Instagram', 'Threads', 'Mediatheken (ARD, ZDF, Arte, SRF, ORF, 3sat)', 'Twitch', 'SoundCloud', 'Bandcamp', 'Vimeo', 'Reddit', 'Snapchat', 'Patreon', 'Rumble', 'Kick', 'Archive.org', 'Podcast-RSS', 'Direkte Downloads'].map((name) => (
-              <span key={name} className="rounded-nav bg-panel px-[6px] py-[2px] text-ink font-medium">
-                {name}
-              </span>
-            ))}
           </div>
 
           {isPortalUrl(url) && !IN_DESKTOP_APP ? (
@@ -1668,50 +1730,6 @@ export function DownloaderPanel() {
             </div>
           ) : null}
 
-          {/* Master toolbar for Collapsing / Expanding groups */}
-          <div className="flex flex-wrap items-center justify-between gap-[8px] bg-wash/50 px-[12px] py-[8px] rounded-field text-small border border-line">
-            <div className="flex items-center gap-[8px] text-muted">
-              <span>
-                {Array.from(new Set(batchEntries.map((e) => e.groupId || 'default'))).length > 1
-                  ? `${Array.from(new Set(batchEntries.map((e) => e.groupId || 'default'))).length} Listen / Quellen`
-                  : '1 Liste'}
-              </span>
-              <span>·</span>
-              <span className="font-medium text-ink">{batchEntries.length} Einträge gesamt</span>
-            </div>
-            <div className="flex items-center gap-[8px]">
-              <button
-                type="button"
-                onClick={() => {
-                  const allGroups = Array.from(new Set(batchEntries.map((e) => e.groupId || 'default')))
-                  const next: Record<string, boolean> = {}
-                  allGroups.forEach((g) => {
-                    next[g] = false
-                  })
-                  setCollapsedGroups(next)
-                }}
-                className="press text-caption font-semibold text-ink hover:underline"
-              >
-                Alle ausklappen ▼
-              </button>
-              <span>·</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const allGroups = Array.from(new Set(batchEntries.map((e) => e.groupId || 'default')))
-                  const next: Record<string, boolean> = {}
-                  allGroups.forEach((g) => {
-                    next[g] = true
-                  })
-                  setCollapsedGroups(next)
-                }}
-                className="press text-caption font-semibold text-muted hover:text-ink hover:underline"
-              >
-                Alle einklappen ▲
-              </button>
-            </div>
-          </div>
-
           {(() => {
             const groupMap = new Map<
               string,
@@ -1731,250 +1749,253 @@ export function DownloaderPanel() {
             })
 
             const groups = Array.from(groupMap.values())
+            // A single address is its own group of one; only a real list (a
+            // playlist, a season, a file of links) gets a heading. Folding
+            // hides what is past the third entry, so the switch for all
+            // lists appears only when more than one list has something to fold.
+            const lists = groups.filter((group) => group.items.length > 1)
+            const foldable = groups.filter((group) => group.items.length > 3).length > 1
+            const setAll = (collapsed: boolean) =>
+              setCollapsedGroups(Object.fromEntries(groups.map((group) => [group.id, collapsed])))
 
             return (
-              <div className="flex flex-col gap-[16px]">
-                {groups.map((group) => {
-                  const isCollapsed = collapsedGroups[group.id] ?? (group.items.length > 3)
-                  const doneCount = group.items.filter((i) => i.entry.status === 'done').length
-                  const errorCount = group.items.filter((i) => i.entry.status === 'error').length
-                  const activeCount = group.items.filter(
-                    (i) => i.entry.status === 'downloading' || i.entry.status === 'resolving',
-                  ).length
-                  const visibleItems = isCollapsed ? group.items.slice(0, 3) : group.items
+              <>
+                {lists.length > 1 ? (
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[4px] py-[10px] text-small">
+                    <span className="text-muted">Aus {lists.length} Listen</span>
+                    {foldable ? (
+                      <span className="flex items-center gap-[16px]">
+                        <button
+                          type="button"
+                          onClick={() => setAll(false)}
+                          className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                        >
+                          Alle ausklappen
+                        </button>
+                        <button type="button" onClick={() => setAll(true)} className="press rounded-nav text-muted hover:text-ink">
+                          Alle einklappen
+                        </button>
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
 
-                  return (
-                    <div
-                      key={group.id}
-                      className="rounded-card border border-line bg-wash/30 p-[12px] flex flex-col gap-[8px]"
-                    >
-                      {/* Group Header Bar with count, progress badge, and collapse toggle */}
-                      <div className="flex flex-wrap items-center justify-between gap-[8px] pb-[8px] border-b border-line">
-                        <div className="flex items-center gap-[8px] min-w-0">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCollapsedGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))
-                            }
-                            className="flex items-center gap-[6px] text-left hover:underline"
-                          >
-                            <span className="text-body font-bold text-ink truncate">📁 {group.title}</span>
-                            <span className="rounded-full bg-accent/15 px-[8px] py-[1px] text-caption font-semibold text-accent shrink-0">
-                              {group.items.length} {group.items.length === 1 ? 'Titel' : 'Titel'}
-                            </span>
-                          </button>
-                          <span className="text-small text-muted hidden sm:inline">
-                            ({doneCount}/{group.items.length} geladen
-                            {errorCount > 0 ? ` · ${errorCount} Fehler` : ''}
-                            {activeCount > 0 ? ` · ${activeCount} aktiv` : ''})
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-[8px]">
-                          <Button
-                            size="sm"
-                            variant="quiet"
-                            onClick={() =>
-                              setCollapsedGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))
-                            }
-                          >
-                            {isCollapsed ? `Ausklappen (${group.items.length}) ▼` : 'Kompakt einklappen ▲'}
-                          </Button>
-                        </div>
-                      </div>
+                <div className="flex flex-col">
+                  {groups.map((group) => {
+                    const isCollapsed = collapsedGroups[group.id] ?? group.items.length > 3
+                    const doneCount = group.items.filter((i) => i.entry.status === 'done').length
+                    const errorCount = group.items.filter((i) => i.entry.status === 'error').length
+                    const activeCount = group.items.filter(
+                      (i) => i.entry.status === 'downloading' || i.entry.status === 'resolving',
+                    ).length
+                    const visibleItems = isCollapsed ? group.items.slice(0, 3) : group.items
+                    const hidden = group.items.length - visibleItems.length
 
-                      {/* Items List */}
-                      <ol className="flex flex-col divide-y divide-line">
-                        {visibleItems.map(({ entry, originalIndex }) => {
-                          const stream =
-                            entry.result?.streams.find((s) => s.id === entry.selectedStreamId) ||
-                            entry.result?.streams[0]
+                    return (
+                      <section
+                        key={group.id}
+                        className={`border-t border-line first:border-t-0 ${group.items.length > 1 ? 'mt-[12px] pt-[12px] first:mt-0' : ''}`}
+                      >
+                        {/* One list per source: its name, how far it is, and
+                            the fold — set like every other heading here. */}
+                        {group.items.length > 1 && (groups.length > 1 || group.title !== 'Downloads') ? (
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[2px]">
+                            <h4 className="min-w-0 truncate text-body font-semibold text-ink">{group.title}</h4>
+                            {groups.length > 1 ? (
+                              <span className="value shrink-0 text-small text-muted">
+                                {doneCount} von {group.items.length} geladen
+                                {activeCount > 0 ? ` · ${activeCount} laufen` : ''}
+                                {errorCount > 0 ? ` · ${errorCount} mit Fehler` : ''}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
 
-                          return (
-                            <li
-                              key={`${originalIndex}-${entry.url}`}
-                              className="flex max-w-none flex-col gap-[8px] py-[12px]"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-[8px]">
-                                <div className="min-w-0 flex-1">
-                                  {entry.result ? (
-                                    <p className="truncate text-body font-medium text-ink">
-                                      {stealthMode !== 'off'
-                                        ? filenameFor(entry.result, stream || entry.result.streams[0], {
-                                            mode: stealthMode,
-                                          })
-                                        : entry.result.title}
-                                    </p>
-                                  ) : (
-                                    <p className="truncate text-body font-medium text-ink">
-                                      {entry.titleHint || entry.url}
-                                    </p>
-                                  )}
-                                  {entry.result && stealthMode === 'off' ? (
-                                    <p className="value text-small text-muted">
-                                      {[
-                                        entry.result.author,
-                                        entry.result.durationSeconds
-                                          ? formatDuration(entry.result.durationSeconds)
-                                          : null,
-                                      ]
-                                        .filter(Boolean)
-                                        .join(' · ')}
-                                    </p>
-                                  ) : null}
-                                </div>
+                        {/* Items List */}
+                        <ol className="flex flex-col divide-y divide-line">
+                          {visibleItems.map(({ entry, originalIndex }) => {
+                            const stream =
+                              entry.result?.streams.find((s) => s.id === entry.selectedStreamId) ||
+                              entry.result?.streams[0]
 
-                                <div className="flex flex-wrap items-center gap-[8px]">
-                                  {entry.status === 'pending' ? (
-                                    <>
-                                      <span className="value text-small text-muted">Bereit</span>
-                                      <Button
-                                        size="sm"
-                                        disabled={batchBusy}
-                                        onClick={() => void takeBatchItem(originalIndex)}
-                                      >
-                                        Laden
-                                      </Button>
-                                    </>
-                                  ) : null}
+                            return (
+                              <li
+                                key={`${originalIndex}-${entry.url}`}
+                                className="flex max-w-none flex-col gap-[8px] py-[12px]"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-[8px]">
+                                  <div className="min-w-0 flex-1">
+                                    {entry.result ? (
+                                      <p className="truncate text-body font-medium text-ink">
+                                        {stealthMode !== 'off'
+                                          ? filenameFor(entry.result, stream || entry.result.streams[0], {
+                                              mode: stealthMode,
+                                            })
+                                          : entry.result.title}
+                                      </p>
+                                    ) : (
+                                      <p className="truncate text-body font-medium text-ink">
+                                        {entry.titleHint || entry.url}
+                                      </p>
+                                    )}
+                                    {entry.result && stealthMode === 'off' ? (
+                                      <p className="value text-small text-muted">
+                                        {[
+                                          entry.result.author,
+                                          entry.result.durationSeconds
+                                            ? formatDuration(entry.result.durationSeconds)
+                                            : null,
+                                        ]
+                                          .filter(Boolean)
+                                          .join(' · ')}
+                                      </p>
+                                    ) : null}
+                                  </div>
 
-                                  {entry.status === 'resolving' ? (
-                                    <>
-                                      <span className="value text-small text-muted">Wird gesucht …</span>
-                                      <Button size="sm" variant="quiet" disabled>
-                                        Laden
-                                      </Button>
-                                    </>
-                                  ) : null}
-
-                                  {entry.status === 'ready' && entry.result ? (
-                                    <>
-                                      {entry.result.streams.length > 1 ? (
-                                        <Select
-                                          aria-label="Fassung"
-                                          value={entry.selectedStreamId}
+                                  <div className="flex flex-wrap items-center gap-[8px]">
+                                    {entry.status === 'pending' ? (
+                                      <>
+                                        <span className="value text-small text-muted">Bereit</span>
+                                        <Button
+                                          size="sm"
                                           disabled={batchBusy}
-                                          onChange={(e) => {
-                                            const val = e.target.value
-                                            setBatchEntries((prev) =>
-                                              prev
-                                                ? prev.map((item, idx) =>
-                                                    idx === originalIndex
-                                                      ? { ...item, selectedStreamId: val }
-                                                      : item,
-                                                  )
-                                                : null,
-                                            )
-                                          }}
-                                          className="w-auto! max-w-[280px] py-[6px]"
+                                          onClick={() => void takeBatchItem(originalIndex)}
                                         >
-                                          {entry.result.streams.map((s) => (
-                                            <option key={s.id} value={s.id}>
-                                              {s.label} ({s.ext.toUpperCase()}
-                                              {s.bytes ? ` · ${formatBytes(s.bytes)}` : ''})
-                                            </option>
-                                          ))}
-                                        </Select>
-                                      ) : stream ? (
-                                        <span className="value text-small text-muted">
-                                          {stream.ext.toUpperCase()}
-                                          {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
-                                        </span>
-                                      ) : null}
+                                          Laden
+                                        </Button>
+                                      </>
+                                    ) : null}
 
-                                      <Button
-                                        size="sm"
-                                        disabled={batchBusy}
-                                        onClick={() => void takeBatchItem(originalIndex)}
-                                      >
-                                        Laden
-                                      </Button>
-                                    </>
-                                  ) : null}
+                                    {entry.status === 'resolving' ? (
+                                      <>
+                                        <span className="value text-small text-muted">Wird gesucht …</span>
+                                        <Button size="sm" variant="quiet" disabled>
+                                          Laden
+                                        </Button>
+                                      </>
+                                    ) : null}
 
-                                  {entry.status === 'downloading' ? (
-                                    <span className="value text-small text-muted">Wird geladen …</span>
-                                  ) : null}
+                                    {entry.status === 'ready' && entry.result ? (
+                                      <>
+                                        {entry.result.streams.length > 1 ? (
+                                          <Select
+                                            aria-label="Fassung"
+                                            value={entry.selectedStreamId}
+                                            disabled={batchBusy}
+                                            onChange={(e) => {
+                                              const val = e.target.value
+                                              setBatchEntries((prev) =>
+                                                prev
+                                                  ? prev.map((item, idx) =>
+                                                      idx === originalIndex
+                                                        ? { ...item, selectedStreamId: val }
+                                                        : item,
+                                                    )
+                                                  : null,
+                                              )
+                                            }}
+                                            className="w-auto! max-w-[280px] py-[6px]"
+                                          >
+                                            {entry.result.streams.map((s) => (
+                                              <option key={s.id} value={s.id}>
+                                                {s.label} ({s.ext.toUpperCase()}
+                                                {s.bytes ? ` · ${formatBytes(s.bytes)}` : ''})
+                                              </option>
+                                            ))}
+                                          </Select>
+                                        ) : stream ? (
+                                          <span className="value text-small text-muted">
+                                            {stream.ext.toUpperCase()}
+                                            {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
+                                          </span>
+                                        ) : null}
 
-                                  {entry.status === 'done' && entry.taken ? (
-                                    <div className="flex items-center gap-[8px]">
-                                      <span className="value text-small font-medium text-ink">In der Sitzung</span>
+                                        <Button
+                                          size="sm"
+                                          disabled={batchBusy}
+                                          onClick={() => void takeBatchItem(originalIndex)}
+                                        >
+                                          Laden
+                                        </Button>
+                                      </>
+                                    ) : null}
+
+                                    {entry.status === 'downloading' ? (
+                                      <span className="value text-small text-muted">Wird geladen …</span>
+                                    ) : null}
+
+                                    {entry.status === 'done' && entry.taken ? (
+                                      <div className="flex items-center gap-[8px]">
+                                        <span className="value text-small font-medium text-ink">In der Sitzung</span>
+                                        <Button
+                                          size="sm"
+                                          variant="quiet"
+                                          onClick={() =>
+                                            saveBytes(entry.taken!.bytes, entry.taken!.name, entry.taken!.mime)
+                                          }
+                                        >
+                                          Speichern
+                                        </Button>
+                                      </div>
+                                    ) : null}
+
+                                    {entry.status === 'error' ? (
                                       <Button
                                         size="sm"
                                         variant="quiet"
-                                        onClick={() =>
-                                          saveBytes(entry.taken!.bytes, entry.taken!.name, entry.taken!.mime)
-                                        }
+                                        disabled={batchBusy}
+                                        onClick={() => void takeBatchItem(originalIndex)}
                                       >
-                                        Speichern
+                                        Erneut versuchen
                                       </Button>
-                                    </div>
-                                  ) : null}
-
-                                  {entry.status === 'error' ? (
-                                    <Button
-                                      size="sm"
-                                      variant="quiet"
-                                      disabled={batchBusy}
-                                      onClick={() => void takeBatchItem(originalIndex)}
-                                    >
-                                      Erneut versuchen
-                                    </Button>
-                                  ) : null}
+                                    ) : null}
+                                  </div>
                                 </div>
-                              </div>
 
-                              {entry.status === 'error' ? (
-                                <p className="flex gap-[8px] text-small leading-[1.5] text-prose">
-                                  <span className="font-semibold text-ink" aria-hidden>
-                                    !
-                                  </span>
-                                  {entry.error}
-                                </p>
-                              ) : null}
+                                {entry.status === 'error' ? (
+                                  <p className="flex gap-[8px] text-small leading-[1.5] text-prose">
+                                    <span className="font-semibold text-ink" aria-hidden>
+                                      !
+                                    </span>
+                                    {entry.error}
+                                  </p>
+                                ) : null}
 
-                              {entry.status === 'downloading' && entry.progress ? (
-                                <Progress
-                                  value={
-                                    entry.progress.total
-                                      ? entry.progress.loaded / entry.progress.total
-                                      : null
-                                  }
-                                  label={`${formatBytes(entry.progress.loaded)}${
-                                    entry.progress.total ? ` von ${formatBytes(entry.progress.total)}` : ''
-                                  }`}
-                                />
-                              ) : null}
-                            </li>
-                          )
-                        })}
-                      </ol>
+                                {entry.status === 'downloading' && entry.progress ? (
+                                  <Progress
+                                    value={
+                                      entry.progress.total
+                                        ? entry.progress.loaded / entry.progress.total
+                                        : null
+                                    }
+                                    label={`${formatBytes(entry.progress.loaded)}${
+                                      entry.progress.total ? ` von ${formatBytes(entry.progress.total)}` : ''
+                                    }`}
+                                  />
+                                ) : null}
+                              </li>
+                            )
+                          })}
+                        </ol>
 
-                      {/* Collapsed footer toggle button */}
-                      {isCollapsed && group.items.length > 3 ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCollapsedGroups((prev) => ({ ...prev, [group.id]: false }))
-                          }
-                          className="w-full py-[8px] text-center text-small font-medium text-muted hover:text-ink border-t border-dashed border-line bg-wash/40 hover:bg-wash transition-colors rounded-b-field"
-                        >
-                          + {group.items.length - 3} weitere Einträge in dieser Liste ausklappen ▼
-                        </button>
-                      ) : !isCollapsed && group.items.length > 3 ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCollapsedGroups((prev) => ({ ...prev, [group.id]: true }))
-                          }
-                          className="w-full py-[6px] text-center text-small text-muted hover:text-ink border-t border-line"
-                        >
-                          ▲ Kompakt einklappen
-                        </button>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
+                        {group.items.length > 3 ? (
+                          <button
+                            type="button"
+                            aria-expanded={!isCollapsed}
+                            onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))}
+                            className="press flex w-full items-center gap-[8px] rounded-nav border-t border-line py-[10px] text-left text-small text-ink"
+                          >
+                            <span aria-hidden className="value">
+                              {isCollapsed ? '+' : '−'}
+                            </span>
+                            {isCollapsed ? `${hidden} weitere zeigen` : 'Auf drei einklappen'}
+                          </button>
+                        ) : null}
+                      </section>
+                    )
+                  })}
+                </div>
+              </>
             )
           })()}
         </Card>
