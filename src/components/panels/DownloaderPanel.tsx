@@ -44,15 +44,91 @@ import { AdvancedDownloader } from './DownloaderAdvanced'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { ZipSave } from '../ZipSave'
 
-export type AudioOutputFormat = 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus'
+export type AudioOutputFormat = 'original' | 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus'
+
+export type VideoFilePref = 'untouched' | 'best' | '1080p' | '720p' | '480p' | '360p'
+export type VideoAdaptMode = 'stream_only' | 'reencode_lower'
+export type AudioFilePref = 'untouched' | 'high' | 'medium' | 'low' | 'lossless'
+export type DirectFilePref = 'untouched' | 'apply_media_prefs'
+export type DownloadDeliveryMode = 'session_only' | 'session_and_save' | 'save_only'
+
+export interface DownloadFilePreferences {
+  videoPref: VideoFilePref
+  videoAdaptMode: VideoAdaptMode
+  audioPref: AudioFilePref
+  directPref: DirectFilePref
+  deliveryMode: DownloadDeliveryMode
+}
+
+const DEFAULT_DOWNLOAD_PREFS: DownloadFilePreferences = {
+  videoPref: 'untouched',
+  videoAdaptMode: 'stream_only',
+  audioPref: 'high',
+  directPref: 'untouched',
+  deliveryMode: 'session_only',
+}
+
+const DOWNLOAD_PREFS_KEY = 'sondra:download_prefs'
+
+function loadDownloadPrefs(): DownloadFilePreferences {
+  try {
+    const raw = localStorage.getItem(DOWNLOAD_PREFS_KEY)
+    if (!raw) return DEFAULT_DOWNLOAD_PREFS
+    const parsed = JSON.parse(raw) as Partial<DownloadFilePreferences>
+    return { ...DEFAULT_DOWNLOAD_PREFS, ...parsed }
+  } catch {
+    return DEFAULT_DOWNLOAD_PREFS
+  }
+}
+
+function saveDownloadPrefs(prefs: DownloadFilePreferences): void {
+  try {
+    localStorage.setItem(DOWNLOAD_PREFS_KEY, JSON.stringify(prefs))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+function targetHeightForVideoPref(pref: VideoFilePref): number | null {
+  if (pref === '1080p') return 1080
+  if (pref === '720p') return 720
+  if (pref === '480p') return 480
+  if (pref === '360p') return 360
+  return null
+}
+
+function streamHeight(stream: StudioStream): number | null {
+  if (typeof stream.height === 'number' && stream.height > 0) return stream.height
+  const match = stream.label.match(/(2160|1440|1080|720|480|360|240|144)p/i)
+  return match ? Number(match[1]) : null
+}
 
 const AUDIO_FORMAT_CONFIGS: { id: AudioOutputFormat; label: string; desc: string; ext: string; mime: string }[] = [
+  { id: 'original', label: 'Original', desc: 'Gar nicht anpassen (Original-Tonspur direkt laden)', ext: 'm4a', mime: 'audio/mp4' },
   { id: 'mp3', label: 'MP3', desc: '320 kbps (Standard)', ext: 'mp3', mime: 'audio/mpeg' },
   { id: 'wav', label: 'WAV', desc: 'Verlustfrei (PCM)', ext: 'wav', mime: 'audio/wav' },
   { id: 'm4a', label: 'M4A', desc: 'AAC 256k (Apple / Mobile)', ext: 'm4a', mime: 'audio/mp4' },
   { id: 'flac', label: 'FLAC', desc: 'Verlustfrei komprimiert', ext: 'flac', mime: 'audio/flac' },
   { id: 'opus', label: 'OPUS', desc: '160k (Kompakt & Klar)', ext: 'opus', mime: 'audio/ogg' },
 ]
+
+function SettingsGearIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className="size-[15px] shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="10" cy="10" r="2.4" />
+      <path d="M8.03 4.76L8.34 2.58A7.6 7.6 0 0 1 11.66 2.58L11.97 4.76A5.6 5.6 0 0 1 13.55 5.67L15.59 4.86A7.6 7.6 0 0 1 17.25 7.73L15.53 9.09A5.6 5.6 0 0 1 15.53 10.91L17.25 12.27A7.6 7.6 0 0 1 15.59 15.14L13.55 14.33A5.6 5.6 0 0 1 11.97 15.24L11.66 17.42A7.6 7.6 0 0 1 8.34 17.42L8.03 15.24A5.6 5.6 0 0 1 6.45 14.33L4.41 15.14A7.6 7.6 0 0 1 2.75 12.27L4.47 10.91A5.6 5.6 0 0 1 4.47 9.09L2.75 7.73A7.6 7.6 0 0 1 4.41 4.86L6.45 5.67A5.6 5.6 0 0 1 8.03 4.76Z" />
+    </svg>
+  )
+}
 
 interface StreamGroup {
   id: string
@@ -62,7 +138,7 @@ interface StreamGroup {
   streams: StudioStream[]
 }
 
-function groupStreams(streams: StudioStream[]): StreamGroup[] {
+function groupStreams(streams: StudioStream[], videoPref: VideoFilePref = 'untouched', audioPref: AudioFilePref = 'high'): StreamGroup[] {
   const groups = new Map<string, StreamGroup>()
 
   for (const s of streams) {
@@ -124,14 +200,30 @@ function groupStreams(streams: StudioStream[]): StreamGroup[] {
     groups.get(resKey)!.streams.push(s)
   }
 
-  // Sort streams inside each group: highest size/bitrate first
+  // Sort streams inside each group: if lower quality is preferred for audio, smaller first; otherwise highest size/bitrate first
   for (const group of groups.values()) {
-    group.streams.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
+    if (group.isAudio && audioPref === 'low') {
+      group.streams.sort((a, b) => (a.bytes ?? Number.MAX_SAFE_INTEGER) - (b.bytes ?? Number.MAX_SAFE_INTEGER))
+    } else {
+      group.streams.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
+    }
   }
 
-  // Order groups descending by resolution, audio last
+  // Order groups descending by resolution, but place preferred resolution group first if specified
   const resOrder = ['2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p', 'video', 'audio']
+  const prefTarget = targetHeightForVideoPref(videoPref)
   return Array.from(groups.values()).sort((a, b) => {
+    if (prefTarget !== null && !a.isAudio && !b.isAudio) {
+      const hA = parseInt(a.id, 10)
+      const hB = parseInt(b.id, 10)
+      if (!Number.isNaN(hA) && !Number.isNaN(hB)) {
+        const aFits = hA <= prefTarget
+        const bFits = hB <= prefTarget
+        if (aFits !== bFits) return aFits ? -1 : 1
+        if (aFits && bFits) return hB - hA
+        return hA - hB
+      }
+    }
     const idxA = resOrder.indexOf(a.id)
     const idxB = resOrder.indexOf(b.id)
     return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB)
@@ -142,44 +234,81 @@ async function processDownloadedAudio(
   bytes: Uint8Array,
   inputExt: string,
   targetFormat: AudioOutputFormat,
+  audioPref: AudioFilePref,
   hasVideo: boolean,
   meta: { title?: string | null; artist?: string | null; coverUrl?: string | null },
   signal?: AbortSignal,
   onStatus?: (status: string) => void,
 ): Promise<{ bytes: Uint8Array; ext: string; mime: string }> {
   const cleanInExt = (inputExt || 'mp4').replace(/^\./, '').toLowerCase()
+  const mimeMap: Record<string, string> = {
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    m4a: 'audio/mp4',
+    flac: 'audio/flac',
+    opus: 'audio/ogg',
+    ogg: 'audio/ogg',
+    aac: 'audio/aac',
+    webm: 'audio/webm',
+  }
 
-  if (!hasVideo && cleanInExt === targetFormat) {
-    const tagged = await tagAudioFile(bytes, cleanInExt, meta, signal)
-    const mimeMap: Record<string, string> = {
-      mp3: 'audio/mpeg',
-      wav: 'audio/wav',
-      m4a: 'audio/mp4',
-      flac: 'audio/flac',
-      opus: 'audio/ogg',
-      ogg: 'audio/ogg',
+  // Untouched audio: if already audio-only, return 1:1 without FFmpeg re-encoding or altering bytes
+  if (targetFormat === 'original' || audioPref === 'untouched') {
+    if (!hasVideo) {
+      return { bytes, ext: cleanInExt, mime: mimeMap[cleanInExt] || 'audio/mp4' }
     }
+    // Source has video, extract audio stream without re-encoding if container matches, otherwise AAC
+    await loadFfmpeg()
+    const inName = `dl_in_${Date.now()}.${cleanInExt}`
+    const copyExt = cleanInExt === 'webm' ? 'opus' : 'm4a'
+    const copyOut = `dl_out_${Date.now()}.${copyExt}`
+    onStatus?.('Original-Tonspur wird ohne Umrechnung herausgelöst …')
+    try {
+      const { files } = await runFfmpeg({
+        input: { [inName]: bytes },
+        output: [copyOut],
+        args: ['-i', inName, '-vn', '-c:a', 'copy', copyOut],
+        signal,
+      })
+      const copied = files[copyOut]
+      if (copied && copied.byteLength > 0) {
+        return { bytes: copied, ext: copyExt, mime: mimeMap[copyExt] || 'audio/mp4' }
+      }
+    } catch {
+      /* fallback to standard extraction below */
+    }
+  }
+
+  const effectiveFormat: Exclude<AudioOutputFormat, 'original'> =
+    targetFormat === 'original' ? 'm4a' : targetFormat
+
+  if (!hasVideo && cleanInExt === effectiveFormat && audioPref !== 'low' && audioPref !== 'medium') {
+    const tagged = await tagAudioFile(bytes, cleanInExt, meta, signal)
     return { bytes: tagged, ext: cleanInExt, mime: mimeMap[cleanInExt] || 'audio/mp4' }
   }
 
   await loadFfmpeg()
   const inName = `dl_in_${Date.now()}.${cleanInExt}`
-  const outExt = targetFormat
+  const outExt = effectiveFormat
   const outName = `dl_out_${Date.now()}.${outExt}`
 
+  const mp3Bitrate = audioPref === 'low' ? '128k' : audioPref === 'medium' ? '192k' : '320k'
+  const aacBitrate = audioPref === 'low' ? '128k' : audioPref === 'medium' ? '192k' : '256k'
+  const opusBitrate = audioPref === 'low' ? '96k' : audioPref === 'medium' ? '128k' : '160k'
+
   const args: string[] = ['-i', inName, '-vn']
-  if (targetFormat === 'mp3') {
-    args.push('-b:a', '320k')
-  } else if (targetFormat === 'm4a') {
-    args.push('-c:a', 'aac', '-b:a', '256k')
-  } else if (targetFormat === 'flac') {
+  if (effectiveFormat === 'mp3') {
+    args.push('-b:a', mp3Bitrate)
+  } else if (effectiveFormat === 'm4a') {
+    args.push('-c:a', 'aac', '-b:a', aacBitrate)
+  } else if (effectiveFormat === 'flac') {
     args.push('-c:a', 'flac')
-  } else if (targetFormat === 'opus') {
-    args.push(...opusArgs('160k'))
-  } else if (targetFormat === 'wav') {
+  } else if (effectiveFormat === 'opus') {
+    args.push(...opusArgs(opusBitrate))
+  } else if (effectiveFormat === 'wav') {
     // wav default PCM
   } else {
-    args.push('-c:a', 'aac', '-b:a', '256k')
+    args.push('-c:a', 'aac', '-b:a', aacBitrate)
   }
   args.push(outName)
 
@@ -198,14 +327,50 @@ async function processDownloadedAudio(
 
   outBytes = await tagAudioFile(outBytes, outExt, meta, signal)
 
-  const mimeMap: Record<string, string> = {
-    mp3: 'audio/mpeg',
-    wav: 'audio/wav',
-    m4a: 'audio/mp4',
-    flac: 'audio/flac',
-    opus: 'audio/ogg',
-  }
   return { bytes: outBytes, ext: outExt, mime: mimeMap[outExt] || 'audio/mp4' }
+}
+
+async function reencodeVideoToTargetHeight(
+  bytes: Uint8Array,
+  inputExt: string,
+  targetHeight: number,
+  signal?: AbortSignal,
+  onStatus?: (status: string) => void,
+): Promise<{ bytes: Uint8Array; ext: string; mime: string }> {
+  const cleanInExt = (inputExt || 'mp4').replace(/^\./, '').toLowerCase()
+  await loadFfmpeg()
+  const inName = `dl_vin_${Date.now()}.${cleanInExt}`
+  const outName = `dl_vout_${Date.now()}.mp4`
+  onStatus?.(`Video wird auf ${targetHeight}p angepasst …`)
+  const { files } = await runFfmpeg({
+    input: { [inName]: bytes },
+    output: [outName],
+    args: [
+      '-i',
+      inName,
+      '-vf',
+      `scale=-2:'min(${targetHeight},ih)'`,
+      '-c:v',
+      'libx264',
+      '-preset',
+      'medium',
+      '-crf',
+      targetHeight <= 360 ? '26' : '24',
+      '-c:a',
+      'aac',
+      '-b:a',
+      targetHeight <= 360 ? '96k' : '128k',
+      '-movflags',
+      '+faststart',
+      outName,
+    ],
+    signal,
+  })
+  const outBytes = files[outName]
+  if (!outBytes || outBytes.byteLength === 0) {
+    return { bytes, ext: cleanInExt, mime: 'video/mp4' }
+  }
+  return { bytes: outBytes, ext: 'mp4', mime: 'video/mp4' }
 }
 
 /**
@@ -645,6 +810,19 @@ export function DownloaderPanel() {
   const targetAudioFormatRef = useRef<AudioOutputFormat>('mp3')
   targetAudioFormatRef.current = targetAudioFormat
 
+  const [filePrefs, setFilePrefs] = useState<DownloadFilePreferences>(loadDownloadPrefs)
+  const filePrefsRef = useRef<DownloadFilePreferences>(filePrefs)
+  filePrefsRef.current = filePrefs
+
+  const updateFilePrefs = useCallback((patch: Partial<DownloadFilePreferences>) => {
+    setFilePrefs((prev) => {
+      const next = { ...prev, ...patch }
+      filePrefsRef.current = next
+      saveDownloadPrefs(next)
+      return next
+    })
+  }, [])
+
   const triggerAutoTranscribe = useCallback(
     async (assetName: string, assetBytes: Uint8Array) => {
       log('holen', `Starte automatische Untertitel-Generierung für ${assetName}…`)
@@ -715,16 +893,46 @@ export function DownloaderPanel() {
     updateBatch((list) => list.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
   const entryById = (id: string) => batchEntriesRef.current?.find((entry) => entry.id === id)
 
-  /** The stream an entry starts with: sound alone when only sound is wanted. */
+  /** The stream an entry starts with: respects the per-file-type quality and adaptation preferences. */
   const defaultStream = (res: StudioResult) => {
-    const audioStream = res.streams.find((s) => !s.hasVideo && s.hasAudio)
-    const lowestVideoWithAudio = res.streams
-      .filter((s) => s.hasVideo && s.hasAudio)
-      .sort((a, b) => (a.height ?? 9999) - (b.height ?? 9999))[0]
-    return filterAudioOnlyRef.current
-      ? audioStream || lowestVideoWithAudio || res.streams[0]
-      : res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0]
+    const prefs = filePrefsRef.current
+    const audioStreams = res.streams.filter((s) => !s.hasVideo && s.hasAudio)
+    const videoWithAudio = res.streams.filter((s) => s.hasVideo && s.hasAudio)
+    const lowestVideoWithAudio = [...videoWithAudio].sort((a, b) => (streamHeight(a) ?? 9999) - (streamHeight(b) ?? 9999))[0]
+
+    if (filterAudioOnlyRef.current) {
+      if (prefs.audioPref === 'low') {
+        const smallestAudio = [...audioStreams].sort((a, b) => (a.bytes ?? 999999999) - (b.bytes ?? 999999999))[0]
+        return smallestAudio || lowestVideoWithAudio || res.streams[0]
+      }
+      const bestAudio = [...audioStreams].sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))[0]
+      return bestAudio || lowestVideoWithAudio || res.streams[0]
+    }
+
+    const targetHeight = targetHeightForVideoPref(prefs.videoPref)
+    if (!targetHeight) {
+      return videoWithAudio[0] || res.streams[0]
+    }
+
+    const candidates = videoWithAudio.length > 0 ? videoWithAudio : res.streams.filter((s) => s.hasVideo)
+    const matchingOrBelow = [...candidates]
+      .filter((s) => (streamHeight(s) ?? 0) > 0 && (streamHeight(s) ?? 0) <= targetHeight)
+      .sort((a, b) => (streamHeight(b) ?? 0) - (streamHeight(a) ?? 0))
+    if (matchingOrBelow.length > 0) return matchingOrBelow[0]
+    const lowest = [...candidates].sort((a, b) => (streamHeight(a) ?? 9999) - (streamHeight(b) ?? 9999))[0]
+    return lowest || videoWithAudio[0] || res.streams[0]
   }
+
+  useEffect(() => {
+    updateBatch((list) =>
+      list.map((entry) => {
+        if (entry.status !== 'ready' || !entry.result) return entry
+        const best = defaultStream(entry.result)
+        return best ? { ...entry, selectedStreamId: best.id } : entry
+      }),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterAudioOnly, filePrefs.videoPref, filePrefs.audioPref])
 
   /** Looks entries up a few at a time, as many at once as „gleichzeitig" says. */
   const resolveAll = (ids: string[], signal?: AbortSignal) => {
@@ -919,6 +1127,7 @@ export function DownloaderPanel() {
     signal: AbortSignal,
     onStatus?: (status: string) => void,
   ) => {
+    const prefs = filePrefsRef.current
     const assembled = isHlsStream(stream)
     const meta = { title: res.title, artist: res.author, coverUrl: res.thumbnail }
     let finalBytes = bytes
@@ -926,27 +1135,76 @@ export function DownloaderPanel() {
     let finalMime = assembled ? 'video/mp4' : stream.mime
     let finalKind = assembled ? ('video' as const) : kindFromMime(stream.mime, stream.label)
 
-    if (filterAudioOnlyRef.current) {
-      onStatus?.(`Wandle in ${targetAudioFormatRef.current.toUpperCase()} um …`)
-      const audioRes = await processDownloadedAudio(
-        bytes,
-        finalExt,
-        targetAudioFormatRef.current,
-        assembled || stream.hasVideo,
-        meta,
-        signal,
-        onStatus,
-      )
-      finalBytes = audioRes.bytes
-      finalExt = audioRes.ext
-      finalMime = audioRes.mime
-      finalKind = 'audio'
-    } else if (!stream.hasVideo && stream.hasAudio && !assembled) {
-      finalBytes = await tagAudioFile(bytes, stream.ext, meta, signal)
+    // When a direct file link is set to "Gar nicht anpassen" (untouched) and not forced into audio extraction, keep 1:1.
+    const isDirectUntouched = res.source === 'direct' && prefs.directPref === 'untouched' && !filterAudioOnlyRef.current
+
+    if (!isDirectUntouched) {
+      if (filterAudioOnlyRef.current) {
+        if (prefs.audioPref === 'untouched' && !assembled && !stream.hasVideo) {
+          finalKind = 'audio'
+        } else {
+          const targetLabel =
+            targetAudioFormatRef.current === 'original'
+              ? 'Original-Tonspur'
+              : targetAudioFormatRef.current.toUpperCase()
+          onStatus?.(`Wandle in ${targetLabel} um …`)
+          const audioRes = await processDownloadedAudio(
+            bytes,
+            finalExt,
+            targetAudioFormatRef.current,
+            prefs.audioPref,
+            assembled || stream.hasVideo,
+            meta,
+            signal,
+            onStatus,
+          )
+          finalBytes = audioRes.bytes
+          finalExt = audioRes.ext
+          finalMime = audioRes.mime
+          finalKind = 'audio'
+        }
+      } else if (!stream.hasVideo && stream.hasAudio && !assembled) {
+        if (prefs.audioPref !== 'untouched') {
+          if (prefs.audioPref === 'low' || prefs.audioPref === 'medium') {
+            const audioRes = await processDownloadedAudio(
+              bytes,
+              finalExt,
+              targetAudioFormatRef.current === 'original' ? 'mp3' : targetAudioFormatRef.current,
+              prefs.audioPref,
+              false,
+              meta,
+              signal,
+              onStatus,
+            )
+            finalBytes = audioRes.bytes
+            finalExt = audioRes.ext
+            finalMime = audioRes.mime
+            finalKind = 'audio'
+          } else {
+            finalBytes = await tagAudioFile(bytes, stream.ext, meta, signal)
+          }
+        }
+      } else if ((stream.hasVideo || assembled) && prefs.videoPref !== 'untouched' && prefs.videoPref !== 'best') {
+        const targetHeight = targetHeightForVideoPref(prefs.videoPref) ?? 0
+        const currentHeight = streamHeight(stream) ?? 0
+        if (
+          prefs.videoAdaptMode === 'reencode_lower' &&
+          targetHeight > 0 &&
+          (currentHeight === 0 || currentHeight > targetHeight)
+        ) {
+          const videoRes = await reencodeVideoToTargetHeight(finalBytes, finalExt, targetHeight, signal, onStatus)
+          finalBytes = videoRes.bytes
+          finalExt = videoRes.ext
+          finalMime = videoRes.mime
+          finalKind = 'video'
+        }
+      }
     }
 
-    let name = filenameFor(res, assembled ? { ...stream, ext: 'mp4' } : stream, { mode: stealthModeRef.current })
-    if (filterAudioOnlyRef.current) {
+    let name = filenameFor(res, assembled ? { ...stream, ext: finalExt } : { ...stream, ext: finalExt }, {
+      mode: stealthModeRef.current,
+    })
+    if (filterAudioOnlyRef.current || finalExt !== stream.ext) {
       name = name.replace(/\.[a-zA-Z0-9]+$/, '') + `.${finalExt}`
     }
     return { bytes: finalBytes, ext: finalExt, mime: finalMime, kind: finalKind, name }
@@ -966,17 +1224,23 @@ export function DownloaderPanel() {
         onProgress: setProgress,
       })
       const done = await finishDownload(bytes, stream, result, controller.signal, (status) => setBusy(status))
+      const delivery = filePrefsRef.current.deliveryMode
 
-      addAsset({
-        name: done.name,
-        bytes: done.bytes,
-        mime: done.mime,
-        sizeBytes: done.bytes.byteLength,
-        kind: done.kind,
-        audio: null,
-        durationSeconds: result.durationSeconds,
-        origin: 'download',
-      })
+      if (delivery !== 'save_only') {
+        addAsset({
+          name: done.name,
+          bytes: done.bytes,
+          mime: done.mime,
+          sizeBytes: done.bytes.byteLength,
+          kind: done.kind,
+          audio: null,
+          durationSeconds: result.durationSeconds,
+          origin: 'download',
+        })
+      }
+      if (delivery === 'session_and_save' || delivery === 'save_only') {
+        saveBytes(done.bytes, done.name, done.mime)
+      }
       log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
       setTaken({ name: done.name, bytes: done.bytes, mime: done.mime })
       recordDownload(url, result.title, result.author ?? '', done.ext, done.bytes.byteLength)
@@ -1031,17 +1295,23 @@ export function DownloaderPanel() {
         patchEntry(id, { progress: { loaded: bytes.byteLength, total: bytes.byteLength } })
       }
       const done = await finishDownload(bytes, stream, res, signal)
+      const delivery = filePrefsRef.current.deliveryMode
 
-      addAsset({
-        name: done.name,
-        bytes: done.bytes,
-        mime: done.mime,
-        sizeBytes: done.bytes.byteLength,
-        kind: done.kind,
-        audio: null,
-        durationSeconds: res.durationSeconds,
-        origin: 'download',
-      })
+      if (delivery !== 'save_only') {
+        addAsset({
+          name: done.name,
+          bytes: done.bytes,
+          mime: done.mime,
+          sizeBytes: done.bytes.byteLength,
+          kind: done.kind,
+          audio: null,
+          durationSeconds: res.durationSeconds,
+          origin: 'download',
+        })
+      }
+      if (delivery === 'session_and_save' || delivery === 'save_only') {
+        saveBytes(done.bytes, done.name, done.mime)
+      }
       log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
       if (autoTranscribeRef.current) {
         void triggerAutoTranscribe(done.name, done.bytes)
@@ -1095,8 +1365,29 @@ export function DownloaderPanel() {
     }
   }
 
+  const videoPrefLabel =
+    filePrefs.videoPref === 'untouched'
+      ? 'Video unverändert'
+      : filePrefs.videoPref === 'best'
+        ? 'Video beste Quali'
+        : `Video ${filePrefs.videoPref}`
+
+  const audioPrefLabel =
+    filePrefs.audioPref === 'untouched'
+      ? 'Ton unverändert'
+      : filePrefs.audioPref === 'low'
+        ? 'Ton tiefere Quali'
+        : filePrefs.audioPref === 'medium'
+          ? 'Ton Standard'
+          : filePrefs.audioPref === 'lossless'
+            ? 'Ton verlustfrei'
+            : 'Ton hohe Quali'
+
   // The folded settings, said: what is in force without opening them.
   const settingsSummary = [
+    videoPrefLabel,
+    audioPrefLabel,
+    filePrefs.directPref === 'untouched' ? 'Direktdateien 1:1' : 'Direktdateien anpassen',
     `Dateiname ${
       stealthMode === 'off'
         ? 'wie das Original'
@@ -1115,7 +1406,20 @@ export function DownloaderPanel() {
   return (
     <div className="flex flex-col gap-[16px]">
       <Card tone="cream">
-        <h2 className="display-md mt-[8px] mb-[12px]">Ein Video oder Lied von einer Adresse</h2>
+        <div className="mt-[8px] mb-[12px] flex flex-wrap items-center justify-between gap-[12px]">
+          <h2 className="display-md">Ein Video oder Lied von einer Adresse</h2>
+          <Button
+            type="button"
+            size="sm"
+            variant={settingsOpen ? 'primary' : 'quiet'}
+            aria-expanded={settingsOpen}
+            aria-controls="download-settings"
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
+            <SettingsGearIcon />
+            Einstellungen
+          </Button>
+        </div>
 
         {IN_DESKTOP_APP ? <AppNotice /> : <NotLocalNotice />}
 
@@ -1316,89 +1620,218 @@ export function DownloaderPanel() {
                 aria-expanded={settingsOpen}
                 aria-controls="download-settings"
                 onClick={() => setSettingsOpen((open) => !open)}
-                className="press rounded-nav text-left text-small text-muted hover:text-ink sm:ml-auto"
+                className="press flex items-center gap-[6px] rounded-nav text-left text-small text-muted hover:text-ink sm:ml-auto"
               >
-                {settingsSummary}{' '}
+                <span>{settingsSummary}</span>
                 <span className="text-ink underline decoration-rule underline-offset-[3px]">
-                  {settingsOpen ? 'Fertig' : 'Ändern'}
+                  {settingsOpen ? 'Schliessen' : 'Einstellungen'}
                 </span>
               </button>
             </div>
             {filterAudioOnly ? (
               <span className="text-small leading-[1.45] text-muted">
-                {AUDIO_FORMAT_CONFIGS.find((format) => format.id === targetAudioFormat)?.desc}. Die Tonspur wird herausgelöst und
-                so gespeichert.
+                {AUDIO_FORMAT_CONFIGS.find((format) => format.id === targetAudioFormat)?.desc}.{' '}
+                {filePrefs.audioPref === 'untouched' || targetAudioFormat === 'original'
+                  ? 'Die Datei wird nach Möglichkeit direkt und unverändert übernommen.'
+                  : 'Die Tonspur wird herausgelöst und in der gewählten Qualitätsstufe gespeichert.'}
               </span>
             ) : null}
 
-            <div id="download-settings" hidden={!settingsOpen} className="grid gap-x-[32px] gap-y-[4px] sm:grid-cols-2">
-            <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
-              <label htmlFor="stealth-mode-select" className="text-small text-prose">
-                Dateiname
-              </label>
-              <Select id="stealth-mode-select" value={stealthMode} onChange={(e) => setStealthMode(e.target.value as StealthMode)}>
-                <option value="off">Originaltitel</option>
-                <option value="standard">Neutral (media_…)</option>
-                <option value="full_security">Nur Zeichen (Hash)</option>
-                <option value="teams_office">Wie eine Office-Datei</option>
-              </Select>
-              {stealthMode !== 'off' ? (
-                <span className="text-small leading-[1.45] text-muted">
-                  Zum Beispiel{' '}
-                  <span className="value">
-                    {stealthMode === 'standard'
-                      ? 'media_7a8b9c.mp4'
-                      : stealthMode === 'full_security'
-                        ? '7a8b9c0d1e2f.mp4'
-                        : 'Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4'}
-                  </span>
-                </span>
-              ) : null}
-            </div>
-
-            <div className="border-t border-line pt-[10px] sm:col-span-2">
-              <Toggle
-                label="Untertitel dazu erstellen"
-                hint="Nach dem Laden schreibt Whisper auf diesem Gerät mit, als .srt neben der Datei."
-                checked={autoTranscribe}
-                onChange={setAutoTranscribe}
-              />
-            </div>
-
-            {IN_DESKTOP_APP ? (
-              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
-                <label htmlFor="adapter-select" className="text-small text-prose">
-                  Netzwerk
-                </label>
-                <div className="flex flex-wrap items-center gap-[12px]">
-                  <Select
-                    id="adapter-select"
-                    value={selectedAdapter}
-                    disabled={adapterLoading || adapters.length === 0}
-                    onChange={(e) => void changeAdapter(e.target.value)}
-                    className="w-auto! min-w-[260px]"
-                  >
-                    {adapters.length === 0 ? (
-                      <option value="default">Automatisch (Windows-Standard)</option>
-                    ) : (
-                      adapters.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))
-                    )}
-                  </Select>
-                  <button
-                    type="button"
-                    onClick={() => void fetchAdapters()}
-                    disabled={adapterLoading}
-                    className="press rounded-nav text-small text-ink underline underline-offset-2 disabled:opacity-40"
-                  >
-                    {adapterLoading ? 'Sucht …' : 'Neu suchen'}
-                  </button>
+            <div
+              id="download-settings"
+              hidden={!settingsOpen}
+              className="mt-[4px] grid gap-x-[24px] gap-y-[14px] rounded-card border border-line bg-raised p-[16px] sm:grid-cols-2"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-[8px] border-b border-line pb-[10px] sm:col-span-2">
+                <div>
+                  <h3 className="text-subheading text-ink">Download-Einstellungen für Dateitypen</h3>
+                  <p className="text-small text-muted">
+                    Legen Sie für verschiedene Dateien fest, ob sie in tieferer Qualität geladen oder gar nicht angepasst und direkt heruntergeladen werden sollen.
+                  </p>
                 </div>
               </div>
-            ) : null}
+
+              <div className="flex flex-col gap-[8px]">
+                <label htmlFor="video-pref-select" className="text-small font-medium text-ink">
+                  Video-Dateien (MP4, WebM, Streams)
+                </label>
+                <Select
+                  id="video-pref-select"
+                  value={filePrefs.videoPref}
+                  onChange={(e) => updateFilePrefs({ videoPref: e.target.value as VideoFilePref })}
+                >
+                  <option value="untouched">Gar nicht anpassen — einfach direkt herunterladen (Original)</option>
+                  <option value="best">Beste verfügbare Qualität (bis 4K / 1080p)</option>
+                  <option value="1080p">Standard Full-HD (1080p bevorzugt)</option>
+                  <option value="720p">Mittlere Qualität (720p HD — spart Speicher)</option>
+                  <option value="480p">Tiefere Qualität (480p Kompakt — schnelle Downloads)</option>
+                  <option value="360p">Minimale Qualität (360p — kleinste Datei)</option>
+                </Select>
+                {filePrefs.videoPref !== 'untouched' && filePrefs.videoPref !== 'best' ? (
+                  <div className="flex flex-col gap-[4px] pt-[2px]">
+                    <span className="text-small text-muted">Wenn die Quelle nur in höherer Auflösung vorliegt:</span>
+                    <ChoiceRow
+                      value={filePrefs.videoAdaptMode}
+                      options={[
+                        { value: 'stream_only', label: 'Nur passende Spur wählen (ohne Neucodierung)' },
+                        { value: 'reencode_lower', label: `Aktiv auf ${filePrefs.videoPref} verkleinern` },
+                      ]}
+                      onChange={(mode) => updateFilePrefs({ videoAdaptMode: mode as VideoAdaptMode })}
+                    />
+                  </div>
+                ) : (
+                  <span className="text-small leading-[1.45] text-muted">
+                    {filePrefs.videoPref === 'untouched'
+                      ? 'Videos werden ohne Qualitätsänderung oder Konvertierung genau so geladen, wie die Quelle sie liefert.'
+                      : 'Wählt automatisch die höchste verfügbare Video-Auflösung.'}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-[8px]">
+                <label htmlFor="audio-pref-select" className="text-small font-medium text-ink">
+                  Ton- & Musik-Dateien (MP3, M4A, Opus, WAV)
+                </label>
+                <Select
+                  id="audio-pref-select"
+                  value={filePrefs.audioPref}
+                  onChange={(e) => {
+                    const nextPref = e.target.value as AudioFilePref
+                    updateFilePrefs({ audioPref: nextPref })
+                    if (nextPref === 'untouched') {
+                      setTargetAudioFormat('original')
+                    } else if (nextPref === 'lossless' && targetAudioFormat !== 'wav' && targetAudioFormat !== 'flac') {
+                      setTargetAudioFormat('flac')
+                    }
+                  }}
+                >
+                  <option value="untouched">Gar nicht anpassen — Original-Audiodatei direkt laden</option>
+                  <option value="high">Hohe Qualität (320 kbps / beste Tonspur)</option>
+                  <option value="medium">Mittlere Qualität (192 kbps — ausgewogen)</option>
+                  <option value="low">Tiefere Qualität (128 kbps — kleine Datei, ideal für Sprache)</option>
+                  <option value="lossless">Verlustfrei (WAV / FLAC ohne Qualitätsverlust)</option>
+                </Select>
+                <span className="text-small leading-[1.45] text-muted">
+                  {filePrefs.audioPref === 'untouched'
+                    ? 'Audiodateien werden gar nicht umgewandelt oder neu getaggt, sondern 1:1 heruntergeladen.'
+                    : filePrefs.audioPref === 'low'
+                      ? 'Bevorzugt kleinere Tonspuren und komprimiert auf 128 kbit/s für geringen Speicherplatz.'
+                      : filePrefs.audioPref === 'medium'
+                        ? 'Konvertiert auf 192 kbit/s für gute Qualität bei moderater Dateigröße.'
+                        : filePrefs.audioPref === 'lossless'
+                          ? 'Speichert unkomprimiert bzw. verlustfrei als FLAC oder WAV.'
+                          : 'Nutzt 320 kbit/s bzw. die höchste verfügbare Bitrate inklusive Cover & Metadaten.'}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+                <label htmlFor="direct-pref-select" className="text-small font-medium text-ink">
+                  Direkte Datei-Links & andere Dateien
+                </label>
+                <Select
+                  id="direct-pref-select"
+                  value={filePrefs.directPref}
+                  onChange={(e) => updateFilePrefs({ directPref: e.target.value as DirectFilePref })}
+                >
+                  <option value="untouched">Gar nicht anpassen — immer 1:1 direkt herunterladen</option>
+                  <option value="apply_media_prefs">Obige Qualitäts- und Formatregeln auch auf Direktlinks anwenden</option>
+                </Select>
+                <span className="text-small leading-[1.45] text-muted">
+                  {filePrefs.directPref === 'untouched'
+                    ? 'Direkte Links auf .mp3-, .mp4-, .wav- oder andere Dateien werden ohne jede Anpassung heruntergeladen.'
+                    : 'Auch direkte Datei-Links werden gemäss Ihren Video- und Ton-Vorgaben angepasst.'}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+                <label htmlFor="delivery-mode-select" className="text-small font-medium text-ink">
+                  Verhalten beim Herunterladen
+                </label>
+                <Select
+                  id="delivery-mode-select"
+                  value={filePrefs.deliveryMode}
+                  onChange={(e) => updateFilePrefs({ deliveryMode: e.target.value as DownloadDeliveryMode })}
+                >
+                  <option value="session_only">In die Sondra-Sitzung legen (zum Weiterbearbeiten oder Speichern)</option>
+                  <option value="session_and_save">Sofort als Datei speichern & zusätzlich in die Sitzung legen</option>
+                  <option value="save_only">Einfach direkt als Datei herunterladen (ohne Sitzung)</option>
+                </Select>
+                <span className="text-small leading-[1.45] text-muted">
+                  {filePrefs.deliveryMode === 'save_only'
+                    ? 'Speichert die Datei sofort im Download-Ordner, ohne sie in die Sitzung zu laden.'
+                    : filePrefs.deliveryMode === 'session_and_save'
+                      ? 'Lädt die Datei gleichzeitig in Ihren Download-Ordner und in die aktuelle Sitzung.'
+                      : 'Legt die geladene Datei bereit für alle Werkzeuge in Sondra.'}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+                <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
+                  Dateiname
+                </label>
+                <Select id="stealth-mode-select" value={stealthMode} onChange={(e) => setStealthMode(e.target.value as StealthMode)}>
+                  <option value="off">Originaltitel</option>
+                  <option value="standard">Neutral (media_…)</option>
+                  <option value="full_security">Nur Zeichen (Hash)</option>
+                  <option value="teams_office">Wie eine Office-Datei</option>
+                </Select>
+                {stealthMode !== 'off' ? (
+                  <span className="text-small leading-[1.45] text-muted">
+                    Zum Beispiel{' '}
+                    <span className="value">
+                      {stealthMode === 'standard'
+                        ? 'media_7a8b9c.mp4'
+                        : stealthMode === 'full_security'
+                          ? '7a8b9c0d1e2f.mp4'
+                          : 'Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4'}
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col justify-center border-t border-line pt-[10px]">
+                <Toggle
+                  label="Untertitel dazu erstellen"
+                  hint="Nach dem Laden schreibt Whisper auf diesem Gerät mit, als .srt neben der Datei."
+                  checked={autoTranscribe}
+                  onChange={setAutoTranscribe}
+                />
+              </div>
+
+              {IN_DESKTOP_APP ? (
+                <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
+                  <label htmlFor="adapter-select" className="text-small font-medium text-ink">
+                    Netzwerk
+                  </label>
+                  <div className="flex flex-wrap items-center gap-[12px]">
+                    <Select
+                      id="adapter-select"
+                      value={selectedAdapter}
+                      disabled={adapterLoading || adapters.length === 0}
+                      onChange={(e) => void changeAdapter(e.target.value)}
+                      className="w-auto! min-w-[260px]"
+                    >
+                      {adapters.length === 0 ? (
+                        <option value="default">Automatisch (Windows-Standard)</option>
+                      ) : (
+                        adapters.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))
+                      )}
+                    </Select>
+                    <button
+                      type="button"
+                      onClick={() => void fetchAdapters()}
+                      disabled={adapterLoading}
+                      className="press rounded-nav text-small text-ink underline underline-offset-2 disabled:opacity-40"
+                    >
+                      {adapterLoading ? 'Sucht …' : 'Neu suchen'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </form>
@@ -1504,8 +1937,18 @@ export function DownloaderPanel() {
           <div className="mt-[16px] flex flex-col">
             {filterAudioOnly ? (
               <p className="pb-[8px] text-small text-muted">
-                Gespeichert wird der Ton als <span className="value text-ink">{targetAudioFormat.toUpperCase()}</span>; eine
-                Fassung mit höherer Bitrate klingt besser.
+                {filePrefs.audioPref === 'untouched' || targetAudioFormat === 'original' ? (
+                  <>Die Tonspur wird ohne Umwandlung im <span className="value text-ink">Originalformat</span> geladen.</>
+                ) : (
+                  <>
+                    Gespeichert wird der Ton als <span className="value text-ink">{targetAudioFormat.toUpperCase()}</span> (
+                    {audioPrefLabel}); eine Fassung mit höherer Bitrate klingt besser.
+                  </>
+                )}
+              </p>
+            ) : filePrefs.videoPref !== 'best' ? (
+              <p className="pb-[8px] text-small text-muted">
+                Bevorzugte Einstellung: <span className="value text-ink">{videoPrefLabel}</span> — passende Fassungen stehen oben.
               </p>
             ) : null}
             {(() => {
@@ -1513,7 +1956,7 @@ export function DownloaderPanel() {
                 filterAudioOnly && result.streams.some((s) => !s.hasVideo && s.hasAudio)
                   ? result.streams.filter((s) => !s.hasVideo && s.hasAudio)
                   : result.streams
-              const rows = groupStreams(displayedStreams).flatMap((group) =>
+              const rows = groupStreams(displayedStreams, filePrefs.videoPref, filePrefs.audioPref).flatMap((group) =>
                 group.streams.map((stream, index) => ({ group, stream, best: index === 0 && Boolean(stream.bytes) && group.streams.length > 1 })),
               )
               const visible = showAllStreams ? rows : rows.slice(0, STREAMS_SHOWN)
@@ -1523,7 +1966,11 @@ export function DownloaderPanel() {
                     {visible.map(({ group, stream, best }) => {
                       const bitrate = stream.label.match(/(\d+\s*kbit\/s)/i)?.[1] ?? null
                       const detail = [
-                        filterAudioOnly ? targetAudioFormat.toUpperCase() : stream.ext.toUpperCase(),
+                        filterAudioOnly
+                          ? targetAudioFormat === 'original' || filePrefs.audioPref === 'untouched'
+                            ? stream.ext.toUpperCase()
+                            : targetAudioFormat.toUpperCase()
+                          : stream.ext.toUpperCase(),
                         bitrate,
                         stream.bytes ? formatBytes(stream.bytes) : null,
                         stream.label.includes('mit Ton') ? 'Bild und Ton' : null,
@@ -1536,12 +1983,27 @@ export function DownloaderPanel() {
                           <div className="min-w-0">
                             <p className="truncate text-body text-ink">
                               {group.isAudio && filterAudioOnly ? 'Ton' : group.title}
-                              {best ? <span className="text-small text-muted"> · {group.isAudio ? 'beste Qualität' : 'beste'}</span> : null}
+                              {best ? (
+                                <span className="text-small text-muted">
+                                  {' · '}
+                                  {group.isAudio
+                                    ? filePrefs.audioPref === 'low'
+                                      ? 'kompakt'
+                                      : 'beste Qualität'
+                                    : 'bevorzugt'}
+                                </span>
+                              ) : null}
                             </p>
                             <p className="value truncate text-small text-muted">{detail}</p>
                           </div>
                           <Button size="sm" disabled={busy !== null} onClick={() => void take(stream)} className="shrink-0">
-                            {busy === stream.label ? 'Lädt …' : filterAudioOnly ? `${targetAudioFormat.toUpperCase()} laden` : 'Laden'}
+                            {busy === stream.label
+                              ? 'Lädt …'
+                              : filterAudioOnly
+                                ? targetAudioFormat === 'original' || filePrefs.audioPref === 'untouched'
+                                  ? 'Original laden'
+                                  : `${targetAudioFormat.toUpperCase()} laden`
+                                : 'Laden'}
                           </Button>
                         </li>
                       )
@@ -1569,11 +2031,18 @@ export function DownloaderPanel() {
             <div className="rise mt-[16px] flex flex-wrap items-center gap-[12px] border-t border-line pt-[12px]" role="status">
               <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-pill bg-ink" />
               <p className="min-w-0 flex-1 text-small text-ink">
-                <span className="value">{taken.name}</span> ist in der Sitzung —{' '}
-                <span className="text-muted">oben im Dateimenü, bereit für jedes Werkzeug.</span>
+                <span className="value">{taken.name}</span>{' '}
+                {filePrefs.deliveryMode === 'save_only'
+                  ? 'wurde direkt als Datei heruntergeladen.'
+                  : filePrefs.deliveryMode === 'session_and_save'
+                    ? 'wurde gespeichert und ist in der Sitzung bereit.'
+                    : 'ist in der Sitzung — '}
+                {filePrefs.deliveryMode === 'session_only' ? (
+                  <span className="text-muted">oben im Dateimenü, bereit für jedes Werkzeug.</span>
+                ) : null}
               </p>
               <Button size="sm" variant="quiet" onClick={() => saveBytes(taken.bytes, taken.name, taken.mime)}>
-                Auch speichern
+                {filePrefs.deliveryMode === 'session_only' ? 'Auch speichern' : 'Nochmals speichern'}
               </Button>
             </div>
           ) : null}
