@@ -256,12 +256,38 @@ export interface HlsVariant {
   bandwidth: number
   resolution: string | null
   codecs: string | null
+  /** The `AUDIO` group whose rendition carries this variant's sound, if apart. */
+  audioGroup: string | null
+}
+
+/** A sound track a master playlist keeps apart from the picture. */
+export interface HlsRendition {
+  url: string
+  groupId: string
+  isDefault: boolean
+  language: string | null
+  name: string | null
+}
+
+/** Bytes `start` through `end` (inclusive) of a segment's address. */
+export interface HlsRange {
+  start: number
+  end: number
 }
 
 export interface HlsPlaylist {
   kind: 'master' | 'media'
   variants: HlsVariant[]
   segments: string[]
+  /**
+   * Per segment, the part of its address it is (`#EXT-X-BYTERANGE`), or null
+   * for the whole. Packagers that write one file per quality list the same
+   * address for every segment; fetched whole each time, the file came out
+   * as many copies of itself.
+   */
+  ranges: (HlsRange | null)[]
+  /** Separate audio renditions (`#EXT-X-MEDIA:TYPE=AUDIO` with a `URI`). */
+  audio: HlsRendition[]
   /** Present when segments are AES-128 encrypted, which we do not decrypt. */
   encrypted: boolean
 }
@@ -271,8 +297,22 @@ export function parseM3u8(text: string, baseUrl: string): HlsPlaylist {
   const lines = text.split(/\r?\n/).map((line) => line.trim())
   const variants: HlsVariant[] = []
   const segments: string[] = []
+  const audio: HlsRendition[] = []
+  const ranges: (HlsRange | null)[] = []
   let encrypted = false
   let pendingVariant: Omit<HlsVariant, 'url'> | null = null
+  let pendingRange: string | null = null
+  // A range without an offset continues where the last one of the same
+  // address ended.
+  const endOf = new Map<string, number>()
+  const rangeFor = (spec: string, address: string): HlsRange | null => {
+    const [lengthText, offsetText] = spec.split('@')
+    const length = Number(lengthText)
+    if (!Number.isFinite(length) || length <= 0) return null
+    const start = offsetText !== undefined && Number.isFinite(Number(offsetText)) ? Number(offsetText) : (endOf.get(address) ?? 0)
+    endOf.set(address, start + length)
+    return { start, end: start + length - 1 }
+  }
 
   // A line that is not an address is skipped, not fatal: one bad line must not
   // turn into "Failed to construct 'URL'" for the whole download.
@@ -290,9 +330,26 @@ export function parseM3u8(text: string, baseUrl: string): HlsPlaylist {
     if (line.startsWith('#EXT-X-STREAM-INF:')) {
       const attributes = line.slice('#EXT-X-STREAM-INF:'.length)
       pendingVariant = {
-        bandwidth: Number(attributes.match(/BANDWIDTH=(\d+)/)?.[1] ?? 0),
+        // `AVERAGE-BANDWIDTH` would match a looser pattern first.
+        bandwidth: Number(attributes.match(/(?:^|,)BANDWIDTH=(\d+)/)?.[1] ?? 0),
         resolution: attributes.match(/RESOLUTION=([\dx]+)/)?.[1] ?? null,
         codecs: attributes.match(/CODECS="([^"]+)"/)?.[1] ?? null,
+        audioGroup: attributes.match(/AUDIO="([^"]+)"/)?.[1] ?? null,
+      }
+      continue
+    }
+
+    if (line.startsWith('#EXT-X-MEDIA:') && /TYPE=AUDIO/.test(line)) {
+      const uri = line.match(/URI="([^"]+)"/)?.[1]
+      const resolved = uri ? resolve(uri) : null
+      if (resolved) {
+        audio.push({
+          url: resolved,
+          groupId: line.match(/GROUP-ID="([^"]+)"/)?.[1] ?? '',
+          isDefault: /DEFAULT=YES/.test(line),
+          language: line.match(/LANGUAGE="([^"]+)"/)?.[1] ?? null,
+          name: line.match(/NAME="([^"]+)"/)?.[1] ?? null,
+        })
       }
       continue
     }
@@ -306,7 +363,16 @@ export function parseM3u8(text: string, baseUrl: string): HlsPlaylist {
       // Initialisation segment for fragmented MP4 — it has to lead the stream.
       const uri = line.match(/URI="([^"]+)"/)?.[1]
       const resolved = uri ? resolve(uri) : null
-      if (resolved) segments.push(resolved)
+      if (resolved) {
+        const spec = line.match(/BYTERANGE="([^"]+)"/)?.[1]
+        segments.push(resolved)
+        ranges.push(spec ? rangeFor(spec, resolved) : null)
+      }
+      continue
+    }
+
+    if (line.startsWith('#EXT-X-BYTERANGE:')) {
+      pendingRange = line.slice('#EXT-X-BYTERANGE:'.length).trim()
       continue
     }
 
@@ -319,6 +385,8 @@ export function parseM3u8(text: string, baseUrl: string): HlsPlaylist {
       pendingVariant = null
     } else {
       segments.push(resolved)
+      ranges.push(pendingRange ? rangeFor(pendingRange, resolved) : null)
+      pendingRange = null
     }
   }
 
@@ -326,8 +394,23 @@ export function parseM3u8(text: string, baseUrl: string): HlsPlaylist {
     kind: variants.length > 0 ? 'master' : 'media',
     variants: variants.sort((a, b) => b.bandwidth - a.bandwidth),
     segments,
+    ranges,
+    audio,
     encrypted,
   }
+}
+
+/**
+ * The sound that belongs to a variant when it is not in the variant itself:
+ * the default rendition of its `AUDIO` group, else the group's first.
+ */
+export function audioFor(playlist: HlsPlaylist, variant: HlsVariant): HlsRendition | null {
+  if (!variant.audioGroup) return null
+  const group = playlist.audio.filter((rendition) => rendition.groupId === variant.audioGroup)
+  const chosen = group.find((rendition) => rendition.isDefault) ?? group[0] ?? null
+  // Some masters name the variant's own address as the rendition; fetching it
+  // twice would put the same picture in as "sound".
+  return chosen && chosen.url !== variant.url ? chosen : null
 }
 
 export async function fetchPlaylist(url: string, signal?: AbortSignal): Promise<HlsPlaylist> {
@@ -382,10 +465,72 @@ export async function fetchHlsTunnel(
     return bytes
   }
 
-  const playlist = parseM3u8(new TextDecoder().decode(bytes), response.url || url)
+  let playlist = parseM3u8(new TextDecoder().decode(bytes), response.url || url)
+  // A master playlist has no segments of its own, only the qualities it
+  // offers. Taken as it was, it ended in "Die Playlist enthält keine
+  // Segmente"; the best quality is what a tunnel means.
+  if (playlist.kind === 'master' && playlist.variants.length > 0) {
+    playlist = await fetchPlaylist(playlist.variants[0].url, signal)
+  }
   // Segment counts say nothing about bytes, so progress counts up without a
   // ceiling rather than inventing one.
   return fetchHlsSegments(playlist, (_done, _total, received) => onProgress?.(received, null), signal)
+}
+
+/**
+ * A whole HLS stream, put together: the media playlist's segments, or — from
+ * a master playlist — the best quality and, where it keeps its sound in a
+ * rendition of its own, that rendition as well. The two come back apart; one
+ * stream copy in FFmpeg joins them.
+ *
+ * An answer that is not a playlist at all is the media already assembled (the
+ * yt-dlp bridge does that) and comes back as the picture.
+ */
+export async function fetchHlsStream(
+  url: string,
+  onProgress?: (loaded: number) => void,
+  signal?: AbortSignal,
+): Promise<{ video: Uint8Array; audio: Uint8Array | null }> {
+  let response: Response
+  try {
+    response = await fetchLocalAware(url, { signal, credentials: 'omit' })
+  } catch (error) {
+    throw describeFetchFailure(error, url)
+  }
+  if (!response.ok) {
+    const explained = await explainErrorBody(response)
+    throw new TransferError('http', explained ?? `Server antwortete mit ${response.status} ${response.statusText}.`)
+  }
+  const bytes = await readWithProgress(response, (p) => onProgress?.(p.receivedBytes), signal)
+  if (!looksLikePlaylist(bytes)) {
+    if (bytes.byteLength < MIN_MEDIA_BYTES) throw emptyTransferError(bytes.byteLength, url)
+    return { video: bytes, audio: null }
+  }
+
+  const top = parseM3u8(new TextDecoder().decode(bytes), response.url || url)
+  let media = top
+  let audioPlaylist: HlsPlaylist | null = null
+  if (top.kind === 'master') {
+    const variant = top.variants[0]
+    media = await fetchPlaylist(variant.url, signal)
+    const rendition = audioFor(top, variant)
+    if (rendition) audioPlaylist = await fetchPlaylist(rendition.url, signal)
+  }
+
+  // Both halves count into one figure, so the bar does not start over.
+  let videoBytes = 0
+  const video = await fetchHlsSegments(
+    media,
+    (_done, _total, received) => {
+      videoBytes = received
+      onProgress?.(received)
+    },
+    signal,
+  )
+  const audio = audioPlaylist
+    ? await fetchHlsSegments(audioPlaylist, (_done, _total, received) => onProgress?.(videoBytes + received), signal)
+    : null
+  return { video, audio }
 }
 
 /**
@@ -394,6 +539,9 @@ export async function fetchHlsTunnel(
  * Segments are fetched a few at a time: serially it is needlessly slow, and all
  * at once it opens hundreds of sockets and gets throttled.
  */
+/** Further tries for a segment whose connection dropped or whose host hiccuped. */
+const SEGMENT_RETRIES = 2
+
 export async function fetchHlsSegments(
   playlist: HlsPlaylist,
   onProgress?: (done: number, total: number, bytes: number) => void,
@@ -422,16 +570,40 @@ export async function fetchHlsSegments(
       if (index >= total) return
       if (signal?.aborted) throw new TransferError('aborted', 'Übertragung abgebrochen.')
 
-      let response: Response
-      try {
-        response = await fetchLocalAware(playlist.segments[index], { signal, credentials: 'omit' })
-      } catch (error) {
-        throw describeFetchFailure(error, playlist.segments[index])
+      const range = playlist.ranges?.[index] ?? null
+      // Hundreds of requests make one dropped connection likely; it costs
+      // that segment a second try, not the whole download.
+      let chunk: Uint8Array | null = null
+      let response: Response | null = null
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          response = await fetchLocalAware(playlist.segments[index], {
+            signal,
+            credentials: 'omit',
+            ...(range ? { headers: { range: `bytes=${range.start}-${range.end}` } } : {}),
+          })
+          if (response.ok) {
+            chunk = new Uint8Array(await response.arrayBuffer())
+            break
+          }
+          if (response.status < 500 || attempt >= SEGMENT_RETRIES) {
+            throw new TransferError('http', `Segment ${index + 1} fehlte (${response.status}).`)
+          }
+        } catch (error) {
+          if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+            throw new TransferError('aborted', 'Übertragung abgebrochen.')
+          }
+          if (error instanceof TransferError || attempt >= SEGMENT_RETRIES) {
+            throw error instanceof TransferError ? error : describeFetchFailure(error, playlist.segments[index])
+          }
+        }
+        await new Promise((done) => setTimeout(done, 400 * (attempt + 1)))
       }
-      if (!response.ok) {
-        throw new TransferError('http', `Segment ${index + 1} fehlte (${response.status}).`)
+      // A host that ignores Range sends the whole file; the segment is the
+      // part of it that was asked for.
+      if (range && response?.status === 200 && chunk.byteLength > range.end) {
+        chunk = chunk.slice(range.start, range.end + 1)
       }
-      const chunk = new Uint8Array(await response.arrayBuffer())
       parts[index] = chunk
       completed += 1
       bytes += chunk.byteLength
@@ -584,4 +756,51 @@ export function isSupportedUrl(value: string): boolean {
   } catch {
     return false
   }
+}
+
+/** Closing brackets a pasted address keeps only when it also opened them. */
+function trimUnbalanced(address: string, open: string, close: string): string {
+  let value = address
+  while (value.endsWith(close) && value.split(close).length > value.split(open).length) value = value.slice(0, -1)
+  return value
+}
+
+/**
+ * Every address in a piece of text, the way people paste them.
+ *
+ * One per line, but just as often „a, b“, „a,b“, „a; b“, in quotes, in angle
+ * brackets, at the end of a sentence with its full stop. Splitting on line
+ * breaks alone left „https://…/a.mp4,“ with its comma as the first address
+ * and „a,b“ as one, and the field's own hint says a comma separates them.
+ * Commas inside an address stay; only a comma or semicolon before the next
+ * `http` separates. Duplicates count once.
+ */
+export function extractAddresses(text: string): string[] {
+  const found: string[] = []
+  for (const match of text.matchAll(/https?:\/\/[^\s"'<>`]+/gi)) {
+    for (const piece of match[0].split(/[,;|]+(?=https?:\/\/)/i)) {
+      let candidate = piece.replace(/[,;.:!?»“”„‘’'"]+$/u, '')
+      candidate = trimUnbalanced(trimUnbalanced(trimUnbalanced(candidate, '(', ')'), '[', ']'), '{', '}')
+      candidate = candidate.replace(/[,;.:!?]+$/, '')
+      try {
+        const parsed = new URL(candidate)
+        if (!parsed.hostname) continue
+      } catch {
+        continue
+      }
+      if (!found.includes(candidate)) found.push(candidate)
+    }
+  }
+  return found
+}
+
+/**
+ * True when a text file is an HLS playlist rather than a list of links.
+ *
+ * Both start with `#EXTM3U`. A music playlist lists tracks to fetch; an HLS
+ * playlist lists the hundreds of segments of one stream, and taken as links it
+ * became hundreds of entries none of which is a file of its own.
+ */
+export function isHlsPlaylistText(text: string): boolean {
+  return /^﻿?\s*#EXTM3U/.test(text) && /#EXT-X-(?:TARGETDURATION|STREAM-INF|MEDIA-SEQUENCE)/.test(text)
 }

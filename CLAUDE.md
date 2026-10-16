@@ -279,5 +279,19 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
     Portale, für die es hier keinen Extraktor gibt. Ohne ihn bleibt YouTube auf
     der progressiven Spur (in der Regel 360p).
   - `SONDRA_PROVIDER_KEY` — dessen `Api-Key`, falls verlangt.
+- **Herunterladen: Erkennen, Zusammensetzen, Laden** (16.10.2026). Adressen
+  liest `extractAddresses` (`lib/download.ts`) aus jedem Text — Komma,
+  Semikolon, Zeilen, Anführungszeichen, Punkt am Satzende; ins einzeilige
+  Feld kommen sie mit „, " getrennt. HLS (`.m3u8`, auch als `audio/mpegurl`)
+  geht durch `/api/stream`: der Dienst schreibt die Playlist um, jede
+  Adresse darin bekommt ein eigenes Token, und die Seite setzt die Segmente
+  (samt getrennter Tonspur, samt `EXT-X-BYTERANGE`) mit FFmpeg per
+  Stream-Kopie zu einer MP4 zusammen (`downloadHls` in `lib/studio.ts`);
+  verschlüsselte Streams bleiben abgelehnt. Einträge einer Liste haben eine
+  feste `id`, nicht ihre Position — eine Playlist, die sich auffaltet,
+  verschob sonst alle Zeilen danach. `boundedFetch` prüft Zertifikate
+  immer; hinter einem Schul- oder Firmenproxy hilft der Zertifikatspeicher
+  des Systems (`tls.getCACertificates('system')`), nie `rejectUnauthorized:
+  false`. `npm run verify:download` prüft das ohne Netz.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.

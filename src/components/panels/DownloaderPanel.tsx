@@ -20,7 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { IN_DESKTOP_APP } from '../../lib/desktop'
 import { useIngestFiles } from '../../hooks/useIngest'
 import { opusArgs } from '../../lib/convert'
-import { isPortalUrl, saveBytes } from '../../lib/download'
+import { extractAddresses, isHlsPlaylistText, isPortalUrl, isSupportedUrl, saveBytes } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { decodeWithBrowser } from '../../lib/audio'
 import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
@@ -29,6 +29,7 @@ import {
   StudioError,
   downloadStream,
   filenameFor,
+  isHlsStream,
   resolveViaService,
   type StealthMode,
   type StudioResult,
@@ -43,15 +44,91 @@ import { AdvancedDownloader } from './DownloaderAdvanced'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { ZipSave } from '../ZipSave'
 
-export type AudioOutputFormat = 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus'
+export type AudioOutputFormat = 'original' | 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus'
+
+export type VideoFilePref = 'untouched' | 'best' | '1080p' | '720p' | '480p' | '360p'
+export type VideoAdaptMode = 'stream_only' | 'reencode_lower'
+export type AudioFilePref = 'untouched' | 'high' | 'medium' | 'low' | 'lossless'
+export type DirectFilePref = 'untouched' | 'apply_media_prefs'
+export type DownloadDeliveryMode = 'session_only' | 'session_and_save' | 'save_only'
+
+export interface DownloadFilePreferences {
+  videoPref: VideoFilePref
+  videoAdaptMode: VideoAdaptMode
+  audioPref: AudioFilePref
+  directPref: DirectFilePref
+  deliveryMode: DownloadDeliveryMode
+}
+
+const DEFAULT_DOWNLOAD_PREFS: DownloadFilePreferences = {
+  videoPref: 'untouched',
+  videoAdaptMode: 'stream_only',
+  audioPref: 'high',
+  directPref: 'untouched',
+  deliveryMode: 'session_only',
+}
+
+const DOWNLOAD_PREFS_KEY = 'sondra:download_prefs'
+
+function loadDownloadPrefs(): DownloadFilePreferences {
+  try {
+    const raw = localStorage.getItem(DOWNLOAD_PREFS_KEY)
+    if (!raw) return DEFAULT_DOWNLOAD_PREFS
+    const parsed = JSON.parse(raw) as Partial<DownloadFilePreferences>
+    return { ...DEFAULT_DOWNLOAD_PREFS, ...parsed }
+  } catch {
+    return DEFAULT_DOWNLOAD_PREFS
+  }
+}
+
+function saveDownloadPrefs(prefs: DownloadFilePreferences): void {
+  try {
+    localStorage.setItem(DOWNLOAD_PREFS_KEY, JSON.stringify(prefs))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+function targetHeightForVideoPref(pref: VideoFilePref): number | null {
+  if (pref === '1080p') return 1080
+  if (pref === '720p') return 720
+  if (pref === '480p') return 480
+  if (pref === '360p') return 360
+  return null
+}
+
+function streamHeight(stream: StudioStream): number | null {
+  if (typeof stream.height === 'number' && stream.height > 0) return stream.height
+  const match = stream.label.match(/(2160|1440|1080|720|480|360|240|144)p/i)
+  return match ? Number(match[1]) : null
+}
 
 const AUDIO_FORMAT_CONFIGS: { id: AudioOutputFormat; label: string; desc: string; ext: string; mime: string }[] = [
+  { id: 'original', label: 'Original', desc: 'Gar nicht anpassen (Original-Tonspur direkt laden)', ext: 'm4a', mime: 'audio/mp4' },
   { id: 'mp3', label: 'MP3', desc: '320 kbps (Standard)', ext: 'mp3', mime: 'audio/mpeg' },
   { id: 'wav', label: 'WAV', desc: 'Verlustfrei (PCM)', ext: 'wav', mime: 'audio/wav' },
   { id: 'm4a', label: 'M4A', desc: 'AAC 256k (Apple / Mobile)', ext: 'm4a', mime: 'audio/mp4' },
   { id: 'flac', label: 'FLAC', desc: 'Verlustfrei komprimiert', ext: 'flac', mime: 'audio/flac' },
   { id: 'opus', label: 'OPUS', desc: '160k (Kompakt & Klar)', ext: 'opus', mime: 'audio/ogg' },
 ]
+
+function SettingsGearIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className="size-[15px] shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="10" cy="10" r="2.4" />
+      <path d="M8.03 4.76L8.34 2.58A7.6 7.6 0 0 1 11.66 2.58L11.97 4.76A5.6 5.6 0 0 1 13.55 5.67L15.59 4.86A7.6 7.6 0 0 1 17.25 7.73L15.53 9.09A5.6 5.6 0 0 1 15.53 10.91L17.25 12.27A7.6 7.6 0 0 1 15.59 15.14L13.55 14.33A5.6 5.6 0 0 1 11.97 15.24L11.66 17.42A7.6 7.6 0 0 1 8.34 17.42L8.03 15.24A5.6 5.6 0 0 1 6.45 14.33L4.41 15.14A7.6 7.6 0 0 1 2.75 12.27L4.47 10.91A5.6 5.6 0 0 1 4.47 9.09L2.75 7.73A7.6 7.6 0 0 1 4.41 4.86L6.45 5.67A5.6 5.6 0 0 1 8.03 4.76Z" />
+    </svg>
+  )
+}
 
 interface StreamGroup {
   id: string
@@ -61,7 +138,7 @@ interface StreamGroup {
   streams: StudioStream[]
 }
 
-function groupStreams(streams: StudioStream[]): StreamGroup[] {
+function groupStreams(streams: StudioStream[], videoPref: VideoFilePref = 'untouched', audioPref: AudioFilePref = 'high'): StreamGroup[] {
   const groups = new Map<string, StreamGroup>()
 
   for (const s of streams) {
@@ -123,14 +200,30 @@ function groupStreams(streams: StudioStream[]): StreamGroup[] {
     groups.get(resKey)!.streams.push(s)
   }
 
-  // Sort streams inside each group: highest size/bitrate first
+  // Sort streams inside each group: if lower quality is preferred for audio, smaller first; otherwise highest size/bitrate first
   for (const group of groups.values()) {
-    group.streams.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
+    if (group.isAudio && audioPref === 'low') {
+      group.streams.sort((a, b) => (a.bytes ?? Number.MAX_SAFE_INTEGER) - (b.bytes ?? Number.MAX_SAFE_INTEGER))
+    } else {
+      group.streams.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
+    }
   }
 
-  // Order groups descending by resolution, audio last
+  // Order groups descending by resolution, but place preferred resolution group first if specified
   const resOrder = ['2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p', 'video', 'audio']
+  const prefTarget = targetHeightForVideoPref(videoPref)
   return Array.from(groups.values()).sort((a, b) => {
+    if (prefTarget !== null && !a.isAudio && !b.isAudio) {
+      const hA = parseInt(a.id, 10)
+      const hB = parseInt(b.id, 10)
+      if (!Number.isNaN(hA) && !Number.isNaN(hB)) {
+        const aFits = hA <= prefTarget
+        const bFits = hB <= prefTarget
+        if (aFits !== bFits) return aFits ? -1 : 1
+        if (aFits && bFits) return hB - hA
+        return hA - hB
+      }
+    }
     const idxA = resOrder.indexOf(a.id)
     const idxB = resOrder.indexOf(b.id)
     return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB)
@@ -141,44 +234,81 @@ async function processDownloadedAudio(
   bytes: Uint8Array,
   inputExt: string,
   targetFormat: AudioOutputFormat,
+  audioPref: AudioFilePref,
   hasVideo: boolean,
   meta: { title?: string | null; artist?: string | null; coverUrl?: string | null },
   signal?: AbortSignal,
   onStatus?: (status: string) => void,
 ): Promise<{ bytes: Uint8Array; ext: string; mime: string }> {
   const cleanInExt = (inputExt || 'mp4').replace(/^\./, '').toLowerCase()
+  const mimeMap: Record<string, string> = {
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    m4a: 'audio/mp4',
+    flac: 'audio/flac',
+    opus: 'audio/ogg',
+    ogg: 'audio/ogg',
+    aac: 'audio/aac',
+    webm: 'audio/webm',
+  }
 
-  if (!hasVideo && cleanInExt === targetFormat) {
-    const tagged = await tagAudioFile(bytes, cleanInExt, meta, signal)
-    const mimeMap: Record<string, string> = {
-      mp3: 'audio/mpeg',
-      wav: 'audio/wav',
-      m4a: 'audio/mp4',
-      flac: 'audio/flac',
-      opus: 'audio/ogg',
-      ogg: 'audio/ogg',
+  // Untouched audio: if already audio-only, return 1:1 without FFmpeg re-encoding or altering bytes
+  if (targetFormat === 'original' || audioPref === 'untouched') {
+    if (!hasVideo) {
+      return { bytes, ext: cleanInExt, mime: mimeMap[cleanInExt] || 'audio/mp4' }
     }
+    // Source has video, extract audio stream without re-encoding if container matches, otherwise AAC
+    await loadFfmpeg()
+    const inName = `dl_in_${Date.now()}.${cleanInExt}`
+    const copyExt = cleanInExt === 'webm' ? 'opus' : 'm4a'
+    const copyOut = `dl_out_${Date.now()}.${copyExt}`
+    onStatus?.('Original-Tonspur wird ohne Umrechnung herausgelöst …')
+    try {
+      const { files } = await runFfmpeg({
+        input: { [inName]: bytes },
+        output: [copyOut],
+        args: ['-i', inName, '-vn', '-c:a', 'copy', copyOut],
+        signal,
+      })
+      const copied = files[copyOut]
+      if (copied && copied.byteLength > 0) {
+        return { bytes: copied, ext: copyExt, mime: mimeMap[copyExt] || 'audio/mp4' }
+      }
+    } catch {
+      /* fallback to standard extraction below */
+    }
+  }
+
+  const effectiveFormat: Exclude<AudioOutputFormat, 'original'> =
+    targetFormat === 'original' ? 'm4a' : targetFormat
+
+  if (!hasVideo && cleanInExt === effectiveFormat && audioPref !== 'low' && audioPref !== 'medium') {
+    const tagged = await tagAudioFile(bytes, cleanInExt, meta, signal)
     return { bytes: tagged, ext: cleanInExt, mime: mimeMap[cleanInExt] || 'audio/mp4' }
   }
 
   await loadFfmpeg()
   const inName = `dl_in_${Date.now()}.${cleanInExt}`
-  const outExt = targetFormat
+  const outExt = effectiveFormat
   const outName = `dl_out_${Date.now()}.${outExt}`
 
+  const mp3Bitrate = audioPref === 'low' ? '128k' : audioPref === 'medium' ? '192k' : '320k'
+  const aacBitrate = audioPref === 'low' ? '128k' : audioPref === 'medium' ? '192k' : '256k'
+  const opusBitrate = audioPref === 'low' ? '96k' : audioPref === 'medium' ? '128k' : '160k'
+
   const args: string[] = ['-i', inName, '-vn']
-  if (targetFormat === 'mp3') {
-    args.push('-b:a', '320k')
-  } else if (targetFormat === 'm4a') {
-    args.push('-c:a', 'aac', '-b:a', '256k')
-  } else if (targetFormat === 'flac') {
+  if (effectiveFormat === 'mp3') {
+    args.push('-b:a', mp3Bitrate)
+  } else if (effectiveFormat === 'm4a') {
+    args.push('-c:a', 'aac', '-b:a', aacBitrate)
+  } else if (effectiveFormat === 'flac') {
     args.push('-c:a', 'flac')
-  } else if (targetFormat === 'opus') {
-    args.push(...opusArgs('160k'))
-  } else if (targetFormat === 'wav') {
+  } else if (effectiveFormat === 'opus') {
+    args.push(...opusArgs(opusBitrate))
+  } else if (effectiveFormat === 'wav') {
     // wav default PCM
   } else {
-    args.push('-c:a', 'aac', '-b:a', '256k')
+    args.push('-c:a', 'aac', '-b:a', aacBitrate)
   }
   args.push(outName)
 
@@ -197,14 +327,50 @@ async function processDownloadedAudio(
 
   outBytes = await tagAudioFile(outBytes, outExt, meta, signal)
 
-  const mimeMap: Record<string, string> = {
-    mp3: 'audio/mpeg',
-    wav: 'audio/wav',
-    m4a: 'audio/mp4',
-    flac: 'audio/flac',
-    opus: 'audio/ogg',
-  }
   return { bytes: outBytes, ext: outExt, mime: mimeMap[outExt] || 'audio/mp4' }
+}
+
+async function reencodeVideoToTargetHeight(
+  bytes: Uint8Array,
+  inputExt: string,
+  targetHeight: number,
+  signal?: AbortSignal,
+  onStatus?: (status: string) => void,
+): Promise<{ bytes: Uint8Array; ext: string; mime: string }> {
+  const cleanInExt = (inputExt || 'mp4').replace(/^\./, '').toLowerCase()
+  await loadFfmpeg()
+  const inName = `dl_vin_${Date.now()}.${cleanInExt}`
+  const outName = `dl_vout_${Date.now()}.mp4`
+  onStatus?.(`Video wird auf ${targetHeight}p angepasst …`)
+  const { files } = await runFfmpeg({
+    input: { [inName]: bytes },
+    output: [outName],
+    args: [
+      '-i',
+      inName,
+      '-vf',
+      `scale=-2:'min(${targetHeight},ih)'`,
+      '-c:v',
+      'libx264',
+      '-preset',
+      'medium',
+      '-crf',
+      targetHeight <= 360 ? '26' : '24',
+      '-c:a',
+      'aac',
+      '-b:a',
+      targetHeight <= 360 ? '96k' : '128k',
+      '-movflags',
+      '+faststart',
+      outName,
+    ],
+    signal,
+  })
+  const outBytes = files[outName]
+  if (!outBytes || outBytes.byteLength === 0) {
+    return { bytes, ext: cleanInExt, mime: 'video/mp4' }
+  }
+  return { bytes: outBytes, ext: 'mp4', mime: 'video/mp4' }
 }
 
 /**
@@ -215,22 +381,23 @@ async function processDownloadedAudio(
  * big enough that nobody pastes an address without having read it.
  */
 function NotLocalNotice() {
+  // Every word stays — the last sentence is binding. What changed is the
+  // shape: three bullets under a heading made a box half a screen tall above
+  // the field. Side by side the same three sentences take a few lines.
   return (
-    <div role="note" className="rounded-card bg-panel-cool p-[20px] ring-2 ring-inset ring-ink sm:p-[24px]">
-      <p className="flex items-start gap-[12px] text-ink">
-        <svg viewBox="0 0 16 16" className="mt-[2px] h-6 w-6 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <div role="note" className="rounded-card bg-panel-cool p-[16px] ring-2 ring-inset ring-ink sm:p-[20px]">
+      <p className="flex items-start gap-[10px] text-ink">
+        <svg viewBox="0 0 16 16" className="mt-[1px] size-[20px] shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M8 1.6l6.2 10.8H1.8zM8 6.2v3.1M8 11.2h.01" />
         </svg>
-        <span className="flex flex-col gap-[2px]">
-          <span className="text-body font-bold leading-[1.3] sm:text-[1.25rem]">
-            Achtung: Herunterladen läuft nicht lokal
-          </span>
+        <span className="flex flex-wrap items-baseline gap-x-[12px] gap-y-[2px]">
+          <span className="text-body font-bold leading-[1.3]">Achtung: Herunterladen läuft nicht lokal</span>
           <span className="text-small text-prose">
             Das ist das einzige Werkzeug, das Ihr Gerät verlässt. Alle anderen rechnen nur hier.
           </span>
         </span>
       </p>
-      <ul className="mt-[12px] flex list-disc flex-col gap-[4px] pl-[52px] text-small leading-[1.5] text-prose">
+      <ul className="mt-[10px] grid gap-x-[24px] gap-y-[6px] text-small leading-[1.5] text-prose sm:grid-cols-3 sm:pl-[30px] [&_li]:max-w-none">
         <li>
           Die Adresse, die Sie einfügen, geht an einen Dienst dieser Seite. Er schlägt dort nach und
           holt die Datei. Ihre eigenen Dateien sieht er nie.
@@ -239,7 +406,7 @@ function NotLocalNotice() {
           Die Datei läuft durch diesen Dienst zu Ihnen. Gespeichert wird sie dort nicht; alles
           Weitere — schneiden, umwandeln, trennen — passiert wieder hier im Tab.
         </li>
-        <li>
+        <li className="font-semibold text-ink">
           Das Ganze läuft über einen Proxy, und ich hafte dafür absolut nicht. Laden Sie nur
           herunter, was Sie herunterladen dürfen. Kopierschutz wird hier nicht umgangen.
         </li>
@@ -271,9 +438,9 @@ function useOnline(): boolean {
 
 function AppNotice() {
   return (
-    <div role="note" className="rounded-card bg-panel-soft p-[20px] sm:p-[24px]">
-      <p className="text-body font-bold leading-[1.3] text-ink sm:text-[1.25rem]">Herunterladen läuft über diesen Rechner</p>
-      <ul className="mt-[12px] flex list-disc flex-col gap-[4px] pl-[20px] text-small leading-[1.5] text-prose">
+    <div role="note" className="rounded-card bg-panel-soft p-[16px] sm:p-[20px]">
+      <p className="text-body font-bold leading-[1.3] text-ink">Herunterladen läuft über diesen Rechner</p>
+      <ul className="mt-[10px] grid gap-x-[24px] gap-y-[6px] text-small leading-[1.5] text-prose sm:grid-cols-3 [&_li]:max-w-none">
         <li>
           Sondra fragt die Seite selbst, mit yt-dlp auf diesem Rechner. Kein fremder Server ist
           dazwischen; die Seite, von der Sie laden, sieht diesen Rechner.
@@ -291,6 +458,8 @@ function AppNotice() {
 /* -------------------------------------------------------------------------- */
 
 interface BatchItem {
+  /** Stable for the life of the entry, whatever happens to the rows around it. */
+  id: string
   url: string
   titleHint?: string
   status: 'pending' | 'resolving' | 'ready' | 'downloading' | 'done' | 'error'
@@ -301,6 +470,8 @@ interface BatchItem {
   taken?: { name: string; bytes: Uint8Array; mime: string }
   groupId?: string
   groupTitle?: string
+  /** The title the list itself gave this entry (a feed's episode title). */
+  sourceTitle?: string
 }
 
 interface NetworkAdapter {
@@ -359,13 +530,13 @@ function WayTile({
       type="button"
       onClick={onClick}
       aria-pressed={pressed}
-      className={`press group flex flex-col items-start gap-[6px] rounded-card p-[16px] text-left transition-colors duration-[var(--dur-fast)] ${
+      className={`press group flex flex-col items-start gap-[4px] rounded-card px-[16px] py-[12px] text-left transition-colors duration-[var(--dur-fast)] ${
         pressed ? 'bg-panel-strong' : 'bg-panel-mid hover:bg-panel-strong'
       }`}
     >
       <span className="text-body font-semibold text-ink">{title}</span>
       <span className="text-small leading-[1.5] text-prose">{hint}</span>
-      <span className="mt-auto inline-flex items-center gap-[6px] pt-[6px] text-small font-semibold text-ink">
+      <span className="mt-auto inline-flex items-center gap-[6px] pt-[4px] text-small font-semibold text-ink">
         {action}
         <ArrowRight className="transition-transform duration-[var(--dur-fast)] group-hover:translate-x-[2px]" />
       </span>
@@ -402,6 +573,8 @@ const SERVICES = [
   'direkte Dateiadressen',
 ]
 const SERVICES_NAMED = 4
+/** Versions shown before „weitere Fassungen": the best of each resolution fit. */
+const STREAMS_SHOWN = 6
 
 export function DownloaderPanel() {
   const addAsset = useSession((state) => state.addAsset)
@@ -439,6 +612,8 @@ export function DownloaderPanel() {
   const { ingest: ingestFile } = useIngestFiles()
   const [isDragOver, setIsDragOver] = useState(false)
   const [showServices, setShowServices] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [showAllStreams, setShowAllStreams] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFiles = async (files: FileList | File[]) => {
@@ -452,15 +627,23 @@ export function DownloaderPanel() {
       for (const tf of textFiles) {
         try {
           const content = await tf.text()
-          const matched = content.match(/https?:\/\/[^\s"'<>]+/gi)
-          if (matched) urls.push(...matched)
+          // The segments of one stream are not a list of things to load.
+          if (isHlsPlaylistText(content)) {
+            log('holen', `${tf.name} ist eine HLS-Playlist, keine Liste von Links — bitte ihre Adresse einfügen`, 'warn')
+            continue
+          }
+          urls.push(...extractAddresses(content))
         } catch {}
       }
       if (urls.length > 0) {
         const unique = Array.from(new Set(urls))
-        setUrl(unique.join('\n'))
+        // The field is one line; joined with line breaks the addresses ran
+        // into one another on screen.
+        setUrl(unique.join(', '))
         log('holen', `${unique.length} ${unique.length === 1 ? 'Adresse' : 'Adressen'} aus ${textFiles[0].name} übernommen`)
         void look(unique.join('\n'))
+      } else if (!textFiles.every((tf) => /\.m3u8$/i.test(tf.name))) {
+        setError({ code: 'url', message: `In ${textFiles[0].name} steht keine Adresse, die mit https:// beginnt.` })
       }
     }
 
@@ -475,11 +658,13 @@ export function DownloaderPanel() {
     e.stopPropagation()
     setIsDragOver(false)
 
+    // A link dragged from another tab, or several: `text/uri-list` holds one
+    // per line, with comment lines in between.
     const text = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')
-    if (text && /^https?:\/\//i.test(text.trim())) {
-      const trimmed = text.trim()
-      setUrl(trimmed)
-      void look(trimmed)
+    const dropped = text ? extractAddresses(text) : []
+    if (dropped.length > 0) {
+      setUrl(dropped.join(', '))
+      void look(dropped.join('\n'))
       return
     }
 
@@ -585,8 +770,12 @@ export function DownloaderPanel() {
     const checkClipboard = async () => {
       if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) return
       try {
-        const text = (await navigator.clipboard.readText()).trim()
-        if (text && isPortalUrl(text) && text !== url.trim() && !dismissedClipboardRef.current.has(text)) {
+        // One address in what was copied, of a kind this can load — a portal
+        // or a media file. Only portals counted before, and only when the
+        // clipboard held nothing but the bare address.
+        const found = extractAddresses(await navigator.clipboard.readText())
+        const text = found.length === 1 ? found[0] : ''
+        if (text && isSupportedUrl(text) && !extractAddresses(url).includes(text) && !dismissedClipboardRef.current.has(text)) {
           setClipboardUrl(text)
         }
       } catch {}
@@ -598,8 +787,8 @@ export function DownloaderPanel() {
   }, [url])
   const abortRef = useRef<AbortController | null>(null)
   const batchAbortRef = useRef<AbortController | null>(null)
-  const resolvingMapRef = useRef<Map<number, Promise<void>>>(new Map())
-  const itemAbortControllers = useRef<Map<number, AbortController>>(new Map())
+  const resolvingMapRef = useRef<Map<string, Promise<StudioResult | null>>>(new Map())
+  const itemAbortControllers = useRef<Map<string, AbortController>>(new Map())
   const online = useOnline()
 
   useEffect(() => () => {
@@ -620,6 +809,19 @@ export function DownloaderPanel() {
   const [targetAudioFormat, setTargetAudioFormat] = useState<AudioOutputFormat>('mp3')
   const targetAudioFormatRef = useRef<AudioOutputFormat>('mp3')
   targetAudioFormatRef.current = targetAudioFormat
+
+  const [filePrefs, setFilePrefs] = useState<DownloadFilePreferences>(loadDownloadPrefs)
+  const filePrefsRef = useRef<DownloadFilePreferences>(filePrefs)
+  filePrefsRef.current = filePrefs
+
+  const updateFilePrefs = useCallback((patch: Partial<DownloadFilePreferences>) => {
+    setFilePrefs((prev) => {
+      const next = { ...prev, ...patch }
+      filePrefsRef.current = next
+      saveDownloadPrefs(next)
+      return next
+    })
+  }, [])
 
   const triggerAutoTranscribe = useCallback(
     async (assetName: string, assetBytes: Uint8Array) => {
@@ -661,19 +863,103 @@ export function DownloaderPanel() {
     [addAsset, log],
   )
 
+  // Every entry of a list has an id of its own. Addressed by position, a
+  // playlist that unfolded into its titles shifted every row after it: a
+  // result landed on whichever row now stood there, and the entries pushed
+  // down were never looked up at all.
+  const nextBatchId = useRef(0)
+  const newBatchItem = (fields: Omit<BatchItem, 'id'>): BatchItem => {
+    nextBatchId.current += 1
+    return { ...fields, id: `eintrag-${nextBatchId.current}` }
+  }
+
+  /**
+   * Changes the list at once, not on the next render. Read back right after
+   * an await, the list from the last render still said „wird gesucht", and
+   * „Laden" on an entry that had not been looked up yet only looked it up.
+   */
+  const updateBatch = (change: (list: BatchItem[]) => BatchItem[]) => {
+    const current = batchEntriesRef.current
+    if (!current) return
+    const next = change(current)
+    batchEntriesRef.current = next
+    setBatchEntries(next)
+  }
+  const replaceBatch = (list: BatchItem[] | null) => {
+    batchEntriesRef.current = list
+    setBatchEntries(list)
+  }
+  const patchEntry = (id: string, patch: Partial<BatchItem>) =>
+    updateBatch((list) => list.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
+  const entryById = (id: string) => batchEntriesRef.current?.find((entry) => entry.id === id)
+
+  /** The stream an entry starts with: respects the per-file-type quality and adaptation preferences. */
+  const defaultStream = (res: StudioResult) => {
+    const prefs = filePrefsRef.current
+    const audioStreams = res.streams.filter((s) => !s.hasVideo && s.hasAudio)
+    const videoWithAudio = res.streams.filter((s) => s.hasVideo && s.hasAudio)
+    const lowestVideoWithAudio = [...videoWithAudio].sort((a, b) => (streamHeight(a) ?? 9999) - (streamHeight(b) ?? 9999))[0]
+
+    if (filterAudioOnlyRef.current) {
+      if (prefs.audioPref === 'low') {
+        const smallestAudio = [...audioStreams].sort((a, b) => (a.bytes ?? 999999999) - (b.bytes ?? 999999999))[0]
+        return smallestAudio || lowestVideoWithAudio || res.streams[0]
+      }
+      const bestAudio = [...audioStreams].sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))[0]
+      return bestAudio || lowestVideoWithAudio || res.streams[0]
+    }
+
+    const targetHeight = targetHeightForVideoPref(prefs.videoPref)
+    if (!targetHeight) {
+      return videoWithAudio[0] || res.streams[0]
+    }
+
+    const candidates = videoWithAudio.length > 0 ? videoWithAudio : res.streams.filter((s) => s.hasVideo)
+    const matchingOrBelow = [...candidates]
+      .filter((s) => (streamHeight(s) ?? 0) > 0 && (streamHeight(s) ?? 0) <= targetHeight)
+      .sort((a, b) => (streamHeight(b) ?? 0) - (streamHeight(a) ?? 0))
+    if (matchingOrBelow.length > 0) return matchingOrBelow[0]
+    const lowest = [...candidates].sort((a, b) => (streamHeight(a) ?? 9999) - (streamHeight(b) ?? 9999))[0]
+    return lowest || videoWithAudio[0] || res.streams[0]
+  }
+
+  useEffect(() => {
+    updateBatch((list) =>
+      list.map((entry) => {
+        if (entry.status !== 'ready' || !entry.result) return entry
+        const best = defaultStream(entry.result)
+        return best ? { ...entry, selectedStreamId: best.id } : entry
+      }),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterAudioOnly, filePrefs.videoPref, filePrefs.audioPref])
+
+  /** Looks entries up a few at a time, as many at once as „gleichzeitig" says. */
+  const resolveAll = (ids: string[], signal?: AbortSignal) => {
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(concurrency, ids.length) }, async () => {
+      while (cursor < ids.length && !signal?.aborted) {
+        const id = ids[cursor++]
+        await resolveBatchItem(id, signal)
+      }
+    })
+    return Promise.all(workers)
+  }
+
   const look = async (overrideUrl?: string) => {
     const targetSource = overrideUrl ?? url
-    let targets = targetSource
-      .split(/\r?\n+/)
-      .map((s) => s.trim().replace(/^["'<]|["'>]$/g, ''))
-      .filter((s) => s.length > 0)
-    if (targets.length === 1 && /\s+https?:\/\//i.test(targets[0])) {
-      const extracted = targets[0].match(/https?:\/\/[^\s"'<>]+/gi)
-      if (extracted && extracted.length > 1) {
-        targets = extracted
-      }
+    let targets = extractAddresses(targetSource)
+    // „youtube.com/watch?v=…" without its scheme is still meant as an address.
+    const bare = targetSource.trim()
+    if (targets.length === 0 && /^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:[/?#]\S*)?$/i.test(bare)) {
+      targets = [`https://${bare}`]
     }
-    if (targets.length === 0) return
+    if (targets.length === 0) {
+      if (bare) {
+        setError({ code: 'url', message: 'Im Feld steht keine Adresse. Eine Adresse beginnt mit https://.' })
+      }
+      return
+    }
 
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -681,7 +967,8 @@ export function DownloaderPanel() {
     setLooking(true)
     setError(null)
     setResult(null)
-    setBatchEntries(null)
+    setShowAllStreams(false)
+    replaceBatch(null)
     setBatchTitle(null)
     setTaken(null)
 
@@ -690,32 +977,32 @@ export function DownloaderPanel() {
         const found = await resolveViaService(targets[0], controller.signal)
         if (found.isPlaylist) {
           log('holen', `Staffel / Playlist erkannt: ${found.title} (${found.items.length} Titel)`)
+          if (found.items.length === 0) {
+            setError({ code: 'empty', message: `„${found.title || 'Die Liste'}“ enthält keine Titel, die sich laden liessen.` })
+            return
+          }
           const gId = targets[0]
           const gTitle = found.title || 'Playlist'
-          const playlistItems: BatchItem[] = found.items.map((item) => ({
-            url: item.url,
-            titleHint: item.title,
-            status: 'pending',
-            groupId: gId,
-            groupTitle: gTitle,
-          }))
-          setBatchEntries(playlistItems)
+          const playlistItems = found.items.map((item) =>
+            newBatchItem({
+              url: item.url,
+              titleHint: item.title,
+              sourceTitle: item.title || undefined,
+              status: 'pending',
+              groupId: gId,
+              groupTitle: gTitle,
+            }),
+          )
+          replaceBatch(playlistItems)
           setBatchTitle(found.title || null)
           if (playlistItems.length > 3) {
             setCollapsedGroups({ [gId]: true })
           }
-
-          // Alle Einträge im Hintergrund auflösen (mit maximal concurrency parallelen Workern)
-          let cursor = 0
-          const workerCount = Math.min(concurrency, playlistItems.length)
-          const workers = Array.from({ length: workerCount }, async () => {
-            while (cursor < playlistItems.length) {
-              if (controller.signal.aborted) break
-              const i = cursor++
-              await resolveBatchItem(i, controller.signal, playlistItems)
-            }
-          })
-          void Promise.all(workers)
+          // Every entry is looked up in the background, a few at a time.
+          void resolveAll(
+            playlistItems.map((item) => item.id),
+            controller.signal,
+          )
           return
         }
         setResult(found)
@@ -734,123 +1021,193 @@ export function DownloaderPanel() {
       return
     }
 
-    // Mehrere Adressen: Batch-Modus
-    const initial: BatchItem[] = targets.map((u, i) => {
+    // Several addresses: one entry each, looked up in the background.
+    const initial = targets.map((u, i) => {
       let host = u
       try {
         host = new URL(u).hostname.replace(/^www\./, '')
       } catch {}
-      return {
+      return newBatchItem({
         url: u,
         titleHint: `Link ${i + 1} (${host})`,
         status: 'pending',
         groupId: u,
         groupTitle: `Link ${i + 1} (${host})`,
-      }
+      })
     })
-    setBatchEntries(initial)
+    replaceBatch(initial)
     setLooking(false)
-
-    let cursor = 0
-    const workerCount = Math.min(concurrency, targets.length)
-    const workers = Array.from({ length: workerCount }, async () => {
-      while (cursor < targets.length) {
-        if (controller.signal.aborted) break
-        const i = cursor++
-        await resolveBatchItem(i, controller.signal, initial)
-      }
-    })
-    void Promise.all(workers)
+    void resolveAll(
+      initial.map((item) => item.id),
+      controller.signal,
+    )
   }
 
-  const resolveBatchItem = async (
-    index: number,
-    signal?: AbortSignal,
-    fallbackEntries?: BatchItem[],
-  ): Promise<void> => {
-    const inFlight = resolvingMapRef.current.get(index)
+  /**
+   * Looks one entry up. Resolves to its result, or to null when it failed or
+   * unfolded into a list of its own — whose entries then take its place and
+   * are looked up in turn.
+   */
+  const resolveBatchItem = async (id: string, signal?: AbortSignal): Promise<StudioResult | null> => {
+    const inFlight = resolvingMapRef.current.get(id)
     if (inFlight) return inFlight
 
-    const list = batchEntriesRef.current ?? fallbackEntries
-    const entry = list?.[index]
-    if (!entry || entry.status === 'ready' || entry.status === 'done') return
+    const entry = entryById(id)
+    if (!entry) return null
+    if (entry.result && (entry.status === 'ready' || entry.status === 'done')) return entry.result
 
-    const task = (async () => {
-      setBatchEntries((prev) =>
-        prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'resolving', error: undefined } : e)) : null,
-      )
-
+    const task = (async (): Promise<StudioResult | null> => {
+      patchEntry(id, { status: 'resolving', error: undefined })
       try {
         const res = await resolveViaService(entry.url, signal)
         if (res.isPlaylist) {
-          if (res.items?.length) {
-            log('holen', `Playlist / Staffel aufgelöst: ${res.title} (${res.items.length} Titel)`)
-            const gId = entry.groupId || entry.url
-            const gTitle = res.title || entry.groupTitle || 'Playlist'
-            const expanded: BatchItem[] = res.items.map((item) => ({
+          const gId = entry.groupId || entry.url
+          const gTitle = res.title || entry.groupTitle || 'Playlist'
+          if (!res.items?.length) {
+            // It used to stay at „wird gesucht" for good.
+            patchEntry(id, { status: 'error', error: `„${gTitle}“ enthält keine Titel, die sich laden liessen.` })
+            return null
+          }
+          log('holen', `Playlist / Staffel aufgelöst: ${res.title} (${res.items.length} Titel)`)
+          const expanded = res.items.map((item) =>
+            newBatchItem({
               url: item.url,
               titleHint: item.title,
+              sourceTitle: item.title || undefined,
               status: 'pending',
               groupId: gId,
               groupTitle: gTitle,
-            }))
-            setBatchEntries((prev) => {
-              if (!prev) return null
-              const copy = [...prev]
-              copy.splice(index, 1, ...expanded)
-              return copy
-            })
-            if (expanded.length > 3) {
-              setCollapsedGroups((prev) => ({ ...prev, [gId]: true }))
-            }
-            setTimeout(() => {
-              const cur = batchEntriesRef.current
-              if (cur) {
-                cur.forEach((it, idx) => {
-                  if (it.groupId === gId && it.status === 'pending') {
-                    void resolveBatchItem(idx, signal)
-                  }
-                })
-              }
-            }, 30)
+            }),
+          )
+          updateBatch((list) => list.flatMap((item) => (item.id === id ? expanded : [item])))
+          if (expanded.length > 3) {
+            setCollapsedGroups((prev) => ({ ...prev, [gId]: true }))
           }
-          return
+          void resolveAll(
+            expanded.map((item) => item.id),
+            signal,
+          )
+          return null
         }
-        const audioStream = res.streams.find((s) => !s.hasVideo && s.hasAudio)
-        const lowestVideoWithAudio = res.streams
-          .filter((s) => s.hasVideo && s.hasAudio)
-          .sort((a, b) => (a.height ?? 9999) - (b.height ?? 9999))[0]
-        const bestStream = filterAudioOnlyRef.current
-          ? (audioStream || lowestVideoWithAudio || res.streams[0])
-          : (res.streams.find((s) => s.hasVideo && s.hasAudio) || res.streams[0])
-        setBatchEntries((prev) =>
-          prev
-            ? prev.map((e, idx) =>
-                idx === index
-                  ? {
-                      ...e,
-                      status: 'ready',
-                      result: res,
-                      selectedStreamId: bestStream?.id ?? res.streams[0]?.id,
-                    }
-                  : e,
-              )
-            : null,
-        )
-        log('holen', `${res.title} — bereit`)
+        // A feed names its episodes; the file behind each is often called
+        // „default.mp3_…". Looked up as a plain file, the name in the list and
+        // on disk was that one.
+        const named = res.source === 'direct' && entry.sourceTitle ? { ...res, title: entry.sourceTitle } : res
+        const bestStream = defaultStream(named)
+        patchEntry(id, { status: 'ready', result: named, selectedStreamId: bestStream?.id ?? named.streams[0]?.id })
+        log('holen', `${named.title} — bereit`)
+        return named
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
+          // Cancelled, not failed: it can be asked again.
+          patchEntry(id, { status: 'pending' })
+          return null
+        }
         const msg = cause instanceof StudioError ? cause.message : cause instanceof Error ? cause.message : String(cause)
-        setBatchEntries((prev) =>
-          prev ? prev.map((e, idx) => (idx === index ? { ...e, status: 'error', error: msg } : e)) : null,
-        )
+        patchEntry(id, { status: 'error', error: msg })
+        return null
       } finally {
-        resolvingMapRef.current.delete(index)
+        resolvingMapRef.current.delete(id)
       }
     })()
 
-    resolvingMapRef.current.set(index, task)
+    resolvingMapRef.current.set(id, task)
     return task
+  }
+
+  /**
+   * What a downloaded stream becomes in the session: converted to the chosen
+   * sound format or tagged, named, and — for a stream put together from
+   * segments — typed as the MP4 it now is rather than as its playlist.
+   */
+  const finishDownload = async (
+    bytes: Uint8Array,
+    stream: StudioStream,
+    res: StudioResult,
+    signal: AbortSignal,
+    onStatus?: (status: string) => void,
+  ) => {
+    const prefs = filePrefsRef.current
+    const assembled = isHlsStream(stream)
+    const meta = { title: res.title, artist: res.author, coverUrl: res.thumbnail }
+    let finalBytes = bytes
+    let finalExt = assembled ? 'mp4' : stream.ext
+    let finalMime = assembled ? 'video/mp4' : stream.mime
+    let finalKind = assembled ? ('video' as const) : kindFromMime(stream.mime, stream.label)
+
+    // When a direct file link is set to "Gar nicht anpassen" (untouched) and not forced into audio extraction, keep 1:1.
+    const isDirectUntouched = res.source === 'direct' && prefs.directPref === 'untouched' && !filterAudioOnlyRef.current
+
+    if (!isDirectUntouched) {
+      if (filterAudioOnlyRef.current) {
+        if (prefs.audioPref === 'untouched' && !assembled && !stream.hasVideo) {
+          finalKind = 'audio'
+        } else {
+          const targetLabel =
+            targetAudioFormatRef.current === 'original'
+              ? 'Original-Tonspur'
+              : targetAudioFormatRef.current.toUpperCase()
+          onStatus?.(`Wandle in ${targetLabel} um …`)
+          const audioRes = await processDownloadedAudio(
+            bytes,
+            finalExt,
+            targetAudioFormatRef.current,
+            prefs.audioPref,
+            assembled || stream.hasVideo,
+            meta,
+            signal,
+            onStatus,
+          )
+          finalBytes = audioRes.bytes
+          finalExt = audioRes.ext
+          finalMime = audioRes.mime
+          finalKind = 'audio'
+        }
+      } else if (!stream.hasVideo && stream.hasAudio && !assembled) {
+        if (prefs.audioPref !== 'untouched') {
+          if (prefs.audioPref === 'low' || prefs.audioPref === 'medium') {
+            const audioRes = await processDownloadedAudio(
+              bytes,
+              finalExt,
+              targetAudioFormatRef.current === 'original' ? 'mp3' : targetAudioFormatRef.current,
+              prefs.audioPref,
+              false,
+              meta,
+              signal,
+              onStatus,
+            )
+            finalBytes = audioRes.bytes
+            finalExt = audioRes.ext
+            finalMime = audioRes.mime
+            finalKind = 'audio'
+          } else {
+            finalBytes = await tagAudioFile(bytes, stream.ext, meta, signal)
+          }
+        }
+      } else if ((stream.hasVideo || assembled) && prefs.videoPref !== 'untouched' && prefs.videoPref !== 'best') {
+        const targetHeight = targetHeightForVideoPref(prefs.videoPref) ?? 0
+        const currentHeight = streamHeight(stream) ?? 0
+        if (
+          prefs.videoAdaptMode === 'reencode_lower' &&
+          targetHeight > 0 &&
+          (currentHeight === 0 || currentHeight > targetHeight)
+        ) {
+          const videoRes = await reencodeVideoToTargetHeight(finalBytes, finalExt, targetHeight, signal, onStatus)
+          finalBytes = videoRes.bytes
+          finalExt = videoRes.ext
+          finalMime = videoRes.mime
+          finalKind = 'video'
+        }
+      }
+    }
+
+    let name = filenameFor(res, assembled ? { ...stream, ext: finalExt } : { ...stream, ext: finalExt }, {
+      mode: stealthModeRef.current,
+    })
+    if (filterAudioOnlyRef.current || finalExt !== stream.ext) {
+      name = name.replace(/\.[a-zA-Z0-9]+$/, '') + `.${finalExt}`
+    }
+    return { bytes: finalBytes, ext: finalExt, mime: finalMime, kind: finalKind, name }
   }
 
   const take = async (stream: StudioStream) => {
@@ -866,63 +1223,29 @@ export function DownloaderPanel() {
         signal: controller.signal,
         onProgress: setProgress,
       })
-      let finalBytes = bytes
-      let finalExt = stream.ext
-      let finalMime = stream.mime
-      let finalKind = kindFromMime(stream.mime, stream.label)
+      const done = await finishDownload(bytes, stream, result, controller.signal, (status) => setBusy(status))
+      const delivery = filePrefsRef.current.deliveryMode
 
-      if (filterAudioOnly) {
-        setBusy(`Wandle in ${targetAudioFormat.toUpperCase()} um …`)
-        const audioRes = await processDownloadedAudio(
-          bytes,
-          stream.ext,
-          targetAudioFormat,
-          stream.hasVideo,
-          {
-            title: result.title,
-            artist: result.author,
-            coverUrl: result.thumbnail,
-          },
-          controller.signal,
-          (status) => setBusy(status),
-        )
-        finalBytes = audioRes.bytes
-        finalExt = audioRes.ext
-        finalMime = audioRes.mime
-        finalKind = 'audio'
-      } else if (!stream.hasVideo && stream.hasAudio) {
-        finalBytes = await tagAudioFile(
-          bytes,
-          stream.ext,
-          {
-            title: result.title,
-            artist: result.author,
-            coverUrl: result.thumbnail,
-          },
-          controller.signal,
-        )
+      if (delivery !== 'save_only') {
+        addAsset({
+          name: done.name,
+          bytes: done.bytes,
+          mime: done.mime,
+          sizeBytes: done.bytes.byteLength,
+          kind: done.kind,
+          audio: null,
+          durationSeconds: result.durationSeconds,
+          origin: 'download',
+        })
       }
-
-      let name = filenameFor(result, stream, { mode: stealthMode })
-      if (filterAudioOnly) {
-        name = name.replace(/\.[a-zA-Z0-9]+$/, '') + `.${finalExt}`
+      if (delivery === 'session_and_save' || delivery === 'save_only') {
+        saveBytes(done.bytes, done.name, done.mime)
       }
-
-      addAsset({
-        name,
-        bytes: finalBytes,
-        mime: finalMime,
-        sizeBytes: finalBytes.byteLength,
-        kind: finalKind,
-        audio: null,
-        durationSeconds: result.durationSeconds,
-        origin: 'download',
-      })
-      log('holen', `${name} geladen (${formatBytes(finalBytes.byteLength)})`)
-      setTaken({ name, bytes: finalBytes, mime: finalMime })
-      recordDownload(url, result.title, result.author ?? '', finalExt, finalBytes.byteLength)
-      if (autoTranscribe) {
-        void triggerAutoTranscribe(name, finalBytes)
+      log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
+      setTaken({ name: done.name, bytes: done.bytes, mime: done.mime })
+      recordDownload(url, result.title, result.author ?? '', done.ext, done.bytes.byteLength)
+      if (autoTranscribeRef.current) {
+        void triggerAutoTranscribe(done.name, done.bytes)
       }
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
@@ -939,142 +1262,74 @@ export function DownloaderPanel() {
     }
   }
 
-  const takeBatchItem = async (index: number, externalSignal?: AbortSignal) => {
-    let entry = batchEntriesRef.current?.[index]
-    if (!entry) return
+  const takeBatchItem = async (id: string, externalSignal?: AbortSignal) => {
+    let entry = entryById(id)
+    // A second click while it runs must not start it twice.
+    if (!entry || entry.status === 'downloading') return
 
-    if (entry.status !== 'ready' || !entry.result) {
-      await resolveBatchItem(index, externalSignal)
-      entry = batchEntriesRef.current?.[index]
-      if (!entry || !entry.result) return
+    let res = entry.status === 'ready' ? (entry.result ?? null) : null
+    if (!res) {
+      res = await resolveBatchItem(id, externalSignal)
+      entry = entryById(id)
+      if (!res || !entry) return
     }
 
-    const stream =
-      entry.result.streams.find((s) => s.id === entry.selectedStreamId) ||
-      entry.result.streams[0]
+    const stream = res.streams.find((s) => s.id === entry!.selectedStreamId) || res.streams[0]
     if (!stream) return
 
     const controller = externalSignal ? null : new AbortController()
     if (controller) {
-      itemAbortControllers.current.set(index, controller)
+      itemAbortControllers.current.set(id, controller)
       abortRef.current = controller
     }
     const signal = externalSignal || controller!.signal
 
-    setBatchEntries((prev) =>
-      prev
-        ? prev.map((e, idx) =>
-            idx === index
-              ? { ...e, status: 'downloading', progress: { loaded: 0, total: stream.bytes } }
-              : e,
-          )
-        : null,
-    )
+    patchEntry(id, { status: 'downloading', error: undefined, progress: { loaded: 0, total: stream.bytes } })
 
     try {
       const bytes = await downloadStream(stream, {
         signal,
-        onProgress: (p) => {
-          setBatchEntries((prev) =>
-            prev ? prev.map((e, idx) => (idx === index ? { ...e, progress: p } : e)) : null,
-          )
-        },
+        onProgress: (p) => patchEntry(id, { progress: p }),
       })
-      let finalBytes = bytes
-      let finalExt = stream.ext
-      let finalMime = stream.mime
-      let finalKind = kindFromMime(stream.mime, stream.label)
-
       if (filterAudioOnlyRef.current) {
-        setBatchEntries((prev) =>
-          prev
-            ? prev.map((e, idx) =>
-                idx === index ? { ...e, status: 'downloading', progress: { loaded: stream.bytes ?? 0, total: stream.bytes } } : e,
-              )
-            : null,
-        )
-        const audioRes = await processDownloadedAudio(
-          bytes,
-          stream.ext,
-          targetAudioFormatRef.current,
-          stream.hasVideo,
-          {
-            title: entry.result.title,
-            artist: entry.result.author,
-            coverUrl: entry.result.thumbnail,
-          },
-          signal,
-        )
-        finalBytes = audioRes.bytes
-        finalExt = audioRes.ext
-        finalMime = audioRes.mime
-        finalKind = 'audio'
-      } else if (!stream.hasVideo && stream.hasAudio) {
-        finalBytes = await tagAudioFile(
-          bytes,
-          stream.ext,
-          {
-            title: entry.result.title,
-            artist: entry.result.author,
-            coverUrl: entry.result.thumbnail,
-          },
-          signal,
-        )
+        patchEntry(id, { progress: { loaded: bytes.byteLength, total: bytes.byteLength } })
       }
+      const done = await finishDownload(bytes, stream, res, signal)
+      const delivery = filePrefsRef.current.deliveryMode
 
-      let name = filenameFor(entry.result, stream, { mode: stealthModeRef.current })
-      if (filterAudioOnlyRef.current) {
-        name = name.replace(/\.[a-zA-Z0-9]+$/, '') + `.${finalExt}`
+      if (delivery !== 'save_only') {
+        addAsset({
+          name: done.name,
+          bytes: done.bytes,
+          mime: done.mime,
+          sizeBytes: done.bytes.byteLength,
+          kind: done.kind,
+          audio: null,
+          durationSeconds: res.durationSeconds,
+          origin: 'download',
+        })
       }
-
-      addAsset({
-        name,
-        bytes: finalBytes,
-        mime: finalMime,
-        sizeBytes: finalBytes.byteLength,
-        kind: finalKind,
-        audio: null,
-        durationSeconds: entry.result.durationSeconds,
-        origin: 'download',
-      })
-      log('holen', `${name} geladen (${formatBytes(finalBytes.byteLength)})`)
+      if (delivery === 'session_and_save' || delivery === 'save_only') {
+        saveBytes(done.bytes, done.name, done.mime)
+      }
+      log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
       if (autoTranscribeRef.current) {
-        void triggerAutoTranscribe(name, finalBytes)
+        void triggerAutoTranscribe(done.name, done.bytes)
       }
-      setBatchEntries((prev) =>
-        prev
-          ? prev.map((e, idx) =>
-              idx === index
-                ? {
-                    ...e,
-                    status: 'done',
-                    progress: null,
-                    taken: { name, bytes: finalBytes, mime: finalMime },
-                  }
-                : e,
-            )
-          : null,
-      )
-      recordDownload(entry.url, entry.result.title, entry.result.author ?? '', finalExt, finalBytes.byteLength)
+      patchEntry(id, { status: 'done', progress: null, taken: { name: done.name, bytes: done.bytes, mime: done.mime } })
+      recordDownload(entry.url, res.title, res.author ?? '', done.ext, done.bytes.byteLength)
     } catch (cause) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') return
-      const msg =
-        cause instanceof StudioError
-          ? cause.message
-          : cause instanceof Error
-          ? cause.message
-          : String(cause)
-      setBatchEntries((prev) =>
-        prev
-          ? prev.map((e, idx) =>
-              idx === index ? { ...e, status: 'error', error: msg, progress: null } : e,
-            )
-          : null,
-      )
-      log('holen', `Fehler beim Laden von ${entry.result?.title ?? entry.url}: ${msg}`, 'error')
+      if (cause instanceof DOMException && cause.name === 'AbortError') {
+        // Cancelled: back to where it was, ready to load again.
+        patchEntry(id, { status: 'ready', progress: null })
+        return
+      }
+      const msg = cause instanceof StudioError ? cause.message : cause instanceof Error ? cause.message : String(cause)
+      patchEntry(id, { status: 'error', error: msg, progress: null })
+      log('holen', `Fehler beim Laden von ${res.title ?? entry.url}: ${msg}`, 'error')
     } finally {
       if (controller) {
-        itemAbortControllers.current.delete(index)
+        itemAbortControllers.current.delete(id)
       }
     }
   }
@@ -1085,19 +1340,22 @@ export function DownloaderPanel() {
     batchAbortRef.current = controller
     setBatchBusy(true)
     try {
-      const indicesToProcess = batchEntriesRef.current
-        .map((entry, idx) => ({ entry, idx }))
-        .filter(({ entry }) => entry.status !== 'done' && entry.status !== 'downloading')
-        .map(({ idx }) => idx)
-
-      let cursor = 0
+      // The queue is read as it goes, not fixed at the start: an entry that
+      // turns out to be a playlist hands its titles to the same run instead of
+      // leaving them for another click.
+      const claimed = new Set<string>()
+      const nextEntry = () =>
+        batchEntriesRef.current?.find(
+          (entry) => !claimed.has(entry.id) && entry.status !== 'done' && entry.status !== 'downloading',
+        )
       const maxParallel = Math.max(1, Math.min(5, concurrency))
-      const activeWorkers = Math.min(maxParallel, indicesToProcess.length)
-      const workers = Array.from({ length: activeWorkers }, async () => {
-        while (cursor < indicesToProcess.length) {
+      const workers = Array.from({ length: maxParallel }, async () => {
+        for (;;) {
           if (controller.signal.aborted) break
-          const targetIndex = indicesToProcess[cursor++]
-          await takeBatchItem(targetIndex, controller.signal)
+          const entry = nextEntry()
+          if (!entry) break
+          claimed.add(entry.id)
+          await takeBatchItem(entry.id, controller.signal)
         }
       })
       await Promise.all(workers)
@@ -1107,10 +1365,61 @@ export function DownloaderPanel() {
     }
   }
 
+  const videoPrefLabel =
+    filePrefs.videoPref === 'untouched'
+      ? 'Video unverändert'
+      : filePrefs.videoPref === 'best'
+        ? 'Video beste Quali'
+        : `Video ${filePrefs.videoPref}`
+
+  const audioPrefLabel =
+    filePrefs.audioPref === 'untouched'
+      ? 'Ton unverändert'
+      : filePrefs.audioPref === 'low'
+        ? 'Ton tiefere Quali'
+        : filePrefs.audioPref === 'medium'
+          ? 'Ton Standard'
+          : filePrefs.audioPref === 'lossless'
+            ? 'Ton verlustfrei'
+            : 'Ton hohe Quali'
+
+  // The folded settings, said: what is in force without opening them.
+  const settingsSummary = [
+    videoPrefLabel,
+    audioPrefLabel,
+    filePrefs.directPref === 'untouched' ? 'Direktdateien 1:1' : 'Direktdateien anpassen',
+    `Dateiname ${
+      stealthMode === 'off'
+        ? 'wie das Original'
+        : stealthMode === 'standard'
+          ? 'neutral'
+          : stealthMode === 'full_security'
+            ? 'nur aus Zeichen'
+            : 'wie eine Office-Datei'
+    }`,
+    autoTranscribe ? 'mit Untertiteln' : 'ohne Untertitel',
+    ...(IN_DESKTOP_APP
+      ? [selectedAdapter === 'default' ? 'Netzwerk automatisch' : `Netzwerk ${adapters.find((a) => a.id === selectedAdapter)?.name ?? selectedAdapter}`]
+      : []),
+  ].join(' · ')
+
   return (
     <div className="flex flex-col gap-[16px]">
       <Card tone="cream">
-        <h2 className="display-md mt-[8px] mb-[12px]">Ein Video oder Lied von einer Adresse</h2>
+        <div className="mt-[8px] mb-[12px] flex flex-wrap items-center justify-between gap-[12px]">
+          <h2 className="display-md">Ein Video oder Lied von einer Adresse</h2>
+          <Button
+            type="button"
+            size="sm"
+            variant={settingsOpen ? 'primary' : 'quiet'}
+            aria-expanded={settingsOpen}
+            aria-controls="download-settings"
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
+            <SettingsGearIcon />
+            Einstellungen
+          </Button>
+        </div>
 
         {IN_DESKTOP_APP ? <AppNotice /> : <NotLocalNotice />}
 
@@ -1171,7 +1480,7 @@ export function DownloaderPanel() {
                     setUrl(event.target.value)
                     setError(null)
                     setResult(null)
-                    setBatchEntries(null)
+                    replaceBatch(null)
                     setProgress(null)
                   }}
                   placeholder="Link hier einfügen"
@@ -1228,20 +1537,20 @@ export function DownloaderPanel() {
             ) : null}
 
             <div id="download-address-hint" className="flex flex-col gap-[2px] text-small leading-[1.5] text-muted [&_p]:max-w-none">
+              {/* One line, not two: what it takes, then how to give it more
+                  than one. */}
               <p>
-                Geht mit YouTube, Spotify, Apple Podcasts, den Mediatheken und {SERVICES.length - SERVICES_NAMED} weiteren.{' '}
+                YouTube, Spotify, Apple Podcasts, Mediatheken und {SERVICES.length - SERVICES_NAMED} weitere (
                 <button
                   type="button"
                   aria-expanded={showServices}
                   onClick={() => setShowServices((open) => !open)}
                   className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
                 >
-                  {showServices ? 'Weniger' : 'Alle zeigen'}
+                  {showServices ? 'weniger' : 'alle zeigen'}
                 </button>
-              </p>
-              {showServices ? <p className="text-prose">{SERVICES.join(' · ')}</p> : null}
-              <p>
-                Mehrere Adressen durch Komma trennen. Eine Textdatei mit Links (.txt, .m3u) aufs Feld ziehen oder{' '}
+                ). Mehrere Adressen mit Komma trennen, oder eine Textdatei mit Links (.txt, .m3u) aufs Feld ziehen
+                bzw.{' '}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -1251,6 +1560,7 @@ export function DownloaderPanel() {
                 </button>
                 .
               </p>
+              {showServices ? <p className="text-prose">{SERVICES.join(' · ')}</p> : null}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1283,12 +1593,12 @@ export function DownloaderPanel() {
             </p>
           ) : null}
 
-          {/* What to fetch and how to name it, asked the way every form on
-              the page asks: a line, the question, the choices. It was a
-              tinted box with colon labels and the browser's own checkbox
-              and list — the one corner of the page in another hand. */}
-          <div className="mt-[8px] grid gap-x-[32px] gap-y-[4px] sm:grid-cols-2">
-            <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+          {/* What to fetch is asked every time; how to name it, whether to
+              transcribe and which network are said as one line and changed a
+              click further. Three settings open on every visit were most of
+              what stood between the field and the result. */}
+          <div className="mt-[4px] flex flex-col gap-[10px] border-t border-line pt-[12px]">
+            <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
               <span className="text-small text-prose">Was laden</span>
               <ChoiceRow
                 value={filterAudioOnly ? 'audio' : 'video'}
@@ -1299,124 +1609,233 @@ export function DownloaderPanel() {
                 onChange={(value) => setFilterAudioOnly(value === 'audio')}
               />
               {filterAudioOnly ? (
-                <>
-                  <ChoiceRow
-                    value={targetAudioFormat}
-                    options={AUDIO_FORMAT_CONFIGS.map((format) => ({ value: format.id, label: format.label, title: format.desc }))}
-                    onChange={setTargetAudioFormat}
-                  />
-                  <span className="text-small leading-[1.45] text-muted">
-                    {AUDIO_FORMAT_CONFIGS.find((format) => format.id === targetAudioFormat)?.desc}. Die Tonspur wird herausgelöst und
-                    so gespeichert.
-                  </span>
-                </>
+                <ChoiceRow
+                  value={targetAudioFormat}
+                  options={AUDIO_FORMAT_CONFIGS.map((format) => ({ value: format.id, label: format.label, title: format.desc }))}
+                  onChange={setTargetAudioFormat}
+                />
               ) : null}
-            </div>
-
-            <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
-              <label htmlFor="stealth-mode-select" className="text-small text-prose">
-                Dateiname
-              </label>
-              <Select id="stealth-mode-select" value={stealthMode} onChange={(e) => setStealthMode(e.target.value as StealthMode)}>
-                <option value="off">Originaltitel</option>
-                <option value="standard">Neutral (media_…)</option>
-                <option value="full_security">Nur Zeichen (Hash)</option>
-                <option value="teams_office">Wie eine Office-Datei</option>
-              </Select>
-              {stealthMode !== 'off' ? (
-                <span className="text-small leading-[1.45] text-muted">
-                  Zum Beispiel{' '}
-                  <span className="value">
-                    {stealthMode === 'standard'
-                      ? 'media_7a8b9c.mp4'
-                      : stealthMode === 'full_security'
-                        ? '7a8b9c0d1e2f.mp4'
-                        : 'Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4'}
-                  </span>
+              <button
+                type="button"
+                aria-expanded={settingsOpen}
+                aria-controls="download-settings"
+                onClick={() => setSettingsOpen((open) => !open)}
+                className="press flex items-center gap-[6px] rounded-nav text-left text-small text-muted hover:text-ink sm:ml-auto"
+              >
+                <span>{settingsSummary}</span>
+                <span className="text-ink underline decoration-rule underline-offset-[3px]">
+                  {settingsOpen ? 'Schliessen' : 'Einstellungen'}
                 </span>
-              ) : null}
+              </button>
             </div>
+            {filterAudioOnly ? (
+              <span className="text-small leading-[1.45] text-muted">
+                {AUDIO_FORMAT_CONFIGS.find((format) => format.id === targetAudioFormat)?.desc}.{' '}
+                {filePrefs.audioPref === 'untouched' || targetAudioFormat === 'original'
+                  ? 'Die Datei wird nach Möglichkeit direkt und unverändert übernommen.'
+                  : 'Die Tonspur wird herausgelöst und in der gewählten Qualitätsstufe gespeichert.'}
+              </span>
+            ) : null}
 
-            <div className="border-t border-line pt-[10px] sm:col-span-2">
-              <Toggle
-                label="Untertitel dazu erstellen"
-                hint="Nach dem Laden schreibt Whisper auf diesem Gerät mit, als .srt neben der Datei."
-                checked={autoTranscribe}
-                onChange={setAutoTranscribe}
-              />
-            </div>
-
-            {IN_DESKTOP_APP ? (
-              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
-                <label htmlFor="adapter-select" className="text-small text-prose">
-                  Netzwerk
-                </label>
-                <div className="flex flex-wrap items-center gap-[12px]">
-                  <Select
-                    id="adapter-select"
-                    value={selectedAdapter}
-                    disabled={adapterLoading || adapters.length === 0}
-                    onChange={(e) => void changeAdapter(e.target.value)}
-                    className="w-auto! min-w-[260px]"
-                  >
-                    {adapters.length === 0 ? (
-                      <option value="default">Automatisch (Windows-Standard)</option>
-                    ) : (
-                      adapters.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))
-                    )}
-                  </Select>
-                  <button
-                    type="button"
-                    onClick={() => void fetchAdapters()}
-                    disabled={adapterLoading}
-                    className="press rounded-nav text-small text-ink underline underline-offset-2 disabled:opacity-40"
-                  >
-                    {adapterLoading ? 'Sucht …' : 'Neu suchen'}
-                  </button>
+            <div
+              id="download-settings"
+              hidden={!settingsOpen}
+              className="mt-[4px] grid gap-x-[24px] gap-y-[14px] rounded-card border border-line bg-raised p-[16px] sm:grid-cols-2"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-[8px] border-b border-line pb-[10px] sm:col-span-2">
+                <div>
+                  <h3 className="text-subheading text-ink">Download-Einstellungen für Dateitypen</h3>
+                  <p className="text-small text-muted">
+                    Legen Sie für verschiedene Dateien fest, ob sie in tieferer Qualität geladen oder gar nicht angepasst und direkt heruntergeladen werden sollen.
+                  </p>
                 </div>
               </div>
-            ) : null}
+
+              <div className="flex flex-col gap-[8px]">
+                <label htmlFor="video-pref-select" className="text-small font-medium text-ink">
+                  Video-Dateien (MP4, WebM, Streams)
+                </label>
+                <Select
+                  id="video-pref-select"
+                  value={filePrefs.videoPref}
+                  onChange={(e) => updateFilePrefs({ videoPref: e.target.value as VideoFilePref })}
+                >
+                  <option value="untouched">Gar nicht anpassen — einfach direkt herunterladen (Original)</option>
+                  <option value="best">Beste verfügbare Qualität (bis 4K / 1080p)</option>
+                  <option value="1080p">Standard Full-HD (1080p bevorzugt)</option>
+                  <option value="720p">Mittlere Qualität (720p HD — spart Speicher)</option>
+                  <option value="480p">Tiefere Qualität (480p Kompakt — schnelle Downloads)</option>
+                  <option value="360p">Minimale Qualität (360p — kleinste Datei)</option>
+                </Select>
+                {filePrefs.videoPref !== 'untouched' && filePrefs.videoPref !== 'best' ? (
+                  <div className="flex flex-col gap-[4px] pt-[2px]">
+                    <span className="text-small text-muted">Wenn die Quelle nur in höherer Auflösung vorliegt:</span>
+                    <ChoiceRow
+                      value={filePrefs.videoAdaptMode}
+                      options={[
+                        { value: 'stream_only', label: 'Nur passende Spur wählen (ohne Neucodierung)' },
+                        { value: 'reencode_lower', label: `Aktiv auf ${filePrefs.videoPref} verkleinern` },
+                      ]}
+                      onChange={(mode) => updateFilePrefs({ videoAdaptMode: mode as VideoAdaptMode })}
+                    />
+                  </div>
+                ) : (
+                  <span className="text-small leading-[1.45] text-muted">
+                    {filePrefs.videoPref === 'untouched'
+                      ? 'Videos werden ohne Qualitätsänderung oder Konvertierung genau so geladen, wie die Quelle sie liefert.'
+                      : 'Wählt automatisch die höchste verfügbare Video-Auflösung.'}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-[8px]">
+                <label htmlFor="audio-pref-select" className="text-small font-medium text-ink">
+                  Ton- & Musik-Dateien (MP3, M4A, Opus, WAV)
+                </label>
+                <Select
+                  id="audio-pref-select"
+                  value={filePrefs.audioPref}
+                  onChange={(e) => {
+                    const nextPref = e.target.value as AudioFilePref
+                    updateFilePrefs({ audioPref: nextPref })
+                    if (nextPref === 'untouched') {
+                      setTargetAudioFormat('original')
+                    } else if (nextPref === 'lossless' && targetAudioFormat !== 'wav' && targetAudioFormat !== 'flac') {
+                      setTargetAudioFormat('flac')
+                    }
+                  }}
+                >
+                  <option value="untouched">Gar nicht anpassen — Original-Audiodatei direkt laden</option>
+                  <option value="high">Hohe Qualität (320 kbps / beste Tonspur)</option>
+                  <option value="medium">Mittlere Qualität (192 kbps — ausgewogen)</option>
+                  <option value="low">Tiefere Qualität (128 kbps — kleine Datei, ideal für Sprache)</option>
+                  <option value="lossless">Verlustfrei (WAV / FLAC ohne Qualitätsverlust)</option>
+                </Select>
+                <span className="text-small leading-[1.45] text-muted">
+                  {filePrefs.audioPref === 'untouched'
+                    ? 'Audiodateien werden gar nicht umgewandelt oder neu getaggt, sondern 1:1 heruntergeladen.'
+                    : filePrefs.audioPref === 'low'
+                      ? 'Bevorzugt kleinere Tonspuren und komprimiert auf 128 kbit/s für geringen Speicherplatz.'
+                      : filePrefs.audioPref === 'medium'
+                        ? 'Konvertiert auf 192 kbit/s für gute Qualität bei moderater Dateigröße.'
+                        : filePrefs.audioPref === 'lossless'
+                          ? 'Speichert unkomprimiert bzw. verlustfrei als FLAC oder WAV.'
+                          : 'Nutzt 320 kbit/s bzw. die höchste verfügbare Bitrate inklusive Cover & Metadaten.'}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+                <label htmlFor="direct-pref-select" className="text-small font-medium text-ink">
+                  Direkte Datei-Links & andere Dateien
+                </label>
+                <Select
+                  id="direct-pref-select"
+                  value={filePrefs.directPref}
+                  onChange={(e) => updateFilePrefs({ directPref: e.target.value as DirectFilePref })}
+                >
+                  <option value="untouched">Gar nicht anpassen — immer 1:1 direkt herunterladen</option>
+                  <option value="apply_media_prefs">Obige Qualitäts- und Formatregeln auch auf Direktlinks anwenden</option>
+                </Select>
+                <span className="text-small leading-[1.45] text-muted">
+                  {filePrefs.directPref === 'untouched'
+                    ? 'Direkte Links auf .mp3-, .mp4-, .wav- oder andere Dateien werden ohne jede Anpassung heruntergeladen.'
+                    : 'Auch direkte Datei-Links werden gemäss Ihren Video- und Ton-Vorgaben angepasst.'}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+                <label htmlFor="delivery-mode-select" className="text-small font-medium text-ink">
+                  Verhalten beim Herunterladen
+                </label>
+                <Select
+                  id="delivery-mode-select"
+                  value={filePrefs.deliveryMode}
+                  onChange={(e) => updateFilePrefs({ deliveryMode: e.target.value as DownloadDeliveryMode })}
+                >
+                  <option value="session_only">In die Sondra-Sitzung legen (zum Weiterbearbeiten oder Speichern)</option>
+                  <option value="session_and_save">Sofort als Datei speichern & zusätzlich in die Sitzung legen</option>
+                  <option value="save_only">Einfach direkt als Datei herunterladen (ohne Sitzung)</option>
+                </Select>
+                <span className="text-small leading-[1.45] text-muted">
+                  {filePrefs.deliveryMode === 'save_only'
+                    ? 'Speichert die Datei sofort im Download-Ordner, ohne sie in die Sitzung zu laden.'
+                    : filePrefs.deliveryMode === 'session_and_save'
+                      ? 'Lädt die Datei gleichzeitig in Ihren Download-Ordner und in die aktuelle Sitzung.'
+                      : 'Legt die geladene Datei bereit für alle Werkzeuge in Sondra.'}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+                <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
+                  Dateiname
+                </label>
+                <Select id="stealth-mode-select" value={stealthMode} onChange={(e) => setStealthMode(e.target.value as StealthMode)}>
+                  <option value="off">Originaltitel</option>
+                  <option value="standard">Neutral (media_…)</option>
+                  <option value="full_security">Nur Zeichen (Hash)</option>
+                  <option value="teams_office">Wie eine Office-Datei</option>
+                </Select>
+                {stealthMode !== 'off' ? (
+                  <span className="text-small leading-[1.45] text-muted">
+                    Zum Beispiel{' '}
+                    <span className="value">
+                      {stealthMode === 'standard'
+                        ? 'media_7a8b9c.mp4'
+                        : stealthMode === 'full_security'
+                          ? '7a8b9c0d1e2f.mp4'
+                          : 'Teams_Meeting_Aufzeichnung_2026-10-12_A8F2.mp4'}
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col justify-center border-t border-line pt-[10px]">
+                <Toggle
+                  label="Untertitel dazu erstellen"
+                  hint="Nach dem Laden schreibt Whisper auf diesem Gerät mit, als .srt neben der Datei."
+                  checked={autoTranscribe}
+                  onChange={setAutoTranscribe}
+                />
+              </div>
+
+              {IN_DESKTOP_APP ? (
+                <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
+                  <label htmlFor="adapter-select" className="text-small font-medium text-ink">
+                    Netzwerk
+                  </label>
+                  <div className="flex flex-wrap items-center gap-[12px]">
+                    <Select
+                      id="adapter-select"
+                      value={selectedAdapter}
+                      disabled={adapterLoading || adapters.length === 0}
+                      onChange={(e) => void changeAdapter(e.target.value)}
+                      className="w-auto! min-w-[260px]"
+                    >
+                      {adapters.length === 0 ? (
+                        <option value="default">Automatisch (Windows-Standard)</option>
+                      ) : (
+                        adapters.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))
+                      )}
+                    </Select>
+                    <button
+                      type="button"
+                      onClick={() => void fetchAdapters()}
+                      disabled={adapterLoading}
+                      className="press rounded-nav text-small text-ink underline underline-offset-2 disabled:opacity-40"
+                    >
+                      {adapterLoading ? 'Sucht …' : 'Neu suchen'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </form>
 
-        {/* Seven lines under the field on every visit, for a question most
-            people only have once something did not work. The warning above
-            stays in full — that one is binding — and the result names the
-            path that answered, so the explanation can wait a click. */}
-        <Reveal label="Welche Wege probiert werden" className="mt-[12px]">
-          <div className="flex flex-col gap-[8px] text-small leading-[1.5] text-muted">
-            {IN_DESKTOP_APP ? (
-              <p>
-                In der Desktop-App nutzt Sondra direkt yt-dlp auf Ihrem Rechner. Das lädt YouTube und
-                Portale in voller Auflösung ohne fremde Server.
-              </p>
-            ) : (
-              <>
-                <p>
-                  <strong className="text-ink">1. Direkte Mediendateien:</strong> Dateien wie .mp4, .mp3,
-                  Podcasts und HLS-Streams (.m3u8) lädt der Webbrowser direkt herunter.
-                </p>
-                <p>
-                  <strong className="text-ink">2. YouTube & geschützte Portale:</strong> Werden von
-                  YouTube für Webseiten blockiert. Sie funktionieren erst nach Start der{' '}
-                  <a
-                    href="https://www.sondra.lizge.ch/download.html"
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="font-medium underline hover:text-ink"
-                  >
-                    Sondra Windows-App
-                  </a>{' '}
-                  oder der lokalen yt-dlp-Brücke auf Ihrem PC.
-                </p>
-              </>
-            )}
-          </div>
-        </Reveal>
       </Card>
 
       {error ? (
@@ -1428,12 +1847,12 @@ export function DownloaderPanel() {
           error.message.toLowerCase().includes('youtube') ||
           error.message.toLowerCase().includes('anmeldung')) ? (
           <Notice tone="error" title="YouTube-Download im Webbrowser blockiert">
+            {/* The reason and the way out as the notice's own text, not a
+                tinted box inside the notice. */}
             <p className="leading-[1.5]">{error.message}</p>
-            <div className="mt-[12px] rounded-nav bg-panel-soft p-[14px] text-ink">
-              <p className="text-small font-semibold">
-                Warum klappt der direkte Download hier nicht?
-              </p>
-              <p className="mt-[4px] text-small leading-[1.5] text-muted">
+            <div className="mt-[10px]">
+              <p className="text-small font-semibold text-ink">Warum klappt der direkte Download hier nicht?</p>
+              <p className="mt-[2px] text-small leading-[1.5] text-prose">
                 YouTube verlangt eine Anmeldung und lässt Abrufe von Webseiten und externen Servern nicht durch.
                 Damit YouTube-Downloads funktionieren, wählen Sie einen der folgenden Wege:
               </p>
@@ -1511,104 +1930,100 @@ export function DownloaderPanel() {
             </div>
           </div>
 
-          <div className="mt-[16px] flex flex-col gap-[12px]">
+          {/* The versions on offer as a list, one line each: what it is, its
+              format and size, and the button. They were a bordered box per
+              resolution with a tinted tile per version inside it — three
+              levels of frame for one choice. */}
+          <div className="mt-[16px] flex flex-col">
             {filterAudioOnly ? (
-              <div className="rounded-nav bg-panel-soft p-[12px] text-ink">
-                <p className="text-small font-semibold">
-                  Audiospur wird als <span className="underline font-bold text-ink">{targetAudioFormat.toUpperCase()}</span> gespeichert:
-                </p>
-                <p className="mt-[2px] text-micro text-muted">
-                  Wählen Sie die gewünschte Audioquelle (höhere Bitrate = bessere Tonqualität):
-                </p>
-              </div>
+              <p className="pb-[8px] text-small text-muted">
+                {filePrefs.audioPref === 'untouched' || targetAudioFormat === 'original' ? (
+                  <>Die Tonspur wird ohne Umwandlung im <span className="value text-ink">Originalformat</span> geladen.</>
+                ) : (
+                  <>
+                    Gespeichert wird der Ton als <span className="value text-ink">{targetAudioFormat.toUpperCase()}</span> (
+                    {audioPrefLabel}); eine Fassung mit höherer Bitrate klingt besser.
+                  </>
+                )}
+              </p>
+            ) : filePrefs.videoPref !== 'best' ? (
+              <p className="pb-[8px] text-small text-muted">
+                Bevorzugte Einstellung: <span className="value text-ink">{videoPrefLabel}</span> — passende Fassungen stehen oben.
+              </p>
             ) : null}
-
             {(() => {
               const displayedStreams =
                 filterAudioOnly && result.streams.some((s) => !s.hasVideo && s.hasAudio)
                   ? result.streams.filter((s) => !s.hasVideo && s.hasAudio)
                   : result.streams
-              const groups = groupStreams(displayedStreams)
-
-              return groups.map((group) => {
-                const isAudioGroup = group.isAudio
-                return (
-                  <div
-                    key={group.id}
-                    className="rounded-card border border-line bg-canvas p-[14px] shadow-xs"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-[8px] mb-[10px]">
-                      <div className="flex items-center gap-[8px]">
-                        <span className="text-subheading font-semibold text-ink">
-                          {isAudioGroup && filterAudioOnly ? 'Verfügbare Audio-Quellen' : group.title}
-                        </span>
-                        {group.badge ? (
-                          <span className="rounded-nav bg-panel-soft px-[8px] py-[2px] text-micro font-medium text-ink">
-                            {group.badge}
-                          </span>
-                        ) : null}
-                      </div>
-                      <span className="text-micro text-muted">
-                        {group.streams.length} {group.streams.length === 1 ? 'Variante' : 'Varianten'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[8px]">
-                      {group.streams.map((stream, idx) => {
-                        const bitrateMatch = stream.label.match(/(\d+\s*kbit\/s)/i)
-                        const bitrateLabel = bitrateMatch ? bitrateMatch[1] : null
-                        const isBestInGroup = idx === 0 && stream.bytes && group.streams.length > 1
-
-                        return (
-                          <div
-                            key={stream.id}
-                            className="flex items-center justify-between gap-[10px] rounded-nav bg-panel-soft px-[12px] py-[8px] ring-1 ring-line/70 hover:ring-ink/30 transition-all"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-[6px] flex-wrap">
-                                <span className="font-semibold text-small text-ink">
-                                  {filterAudioOnly ? targetAudioFormat.toUpperCase() : stream.ext.toUpperCase()}
+              const rows = groupStreams(displayedStreams, filePrefs.videoPref, filePrefs.audioPref).flatMap((group) =>
+                group.streams.map((stream, index) => ({ group, stream, best: index === 0 && Boolean(stream.bytes) && group.streams.length > 1 })),
+              )
+              const visible = showAllStreams ? rows : rows.slice(0, STREAMS_SHOWN)
+              return (
+                <>
+                  <ul className="flex flex-col divide-y divide-line border-y border-line">
+                    {visible.map(({ group, stream, best }) => {
+                      const bitrate = stream.label.match(/(\d+\s*kbit\/s)/i)?.[1] ?? null
+                      const detail = [
+                        filterAudioOnly
+                          ? targetAudioFormat === 'original' || filePrefs.audioPref === 'untouched'
+                            ? stream.ext.toUpperCase()
+                            : targetAudioFormat.toUpperCase()
+                          : stream.ext.toUpperCase(),
+                        bitrate,
+                        stream.bytes ? formatBytes(stream.bytes) : null,
+                        stream.label.includes('mit Ton') ? 'Bild und Ton' : null,
+                        filterAudioOnly && !group.isAudio ? 'Ton aus dem Video' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                      return (
+                        <li key={stream.id} className="flex max-w-none items-center justify-between gap-[12px] py-[10px]">
+                          <div className="min-w-0">
+                            <p className="truncate text-body text-ink">
+                              {group.isAudio && filterAudioOnly ? 'Ton' : group.title}
+                              {best ? (
+                                <span className="text-small text-muted">
+                                  {' · '}
+                                  {group.isAudio
+                                    ? filePrefs.audioPref === 'low'
+                                      ? 'kompakt'
+                                      : 'beste Qualität'
+                                    : 'bevorzugt'}
                                 </span>
-                                {bitrateLabel ? (
-                                  <span className="rounded-nav bg-canvas px-[6px] py-[1px] text-micro font-medium text-ink">
-                                    {bitrateLabel}
-                                  </span>
-                                ) : null}
-                                {stream.label.includes('mit Ton') ? (
-                                  <span className="rounded-nav bg-canvas px-[6px] py-[1px] text-micro text-muted">
-                                    Bild & Ton
-                                  </span>
-                                ) : null}
-                                {isBestInGroup ? (
-                                  <span className="rounded-nav bg-keylime/40 text-ink px-[6px] py-[1px] text-micro font-medium">
-                                    {isAudioGroup ? 'Beste Qualität' : 'Beste'}
-                                  </span>
-                                ) : null}
-                              </div>
-                              <p className="value text-micro text-muted mt-[2px]">
-                                {stream.bytes ? formatBytes(stream.bytes) : 'Größe dynamisch'}
-                                {filterAudioOnly && !isAudioGroup ? ' · Video-Audiospur' : ''}
-                              </p>
-                            </div>
-
-                            <Button
-                              size="sm"
-                              disabled={busy !== null}
-                              onClick={() => void take(stream)}
-                            >
-                              {busy === stream.label
-                                ? 'Lädt …'
-                                : filterAudioOnly
-                                ? `${targetAudioFormat.toUpperCase()} laden`
-                                : 'Laden'}
-                            </Button>
+                              ) : null}
+                            </p>
+                            <p className="value truncate text-small text-muted">{detail}</p>
                           </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })
+                          <Button size="sm" disabled={busy !== null} onClick={() => void take(stream)} className="shrink-0">
+                            {busy === stream.label
+                              ? 'Lädt …'
+                              : filterAudioOnly
+                                ? targetAudioFormat === 'original' || filePrefs.audioPref === 'untouched'
+                                  ? 'Original laden'
+                                  : `${targetAudioFormat.toUpperCase()} laden`
+                                : 'Laden'}
+                          </Button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {rows.length > STREAMS_SHOWN ? (
+                    <button
+                      type="button"
+                      aria-expanded={showAllStreams}
+                      onClick={() => setShowAllStreams((open) => !open)}
+                      className="press flex items-center gap-[8px] self-start rounded-nav py-[10px] text-small text-ink"
+                    >
+                      <span aria-hidden className="value">
+                        {showAllStreams ? '−' : '+'}
+                      </span>
+                      {showAllStreams ? 'Weniger Fassungen' : `${rows.length - STREAMS_SHOWN} weitere Fassungen`}
+                    </button>
+                  ) : null}
+                </>
+              )
             })()}
           </div>
 
@@ -1616,11 +2031,18 @@ export function DownloaderPanel() {
             <div className="rise mt-[16px] flex flex-wrap items-center gap-[12px] border-t border-line pt-[12px]" role="status">
               <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-pill bg-ink" />
               <p className="min-w-0 flex-1 text-small text-ink">
-                <span className="value">{taken.name}</span> ist in der Sitzung —{' '}
-                <span className="text-muted">oben im Dateimenü, bereit für jedes Werkzeug.</span>
+                <span className="value">{taken.name}</span>{' '}
+                {filePrefs.deliveryMode === 'save_only'
+                  ? 'wurde direkt als Datei heruntergeladen.'
+                  : filePrefs.deliveryMode === 'session_and_save'
+                    ? 'wurde gespeichert und ist in der Sitzung bereit.'
+                    : 'ist in der Sitzung — '}
+                {filePrefs.deliveryMode === 'session_only' ? (
+                  <span className="text-muted">oben im Dateimenü, bereit für jedes Werkzeug.</span>
+                ) : null}
               </p>
               <Button size="sm" variant="quiet" onClick={() => saveBytes(taken.bytes, taken.name, taken.mime)}>
-                Auch speichern
+                {filePrefs.deliveryMode === 'session_only' ? 'Auch speichern' : 'Nochmals speichern'}
               </Button>
             </div>
           ) : null}
@@ -1733,9 +2155,9 @@ export function DownloaderPanel() {
           {(() => {
             const groupMap = new Map<
               string,
-              { id: string; title: string; items: { entry: BatchItem; originalIndex: number }[] }
+              { id: string; title: string; items: { entry: BatchItem }[] }
             >()
-            batchEntries.forEach((entry, idx) => {
+            batchEntries.forEach((entry) => {
               const gId = entry.groupId || 'default'
               const gTitle =
                 entry.groupTitle ||
@@ -1745,7 +2167,7 @@ export function DownloaderPanel() {
               if (!groupMap.has(gId)) {
                 groupMap.set(gId, { id: gId, title: gTitle, items: [] })
               }
-              groupMap.get(gId)!.items.push({ entry, originalIndex: idx })
+              groupMap.get(gId)!.items.push({ entry })
             })
 
             const groups = Array.from(groupMap.values())
@@ -1813,14 +2235,14 @@ export function DownloaderPanel() {
 
                         {/* Items List */}
                         <ol className="flex flex-col divide-y divide-line">
-                          {visibleItems.map(({ entry, originalIndex }) => {
+                          {visibleItems.map(({ entry }) => {
                             const stream =
                               entry.result?.streams.find((s) => s.id === entry.selectedStreamId) ||
                               entry.result?.streams[0]
 
                             return (
                               <li
-                                key={`${originalIndex}-${entry.url}`}
+                                key={entry.id}
                                 className="flex max-w-none flex-col gap-[8px] py-[12px]"
                               >
                                 <div className="flex flex-wrap items-center justify-between gap-[8px]">
@@ -1859,7 +2281,7 @@ export function DownloaderPanel() {
                                         <Button
                                           size="sm"
                                           disabled={batchBusy}
-                                          onClick={() => void takeBatchItem(originalIndex)}
+                                          onClick={() => void takeBatchItem(entry.id)}
                                         >
                                           Laden
                                         </Button>
@@ -1884,15 +2306,7 @@ export function DownloaderPanel() {
                                             disabled={batchBusy}
                                             onChange={(e) => {
                                               const val = e.target.value
-                                              setBatchEntries((prev) =>
-                                                prev
-                                                  ? prev.map((item, idx) =>
-                                                      idx === originalIndex
-                                                        ? { ...item, selectedStreamId: val }
-                                                        : item,
-                                                    )
-                                                  : null,
-                                              )
+                                              patchEntry(entry.id, { selectedStreamId: val })
                                             }}
                                             className="w-auto! max-w-[280px] py-[6px]"
                                           >
@@ -1913,7 +2327,7 @@ export function DownloaderPanel() {
                                         <Button
                                           size="sm"
                                           disabled={batchBusy}
-                                          onClick={() => void takeBatchItem(originalIndex)}
+                                          onClick={() => void takeBatchItem(entry.id)}
                                         >
                                           Laden
                                         </Button>
@@ -1944,7 +2358,7 @@ export function DownloaderPanel() {
                                         size="sm"
                                         variant="quiet"
                                         disabled={batchBusy}
-                                        onClick={() => void takeBatchItem(originalIndex)}
+                                        onClick={() => void takeBatchItem(entry.id)}
                                       >
                                         Erneut versuchen
                                       </Button>
@@ -1979,17 +2393,19 @@ export function DownloaderPanel() {
                         </ol>
 
                         {group.items.length > 3 ? (
-                          <button
-                            type="button"
-                            aria-expanded={!isCollapsed}
-                            onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))}
-                            className="press flex w-full items-center gap-[8px] rounded-nav border-t border-line py-[10px] text-left text-small text-ink"
-                          >
-                            <span aria-hidden className="value">
-                              {isCollapsed ? '+' : '−'}
-                            </span>
-                            {isCollapsed ? `${hidden} weitere zeigen` : 'Auf drei einklappen'}
-                          </button>
+                          <div className="border-t border-line">
+                            <button
+                              type="button"
+                              aria-expanded={!isCollapsed}
+                              onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group.id]: !isCollapsed }))}
+                              className="press flex items-center gap-[8px] rounded-nav py-[10px] text-left text-small text-ink"
+                            >
+                              <span aria-hidden className="value">
+                                {isCollapsed ? '+' : '−'}
+                              </span>
+                              {isCollapsed ? `${hidden} weitere zeigen` : 'Auf drei einklappen'}
+                            </button>
+                          </div>
                         ) : null}
                       </section>
                     )
@@ -2110,6 +2526,39 @@ export function DownloaderPanel() {
             onClick={openSetup}
           />
         </div>
+        {/* Which way the field takes, folded, with the ways themselves —
+            under the field it was one more line about the same thing as
+            this section. */}
+        <Reveal label="Welche Wege das Feld oben probiert">
+          <div className="flex flex-col gap-[8px] text-small leading-[1.5] text-muted">
+            {IN_DESKTOP_APP ? (
+              <p>
+                In der Desktop-App nutzt Sondra direkt yt-dlp auf Ihrem Rechner. Das lädt YouTube und
+                Portale in voller Auflösung ohne fremde Server.
+              </p>
+            ) : (
+              <>
+                <p>
+                  <strong className="text-ink">1. Direkte Mediendateien:</strong> Dateien wie .mp4, .mp3,
+                  Podcasts und HLS-Streams (.m3u8) lädt der Webbrowser direkt herunter.
+                </p>
+                <p>
+                  <strong className="text-ink">2. YouTube & geschützte Portale:</strong> Werden von
+                  YouTube für Webseiten blockiert. Sie funktionieren erst nach Start der{' '}
+                  <a
+                    href="https://www.sondra.lizge.ch/download.html"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="font-medium underline hover:text-ink"
+                  >
+                    Sondra Windows-App
+                  </a>{' '}
+                  oder der lokalen yt-dlp-Brücke auf Ihrem PC.
+                </p>
+              </>
+            )}
+          </div>
+        </Reveal>
         {/* Always mounted: the service connection and the setup dialog live in
             here, and the buttons above and in the error notice reach them. */}
         <div hidden={!waysOpen}>
