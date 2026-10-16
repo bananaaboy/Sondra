@@ -12,7 +12,7 @@
  * a cancelled download stops costing anything immediately.
  */
 
-import { allowedTarget, verify, youtubeStreamUrl } from './_shared.js'
+import { allowedTarget, sign, verify, youtubeStreamUrl } from './_shared.js'
 import { boundedFetch } from './extractors.js'
 
 /**
@@ -28,6 +28,54 @@ async function targetFor(claim, fresh = false) {
     return url ? allowedTarget(url) : null
   }
   return allowedTarget(claim.u)
+}
+
+/** Playlists are text and small; anything past this is not one. */
+const PLAYLIST_LIMIT = 8 * 1024 * 1024
+const PLAYLIST_TYPE = /^application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i
+
+/**
+ * An HLS playlist with every address in it pointed back through this pipe.
+ *
+ * The browser may not fetch a segment from the media host itself — the same
+ * CORS wall that is the reason this endpoint exists — so each segment, each
+ * quality and each separate sound track gets its own signed token, with the
+ * same referer as the playlist. Keys are left alone: an encrypted stream is
+ * refused on the page, and its key is never fetched by anyone here.
+ *
+ * Exported for the checks in `scripts/verify-resolve.mjs`.
+ */
+export function rewritePlaylist(text, base, extra = {}) {
+  const claim = (target, nested) => {
+    let absolute
+    try {
+      absolute = new URL(target, base)
+    } catch {
+      return null
+    }
+    if (!allowedTarget(absolute.href)) return null
+    return `/api/stream?t=${encodeURIComponent(sign(absolute.href, { ...extra, ...(nested ? { isHls: true } : {}) }))}`
+  }
+  let nextIsPlaylist = false
+  return text
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim()
+      if (!trimmed) return line
+      if (trimmed.startsWith('#')) {
+        if (/^#EXT-X-STREAM-INF/i.test(trimmed)) nextIsPlaylist = true
+        if (/^#EXT-X-(?:SESSION-)?KEY/i.test(trimmed)) return line
+        const nested = /^#EXT-X-(?:MEDIA|I-FRAME-STREAM-INF)/i.test(trimmed)
+        return line.replace(/URI="([^"]+)"/g, (whole, uri) => {
+          const proxied = claim(uri, nested)
+          return proxied ? `URI="${proxied}"` : whole
+        })
+      }
+      const nested = nextIsPlaylist || /\.m3u8?(?:$|\?)/i.test(trimmed)
+      nextIsPlaylist = false
+      return claim(trimmed, nested) ?? line
+    })
+    .join('\n')
 }
 
 export default async function handler(request, response) {
@@ -82,6 +130,50 @@ export default async function handler(request, response) {
       return
     }
 
+    // An HLS playlist is answered whole and rewritten, never in ranges: its
+    // addresses have to be signed for this pipe before the page can use them.
+    const type = upstream.headers.get('content-type') ?? ''
+    const maybePlaylist =
+      PLAYLIST_TYPE.test(type) ||
+      // Some hosts type HLS as `audio/mpegurl`; a real media type is left alone.
+      ((claim.isHls || /\.m3u8$/i.test(target.pathname)) && (/mpegurl/i.test(type) || !/^(?:video|audio)\//i.test(type)))
+    // `body` is not touched here: on the adapter path it is a stream of its
+    // own, and asking for it would leave nothing for `arrayBuffer`.
+    if (maybePlaylist && upstream.ok) {
+      let buffer = Buffer.from(await upstream.arrayBuffer())
+      const head = buffer.subarray(0, 64).toString('utf8').replace(/^\uFEFF/, '').trimStart()
+      if (head.startsWith('#EXTM3U')) {
+        // A ranged request may have cut the playlist short; fetch it whole.
+        if (upstream.status === 206) {
+          const { range: _range, ...whole } = headers
+          const full = await boundedFetch(target, { headers: whole, redirect: 'follow', localAddress })
+          if (full.ok) buffer = Buffer.from(await full.arrayBuffer())
+        }
+        if (buffer.byteLength <= PLAYLIST_LIMIT) {
+          const rewritten = rewritePlaylist(buffer.toString('utf8'), upstream.url || target.href, referer ? { ref: referer } : {})
+          const body = Buffer.from(rewritten, 'utf8')
+          response.status(200)
+          response.setHeader('content-type', 'application/vnd.apple.mpegurl')
+          response.setHeader('content-length', String(body.byteLength))
+          response.setHeader('Cache-Control', 'no-store')
+          response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+          response.end(body)
+          return
+        }
+      }
+      // Not a playlist after all: the bytes as they came.
+      response.status(upstream.status)
+      for (const header of ['content-type', 'content-range', 'accept-ranges', 'last-modified']) {
+        const value = upstream.headers.get(header)
+        if (value) response.setHeader(header, value)
+      }
+      response.setHeader('content-length', String(buffer.byteLength))
+      response.setHeader('Cache-Control', 'no-store')
+      response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+      response.end(buffer)
+      return
+    }
+
     response.status(upstream.status)
     for (const header of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'last-modified']) {
       const value = upstream.headers.get(header)
@@ -99,8 +191,17 @@ export default async function handler(request, response) {
 
     // Node's stream plumbing, not `await arrayBuffer()`: buffering the chunk in
     // memory first would double the memory and add latency for no gain.
+    // `pipeline`, not `pipe`: a source that drops the connection mid-chunk
+    // raised an error nobody listened for, and that ended the whole process —
+    // in the app, the server inside it. Now only this answer is cut off, and
+    // the page sees a short chunk it can ask for again.
     const { Readable } = await import('node:stream')
-    Readable.fromWeb(upstream.body).pipe(response)
+    const { pipeline } = await import('node:stream/promises')
+    try {
+      await pipeline(Readable.fromWeb(upstream.body), response)
+    } catch {
+      if (!response.writableEnded) response.destroy()
+    }
   } catch (failure) {
     response.status(502).json({
       error: 'upstream',

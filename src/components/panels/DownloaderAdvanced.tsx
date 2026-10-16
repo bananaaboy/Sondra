@@ -30,6 +30,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import {
+  audioFor,
   fetchHlsSegments,
   fetchMedia,
   fetchPlaylist,
@@ -339,9 +340,15 @@ export function AdvancedDownloader({ url }: { url: string }) {
 
     try {
       let media = playlist
+      // A master may keep the sound in a rendition of its own; without it the
+      // MP4 came out silent.
+      let soundPlaylist: HlsPlaylist | null = null
       if (media.kind === 'master') {
         setNote('Qualitätsstufe wird geladen')
-        media = await fetchPlaylist(variantUrl || media.variants[0].url, controller.signal)
+        const variant = media.variants.find((entry) => entry.url === variantUrl) ?? media.variants[0]
+        const rendition = audioFor(media, variant)
+        media = await fetchPlaylist(variant.url, controller.signal)
+        if (rendition) soundPlaylist = await fetchPlaylist(rendition.url, controller.signal)
       }
 
       setNote('Segmente werden geladen')
@@ -359,15 +366,25 @@ export function AdvancedDownloader({ url }: { url: string }) {
         controller.signal,
       )
 
+      const sound = soundPlaylist
+        ? await fetchHlsSegments(
+            soundPlaylist,
+            (done, total) => setNote(`Ton: Segment ${done} von ${total}`),
+            controller.signal,
+          )
+        : null
+
       // Concatenated transport-stream segments are playable but seek badly;
       // remuxing to MP4 costs one stream copy and no re-encode.
       setNote('Wird zu MP4 zusammengefasst')
       setProgress(null)
       await loadFfmpeg()
       const { files } = await runFfmpeg({
-        input: { 'stream.ts': segments },
+        input: sound ? { 'stream.ts': segments, 'sound.ts': sound } : { 'stream.ts': segments },
         output: ['stream.mp4'],
-        args: ['-i', 'stream.ts', '-c', 'copy', '-movflags', '+faststart', 'stream.mp4'],
+        args: sound
+          ? ['-i', 'stream.ts', '-i', 'sound.ts', '-map', '0:v:0?', '-map', '1:a:0', '-c', 'copy', '-dn', '-sn', '-movflags', '+faststart', 'stream.mp4']
+          : ['-i', 'stream.ts', '-c', 'copy', '-movflags', '+faststart', 'stream.mp4'],
         signal: controller.signal,
       })
 
