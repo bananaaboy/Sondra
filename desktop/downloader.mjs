@@ -150,11 +150,14 @@ function errorCode(stderr) {
   if (/not available in your country|geo[-_ ]?(?:block|restrict)|restricted in your (?:country|region)|not available in your region|georestricted/i.test(text)) {
     return 'error.api.content.video.region'
   }
+  // Before the sign-in check: yt-dlp says "Private video. Sign in if you have
+  // been granted access", and read as a sign-in problem every private video
+  // asked which browser to take the login from — for a video no login opens.
+  if (text.includes('private video') || text.includes('members-only')) return 'error.api.content.video.private'
   if (/not a bot|sign in to confirm|confirm that you are not a bot|login required|sign in if you have been granted access/i.test(text)) {
     return 'error.api.ytdlp.signin'
   }
   if (text.includes('unsupported url') || text.includes('is not a valid url')) return 'error.api.link.unsupported'
-  if (text.includes('private video') || text.includes('members-only')) return 'error.api.content.video.private'
   if (text.includes('video unavailable') || text.includes('has been removed') || text.includes('this video has been deleted')) return 'error.api.content.video.unavailable'
   if (text.includes('no video formats') || text.includes('unable to extract')) return 'error.api.link.unsupported'
   return 'error.api.fetch.fail'

@@ -113,6 +113,16 @@ export function sizeFrom(headers) {
 }
 
 /**
+ * An HLS playlist: by its type, or by its `.m3u8` name when the server types
+ * it as plain text — some do. A `.m3u` music playlist (`audio/x-mpegurl`) is
+ * a list of tracks, not one stream, and is left out on purpose.
+ */
+export function isHlsAnswer(type, url) {
+  if (/^application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(type)) return true
+  return /\.m3u8$/i.test(url.pathname) && !/html/i.test(type)
+}
+
+/**
  * Ask what is at an address without pulling the file down.
  *
  * `HEAD` first, because it is the polite question. Plenty of storage backends
@@ -394,7 +404,7 @@ export default async function handler(request, response) {
     const mediaTarget = allowedTarget(finalUrlFrom(probed, target).toString())
     const type = probed.headers.get('content-type') ?? ''
     const disposition = probed.headers.get('content-disposition') ?? ''
-    if (!mediaTarget || !probed.ok || !looksLikeMedia(type, mediaTarget, disposition)) {
+    if (!mediaTarget || !probed.ok || !(looksLikeMedia(type, mediaTarget, disposition) || isHlsAnswer(type, mediaTarget))) {
       if (type.includes('xml') || type.includes('rss') || type.includes('atom') || target.pathname.endsWith('.xml') || target.pathname.endsWith('.rss')) {
         try {
           const feedRes = await fetch(target.toString(), {
@@ -433,6 +443,36 @@ export default async function handler(request, response) {
     }
     const length = sizeFrom(probed.headers)
     const name = nameFrom(mediaTarget, disposition)
+    // An HLS playlist is a stream, not a file: the page fetches its segments
+    // through `stream.js` and puts them together as an MP4. Announced as the
+    // playlist it was, its text was what got saved.
+    if (isHlsAnswer(type, mediaTarget)) {
+      const stem = name.replace(/\.m3u8$/i, '')
+      response.status(200).json({
+        source: 'direct',
+        kind: 'direct',
+        title: `${stem === 'download' || /^(?:master|index|playlist|chunklist|prog_index|manifest|hls|stream|video)(?:[_.-]\w*)?$/i.test(stem) ? mediaTarget.hostname : stem}.mp4`,
+        author: target.hostname,
+        durationSeconds: null,
+        thumbnail: null,
+        streams: [
+          {
+            id: 'direct-hls',
+            label: 'Stream laden (wird zusammengefügt)',
+            hasVideo: true,
+            hasAudio: true,
+            width: null,
+            height: null,
+            ext: 'mp4',
+            mime: 'video/mp4',
+            bytes: null,
+            isHls: true,
+            token: sign(mediaTarget.toString(), { isHls: true }),
+          },
+        ],
+      })
+      return
+    }
     response.status(200).json({
       source: 'direct',
       kind: 'direct',

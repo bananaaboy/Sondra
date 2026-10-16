@@ -34,7 +34,7 @@
  * instant.
  */
 
-import { fetchHlsTunnel, fetchMedia } from './download'
+import { fetchHlsStream, fetchHlsTunnel, fetchMedia } from './download'
 import { loadFfmpeg, runFfmpeg } from './ffmpegClient'
 import { sanitizeFilename, withExtension } from './format'
 import {
@@ -78,6 +78,11 @@ export interface StudioStream {
    * never sees the finished file.
    */
   job?: LocalJob | null
+  /**
+   * The address is an HLS playlist, not a file: its segments are fetched and
+   * put together here. Older answers say so only through the MIME type.
+   */
+  isHls?: boolean
 }
 
 export interface StudioResult {
@@ -147,22 +152,24 @@ export async function finishLocalJob(
   // otherwise a wait of their own at the very end.
   void loadFfmpeg().catch(() => undefined)
 
+  // The parts count into one figure: reported each from zero, the bar ran
+  // full for the picture and then started over for the sound. A total is
+  // only claimed for the last part, when nothing unknown comes after it.
+  let before = 0
   for (const [index, tunnel] of job.tunnels.entries()) {
     onNote?.(`Teil ${index + 1} von ${job.tunnels.length} wird geholt`)
+    const last = index === job.tunnels.length - 1
+    const report = (loaded: number, total: number | null) =>
+      onProgress?.({ loaded: before + loaded, total: last && total !== null ? before + total : null })
     let bytes: Uint8Array
     if (job.isHls) {
       // Usually a playlist whose segments follow; from the yt-dlp bridge, the
       // assembled media itself. `fetchHlsTunnel` tells the two apart.
-      bytes = await fetchHlsTunnel(tunnel, (loaded, total) => onProgress?.({ loaded, total }), signal)
+      bytes = await fetchHlsTunnel(tunnel, report, signal)
     } else {
-      bytes = (
-        await fetchMedia(
-          tunnel,
-          (p) => onProgress?.({ loaded: p.receivedBytes, total: p.totalBytes }),
-          signal,
-        )
-      ).bytes
+      bytes = (await fetchMedia(tunnel, (p) => report(p.receivedBytes, p.totalBytes), signal)).bytes
     }
+    before += bytes.byteLength
     const name = `part${index}`
     inputs[name] = bytes
     names.push(name)
@@ -201,6 +208,28 @@ export async function finishLocalJob(
   }
 }
 
+/** What a file's extension says it is, for answers that only name the file. */
+const MIME_BY_EXTENSION: Record<string, string> = {
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
+  mov: 'video/quicktime',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  aac: 'audio/aac',
+  opus: 'audio/ogg',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  wav: 'audio/wav',
+  flac: 'audio/flac',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+}
+
 /** A service answer, in the shape the panel already knows how to show. */
 function fromServiceItems(items: ServiceItem[], fallbackTitle: string): StudioResult {
   return {
@@ -220,7 +249,11 @@ function fromServiceItems(items: ServiceItem[], fallbackTitle: string): StudioRe
       ext: item.filename.includes('.')
         ? (item.filename.split('.').pop() ?? 'bin').toLowerCase()
         : 'bin',
-      mime: 'application/octet-stream',
+      // Typed by its name: as octet-stream a loaded video sat in the session
+      // as a „Datei" the player and the tools did not take for one.
+      mime:
+        MIME_BY_EXTENSION[item.filename.split('.').pop()?.toLowerCase() ?? ''] ??
+        (item.kind === 'audio' ? 'audio/mp4' : item.kind === 'photo' ? 'image/jpeg' : 'application/octet-stream'),
       bytes: null,
       token: '',
       directUrl: item.url,
@@ -390,6 +423,8 @@ export async function downloadStream(
     return done.bytes
   }
 
+  if (stream.directUrl && isHlsStream(stream)) return downloadHls(stream.directUrl, onProgress, signal)
+
   if (stream.directUrl) {
     const media = await fetchMedia(
       stream.directUrl,
@@ -401,13 +436,19 @@ export async function downloadStream(
     return media.bytes
   }
 
+  const proxied = `/api/stream?t=${encodeURIComponent(stream.token)}`
+  if (isHlsStream(stream)) return downloadHls(proxied, onProgress, signal)
+
   const parts: Uint8Array[] = []
   let loaded = 0
   let total = stream.bytes
 
-  for (let offset = 0; total === null || offset < total; offset += CHUNK) {
+  // The next request starts where the last one really ended. Stepping by a
+  // fixed four megabytes and stopping at the first short answer cut a file off
+  // without a word wherever a host hands out smaller ranges than asked for.
+  for (let offset = 0; total === null || offset < total; ) {
     const end = offset + CHUNK - 1
-    const response = await fetch(`/api/stream?t=${encodeURIComponent(stream.token)}`, {
+    const response = await fetch(proxied, {
       headers: { range: `bytes=${offset}-${end}` },
       signal,
     })
@@ -415,26 +456,47 @@ export async function downloadStream(
     if (response.status === 403) {
       throw new StudioError('expired', 'Der Link ist abgelaufen. Bitte die Adresse noch einmal suchen.')
     }
+    if (response.status === 416 && total === null && offset > 0) break
     if (!response.ok) {
       const detail = (await response.json().catch(() => null)) as { message?: string } | null
       throw new StudioError('upstream', detail?.message ?? `Der Dienst antwortete mit ${response.status}.`)
     }
 
     const buffer = new Uint8Array(await response.arrayBuffer())
+    const range = response.headers.get('content-range')?.match(/bytes\s+(\d+)-(\d+)\/(\d+|\*)/i)
+    if (range && total === null && range[3] !== '*') {
+      const declared = Number(range[3])
+      if (Number.isFinite(declared) && declared > 0) total = declared
+    }
+
+    // A server that ignored the Range header sent the whole thing in one go;
+    // whatever came before is the same bytes again.
+    if (response.status !== 206) {
+      parts.length = 0
+      parts.push(buffer)
+      loaded = buffer.byteLength
+      onProgress?.({ loaded, total: total ?? loaded })
+      break
+    }
+
     parts.push(buffer)
     loaded += buffer.byteLength
     onProgress?.({ loaded, total })
 
-    const range = response.headers.get('content-range')
-    if (total === null && range) {
-      const declared = Number(range.split('/')[1])
-      if (Number.isFinite(declared) && declared > 0) total = declared
-    }
+    if (buffer.byteLength === 0) break
+    offset = range ? Number(range[2]) + 1 : offset + buffer.byteLength
+    // Without a total, an answer shorter than asked for is the end.
+    if (total === null && buffer.byteLength < CHUNK) break
+  }
 
-    // A server that ignored the Range header sent the whole thing in one go,
-    // and a short chunk means the end. Either way there is nothing left to ask
-    // for, and looping again would fetch the same bytes forever.
-    if (response.status !== 206 || buffer.byteLength < CHUNK) break
+  // An empty answer must not become an empty file in the session.
+  if (loaded < 1024) {
+    throw new StudioError(
+      'empty',
+      loaded === 0
+        ? 'Die Quelle hat mit „in Ordnung“ geantwortet und dann nichts geschickt. Meist hilft ein zweiter Versuch oder eine andere Qualität.'
+        : `Von der Quelle kamen nur ${loaded} Bytes — das ist keine abspielbare Datei.`,
+    )
   }
 
   const whole = new Uint8Array(loaded)
@@ -444,6 +506,50 @@ export async function downloadStream(
     at += part.byteLength
   }
   return whole
+}
+
+/** True when a stream is an HLS playlist to be put together here. */
+export function isHlsStream(stream: Pick<StudioStream, 'isHls' | 'mime' | 'ext'>): boolean {
+  return (
+    Boolean(stream.isHls) ||
+    /^application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(stream.mime) ||
+    stream.ext.toLowerCase() === 'm3u8'
+  )
+}
+
+/**
+ * An HLS stream through this site's service, as one MP4.
+ *
+ * The service hands the playlist back with every segment address signed for
+ * it (`api/stream.js`); the segments come one request each, and FFmpeg copies
+ * them — and the sound, where the master keeps it apart — into an ordinary
+ * MP4. Before this the playlist's text itself was saved, as „video.mp4".
+ */
+async function downloadHls(
+  address: string,
+  onProgress: ((progress: StreamProgress) => void) | undefined,
+  signal: AbortSignal | undefined,
+): Promise<Uint8Array> {
+  const absolute = new URL(address, globalThis.location?.href ?? 'http://localhost/').href
+  void loadFfmpeg().catch(() => undefined)
+  const { video, audio } = await fetchHlsStream(absolute, (loaded) => onProgress?.({ loaded, total: null }), signal)
+
+  await loadFfmpeg()
+  const input: Record<string, Uint8Array> = { 'video.ts': video }
+  if (audio) input['audio.ts'] = audio
+  const args = audio
+    ? ['-i', 'video.ts', '-i', 'audio.ts', '-map', '0:v:0?', '-map', '1:a:0', '-c', 'copy', '-dn', '-sn', 'out.mp4']
+    : ['-i', 'video.ts', '-map', '0:v:0?', '-map', '0:a:0?', '-c', 'copy', '-dn', '-sn', 'out.mp4']
+  const { files } = await runFfmpeg({ input, output: ['out.mp4'], args, signal, consumeInput: true })
+  const bytes = files['out.mp4']
+  if (!bytes || bytes.byteLength < 1024) {
+    throw new StudioError(
+      'merge',
+      'Die Teile des Streams liessen sich nicht zu einer Datei zusammenfügen. Meist hilft ein ' +
+        'erneuter Versuch; bleibt es dabei, ist der Stream in einem Format, das FFmpeg hier nicht kennt.',
+    )
+  }
+  return bytes
 }
 
 export type StealthMode = 'off' | 'standard' | 'full_security' | 'teams_office'
