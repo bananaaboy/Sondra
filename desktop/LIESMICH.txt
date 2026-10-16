@@ -65,7 +65,8 @@ Herunterladen von Videoportalen
   Unter „Was laden“ wählen Sie Video mit Ton oder nur den Ton (MP3, WAV, M4A,
   FLAC oder Opus). Mehrere Adressen, durch Komma oder Zeilen getrennt, werden
   eine Liste zum Laden. „Zuletzt geladen“ merkt sich die letzten Adressen nur
-  auf diesem Rechner.
+  auf diesem Rechner. Eine Stream-Adresse (.m3u8) wird Stück für Stück
+  geladen und hier zu einer MP4 zusammengefügt.
 
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →

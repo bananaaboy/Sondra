@@ -737,9 +737,21 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Vorher stand eine durchsichtige Zeile in einer gestrichelten Ablagefläche
   mit Pille und Emoji in der Ecke. Eine Textdatei mit Links lässt sich
   weiterhin auf die Stelle ziehen — dann färbt sie sich, und das Etikett sagt
-  „Loslassen …" —, oder über „auswählen" im Satz darunter laden. Die Dienste
-  stehen als ein Satz da (vier mit Namen, „Alle zeigen" für den Rest), nicht
-  als zwanzig Chips.
+  „Loslassen …" —, oder über „auswählen" im Satz darunter laden. Darunter
+  steht eine einzige Zeile: die Dienste (vier mit Namen, „alle zeigen" für
+  den Rest, nicht zwanzig Chips) und wie man mehrere Adressen gibt.
+- **Das Herunterladen-Tab zeigt das Nötige, der Rest ist gesagt** (16.10.2026,
+  „cluttered"): Die Warnung behält jedes Wort, steht aber in drei Spalten
+  statt als Liste — ein Viertel der Höhe; der Haftungssatz ist darin fett in
+  Tinte. „Was laden" bleibt offen, Dateiname, Untertitel und Netzwerk stehen
+  als ein Satz rechts daneben („Dateiname wie das Original · ohne
+  Untertitel  Ändern") und öffnen sich auf Klick. Die angebotenen Fassungen
+  sind eine Liste mit Linien — Auflösung, Format und Grösse in Mono, „Laden"
+  rechts —, sechs sichtbar, der Rest hinter „n weitere Fassungen"; vorher ein
+  Rahmen je Auflösung mit einer getönten Kachel je Fassung darin. „Welche
+  Wege das Feld oben probiert" steht bei den Weiteren Wegen, nicht unter dem
+  Feld. Eine Fehlermeldung trägt ihre Erklärung als Text, nicht als Kasten im
+  Kasten.
 - **Ein Link in der Zwischenablage ist ein Satz, kein Balken**: unter dem
   Feld, das er füllen würde, ein Punkt in Tinte, „In der Zwischenablage",
   die Adresse ohne `https://www.` in Mono, dann „Einfügen und nachsehen"

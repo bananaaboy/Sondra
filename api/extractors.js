@@ -10,6 +10,7 @@ import { createDecipheriv } from 'node:crypto'
 import http from 'node:http'
 import https from 'node:https'
 import { Readable } from 'node:stream'
+import tls from 'node:tls'
 
 /* -------------------------------------------------------------------------- */
 /* Constants & URL matchers                                                   */
@@ -216,13 +217,46 @@ export function unpackPackedJs(source) {
 /* Common HTTP fetch helper with network adapter (localAddress) support      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The certificate authorities a request trusts: Node's own list and, where
+ * this Node can read it, the operating system's store.
+ *
+ * That second half is what a school or company network needs. Such networks
+ * often inspect HTTPS with a certificate of their own that Windows trusts and
+ * Node's bundled list does not, so every request failed there. Switching the
+ * check off would have "fixed" that and let anyone on the same network pass
+ * off a server of their own as the real one; trusting what the system trusts
+ * fixes it without that. `null` keeps Node's default.
+ */
+let trustedCas
+function trustedAuthorities() {
+  if (trustedCas !== undefined) return trustedCas
+  try {
+    const system = typeof tls.getCACertificates === 'function' ? tls.getCACertificates('system') : []
+    trustedCas = system.length > 0 ? [...tls.rootCertificates, ...system] : null
+  } catch {
+    trustedCas = null
+  }
+  return trustedCas
+}
+
+/** A certificate problem, as opposed to a host that is simply not there. */
+function isCertificateFailure(error) {
+  const code = String(error?.cause?.code ?? error?.code ?? '')
+  return /CERT|SELF_SIGNED|UNABLE_TO_(?:GET|VERIFY)|DEPTH_ZERO|ERR_TLS/i.test(code)
+}
+
 export async function boundedFetch(url, options = {}, redirectCount = 0) {
   const localAddr = options.localAddress && options.localAddress !== 'default' ? String(options.localAddress) : null
   if (!localAddr && typeof globalThis.fetch === 'function') {
     try {
       return await globalThis.fetch(url, options)
-    } catch {
-      // Fall through to transport.request with rejectUnauthorized: false
+    } catch (error) {
+      // A cancelled request stays cancelled. Anything else gets the second
+      // try below through Node's own client — with the certificate checked,
+      // against the system's store as well when that is what failed.
+      if (error?.name === 'AbortError' || options.signal?.aborted) throw error
+      if (isCertificateFailure(error) && !trustedAuthorities()) throw error
     }
   }
 
@@ -242,11 +276,13 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
   const method = (options.method || 'GET').toUpperCase()
 
   return new Promise((resolve, reject) => {
+    const authorities = isHttps ? trustedAuthorities() : null
     const req = transport.request(parsed, {
       method,
       headers,
       localAddress: localAddr || undefined,
-      rejectUnauthorized: false,
+      // Certificates are always checked — against the system's store too.
+      ...(authorities ? { ca: authorities } : {}),
       signal: options.signal,
     }, (res) => {
       const isRedirect = [301, 302, 303, 307, 308].includes(res.statusCode)
@@ -269,6 +305,10 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
       }
 
       let bodyUsed = false
+      // One stream for the one body. Created anew on every read, each copy
+      // started pulling from the same socket and the bytes went to whichever
+      // was first — `stream.js` reads it twice.
+      let webBody = null
       const response = {
         ok: res.statusCode >= 200 && res.statusCode < 300,
         status: res.statusCode,
@@ -276,7 +316,11 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
         headers: headersObj,
         url: parsed.href,
         get body() {
-          return Readable.toWeb(res)
+          if (!webBody) {
+            bodyUsed = true
+            webBody = Readable.toWeb(res)
+          }
+          return webBody
         },
         async text() {
           if (bodyUsed) throw new Error('Body already used')
@@ -293,7 +337,10 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
           bodyUsed = true
           const chunks = []
           for await (const chunk of res) chunks.push(chunk)
-          return Buffer.concat(chunks).buffer
+          // A small Buffer lives inside a shared pool; its `.buffer` is the
+          // whole pool, other data and all. Only its own bytes are the body.
+          const joined = Buffer.concat(chunks)
+          return joined.buffer.slice(joined.byteOffset, joined.byteOffset + joined.byteLength)
         },
       }
       resolve(response)
