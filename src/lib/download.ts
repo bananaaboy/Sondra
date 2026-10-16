@@ -546,7 +546,7 @@ export async function fetchHlsSegments(
   playlist: HlsPlaylist,
   onProgress?: (done: number, total: number, bytes: number) => void,
   signal?: AbortSignal,
-  concurrency = 6,
+  concurrency = 4,
 ): Promise<Uint8Array> {
   if (playlist.encrypted) {
     throw new TransferError(
@@ -558,12 +558,21 @@ export async function fetchHlsSegments(
   const total = playlist.segments.length
   if (total === 0) throw new TransferError('http', 'Die Playlist enthält keine Segmente.')
 
+  const workerCount = Math.min(concurrency, total)
   const parts = new Array<Uint8Array>(total)
+  const inFlight = new Array<number>(workerCount).fill(0)
   let completed = 0
   let bytes = 0
   let cursor = 0
 
-  const worker = async () => {
+  const reportProgress = () => {
+    if (!onProgress) return
+    let live = bytes
+    for (let i = 0; i < workerCount; i++) live += inFlight[i]
+    onProgress(completed, total, live)
+  }
+
+  const worker = async (workerId: number) => {
     for (;;) {
       const index = cursor
       cursor += 1
@@ -576,6 +585,7 @@ export async function fetchHlsSegments(
       let chunk: Uint8Array | null = null
       let response: Response | null = null
       for (let attempt = 0; ; attempt += 1) {
+        inFlight[workerId] = 0
         try {
           response = await fetchLocalAware(playlist.segments[index], {
             signal,
@@ -583,13 +593,21 @@ export async function fetchHlsSegments(
             ...(range ? { headers: { range: `bytes=${range.start}-${range.end}` } } : {}),
           })
           if (response.ok) {
-            chunk = new Uint8Array(await response.arrayBuffer())
+            chunk = await readWithProgress(
+              response,
+              (p) => {
+                inFlight[workerId] = p.receivedBytes
+                reportProgress()
+              },
+              signal,
+            )
             break
           }
           if (response.status < 500 || attempt >= SEGMENT_RETRIES) {
             throw new TransferError('http', `Segment ${index + 1} fehlte (${response.status}).`)
           }
         } catch (error) {
+          inFlight[workerId] = 0
           if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
             throw new TransferError('aborted', 'Übertragung abgebrochen.')
           }
@@ -599,6 +617,7 @@ export async function fetchHlsSegments(
         }
         await new Promise((done) => setTimeout(done, 400 * (attempt + 1)))
       }
+      inFlight[workerId] = 0
       // A host that ignores Range sends the whole file; the segment is the
       // part of it that was asked for.
       if (range && response?.status === 200 && chunk.byteLength > range.end) {
@@ -607,11 +626,11 @@ export async function fetchHlsSegments(
       parts[index] = chunk
       completed += 1
       bytes += chunk.byteLength
-      onProgress?.(completed, total, bytes)
+      reportProgress()
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(concurrency, total) }, worker))
+  await Promise.all(Array.from({ length: workerCount }, (_, i) => worker(i)))
 
   if (bytes < MIN_MEDIA_BYTES) throw emptyTransferError(bytes, playlist.segments[0])
 
@@ -729,6 +748,16 @@ export async function streamToDisk(
 
 export const PORTAL_HOSTS =
   /(?:^|\.)(?:youtube\.com|youtu\.be|soundcloud\.com|vimeo\.com|tiktok\.com|twitter\.com|x\.com|instagram\.com|facebook\.com|fb\.watch|reddit\.com|twitch\.tv|bilibili\.com|dailymotion\.com|streamable\.com|tumblr\.com|pinterest\.com|pin\.it|ardmediathek\.de|ard\.de|zdf\.de|arte\.tv|srf\.ch|spotify\.com|podcasts\.apple\.com|threads\.net|snapchat\.com|patreon\.com|vk\.com|rumble\.com|odysee\.com|archive\.org|kick\.com|substack\.com|peertube\.[a-z]+|orf\.at|3sat\.de|ok\.ru|rutube\.ru|mixcloud\.com|bandcamp\.com|loom\.com|bluesky\.app|bsky\.app|aniworld\.to|s\.to|serienstream\.to|voe\.sx|filemoon\.(?:sx|to|in|nl|wf)|vidmoly\.(?:to|me|net)|doodstream\.com|dood\.(?:to|so|ws|wf)|streamtape\.com|vidoza\.net)$/i
+
+export const ANIWORLD_HOSTS = /^(?:[a-z0-9-]+\.)*(?:aniworld\.(?:to|la)|s\.to|serienstream\.(?:to|sx))$/i
+
+export function isAniworldUrl(value: string): boolean {
+  try {
+    return ANIWORLD_HOSTS.test(new URL(value.trim()).hostname)
+  } catch {
+    return false
+  }
+}
 
 export function isPortalUrl(value: string): boolean {
   try {

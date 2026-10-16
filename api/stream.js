@@ -134,9 +134,9 @@ export default async function handler(request, response) {
     // addresses have to be signed for this pipe before the page can use them.
     const type = upstream.headers.get('content-type') ?? ''
     const maybePlaylist =
+      Boolean(claim.isHls) ||
       PLAYLIST_TYPE.test(type) ||
-      // Some hosts type HLS as `audio/mpegurl`; a real media type is left alone.
-      ((claim.isHls || /\.m3u8$/i.test(target.pathname)) && (/mpegurl/i.test(type) || !/^(?:video|audio)\//i.test(type)))
+      (/\.m3u8$/i.test(target.pathname) && (/mpegurl/i.test(type) || !/^(?:video|audio)\//i.test(type)))
     // `body` is not touched here: on the adapter path it is a stream of its
     // own, and asking for it would leave nothing for `arrayBuffer`.
     if (maybePlaylist && upstream.ok) {

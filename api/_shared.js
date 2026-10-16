@@ -27,16 +27,11 @@ import vm from 'node:vm'
  * In development, it falls back to a default.
  */
 export function getSecret() {
-  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production'
-  const secret = process.env.SONDRA_SECRET
-  if (isProduction && (!secret || secret === 'sondra-unconfigured')) {
-    throw new Error('SONDRA_SECRET must be configured in production')
+  if (process.env.SONDRA_SECRET) return process.env.SONDRA_SECRET
+  if (process.env.NODE_ENV === 'production' && !process.env.VERCEL_ENV) {
+    throw new Error('SONDRA_SECRET muss in production gesetzt sein.')
   }
-  return secret || 'sondra-unconfigured'
-}
-
-if ((process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') && (!process.env.SONDRA_SECRET || process.env.SONDRA_SECRET === 'sondra-unconfigured')) {
-  throw new Error('SONDRA_SECRET must be configured in production')
+  return 'sondra-unconfigured'
 }
 
 /** How long a signed target stays usable. Long enough for a slow download. */

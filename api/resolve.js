@@ -258,6 +258,7 @@ export default async function handler(request, response) {
     try {
       const media = await extractDirectMedia(targetStr, {
         localAddress: request.body?.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
+        language: request.body?.language,
       })
       if (media && media.isPlaylist) {
         response.status(200).json({
@@ -312,6 +313,7 @@ export default async function handler(request, response) {
               ext: s.ext || (s.isHls ? 'mp4' : 'mp4'),
               mime: s.isHls ? 'application/x-mpegurl' : 'video/mp4',
               bytes: null,
+              isHls: Boolean(s.isHls),
               token: sign(safeUrl, { ref: s.referer, isHls: Boolean(s.isHls) }),
             })
           }
@@ -324,9 +326,10 @@ export default async function handler(request, response) {
             hasAudio: true,
             width: null,
             height: 1080,
-            ext: media.isHls ? 'mp4' : 'mp4',
+            ext: media.isHls ? 'mp4' : media.mp4 ? 'mp4' : 'mp4',
             mime: media.isHls ? 'application/x-mpegurl' : 'video/mp4',
             bytes: null,
+            isHls: Boolean(media.isHls),
             token: sign(safeUrl, { ref: media.referer, isHls: Boolean(media.isHls) }),
           })
         }
@@ -338,6 +341,8 @@ export default async function handler(request, response) {
           author: media.seriesTitle || target.hostname,
           durationSeconds: null,
           thumbnail: media.thumbnail || null,
+          availableLanguages: media.availableLanguages,
+          currentLanguage: media.language,
           streams,
         })
         return
