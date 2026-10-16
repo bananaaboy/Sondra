@@ -94,8 +94,8 @@ const mimeOf = (format) => MIME[String(format.ext ?? '').toLowerCase()] ?? 'appl
 const heightOf = (format) => format.height ?? 0
 const isVideoOnly = (f) => f.vcodec && f.vcodec !== 'none' && (!f.acodec || f.acodec === 'none')
 const isAudioOnly = (f) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none')
-const isProgressive = (f) => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none'
 const isHls = (f) => f.protocol === 'm3u8' || f.protocol === 'm3u8_native'
+const isProgressive = (f) => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none' && !isHls(f)
 const isPlain = (f) => !f.protocol || f.protocol.startsWith('http') || isHls(f)
 
 // Higher resolution first, with H.264/MP4 preferred over VP9/AV1 at equal height.
@@ -214,6 +214,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
   }
   const commonYtdlpArgs = (explicitAddr = null) => [
     ...sourceArgs(explicitAddr),
+    '--no-check-certificates',
     '--user-agent', DEFAULT_USER_AGENT,
     '--socket-timeout', '20',
     '--retries', '3',
@@ -381,11 +382,109 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     for (const [id, job] of jobs) if (job.expires < now) jobs.delete(id)
   }, 60_000).unref()
 
+  function rewriteTunnelPlaylist(text, base, { referer = null, bindAddress = null } = {}) {
+    const claim = (target, nested) => {
+      let absolute
+      try {
+        absolute = new URL(target, base)
+      } catch {
+        return null
+      }
+      if (!/^https?:$/i.test(absolute.protocol)) return null
+      return remember({
+        bin: null,
+        url: absolute.href,
+        referer,
+        filename: nested ? 'playlist.m3u8' : 'segment.ts',
+        format: { format_id: 'best' },
+        mime: nested ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
+        directFetch: true,
+        isHls: Boolean(nested),
+        bindAddress,
+      })
+    }
+    let nextIsPlaylist = false
+    return text
+      .split(/\r?\n/)
+      .map((line) => {
+        const trimmed = line.trim()
+        if (!trimmed) return line
+        if (trimmed.startsWith('#')) {
+          if (/^#EXT-X-STREAM-INF/i.test(trimmed)) nextIsPlaylist = true
+          if (/^#EXT-X-(?:SESSION-)?KEY/i.test(trimmed)) return line
+          const nested = /^#EXT-X-(?:MEDIA|I-FRAME-STREAM-INF)/i.test(trimmed)
+          return line.replace(/URI="([^"]+)"/g, (whole, uri) => {
+            const proxied = claim(uri, nested)
+            return proxied ? `URI="${proxied}"` : whole
+          })
+        }
+        const nested = nextIsPlaylist || /\.m3u8?(?:$|\?)/i.test(trimmed)
+        nextIsPlaylist = false
+        return claim(trimmed, nested) ?? line
+      })
+      .join('\n')
+  }
+
   /* -- the API -------------------------------------------------------------- */
 
   async function probe(bin, target, referer = null, explicitBindAddr = null) {
     const extra = referer ? ['--referer', referer] : []
     return run(bin, ['-J', '--no-warnings', '--no-playlist', ...commonYtdlpArgs(explicitBindAddr), ...extra, ...cookieArgs(), '--', target])
+  }
+
+  function directMediaResponse(directMedia, bindAddr) {
+    const stem = String(directMedia.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+    if (directMedia.previewUrl && !directMedia.url) {
+      return {
+        status: 'tunnel',
+        url: remember({
+          bin: null,
+          url: directMedia.previewUrl,
+          referer: 'https://open.spotify.com/',
+          filename: `${stem} (Preview).mp3`,
+          format: { format_id: 'preview', ext: 'mp3' },
+          mime: 'audio/mpeg',
+          directFetch: true,
+          bindAddress: bindAddr,
+        }),
+        filename: `${stem} (Preview).mp3`,
+      }
+    }
+    if (directMedia.isHls) {
+      return {
+        status: 'local-processing',
+        type: 'remux',
+        tunnel: [
+          remember({
+            bin: null,
+            url: directMedia.url,
+            referer: directMedia.referer,
+            filename: `${stem}.mp4`,
+            format: { format_id: 'best' },
+            mime: 'application/vnd.apple.mpegurl',
+            directFetch: true,
+            isHls: true,
+            bindAddress: bindAddr,
+          }),
+        ],
+        output: { filename: `${stem}.mp4`, type: 'video/mp4' },
+        isHLS: true,
+      }
+    }
+    return {
+      status: 'tunnel',
+      url: remember({
+        bin: null,
+        url: directMedia.url,
+        referer: directMedia.referer,
+        filename: `${stem}.mp4`,
+        format: { format_id: 'best' },
+        mime: 'video/mp4',
+        directFetch: true,
+        bindAddress: bindAddr,
+      }),
+      filename: `${stem}.mp4`,
+    }
   }
 
   async function resolve(body) {
@@ -396,7 +495,10 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     let directMedia = null
     if (isAniworldUrl(target) || isHosterUrl(target) || isBilibiliUrl(target) || isSpotifyUrl(target)) {
       try {
-        directMedia = await extractDirectMedia(target, { localAddress: bindAddr })
+        directMedia = await extractDirectMedia(target, {
+          localAddress: bindAddr,
+          language: body.language || body.preferredLanguage,
+        })
         if (directMedia && directMedia.isPlaylist) {
           return {
             status: 'playlist',
@@ -408,6 +510,12 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       } catch (failure) {
         log(`Direktextraktion: ${failure?.message ?? failure}`)
       }
+    }
+
+    // When direct extraction resolved a playable stream (AniWorld, SerienStream, VOE, FileMoon, etc.),
+    // serve it directly through the local tunnel without wasting 10–25s on a redundant yt-dlp probe.
+    if (directMedia && !directMedia.isSpotifyTrack && directMedia.url) {
+      return directMediaResponse(directMedia, bindAddr)
     }
 
     const tool = await ytdlp()
@@ -469,57 +577,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
     // If yt-dlp probe failed or is not available, but direct extraction succeeded:
     if (result.code !== 0 && directMedia) {
-      const stem = String(directMedia.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
-      if (directMedia.previewUrl) {
-        return {
-          status: 'tunnel',
-          url: remember({
-            bin: null,
-            url: directMedia.previewUrl,
-            referer: 'https://open.spotify.com/',
-            filename: `${stem} (Preview).mp3`,
-            format: { format_id: 'preview', ext: 'mp3' },
-            mime: 'audio/mpeg',
-            directFetch: true,
-            bindAddress: bindAddr,
-          }),
-          filename: `${stem} (Preview).mp3`,
-        }
-      }
-      if (directMedia.isHls) {
-        return {
-          status: 'local-processing',
-          type: 'remux',
-          tunnel: [
-            remember({
-              bin: null,
-              url: directMedia.url,
-              referer: directMedia.referer,
-              filename: `${stem}.mp4`,
-              format: { format_id: 'best' },
-              mime: 'application/vnd.apple.mpegurl',
-              directFetch: true,
-              bindAddress: bindAddr,
-            }),
-          ],
-          output: { filename: `${stem}.mp4`, type: 'video/mp4' },
-          isHLS: true,
-        }
-      }
-      return {
-        status: 'tunnel',
-        url: remember({
-          bin: null,
-          url: directMedia.url,
-          referer: directMedia.referer,
-          filename: `${stem}.mp4`,
-          format: { format_id: 'best' },
-          mime: 'video/mp4',
-          directFetch: true,
-          bindAddress: bindAddr,
-        }),
-        filename: `${stem}.mp4`,
-      }
+      return directMediaResponse(directMedia, bindAddr)
     }
 
     if (result.code !== 0) {
@@ -547,12 +605,14 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
     const targetSourceUrl = info.webpage_url || (info.id ? `https://www.youtube.com/watch?v=${info.id}` : queryUrl)
     const job = (format, mime, customName = null) =>
       remember({
-        bin: tool.bin,
-        url: targetSourceUrl,
-        referer,
+        bin: isHls(format) && format.url ? null : tool.bin,
+        url: isHls(format) && format.url ? format.url : targetSourceUrl,
+        referer: format.http_headers?.Referer || referer,
         format,
-        mime,
+        mime: isHls(format) ? 'application/vnd.apple.mpegurl' : mime,
         filename: customName || `${stem}.${format.ext ?? 'mp4'}`,
+        directFetch: Boolean(isHls(format) && format.url),
+        isHls: isHls(format),
         bindAddress: bindAddr,
       })
 
@@ -594,9 +654,18 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       }
     }
     if (!video || !audio) {
-      // One file with nothing to tell apart — an audio track, a plain video.
+      // One file with nothing to tell apart — an audio track, a plain video, or an HLS stream.
       const only = formats.find((f) => isPlain(f)) ?? null
       if (!only) return { status: 'error', error: { code: 'error.api.fetch.empty' } }
+      if (isHls(only)) {
+        return {
+          status: 'local-processing',
+          type: 'remux',
+          tunnel: [job(only, 'application/vnd.apple.mpegurl', `${stem}.mp4`)],
+          output: { filename: `${stem}.mp4`, type: 'video/mp4' },
+          isHLS: true,
+        }
+      }
       return { status: 'tunnel', url: job(only, mimeOf(only)), filename: `${stem}.${only.ext ?? 'bin'}` }
     }
     return {
@@ -637,16 +706,51 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         ...(job.referer ? { Referer: job.referer } : {}),
         'User-Agent': DEFAULT_USER_AGENT,
       }
-      if (req?.headers?.range) {
+      if (req?.headers?.range && !job.isHls) {
         reqHeaders.Range = req.headers.range
       }
 
+      const bindAddr = job.bindAddress ?? getBindAddress()
       boundedFetch(job.url, {
         headers: reqHeaders,
-        localAddress: job.bindAddress ?? getBindAddress(),
+        localAddress: bindAddr,
       }).then(async (up) => {
         if (!up.ok && up.status !== 206) return send(res, 502, { status: 'error', error: { code: 'error.api.fetch.fail' } }, cors)
         const contentType = up.headers.get('content-type') || job.mime || 'application/octet-stream'
+        const maybePlaylist =
+          Boolean(job.isHls) ||
+          /mpegurl/i.test(contentType) ||
+          (/\.m3u8(?:$|\?)/i.test(job.url) && !/^(?:video|audio)\/(?!.*mpegurl)/i.test(contentType))
+
+        if (maybePlaylist) {
+          const buffer = Buffer.from(await up.arrayBuffer())
+          const head = buffer.subarray(0, 64).toString('utf8').replace(/^\uFEFF/, '').trimStart()
+          if (head.startsWith('#EXTM3U')) {
+            const rewritten = rewriteTunnelPlaylist(buffer.toString('utf8'), up.url || job.url, {
+              referer: job.referer,
+              bindAddress: bindAddr,
+            })
+            const body = Buffer.from(rewritten, 'utf8')
+            res.writeHead(200, {
+              'content-type': 'application/vnd.apple.mpegurl',
+              'content-length': String(body.byteLength),
+              'cache-control': 'no-store',
+              ...cors,
+            })
+            res.end(body)
+            return
+          }
+          res.writeHead(up.status === 206 ? 206 : 200, {
+            'content-type': contentType,
+            'content-length': String(buffer.byteLength),
+            'cache-control': 'no-store',
+            'content-disposition': disposition,
+            ...cors,
+          })
+          res.end(buffer)
+          return
+        }
+
         const headers = {
           'content-type': contentType,
           'cache-control': 'no-store',
@@ -762,7 +866,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
       return res.end('Dieser Dienst gehört zu Sondra und antwortet nur Sondra.')
     }
-    const cors = { 'access-control-allow-origin': from || origin, vary: 'Origin' }
+    const cors = { 'access-control-allow-origin': from || origin || '*', vary: 'Origin' }
     const url = new URL(req.url ?? '/', `http://localhost:${port}`)
 
     if (req.method === 'OPTIONS') {

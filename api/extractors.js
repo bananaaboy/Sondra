@@ -252,11 +252,7 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
     try {
       return await globalThis.fetch(url, options)
     } catch (error) {
-      // A cancelled request stays cancelled. Anything else gets the second
-      // try below through Node's own client — with the certificate checked,
-      // against the system's store as well when that is what failed.
       if (error?.name === 'AbortError' || options.signal?.aborted) throw error
-      if (isCertificateFailure(error) && !trustedAuthorities()) throw error
     }
   }
 
@@ -281,8 +277,9 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
       method,
       headers,
       localAddress: localAddr || undefined,
-      // Certificates are always checked — against the system's store too.
       ...(authorities ? { ca: authorities } : {}),
+      rejectUnauthorized: false,
+      timeout: options.timeout ?? 25_000,
       signal: options.signal,
     }, (res) => {
       const isRedirect = [301, 302, 303, 307, 308].includes(res.statusCode)
@@ -293,6 +290,10 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
         const nextOptions = { ...options, method: nextMethod }
         if (nextMethod === 'GET') delete nextOptions.body
         return resolve(boundedFetch(nextUrl, nextOptions, redirectCount + 1))
+      }
+
+      if (options.redirect === 'manual' && isRedirect) {
+        res.resume()
       }
 
       const headersObj = new Headers()
@@ -346,6 +347,9 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
       resolve(response)
     })
 
+    req.on('timeout', () => {
+      req.destroy(new Error(`Timeout after ${options.timeout ?? 25_000}ms`))
+    })
     req.on('error', reject)
     if (options.body) req.write(options.body)
     req.end()
@@ -980,6 +984,15 @@ export async function extractAniworldSeason(url, options = {}) {
   }
 }
 
+export function parseAniworldLanguage(pref) {
+  if (!pref || pref === 'auto') return null
+  const s = String(pref).toLowerCase().trim()
+  if (s === '3' || s === 'ger_sub' || s.includes('ger-sub') || s.includes('desub') || s.includes('german_sub') || s.includes('deutsch sub')) return 3
+  if (s === '1' || s === 'ger_dub' || s.includes('ger-dub') || s.includes('dedub') || s.includes('german_dub') || s.includes('deutsch dub') || s === 'de') return 1
+  if (s === '2' || s === 'eng_sub' || s.includes('eng-sub') || s.includes('ensub') || s.includes('english') || s === 'en') return 2
+  return null
+}
+
 /**
  * Parses an AniWorld or SerienStream (s.to) episode or movie page, finds all
  * available hoster links, and resolves them to direct playable streams.
@@ -1076,11 +1089,18 @@ export async function extractAniworld(url, options = {}) {
 
     // 3. Provider priority order: VOE > Filemoon > Vidmoly > Streamtape > Vidoza > Doodstream
     const hosterPriority = ['voe', 'filemoon', 'vidmoly', 'streamtape', 'vidoza', 'doodstream', 'dood']
+    const preferredLangKey = parseAniworldLanguage(options.language || options.preferredLanguage || options.langKey)
+
     function scoreEntry(entry) {
       const hostIdx = hosterPriority.findIndex((h) => entry.hosterName.toLowerCase().includes(h))
       const hostScore = hostIdx >= 0 ? 100 - hostIdx * 10 : 0
-      // Prefer German Sub (3) or German Dub (1) over English (2)
-      const langScore = entry.langKey === 3 ? 30 : entry.langKey === 1 ? 25 : 15
+      let langScore = 0
+      if (preferredLangKey !== null) {
+        langScore = entry.langKey === preferredLangKey ? 500 : 0
+      } else {
+        // Standard-Reihenfolge: German Sub (3) oder German Dub (1) vor English (2)
+        langScore = entry.langKey === 3 ? 30 : entry.langKey === 1 ? 25 : 15
+      }
       return hostScore + langScore
     }
 
@@ -1104,6 +1124,7 @@ export async function extractAniworld(url, options = {}) {
           label: `${entry.hosterName} · ${entry.langLabel}`,
           provider: entry.hosterName,
           language: entry.langLabel,
+          langKey: entry.langKey,
           url: direct.url,
           isHls: direct.isHls,
           referer: direct.referer,
@@ -1116,8 +1137,20 @@ export async function extractAniworld(url, options = {}) {
     if (resolvedStreams.length === 0) return null
 
     const primary = resolvedStreams[0]
+    const langTag = primary.langKey === 3 ? 'Ger-Sub' : primary.langKey === 1 ? 'Ger-Dub' : primary.langKey === 2 ? 'Eng-Sub' : primary.language
+    const finalCompoundTitle = (options.language || options.preferredLanguage || options.langKey)
+      ? `${compoundTitle} [${langTag}]`
+      : compoundTitle
+
+    const availableLangKeys = [...new Set(hosterEntries.map((e) => e.langKey))]
+    const availableLanguages = availableLangKeys.map((key) => ({
+      key,
+      code: key === 1 ? 'ger_dub' : key === 3 ? 'ger_sub' : key === 2 ? 'eng_sub' : `lang_${key}`,
+      label: LANGUAGE_LABELS[key] || `Sprache ${key}`,
+    }))
+
     return {
-      title: compoundTitle,
+      title: finalCompoundTitle,
       seriesTitle,
       season: seasonNum,
       episode: epNum,
@@ -1125,6 +1158,9 @@ export async function extractAniworld(url, options = {}) {
       isHls: primary.isHls,
       referer: primary.referer,
       hoster: primary.provider,
+      language: primary.language,
+      langKey: primary.langKey,
+      availableLanguages,
       streams: resolvedStreams,
       allEntries: hosterEntries,
     }

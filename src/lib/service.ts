@@ -542,6 +542,7 @@ export async function resolveMedia(
   settings: ServiceSettings,
   apiKey: string | null,
   signal?: AbortSignal,
+  extra?: { language?: string },
 ): Promise<ServiceResult> {
   const endpoint = normalizeEndpoint(settings.endpoint)
 
@@ -562,6 +563,7 @@ export async function resolveMedia(
         videoQuality: settings.videoQuality,
         audioFormat: settings.audioFormat,
         filenameStyle: 'basic',
+        ...(extra?.language ? { language: extra.language } : {}),
       }),
     })
   } catch (error) {

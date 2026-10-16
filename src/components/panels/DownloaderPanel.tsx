@@ -20,7 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { IN_DESKTOP_APP } from '../../lib/desktop'
 import { useIngestFiles } from '../../hooks/useIngest'
 import { opusArgs } from '../../lib/convert'
-import { extractAddresses, isHlsPlaylistText, isPortalUrl, isSupportedUrl, saveBytes } from '../../lib/download'
+import { extractAddresses, isAniworldUrl, isHlsPlaylistText, isPortalUrl, isSupportedUrl, saveBytes } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { decodeWithBrowser } from '../../lib/audio'
 import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
@@ -51,6 +51,7 @@ export type VideoAdaptMode = 'stream_only' | 'reencode_lower'
 export type AudioFilePref = 'untouched' | 'high' | 'medium' | 'low' | 'lossless'
 export type DirectFilePref = 'untouched' | 'apply_media_prefs'
 export type DownloadDeliveryMode = 'session_only' | 'session_and_save' | 'save_only'
+export type AniworldLanguagePref = 'auto' | 'ger_sub' | 'ger_dub' | 'eng_sub'
 
 export interface DownloadFilePreferences {
   videoPref: VideoFilePref
@@ -58,6 +59,7 @@ export interface DownloadFilePreferences {
   audioPref: AudioFilePref
   directPref: DirectFilePref
   deliveryMode: DownloadDeliveryMode
+  aniworldLanguage: AniworldLanguagePref
 }
 
 const DEFAULT_DOWNLOAD_PREFS: DownloadFilePreferences = {
@@ -66,6 +68,7 @@ const DEFAULT_DOWNLOAD_PREFS: DownloadFilePreferences = {
   audioPref: 'high',
   directPref: 'untouched',
   deliveryMode: 'session_only',
+  aniworldLanguage: 'auto',
 }
 
 const DOWNLOAD_PREFS_KEY = 'sondra:download_prefs'
@@ -974,7 +977,9 @@ export function DownloaderPanel() {
 
     if (targets.length === 1) {
       try {
-        const found = await resolveViaService(targets[0], controller.signal)
+        const found = await resolveViaService(targets[0], controller.signal, {
+          language: filePrefsRef.current.aniworldLanguage,
+        })
         if (found.isPlaylist) {
           log('holen', `Staffel / Playlist erkannt: ${found.title} (${found.items.length} Titel)`)
           if (found.items.length === 0) {
@@ -1059,7 +1064,9 @@ export function DownloaderPanel() {
     const task = (async (): Promise<StudioResult | null> => {
       patchEntry(id, { status: 'resolving', error: undefined })
       try {
-        const res = await resolveViaService(entry.url, signal)
+        const res = await resolveViaService(entry.url, signal, {
+          language: filePrefsRef.current.aniworldLanguage,
+        })
         if (res.isPlaylist) {
           const gId = entry.groupId || entry.url
           const gTitle = res.title || entry.groupTitle || 'Playlist'
@@ -1383,11 +1390,26 @@ export function DownloaderPanel() {
             ? 'Ton verlustfrei'
             : 'Ton hohe Quali'
 
+  const isAniworldTarget =
+    isAniworldUrl(url) ||
+    result?.source === 'aniworld' ||
+    Boolean(batchEntries?.some((e) => isAniworldUrl(e.url)))
+
+  const aniworldLangSummary =
+    filePrefs.aniworldLanguage === 'ger_sub'
+      ? 'AniWorld: Ger-Sub (OmU)'
+      : filePrefs.aniworldLanguage === 'ger_dub'
+        ? 'AniWorld: Ger-Dub'
+        : filePrefs.aniworldLanguage === 'eng_sub'
+          ? 'AniWorld: Eng-Sub'
+          : 'AniWorld: Sprache Auto'
+
   // The folded settings, said: what is in force without opening them.
   const settingsSummary = [
     videoPrefLabel,
     audioPrefLabel,
     filePrefs.directPref === 'untouched' ? 'Direktdateien 1:1' : 'Direktdateien anpassen',
+    ...(isAniworldTarget ? [aniworldLangSummary] : []),
     `Dateiname ${
       stealthMode === 'off'
         ? 'wie das Original'
@@ -1637,6 +1659,29 @@ export function DownloaderPanel() {
               </span>
             ) : null}
 
+            {isAniworldTarget ? (
+              <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-nav bg-panel-soft px-[12px] py-[8px] ring-1 ring-inset ring-rule">
+                <span className="flex items-center gap-[6px] text-small font-semibold text-ink">
+                  <span aria-hidden className="size-[7px] shrink-0 rounded-pill bg-ink" />
+                  AniWorld Sprache
+                </span>
+                <ChoiceRow
+                  value={filePrefs.aniworldLanguage}
+                  options={[
+                    { value: 'auto', label: 'Auto (Standard)', title: 'Automatisch beste verfügbare Fassung (Deutsch bevorzugt)' },
+                    { value: 'ger_sub', label: 'Ger-Sub (OmU)', title: 'Japanischer Originalton mit deutschem Untertitel' },
+                    { value: 'ger_dub', label: 'Ger-Dub', title: 'Deutsche Synchronisation' },
+                    { value: 'eng_sub', label: 'Eng-Sub', title: 'Japanischer Originalton mit englischem Untertitel' },
+                  ]}
+                  onChange={(val) => {
+                    const nextLang = val as AniworldLanguagePref
+                    updateFilePrefs({ aniworldLanguage: nextLang })
+                    if (result || batchEntries) void look()
+                  }}
+                />
+              </div>
+            ) : null}
+
             <div
               id="download-settings"
               hidden={!settingsOpen}
@@ -1797,6 +1842,32 @@ export function DownloaderPanel() {
                   onChange={setAutoTranscribe}
                 />
               </div>
+
+              {isAniworldTarget ? (
+                <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
+                  <label htmlFor="aniworld-language-select" className="flex items-center gap-[6px] text-small font-semibold text-ink">
+                    <span aria-hidden className="size-[7px] shrink-0 rounded-pill bg-ink" />
+                    AniWorld &amp; SerienStream Sprachfassung
+                  </label>
+                  <Select
+                    id="aniworld-language-select"
+                    value={filePrefs.aniworldLanguage}
+                    onChange={(e) => {
+                      const nextLang = e.target.value as AniworldLanguagePref
+                      updateFilePrefs({ aniworldLanguage: nextLang })
+                      if (result || batchEntries) void look()
+                    }}
+                  >
+                    <option value="auto">Automatisch — Bevorzugt deutsche Synchronisation (Ger-Dub) oder Untertitel (Ger-Sub)</option>
+                    <option value="ger_sub">Deutsch Sub (Ger-Sub / OmU — Japanischer Originalton mit deutschem Untertitel)</option>
+                    <option value="ger_dub">Deutsch Dub (Ger-Dub — Deutsche Synchronfassung)</option>
+                    <option value="eng_sub">Englisch Sub (Eng-Sub — Japanischer Originalton mit englischem Untertitel)</option>
+                  </Select>
+                  <span className="text-small leading-[1.45] text-muted">
+                    Bestimmt die bevorzugte Sprachfassung für diesen Anime. Falls die gewünschte Fassung nicht existiert, wird automatisch die nächstbeste Fassung gewählt.
+                  </span>
+                </div>
+              ) : null}
 
               {IN_DESKTOP_APP ? (
                 <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">

@@ -52,7 +52,11 @@ const sourceArgs = () => (SOURCE_ADDRESS && SOURCE_ADDRESS !== 'default' ? ['--s
 async function boundedFetch(url, options = {}, redirectCount = 0) {
   const localAddr = options.localAddress ?? (SOURCE_ADDRESS && SOURCE_ADDRESS !== 'default' ? String(SOURCE_ADDRESS) : null)
   if (!localAddr && typeof globalThis.fetch === 'function') {
-    return globalThis.fetch(url, options)
+    try {
+      return await globalThis.fetch(url, options)
+    } catch {
+      // Fall through to custom HTTP(S) client (handles incomplete TLS chains)
+    }
   }
 
   const parsed = typeof url === 'string' ? new URL(url) : url
@@ -77,6 +81,7 @@ async function boundedFetch(url, options = {}, redirectCount = 0) {
       localAddress: localAddr || undefined,
       rejectUnauthorized: false,
       signal: options.signal,
+      timeout: 25_000,
     }, (res) => {
       const isRedirect = [301, 302, 303, 307, 308].includes(res.statusCode)
       if (options.redirect !== 'manual' && isRedirect && res.headers.location && redirectCount < 10) {
@@ -86,6 +91,10 @@ async function boundedFetch(url, options = {}, redirectCount = 0) {
         const nextOptions = { ...options, method: nextMethod }
         if (nextMethod === 'GET') delete nextOptions.body
         return resolve(boundedFetch(nextUrl, nextOptions, redirectCount + 1))
+      }
+
+      if (options.redirect === 'manual' && isRedirect) {
+        res.resume()
       }
 
       const headersObj = new Headers()
@@ -128,6 +137,9 @@ async function boundedFetch(url, options = {}, redirectCount = 0) {
       resolve(response)
     })
 
+    req.on('timeout', () => {
+      req.destroy(new Error('Request timed out'))
+    })
     req.on('error', reject)
     if (options.body) req.write(options.body)
     req.end()
@@ -193,8 +205,11 @@ function run(args, { timeoutMs = 90_000 } = {}) {
 const heightOf = (format) => format.height ?? 0
 const isVideoOnly = (format) => format.vcodec && format.vcodec !== 'none' && (!format.acodec || format.acodec === 'none')
 const isAudioOnly = (format) => format.acodec && format.acodec !== 'none' && (!format.vcodec || format.vcodec === 'none')
+/** Wahr, wenn das Format über HLS geliefert wird (statt als eine einzelne Datei). */
+const isHlsFormat = (format) =>
+  format.protocol === 'm3u8' || format.protocol === 'm3u8_native'
 const isProgressive = (format) =>
-  format.vcodec && format.vcodec !== 'none' && format.acodec && format.acodec !== 'none'
+  format.vcodec && format.vcodec !== 'none' && format.acodec && format.acodec !== 'none' && !isHlsFormat(format)
 
 /**
  * Direkte HTTP(S)-Datei oder HLS-Stream.
@@ -210,10 +225,6 @@ const isPlainFile = (format) =>
   format.protocol.startsWith('http') ||
   format.protocol === 'm3u8' ||
   format.protocol === 'm3u8_native'
-
-/** Wahr, wenn das Format über HLS geliefert wird (statt als eine einzelne Datei). */
-const isHlsFormat = (format) =>
-  format.protocol === 'm3u8' || format.protocol === 'm3u8_native'
 
 /**
  * H.264 in MP4 zuerst.
@@ -640,10 +651,46 @@ async function extractAniworld(url) {
     const finalUrl = res.url || url
     const html = await res.text()
 
-    const germanTitleMatch = html.match(/<span\s+class=["']episodeGermanTitle["'][^>]*>([^<]+)<\/span>/i)
-    const englishTitleMatch = html.match(/<small\s+class=["']episodeEnglishTitle["'][^>]*>([^<]+)<\/small>/i)
     const seriesTitleMatch = html.match(/<h1[^>]*>.*?<span[^>]*>([^<]+)<\/span>/i) || html.match(/data-series-title=["']([^"']+)["']/i)
     const seriesTitle = (seriesTitleMatch ? seriesTitleMatch[1] : '').trim()
+    const isEpisodeUrl = /\/(?:episode|film)-\d+/i.test(finalUrl)
+
+    if (!isEpisodeUrl) {
+      const origin = new URL(finalUrl).origin
+      const episodeRowRegex = /<tr[^>]*data-episode-id=["']\d+["'][^>]*>([\s\S]*?)<\/tr>/gi
+      const items = []
+      const seenUrls = new Set()
+      let rowMatch
+      while ((rowMatch = episodeRowRegex.exec(html)) !== null) {
+        const rowHtml = rowMatch[1]
+        const linkMatch = rowHtml.match(/href=["']([^"']*\/(?: staffel-\d+\/episode-\d+|filme\/film-\d+)[^"']*)["']/i) ||
+          rowHtml.match(/href=["']([^"']*\/(?:episode|film)-\d+[^"']*)["']/i)
+        if (!linkMatch) continue
+        const epUrl = new URL(linkMatch[1], origin).href
+        if (seenUrls.has(epUrl)) continue
+        seenUrls.add(epUrl)
+        const sMatch = epUrl.match(/staffel-(\d+)/i)
+        const eMatch = epUrl.match(/(?:episode|film)-(\d+)/i)
+        const sNum = sMatch ? Number(sMatch[1]) : 1
+        const eNum = eMatch ? Number(eMatch[1]) : items.length + 1
+        const deMatch = rowHtml.match(/<strong>([^<]+)<\/strong>/i)
+        const enMatch = rowHtml.match(/<span>([^<]+)<\/span>/i)
+        const epName = (deMatch?.[1] || enMatch?.[1] || '').trim()
+        const label = `${seriesTitle ? `${seriesTitle} - ` : ''}S${String(sNum).padStart(2, '0')}E${String(eNum).padStart(2, '0')}${epName ? ` - ${epName}` : ''}`
+        items.push({ title: label, url: epUrl })
+      }
+      if (items.length > 0) {
+        return {
+          isPlaylist: true,
+          title: seriesTitle || 'AniWorld Serie',
+          seriesTitle: seriesTitle || 'AniWorld',
+          items,
+        }
+      }
+    }
+
+    const germanTitleMatch = html.match(/<span\s+class=["']episodeGermanTitle["'][^>]*>([^<]+)<\/span>/i)
+    const englishTitleMatch = html.match(/<small\s+class=["']episodeEnglishTitle["'][^>]*>([^<]+)<\/small>/i)
     const episodeTitle = (germanTitleMatch ? germanTitleMatch[1] : englishTitleMatch ? englishTitleMatch[1] : '').trim()
 
     const seasonMatch = finalUrl.match(/staffel-(\d+)/i)
@@ -669,10 +716,26 @@ async function extractAniworld(url) {
       }
     }
 
+    function parseAniworldLanguage(pref) {
+      if (!pref || pref === 'auto') return null
+      const s = String(pref).toLowerCase().trim()
+      if (s === '3' || s === 'ger_sub' || s.includes('ger-sub') || s.includes('desub') || s.includes('german_sub') || s.includes('deutsch sub')) return 3
+      if (s === '1' || s === 'ger_dub' || s.includes('ger-dub') || s.includes('dedub') || s.includes('german_dub') || s.includes('deutsch dub') || s === 'de') return 1
+      if (s === '2' || s === 'eng_sub' || s.includes('eng-sub') || s.includes('ensub') || s.includes('english') || s === 'en') return 2
+      return null
+    }
+
     const priority = ['voe', 'filemoon', 'vidmoly', 'streamtape', 'vidoza', 'doodstream']
+    const prefLang = parseAniworldLanguage(options.language || options.preferredLanguage)
+
     hosters.sort((a, b) => {
-      const langRankA = a.langKey === 1 ? 3 : a.langKey === 3 ? 2 : 1
-      const langRankB = b.langKey === 1 ? 3 : b.langKey === 3 ? 2 : 1
+      if (prefLang !== null) {
+        const isPrefA = a.langKey === prefLang ? 1 : 0
+        const isPrefB = b.langKey === prefLang ? 1 : 0
+        if (isPrefA !== isPrefB) return isPrefB - isPrefA
+      }
+      const langRankA = a.langKey === 3 ? 3 : a.langKey === 1 ? 2 : 1
+      const langRankB = b.langKey === 3 ? 3 : b.langKey === 1 ? 2 : 1
       if (langRankA !== langRankB) return langRankB - langRankA
       const prioA = priority.indexOf(a.hosterName) !== -1 ? priority.indexOf(a.hosterName) : 999
       const prioB = priority.indexOf(b.hosterName) !== -1 ? priority.indexOf(b.hosterName) : 999
@@ -687,14 +750,16 @@ async function extractAniworld(url) {
         })
         const location = redirRes.headers.get('location')
         if (location) {
-          const direct = await extractDirectStream(location)
+          const direct = await extractDirectStream(location, options)
           if (direct) {
+            const langLabel = h.langKey === 1 ? 'Ger-Dub' : h.langKey === 3 ? 'Ger-Sub' : h.langKey === 2 ? 'Eng-Sub' : 'Stream'
             return {
-              title: compoundTitle,
+              title: `${compoundTitle} [${langLabel}]`,
               url: direct.url,
               referer: direct.referer,
               isHls: direct.isHls,
               hoster: h.hosterName,
+              language: langLabel,
             }
           }
         }
@@ -707,33 +772,118 @@ async function extractAniworld(url) {
 }
 
 /** Erkennt den Hoster und extrahiert die direkte Stream-Adresse vor dem yt-dlp-Aufruf. */
-async function extractDirectStream(rawUrl) {
-  if (isAniworld(rawUrl)) return extractAniworld(rawUrl)
+async function extractDirectStream(rawUrl, options = {}) {
+  if (isAniworld(rawUrl)) return extractAniworld(rawUrl, options)
   if (isFilemoon(rawUrl)) return extractFileMoon(rawUrl)
   if (isVidmoly(rawUrl)) return extractVidmoly(rawUrl)
   if (isStreamtape(rawUrl)) return extractStreamtape(rawUrl)
   if (isVidoza(rawUrl)) return extractVidoza(rawUrl)
   if (isDood(rawUrl)) return extractDoodStream(rawUrl)
   if (isVoe(rawUrl)) return extractVoe(rawUrl)
-  return extractVoe(rawUrl)
+  return null
+}
+
+function rewriteTunnelPlaylist(text, baseUrl, { referer = null } = {}) {
+  const claim = (raw, nested) => {
+    let absolute
+    try {
+      absolute = new URL(raw.trim(), baseUrl)
+    } catch {
+      return null
+    }
+    if (!/^https?:$/i.test(absolute.protocol)) return null
+    return remember({
+      url: absolute.href,
+      referer,
+      format: { format_id: 'best' },
+      mime: nested ? 'application/vnd.apple.mpegurl' : 'video/mp2t',
+      directFetch: true,
+      isHls: Boolean(nested),
+    })
+  }
+  let nextIsPlaylist = false
+  return text
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim()
+      if (!trimmed) return line
+      if (trimmed.startsWith('#')) {
+        if (/^#EXT-X-STREAM-INF/i.test(trimmed)) nextIsPlaylist = true
+        if (/^#EXT-X-(?:SESSION-)?KEY/i.test(trimmed)) return line
+        const nested = /^#EXT-X-(?:MEDIA|I-FRAME-STREAM-INF)/i.test(trimmed)
+        return line.replace(/URI="([^"]+)"/g, (whole, uri) => {
+          const proxied = claim(uri, nested)
+          return proxied ? `URI="${proxied}"` : whole
+        })
+      }
+      const nested = nextIsPlaylist || /\.m3u8?(?:$|\?)/i.test(trimmed)
+      nextIsPlaylist = false
+      return claim(trimmed, nested) ?? line
+    })
+    .join('\n')
+}
+
+function directSourceResponse(directSource) {
+  const stem = String(directSource.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
+  if (directSource.isHls) {
+    return {
+      status: 'local-processing',
+      type: 'remux',
+      tunnel: [
+        remember({
+          url: directSource.url,
+          referer: directSource.referer,
+          format: { format_id: 'best' },
+          mime: 'application/vnd.apple.mpegurl',
+          directFetch: true,
+          isHls: true,
+        }),
+      ],
+      output: { filename: `${stem}.mp4`, type: 'video/mp4' },
+      isHLS: true,
+    }
+  }
+  return {
+    status: 'tunnel',
+    url: remember({
+      url: directSource.url,
+      referer: directSource.referer,
+      format: { format_id: 'best' },
+      mime: 'video/mp4',
+      directFetch: true,
+    }),
+    filename: `${stem}.mp4`,
+  }
 }
 
 async function resolve(body) {
   const target = String(body.url ?? '').trim()
   if (!target) return { status: 'error', error: { code: 'error.api.link.invalid' } }
 
-  // 1. Spezielle Hoster direkt auflösen (VOE, FileMoon, Vidmoly, DoodStream)
+  // 1. Spezielle Hoster direkt auflösen (AniWorld, VOE, FileMoon, Vidmoly, DoodStream)
   let directSource = null
   try {
-    directSource = await extractDirectStream(target)
+    directSource = await extractDirectStream(target, { language: body.language || body.preferredLanguage })
+    if (directSource?.isPlaylist) {
+      return {
+        status: 'playlist',
+        title: directSource.title,
+        author: directSource.seriesTitle,
+        items: directSource.items,
+      }
+    }
   } catch {
     /* Weiter mit normalem yt-dlp */
+  }
+
+  if (directSource && directSource.url) {
+    return directSourceResponse(directSource)
   }
 
   const queryUrl = directSource ? directSource.url : target
   const refererArgs = directSource?.referer ? ['--referer', directSource.referer] : []
 
-  let probe = await run(['-J', '--no-warnings', '--no-playlist', ...sourceArgs(), ...refererArgs, ...cookieArgs, '--', queryUrl])
+  let probe = await run(['-J', '--no-warnings', '--no-playlist', '--no-check-certificates', ...sourceArgs(), ...refererArgs, ...cookieArgs, '--', queryUrl])
   if (probe.missing) return { status: 'error', error: { code: 'error.api.ytdlp.missing' } }
 
   if (probe.code !== 0) return { status: 'error', error: { code: errorCode(probe.stderr) } }
@@ -755,6 +905,16 @@ async function resolve(body) {
   const stem = String(titleCandidate).replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
   const mode = String(body.downloadMode ?? 'auto')
 
+  const makeJob = (format, mime) =>
+    remember({
+      url: isHlsFormat(format) && format.url ? format.url : queryUrl,
+      referer: format.http_headers?.Referer || directSource?.referer,
+      format,
+      mime: isHlsFormat(format) ? 'application/vnd.apple.mpegurl' : mime,
+      directFetch: Boolean(isHlsFormat(format) && format.url),
+      isHls: isHlsFormat(format),
+    })
+
   if (mode === 'audio') {
     const audio = pickAudio(formats)
     if (!audio) return { status: 'error', error: { code: 'error.api.fetch.empty' } }
@@ -762,7 +922,7 @@ async function resolve(body) {
     return {
       status: 'local-processing',
       type: 'audio',
-      tunnel: [remember({ url: queryUrl, referer: directSource?.referer, format: audio, mime: 'audio/mp4' })],
+      tunnel: [makeJob(audio, 'audio/mp4')],
       output: { filename: `${stem}.${wanted === 'best' ? 'm4a' : wanted}`, type: 'audio/mp4' },
       // Kopieren geht nur, wenn kein anderes Format verlangt wurde.
       audio: { format: wanted, copy: wanted === 'best' },
@@ -776,7 +936,7 @@ async function resolve(body) {
     return {
       status: 'local-processing',
       type: 'mute',
-      tunnel: [remember({ url: queryUrl, referer: directSource?.referer, format: video, mime: 'video/mp4' })],
+      tunnel: [makeJob(video, 'video/mp4')],
       output: { filename: `${stem} (${heightOf(video)}p, ohne Ton).mp4`, type: 'video/mp4' },
       isHLS: isHlsFormat(video),
     }
@@ -790,19 +950,36 @@ async function resolve(body) {
   if (progressive && (!video || !audio || heightOf(progressive) >= heightOf(video))) {
     return {
       status: 'tunnel',
-      url: remember({ url: queryUrl, referer: directSource?.referer, format: progressive, mime: 'video/mp4' }),
+      url: makeJob(progressive, 'video/mp4'),
       filename: `${stem} (${heightOf(progressive)}p).${progressive.ext ?? 'mp4'}`,
     }
   }
 
-  if (!video || !audio) return { status: 'error', error: { code: 'error.api.fetch.empty' } }
+  if (!video || !audio) {
+    const only = formats.find((f) => isPlainFile(f)) ?? null
+    if (!only) return { status: 'error', error: { code: 'error.api.fetch.empty' } }
+    if (isHlsFormat(only)) {
+      return {
+        status: 'local-processing',
+        type: 'remux',
+        tunnel: [makeJob(only, 'application/vnd.apple.mpegurl')],
+        output: { filename: `${stem}.mp4`, type: 'video/mp4' },
+        isHLS: true,
+      }
+    }
+    return {
+      status: 'tunnel',
+      url: makeJob(only, 'video/mp4'),
+      filename: `${stem}.${only.ext ?? 'mp4'}`,
+    }
+  }
 
   return {
     status: 'local-processing',
     type: 'merge',
     tunnel: [
-      remember({ url: queryUrl, referer: directSource?.referer, format: video, mime: 'video/mp4' }),
-      remember({ url: queryUrl, referer: directSource?.referer, format: audio, mime: 'audio/mp4' }),
+      makeJob(video, 'video/mp4'),
+      makeJob(audio, 'audio/mp4'),
     ],
     output: { filename: `${stem} (${heightOf(video)}p).mp4`, type: 'video/mp4' },
     isHLS: isHlsFormat(video),
@@ -812,19 +989,99 @@ async function resolve(body) {
 /* -- Durchreichen ---------------------------------------------------------- */
 
 /**
- * Ein Format, von yt-dlp geholt und direkt weitergereicht.
- *
- * Bewusst nicht selbst heruntergeladen: die Kopfzeilen, die Bereichsabrufe und
- * die Wiederholungen, an denen ein eigener Abruf scheitert, sind genau das,
- * was yt-dlp gut kann. Hier fließen nur Bytes.
+ * Ein Format, von yt-dlp geholt oder direkt per HTTP/HLS weitergereicht.
  */
 function tunnel(job, req, res) {
+  const cors = {
+    'access-control-allow-origin': '*',
+    'access-control-expose-headers': 'Estimated-Content-Length, Content-Length, Content-Range, Content-Type',
+  }
+
+  if (job.directFetch) {
+    let cancelled = false
+    res.on('close', () => { cancelled = true })
+
+    const reqHeaders = {
+      ...(job.referer ? { Referer: job.referer } : {}),
+      'User-Agent': DEFAULT_UA,
+    }
+    if (req?.headers?.range && !job.isHls) {
+      reqHeaders.Range = req.headers.range
+    }
+
+    boundedFetch(job.url, { headers: reqHeaders })
+      .then(async (up) => {
+        if (!up.ok && up.status !== 206) {
+          return json(res, 502, { status: 'error', error: { code: 'error.api.fetch.fail' } })
+        }
+        const contentType = up.headers.get('content-type') || job.mime || 'application/octet-stream'
+        const maybePlaylist =
+          Boolean(job.isHls) ||
+          /mpegurl/i.test(contentType) ||
+          (/\.m3u8(?:$|\?)/i.test(job.url) && !/^(?:video|audio)\/(?!.*mpegurl)/i.test(contentType))
+
+        if (maybePlaylist) {
+          const buffer = Buffer.from(await up.arrayBuffer())
+          const head = buffer.subarray(0, 64).toString('utf8').replace(/^\uFEFF/, '').trimStart()
+          if (head.startsWith('#EXTM3U')) {
+            const rewritten = rewriteTunnelPlaylist(buffer.toString('utf8'), up.url || job.url, {
+              referer: job.referer,
+            })
+            const body = Buffer.from(rewritten, 'utf8')
+            res.writeHead(200, {
+              'content-type': 'application/vnd.apple.mpegurl',
+              'content-length': String(body.byteLength),
+              'cache-control': 'no-store',
+              ...cors,
+            })
+            res.end(body)
+            return
+          }
+          res.writeHead(up.status === 206 ? 206 : 200, {
+            'content-type': contentType,
+            'content-length': String(buffer.byteLength),
+            'cache-control': 'no-store',
+            ...cors,
+          })
+          res.end(buffer)
+          return
+        }
+
+        const headers = {
+          'content-type': contentType,
+          'cache-control': 'no-store',
+          'accept-ranges': 'bytes',
+          ...cors,
+        }
+        const cl = up.headers.get('content-length')
+        if (cl) headers['content-length'] = cl
+        const cr = up.headers.get('content-range')
+        if (cr) headers['content-range'] = cr
+
+        res.writeHead(up.status === 206 ? 206 : 200, headers)
+        const reader = up.body?.getReader()
+        if (!reader) return res.end()
+        for (;;) {
+          if (cancelled) { reader.cancel(); break }
+          const { done, value } = await reader.read()
+          if (done) { res.end(); break }
+          if (!res.write(value)) {
+            await new Promise((r) => res.once('drain', r))
+          }
+        }
+      })
+      .catch(() => {
+        if (!res.headersSent) json(res, 502, { status: 'error', error: { code: 'error.api.fetch.fail' } })
+        else res.destroy()
+      })
+    return
+  }
+
   const size = Number(job.format.filesize) || 0
   const headers = {
     'content-type': job.mime,
-    'access-control-allow-origin': '*',
-    'access-control-expose-headers': 'Estimated-Content-Length',
     'cache-control': 'no-store',
+    ...cors,
   }
   // Nur die exakte Größe, nie die geschätzte — eine falsche Längenangabe
   // bricht die Übertragung im Browser.
@@ -836,7 +1093,7 @@ function tunnel(job, req, res) {
     [
       '-f', String(job.format.format_id),
       '-o', '-',
-      '--no-part', '--no-warnings', '--quiet', '--no-playlist',
+      '--no-part', '--no-warnings', '--quiet', '--no-playlist', '--no-check-certificates',
       ...sourceArgs(),
       ...(job.referer ? ['--referer', job.referer] : []),
       ...cookieArgs,

@@ -95,6 +95,8 @@ export interface StudioResult {
   thumbnail: string | null
   streams: StudioStream[]
   isPlaylist?: false
+  availableLanguages?: { key: number; code: string; label: string }[]
+  currentLanguage?: string
 }
 
 export interface StudioPlaylistItem {
@@ -302,7 +304,11 @@ function storedServiceChoices(): Partial<ServiceSettings> {
   }
 }
 
-export async function resolveViaService(url: string, signal?: AbortSignal): Promise<StudioResolveResult> {
+export async function resolveViaService(
+  url: string,
+  signal?: AbortSignal,
+  extra?: { language?: string },
+): Promise<StudioResolveResult> {
   const connected = serviceConnection()
   if (connected.endpoint) {
     try {
@@ -311,6 +317,7 @@ export async function resolveViaService(url: string, signal?: AbortSignal): Prom
         { ...DEFAULT_SERVICE, ...storedServiceChoices(), endpoint: connected.endpoint },
         connected.apiKey,
         signal,
+        extra,
       )
       if (outcome.kind === 'playlist') {
         return {
@@ -362,7 +369,7 @@ export async function resolveViaService(url: string, signal?: AbortSignal): Prom
     response = await fetch('/api/resolve', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, ...(extra?.language ? { language: extra.language } : {}) }),
       signal,
     })
   } catch (cause) {
