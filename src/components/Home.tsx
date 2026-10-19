@@ -1,21 +1,16 @@
 /**
- * The start screen: a way in, and every capability as a tile.
+ * The start screen: a way in, three featured jobs, and every capability as a tile.
  *
- * Redesigned on 23.9.2026 together with the move to rounded forms. What it
- * replaced read as one long ruled column: a headline, a button row, a rule, a
- * second button row for the Windows app, a heading, a search field, and then
- * five group headings each over its own block of tiles — thirty tiles in a
- * scroll of five sections, every one of them weighted the same.
- *
- * Now the page has three parts with three different jobs:
- *
- * 1. The way in. Without a file it is a drop target — the one thing a
- *    visitor has to do before anything else works — beside a sentence saying
- *    what the page is. With a file it names the file and offers the tools that
- *    fit it, so the next step is one tap instead of a search.
- * 2. The tools, filtered by group with a row of pills rather than scrolled
- *    through as five sections. „Alle" keeps the groups, as asked.
- * 3. The Windows app, as its own quiet block at the end.
+ * Flat surfaces, no glow, no shadow — strictly following DESIGN.md („Das ruhige Blatt"):
+ * 1. The way in: two side-by-side blocks on `bg-panel-soft` — the headline with
+ *    the local-privacy badge on the left, and the dashed drop zone with the two
+ *    entry actions on the right. With an active file, it names the file and
+ *    offers the tools that fit it.
+ * 2. The filter bar: group pills on the left, search pill on the right.
+ * 3. The tools: three featured horizontal cards (`Ton schneiden`,
+ *    `Rauschen entfernen`, `Gesprochenes als Text`) with flat vector graphics,
+ *    followed by the 5-column grid of all remaining tools.
+ * 4. The Windows app block at the foot (web only).
  */
 
 import { useMemo, useState } from 'react'
@@ -63,6 +58,194 @@ const iconFor = (action: ToolAction): ReactNode => ACTION_ICONS[action.id] ?? IC
 /** The groups a visitor filters by. „Hereinholen" is the way in above. */
 const FILTERS: ToolGroup[] = ['ton', 'video', 'bild', 'musik']
 
+/** The three featured cards shown in the top row. */
+const FEATURED_IDS = ['audio-cut', 'audio-noise', 'transcript'] as const
+
+/** Priority ordering for the compact 5-column grid directly below the featured row. */
+const PRIORITY_GRID_IDS = [
+  'mic-test',
+  'mix-duck',
+  'convert-audio',
+  'audio-gain',
+  'audio-silence',
+  'audio-clipboard',
+  'audio-filter',
+  'audio-dynamics',
+  'audio-fade',
+  'audio-reverse',
+]
+
+/* -- featured card illustrations (flat, no glow, DESIGN.md compliant) ------ */
+
+const WAVE_BARS_LEFT = [5, 9, 4, 12, 7, 14, 6, 10, 5, 11, 7, 13, 5, 8, 6, 10]
+const WAVE_BARS_SELECTED = [9, 15, 11, 17, 13, 16, 8, 14, 17, 10, 15, 12, 16, 9]
+const WAVE_BARS_RIGHT = [10, 6, 12, 5, 9, 13, 7, 4, 10, 6, 11, 5, 8, 12, 6, 5]
+
+function CutIllustration() {
+  return (
+    <svg viewBox="0 0 64 64" className="h-[64px] w-[64px] shrink-0 text-ink" fill="none" aria-hidden>
+      {/* Flat horizontal waveform behind the blades */}
+      <path
+        d="M4 32h7l2.5-6 3 12 2.5-6h6M39 32h6l2.5-5 3 10 2.5-5h7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="opacity-45"
+      />
+      {/* Flat geometric scissors */}
+      <path
+        d="M22 12L38 36M42 12L26 36"
+        stroke="currentColor"
+        strokeWidth="4.2"
+        strokeLinecap="round"
+      />
+      <circle cx="21" cy="44" r="7.5" stroke="currentColor" strokeWidth="3.8" />
+      <circle cx="43" cy="44" r="7.5" stroke="currentColor" strokeWidth="3.8" />
+      <circle cx="32" cy="27" r="2" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CutWaveformStrip() {
+  return (
+    <div
+      aria-hidden
+      className="mt-[6px] flex h-[28px] w-full items-center justify-between gap-[3px] rounded-nav bg-panel-soft px-[8px] ring-1 ring-inset ring-line"
+    >
+      <div className="flex flex-1 items-center justify-between gap-[2px]">
+        {WAVE_BARS_LEFT.map((h, i) => (
+          <span
+            key={`l-${i}`}
+            className="w-[2px] rounded-pill bg-faint opacity-65"
+            style={{ height: `${h}px` }}
+          />
+        ))}
+      </div>
+      <div className="flex h-[22px] items-center gap-[2.5px] rounded-[4px] bg-panel-strong px-[6px] ring-1 ring-inset ring-ink">
+        {WAVE_BARS_SELECTED.map((h, i) => (
+          <span
+            key={`s-${i}`}
+            className="w-[2px] rounded-pill bg-ink"
+            style={{ height: `${h}px` }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-1 items-center justify-between gap-[2px]">
+        {WAVE_BARS_RIGHT.map((h, i) => (
+          <span
+            key={`r-${i}`}
+            className="w-[2px] rounded-pill bg-faint opacity-65"
+            style={{ height: `${h}px` }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function NoiseIllustration() {
+  return (
+    <svg viewBox="0 0 64 64" className="h-[64px] w-[64px] shrink-0 text-ink" fill="none" aria-hidden>
+      {/* Four-point flat star marks (cleaned signal) */}
+      <path
+        d="M24 12l2.4 6.6L33 21l-6.6 2.4L24 30l-2.4-6.6L15 21l6.6-2.4L24 12z"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M44 10l1.4 3.8L49 15.2l-3.6 1.4L44 20.4l-1.4-3.8L39 15.2l3.6-1.4L44 10z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <circle cx="14" cy="31" r="1.6" fill="currentColor" />
+      <circle cx="48" cy="27" r="1.6" fill="currentColor" />
+      {/* Smooth double wave below */}
+      <path
+        d="M8 42c5.5 0 5.5-7 11-7s5.5 7 11 7 5.5-7 11-7 5.5 7 11 7 5.5-4 8-4"
+        stroke="currentColor"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 50c5 0 5-5 10-5s5 5 10 5 5-5 10-5 5 5 10 5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        className="opacity-55"
+      />
+    </svg>
+  )
+}
+
+function TranscriptIllustration() {
+  return (
+    <svg viewBox="0 0 64 64" className="h-[64px] w-[64px] shrink-0 text-ink" fill="none" aria-hidden>
+      <rect
+        x="6"
+        y="10"
+        width="52"
+        height="44"
+        rx="8"
+        className="fill-panel-soft stroke-rule"
+        strokeWidth="2"
+      />
+      {/* T | cursor and lines */}
+      <path
+        d="M15 21h9M19.5 21v11M28 19v15"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+      <rect x="34" y="21" width="15" height="3" rx="1.5" fill="currentColor" className="opacity-55" />
+      <rect x="34" y="28" width="11" height="3" rx="1.5" fill="currentColor" className="opacity-55" />
+      <rect x="15" y="39" width="22" height="3.2" rx="1.6" fill="currentColor" />
+      <rect x="40" y="39" width="9" height="3.2" rx="1.6" fill="currentColor" className="opacity-45" />
+      <rect x="15" y="45.5" width="13" height="3.2" rx="1.6" fill="currentColor" className="opacity-55" />
+      <rect x="31" y="45.5" width="16" height="3.2" rx="1.6" fill="currentColor" />
+    </svg>
+  )
+}
+
+function FeaturedTool({
+  action,
+  dimmed,
+  onClick,
+}: {
+  action: ToolAction
+  dimmed: boolean
+  onClick: () => void
+}) {
+  const illustration =
+    action.id === 'audio-cut' ? (
+      <CutIllustration />
+    ) : action.id === 'audio-noise' ? (
+      <NoiseIllustration />
+    ) : (
+      <TranscriptIllustration />
+    )
+
+  return (
+    <button
+      id={`v-${action.id}`}
+      type="button"
+      onClick={onClick}
+      className={`press group flex scroll-mt-[120px] items-center gap-[16px] rounded-card bg-panel-mid p-[18px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-strong sm:p-[20px] ${
+        dimmed ? 'opacity-75' : ''
+      }`}
+    >
+      {illustration}
+      <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
+        <span className="text-body font-bold leading-[1.25] text-ink">{action.label}</span>
+        <span className="text-small leading-[1.45] text-prose">{action.hint}</span>
+        {action.id === 'audio-cut' ? <CutWaveformStrip /> : null}
+      </div>
+    </button>
+  )
+}
+
 /**
  * One tool, as a tile.
  *
@@ -88,7 +271,7 @@ function Tool({
       id={`v-${action.id}`}
       type="button"
       onClick={onClick}
-      className="press group flex scroll-mt-[120px] flex-col gap-[6px] rounded-card bg-panel-mid p-[14px] text-left transition-colors duration-[var(--dur-fast)] hover:bg-panel-strong sm:p-[16px]"
+      className="press group flex scroll-mt-[120px] flex-col gap-[8px] rounded-card bg-panel-mid p-[14px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-strong"
     >
       <span className="flex items-center gap-[8px]">
         {/* A tool that needs a kind of file the session does not hold says so
@@ -102,7 +285,7 @@ function Tool({
         >
           <ToolIcon>{iconFor(action)}</ToolIcon>
         </span>
-        <span className="text-small font-semibold leading-[1.3] text-ink">{action.label}</span>
+        <span className="text-small font-semibold leading-[1.25] text-ink">{action.label}</span>
       </span>
       <span className="text-small leading-[1.4] text-prose">{action.hint}</span>
     </button>
@@ -111,18 +294,38 @@ function Tool({
 
 function Grid({ children }: { children: ReactNode }) {
   // More desk means more tiles visible at once, not wider ones.
-  return <div className="grid grid-cols-2 gap-[8px] lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">{children}</div>
+  return <div className="grid grid-cols-2 gap-[10px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{children}</div>
 }
 
 /* -- the way in ------------------------------------------------------------- */
 
-function UploadIcon() {
+function UploadTrayIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" aria-hidden>
+    <svg viewBox="0 0 24 24" className="h-[32px] w-[32px] text-ink" fill="none" aria-hidden>
       <path
-        d="M12 15V4.5M7.5 9L12 4.5 16.5 9M4.5 14.5v3.5a2 2 0 002 2h11a2 2 0 002-2v-3.5"
+        d="M12 15.5V4.5M7.5 9L12 4.5 16.5 9M4.5 15v3a2 2 0 002 2h11a2 2 0 002-2v-3"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function ShieldCheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-[15px] w-[15px] shrink-0 text-ink" fill="none" aria-hidden>
+      <path
+        d="M8 1.8L2.8 4v3.8c0 3.4 2.2 5.5 5.2 6.4 3-.9 5.2-3 5.2-6.4V4L8 1.8z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.7 8.1l1.6 1.6 3.1-3.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -131,26 +334,30 @@ function UploadIcon() {
 }
 
 /**
- * Without a file: the two ways in, stacked.
- *
- * This was a dashed drop target of its own, 250px tall, beside the headline —
- * mostly empty, and the dashes promised a drop zone the whole window already
- * is (dragging a file anywhere shows the overlay). Now it is just the actions:
- * the one that starts work, the other way in, and a line saying dragging
- * works too, on the same block as the headline.
+ * Without a file: the dashed drop target with the two entry buttons inside it.
+ * Flat surface, no glow, following DESIGN.md.
  */
 function WayIn({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
   const setPanel = useSession((state) => state.setPanel)
   return (
-    <div className="flex flex-col gap-[10px] sm:w-[280px] sm:shrink-0">
-      <Button onClick={onOpen} disabled={busy} className="w-full">
-        <UploadIcon />
-        {busy ? 'Wird gelesen…' : 'Datei öffnen'}
-      </Button>
-      <Button variant="quiet" onClick={() => setPanel('downloader')} className="w-full">
-        Von einer Adresse laden
-      </Button>
-      <p className="hidden text-center text-small text-prose sm:block">oder einfach ins Fenster ziehen</p>
+    <div className="flex rounded-card bg-panel-soft p-[8px] ring-1 ring-inset ring-line">
+      <div className="flex flex-1 flex-col items-center justify-center gap-[10px] rounded-[12px] border border-dashed border-rule px-[20px] py-[22px] text-center sm:px-[28px] sm:py-[26px]">
+        <UploadTrayIcon />
+        <p className="display-sm">Datei hierher ziehen</p>
+        <div className="mt-[4px] flex flex-wrap items-center justify-center gap-[8px]">
+          <Button size="sm" onClick={onOpen} disabled={busy} className="px-[16px] py-[9px] font-semibold">
+            {busy ? 'Wird gelesen…' : 'Datei auswählen'}
+          </Button>
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() => setPanel('downloader')}
+            className="px-[16px] py-[9px]"
+          >
+            Von Adresse laden
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -165,7 +372,7 @@ function FileCard({ onOpen }: { onOpen: () => void }) {
   const fits = actionsFor(active.kind).slice(0, 4)
 
   return (
-    <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft p-[16px] sm:p-[20px]">
+    <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft p-[16px] ring-1 ring-inset ring-line sm:p-[20px]">
       <p className="text-small text-prose">Weiter mit</p>
       {fits.length > 0 ? (
         <div className="grid gap-[8px] sm:grid-cols-2">
@@ -212,22 +419,38 @@ export function Home() {
 
   const searching = query.trim().length > 0
 
+  const featuredActions = useMemo(
+    () =>
+      FEATURED_IDS.map((id) => ACTIONS.find((a) => a.id === id)).filter(
+        (a): a is ToolAction => Boolean(a),
+      ),
+    [],
+  )
+
+  const showFeatured = !searching && (filter === 'alle' || filter === 'ton')
+
   // Searching looks through everything, the way in included; filtering by a
-  // group narrows the grid; „Alle" shows the groups in their order.
+  // group narrows the grid; „Alle" shows all tools in one compact grid below
+  // the three featured cards.
   const matches = useMemo(() => {
     if (searching) return searchActions(query)
-    return ACTIONS.filter((action) => action.group !== 'holen' && (filter === 'alle' || action.group === filter))
-  }, [query, searching, filter])
-
-  const grouped = useMemo(() => {
-    const map = new Map<ToolGroup, ToolAction[]>()
-    for (const action of matches) {
-      const list = map.get(action.group)
-      if (list) list.push(action)
-      else map.set(action.group, [action])
+    const featuredSet = new Set<string>(FEATURED_IDS)
+    const pool = ACTIONS.filter(
+      (action) =>
+        action.group !== 'holen' &&
+        (filter === 'alle' || action.group === filter) &&
+        !(showFeatured && featuredSet.has(action.id)),
+    )
+    if (filter === 'alle' || filter === 'ton') {
+      const rank = new Map(PRIORITY_GRID_IDS.map((id, index) => [id, index]))
+      return [...pool].sort((a, b) => {
+        const ra = rank.get(a.id) ?? 999
+        const rb = rank.get(b.id) ?? 999
+        return ra - rb
+      })
     }
-    return FILTERS.filter((group) => map.has(group)).map((group) => ({ group, actions: map.get(group) ?? [] }))
-  }, [matches])
+    return pool
+  }, [query, searching, filter, showFeatured])
 
   // Through `useShallow` and a `useMemo`, not `new Set(...)` inside the
   // selector: a fresh Set on every read is a fresh identity on every read,
@@ -242,7 +465,7 @@ export function Home() {
   )
 
   return (
-    <div className="flex flex-col gap-[40px] sm:gap-[56px]">
+    <div className="flex flex-col gap-[24px] sm:gap-[28px]">
       {picker.input}
 
       {/* -- the way in ----------------------------------------------------- */}
@@ -263,28 +486,26 @@ export function Home() {
           <FileCard onOpen={picker.open} />
         </section>
       ) : (
-        /* One block: what the page is, and how to start. The tint holds both,
-           so the headline is not a sentence floating beside a box. */
-        <section className="bg-panel-soft flex flex-col gap-[24px] rounded-card p-[24px] sm:flex-row sm:items-center sm:justify-between sm:gap-[40px] sm:p-[40px]">
-          <div className="flex max-w-[40em] flex-col gap-[12px]">
-            <h2 className="display-md sm:display-lg">Ton, Video und Bilder bearbeiten</h2>
-            <p className="text-body leading-[1.55] text-prose">
-              Alles rechnet auf diesem Gerät. Ihre Dateien werden nirgendwohin hochgeladen, und die Sitzung
-              bleibt hier, bis Sie sie verwerfen.
-            </p>
+        <section className="grid grid-cols-1 gap-[16px] lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className="flex flex-col justify-between gap-[20px] rounded-card bg-panel-soft p-[24px] ring-1 ring-inset ring-line sm:p-[32px]">
+            <div className="flex max-w-[38em] flex-col gap-[10px]">
+              <h2 className="display-md sm:display-lg">Ton, Video und Bilder bearbeiten</h2>
+              <p className="text-body leading-[1.55] text-prose">
+                Alles rechnet direkt auf deinem Gerät. Deine Dateien bleiben 100% privat.
+              </p>
+            </div>
+            <div className="inline-flex self-start items-center gap-[8px] rounded-pill bg-panel-mid px-[12px] py-[6px] text-small font-medium text-ink ring-1 ring-inset ring-rule">
+              <ShieldCheckIcon />
+              <span>100% lokal &amp; privat</span>
+            </div>
           </div>
           <WayIn onOpen={picker.open} busy={picker.busy} />
         </section>
       )}
 
       {/* -- the tools ------------------------------------------------------ */}
-      <section className="flex flex-col gap-[16px]">
-        <h2 className="display-md">Werkzeuge</h2>
-
-        {/* One bar: narrow by group on the left, search on the right. The
-            search was a thin outlined pill parked at the far edge of the
-            heading row, related to nothing next to it; filled and on the same
-            line as the pills it reads as the second half of one control. */}
+      <section aria-label="Werkzeuge" className="flex flex-col gap-[14px]">
+        {/* One bar: narrow by group on the left, search on the right. */}
         <div className="flex flex-col-reverse gap-[12px] md:flex-row md:items-center md:justify-between">
           <div
             role="radiogroup"
@@ -303,8 +524,10 @@ export function Home() {
                     setQuery('')
                     setFilter(group)
                   }}
-                  className={`press rounded-pill px-[12px] py-[8px] text-small font-medium sm:px-[16px] transition-colors duration-[var(--dur-fast)] ${
-                    on ? 'bg-ink text-on-ink' : 'bg-panel-soft text-ink hover:bg-panel-mid'
+                  className={`press rounded-pill px-[14px] py-[7px] text-small font-medium transition-colors duration-[var(--dur-fast)] ${
+                    on
+                      ? 'bg-ink font-semibold text-on-ink'
+                      : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
                   }`}
                 >
                   {group === 'alle' ? 'Alle' : GROUP_LABEL[group]}
@@ -313,11 +536,11 @@ export function Home() {
             })}
           </div>
 
-          <label className="relative flex w-full items-center md:w-[320px]">
+          <label className="relative flex w-full items-center md:w-[300px]">
             <svg
               viewBox="0 0 16 16"
               aria-hidden
-              className="pointer-events-none absolute left-[16px] h-4 w-4 text-ink"
+              className="pointer-events-none absolute left-[14px] h-4 w-4 text-muted"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.5"
@@ -331,31 +554,33 @@ export function Home() {
               data-own-focus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Werkzeug suchen"
+              placeholder="Werkzeug suchen…"
               aria-label="Werkzeuge durchsuchen, zum Beispiel „mp3 aus video“ oder „tonart“"
-              className="w-full rounded-pill border-0 bg-panel-soft py-[9px] pl-[42px] pr-[16px] text-small text-ink outline-none ring-1 ring-inset ring-transparent transition-colors duration-[var(--dur-fast)] placeholder:text-muted hover:bg-panel-mid focus:bg-raised focus:ring-2 focus:ring-ink [&::-webkit-search-cancel-button]:hidden"
+              className="w-full rounded-pill border-0 bg-panel-soft py-[8px] pl-[38px] pr-[16px] text-small text-ink outline-none ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] placeholder:text-muted hover:bg-panel-mid focus:bg-raised focus:ring-2 focus:ring-ink [&::-webkit-search-cancel-button]:hidden"
             />
           </label>
         </div>
 
-        {searching ? (
-          matches.length > 0 ? (
-            <Grid>{matches.map(tile)}</Grid>
-          ) : (
-            <p className="text-small text-muted">
-              Nichts gefunden für <span className="value text-ink">{query}</span>. Versuchen Sie es mit
-              einem Format („mp3“, „webp“, „gif“) oder mit dem, was herauskommen soll.
-            </p>
-          )
-        ) : filter === 'alle' ? (
-          <div className="flex flex-col gap-[24px]">
-            {grouped.map(({ group, actions }) => (
-              <div key={group} className="flex flex-col gap-[10px]">
-                <h3 className="text-body font-semibold text-ink">{GROUP_LABEL[group]}</h3>
-                <Grid>{actions.map(tile)}</Grid>
-              </div>
+        {/* Featured 3-card row */}
+        {showFeatured ? (
+          <div className="grid grid-cols-1 gap-[12px] lg:grid-cols-3">
+            {featuredActions.map((action) => (
+              <FeaturedTool
+                key={action.id}
+                action={action}
+                dimmed={dimmed(action)}
+                onClick={() => setPanel(action.panel)}
+              />
             ))}
           </div>
+        ) : null}
+
+        {/* Main tool grid */}
+        {searching && matches.length === 0 ? (
+          <p className="text-small text-muted">
+            Nichts gefunden für <span className="value text-ink">{query}</span>. Versuchen Sie es mit
+            einem Format („mp3“, „webp“, „gif“) oder mit dem, was herauskommen soll.
+          </p>
         ) : (
           <Grid>{matches.map(tile)}</Grid>
         )}
@@ -363,7 +588,7 @@ export function Home() {
 
       {/* -- the Windows app ------------------------------------------------ */}
       {IN_DESKTOP_APP ? null : (
-        <section className="flex flex-col items-start gap-[16px] rounded-card bg-panel-soft p-[20px] sm:flex-row sm:items-center sm:justify-between sm:p-[24px]">
+        <section className="flex flex-col items-start gap-[16px] rounded-card bg-panel-soft p-[20px] ring-1 ring-inset ring-line sm:flex-row sm:items-center sm:justify-between sm:p-[24px]">
           <div className="flex flex-col gap-[4px]">
             <h2 className="text-body font-semibold text-ink">Sondra als Windows-App</h2>
             <p className="text-small text-prose">Eigenes Fenster, läuft ohne Browser, rechnet auf Ihrem Rechner.</p>

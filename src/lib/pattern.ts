@@ -15,6 +15,17 @@ import { fromAudioBuffer, type AudioData } from './wav'
 
 export type PlayMode = 'oneshot' | 'gate' | 'loop'
 
+export type SoundKind = 'sample' | 'warm' | 'sub808' | 'epiano' | 'pluck' | 'lead'
+
+export const SOUND_LABELS: Record<SoundKind, string> = {
+  sample: 'Pad-Sample',
+  warm: 'Warm-Filter',
+  sub808: '808 Bass',
+  epiano: 'E-Piano',
+  pluck: 'Synth-Pluck',
+  lead: 'Soft-Lead',
+}
+
 export interface Slice {
   id: string
   start: number
@@ -29,14 +40,24 @@ export interface Slice {
   attackMs: number
   /** Fade-out at the end of each hit, milliseconds. */
   releaseMs: number
+  /** Timbre in the sequencer / piano roll. */
+  sound?: SoundKind
 }
 
-export const SLICE_DEFAULTS = { semitones: 0, gainDb: 0, reverse: false, pan: 0, attackMs: 0, releaseMs: 0 }
+export const SLICE_DEFAULTS = {
+  semitones: 0,
+  gainDb: 0,
+  reverse: false,
+  pan: 0,
+  attackMs: 0,
+  releaseMs: 0,
+  sound: 'sample' as SoundKind,
+}
 
 const dbToGain = (db: number) => (db <= -96 ? 0 : 10 ** (db / 20))
 
 export interface Voice {
-  source: AudioBufferSourceNode
+  source: AudioScheduledSourceNode
   gain: GainNode
   /** Stops the voice with a short fade, at `when` or now. */
   stop: (when?: number) => void
@@ -58,6 +79,123 @@ export function startVoice(
   holdSeconds?: number,
   velocity = 1,
 ): Voice {
+  const sound: SoundKind = slice.sound ?? 'sample'
+  const velGain = Math.max(0.01, Math.min(1, velocity))
+  const level = dbToGain(slice.gainDb) * velGain
+  const attack = slice.attackMs / 1000
+  const release = slice.releaseMs / 1000
+
+  const gain = context.createGain()
+  if (attack > 0) {
+    gain.gain.setValueAtTime(0, when)
+    gain.gain.linearRampToValueAtTime(level, when + attack)
+  } else {
+    gain.gain.setValueAtTime(level, when)
+  }
+
+  let outputNode: AudioNode = gain
+  if (slice.pan !== 0 && 'createStereoPanner' in context) {
+    const panner = context.createStereoPanner()
+    panner.pan.value = Math.max(-1, Math.min(1, slice.pan))
+    gain.connect(panner)
+    outputNode = panner
+  }
+  outputNode.connect(destination)
+
+  // Built-in studio synth voices for melodic Piano-Roll playback & bounce
+  if (sound !== 'sample' && sound !== 'warm') {
+    const baseFreq = (sound === 'sub808' ? 65.41 : 261.63) * 2 ** (slice.semitones / 12)
+    const lasts = holdSeconds !== undefined ? Math.max(0.08, holdSeconds) : sound === 'sub808' ? 0.65 : 0.45
+    const end = when + lasts
+    const fade = Math.max(0.015, Math.min(release || (sound === 'pluck' ? 0.08 : 0.04), lasts * 0.6))
+
+    const osc = context.createOscillator()
+    const extraOscs: OscillatorNode[] = []
+    let voiceInput: AudioNode = gain
+
+    if (sound === 'sub808') {
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(baseFreq * 2.1, when)
+      osc.frequency.exponentialRampToValueAtTime(Math.max(24, baseFreq), when + 0.045)
+      const subFilter = context.createBiquadFilter()
+      subFilter.type = 'lowpass'
+      subFilter.frequency.setValueAtTime(240, when)
+      subFilter.connect(gain)
+      voiceInput = subFilter
+    } else if (sound === 'epiano') {
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(baseFreq, when)
+      const tine = context.createOscillator()
+      const tineGain = context.createGain()
+      tine.type = 'sine'
+      tine.frequency.setValueAtTime(baseFreq * 4, when)
+      tineGain.gain.setValueAtTime(0.22 * velGain, when)
+      tineGain.gain.exponentialRampToValueAtTime(0.001, when + Math.min(0.18, lasts))
+      tine.connect(tineGain)
+      tineGain.connect(gain)
+      tine.start(when)
+      tine.stop(end + 0.02)
+      extraOscs.push(tine)
+      const lp = context.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.frequency.setValueAtTime(2400, when)
+      lp.connect(gain)
+      voiceInput = lp
+    } else if (sound === 'pluck') {
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(baseFreq, when)
+      const lp = context.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.Q.setValueAtTime(2.2, when)
+      lp.frequency.setValueAtTime(Math.min(12000, baseFreq * 9), when)
+      lp.frequency.exponentialRampToValueAtTime(Math.max(180, baseFreq * 1.4), when + Math.min(0.16, lasts))
+      lp.connect(gain)
+      voiceInput = lp
+    } else {
+      // 'lead'
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(baseFreq, when)
+      const detuned = context.createOscillator()
+      const detunedGain = context.createGain()
+      detuned.type = 'triangle'
+      detuned.frequency.setValueAtTime(baseFreq * 1.004, when)
+      detunedGain.gain.setValueAtTime(0.55, when)
+      detuned.connect(detunedGain)
+      const lp = context.createBiquadFilter()
+      lp.type = 'lowpass'
+      lp.frequency.setValueAtTime(Math.min(9000, baseFreq * 5), when)
+      detunedGain.connect(lp)
+      lp.connect(gain)
+      detuned.start(when)
+      detuned.stop(end + 0.02)
+      extraOscs.push(detuned)
+      voiceInput = lp
+    }
+
+    osc.connect(voiceInput)
+    gain.gain.setValueAtTime(level * 0.7, Math.max(when + attack, end - fade))
+    gain.gain.linearRampToValueAtTime(0, end)
+    osc.start(when)
+    osc.stop(end + 0.02)
+
+    return {
+      source: osc,
+      gain,
+      stop: (at) => {
+        const time = Math.max(at ?? context.currentTime, context.currentTime)
+        try {
+          gain.gain.cancelScheduledValues(time)
+          gain.gain.setValueAtTime(gain.gain.value, time)
+          gain.gain.linearRampToValueAtTime(0, time + Math.max(0.008, release))
+          osc.stop(time + Math.max(0.008, release) + 0.01)
+          for (const extra of extraOscs) extra.stop(time + Math.max(0.008, release) + 0.01)
+        } catch {
+          /* already stopped */
+        }
+      },
+    }
+  }
+
   const source = context.createBufferSource()
   const reversed = slice.reverse && buffers.reversed
   source.buffer = reversed ? buffers.reversed : buffers.forward
@@ -67,27 +205,16 @@ export function startVoice(
   const rate = 2 ** (slice.semitones / 12)
   source.playbackRate.value = rate
 
-  const gain = context.createGain()
-  const velGain = Math.max(0.01, Math.min(1, velocity))
-  const level = dbToGain(slice.gainDb) * velGain
-  const attack = slice.attackMs / 1000
-  const release = slice.releaseMs / 1000
-  if (attack > 0) {
-    gain.gain.setValueAtTime(0, when)
-    gain.gain.linearRampToValueAtTime(level, when + attack)
+  if (sound === 'warm') {
+    const warmFilter = context.createBiquadFilter()
+    warmFilter.type = 'lowpass'
+    warmFilter.frequency.setValueAtTime(1750, when)
+    warmFilter.Q.setValueAtTime(0.85, when)
+    source.connect(warmFilter)
+    warmFilter.connect(gain)
   } else {
-    gain.gain.setValueAtTime(level, when)
+    source.connect(gain)
   }
-
-  let node: AudioNode = gain
-  if (slice.pan !== 0 && 'createStereoPanner' in context) {
-    const panner = context.createStereoPanner()
-    panner.pan.value = Math.max(-1, Math.min(1, slice.pan))
-    gain.connect(panner)
-    node = panner
-  }
-  source.connect(gain)
-  node.connect(destination)
 
   // How long the hit sounds in real time, before any release is added.
   const natural = length / rate
@@ -139,6 +266,8 @@ export interface RollNote {
   length: number
   /** Relative to the pad's own pitch. */
   semitone: number
+  /** Relative velocity 0.1 .. 1.0 (default 0.85). */
+  velocity?: number
 }
 
 export interface Pattern {
@@ -190,6 +319,7 @@ export interface Hit {
   step: number
   at: number
   hold: number
+  velocity: number
   /** Which voice this hit replaces when pads choke: the row, or row and note. */
   voice: string
 }
@@ -214,6 +344,7 @@ export function patternHits(slices: Slice[], pattern: Pattern): Hit[] {
           step: note.step,
           at,
           hold: Math.max(0.01, end - at),
+          velocity: note.velocity ?? 0.9,
           voice: `${row}:${note.semitone}`,
         })
       }
@@ -226,7 +357,7 @@ export function patternHits(slices: Slice[], pattern: Pattern): Hit[] {
       // A gate lasts one step; a loop until the row's next hit (wrapping).
       const next = index + 1 < on.length ? stepTime(on[index + 1], pattern.bpm, pattern.swing) : length + stepTime(on[0], pattern.bpm, pattern.swing)
       const hold = slice.mode === 'gate' ? stepSeconds(pattern.bpm) : next - at
-      hits.push({ slice, row, step, at, hold, voice: String(row) })
+      hits.push({ slice, row, step, at, hold, velocity: 1, voice: String(row) })
     })
   })
   return hits.sort((a, b) => a.at - b.at)
@@ -254,7 +385,7 @@ export async function bouncePattern(
     for (const hit of hits) {
       const when = pass * passSeconds + hit.at
       if (choke) lastVoice.get(hit.voice)?.stop(when)
-      const voice = startVoice(context, context.destination, hit.slice, buffers, when, hit.slice.mode === 'oneshot' ? undefined : hit.hold)
+      const voice = startVoice(context, context.destination, hit.slice, buffers, when, hit.slice.mode === 'oneshot' ? undefined : hit.hold, hit.velocity)
       lastVoice.set(hit.voice, voice)
     }
   }
@@ -287,7 +418,7 @@ export function patternToMidi(slices: Slice[], pattern: Pattern, loops = 1): Uin
         midi: rolled ? 60 + hit.slice.semitones - slices[hit.row].semitones : 36 + hit.row,
         startSeconds: start,
         endSeconds: start + (rolled ? hit.hold : stepSeconds(pattern.bpm) * 0.9),
-        velocity: 100,
+        velocity: Math.max(1, Math.min(127, Math.round(hit.velocity * 110))),
       })
     }
   }
