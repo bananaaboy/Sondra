@@ -20,6 +20,7 @@ import {
   type CaptureSource,
   type ScreenRecording,
 } from '../../lib/screenRecord'
+import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { useSession, type Asset } from '../../state/store'
 import { ArrowRight, Button, Card, Field, Notice, Progress, Select, Toggle } from '../ui/primitives'
@@ -109,6 +110,25 @@ export function ScreenPanel() {
     if (result) URL.revokeObjectURL(result.url)
   }, [result])
 
+  useEffect(() => {
+    const onProjectLoaded = () => {
+      const saved = getProjectToolState<{ resultAssetId?: string; fixed?: boolean }>('screen')
+      if (saved?.resultAssetId) {
+        const found = useSession.getState().assets.find((a) => a.id === saved.resultAssetId)
+        if (found) {
+          setResult({
+            asset: found,
+            url: URL.createObjectURL(new Blob([found.bytes as BlobPart], { type: found.mime || 'video/webm' })),
+            fixed: saved.fixed ?? true,
+          })
+        }
+      }
+    }
+    onProjectLoaded()
+    window.addEventListener('sondra:project-loaded', onProjectLoaded)
+    return () => window.removeEventListener('sondra:project-loaded', onProjectLoaded)
+  }, [])
+
   const start = async () => {
     setError(null)
     setStage({ kind: 'starting' })
@@ -144,6 +164,7 @@ export function ScreenPanel() {
       })
       setActiveAsset(asset.id)
       setResult({ asset, url: URL.createObjectURL(new Blob([finished.bytes as BlobPart], { type: 'video/webm' })), fixed: finished.fixed })
+      setProjectToolState('screen', { resultAssetId: asset.id, fixed: finished.fixed })
       log('bildschirm', `${asset.name}: ${formatTimecode(recorded.seconds)}, ${formatBytes(finished.bytes.byteLength)}`)
     } catch (failure) {
       const message = failure instanceof Error ? failure.message : String(failure)

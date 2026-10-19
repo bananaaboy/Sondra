@@ -283,12 +283,20 @@ if (await playerPill.isVisible()) {
   await page.waitForTimeout(2000)
 }
 await saveScreen('06-abspielen.png')
-// Remove item from player playlist so miniBar doesn't float over other tabs
-const removePlayerBtn = page.locator('button[title="Aus der Liste nehmen"]').first()
-if (await removePlayerBtn.isVisible()) {
-  await removePlayerBtn.click().catch(() => {})
-  await page.waitForTimeout(600)
+// Remove items from player playlist so miniBar doesn't float over other tabs
+while ((await page.locator('button[title="Aus der Liste nehmen"]').count()) > 0) {
+  await page.locator('button[title="Aus der Liste nehmen"]').first().click({ force: true }).catch(() => {})
+  await page.waitForTimeout(300)
 }
+await page.evaluate(() => {
+  document.querySelectorAll('video, audio').forEach((el) => {
+    try {
+      el.pause()
+      el.src = ''
+    } catch {}
+  })
+})
+await page.waitForTimeout(400)
 
 // 7. Tab: Bilder
 console.log('7. Bilder...')
@@ -341,6 +349,11 @@ if (await cutBtn.isVisible()) {
   await cutBtn.click().catch(() => {})
   await page.waitForTimeout(1200)
 }
+const beatBtn = page.getByRole('button', { name: /Grundbeat vorschlagen/ }).first()
+if (await beatBtn.isVisible()) {
+  await beatBtn.click().catch(() => {})
+  await page.waitForTimeout(600)
+}
 await saveScreen('11-zerschneiden.png')
 
 // 12. Tab: Tonart
@@ -364,18 +377,108 @@ await saveScreen('12-tonart.png')
 console.log('13. Untertitel...')
 await selectAssetByKeyword('Video')
 await clickTab('subtitles')
+await page.waitForTimeout(800)
+await page.evaluate(() => {
+  const segments = [
+    { start: 0.0, end: 1.8, text: 'Willkommen bei Sondra – dem modernen Medienstudio für Windows.' },
+    { start: 1.8, end: 3.2, text: 'Hier schneiden, mastern und optimieren wir Audio- und Videodateien komplett offline.' },
+    { start: 3.2, end: 4.0, text: 'Die Whisper KI transkribiert Sprache direkt auf deinem Gerät.' },
+  ]
+  if (window.__setProjectToolState) {
+    window.__setProjectToolState('subtitles', {
+      segments,
+      language: 'de',
+      model: 'openai/whisper-tiny',
+    })
+  }
+  window.dispatchEvent(new CustomEvent('sondra:project-loaded'))
+})
 await page.waitForTimeout(1200)
 await saveScreen('13-untertitel.png')
 
 // 14. Tab: Bildschirm
 console.log('14. Bildschirm...')
 await clickTab('screen')
+await page.waitForTimeout(800)
+await page.evaluate(() => {
+  const s = window.__useSession?.getState?.()
+  if (!s) return
+  const videoAsset = s.assets.find((a) => a.kind === 'video' || a.name.includes('Video'))
+  if (videoAsset && window.__setProjectToolState) {
+    videoAsset.name = 'Bildschirm 2026-10-19 13-30.mp4'
+    window.__setProjectToolState('screen', {
+      resultAssetId: videoAsset.id,
+      fixed: true,
+    })
+    window.dispatchEvent(new CustomEvent('sondra:project-loaded'))
+  }
+})
 await page.waitForTimeout(1200)
 await saveScreen('14-bildschirm.png')
 
 // 15. Tab: Mikrofon
 console.log('15. Mikrofon...')
 await clickTab('mic')
+await page.waitForTimeout(800)
+await page.evaluate(() => {
+  const sampleRate = 44100
+  const len = sampleRate * 4
+  const rawData = new Float32Array(len)
+  const procData = new Float32Array(len)
+  for (let i = 0; i < len; i++) {
+    const t = i / sampleRate
+    const envelope = Math.exp(-((t % 0.6) * 4))
+    const s = (Math.sin(2 * Math.PI * 220 * t) + 0.5 * Math.sin(2 * Math.PI * 440 * t)) * envelope * 0.35
+    rawData[i] = s + (Math.random() - 0.5) * 0.05
+    procData[i] = s * 0.95
+  }
+  const rawAudio = { channels: [rawData], sampleRate }
+  const procAudio = { channels: [procData], sampleRate }
+
+  const micResult = {
+    purpose: 'podcast',
+    before: {
+      noiseFloorDb: -48.3,
+      speechDb: -22.1,
+      peakDb: -6.2,
+      clipped: 0,
+      snrDb: 14.2,
+      humHz: null,
+    },
+    after: {
+      noiseFloorDb: -62.1,
+      speechDb: -18.0,
+      peakDb: -1.0,
+      clipped: 0,
+      snrDb: 28.5,
+      humHz: null,
+      lufs: -16.0,
+    },
+    raw: rawAudio,
+    processed: procAudio,
+    steps: [
+      { title: 'Rumpelfilter (80 Hz)', detail: 'Hochpass 80 Hz entfernt tiefes Rumpeln und Trittschall.' },
+      { title: 'Spektrale Rauschunterdrückung', detail: 'Grundrauschen des Raums um 18 dB abgesenkt.' },
+      { title: 'Expander / Noise Gate', detail: 'Sprachpausen um 12 dB gedämpft für absolute Stille im Hintergrund.' },
+      { title: 'Podcast-Kompressor', detail: 'Verdichtung 3:1 gleicht Lautstärkesprünge sanft aus.' },
+      { title: 'Lautheit normalisiert', detail: 'Auf Spotify / Apple Podcasts Standard (−16,0 LUFS) gepegelt.' },
+    ],
+    advice: [
+      { tone: 'mint', title: 'Optimaler Pegel', text: 'Der Eingangspegel liegt im perfekten Bereich für Sprachaufnahmen.' },
+    ],
+    apply: (src) => src,
+  }
+
+  if (window.__setProjectToolState) {
+    window.__setProjectToolState('mic', {
+      result: micResult,
+      purpose: 'podcast',
+      probe: rawAudio,
+    })
+    window.dispatchEvent(new CustomEvent('sondra:project-loaded'))
+  }
+  window.scrollTo({ top: 350, behavior: 'instant' })
+})
 await page.waitForTimeout(1200)
 await saveScreen('15-mikrofon.png')
 
