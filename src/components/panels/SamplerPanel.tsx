@@ -40,7 +40,7 @@ import { withAlpha, type ResolvedTheme } from '../../lib/theme'
 import { encodeWav, mixToMono, type AudioData } from '../../lib/wav'
 import { detectTransients } from '../../lib/audio/transients'
 import { renderSliceInWorker } from '../../lib/workerClient'
-import { SLICE_DEFAULTS, startVoice, type PlayMode, type Slice, type Voice } from '../../lib/pattern'
+import { SLICE_DEFAULTS, SOUND_LABELS, startVoice, type PlayMode, type Slice, type SoundKind, type Voice } from '../../lib/pattern'
 import { StepSequencer } from './StepSequencer'
 import { createZip } from '../../lib/zip'
 import { createCueSheet, createAudacityLabels } from '../../lib/cueExport'
@@ -133,6 +133,13 @@ const METHODS: { value: ChopMethod; label: string; title: string }[] = [
   { value: 'length', label: 'Länge', title: 'In Teile fester Länge' },
 ]
 
+type CutMode = 'manual' | ChopMethod
+
+const CUT_MODES: { value: CutMode; label: string; title: string }[] = [
+  { value: 'manual', label: 'Selber schneiden', title: 'Frei von Hand in der Wellenform ziehen oder am Zeiger teilen' },
+  ...METHODS,
+]
+
 /** The planned cuts, drawn on the stage before anything is cut. */
 const isPlanMark = (id: string) => id.startsWith('plan-')
 
@@ -194,13 +201,25 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
   const [tempo, setTempo] = useState<TempoEstimate | null>(null)
   const [bpm, setBpm] = useState(120)
   const [zoom, setZoom] = useState(0)
+  /** Starts on 'manual' ("Selber schneiden") first; presets are opt-in. */
+  const [cutMode, setCutMode] = useState<CutMode>('manual')
   /** How to cut, for every method at once — switching method keeps the rest. */
   const [chop, setChopState] = useState<ChopSettings>(DEFAULT_CHOP)
-  /** Whether the planned cuts are drawn: from the first change until they are made. */
-  const [planShown, setPlanShown] = useState(true)
+  /** Whether the planned cuts are drawn: only when a preset is selected or adjusted. */
+  const [planShown, setPlanShown] = useState(false)
   const setChop = (patch: Partial<ChopSettings>) => {
     setChopState((value) => ({ ...value, ...patch }))
+    if (patch.method) setCutMode(patch.method)
     setPlanShown(true)
+  }
+  const selectCutMode = (mode: CutMode) => {
+    setCutMode(mode)
+    if (mode === 'manual') {
+      setPlanShown(false)
+    } else {
+      setChopState((value) => ({ ...value, method: mode }))
+      setPlanShown(true)
+    }
   }
   /** Re-reads the regions into the pads; set by the wavesurfer effect. */
   const syncRef = useRef<(() => void) | null>(null)
@@ -918,6 +937,95 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
   /* -- per-pad cutting ---------------------------------------------------------- */
   const regionOf = (id: string) => regionsRef.current?.getRegions().find((region) => region.id === id)
 
+  /** Cuts at a given time (in seconds): splits the containing pad or creates two pads from the whole file. */
+  const cutAtTime = (rawTime: number) => {
+    const regions = regionsRef.current
+    if (!regions || !audio || duration <= 0.04) return
+    const clamped = clamp(rawTime, 0.02, duration - 0.02)
+    const at = chop.snap ? snapToZeroCrossing(audio, clamped) : clamped
+    if (at <= 0.015 || at >= duration - 0.015) return
+
+    const existing = slices.find((s) => at > s.start + 0.015 && at < s.end - 0.015)
+    cuttingRef.current = true
+    if (existing) {
+      const reg = regionOf(existing.id)
+      if (reg) {
+        reg.setOptions({ start: existing.start, end: at })
+        const added = regions.addRegion({ start: at, end: existing.end, color: SLICE_COLOR, drag: true, resize: true })
+        cuttingRef.current = false
+        syncRef.current?.()
+        const { id: _id, start: _s, end: _e, ...settings } = existing
+        setSlices((current) => current.map((entry) => (entry.id === added.id ? { ...entry, ...settings } : entry)))
+        setActiveSlice(added.id)
+        log('sampler', `Schnitt bei ${formatTimecode(at)} gesetzt`)
+        return
+      }
+    }
+
+    if (slices.length === 0) {
+      regions.addRegion({ start: 0, end: at, color: SLICE_COLOR, drag: true, resize: true })
+      const second = regions.addRegion({ start: at, end: duration, color: SLICE_COLOR, drag: true, resize: true })
+      cuttingRef.current = false
+      syncRef.current?.()
+      setActiveSlice(second.id)
+      log('sampler', `Manueller Schnitt bei ${formatTimecode(at)} (2 Pads angelegt)`)
+      return
+    }
+
+    const lastEnd = slices[slices.length - 1]?.end ?? 0
+    if (at > lastEnd + 0.015) {
+      const added = regions.addRegion({ start: lastEnd, end: at, color: SLICE_COLOR, drag: true, resize: true })
+      cuttingRef.current = false
+      syncRef.current?.()
+      setActiveSlice(added.id)
+      log('sampler', `Pad bis ${formatTimecode(at)} angelegt`)
+      return
+    }
+    cuttingRef.current = false
+  }
+
+  const cutAtPlayhead = () => {
+    const currentPlayhead = waveRef.current?.getCurrentTime() ?? 0
+    const target = currentPlayhead > 0.02 && currentPlayhead < duration - 0.02 ? currentPlayhead : duration / 2
+    cutAtTime(target)
+  }
+
+  const createFullSamplePad = () => {
+    const regions = regionsRef.current
+    if (!regions || !audio || duration <= 0.02) return
+    cuttingRef.current = true
+    for (const region of [...regions.getRegions()]) {
+      if (!isPlanMark(region.id) && region.id !== pendingRef.current) region.remove()
+    }
+    const full = regions.addRegion({ start: 0, end: duration, color: SLICE_COLOR, drag: true, resize: true })
+    cuttingRef.current = false
+    syncRef.current?.()
+    setActiveSlice(full.id)
+    log('sampler', 'Ganze Datei als Pad 1 angelegt')
+  }
+
+  const ensureSlices = (): Slice[] => {
+    if (slices.length > 0) return slices
+    const regions = regionsRef.current
+    if (!regions || !audio) return []
+    const result = planChop(audio, planSettings, { range: null, tempoOffsetSeconds: tempoOffset })
+    const targetSlices = result.slices.length > 0 ? result.slices : [{ start: 0, end: duration }]
+    cuttingRef.current = true
+    for (const s of targetSlices) {
+      regions.addRegion({ start: s.start, end: s.end, color: SLICE_COLOR, drag: true, resize: true })
+    }
+    cuttingRef.current = false
+    syncRef.current?.()
+    setPlanShown(false)
+    const built: Slice[] = regions
+      .getRegions()
+      .filter((r) => r.id !== pendingRef.current && !isPlanMark(r.id))
+      .map((r) => ({ ...SLICE_DEFAULTS, id: r.id, start: r.start, end: r.end, mode: defaultMode }))
+      .sort((a, b) => a.start - b.start)
+    if (built[0]) setActiveSlice(built[0].id)
+    return built
+  }
+
   /** Two pads where there was one; the new half keeps the pad's settings. */
   const splitPad = (slice: Slice, index: number) => {
     const regions = regionsRef.current
@@ -1023,6 +1131,29 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
             >
               Auf alle übertragen
             </button>
+          </div>
+          <div className="flex flex-col gap-[6px]">
+            <span className="text-small text-prose">Klang / Instrument</span>
+            <div className="grid grid-cols-3 gap-[4px]">
+              {(Object.keys(SOUND_LABELS) as SoundKind[]).map((soundKey) => {
+                const activeSound = (selected.sound ?? 'sample') === soundKey
+                return (
+                  <button
+                    key={soundKey}
+                    type="button"
+                    aria-pressed={activeSound}
+                    onClick={() => updateSlice(selected.id, { sound: soundKey })}
+                    className={`press rounded-nav px-[6px] py-[6px] text-micro font-semibold transition-colors ${
+                      activeSound
+                        ? 'bg-ink text-on-ink'
+                        : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
+                    }`}
+                  >
+                    {SOUND_LABELS[soundKey]}
+                  </button>
+                )
+              })}
+            </div>
           </div>
           <Slider
             label="Tonhöhe"
@@ -1245,17 +1376,53 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
     )
   })()
 
-  /* -- how to cut: the options of the chosen method ------------------------------ */
-  const keepsAttack = chop.method === 'hits' || chop.method === 'auto' || chop.method === 'silence'
+  /* -- how to cut: 2-column parameter grid matching the reference mockup ---------- */
   const methodOptions = (() => {
-    switch (chop.method) {
+    switch (cutMode) {
+      case 'manual':
       case 'hits':
         return (
           <>
-            <Slider label="Empfindlichkeit" display={chop.sensitivity.toFixed(1).replace('.', ',')} min={0.5} max={3} step={0.1} value={chop.sensitivity}
-              onChange={(event) => setChop({ sensitivity: Number(event.target.value) })} title="Höher: nur deutliche Schläge" />
-            <Slider label="Mindestabstand" display={`${chop.minGapMs} ms`} min={20} max={1000} step={10} value={chop.minGapMs}
-              onChange={(event) => setChop({ minGapMs: Number(event.target.value) })} title="Kürzester Abstand zwischen zwei Schnitten" />
+            <Slider
+              label="Empfindlichkeit"
+              display={chop.sensitivity.toFixed(1).replace('.', ',')}
+              min={0.5}
+              max={3}
+              step={0.1}
+              value={chop.sensitivity}
+              onChange={(event) => setChop({ sensitivity: Number(event.target.value) })}
+              title="Höher: nur deutliche Schläge"
+            />
+            <Slider
+              label="Mindestabstand"
+              display={`${chop.minGapMs} ms`}
+              min={20}
+              max={1000}
+              step={10}
+              value={chop.minGapMs}
+              onChange={(event) => setChop({ minGapMs: Number(event.target.value) })}
+              title="Kürzester Abstand zwischen zwei Schnitten"
+            />
+            <Slider
+              label="Vorlauf"
+              display={`${chop.preRollMs} ms`}
+              min={0}
+              max={40}
+              step={1}
+              value={chop.preRollMs}
+              onChange={(event) => setChop({ preRollMs: Number(event.target.value) })}
+              title="Jeder Schnitt so viel früher — der Anlauf eines Schlags bleibt auf seinem Pad"
+            />
+            <Slider
+              label="Mindestlänge"
+              display={`${chop.minLengthMs} ms`}
+              min={0}
+              max={1000}
+              step={10}
+              value={chop.minLengthMs}
+              onChange={(event) => setChop({ minLengthMs: Number(event.target.value) })}
+              title="Kürzere Stücke gehen im vorigen auf"
+            />
           </>
         )
       case 'auto':
@@ -1264,8 +1431,33 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
             <OptionGroup label="Anzahl">
               <ChoiceRow value={chop.count} onChange={(count) => setChop({ count })} options={[4, 8, 12, 16, 24, 32].map((value) => ({ value, label: String(value) }))} />
             </OptionGroup>
-            <Slider label="Empfindlichkeit" display={chop.sensitivity.toFixed(1).replace('.', ',')} min={0.5} max={3} step={0.1} value={chop.sensitivity}
-              onChange={(event) => setChop({ sensitivity: Number(event.target.value) })} />
+            <Slider
+              label="Empfindlichkeit"
+              display={chop.sensitivity.toFixed(1).replace('.', ',')}
+              min={0.5}
+              max={3}
+              step={0.1}
+              value={chop.sensitivity}
+              onChange={(event) => setChop({ sensitivity: Number(event.target.value) })}
+            />
+            <Slider
+              label="Vorlauf"
+              display={`${chop.preRollMs} ms`}
+              min={0}
+              max={40}
+              step={1}
+              value={chop.preRollMs}
+              onChange={(event) => setChop({ preRollMs: Number(event.target.value) })}
+            />
+            <Slider
+              label="Mindestlänge"
+              display={`${chop.minLengthMs} ms`}
+              min={0}
+              max={1000}
+              step={10}
+              value={chop.minLengthMs}
+              onChange={(event) => setChop({ minLengthMs: Number(event.target.value) })}
+            />
           </>
         )
       case 'grid':
@@ -1273,56 +1465,169 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           <>
             <OptionGroup label={`Tempo${confident ? '' : ' — nachhören'}`}>
               <div className="flex items-center gap-[2px] self-start rounded-nav bg-panel-soft p-[2px] ring-1 ring-inset ring-line">
-                <button type="button" onClick={() => { setBpm((value) => Math.max(30, Math.round(value / 2))); setPlanShown(true) }}
-                  className="press rounded-[7px] px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid" title="Halbes Tempo">÷2</button>
-                <input type="number" value={bpm} min={30} max={300} step={0.1} aria-label="Tempo in BPM"
-                  onChange={(event) => { setBpm(Number(event.target.value) || 120); setPlanShown(true) }}
-                  className="value w-[6ch] min-w-0 bg-transparent text-center text-small text-ink outline-none" />
-                <button type="button" onClick={() => { setBpm((value) => Math.min(300, Math.round(value * 2))); setPlanShown(true) }}
-                  className="press rounded-[7px] px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid" title="Doppeltes Tempo">×2</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBpm((value) => Math.max(30, Math.round(value / 2)))
+                    setPlanShown(true)
+                  }}
+                  className="press rounded-[7px] px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid"
+                  title="Halbes Tempo"
+                >
+                  ÷2
+                </button>
+                <input
+                  type="number"
+                  value={bpm}
+                  min={30}
+                  max={300}
+                  step={0.1}
+                  aria-label="Tempo in BPM"
+                  onChange={(event) => {
+                    setBpm(Number(event.target.value) || 120)
+                    setPlanShown(true)
+                  }}
+                  className="value w-[6ch] min-w-0 bg-transparent text-center text-small text-ink outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBpm((value) => Math.min(300, Math.round(value * 2)))
+                    setPlanShown(true)
+                  }}
+                  className="press rounded-[7px] px-[8px] py-[4px] text-small text-ink hover:bg-panel-mid"
+                  title="Doppeltes Tempo"
+                >
+                  ×2
+                </button>
                 <span className="px-[6px] text-small text-prose">BPM</span>
               </div>
             </OptionGroup>
-            <OptionGroup label="Raster" wide>
+            <OptionGroup label="Raster">
               <ChoiceRow value={chop.beatsPerSlice} onChange={(beatsPerSlice) => setChop({ beatsPerSlice })} options={GRID_DIVISIONS} />
             </OptionGroup>
-            <Slider label="Verschieben" display={`${chop.gridOffsetMs > 0 ? '+' : ''}${chop.gridOffsetMs} ms`} min={-250} max={250} step={1} value={chop.gridOffsetMs}
-              onChange={(event) => setChop({ gridOffsetMs: Number(event.target.value) })} title="Das ganze Raster früher oder später" />
+            <Slider
+              label="Verschieben"
+              display={`${chop.gridOffsetMs > 0 ? '+' : ''}${chop.gridOffsetMs} ms`}
+              min={-250}
+              max={250}
+              step={1}
+              value={chop.gridOffsetMs}
+              onChange={(event) => setChop({ gridOffsetMs: Number(event.target.value) })}
+              title="Das ganze Raster früher oder später"
+            />
+            <Slider
+              label="Mindestlänge"
+              display={`${chop.minLengthMs} ms`}
+              min={0}
+              max={1000}
+              step={10}
+              value={chop.minLengthMs}
+              onChange={(event) => setChop({ minLengthMs: Number(event.target.value) })}
+            />
           </>
         )
       case 'silence':
         return (
           <>
             <OptionGroup label="Was als Pause gilt">
-              <ChoiceRow value={chop.silenceDb} onChange={(silenceDb) => setChop({ silenceDb })}
-                options={[-35, -45, -55, -65].map((value) => ({ value, label: `${value.toString().replace('-', '−')} dB` }))} />
+              <ChoiceRow
+                value={chop.silenceDb}
+                onChange={(silenceDb) => setChop({ silenceDb })}
+                options={[-35, -45, -55, -65].map((value) => ({ value, label: `${value.toString().replace('-', '−')} dB` }))}
+              />
             </OptionGroup>
-            <Slider label="Pause ab" display={`${chop.silenceMs} ms`} min={30} max={1500} step={10} value={chop.silenceMs}
-              onChange={(event) => setChop({ silenceMs: Number(event.target.value) })} />
-            <div className="flex items-end">
-              <Toggle label="Pausen weglassen" hint="Jedes Pad beginnt mit seinem Klang und endet mit ihm." checked={chop.dropSilence}
-                onChange={(dropSilence) => setChop({ dropSilence })} />
-            </div>
+            <Slider
+              label="Pause ab"
+              display={`${chop.silenceMs} ms`}
+              min={30}
+              max={1500}
+              step={10}
+              value={chop.silenceMs}
+              onChange={(event) => setChop({ silenceMs: Number(event.target.value) })}
+            />
+            <Slider
+              label="Vorlauf"
+              display={`${chop.preRollMs} ms`}
+              min={0}
+              max={40}
+              step={1}
+              value={chop.preRollMs}
+              onChange={(event) => setChop({ preRollMs: Number(event.target.value) })}
+            />
+            <Slider
+              label="Mindestlänge"
+              display={`${chop.minLengthMs} ms`}
+              min={0}
+              max={1000}
+              step={10}
+              value={chop.minLengthMs}
+              onChange={(event) => setChop({ minLengthMs: Number(event.target.value) })}
+            />
           </>
         )
       case 'even':
         return (
-          <OptionGroup label="Teile" wide>
-            <ChoiceRow value={chop.count} onChange={(count) => setChop({ count })} options={[2, 3, 4, 6, 8, 12, 16, 24, 32, 64].map((value) => ({ value, label: String(value) }))} />
-          </OptionGroup>
+          <>
+            <OptionGroup label="Teile">
+              <ChoiceRow
+                value={chop.count}
+                onChange={(count) => setChop({ count })}
+                options={[2, 3, 4, 6, 8, 12, 16, 24, 32, 64].map((value) => ({ value, label: String(value) }))}
+              />
+            </OptionGroup>
+            <Slider
+              label="Mindestlänge"
+              display={`${chop.minLengthMs} ms`}
+              min={0}
+              max={1000}
+              step={10}
+              value={chop.minLengthMs}
+              onChange={(event) => setChop({ minLengthMs: Number(event.target.value) })}
+            />
+          </>
         )
       case 'length':
         return (
           <>
-            <Slider label="Länge je Teil" display={chop.lengthMs >= 1000 ? `${(chop.lengthMs / 1000).toFixed(2).replace('.', ',')} s` : `${chop.lengthMs} ms`}
-              min={50} max={4000} step={10} value={chop.lengthMs} onChange={(event) => setChop({ lengthMs: Number(event.target.value) })} />
+            <Slider
+              label="Länge je Teil"
+              display={chop.lengthMs >= 1000 ? `${(chop.lengthMs / 1000).toFixed(2).replace('.', ',')} s` : `${chop.lengthMs} ms`}
+              min={50}
+              max={4000}
+              step={10}
+              value={chop.lengthMs}
+              onChange={(event) => setChop({ lengthMs: Number(event.target.value) })}
+            />
             <OptionGroup label="Oder im Takt">
               <ChoiceRow
                 value={-1}
                 onChange={(beats) => setChop({ lengthMs: Math.round((60000 / bpm) * beats) })}
-                options={[0.25, 0.5, 1, 4].map((beats) => ({ value: beats, label: beats === 4 ? '1 Takt' : `1/${4 / beats}`, title: `${Math.round((60000 / bpm) * beats)} ms bei ${Math.round(bpm)} BPM` }))}
+                options={[0.25, 0.5, 1, 4].map((beats) => ({
+                  value: beats,
+                  label: beats === 4 ? '1 Takt' : `1/${4 / beats}`,
+                  title: `${Math.round((60000 / bpm) * beats)} ms bei ${Math.round(bpm)} BPM`,
+                }))}
               />
             </OptionGroup>
+            <Slider
+              label="Vorlauf"
+              display={`${chop.preRollMs} ms`}
+              min={0}
+              max={40}
+              step={1}
+              value={chop.preRollMs}
+              onChange={(event) => setChop({ preRollMs: Number(event.target.value) })}
+            />
+            <Slider
+              label="Mindestlänge"
+              display={`${chop.minLengthMs} ms`}
+              min={0}
+              max={1000}
+              step={10}
+              value={chop.minLengthMs}
+              onChange={(event) => setChop({ minLengthMs: Number(event.target.value) })}
+            />
           </>
         )
     }
@@ -1331,11 +1636,11 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
   const planCount = plan?.slices.length ?? 0
 
   return (
-    <div className="flex flex-col gap-[16px]">
-      {/* ---- the slicer: how to cut, the stage, the transport -------------- */}
-      <section className="flex flex-col overflow-hidden bg-raised ring-1 ring-inset ring-line" aria-label="Schneiden">
-        <header className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px] border-b border-line px-[16px] py-[8px]">
-          <div className="min-w-0 flex-1">
+    <div className="flex flex-col gap-[12px]">
+      {/* ---- Top Frame: The Slicer, 2x2 Parameters, Stage, Transport -------- */}
+      <section className="flex flex-col overflow-hidden rounded-card bg-raised ring-1 ring-inset ring-line" aria-label="Schneiden">
+        <header className="flex flex-wrap items-center gap-x-[16px] gap-y-[6px] border-b border-line px-[16px] py-[8px]">
+          <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-[12px] gap-y-[2px]">
             <p className="truncate text-small font-semibold text-ink">{asset.name}</p>
             <p className="value truncate text-small text-muted">
               {audio
@@ -1353,45 +1658,72 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           ) : null}
         </header>
 
-        {/* How to cut: the method, its own options, and what every method shares. */}
+        {/* Mode Selector Bar & 2-Column Parameter Grid */}
         <div className="flex flex-col border-b border-line">
-          <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px] px-[16px] pt-[12px]">
-            <ChoiceRow value={chop.method} onChange={(method) => setChop({ method })} options={METHODS} />
-            <div className="ml-auto flex items-center gap-[12px]">
-              <Button size="sm" variant="quiet" onClick={autoSliceTransients} disabled={!audio} title="Erkennt bis zu 16 Transienten und belegt die 16 Pads">
-                Auto-Slice (Transienten)
-              </Button>
+          <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] px-[16px] pt-[12px]">
+            <ChoiceRow value={cutMode} onChange={selectCutMode} options={CUT_MODES} />
+            <div className="ml-auto flex flex-wrap items-center gap-[10px]">
+              {cutMode === 'manual' ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    onClick={cutAtPlayhead}
+                    disabled={!audio}
+                    title="Teilt das Audio direkt an der aktuellen Abspielposition"
+                  >
+                    Am Zeiger teilen
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    onClick={createFullSamplePad}
+                    disabled={!audio}
+                    title="Legt die gesamte Datei als Pad 1 an"
+                  >
+                    Als 1 Pad
+                  </Button>
+                </>
+              ) : null}
               {audio && plan ? (
                 <span className="value text-small text-prose" aria-live="polite">
-                  ergibt {planCount}
-                  {plan.capped ? '+' : ''} {planCount === 1 ? 'Pad' : 'Pads'}
+                  ergibt{' '}
+                  <strong className="font-semibold text-ink">
+                    {planCount}
+                    {plan.capped ? '+' : ''} {planCount === 1 ? 'Pad' : 'Pads'}
+                  </strong>
                 </span>
               ) : null}
-              <Button size="sm" onClick={() => applyPlan()} disabled={!audio || planCount === 0}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (pending) confirmPending()
+                  else applyPlan()
+                }}
+                disabled={!audio || (planCount === 0 && !pending)}
+              >
                 Schneiden
                 <ArrowRight />
               </Button>
             </div>
           </div>
-          <div className="grid gap-x-[24px] gap-y-[12px] px-[16px] py-[12px] sm:grid-cols-2 lg:grid-cols-4">{methodOptions}</div>
-          <div className="grid gap-x-[24px] gap-y-[12px] border-t border-line bg-panel-soft px-[16px] py-[12px] sm:grid-cols-2 lg:grid-cols-4">
-            {keepsAttack ? (
-              <Slider label="Vorlauf" display={`${chop.preRollMs} ms`} min={0} max={40} step={1} value={chop.preRollMs}
-                onChange={(event) => setChop({ preRollMs: Number(event.target.value) })} title="Jeder Schnitt so viel früher — der Anlauf eines Schlags bleibt auf seinem Pad" />
-            ) : null}
-            <Slider label="Mindestlänge" display={`${chop.minLengthMs} ms`} min={0} max={1000} step={10} value={chop.minLengthMs}
-              onChange={(event) => setChop({ minLengthMs: Number(event.target.value) })} title="Kürzere Stücke gehen im vorigen auf" />
-            <div className="flex items-end">
-              <Toggle label="An Nulldurchgänge rasten" hint="Keine Knackser an den Kanten." checked={chop.snap} onChange={(snap) => setChop({ snap })} />
-            </div>
-            <p className="self-end text-small leading-[1.45] text-prose">
-              Gestrichelt auf der Welle: wo geschnitten wird. Einen Bereich ziehen schneidet nur darin.
-            </p>
-          </div>
+
+          {/* 2-Column × 2-Row Parameter Grid matching the reference mockup */}
+          <div className="grid gap-x-[32px] gap-y-[12px] px-[16px] py-[12px] md:grid-cols-2">{methodOptions}</div>
         </div>
 
         {/* The stage: the file, its cuts, and the range being asked about. */}
-        <div className="relative bg-stage">
+        <div
+          className="relative bg-stage"
+          onDoubleClick={(event) => {
+            if (!audio || !containerRef.current) return
+            const rect = containerRef.current.getBoundingClientRect()
+            if (rect.width <= 0) return
+            const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1)
+            cutAtTime(ratio * duration)
+          }}
+          title="Ziehen markiert einen Bereich · Doppelklick setzt direkt einen Schnitt"
+        >
           <div className="sondra-wave sondra-stage-wave overflow-x-auto px-[0] pb-[10px]">
             <div ref={containerRef} />
           </div>
@@ -1400,14 +1732,23 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
           ) : null}
           {pending ? (
             /* A dragged range is a question, not a pad yet — or the place to cut. */
-            <div className="rise absolute left-[12px] top-[30px] z-10 flex flex-wrap items-center gap-[6px] bg-stage/90 p-[6px] pl-[12px] ring-1 ring-inset ring-stage-line backdrop-blur-[6px]">
+            <div className="rise absolute left-[12px] top-[30px] z-10 flex flex-wrap items-center gap-[6px] bg-stage/95 p-[6px] pl-[12px] ring-1 ring-inset ring-stage-line">
               <span className="value mr-[4px] text-small text-stage-ink">
                 {formatTimecode(pending.start)} – {formatTimecode(pending.end)} · {(pending.end - pending.start).toFixed(2).replace('.', ',')} s
               </span>
-              <button type="button" onClick={playPending} className="press rounded-nav px-[10px] py-[5px] text-small text-stage-ink ring-1 ring-inset ring-stage-line hover:bg-stage-line">
+              <button
+                type="button"
+                onClick={playPending}
+                className="press rounded-nav px-[10px] py-[5px] text-small text-stage-ink ring-1 ring-inset ring-stage-line hover:bg-stage-line"
+              >
                 Hören
               </button>
-              <button type="button" onClick={confirmPending} className="press rounded-nav bg-stage-ink px-[10px] py-[5px] text-small font-semibold text-stage hover:bg-stage-ink/85" title="Eingabetaste">
+              <button
+                type="button"
+                onClick={confirmPending}
+                className="press rounded-nav bg-stage-ink px-[10px] py-[5px] text-small font-semibold text-stage hover:bg-stage-ink/85"
+                title="Eingabetaste"
+              >
                 Als ein Pad
               </button>
               <button
@@ -1422,23 +1763,19 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
                 Verwerfen
               </button>
             </div>
-          ) : audio && slices.length === 0 ? (
-            <p className="pointer-events-none absolute inset-x-[12px] bottom-[20px] z-10 mx-auto w-fit max-w-[calc(100%-24px)] bg-stage/85 px-[12px] py-[6px] text-center text-small text-stage-ink ring-1 ring-inset ring-stage-line backdrop-blur-[6px]">
-              Die gestrichelten Linien zeigen, wo geschnitten würde — „Schneiden“ macht Pads daraus.
-            </p>
           ) : null}
         </div>
 
-        {/* Transport */}
-        <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line px-[12px] py-[8px]">
-          <div className="flex items-center gap-[4px]">
+        {/* Transport Bar */}
+        <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] border-t border-line px-[14px] py-[8px]">
+          <div className="flex items-center gap-[6px]">
             <button
               type="button"
               disabled={!waveReady}
               onClick={() => void waveRef.current?.playPause()}
               aria-label={wavePlaying ? 'Anhalten' : 'Alles abspielen'}
               title={wavePlaying ? 'Anhalten' : 'Alles abspielen'}
-              className="press inline-flex h-[36px] w-[36px] items-center justify-center rounded-pill bg-ink text-on-ink hover:bg-ink-hover disabled:opacity-40"
+              className="press inline-flex h-[34px] w-[34px] items-center justify-center rounded-pill bg-ink text-on-ink hover:bg-ink-hover disabled:opacity-40"
             >
               {wavePlaying ? IconPause : IconPlay}
             </button>
@@ -1451,10 +1788,27 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
             >
               {IconStop}
             </IconButton>
+            <IconButton
+              label="Auto-Slice (Transienten erkennen)"
+              onClick={autoSliceTransients}
+              disabled={!audio}
+            >
+              <svg viewBox="0 0 16 16" className="h-[15px] w-[15px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <circle cx="6.5" cy="6.5" r="4" />
+                <path d="M9.5 9.5L14 14" />
+              </svg>
+            </IconButton>
           </div>
-          <span className="hidden text-small text-prose sm:inline">
-            Ziehen wählt · Eingabetaste legt an · 1–4 · Q–R · A–F · Y–V spielen · Entf löscht
-          </span>
+
+          <div className="hidden items-center gap-[12px] text-micro text-muted lg:flex">
+            <span>
+              {cutMode === 'manual'
+                ? 'Selber schneiden: Bereich ziehen oder Doppelklick in die Welle teilt direkt · Presets oben wählbar'
+                : 'Ziehen wählt Bereich · Eingabetaste legt Pad an · 1–4 · Q–R · A–F · Y–V spielen'}
+            </span>
+            <Toggle label="Nulldurchgang" checked={chop.snap} onChange={(snap) => setChopState((v) => ({ ...v, snap }))} />
+          </div>
+
           <div className="ml-auto flex items-center gap-[4px]">
             <IconButton label="Herauszoomen" onClick={() => setZoom((value) => Math.max(0, value - 50))} disabled={!waveReady || zoom === 0}>
               {IconZoomOut}
@@ -1467,7 +1821,7 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
               value={zoom}
               disabled={!waveReady}
               onChange={(event) => setZoom(Number(event.target.value))}
-              className="w-[96px] sm:w-[140px]"
+              className="w-[100px] sm:w-[140px]"
               aria-label="Zoom"
             />
             <IconButton label="Hineinzoomen" onClick={() => setZoom((value) => Math.min(400, value + 50))} disabled={!waveReady || zoom >= 400}>
@@ -1477,63 +1831,64 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
         </div>
       </section>
 
-      {/* ---- pads and pattern, one rack ------------------------------------- */}
-      {slices.length > 0 ? (
-        <StepSequencer
-          slices={slices}
-          buffers={() => (bufferRef.current ? { forward: bufferRef.current, reversed: reversedRef.current } : null)}
-          initialBpm={bpm}
-          choke={choke}
-          baseName={baseName}
-          note={
-            slices.length > MAX_PADS
-              ? `Die ersten ${MAX_PADS} von ${slices.length} Pads liegen auf Tasten und im Pattern; exportiert werden alle.`
-              : undefined
-          }
-          head={padHead}
-          aside={
-            <>
-              <div role="tablist" aria-label="Einstellungen" className="flex gap-[4px] border-b border-line p-[8px]">
-                {(
-                  [
-                    { id: 'pad', label: selected ? `Pad ${selectedIndex + 1}` : 'Pad' },
-                    { id: 'kit', label: 'Alle Pads' },
-                    { id: 'export', label: 'Export' },
-                    { id: 'vorgaben', label: 'Vorgaben' },
-                  ] as const
-                ).map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={side === entry.id}
-                    onClick={() => setSide(entry.id)}
-                    className={`press flex-1 rounded-nav px-[6px] py-[7px] text-small ${
-                      side === entry.id ? 'bg-ink text-on-ink' : 'text-prose hover:bg-panel-soft'
-                    }`}
-                  >
-                    {entry.label}
-                  </button>
-                ))}
-              </div>
-              <div key={side} role="tabpanel" className="rise flex flex-col gap-[14px] p-[16px]">
-                {sideContent}
-              </div>
-            </>
-          }
-          onPreviewPad={(index, semitone) => {
-            if (!slices[index]) return
-            // A key auditioned in the roll only sounds; selecting the pad
-            // would redraw the panels around the roll mid-gesture.
-            if (semitone === undefined) setActiveSlice(slices[index].id)
-            triggerPad(index, semitone)
-          }}
-          onBounce={(pattern, name) => {
-            addToSession([{ name, piece: pattern, bytes: encodeWav(pattern, 24) }])
-            log('sampler', `${name} in die Sitzung übernommen`)
-          }}
-        />
-      ) : null}
+      {/* ---- Bottom Frame: Rack ([ Pads ] / [ Piano-Roll ]), Inspector, and Ausgabe ---- */}
+      <StepSequencer
+        slices={slices}
+        buffers={() => (bufferRef.current ? { forward: bufferRef.current, reversed: reversedRef.current } : null)}
+        initialBpm={bpm}
+        choke={choke}
+        baseName={baseName}
+        activeSliceId={activeSlice}
+        onSelectSlice={(id) => setActiveSlice(id)}
+        onChangeSound={(id, sound) => updateSlice(id, { sound })}
+        onEnsureSlices={ensureSlices}
+        note={
+          slices.length > MAX_PADS
+            ? `Die ersten ${MAX_PADS} von ${slices.length} Pads liegen auf Tasten und im Pattern; exportiert werden alle.`
+            : undefined
+        }
+        head={padHead}
+        aside={
+          <>
+            <div role="tablist" aria-label="Einstellungen" className="flex gap-[4px] border-b border-line p-[8px]">
+              {(
+                [
+                  { id: 'pad', label: selected ? `Pad ${selectedIndex + 1}` : 'Pad' },
+                  { id: 'kit', label: 'Alle Pads' },
+                  { id: 'export', label: 'Export' },
+                  { id: 'vorgaben', label: 'Vorgaben' },
+                ] as const
+              ).map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={side === entry.id}
+                  onClick={() => setSide(entry.id)}
+                  className={`press flex-1 rounded-nav px-[6px] py-[7px] text-small font-semibold ${
+                    side === entry.id ? 'bg-ink text-on-ink' : 'text-prose hover:bg-panel-soft'
+                  }`}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+            <div key={side} role="tabpanel" className="rise flex flex-col gap-[14px] p-[16px]">
+              {sideContent}
+            </div>
+          </>
+        }
+        onPreviewPad={(index, semitone) => {
+          const target = slices[index]
+          if (!target) return
+          if (semitone === undefined) setActiveSlice(target.id)
+          triggerPad(index, semitone)
+        }}
+        onBounce={(pattern, name) => {
+          addToSession([{ name, piece: pattern, bytes: encodeWav(pattern, 24) }])
+          log('sampler', `${name} in die Sitzung übernommen`)
+        }}
+      />
     </div>
   )
 }
