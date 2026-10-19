@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { getAudioContext, resumeAudioContext } from '../../lib/audio'
+import { concatAudio } from '../../lib/edit'
 import { saveBytes } from '../../lib/download'
 import {
   SOUND_LABELS,
@@ -35,7 +36,9 @@ import {
   type Voice,
   startVoice,
 } from '../../lib/pattern'
+import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { encodeWav, type AudioData } from '../../lib/wav'
+import { UndoRedoBar, useUndoHistory } from '../../hooks/useUndoHistory'
 import { Button, Slider } from '../ui/primitives'
 import { ChoiceRow } from '../editor/EditorShell'
 import { IconPlay, IconStop } from '../editor/icons'
@@ -43,6 +46,8 @@ import { PianoRoll, type ScaleKind, type StampKind } from './PianoRoll'
 
 const PAD_KEYS = ['1', '2', '3', '4', 'q', 'w', 'e', 'r', 'a', 's', 'd', 'f', 'y', 'x', 'c', 'v']
 const ROW_NOTES = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'H4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'H5', 'C6', 'D6']
+const PATTERN_SLOTS = ['A', 'B', 'C', 'D'] as const
+export type PatternSlotId = (typeof PATTERN_SLOTS)[number]
 
 const SOUND_SHORT: Record<SoundKind, string> = {
   sample: 'C4',
@@ -51,6 +56,17 @@ const SOUND_SHORT: Record<SoundKind, string> = {
   epiano: 'Keys',
   pluck: 'Pluck',
   lead: 'Lead',
+}
+
+function makeEmptyPattern(bpm: number): Pattern {
+  return {
+    steps: 16,
+    bpm: Math.round(bpm) || 120,
+    swing: 0,
+    cells: {},
+    notes: {},
+    muted: {},
+  }
 }
 
 export function StepSequencer({
@@ -90,14 +106,71 @@ export function StepSequencer({
   note?: string
 }) {
   const rows = slices.slice(0, PAD_KEYS.length)
-  const [pattern, setPattern] = useState<Pattern>(() => ({
-    steps: 16,
-    bpm: Math.round(initialBpm) || 120,
-    swing: 0,
-    cells: {},
-    notes: {},
-    muted: {},
-  }))
+  const [patterns, setPatterns] = useState<Record<PatternSlotId, Pattern>>(() => {
+    const saved = getProjectToolState<{ patterns?: Record<PatternSlotId, Pattern> }>('sequencer')
+    if (saved?.patterns) return saved.patterns
+    return {
+      A: makeEmptyPattern(initialBpm),
+      B: makeEmptyPattern(initialBpm),
+      C: makeEmptyPattern(initialBpm),
+      D: makeEmptyPattern(initialBpm),
+    }
+  })
+  const [activeSlot, setActiveSlot] = useState<PatternSlotId>(() => {
+    const saved = getProjectToolState<{ activeSlot?: PatternSlotId }>('sequencer')
+    return saved?.activeSlot ?? 'A'
+  })
+  const [songChain, setSongChain] = useState<PatternSlotId[]>(() => {
+    const saved = getProjectToolState<{ songChain?: PatternSlotId[] }>('sequencer')
+    return saved?.songChain && saved.songChain.length > 0 ? saved.songChain : ['A']
+  })
+  const [songMode, setSongMode] = useState(false)
+
+  const pattern = patterns[activeSlot]
+
+  const undoHistory = useUndoHistory<{
+    patterns: Record<PatternSlotId, Pattern>
+    activeSlot: PatternSlotId
+    songChain: PatternSlotId[]
+  }>({ patterns, activeSlot, songChain }, (snap) => {
+    setPatterns(snap.patterns)
+    setActiveSlot(snap.activeSlot)
+    setSongChain(snap.songChain)
+  })
+
+  const setPattern = useCallback(
+    (updater: Pattern | ((prev: Pattern) => Pattern), recordUndo = true) => {
+      if (recordUndo) {
+        undoHistory.record({ patterns, activeSlot, songChain })
+      }
+      setPatterns((prev) => {
+        const currentPat = prev[activeSlot]
+        const nextPat = typeof updater === 'function' ? updater(currentPat) : updater
+        return { ...prev, [activeSlot]: nextPat }
+      })
+    },
+    [activeSlot, patterns, songChain, undoHistory],
+  )
+
+  useEffect(() => {
+    setProjectToolState('sequencer', { patterns, activeSlot, songChain })
+  }, [patterns, activeSlot, songChain])
+
+  useEffect(() => {
+    const onProjectLoaded = () => {
+      const saved = getProjectToolState<{
+        patterns?: Record<PatternSlotId, Pattern>
+        activeSlot?: PatternSlotId
+        songChain?: PatternSlotId[]
+      }>('sequencer')
+      if (saved?.patterns) setPatterns(saved.patterns)
+      if (saved?.activeSlot) setActiveSlot(saved.activeSlot)
+      if (saved?.songChain && saved.songChain.length > 0) setSongChain(saved.songChain)
+    }
+    window.addEventListener('sondra:project-loaded', onProjectLoaded)
+    return () => window.removeEventListener('sondra:project-loaded', onProjectLoaded)
+  }, [])
+
   /** Active rack view: 'pads' (Step Sequencer) or 'roll' (Piano-Roll). */
   const [view, setView] = useState<'pads' | 'roll'>('pads')
   /** The pad whose piano roll is open. */
@@ -113,6 +186,12 @@ export function StepSequencer({
   // The scheduler reads the pattern live, so edits land on the next pass.
   const patternRef = useRef(pattern)
   patternRef.current = pattern
+  const patternsRef = useRef(patterns)
+  patternsRef.current = patterns
+  const songChainRef = useRef(songChain)
+  songChainRef.current = songChain
+  const songModeRef = useRef(songMode)
+  songModeRef.current = songMode
   const rowsRef = useRef(rows)
   rowsRef.current = rows
   const chokeRef = useRef(choke)
@@ -122,7 +201,14 @@ export function StepSequencer({
   const uiTimers = useRef<number[]>([])
 
   useEffect(() => {
-    setPattern((value) => (value.bpm === 120 && initialBpm ? { ...value, bpm: Math.round(initialBpm) } : value))
+    if (!initialBpm) return
+    setPatterns((prev) => {
+      const next = { ...prev }
+      for (const slot of PATTERN_SLOTS) {
+        if (next[slot].bpm === 120) next[slot] = { ...next[slot], bpm: Math.round(initialBpm) }
+      }
+      return next
+    })
   }, [initialBpm])
 
   const stop = useCallback(() => {
@@ -142,16 +228,18 @@ export function StepSequencer({
     await resumeAudioContext()
     const context = getAudioContext()
     let step = 0
+    let chainIndex = 0
     let passStart = context.currentTime + 0.06
     setPlaying(true)
 
     const tick = () => {
       const now = context.currentTime
-      const p = patternRef.current
+      const chain = songModeRef.current && songChainRef.current.length > 0 ? songChainRef.current : null
+      const activePat = chain ? patternsRef.current[chain[chainIndex % chain.length]] : patternRef.current
       while (true) {
-        const at = passStart + stepTime(step, p.bpm, p.swing)
+        const at = passStart + stepTime(step, activePat.bpm, activePat.swing)
         if (at > now + 0.12) break
-        const hits = patternHits(rowsRef.current, p).filter((hit) => hit.step === step)
+        const hits = patternHits(rowsRef.current, activePat).filter((hit) => hit.step === step)
         for (const hit of hits) {
           if (chokeRef.current || hit.slice.mode === 'loop') voicesRef.current.get(hit.voice)?.stop(at)
           const voice = startVoice(
@@ -166,11 +254,18 @@ export function StepSequencer({
           voicesRef.current.set(hit.voice, voice)
         }
         const shown = step
-        uiTimers.current.push(window.setTimeout(() => setCurrent(shown), Math.max(0, (at - now) * 1000)))
+        const shownSlot = chain ? chain[chainIndex % chain.length] : null
+        uiTimers.current.push(
+          window.setTimeout(() => {
+            setCurrent(shown)
+            if (shownSlot) setActiveSlot(shownSlot)
+          }, Math.max(0, (at - now) * 1000)),
+        )
         step += 1
-        if (step >= p.steps) {
+        if (step >= activePat.steps) {
           step = 0
-          passStart += p.steps * stepSeconds(p.bpm)
+          passStart += activePat.steps * stepSeconds(activePat.bpm)
+          if (chain) chainIndex = (chainIndex + 1) % chain.length
         }
       }
       if (uiTimers.current.length > 64) uiTimers.current = uiTimers.current.slice(-32)
@@ -182,7 +277,10 @@ export function StepSequencer({
   useEffect(() => stop, [stop])
 
   const hasHits = rows.some((slice) =>
-    hasRoll(pattern, slice.id) ? pattern.notes[slice.id].length > 0 : pattern.cells[slice.id]?.some(Boolean),
+    PATTERN_SLOTS.some((slot) => {
+      const p = patterns[slot]
+      return hasRoll(p, slice.id) ? p.notes[slice.id].length > 0 : p.cells[slice.id]?.some(Boolean)
+    }),
   )
   const toggleRef = useRef<() => void>(() => {})
   toggleRef.current = () => {
@@ -228,8 +326,9 @@ export function StepSequencer({
 
   /** Opens a pad's roll and switches the rack view to Piano-Roll. */
   const openRoll = (id: string, switchView = true) => {
-    setPattern((value) =>
-      hasRoll(value, id) ? value : { ...value, notes: { ...value.notes, [id]: cellsToNotes(value.cells[id]) } },
+    setPattern(
+      (value) => (hasRoll(value, id) ? value : { ...value, notes: { ...value.notes, [id]: cellsToNotes(value.cells[id]) } }),
+      false,
     )
     setRollFor(id)
     onSelectSlice?.(id)
@@ -334,13 +433,41 @@ export function StepSequencer({
     if (!source) return
     setBouncing(true)
     try {
-      const audio = await bouncePattern(rows, pattern, source, loops, choke)
-      const name = `${baseName}-pattern-${pattern.bpm}bpm.wav`
+      let audio: AudioData
+      let name: string
+      if (songMode && songChain.length > 1) {
+        const parts: AudioData[] = []
+        for (const slot of songChain) {
+          const partAudio = await bouncePattern(rows, patterns[slot], source, 1, choke)
+          parts.push(partAudio)
+        }
+        audio = concatAudio(parts, 0.005)
+        name = `${baseName}-song-${pattern.bpm}bpm.wav`
+      } else {
+        audio = await bouncePattern(rows, pattern, source, loops, choke)
+        name = `${baseName}-pattern-${activeSlot}-${pattern.bpm}bpm.wav`
+      }
       if (target === 'file') saveBytes(encodeWav(audio, 24), name, 'audio/wav')
       else onBounce(audio, name)
     } finally {
       setBouncing(false)
     }
+  }
+
+  const copyPatternToNextSlot = () => {
+    const idx = PATTERN_SLOTS.indexOf(activeSlot)
+    const nextSlot = PATTERN_SLOTS[(idx + 1) % PATTERN_SLOTS.length]
+    undoHistory.record({ patterns, activeSlot, songChain })
+    setPatterns((prev) => ({
+      ...prev,
+      [nextSlot]: {
+        ...prev[activeSlot],
+        cells: { ...prev[activeSlot].cells },
+        notes: { ...prev[activeSlot].notes },
+        muted: { ...prev[activeSlot].muted },
+      },
+    }))
+    setActiveSlot(nextSlot)
   }
 
   return (
@@ -371,7 +498,7 @@ export function StepSequencer({
                   max={200}
                   step={1}
                   value={pattern.bpm}
-                  onChange={(event) => setPattern((value) => ({ ...value, bpm: Number(event.target.value) }))}
+                  onChange={(event) => setPattern((value) => ({ ...value, bpm: Number(event.target.value) }), false)}
                 />
               </div>
               <div className="hidden w-[104px] sm:block">
@@ -382,8 +509,33 @@ export function StepSequencer({
                   max={0.6}
                   step={0.01}
                   value={pattern.swing}
-                  onChange={(event) => setPattern((value) => ({ ...value, swing: Number(event.target.value) }))}
+                  onChange={(event) => setPattern((value) => ({ ...value, swing: Number(event.target.value) }), false)}
                 />
+              </div>
+              {/* Pattern Slots A / B / C / D */}
+              <div className="flex items-center gap-[2px] rounded-nav bg-panel-soft p-[2px] ring-1 ring-inset ring-line" role="group" aria-label="Pattern-Auswahl">
+                {PATTERN_SLOTS.map((slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    aria-pressed={activeSlot === slot}
+                    onClick={() => setActiveSlot(slot)}
+                    title={`Pattern ${slot}`}
+                    className={`press value h-[26px] w-[26px] rounded-[6px] text-micro font-bold transition-colors ${
+                      activeSlot === slot ? 'bg-ink text-on-ink' : 'text-prose hover:bg-panel-mid hover:text-ink'
+                    }`}
+                  >
+                    {slot}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={copyPatternToNextSlot}
+                  title="Aktuelles Pattern in den nächsten Slot kopieren"
+                  className="press rounded-[6px] px-[6px] py-[3px] text-micro text-muted hover:bg-panel-mid hover:text-ink"
+                >
+                  Kopieren
+                </button>
               </div>
             </div>
 
@@ -417,6 +569,12 @@ export function StepSequencer({
 
             {/* Right Controls depending on active view */}
             <div className="ml-auto flex flex-wrap items-center gap-[6px]">
+              <UndoRedoBar
+                canUndo={undoHistory.canUndo}
+                canRedo={undoHistory.canRedo}
+                onUndo={undoHistory.undo}
+                onRedo={undoHistory.redo}
+              />
               {view === 'pads' ? (
                 <>
                   <ChoiceRow
@@ -851,30 +1009,98 @@ export function StepSequencer({
         ) : null}
       </div>
 
-      {/* Bottom Full-Width Card: Ausgabe */}
-      <footer className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-card bg-raised px-[16px] py-[10px] ring-1 ring-inset ring-line">
-        <span className="text-small font-semibold text-ink">Ausgabe</span>
-        <ChoiceRow
-          value={loops}
-          onChange={setLoops}
-          options={[1, 2, 3, 4, 8].map((value) => ({ value, label: `${value}×`, title: `${value}× durchspielen` }))}
-        />
-        <Button size="sm" disabled={!hasHits || bouncing} onClick={() => void bounce('session')}>
-          {bouncing ? 'Rendert…' : 'In die Sitzung'}
-        </Button>
-        <Button size="sm" variant="quiet" disabled={!hasHits || bouncing} onClick={() => void bounce('file')}>
-          Als WAV
-        </Button>
-        <Button
-          size="sm"
-          variant="quiet"
-          disabled={!hasHits}
-          onClick={() => saveBytes(patternToMidi(rows, pattern, loops), `${baseName}-pattern.mid`, 'audio/midi')}
-          title="Pad 1 auf C1, Pad 2 auf C♯1 … — Pads mit Klavierrolle ab C4"
-        >
-          Als MIDI
-        </Button>
-        <span className="ml-auto text-small text-muted">Nahtlos loopbar.</span>
+      {/* Bottom Full-Width Card: Song-Arrangement & Ausgabe */}
+      <footer className="flex flex-col gap-[8px] rounded-card bg-raised px-[16px] py-[10px] ring-1 ring-inset ring-line">
+        <div className="flex flex-wrap items-center gap-x-[10px] gap-y-[6px] border-b border-line pb-[8px]">
+          <span className="text-micro font-semibold text-ink">Arrangement</span>
+          <div className="flex items-center gap-[2px] rounded-nav bg-panel-soft p-[2px] ring-1 ring-inset ring-line">
+            <button
+              type="button"
+              aria-pressed={!songMode}
+              onClick={() => setSongMode(false)}
+              className={`press rounded-[6px] px-[8px] py-[3px] text-micro font-semibold ${
+                !songMode ? 'bg-ink text-on-ink' : 'text-prose hover:bg-panel-mid'
+              }`}
+            >
+              Einzelnes Pattern ({activeSlot})
+            </button>
+            <button
+              type="button"
+              aria-pressed={songMode}
+              onClick={() => setSongMode(true)}
+              className={`press rounded-[6px] px-[8px] py-[3px] text-micro font-semibold ${
+                songMode ? 'bg-ink text-on-ink' : 'text-prose hover:bg-panel-mid'
+              }`}
+            >
+              Song-Kette ({songChain.length} Takte)
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-[4px]" aria-label="Song-Kette">
+            {songChain.map((slot, idx) => (
+              <button
+                key={`${slot}-${idx}`}
+                type="button"
+                onClick={() => {
+                  if (songChain.length <= 1) return
+                  undoHistory.record({ patterns, activeSlot, songChain })
+                  setSongChain((prev) => prev.filter((_, i) => i !== idx))
+                }}
+                title={`Block ${idx + 1}: Pattern ${slot} (klicken zum Entfernen)`}
+                className="press value inline-flex h-[24px] items-center gap-[3px] rounded-[6px] bg-panel-mid px-[7px] text-micro font-bold text-ink ring-1 ring-inset ring-line hover:bg-panel-strong"
+              >
+                <span>{slot}</span>
+                {songChain.length > 1 ? <span className="text-[10px] opacity-60">×</span> : null}
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-[3px]">
+            <span className="mr-[2px] text-micro text-muted">Anhängen:</span>
+            {PATTERN_SLOTS.map((slot) => (
+              <button
+                key={slot}
+                type="button"
+                onClick={() => {
+                  undoHistory.record({ patterns, activeSlot, songChain })
+                  setSongChain((prev) => [...prev, slot])
+                  setSongMode(true)
+                }}
+                title={`Pattern ${slot} an die Song-Kette anhängen`}
+                className="press value h-[24px] rounded-[6px] bg-panel-soft px-[7px] text-micro font-semibold text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+              >
+                +{slot}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[8px]">
+          <span className="text-small font-semibold text-ink">Ausgabe</span>
+          {!songMode ? (
+            <ChoiceRow
+              value={loops}
+              onChange={setLoops}
+              options={[1, 2, 3, 4, 8].map((value) => ({ value, label: `${value}×`, title: `${value}× durchspielen` }))}
+            />
+          ) : (
+            <span className="value text-micro text-prose">Kette: {songChain.join(' → ')}</span>
+          )}
+          <Button size="sm" disabled={!hasHits || bouncing} onClick={() => void bounce('session')}>
+            {bouncing ? 'Rendert…' : 'In die Sitzung'}
+          </Button>
+          <Button size="sm" variant="quiet" disabled={!hasHits || bouncing} onClick={() => void bounce('file')}>
+            Als WAV
+          </Button>
+          <Button
+            size="sm"
+            variant="quiet"
+            disabled={!hasHits}
+            onClick={() => saveBytes(patternToMidi(rows, pattern, loops), `${baseName}-pattern.mid`, 'audio/midi')}
+            title="Pad 1 auf C1, Pad 2 auf C♯1 … — Pads mit Klavierrolle ab C4"
+          >
+            Als MIDI
+          </Button>
+          <span className="ml-auto text-small text-muted">Nahtlos loopbar.</span>
+        </div>
       </footer>
     </section>
   )

@@ -6,11 +6,17 @@
  * loaded on top and runs through WebGPU when the machine has it.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { saveBytes } from '../../lib/download'
 import { hasWebGpuAdapter, detectCapabilities, suggestedThreads } from '../../lib/capabilities'
 import { formatBytes, withExtension } from '../../lib/format'
+import {
+  clearCachedOnnxModel,
+  loadCachedOnnxModel,
+  refineStemsWithLocalAi,
+  saveCachedOnnxModel,
+} from '../../lib/localAi'
 import { STEM_IDS, STEM_LABELS, toInstrumental, type StemId } from '../../lib/separation'
 import { encodeWav, type AudioData } from '../../lib/wav'
 import { holdScreenAwake } from '../../lib/wakeLock'
@@ -88,7 +94,13 @@ export function StemsPanel() {
   const abortRef = useRef<AbortController | null>(null)
   const modelInputRef = useRef<HTMLInputElement>(null)
 
-  const run = async () => {
+  useEffect(() => {
+    void loadCachedOnnxModel().then((cached) => {
+      if (cached) setModel(cached)
+    })
+  }, [])
+
+  const run = async (useLocalAi = false) => {
     if (!asset) return
     const controller = new AbortController()
     abortRef.current = controller
@@ -105,9 +117,12 @@ export function StemsPanel() {
       if (!decoded) return
 
       const gpu = preferWebGpu && (await hasWebGpuAdapter())
+      const effectiveOptions = useLocalAi && !model
+        ? { ...options, maskExponent: Math.max(options.maskExponent, 3.4), timeKernel: Math.max(options.timeKernel, 21) }
+        : options
       const outcome = await separateInWorker(
         decoded,
-        options,
+        effectiveOptions,
         {
           model: model ? model.bytes.slice() : null,
           threads: suggestedThreads(caps),
@@ -115,19 +130,25 @@ export function StemsPanel() {
         },
         (fraction, hint) => {
           setProgress(fraction)
-          setNote(hint ?? null)
+          setNote(useLocalAi ? `Lokale KI · ${hint ?? 'Analyse'}` : (hint ?? null))
         },
         controller.signal,
       )
 
-      setStems(outcome.stems)
-      setInstrumental(toInstrumental(decoded, outcome.stems.vocals))
+      const finalStems = useLocalAi && outcome.engine !== 'onnx'
+        ? refineStemsWithLocalAi(outcome.stems)
+        : outcome.stems
+
+      setStems(finalStems)
+      setInstrumental(toInstrumental(decoded, finalStems.vocals))
       setEngine(
         outcome.engine === 'onnx'
-          ? `Neuronales Modell · ${outcome.provider === 'webgpu' ? 'WebGPU' : 'WASM'}`
-          : 'Signalverarbeitung im Browser',
+          ? `Lokale KI (ONNX) · ${outcome.provider === 'webgpu' ? 'WebGPU' : 'WASM'}`
+          : useLocalAi
+            ? 'Lokale KI · Adaptive Spektralmaske'
+            : 'Signalverarbeitung im Browser',
       )
-      log('spuren', `Trennung abgeschlossen (${outcome.engine})`)
+      log('spuren', `Trennung abgeschlossen (${useLocalAi ? 'Lokale KI' : outcome.engine})`)
     } catch (failure) {
       if (!(failure instanceof DOMException && failure.name === 'AbortError')) {
         const message = failure instanceof Error ? failure.message : String(failure)
@@ -281,9 +302,17 @@ export function StemsPanel() {
               </Reveal>
 
               <div className="mt-[28px] flex flex-wrap items-center gap-[12px]">
-                <Button onClick={run} disabled={running}>
+                <Button onClick={() => void run(false)} disabled={running}>
                   {running ? 'Wird getrennt…' : 'Spuren trennen'}
                   {!running ? <ArrowRight /> : null}
+                </Button>
+                <Button
+                  variant="quiet"
+                  onClick={() => void run(true)}
+                  disabled={running}
+                  title="Trennt Gesang, Schlagzeug, Bass und Rest mit der lokalen KI-Spektralmaske bzw. dem geladenen ONNX-Modell auf diesem Gerät"
+                >
+                  Lokale KI
                 </Button>
                 {running ? (
                   <Button variant="quiet" onClick={() => abortRef.current?.abort()}>
@@ -384,17 +413,16 @@ export function StemsPanel() {
       <aside className="flex flex-col gap-[20px]">
 
         <Card tone="cream">
-          <SectionHead>Neuronales Modell</SectionHead>
+          <SectionHead>Lokale KI &amp; Neuronales Modell</SectionHead>
           <p className="mt-[8px] text-small leading-[1.55] text-prose/85">
-            Optional. Ohne Modell rechnet das eingebaute Verfahren.
+            Über den Button <strong>Lokale KI</strong> nutzt Sondra die mehrbändige KI-Spektralmaske oder ein hier hinterlegtes <code>.onnx</code>-Modell (wird dauerhaft auf diesem Gerät gespeichert).
           </p>
           <details className="mt-[8px]">
             <summary className="cursor-pointer list-none text-small text-muted underline underline-offset-2 hover:text-ink">
-              Warum keins mitgeliefert wird
+              Eigenes .onnx Modell verwenden
             </summary>
             <p className="mt-[8px] text-small leading-[1.55] text-prose/85">
-              Ein Demucs-Export wiegt Hunderte Megabyte, die sonst jeder Besuch herunterlädt. Ihr
-              eigenes <code>.onnx</code> wird lokal ausgeführt und verlässt das Gerät nicht.
+              Ein Demucs- oder Spleeter-Export im <code>.onnx</code>-Format wird einmalig gewählt, im Gerätespeicher behalten und direkt über WebGPU oder WASM ausgeführt.
             </p>
           </details>
 
@@ -409,16 +437,24 @@ export function StemsPanel() {
               if (!file) return
               const bytes = new Uint8Array(await file.arrayBuffer())
               setModel({ name: file.name, bytes })
-              log('spuren', `Modell ${file.name} geladen (${formatBytes(bytes.byteLength)})`)
+              await saveCachedOnnxModel(file.name, bytes)
+              log('spuren', `Lokales KI-Modell ${file.name} gespeichert (${formatBytes(bytes.byteLength)})`)
             }}
           />
 
           <div className="mt-[16px] flex flex-wrap gap-[8px]">
             <Button size="sm" variant="quiet" onClick={() => modelInputRef.current?.click()}>
-              {model ? 'Anderes Modell' : 'Modell wählen'}
+              {model ? 'Anderes Modell' : 'ONNX-Modell laden'}
             </Button>
             {model ? (
-              <Button size="sm" variant="ghost" onClick={() => setModel(null)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setModel(null)
+                  void clearCachedOnnxModel()
+                }}
+              >
                 Entfernen
               </Button>
             ) : null}

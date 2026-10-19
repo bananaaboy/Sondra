@@ -250,3 +250,36 @@ export function uniqueEntryNames(entries: ZipEntry[]): ZipEntry[] {
     return name === entry.name ? entry : { ...entry, name }
   })
 }
+
+/**
+ * Reads an uncompressed (store-only) ZIP / `.sondra` archive written by `createZip`.
+ */
+export function readZip(archive: Uint8Array): ZipEntry[] {
+  const decoder = new TextDecoder()
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength)
+  const entries: ZipEntry[] = []
+  let offset = 0
+
+  while (offset + 30 <= archive.byteLength) {
+    const sig = view.getUint32(offset, true)
+    if (sig !== 0x04034b50) break // reached central directory
+    const method = view.getUint16(offset + 8, true)
+    if (method !== 0) {
+      throw new Error('Komprimierte ZIP-Einträge werden für Projektdateien nicht unterstützt.')
+    }
+    const compressedSize = view.getUint32(offset + 18, true)
+    const nameLen = view.getUint16(offset + 26, true)
+    const extraLen = view.getUint16(offset + 28, true)
+    const nameStart = offset + 30
+    const dataStart = nameStart + nameLen + extraLen
+    if (dataStart + compressedSize > archive.byteLength) break
+
+    const name = decoder.decode(archive.subarray(nameStart, nameStart + nameLen))
+    const data = archive.slice(dataStart, dataStart + compressedSize)
+    entries.push({ name, data })
+    offset = dataStart + compressedSize
+  }
+
+  return entries
+}
+

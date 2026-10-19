@@ -386,6 +386,76 @@ function enqueue<T>(job: () => Promise<T>): Promise<T> {
   return next
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64)
+  const out = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+  return out
+}
+
+let nativeFfmpegChecked: boolean | null = null
+
+async function tryRunNativeFfmpeg({ input, output, args, folders = [], signal }: RunOptions): Promise<RunResult | null> {
+  if (typeof window === 'undefined') return null
+  const isLocalDesktop = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+  if (!isLocalDesktop) return null
+
+  const totalInputBytes = Object.values(input).reduce((sum, b) => sum + b.byteLength, 0)
+  if (totalInputBytes > 120 * 1024 * 1024) return null
+
+  if (nativeFfmpegChecked === null) {
+    try {
+      const res = await fetch('/api/ffmpeg/status', { signal })
+      if (res.ok) {
+        const data = (await res.json()) as { available?: boolean }
+        nativeFfmpegChecked = Boolean(data.available)
+      } else {
+        nativeFfmpegChecked = false
+      }
+    } catch {
+      nativeFfmpegChecked = false
+    }
+  }
+  if (!nativeFfmpegChecked) return null
+
+  try {
+    const encodedInput: Record<string, string> = {}
+    for (const [name, bytes] of Object.entries(input)) {
+      encodedInput[name] = bytesToBase64(bytes)
+    }
+    const res = await fetch('/api/ffmpeg/run', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ input: encodedInput, output, args, folders }),
+      signal,
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as { ok?: boolean; files?: Record<string, string>; logs?: string[] }
+    if (!data.ok || !data.files) return null
+    const files: Record<string, Uint8Array> = {}
+    for (const outName of output) {
+      if (!(outName in data.files)) return null
+      files[outName] = base64ToBytes(data.files[outName])
+    }
+    const logs = data.logs ?? []
+    logs.forEach((line) => logHandlers.forEach((handler) => handler(line)))
+    progressHandlers.forEach((handler) => handler(1))
+    return { files, logs }
+  } catch (err) {
+    if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError')
+    return null
+  }
+}
+
 /**
  * Writes inputs to MEMFS, runs one ffmpeg invocation, reads the outputs back,
  * and cleans up — so a long session does not slowly fill the heap with old jobs.
@@ -395,6 +465,9 @@ export function runFfmpeg(options: RunOptions): Promise<RunResult> {
 }
 
 async function runFfmpegNow({ input, output, args, signal, consumeInput = false, folders = [], stallSeconds }: RunOptions): Promise<RunResult> {
+  const nativeResult = await tryRunNativeFfmpeg({ input, output, args, folders, signal })
+  if (nativeResult) return nativeResult
+
   const ffmpeg = await loadFfmpeg()
   const logs: string[] = []
   let stalled = false

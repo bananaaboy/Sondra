@@ -17,7 +17,9 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { saveBytes } from '../lib/download'
+import { startFileDragOut } from '../lib/dragOut'
 import { formatBytes, formatDuration } from '../lib/format'
+import { saveProjectFile } from '../lib/project'
 import { useDecodedAudio } from '../hooks/useDecodedAudio'
 import { useFilePicker } from '../hooks/useIngest'
 import { useKept } from '../hooks/useKeptSession'
@@ -225,7 +227,7 @@ export function SessionMenu() {
                   onDragStart={(e) => {
                     setDraggedIndex(index)
                     e.dataTransfer.setData('text/plain', String(index))
-                    e.dataTransfer.effectAllowed = 'move'
+                    startFileDragOut(e, { name: asset.name, bytes: asset.bytes, mime: asset.mime })
                   }}
                   onDragOver={(e) => {
                     e.preventDefault()
@@ -254,7 +256,7 @@ export function SessionMenu() {
                   } ${draggedIndex === index ? 'opacity-40' : ''}`}
                 >
                   <span
-                    title="Ziehen zum Sortieren"
+                    title="Ziehen zum Sortieren oder in ein anderes Programm"
                     className="flex cursor-grab items-center justify-center p-[4px] text-muted/60 hover:text-ink active:cursor-grabbing"
                     aria-hidden
                   >
@@ -301,17 +303,27 @@ export function SessionMenu() {
             })}
           </ul>
 
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false)
-              picker.open()
-            }}
-            disabled={picker.busy}
-            className="press self-start text-small text-ink underline underline-offset-[3px] hover:no-underline disabled:opacity-40"
-          >
-            {picker.busy ? 'Wird gelesen…' : 'Weitere Datei öffnen'}
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-[12px]">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                picker.open()
+              }}
+              disabled={picker.busy}
+              className="press self-start text-small text-ink underline underline-offset-[3px] hover:no-underline disabled:opacity-40"
+            >
+              {picker.busy ? 'Wird gelesen…' : 'Weitere Datei oder Projekt öffnen'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveProjectFile()}
+              className="press rounded-nav bg-panel-soft px-[10px] py-[5px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink"
+              title="Speichert alle Sitzungsdateien und Werkzeugeinstellungen als .sondra Projektdatei"
+            >
+              Projekt speichern (.sondra)
+            </button>
+          </div>
 
           {/* The whole session in one archive, under a name of one's own. */}
           {assets.length > 1 ? (

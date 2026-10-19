@@ -13,12 +13,93 @@
  *   is in the program.
  */
 
+import { spawn, spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
+import os from 'node:os'
 import path from 'node:path'
 
 const HOST = '127.0.0.1'
+
+let cachedFfmpegBin = undefined
+
+function findNativeFfmpeg(dataDir) {
+  if (cachedFfmpegBin !== undefined) return cachedFfmpegBin
+  const candidates = [
+    process.env.SONDRA_FFMPEG,
+    dataDir ? path.join(dataDir, 'bin', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg') : null,
+    process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg',
+  ].filter(Boolean)
+
+  for (const bin of candidates) {
+    try {
+      const check = spawnSync(bin, ['-version'], { stdio: 'ignore', timeout: 4000, windowsHide: true })
+      if (check.status === 0) {
+        cachedFfmpegBin = bin
+        return bin
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  cachedFfmpegBin = null
+  return null
+}
+
+async function runNativeFfmpeg(bin, payload) {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sondra-ff-'))
+  try {
+    const folders = Array.isArray(payload.folders) ? payload.folders : []
+    for (const folder of folders) {
+      const targetDir = path.resolve(workDir, '.' + path.posix.normalize('/' + String(folder)))
+      if (targetDir.startsWith(workDir)) fs.mkdirSync(targetDir, { recursive: true })
+    }
+    const input = payload.input && typeof payload.input === 'object' ? payload.input : {}
+    for (const [name, b64] of Object.entries(input)) {
+      const safePath = path.resolve(workDir, '.' + path.posix.normalize('/' + String(name)))
+      if (!safePath.startsWith(workDir)) continue
+      fs.mkdirSync(path.dirname(safePath), { recursive: true })
+      fs.writeFileSync(safePath, Buffer.from(String(b64), 'base64'))
+    }
+    const rawArgs = Array.isArray(payload.args) ? payload.args.map(String) : []
+    const logs = []
+    const exitCode = await new Promise((resolve, reject) => {
+      const child = spawn(bin, ['-y', ...rawArgs], {
+        cwd: workDir,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      const onChunk = (chunk) => {
+        const lines = chunk.toString('utf8').split(/\r?\n/).filter(Boolean)
+        logs.push(...lines)
+        if (logs.length > 500) logs.splice(0, logs.length - 500)
+      }
+      child.stdout.on('data', onChunk)
+      child.stderr.on('data', onChunk)
+      child.on('error', reject)
+      child.on('close', (code) => resolve(code ?? 1))
+    })
+
+    if (exitCode !== 0) {
+      return { ok: false, code: exitCode, logs }
+    }
+
+    const outputNames = Array.isArray(payload.output) ? payload.output.map(String) : []
+    const files = {}
+    for (const outName of outputNames) {
+      const safeOut = path.resolve(workDir, '.' + path.posix.normalize('/' + outName))
+      if (safeOut.startsWith(workDir) && fs.existsSync(safeOut)) {
+        files[outName] = fs.readFileSync(safeOut).toString('base64')
+      }
+    }
+    return { ok: true, files, logs }
+  } finally {
+    try {
+      fs.rmSync(workDir, { recursive: true, force: true })
+    } catch {}
+  }
+}
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -221,6 +302,18 @@ export async function startServer({ root, port, dataDir, onError }) {
                 selected: saved,
               })
             }
+          }
+        } else if (url.pathname === '/api/ffmpeg/status') {
+          const bin = findNativeFfmpeg(dataDir)
+          response.status(200).json({ available: Boolean(bin), bin: bin ? path.basename(bin) : null })
+        } else if (url.pathname === '/api/ffmpeg/run' && request.method === 'POST') {
+          const bin = findNativeFfmpeg(dataDir)
+          if (!bin) {
+            response.status(404).json({ ok: false, error: 'no-native-ffmpeg' })
+          } else {
+            const payload = request.body ? JSON.parse(request.body) : {}
+            const result = await runNativeFfmpeg(bin, payload)
+            response.status(result.ok ? 200 : 422).json(result)
           }
         }
         else response.status(404).json({ error: 'route' })

@@ -11,6 +11,7 @@
 import { useCallback, useRef, useState } from 'react'
 
 import { formatBytes } from '../lib/format'
+import { isProjectFile, loadProjectBytes } from '../lib/project'
 import { kindFromMime, useSession } from '../state/store'
 
 const MEDIA_PATTERN = /^(audio|video)\//
@@ -25,7 +26,7 @@ export const IMAGE_ACCEPT = 'image/*,.heic,.heif,.avif,.webp'
  * system file dialog opened on a filter of sound and video, and a photo could
  * only be picked by switching that filter to „All files" by hand.
  */
-export const ACCEPTED_FILES = `audio/*,video/*,.mkv,.flac,.opus,.m4a,.ts,.aac,.wma,.aiff,.aif,${IMAGE_ACCEPT}`
+export const ACCEPTED_FILES = `.sondra,audio/*,video/*,.mkv,.flac,.opus,.m4a,.ts,.aac,.wma,.aiff,.aif,${IMAGE_ACCEPT}`
 
 export function useIngestFiles() {
   const addAsset = useSession((state) => state.addAsset)
@@ -35,13 +36,14 @@ export function useIngestFiles() {
   const ingest = useCallback(
     async (files: File[] | FileList, source: string) => {
       const list = Array.from(files)
+      const projects = list.filter((file) => isProjectFile(file))
       const usable = list.filter(
-        (file) => MEDIA_PATTERN.test(file.type) || kindFromMime(file.type, file.name) !== 'unknown',
+        (file) => !isProjectFile(file) && (MEDIA_PATTERN.test(file.type) || kindFromMime(file.type, file.name) !== 'unknown'),
       )
 
       // Saying nothing when a .docx lands on the window reads as a broken drop
       // target. Saying so costs one line and answers the question.
-      if (usable.length === 0) {
+      if (usable.length === 0 && projects.length === 0) {
         if (list.length > 0) {
           log('bibliothek', `${list.length === 1 ? list[0].name : `${list.length} Dateien`} übersprungen — kein Ton und kein Video`, 'warn')
         }
@@ -50,6 +52,12 @@ export function useIngestFiles() {
 
       setBusy(true)
       try {
+        let count = 0
+        for (const projectFile of projects) {
+          const bytes = new Uint8Array(await projectFile.arrayBuffer())
+          const loaded = await loadProjectBytes(bytes, projectFile.name)
+          count += loaded.assetCount
+        }
         for (const file of usable) {
           const bytes = new Uint8Array(await file.arrayBuffer())
           addAsset({
@@ -64,8 +72,9 @@ export function useIngestFiles() {
             origin: 'file',
           })
           log('bibliothek', `${file.name || 'eingefügt'} ${source} (${formatBytes(bytes.byteLength)})`)
+          count += 1
         }
-        return usable.length
+        return count
       } finally {
         setBusy(false)
       }
