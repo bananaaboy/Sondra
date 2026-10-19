@@ -45,6 +45,8 @@ export interface FfmpegStatus {
   loaded: boolean
   multiThreaded: boolean
   threads: number
+  native?: boolean
+  nativePath?: string | null
 }
 
 /**
@@ -176,16 +178,60 @@ export function onFfmpegProgress(handler: ProgressHandler): () => void {
 
 let instance: FFmpeg | null = null
 let loading: Promise<FFmpeg> | null = null
-let status: FfmpegStatus = { loaded: false, multiThreaded: false, threads: 1 }
+let nativeFfmpegChecked: boolean | null = null
+let nativeFfmpegPath: string | null = null
+let nativeProbePromise: Promise<boolean> | null = null
+let status: FfmpegStatus = { loaded: false, multiThreaded: false, threads: 1, native: false, nativePath: null }
 
 export function ffmpegStatus(): FfmpegStatus {
   return status
+}
+
+export async function probeNativeFfmpeg(signal?: AbortSignal): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  const isLocalDesktop = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
+  if (!isLocalDesktop) {
+    nativeFfmpegChecked = false
+    return false
+  }
+  if (nativeFfmpegChecked !== null) return nativeFfmpegChecked
+  if (nativeProbePromise) return nativeProbePromise
+
+  nativeProbePromise = (async () => {
+    try {
+      const res = await fetch('/api/ffmpeg/status', { signal })
+      if (res.ok) {
+        const data = (await res.json()) as { available?: boolean; path?: string | null }
+        nativeFfmpegChecked = Boolean(data.available)
+        nativeFfmpegPath = data.path ?? null
+      } else {
+        nativeFfmpegChecked = false
+        nativeFfmpegPath = null
+      }
+    } catch {
+      nativeFfmpegChecked = false
+      nativeFfmpegPath = null
+    } finally {
+      nativeProbePromise = null
+    }
+    setStatus({
+      ...status,
+      native: Boolean(nativeFfmpegChecked),
+      nativePath: nativeFfmpegPath,
+    })
+    return Boolean(nativeFfmpegChecked)
+  })()
+
+  return nativeProbePromise
 }
 
 /** Subscribe to load/unload transitions. Fires immediately with the state. */
 export function onFfmpegStatus(handler: StatusHandler): () => void {
   statusHandlers.add(handler)
   handler(status)
+  if (nativeFfmpegChecked === null) {
+    void probeNativeFfmpeg()
+  }
   return () => {
     statusHandlers.delete(handler)
   }
@@ -236,6 +282,9 @@ export async function loadFfmpeg({ singleThread = false }: LoadOptions = {}): Pr
   if (loading) return loading
 
   loading = (async () => {
+    if (nativeFfmpegChecked === null) {
+      await probeNativeFfmpeg()
+    }
     const caps = detectCapabilities()
     const multiThreaded = caps.ffmpegMultiThread && !singleThread
     const ffmpeg = new FFmpeg()
@@ -284,6 +333,8 @@ export async function loadFfmpeg({ singleThread = false }: LoadOptions = {}): Pr
       loaded: true,
       multiThreaded,
       threads: multiThreaded ? suggestedThreads(caps) : 1,
+      native: Boolean(nativeFfmpegChecked),
+      nativePath: nativeFfmpegPath,
     })
     setBoot({ state: 'ready', message: 'FFmpeg bereit', error: null })
     return ffmpeg
@@ -312,7 +363,13 @@ export async function unloadFfmpeg(): Promise<void> {
   } finally {
     instance = null
     loading = null
-    setStatus({ loaded: false, multiThreaded: false, threads: 1 })
+    setStatus({
+      loaded: false,
+      multiThreaded: false,
+      threads: 1,
+      native: Boolean(nativeFfmpegChecked),
+      nativePath: nativeFfmpegPath,
+    })
     setBoot({ state: 'idle', message: 'Noch nicht geladen', receivedBytes: 0, totalBytes: null })
   }
 }
@@ -402,8 +459,6 @@ function base64ToBytes(b64: string): Uint8Array {
   return out
 }
 
-let nativeFfmpegChecked: boolean | null = null
-
 async function tryRunNativeFfmpeg({ input, output, args, folders = [], signal }: RunOptions): Promise<RunResult | null> {
   if (typeof window === 'undefined') return null
   const isLocalDesktop = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
@@ -412,20 +467,8 @@ async function tryRunNativeFfmpeg({ input, output, args, folders = [], signal }:
   const totalInputBytes = Object.values(input).reduce((sum, b) => sum + b.byteLength, 0)
   if (totalInputBytes > 120 * 1024 * 1024) return null
 
-  if (nativeFfmpegChecked === null) {
-    try {
-      const res = await fetch('/api/ffmpeg/status', { signal })
-      if (res.ok) {
-        const data = (await res.json()) as { available?: boolean }
-        nativeFfmpegChecked = Boolean(data.available)
-      } else {
-        nativeFfmpegChecked = false
-      }
-    } catch {
-      nativeFfmpegChecked = false
-    }
-  }
-  if (!nativeFfmpegChecked) return null
+  const available = await probeNativeFfmpeg(signal)
+  if (!available) return null
 
   try {
     const encodedInput: Record<string, string> = {}

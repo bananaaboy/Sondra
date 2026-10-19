@@ -8,8 +8,11 @@
  */
 
 
+import { useEffect, useState } from 'react'
+
 import { useFilePicker } from '../hooks/useIngest'
 import { IN_DESKTOP_APP } from '../lib/desktop'
+import { onFfmpegStatus, type FfmpegStatus } from '../lib/ffmpegClient'
 import { APP_VERSION } from '../lib/version'
 import type { ThemeChoice } from '../lib/theme'
 import { useSession } from '../state/store'
@@ -179,14 +182,33 @@ export function DropOverlay({ visible }: { visible: boolean }) {
 const footerLink = 'text-ink underline underline-offset-[3px] hover:no-underline'
 
 export function Footer() {
+  const [ffmpeg, setFfmpeg] = useState<FfmpegStatus>({ loaded: false, multiThreaded: false, threads: 1 })
+  useEffect(() => onFfmpegStatus(setFfmpeg), [])
+
+  const ffmpegComponentLabel = ffmpeg.native
+    ? 'FFmpeg (Nativ · System)'
+    : ffmpeg.loaded
+      ? ffmpeg.multiThreaded
+        ? `FFmpeg (WebAssembly · ${ffmpeg.threads} Threads)`
+        : 'FFmpeg (WebAssembly · 1 Thread)'
+      : 'FFmpeg (WebAssembly)'
+
+  const ffmpegStatusBadge = ffmpeg.native
+    ? 'FFmpeg: Nativ'
+    : ffmpeg.loaded
+      ? ffmpeg.multiThreaded
+        ? `FFmpeg: WASM (${ffmpeg.threads} Threads)`
+        : 'FFmpeg: WASM (1 Thread)'
+      : 'FFmpeg: WASM'
+
   return (
     <footer className="shell mt-[36px] flex flex-col gap-[12px] border-t border-line py-[24px] text-small text-muted">
       <div className="flex flex-wrap items-center justify-between gap-[16px]">
         <p className="max-w-[60ch] leading-[1.6]">
-          Statisch ausgeliefert, lokal gerechnet. Quelloffene Bausteine: FFmpeg (WebAssembly), ONNX
+          Statisch ausgeliefert, lokal gerechnet. Quelloffene Bausteine: {ffmpegComponentLabel}, ONNX
           Runtime Web, Wavesurfer, Tone.js.
         </p>
-        <p>v{APP_VERSION} · Keine Uploads · keine Cookies · kein Tracking</p>
+        <p>v{APP_VERSION} · {ffmpegStatusBadge} · Keine Uploads · keine Cookies · kein Tracking</p>
       </div>
       <p className="flex flex-wrap gap-x-[16px] gap-y-[4px]">
         {IN_DESKTOP_APP ? null : (
