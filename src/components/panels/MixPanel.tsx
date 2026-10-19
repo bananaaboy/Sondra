@@ -19,6 +19,7 @@ import { encodeWav, type AudioData } from '../../lib/wav'
 import { createZip } from '../../lib/zip'
 import { decodeAssetAudio } from '../../hooks/useDecodedAudio'
 import { useFilePicker } from '../../hooks/useIngest'
+import { UndoRedoBar, useUndoHistory } from '../../hooks/useUndoHistory'
 import { useSession, type Asset } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
 import { ArrowRight, Button, Card, Field, Notice, Progress, Select, Slider, Toggle } from '../ui/primitives'
@@ -96,6 +97,7 @@ export function MixPanel() {
   const [voiceId, setVoiceId] = useState<string | null>(null)
   const [musicId, setMusicId] = useState<string | null>(null)
   const [settings, setSettings] = useState<DuckSettings>(rememberedSettings)
+  const history = useUndoHistory(settings, setSettings, { enabled: candidates.length >= 2 })
   const [decoded, setDecoded] = useState<{ voice: AudioData; music: AudioData; key: string } | null>(null)
   const [decoding, setDecoding] = useState(false)
   const [result, setResult] = useState<{ mix: DuckResult; flat: AudioData } | null>(null)
@@ -157,6 +159,7 @@ export function MixPanel() {
 
   const update = (patch: Partial<DuckSettings>) =>
     setSettings((current) => {
+      history.record(current)
       const next = { ...current, ...patch }
       try {
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
@@ -258,23 +261,26 @@ export function MixPanel() {
             </div>
 
             {/* Schnell-Presets */}
-            <div className="mt-[20px] flex flex-wrap items-center gap-[6px]">
-              <span className="text-small font-medium text-muted">Vorgaben:</span>
-              {[
-                { label: 'Podcast / Talk', settings: { musicDb: -14, duckDb: 16, sensitivity: 0.5, attackMs: 120, releaseMs: 600 } },
-                { label: 'Radio / Moderation', settings: { musicDb: -10, duckDb: 14, sensitivity: 0.6, attackMs: 80, releaseMs: 400 } },
-                { label: 'Hintergrund / Dezent', settings: { musicDb: -18, duckDb: 8, sensitivity: 0.4, attackMs: 200, releaseMs: 800 } },
-                { label: 'Voiceover / Stark', settings: { musicDb: -8, duckDb: 22, sensitivity: 0.7, attackMs: 60, releaseMs: 350 } },
-              ].map((preset) => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  onClick={() => update(preset.settings)}
-                  className="rounded-nav bg-panel-soft px-[10px] py-[4px] text-small font-medium text-ink hover:bg-panel-mid transition-colors ring-1 ring-line"
-                >
-                  {preset.label}
-                </button>
-              ))}
+            <div className="mt-[20px] flex flex-wrap items-center justify-between gap-[8px]">
+              <div className="flex flex-wrap items-center gap-[6px]">
+                <span className="text-small font-medium text-muted">Vorgaben:</span>
+                {[
+                  { label: 'Podcast / Talk', settings: { musicDb: -14, duckDb: 16, sensitivity: 0.5, attackMs: 120, releaseMs: 600 } },
+                  { label: 'Radio / Moderation', settings: { musicDb: -10, duckDb: 14, sensitivity: 0.6, attackMs: 80, releaseMs: 400 } },
+                  { label: 'Hintergrund / Dezent', settings: { musicDb: -18, duckDb: 8, sensitivity: 0.4, attackMs: 200, releaseMs: 800 } },
+                  { label: 'Voiceover / Stark', settings: { musicDb: -8, duckDb: 22, sensitivity: 0.7, attackMs: 60, releaseMs: 350 } },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => update(preset.settings)}
+                    className="rounded-nav bg-panel-soft px-[10px] py-[4px] text-small font-medium text-ink hover:bg-panel-mid transition-colors ring-1 ring-line"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              <UndoRedoBar canUndo={history.canUndo} canRedo={history.canRedo} onUndo={history.undo} onRedo={history.redo} />
             </div>
 
             {/* 3 Thematische Karten */}

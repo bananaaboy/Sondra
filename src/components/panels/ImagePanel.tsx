@@ -275,11 +275,13 @@ export function ImagePanel() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return
+      if (!(event.ctrlKey || event.metaKey)) return
+      const key = event.key.toLowerCase()
+      if (key !== 'z' && key !== 'y') return
       const target = event.target as HTMLElement | null
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return
       event.preventDefault()
-      if (event.shiftKey) redo()
+      if (key === 'y' || event.shiftKey) redo()
       else undo()
     }
     window.addEventListener('keydown', onKey)

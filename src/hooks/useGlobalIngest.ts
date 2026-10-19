@@ -29,37 +29,19 @@ interface LaunchQueue {
 
 export function useGlobalIngest(): { dragging: boolean } {
   const { ingest } = useIngestFiles()
-  const [dragging, setDragging] = useState(false)
+  const [dragging] = useState(false)
 
   useEffect(() => {
-    // Depth counting, because dragenter/dragleave fire for every child element
-    // the pointer crosses and a naive boolean flickers.
-    let depth = 0
-
-    const onDragEnter = (event: DragEvent) => {
-      if (!event.dataTransfer?.types.includes('Files')) return
-      depth += 1
-      setDragging(true)
-    }
+    // Prevent the browser from navigating away when a file misses a drop box,
+    // while requiring the user to drop files directly inside an actual drop field.
     const onDragOver = (event: DragEvent) => {
       if (!event.dataTransfer?.types.includes('Files')) return
       event.preventDefault()
-      event.dataTransfer.dropEffect = 'copy'
-    }
-    const onDragLeave = () => {
-      depth = Math.max(0, depth - 1)
-      if (depth === 0) setDragging(false)
+      event.dataTransfer.dropEffect = 'none'
     }
     const onDrop = (event: DragEvent) => {
       if (!event.dataTransfer?.files.length) return
       event.preventDefault()
-      depth = 0
-      setDragging(false)
-      // The player takes its own: a film dropped there is played from disk,
-      // not read into the session.
-      const inbox = playerInbox()
-      if (inbox) return inbox(Array.from(event.dataTransfer.files))
-      void ingest(Array.from(event.dataTransfer.files), 'per Drag & Drop geladen')
     }
     const onPaste = (event: ClipboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -73,15 +55,11 @@ export function useGlobalIngest(): { dragging: boolean } {
       void ingest(files, 'aus der Zwischenablage eingefügt')
     }
 
-    window.addEventListener('dragenter', onDragEnter)
     window.addEventListener('dragover', onDragOver)
-    window.addEventListener('dragleave', onDragLeave)
     window.addEventListener('drop', onDrop)
     window.addEventListener('paste', onPaste)
     return () => {
-      window.removeEventListener('dragenter', onDragEnter)
       window.removeEventListener('dragover', onDragOver)
-      window.removeEventListener('dragleave', onDragLeave)
       window.removeEventListener('drop', onDrop)
       window.removeEventListener('paste', onPaste)
     }

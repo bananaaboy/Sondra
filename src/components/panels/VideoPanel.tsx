@@ -358,6 +358,9 @@ export function VideoPanel() {
         event.preventDefault()
         if (event.shiftKey) redo()
         else undo()
+      } else if (key === 'y') {
+        event.preventDefault()
+        redo()
       }
     }
     window.addEventListener('keydown', onKey)

@@ -1663,6 +1663,24 @@ export function DownloaderPanel() {
               ) : null}
               <button
                 type="button"
+                aria-pressed={autoTranscribe}
+                onClick={() => {
+                  const next = !autoTranscribe
+                  setAutoTranscribe(next)
+                  log('holen', next ? 'Lokale KI: Automatische Whisper-Untertitel nach dem Laden aktiviert' : 'Lokale KI: Automatische Untertitel deaktiviert')
+                }}
+                title="Erstellt beim Herunterladen automatisch Untertitel (.srt) mit der lokalen Whisper-KI auf diesem Gerät"
+                className={`press inline-flex items-center gap-[6px] rounded-nav px-[10px] py-[6px] text-small font-medium transition-colors ${
+                  autoTranscribe
+                    ? 'bg-ink text-on-ink ring-1 ring-inset ring-ink'
+                    : 'bg-panel-soft text-ink ring-1 ring-inset ring-line hover:ring-ink'
+                }`}
+              >
+                <span>Lokale KI</span>
+                <span className="text-micro opacity-80">{autoTranscribe ? 'Untertitel an' : 'Untertitel'}</span>
+              </button>
+              <button
+                type="button"
                 aria-expanded={settingsOpen}
                 aria-controls="download-settings"
                 onClick={() => setSettingsOpen((open) => !open)}

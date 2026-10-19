@@ -44,7 +44,9 @@ import { SLICE_DEFAULTS, SOUND_LABELS, startVoice, type PlayMode, type Slice, ty
 import { StepSequencer } from './StepSequencer'
 import { createZip } from '../../lib/zip'
 import { createCueSheet, createAudacityLabels } from '../../lib/cueExport'
+import { startFileDragOut } from '../../lib/dragOut'
 import { connectWebMidi, type MidiAccessSubscription } from '../../lib/midi'
+import { setProjectToolState } from '../../lib/project'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { useActiveAsset, useSession } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
@@ -1066,6 +1068,10 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
     updateSlice(slice.id, { start, end })
   }
 
+  useEffect(() => {
+    setProjectToolState('sampler', { slices, bpm, choke, fadeMs, normalize })
+  }, [slices, bpm, choke, fadeMs, normalize])
+
   /* -- the head of each pattern row: the pad itself ----------------------------- */
   const padHead = (slice: Slice, index: number) => {
     const key = PAD_KEYS[index]
@@ -1074,8 +1080,23 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
     return (
       <button
         type="button"
+        draggable={Boolean(audio)}
+        title={`Pad ${index + 1} (${key.toUpperCase()}) · antippen zum Spielen oder als WAV herausziehen`}
         aria-label={`Pad ${index + 1}, Taste ${key.toUpperCase()} — spielen und wählen`}
         aria-pressed={isSelected}
+        onDragStart={(event) => {
+          if (!audio) return
+          let piece = sliceAudio(audio, slice.start, slice.end)
+          if (slice.reverse) piece = reverseAudio(piece)
+          const fade = fadeMs / 1000
+          piece = applyFades(piece, fade, fade)
+          if (normalize) piece = normalizePeak(piece, -0.3)
+          if (slice.attackMs > 0 || slice.releaseMs > 0) {
+            piece = applyFades(piece, slice.attackMs / 1000, slice.releaseMs / 1000)
+          }
+          const wavBytes = encodeWav(piece, 24)
+          startFileDragOut(event, sliceName(index), wavBytes, 'audio/wav')
+        }}
         onPointerDown={() => {
           setActiveSlice(slice.id)
           setSide((value) => (value === 'kit' || value === 'vorgaben' ? 'pad' : value))

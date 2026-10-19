@@ -1481,12 +1481,29 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         {fileInputs}
         <div className="flex flex-col gap-[12px]">
           <div
-            onDragOver={(event) => {
+            onDragEnter={(event) => {
+              if (!event.dataTransfer.types.includes('Files')) return
               event.preventDefault()
+              event.stopPropagation()
               setDragging(true)
             }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={() => setDragging(false)}
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes('Files')) return
+              event.preventDefault()
+              event.stopPropagation()
+              event.dataTransfer.dropEffect = 'copy'
+              if (!dragging) setDragging(true)
+            }}
+            onDragLeave={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+              setDragging(false)
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              setDragging(false)
+              if (event.dataTransfer.files.length) void addFiles(Array.from(event.dataTransfer.files), true)
+            }}
             className={`flex flex-col items-center gap-[12px] rounded-card p-[28px] text-center transition-colors duration-[var(--dur-fast)] ${
               dragging ? 'bg-panel-mid ring-2 ring-inset ring-ink' : 'bg-panel-soft ring-1 ring-inset ring-line'
             }`}
@@ -1694,6 +1711,18 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
             onPointerMove={wake}
             onPointerDown={wake}
             onPointerLeave={() => playing && setIdle(true)}
+            onDragOver={(event) => {
+              if (!event.dataTransfer.types.includes('Files')) return
+              event.preventDefault()
+              event.stopPropagation()
+              event.dataTransfer.dropEffect = 'copy'
+            }}
+            onDrop={(event) => {
+              if (!event.dataTransfer.files.length) return
+              event.preventDefault()
+              event.stopPropagation()
+              void addFiles(Array.from(event.dataTransfer.files), true)
+            }}
             className={`sondra-player group/player isolate overflow-hidden text-white ${isVideo ? 'bg-black' : 'bg-stage'} ${controlsShown && isVideo ? 'controls-up' : ''} ${
               fullscreen ? 'relative h-screen' : fill ? 'fixed inset-0 z-[60] h-[100dvh]' : 'relative rounded-card elevate-lift'
             } ${!controlsShown ? 'cursor-none' : ''}`}

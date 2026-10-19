@@ -52,6 +52,7 @@ import {
 } from '../../lib/liveSound'
 import { removeClicks, type ClickStrength } from '../../lib/declick'
 import { formatBytes, formatTimecode } from '../../lib/format'
+import { detectNoiseFloorRegion } from '../../lib/localAi'
 import { pitchShift, stretchAudio } from '../../lib/timestretch'
 import { encodeWav, type AudioData, type WavBitDepth } from '../../lib/wav'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
@@ -1070,20 +1071,36 @@ export function AudioEditorPanel() {
               {noise ? (
                 <Toggle label="Rauschen entfernen" checked={Boolean(on.noise)} onChange={toggle('noise')} hint="Aus dem gelernten Rauschprofil, sofort zu hören." />
               ) : (
-                <ToolHeading title="Rauschen entfernen" hint="Erst eine Stelle wählen, an der nur das Rauschen zu hören ist, und daraus lernen." />
+                <ToolHeading title="Rauschen entfernen" hint="Mit Lokale KI automatisch erkennen oder eine Stelle in der Welle auswählen." />
               )}
-              <Button
-                size="sm"
-                variant="quiet"
-                disabled={idle || !hasSelection}
-                onClick={() => {
-                  setNoise(learnNoise(copyRange(current, span.start, span.end)))
-                  enable('noise')
-                  log('ton', `Rauschprofil aus ${(span.end - span.start).toFixed(2)} s gelernt`)
-                }}
-              >
-                {noise ? 'Neu lernen aus der Auswahl' : 'Aus der Auswahl lernen'}
-              </Button>
+              <div className="flex flex-wrap gap-[6px]">
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  disabled={idle}
+                  onClick={() => {
+                    const region = detectNoiseFloorRegion(current)
+                    setNoise(learnNoise(copyRange(current, region.start, region.end)))
+                    enable('noise')
+                    log('ton', `Lokale KI: Rauschprofil automatisch erkannt (${formatTimecode(region.start)} – ${formatTimecode(region.end)})`)
+                  }}
+                  title="Erkennt das Rauschprofil automatisch per lokaler KI-Spektralanalyse und entfernt das Hintergrundrauschen"
+                >
+                  Lokale KI
+                </Button>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  disabled={idle || !hasSelection}
+                  onClick={() => {
+                    setNoise(learnNoise(copyRange(current, span.start, span.end)))
+                    enable('noise')
+                    log('ton', `Rauschprofil aus ${(span.end - span.start).toFixed(2)} s gelernt`)
+                  }}
+                >
+                  {noise ? 'Neu aus Auswahl' : 'Aus der Auswahl lernen'}
+                </Button>
+              </div>
               {noise ? (
                 <ChoiceRow
                   value={noiseCut}

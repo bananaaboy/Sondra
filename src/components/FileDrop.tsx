@@ -6,7 +6,7 @@
  * target. Ingestion itself is shared with every other door in `useIngest`.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { useFilePicker, useIngestFiles } from '../hooks/useIngest'
 import { ArrowRight, Button } from './ui/primitives'
@@ -25,38 +25,25 @@ export function FileDrop({
   const { input, open, busy } = useFilePicker('geöffnet', accept)
   const [dragging, setDragging] = useState(false)
 
-  useEffect(() => {
-    let depth = 0
-    const onEnter = (e: DragEvent) => {
-      if (!e.dataTransfer?.types.includes('Files')) return
-      depth += 1
-      setDragging(true)
-    }
-    const onLeave = () => {
-      depth = Math.max(0, depth - 1)
-      if (depth === 0) setDragging(false)
-    }
-    const onDropWindow = () => {
-      depth = 0
-      setDragging(false)
-    }
-    window.addEventListener('dragenter', onEnter)
-    window.addEventListener('dragleave', onLeave)
-    window.addEventListener('drop', onDropWindow)
-    return () => {
-      window.removeEventListener('dragenter', onEnter)
-      window.removeEventListener('dragleave', onLeave)
-      window.removeEventListener('drop', onDropWindow)
-    }
-  }, [])
-
   return (
     <div
-      onDragOver={(event) => {
+      onDragEnter={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return
         event.preventDefault()
+        event.stopPropagation()
         setDragging(true)
       }}
-      onDragLeave={() => setDragging(false)}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return
+        event.preventDefault()
+        event.stopPropagation()
+        event.dataTransfer.dropEffect = 'copy'
+        if (!dragging) setDragging(true)
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+        setDragging(false)
+      }}
       onDrop={(event) => {
         event.preventDefault()
         event.stopPropagation()

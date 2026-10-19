@@ -13,6 +13,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { saveBytes } from '../../lib/download'
 import { loadFfmpeg, probeVideo, runFfmpeg } from '../../lib/ffmpegClient'
 import { formatBytes, formatTimecode, withExtension } from '../../lib/format'
+import { isWhisperModelCached } from '../../lib/localAi'
+import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import {
   SPEECH_LANGUAGES,
   SPEECH_MODELS,
@@ -25,9 +27,10 @@ import {
   type TranscriptSegment,
 } from '../../lib/transcribe'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
+import { UndoRedoBar, useUndoHistory } from '../../hooks/useUndoHistory'
 import { useActiveAsset, useSession, type Asset } from '../../state/store'
 import { FileDrop } from '../FileDrop'
-import { ArrowRight, Button, Card, Field, Notice, Progress, SectionHead, Select } from '../ui/primitives'
+import { ArrowRight, Badge, Button, Card, Field, Notice, Progress, SectionHead, Select } from '../ui/primitives'
 
 const MODEL_KEY = 'sondra:sprachmodell'
 const LANGUAGE_KEY = 'sondra:sprache'
@@ -73,46 +76,83 @@ export function SubtitlesPanel() {
   const [model, setModel] = useState(() => remembered(MODEL_KEY, SPEECH_MODELS[0].id))
   const [language, setLanguage] = useState(() => remembered(LANGUAGE_KEY, 'de'))
   const [stage, setStage] = useState<Stage>({ kind: 'idle' })
-  const [segments, setSegments] = useState<TranscriptSegment[] | null>(null)
+  const [segments, setSegments] = useState<TranscriptSegment[] | null>(() => {
+    const saved = getProjectToolState<{ segments?: TranscriptSegment[] }>('subtitles')
+    return saved?.segments ?? null
+  })
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState<number | null>(null)
+  const [modelCached, setModelCached] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
-  // A different file makes the last transcript someone else's.
+  const undoHistory = useUndoHistory<TranscriptSegment[] | null>(segments, (snap) => setSegments(snap))
+
   useEffect(() => {
-    setSegments(null)
-    setError(null)
-    setElapsed(null)
-  }, [asset?.id])
+    void isWhisperModelCached().then(setModelCached)
+  }, [stage.kind])
+
+  useEffect(() => {
+    setProjectToolState('subtitles', { segments, language, model })
+  }, [segments, language, model])
+
+  useEffect(() => {
+    const onProjectLoaded = () => {
+      const saved = getProjectToolState<{ segments?: TranscriptSegment[]; language?: string; model?: string }>('subtitles')
+      if (saved?.segments) setSegments(saved.segments)
+      if (saved?.language) setLanguage(saved.language)
+      if (saved?.model) setModel(saved.model)
+    }
+    window.addEventListener('sondra:project-loaded', onProjectLoaded)
+    return () => window.removeEventListener('sondra:project-loaded', onProjectLoaded)
+  }, [])
+
+  // A different file makes the last transcript someone else's.
+  const lastAssetId = useRef<string | undefined>(asset?.id)
+  useEffect(() => {
+    if (lastAssetId.current && lastAssetId.current !== asset?.id) {
+      setSegments(null)
+      setError(null)
+      setElapsed(null)
+      undoHistory.clear()
+    }
+    lastAssetId.current = asset?.id
+  }, [asset?.id, undoHistory])
 
   const chosen = SPEECH_MODELS.find((entry) => entry.id === model) ?? SPEECH_MODELS[0]
   const busy = stage.kind !== 'idle'
   const stem = asset ? asset.name.replace(/\.[^.]+$/, '') : 'untertitel'
 
-  const run = async () => {
+  const run = async (forceHighAccuracy = false) => {
     if (!asset) return
     const controller = new AbortController()
     abortRef.current = controller
     setError(null)
+    if (segments) undoHistory.record(segments)
     setSegments(null)
+    const activeModel = forceHighAccuracy ? (SPEECH_MODELS[1] ?? chosen) : chosen
+    if (forceHighAccuracy && SPEECH_MODELS[1]) {
+      setModel(SPEECH_MODELS[1].id)
+      remember(MODEL_KEY, SPEECH_MODELS[1].id)
+    }
     const started = performance.now()
     try {
       setStage({ kind: 'decoding' })
       const audio = await decode()
       if (!audio) throw new Error('Die Tonspur liess sich nicht lesen.')
       const samples = await toSpeechSamples(audio)
-      setStage({ kind: 'loading', loaded: 0, total: chosen.bytes })
+      setStage({ kind: 'loading', loaded: 0, total: activeModel.bytes })
       const result = await transcribe(samples, {
-        model: chosen.id,
+        model: activeModel.id,
         language,
         signal: controller.signal,
-        onLoading: (loaded, total) => setStage({ kind: 'loading', loaded, total: Math.max(total, loaded, chosen.bytes) }),
+        onLoading: (loaded, total) => setStage({ kind: 'loading', loaded, total: Math.max(total, loaded, activeModel.bytes) }),
         onProgress: (fraction, done) => setStage({ kind: 'listening', fraction, done }),
         onPartial: (partial) => setSegments(partial),
       })
       setSegments(result)
       setElapsed((performance.now() - started) / 1000)
-      log('untertitel', `${asset.name}: ${result.length} ${result.length === 1 ? "Abschnitt" : "Abschnitte"} erkannt (${chosen.label})`)
+      setModelCached(true)
+      log('untertitel', `${asset.name}: ${result.length} ${result.length === 1 ? "Abschnitt" : "Abschnitte"} erkannt (${activeModel.label})`)
     } catch (failure) {
       if (failure instanceof DOMException && failure.name === 'AbortError') {
         log('untertitel', 'Abgebrochen', 'warn')
@@ -127,8 +167,10 @@ export function SubtitlesPanel() {
     }
   }
 
-  const edit = (index: number, text: string) =>
+  const edit = (index: number, text: string) => {
+    if (segments) undoHistory.record(segments)
     setSegments((current) => current?.map((segment, at) => (at === index ? { ...segment, text } : segment)) ?? null)
+  }
 
   const cleaned = useMemo(() => segments?.filter((segment) => segment.text.trim()) ?? [], [segments])
   const encoder = new TextEncoder()
@@ -254,10 +296,19 @@ export function SubtitlesPanel() {
             </p>
 
             <div className="mt-[20px] flex flex-wrap items-center gap-[12px]">
-              <Button onClick={() => void run()} disabled={busy}>
+              <Button onClick={() => void run(false)} disabled={busy}>
                 {busy && stage.kind !== 'writing' ? 'Läuft …' : segments ? 'Noch einmal erkennen' : 'Text erkennen'}
                 {!busy ? <ArrowRight /> : null}
               </Button>
+              <Button
+                variant="quiet"
+                onClick={() => void run(true)}
+                disabled={busy}
+                title="Startet die lokale Whisper-KI-Spracherkennung auf diesem Gerät"
+              >
+                Lokale KI
+              </Button>
+              {modelCached ? <Badge>Lokales KI-Modell bereit</Badge> : null}
               {busy && stage.kind !== 'writing' ? (
                 <Button variant="quiet" onClick={() => abortRef.current?.abort()}>
                   Abbrechen
@@ -298,11 +349,19 @@ export function SubtitlesPanel() {
 
       {segments && segments.length > 0 ? (
         <Card tone="slate">
-          <div className="flex flex-wrap items-baseline justify-between gap-[12px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px]">
             <SectionHead>Text</SectionHead>
-            <span className="value text-small text-muted">
-              {segments.length} {segments.length === 1 ? 'Abschnitt' : 'Abschnitte'}{elapsed !== null ? ` · in ${elapsed.toFixed(0)} s erkannt` : ' · läuft noch'}
-            </span>
+            <div className="flex flex-wrap items-center gap-[12px]">
+              <UndoRedoBar
+                canUndo={undoHistory.canUndo}
+                canRedo={undoHistory.canRedo}
+                onUndo={undoHistory.undo}
+                onRedo={undoHistory.redo}
+              />
+              <span className="value text-small text-muted">
+                {segments.length} {segments.length === 1 ? 'Abschnitt' : 'Abschnitte'}{elapsed !== null ? ` · in ${elapsed.toFixed(0)} s erkannt` : ' · läuft noch'}
+              </span>
+            </div>
           </div>
           <p className="mt-[4px] text-small text-muted">Jede Zeile lässt sich korrigieren, bevor sie gespeichert wird.</p>
 
