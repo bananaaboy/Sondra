@@ -26,7 +26,7 @@ export const IMAGE_ACCEPT = 'image/*,.heic,.heif,.avif,.webp'
  * system file dialog opened on a filter of sound and video, and a photo could
  * only be picked by switching that filter to „All files" by hand.
  */
-export const ACCEPTED_FILES = `.sondra,audio/*,video/*,.mkv,.flac,.opus,.m4a,.ts,.aac,.wma,.aiff,.aif,${IMAGE_ACCEPT}`
+export const ACCEPTED_FILES = `audio/*,video/*,.mkv,.flac,.opus,.m4a,.ts,.aac,.wma,.aiff,.aif,${IMAGE_ACCEPT}`
 
 export function useIngestFiles() {
   const addAsset = useSession((state) => state.addAsset)
@@ -55,7 +55,7 @@ export function useIngestFiles() {
         let count = 0
         for (const projectFile of projects) {
           const bytes = new Uint8Array(await projectFile.arrayBuffer())
-          const loaded = await loadProjectBytes(bytes, projectFile.name)
+          const loaded = loadProjectBytes(bytes, projectFile.name)
           count += loaded.assetCount
         }
         for (const file of usable) {
@@ -105,6 +105,46 @@ export function useFilePicker(source = 'geöffnet', accept = ACCEPTED_FILES) {
       onChange={(event) => {
         if (event.target.files?.length) void ingest(event.target.files, source)
         // Cleared so picking the same file twice in a row still fires.
+        event.target.value = ''
+      }}
+    />
+  )
+
+  return { input, open: () => ref.current?.click(), busy }
+}
+
+/**
+ * Dedicated picker for `.sondra` project files.
+ */
+export function useProjectPicker() {
+  const log = useSession((state) => state.log)
+  const [busy, setBusy] = useState(false)
+  const ref = useRef<HTMLInputElement>(null)
+
+  const openProject = useCallback(
+    async (file: File) => {
+      setBusy(true)
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer())
+        loadProjectBytes(bytes, file.name)
+      } catch (err) {
+        log('projekt', err instanceof Error ? err.message : String(err), 'error')
+      } finally {
+        setBusy(false)
+      }
+    },
+    [log],
+  )
+
+  const input = (
+    <input
+      ref={ref}
+      type="file"
+      accept=".sondra"
+      className="sr-only"
+      onChange={(event) => {
+        const file = event.target.files?.[0]
+        if (file) void openProject(file)
         event.target.value = ''
       }}
     />

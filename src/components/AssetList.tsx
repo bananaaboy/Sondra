@@ -21,13 +21,26 @@ import { startFileDragOut } from '../lib/dragOut'
 import { formatBytes, formatDuration } from '../lib/format'
 import { saveProjectFile } from '../lib/project'
 import { useDecodedAudio } from '../hooks/useDecodedAudio'
-import { useFilePicker } from '../hooks/useIngest'
+import { useFilePicker, useProjectPicker } from '../hooks/useIngest'
 import { useKept } from '../hooks/useKeptSession'
 import { useActiveAsset, useSession } from '../state/store'
 import { AudioPreview } from './AudioPreview'
 import { Badge, Toggle } from './ui/primitives'
 import { createZip, uniqueEntryNames } from '../lib/zip'
 import { ZipSave } from './ZipSave'
+
+/** Sondra's own 5-bar mark, rendered inside `.sondra` project actions. */
+export function SondraProjectIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" className={`fill-current ${className}`} aria-hidden>
+      <rect x="9" y="5.35" width="13.99" height="3.3" rx="1.65" />
+      <rect x="7.73" y="9.85" width="20.95" height="3.3" rx="1.65" />
+      <rect x="4.6" y="14.35" width="22.8" height="3.3" rx="1.65" />
+      <rect x="3.33" y="18.85" width="20.95" height="3.3" rx="1.65" />
+      <rect x="9" y="23.35" width="13.99" height="3.3" rx="1.65" />
+    </svg>
+  )
+}
 
 /** Playback of the selected file, decoded only once the menu is open. */
 function SelectedPlayer() {
@@ -89,6 +102,7 @@ export function SessionMenu() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
   const picker = useFilePicker('geöffnet')
+  const projectPicker = useProjectPicker()
   const keep = useKept((state) => state.keep)
   const saving = useKept((state) => state.saving)
   const setKeep = useKept((state) => state.setKeep)
@@ -153,6 +167,7 @@ export function SessionMenu() {
   return (
     <div ref={rootRef} className="relative">
       {picker.input}
+      {projectPicker.input}
       <span className="sr-only" role="status" aria-live="polite">
         {arrived ? `${arrived} ist jetzt in der Sitzung` : ''}
       </span>
@@ -303,7 +318,7 @@ export function SessionMenu() {
             })}
           </ul>
 
-          <div className="flex flex-wrap items-center justify-between gap-[12px]">
+          <div className="flex flex-wrap items-center justify-between gap-[8px]">
             <button
               type="button"
               onClick={() => {
@@ -313,16 +328,32 @@ export function SessionMenu() {
               disabled={picker.busy}
               className="press self-start text-small text-ink underline underline-offset-[3px] hover:no-underline disabled:opacity-40"
             >
-              {picker.busy ? 'Wird gelesen…' : 'Weitere Datei oder Projekt öffnen'}
+              {picker.busy ? 'Wird gelesen…' : 'Weitere Datei öffnen'}
             </button>
-            <button
-              type="button"
-              onClick={() => void saveProjectFile()}
-              className="press rounded-nav bg-panel-soft px-[10px] py-[5px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink"
-              title="Speichert alle Sitzungsdateien und Werkzeugeinstellungen als .sondra Projektdatei"
-            >
-              Projekt speichern (.sondra)
-            </button>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  projectPicker.open()
+                }}
+                disabled={projectPicker.busy}
+                className="press inline-flex items-center gap-[6px] rounded-nav bg-panel-soft px-[10px] py-[5px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink disabled:opacity-40"
+                title="Öffnet eine gespeicherte .sondra Projektdatei"
+              >
+                <SondraProjectIcon />
+                <span>{projectPicker.busy ? 'Lädt…' : 'Projekt laden'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveProjectFile()}
+                className="press inline-flex items-center gap-[6px] rounded-nav bg-panel-soft px-[10px] py-[5px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink"
+                title="Speichert alle Sitzungsdateien und Werkzeugeinstellungen als .sondra Projektdatei"
+              >
+                <SondraProjectIcon />
+                <span>Projekt speichern (.sondra)</span>
+              </button>
+            </div>
           </div>
 
           {/* The whole session in one archive, under a name of one's own. */}

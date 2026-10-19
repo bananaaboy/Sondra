@@ -210,6 +210,7 @@ if (forStore) {
     // „Öffnen mit“, the MSIX way: the package declares what it can open and
     // Windows lists it, without it becoming anyone's default.
     fileAssociations: [
+      { ext: 'sondra', name: 'sondra.projekt', description: 'Sondra-Projekt' },
       { ext: ['mp3', 'wav', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'aif', 'aiff', 'wma'], name: 'sondra.ton', description: 'Ton' },
       { ext: ['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi'], name: 'sondra.video', description: 'Video' },
       { ext: ['png', 'jpg', 'jpeg', 'webp', 'gif'], name: 'sondra.bild', description: 'Bild' },

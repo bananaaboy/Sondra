@@ -17,6 +17,7 @@
  * file, and quit. The Windows CI job uses it to test the installed app.
  */
 
+import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -499,17 +500,32 @@ async function open() {
 
 }
 
+function registerSondraProjectIcon() {
+  if (process.platform !== 'win32' || IN_STORE || SMOKE || !app.isPackaged) return
+  const exe = process.execPath
+  const entries = [
+    ['HKCU\\Software\\Classes\\.sondra', '/ve', '/d', 'Sondra.Projekt', '/f'],
+    ['HKCU\\Software\\Classes\\Sondra.Projekt', '/ve', '/d', 'Sondra-Projekt', '/f'],
+    ['HKCU\\Software\\Classes\\Sondra.Projekt\\DefaultIcon', '/ve', '/d', `${exe},0`, '/f'],
+    ['HKCU\\Software\\Classes\\Sondra.Projekt\\shell\\open\\command', '/ve', '/d', `"${exe}" "%1"`, '/f'],
+  ]
+  for (const args of entries) {
+    execFile('reg.exe', ['add', ...args], { windowsHide: true }, () => {})
+  }
+}
+
 app.setAppUserModelId('ch.lizge.sondra')
 
-if (primary) app.whenReady().then(() =>
-  open().catch((failure) => {
+if (primary) app.whenReady().then(() => {
+  registerSondraProjectIcon()
+  return open().catch((failure) => {
     const message = String(failure?.message ?? failure)
     log(`Start fehlgeschlagen: ${failure?.stack ?? failure}`)
     if (SMOKE) fs.writeFileSync(SMOKE, JSON.stringify({ error: message }))
     else dialog.showErrorBox('Sondra konnte nicht starten', `${message}\n\nProtokoll: ${logFile()}`)
     app.exit(1)
-  }),
-)
+  })
+})
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()

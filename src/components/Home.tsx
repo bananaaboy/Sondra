@@ -17,11 +17,13 @@ import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useShallow } from 'zustand/shallow'
 
-import { useFilePicker, useIngestFiles } from '../hooks/useIngest'
+import { useFilePicker, useIngestFiles, useProjectPicker } from '../hooks/useIngest'
 import { ACTIONS, GROUP_LABEL, actionsFor, searchActions, type ToolAction, type ToolGroup } from '../lib/actions'
 import { IN_DESKTOP_APP } from '../lib/desktop'
 import { formatBytes, formatDuration } from '../lib/format'
+import { saveProjectFile } from '../lib/project'
 import { KIND_LABEL, useActiveAsset, useSession, type PanelId } from '../state/store'
+import { SondraProjectIcon } from './AssetList'
 import { openGetAppDialog } from './GetApp'
 import { PANELS, ToolIcon } from './panelMeta'
 import { ArrowRight, Button } from './ui/primitives'
@@ -338,7 +340,17 @@ function ShieldCheckIcon() {
  * Without a file: the dashed drop target with the two entry buttons inside it.
  * Flat surface, no glow, following DESIGN.md.
  */
-function WayIn({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
+function WayIn({
+  onOpen,
+  onOpenProject,
+  busy,
+  projectBusy,
+}: {
+  onOpen: () => void
+  onOpenProject: () => void
+  busy: boolean
+  projectBusy: boolean
+}) {
   const setPanel = useSession((state) => state.setPanel)
   const { ingest } = useIngestFiles()
   const [dragging, setDragging] = useState(false)
@@ -386,6 +398,17 @@ function WayIn({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
           <Button
             variant="quiet"
             size="sm"
+            onClick={onOpenProject}
+            disabled={projectBusy}
+            className="px-[14px] py-[9px]"
+            title=".sondra Projektdatei laden"
+          >
+            <SondraProjectIcon />
+            <span>{projectBusy ? 'Lädt…' : 'Projekt laden'}</span>
+          </Button>
+          <Button
+            variant="quiet"
+            size="sm"
             onClick={() => setPanel('downloader')}
             className="px-[16px] py-[9px]"
           >
@@ -398,7 +421,7 @@ function WayIn({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
 }
 
 /** With a file: what it is, and the tools that fit it. */
-function FileCard({ onOpen }: { onOpen: () => void }) {
+function FileCard({ onOpen, onOpenProject }: { onOpen: () => void; onOpenProject: () => void }) {
   const active = useActiveAsset()
   const setPanel = useSession((state) => state.setPanel)
   if (!active) return null
@@ -432,13 +455,35 @@ function FileCard({ onOpen }: { onOpen: () => void }) {
           über das Dateimenü oben.
         </p>
       )}
-      <button
-        type="button"
-        onClick={onOpen}
-        className="press self-start text-small text-ink underline underline-offset-[3px] hover:no-underline"
-      >
-        Andere Datei öffnen
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-[10px]">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="press text-small text-ink underline underline-offset-[3px] hover:no-underline"
+        >
+          Andere Datei öffnen
+        </button>
+        <div className="flex flex-wrap items-center gap-[6px]">
+          <button
+            type="button"
+            onClick={onOpenProject}
+            className="press inline-flex items-center gap-[6px] rounded-nav bg-raised px-[10px] py-[5px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink"
+            title=".sondra Projektdatei laden"
+          >
+            <SondraProjectIcon />
+            <span>Projekt laden</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveProjectFile()}
+            className="press inline-flex items-center gap-[6px] rounded-nav bg-raised px-[10px] py-[5px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink"
+            title="Speichert alle Sitzungsdateien und Werkzeugeinstellungen als .sondra Projektdatei"
+          >
+            <SondraProjectIcon />
+            <span>Projekt speichern (.sondra)</span>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -451,6 +496,7 @@ export function Home() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ToolGroup | 'alle'>('alle')
   const picker = useFilePicker('geöffnet')
+  const projectPicker = useProjectPicker()
 
   const searching = query.trim().length > 0
 
@@ -502,6 +548,7 @@ export function Home() {
   return (
     <div className="flex flex-col gap-[24px] sm:gap-[28px]">
       {picker.input}
+      {projectPicker.input}
 
       {/* -- the way in ----------------------------------------------------- */}
       {active ? (
@@ -518,7 +565,7 @@ export function Home() {
               ) : null}
             </p>
           </div>
-          <FileCard onOpen={picker.open} />
+          <FileCard onOpen={picker.open} onOpenProject={projectPicker.open} />
         </section>
       ) : (
         <section className="grid grid-cols-1 gap-[16px] lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
@@ -534,7 +581,12 @@ export function Home() {
               <span>100% lokal &amp; privat</span>
             </div>
           </div>
-          <WayIn onOpen={picker.open} busy={picker.busy} />
+          <WayIn
+            onOpen={picker.open}
+            onOpenProject={projectPicker.open}
+            busy={picker.busy}
+            projectBusy={projectPicker.busy}
+          />
         </section>
       )}
 

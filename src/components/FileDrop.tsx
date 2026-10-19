@@ -8,7 +8,8 @@
 
 import { useState } from 'react'
 
-import { useFilePicker, useIngestFiles } from '../hooks/useIngest'
+import { useFilePicker, useIngestFiles, useProjectPicker } from '../hooks/useIngest'
+import { SondraProjectIcon } from './AssetList'
 import { ArrowRight, Button } from './ui/primitives'
 
 export function FileDrop({
@@ -23,6 +24,7 @@ export function FileDrop({
 }) {
   const { ingest } = useIngestFiles()
   const { input, open, busy } = useFilePicker('geöffnet', accept)
+  const projectPicker = useProjectPicker()
   const [dragging, setDragging] = useState(false)
 
   return (
@@ -57,13 +59,26 @@ export function FileDrop({
       } ${compact ? 'p-[16px]' : 'p-[28px]'}`}
     >
       {input}
+      {projectPicker.input}
       {!compact ? (
         <p className="text-body text-prose">{prompt}</p>
       ) : null}
-      <Button size={compact ? 'sm' : 'md'} onClick={open} disabled={busy}>
-        {busy ? 'Wird gelesen…' : 'Datei auswählen'}
-        <ArrowRight />
-      </Button>
+      <div className="flex flex-wrap items-center justify-center gap-[8px]">
+        <Button size={compact ? 'sm' : 'md'} onClick={open} disabled={busy}>
+          {busy ? 'Wird gelesen…' : 'Datei auswählen'}
+          <ArrowRight />
+        </Button>
+        <Button
+          variant="quiet"
+          size={compact ? 'sm' : 'md'}
+          onClick={projectPicker.open}
+          disabled={projectPicker.busy}
+          title=".sondra Projektdatei laden"
+        >
+          <SondraProjectIcon />
+          <span>{projectPicker.busy ? 'Lädt…' : 'Projekt laden'}</span>
+        </Button>
+      </div>
     </div>
   )
 }
