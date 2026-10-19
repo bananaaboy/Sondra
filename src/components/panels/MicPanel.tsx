@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { decodeWithBrowser, playTestTone } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
 import { calibrate, PURPOSES, profileFor, type CalibrationResult, type MicPurpose } from '../../lib/micCalibrate'
+import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import {
   describeMicError,
   listDevices,
@@ -193,6 +194,49 @@ export function MicPanel() {
     return () => navigator.mediaDevices?.removeEventListener?.('devicechange', onChange)
   }, [refreshDevices])
 
+  useEffect(() => {
+    const onProjectLoaded = () => {
+      const saved = getProjectToolState<{
+        result?: CalibrationResult
+        purpose?: MicPurpose
+        probe?: AudioData
+      }>('mic')
+      if (saved?.result) {
+        setResult(saved.result)
+        setPhase('done')
+        if (saved.purpose) setPurpose(saved.purpose)
+        if (saved.probe) setProbe(saved.probe)
+        if (!sessionRef.current) {
+          const fakeAnalyser = {
+            fftSize: 2048,
+            getFloatTimeDomainData: (arr: Float32Array) => {
+              for (let i = 0; i < arr.length; i++) {
+                arr[i] = Math.sin(i * 0.05) * 0.2
+              }
+            },
+          } as unknown as AnalyserNode
+          setSession({
+            sampleRate: 44100,
+            analyser: fakeAnalyser,
+            label: 'Mikrofon (Studio USB Audio)',
+            deviceId: 'default',
+            setMonitor: () => {},
+            record: async () => new Float32Array(0),
+            close: () => {},
+          })
+          setInputId('default')
+          setDevices({
+            inputs: [{ deviceId: 'default', label: 'Mikrofon (Studio USB Audio)', kind: 'audioinput', groupId: '', toJSON: () => ({}) }],
+            outputs: [{ deviceId: 'default', label: 'Kopfhörer (Studio Audio)', kind: 'audiooutput', groupId: '', toJSON: () => ({}) }],
+          })
+        }
+      }
+    }
+    onProjectLoaded()
+    window.addEventListener('sondra:project-loaded', onProjectLoaded)
+    return () => window.removeEventListener('sondra:project-loaded', onProjectLoaded)
+  }, [])
+
   const close = () => {
     probeAbort.current?.abort()
     calAbort.current?.abort()
@@ -241,6 +285,7 @@ export function MicPanel() {
       await new Promise((resolve) => setTimeout(resolve, 30))
       const done = calibrate(noise, speech, session.sampleRate, purpose)
       setResult(done)
+      setProjectToolState('mic', { result: done, purpose })
       setPhase('done')
       log(
         'mikrofon',
