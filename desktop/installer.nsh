@@ -69,6 +69,15 @@
 !macro customInstall
   WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" "InstallLocation" "$INSTDIR"
 
+  ; Native .sondra project files always carry the Sondra icon and open in Sondra Studio.
+  WriteRegStr SHELL_CONTEXT "Software\Classes\.sondra" "" "Sondra.Projekt"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\.sondra\OpenWithProgids" "Sondra.Projekt" ""
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Projekt" "" "Sondra-Projekt"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Projekt\DefaultIcon" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Projekt\shell\open" "FriendlyAppName" "Sondra Studio"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Projekt\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\SupportedTypes" ".sondra" ""
+
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei" "" "Mediendatei (Sondra)"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei\DefaultIcon" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei\shell\open" "FriendlyAppName" "Sondra Studio"
@@ -87,6 +96,8 @@
 
 !macro customUnInstall
   !insertmacro sondraEachExtension sondraForget
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\.sondra"
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\Sondra.Projekt"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\Sondra.Datei"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'

@@ -45,6 +45,28 @@
   "file_handlers": [
     {
       "action": "./",
+      "name": "Sondra-Projekt",
+      "icons": [
+        {
+          "src": "./favicon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        },
+        {
+          "src": "./icon-512.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ],
+      "accept": {
+        "application/x-sondra": [
+          ".sondra"
+        ]
+      },
+      "launch_type": "single-client"
+    },
+    {
+      "action": "./",
       "accept": {
         "audio/mpeg": [
           ".mp3"
