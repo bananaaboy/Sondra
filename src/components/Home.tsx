@@ -13,15 +13,16 @@
  * 4. The Windows app block at the foot (web only).
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useShallow } from 'zustand/shallow'
 
-import { useFilePicker } from '../hooks/useIngest'
+import { useFilePicker, useIngestFiles } from '../hooks/useIngest'
 import { ACTIONS, GROUP_LABEL, actionsFor, searchActions, type ToolAction, type ToolGroup } from '../lib/actions'
 import { IN_DESKTOP_APP } from '../lib/desktop'
 import { formatBytes, formatDuration } from '../lib/format'
 import { KIND_LABEL, useActiveAsset, useSession, type PanelId } from '../state/store'
+import { openGetAppDialog } from './GetApp'
 import { PANELS, ToolIcon } from './panelMeta'
 import { ArrowRight, Button } from './ui/primitives'
 
@@ -339,11 +340,58 @@ function ShieldCheckIcon() {
  */
 function WayIn({ onOpen, busy }: { onOpen: () => void; busy: boolean }) {
   const setPanel = useSession((state) => state.setPanel)
+  const { ingest } = useIngestFiles()
+  const [dragging, setDragging] = useState(false)
+
+  useEffect(() => {
+    let depth = 0
+    const onEnter = (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes('Files')) return
+      depth += 1
+      setDragging(true)
+    }
+    const onLeave = () => {
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setDragging(false)
+    }
+    const onDropWindow = () => {
+      depth = 0
+      setDragging(false)
+    }
+    window.addEventListener('dragenter', onEnter)
+    window.addEventListener('dragleave', onLeave)
+    window.addEventListener('drop', onDropWindow)
+    return () => {
+      window.removeEventListener('dragenter', onEnter)
+      window.removeEventListener('dragleave', onLeave)
+      window.removeEventListener('drop', onDropWindow)
+    }
+  }, [])
+
   return (
-    <div className="flex rounded-card bg-panel-soft p-[8px] ring-1 ring-inset ring-line">
-      <div className="flex flex-1 flex-col items-center justify-center gap-[10px] rounded-[12px] border border-dashed border-rule px-[20px] py-[22px] text-center sm:px-[28px] sm:py-[26px]">
+    <div
+      onDragOver={(event) => {
+        event.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        setDragging(false)
+        if (event.dataTransfer.files.length) void ingest(event.dataTransfer.files, 'hierher gezogen')
+      }}
+      className={`flex rounded-card p-[8px] transition-colors duration-[var(--dur-fast)] ${
+        dragging ? 'bg-panel-mid ring-2 ring-inset ring-ink' : 'bg-panel-soft ring-1 ring-inset ring-line'
+      }`}
+    >
+      <div
+        className={`flex flex-1 flex-col items-center justify-center gap-[10px] rounded-[12px] border border-dashed px-[20px] py-[22px] text-center transition-colors sm:px-[28px] sm:py-[26px] ${
+          dragging ? 'border-ink bg-raised/60' : 'border-rule'
+        }`}
+      >
         <UploadTrayIcon />
-        <p className="display-sm">Datei hierher ziehen</p>
+        <p className="display-sm">{dragging ? 'Loslassen zum Öffnen' : 'Datei hierher ziehen'}</p>
         <div className="mt-[4px] flex flex-wrap items-center justify-center gap-[8px]">
           <Button size="sm" onClick={onOpen} disabled={busy} className="px-[16px] py-[9px] font-semibold">
             {busy ? 'Wird gelesen…' : 'Datei auswählen'}
@@ -593,15 +641,16 @@ export function Home() {
             <h2 className="text-body font-semibold text-ink">Sondra als Windows-App</h2>
             <p className="text-small text-prose">Eigenes Fenster, läuft ohne Browser, rechnet auf Ihrem Rechner.</p>
           </div>
-          <a
-            href="./download.html"
+          <button
+            type="button"
+            onClick={openGetAppDialog}
             className="press inline-flex shrink-0 items-center gap-[8px] rounded-nav bg-raised px-[14px] py-[10px] text-small font-medium text-ink ring-1 ring-inset ring-rule hover:ring-ink"
           >
             <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
               <path d="M8 2.5v7.5M4.8 6.8 8 10l3.2-3.2M3 13h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             Für Windows herunterladen
-          </a>
+          </button>
         </section>
       )}
     </div>

@@ -15,7 +15,7 @@ import type { ThemeChoice } from '../lib/theme'
 import { useSession } from '../state/store'
 import { SessionMenu } from './AssetList'
 import { AppUpdateButton } from './AppUpdate'
-import { GetAppButton } from './GetApp'
+import { GetAppButton, openGetAppDialog } from './GetApp'
 import { PanelTabs } from './PanelTabs'
 import { ThemeToggle } from './ThemeToggle'
 import { Button } from './ui/primitives'
@@ -190,9 +190,9 @@ export function Footer() {
       </div>
       <p className="flex flex-wrap gap-x-[16px] gap-y-[4px]">
         {IN_DESKTOP_APP ? null : (
-          <a className={footerLink} href="./download.html">
+          <button type="button" className={footerLink} onClick={openGetAppDialog}>
             Sondra für Windows herunterladen
-          </a>
+          </button>
         )}
         <a className={footerLink} href="./datenschutz.html">
           Datenschutz

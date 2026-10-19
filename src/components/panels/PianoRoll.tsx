@@ -224,7 +224,7 @@ export function PianoRoll({
                   key={semitone}
                   type="button"
                   onClick={() => onAudition(semitone)}
-                  title={semitone === 0 ? 'Grundton des Pads (C4)' : `${semitone > 0 ? '+' : ''}${semitone} Halbtöne (${noteName(semitone)})`}
+                  title={semitone === 0 ? 'Tonhöhe des Pads' : `${semitone > 0 ? '+' : ''}${semitone} Halbtöne (${noteName(semitone)})`}
                   className={`value flex w-full items-center justify-end border-b border-line/60 pr-[6px] text-micro transition-colors ${
                     black
                       ? 'bg-panel-strong/75 text-ink hover:bg-ink hover:text-on-ink'
