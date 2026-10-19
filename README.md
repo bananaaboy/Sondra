@@ -2,16 +2,18 @@
 
 Ein Medienstudio im Browser, das nichts hochlädt. Der Server liefert HTML,
 JavaScript und WebAssembly aus — danach rechnet ausschliesslich der Rechner des
-Besuchers. Live unter [sondra.lizge.ch](https://www.sondra.lizge.ch), als Windows-App über
-die [Releases](https://github.com/bananaaboy/Sondra/releases/latest).
+Besuchers. Live unter [sondra.lizge.ch](https://www.sondra.lizge.ch), als Windows-App im
+[Microsoft Store](https://apps.microsoft.com/detail/9P0JXR5GNSMG) oder über die
+[Releases](https://github.com/bananaaboy/Sondra/releases/latest).
 
 Vite 7 · React 19 · TypeScript · Tailwind v4 · zustand · FFmpeg als
-WebAssembly.
+WebAssembly und nativ.
 
 ## Was es kann
 
 Die Werkzeuge heissen nach dem Ergebnis, nicht nach dem Verfahren. Jedes hat
-eine eigene Adresse; der Start ist die blanke Wurzel.
+eine eigene Adresse; der Start ist die blanke Wurzel. Die Reihenfolge folgt exakt
+der Navigationsleiste:
 
 | Werkzeug | Adresse | |
 |---|---|---|
@@ -19,25 +21,27 @@ eine eigene Adresse; der Start ist die blanke Wurzel.
 | **Umwandeln** | `#umwandeln` | Ton und Video in andere Formate; die Ziele richten sich nach der Quelle, mehrere Dateien auf einmal als ZIP |
 | **Ton** | `#ton` | Schneiden an der Wellenform, Kopieren/Einfügen/Verdoppeln, Stille einfügen, Zoom (auch mit dem Mausrad) und Schleife; Filter, Bass/Höhen, Kompressor, Klicks und Knackser entfernen, Rauschentfernung aus einem Rauschprofil, Echo, Hall, Pegel, Blenden, Tonhöhe und Tempo — alles live zu hören, bevor es übernommen wird; Kanäle |
 | **Video** | `#video` | Schneiden an der Zeitleiste, Ausschnitt, Drehen; Bild (Helligkeit, Kontrast, Sättigung, Looks, schärfen, entrauschen, stabilisieren), Blenden, Lautstärke und Lautheit, Tempo, rückwärts, Ton herauslösen, GIF |
+| **Abspielen** | `#abspielen` | Media Player zum Ansehen und Anhören: spielt direkt von der Festplatte, auch grosse Filme, Wiedergabeliste, Untertitel aus .srt/.vtt, Vollbild, Bild im Bild, Tempo, Tastatur, „Weiter bei“; was der Browser nicht kann (AVI, MPEG-4, AC-3/DTS-Ton), macht FFmpeg abspielbar |
 | **Bilder** | `#bilder` | Skalieren, zuschneiden, Farbe, umwandeln, Stapel als ZIP |
+| **Mischen** | `#mischen` | Stimme und Musik in eine Datei; die Musik wird beim Sprechen weich leiser (Schwelle aus der Aufnahme, Haltezeit, Vorlauf, Ausklang), Vorher/Nachher, als WAV oder unter das Video gelegt |
 | **Spuren trennen** | `#spuren-trennen` | Gesang, Schlagzeug, Bass, Übriges — ohne Modell-Download |
 | **Lautstärke** | `#lautstaerke` | EBU R128 / ITU-R BS.1770-4 mit True-Peak-Grenze, mehrere Dateien auf einmal als ZIP |
 | **Zerschneiden** | `#zerschneiden` | Schnitte an Anschlägen oder im Tempo-Raster, 16 Pads mit Tonhöhe, Pegel, Panorama und Hüllkurve, eigene Bereiche nach Bestätigung, Step-Sequencer (Tempo, Swing, 16/32 Schritte) mit Klavierrolle je Pad, als loopbare WAV oder MIDI, Sample-Pack |
 | **Tonart** | `#tonart` | Tempo, Tonart mit Camelot-Code, Akkordverlauf, Melodie als MIDI |
 | **Untertitel** | `#untertitel` | Gesprochenes als Text mit Whisper auf dem Gerät (Modell einmalig von Hugging Face), jede Zeile korrigierbar; als TXT, SRT, VTT, als Untertitelspur im Video oder ins Bild gebrannt |
-| **Mischen** | `#mischen` | Stimme und Musik in eine Datei; die Musik wird beim Sprechen weich leiser (Schwelle aus der Aufnahme, Haltezeit, Vorlauf, Ausklang), Vorher/Nachher, als WAV oder unter das Video gelegt |
-| **Abspielen** | `#abspielen` | Media Player zum Ansehen und Anhören: spielt direkt von der Festplatte, auch grosse Filme, Wiedergabeliste, Untertitel aus .srt/.vtt, Vollbild, Bild im Bild, Tempo, Tastatur, „Weiter bei“; was der Browser nicht kann (AVI, MPEG-4, AC-3/DTS-Ton), macht FFmpeg abspielbar |
 | **Bildschirm** | `#bildschirm` | Ganzer Bildschirm oder ein Fenster, mit Ton des Rechners und/oder Mikrofon, als Video direkt in die Sitzung; in der App mit Quellenauswahl samt Vorschaubildern |
 | **Mikrofon** | `#mikrofon` | Ein- und Ausgang wählen, Pegelanzeige, Mithören, Probe; Einstellen für Podcast, Streaming, Videocall, Gesang oder Instrument mit Bericht jedes Schritts und Vorher/Nachher |
 
 Die Sitzung bleibt auf dem Gerät (IndexedDB) und wird nach dem Schliessen
-wieder angeboten; abschaltbar im Dateimenü. Nach einem Besuch geht alles ausser
+wieder angeboten; abschaltbar im Dateimenü. Ganze Projekte lassen sich als
+`.sondra`-Datei exportieren und über den Knopf „Projekt laden“ auf der Startseite
+oder per Dateiverknüpfung wiederherstellen. Nach einem Besuch geht alles ausser
 dem Herunterladen auch ohne Netz. `?` zeigt alle Tastenkürzel.
 
-Die Startseite zeigt ohne Datei nur, was die Seite kann, und den Knopf, der
-sie startet. Mit Datei fragt sie, was damit passieren soll, und bietet die
-passenden Werkzeuge an. Darunter stehen alle Werkzeuge als Kacheln, nach
-Gruppen filterbar und durchsuchbar.
+Die Startseite zeigt ohne Datei nur, was die Seite kann, sowie die Knöpfe zum
+Öffnen von Dateien, Laden von Projekten oder Abrufen von Adressen. Mit Datei fragt
+sie, was damit passieren soll, und bietet die passenden Werkzeuge an. Darunter
+stehen alle Werkzeuge als Kacheln, nach Gruppen filterbar und durchsuchbar.
 
 Die geöffneten Dateien liegen hinter dem Dateinamen in der Kopfzeile: dort
 wechseln, abspielen, speichern, entfernen, weitere öffnen oder alles
@@ -65,9 +69,11 @@ baut einmal und startet `npm run dev:service`.
 1. **Keine fremden Ursprünge.** Schriften, WASM-Module und Skripte liegen im
    eigenen Bündel. Kein CDN, keine Google Fonts, kein Analytics. Der
    Netzwerk-Tab bleibt nach dem Laden still.
-2. **Medien nur im Arbeitsspeicher.** Dateien liegen ausschliesslich im Heap
-   des Tabs — keine IndexedDB, keine Cookies. Tab schliessen ist die
-   Löschtaste. Im `localStorage` stehen nur drei Einstellungen: das
+2. **Medien im Arbeitsspeicher.** Dateien liegen standardmässig ausschliesslich
+   im Heap des Tabs. Optional sichert die lokale Sitzungswiederherstellung
+   den Stand im Browser (IndexedDB), oder man exportiert die gesamte Sitzung
+   als `.sondra`-Projektdatei. Tab schliessen ohne Speichern ist die
+   Löschtaste. Im `localStorage` stehen nur Einstellungen: das
    Erscheinungsbild (`sondra:theme`), ein selbst eingetragener
    Extraktionsdienst (`sondra:service`, ohne API-Schlüssel) und eigene
    Instanzen (`sondra:instances`).
@@ -174,9 +180,36 @@ die Website ausliefert, ohne Bereitstellungsdateien, Service Worker und
 
 Die App schreibt ein Protokoll nach `%APPDATA%\Sondra\sondra.log`.
 
-## FFmpeg im Browser
+## Projektdateien (.sondra)
 
-`@ffmpeg/ffmpeg` ist nur ein RPC-Client; `load()` startet einen Worker und
+Über das Sitzungsmenü oder den Knopf „Projekt speichern“ lässt sich der gesamte
+Arbeitsstand als portable `.sondra`-Datei sichern und transportieren:
+
+- **Alles in einer Datei:** Eine `.sondra`-Datei ist ein ZIP-Archiv,
+  das sämtliche Quell- und Ergebnisdateien unter `assets/` enthält sowie eine
+  `project.json` mit allen Werkzeugzuständen.
+- **Zustände bleiben erhalten:** Schnittmarken, Sampler-Slices, Melodien und
+  Muster im Step-Sequencer, Untertitel-Texte mit Zeitcodes, Bildschirmaufnahmen
+  und Mikrofon-Kalibrierungen werden exakt wiederhergestellt.
+- **Einfaches Laden:** Direkt über den Knopf **„Projekt laden“** auf der Startseite,
+  per Drag & Drop oder über die Windows-Dateiverknüpfung mit dem offiziellen
+  Sondra-Dateisymbol.
+
+## FFmpeg: Nativ und im Browser
+
+Sondra wählt automatisch den schnellsten verfügbaren Weg für Audio- und Videoberechnungen:
+
+- **Natives FFmpeg:** Ist auf dem Rechner (oder in der Windows-App) ein natives
+  FFmpeg verfügbar, nutzt Sondra direkte Systemaufrufe ohne WebAssembly-Overhead.
+- **WebAssembly (mehrfädig):** Im Browser mit aktivierten Isolations-Headern
+  rechnet `@ffmpeg/core-mt` mehrfädig parallel über Web Worker und `SharedArrayBuffer`.
+- **WebAssembly (einfädig):** Fehlt die Isolation, schaltet Sondra nahtlos auf
+  den einfädigen Core zurück.
+
+Welcher Motor gerade rechnet, wird transparent in der Fußzeile (z. B. `FFmpeg: Nativ`
+oder `FFmpeg: WASM (4 Threads)`) sowie im Bereich „Unter der Haube“ ausgewiesen.
+
+Im Browser ist `@ffmpeg/ffmpeg` nur ein RPC-Client; `load()` startet einen Worker und
 übergibt ihm die Adressen von Core und WASM. Was dabei zählt:
 
 - **Alles aus dem eigenen Bündel.** Beide Cores sind Abhängigkeiten und werden
@@ -358,21 +391,22 @@ als App installieren.
 
 ```
 api/                 Funktionen des Downloaders (resolve, stream, _shared)
-desktop/             Windows-App: Electron-Fenster, lokaler Server, Setup-Texte
+desktop/             Windows-App: Electron-Fenster, lokaler Server, Setup-Texte, Icons
 public/              statische Dateien: Schriften, Icons, Manifest,
                      Service Worker, Datenschutzerklärung
-scripts/             Build der App, lokaler Dienst, Prüfskripte
+scripts/             Build der App, lokaler Dienst, Prüf- und Screenshot-Skripte
 src/
   components/        Kopfzeile, Startseite, Reiter, Sitzungsmenü, Wellenform
     editor/          gemeinsame Editor-Hülle und Zuschnitt
-    panels/          die zehn Werkzeuge, dazu der Step-Sequencer
+    panels/          die 14 Werkzeug-Panels, Step-Sequencer und Piano-Roll
+    player/          Media Player, Mini-Bar, Abspiellisten-Steuerung
     ui/              Grundbausteine (Button, Notice, Reveal …)
-  hooks/             Routing, Dateiaufnahme, Dekodierung, Theme
+  hooks/             Routing, Dateiaufnahme, Dekodierung, Theme, Undo/Redo
   lib/               Rechenverfahren, Effekte, Mikrofon-Kalibrierung, Pattern,
-                     FFmpeg-Client, Downloader-Client
+                     Projektdateien (.sondra), FFmpeg-Client, Downloader-Client
   state/             Sitzung (zustand, nur im Speicher)
   styles/            Tokens und Theme
-.github/workflows/   Build und Release der Windows-App
+.github/workflows/   Build, Test und Release der Windows-App (Setup & MSIX)
 ```
 
 Produktgrundlagen stehen in [PRODUCT.md](PRODUCT.md), die gestalterischen
