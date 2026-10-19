@@ -229,6 +229,12 @@ function DefenderDialog({
 
 const ACTION = 'inline-flex items-center gap-[10px] rounded-nav px-[22px] py-[14px] text-body font-semibold'
 
+export const OPEN_GET_APP_EVENT = 'sondra:get-app'
+
+export function openGetAppDialog() {
+  window.dispatchEvent(new Event(OPEN_GET_APP_EVENT))
+}
+
 export function GetAppButton() {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -239,6 +245,12 @@ export function GetAppButton() {
   const [arm, setArm] = useState(false)
   useEffect(() => {
     void onWindowsArm().then(setArm)
+  }, [])
+
+  useEffect(() => {
+    const onOpen = () => setOpen(true)
+    window.addEventListener(OPEN_GET_APP_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_GET_APP_EVENT, onOpen)
   }, [])
 
   useEffect(() => {
@@ -407,8 +419,6 @@ export function GetAppButton() {
             >
               {arm ? 'Setup für x64-Prozessoren' : 'Setup für Arm-Prozessoren'}
             </button>
-            {' · '}
-            <a href="./download.html" className="text-ink underline underline-offset-[3px] hover:no-underline">Download-Seite & Hinweise</a>
           </p>
         </div>
       </dialog>

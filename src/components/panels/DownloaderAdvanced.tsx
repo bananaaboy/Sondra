@@ -29,6 +29,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { openGetAppDialog } from '../GetApp'
+
 import {
   audioFor,
   fetchHlsSegments,
@@ -1066,15 +1068,17 @@ export function AdvancedDownloader({ url }: { url: string }) {
                         und lädt Videos sofort in voller Auflösung herunter.
                       </p>
                       <div className="mt-[12px]">
-                        <a
-                          href="https://www.sondra.lizge.ch/download.html"
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className="inline-flex items-center gap-[6px] rounded-nav bg-ink px-[14px] py-[8px] text-small font-medium text-on-ink hover:opacity-90"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSetupDialog(false)
+                            openGetAppDialog()
+                          }}
+                          className="press inline-flex items-center gap-[6px] rounded-nav bg-ink px-[14px] py-[8px] text-small font-medium text-on-ink hover:opacity-90"
                         >
                           Sondra für Windows herunterladen
                           <ArrowRight />
-                        </a>
+                        </button>
                       </div>
                     </div>
 

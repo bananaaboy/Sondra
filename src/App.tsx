@@ -2,7 +2,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { Dashboard } from './components/Dashboard'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ShortcutHelp } from './components/ShortcutHelp'
-import { DropOverlay, Footer, Header } from './components/AppShell'
+import { Footer, Header } from './components/AppShell'
 import { useFfmpegPrefetch } from './hooks/useFfmpegPrefetch'
 import { useGlobalIngest } from './hooks/useGlobalIngest'
 import { useKeptSession } from './hooks/useKeptSession'
@@ -11,7 +11,7 @@ import { useTheme } from './hooks/useTheme'
 
 export default function App() {
   const { choice, resolved, setChoice } = useTheme()
-  const { dragging } = useGlobalIngest()
+  useGlobalIngest()
   useFfmpegPrefetch()
   useKeptSession()
   usePanelRoute()
@@ -24,7 +24,6 @@ export default function App() {
           <Dashboard theme={resolved} />
         </main>
         <Footer />
-        <DropOverlay visible={dragging} />
         <CommandPalette />
         <ShortcutHelp />
       </div>

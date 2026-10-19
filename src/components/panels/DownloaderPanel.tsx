@@ -41,6 +41,7 @@ import { ArrowRight, Button, Card, Notice, Progress, Reveal, Select, Toggle } fr
 import { ChoiceRow } from '../editor/EditorShell'
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { AdvancedDownloader } from './DownloaderAdvanced'
+import { openGetAppDialog } from '../GetApp'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { ZipSave } from '../ZipSave'
 
@@ -203,12 +204,41 @@ function groupStreams(streams: StudioStream[], videoPref: VideoFilePref = 'untou
     groups.get(resKey)!.streams.push(s)
   }
 
-  // Sort streams inside each group: if lower quality is preferred for audio, smaller first; otherwise highest size/bitrate first
+  // Deduplicate each group:
+  // - Video resolution groups: pick ONE best stream per resolution (preferring muxed video+audio and MP4 container, then highest size)
+  // - Audio group: deduplicate identical bitrates and keep at most 3 distinct quality tiers (Beste, Mittel, Kompakt)
   for (const group of groups.values()) {
-    if (group.isAudio && audioPref === 'low') {
-      group.streams.sort((a, b) => (a.bytes ?? Number.MAX_SAFE_INTEGER) - (b.bytes ?? Number.MAX_SAFE_INTEGER))
+    if (group.isAudio) {
+      if (audioPref === 'low') {
+        group.streams.sort((a, b) => (a.bytes ?? Number.MAX_SAFE_INTEGER) - (b.bytes ?? Number.MAX_SAFE_INTEGER))
+      } else {
+        group.streams.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
+      }
+      const seenBitrate = new Set<string>()
+      const uniqueAudio: StudioStream[] = []
+      for (const s of group.streams) {
+        const br = s.label.match(/(\d+\s*kbit\/s)/i)?.[1]?.replace(/\s+/g, '') ?? `${s.ext}-${s.bytes ?? s.id}`
+        if (seenBitrate.has(br)) continue
+        seenBitrate.add(br)
+        uniqueAudio.push(s)
+      }
+      if (uniqueAudio.length > 3) {
+        const midIdx = Math.floor(uniqueAudio.length / 2)
+        group.streams = [uniqueAudio[0], uniqueAudio[midIdx], uniqueAudio[uniqueAudio.length - 1]]
+      } else {
+        group.streams = uniqueAudio
+      }
     } else {
-      group.streams.sort((a, b) => (b.bytes ?? 0) - (a.bytes ?? 0))
+      group.streams.sort((a, b) => {
+        const audioDiff = (b.hasAudio ? 1 : 0) - (a.hasAudio ? 1 : 0)
+        if (audioDiff !== 0) return audioDiff
+        const mp4Diff = (b.ext.toLowerCase() === 'mp4' ? 1 : 0) - (a.ext.toLowerCase() === 'mp4' ? 1 : 0)
+        if (mp4Diff !== 0) return mp4Diff
+        return (b.bytes ?? 0) - (a.bytes ?? 0)
+      })
+      if (group.id !== 'video' && group.streams.length > 1) {
+        group.streams = [group.streams[0]]
+      }
     }
   }
 
@@ -376,54 +406,44 @@ async function reencodeVideoToTargetHeight(
   return { bytes: outBytes, ext: 'mp4', mime: 'video/mp4' }
 }
 
-/**
- * The one place where Sondra is not local, said loudly.
- *
- * The header used to carry this as a chip on every screen. That it is local
- * everywhere else goes without saying; the exception belongs where it happens,
- * big enough that nobody pastes an address without having read it.
- */
 function NotLocalNotice() {
-  // Every word stays — the last sentence is binding. What changed is the
-  // shape: three bullets under a heading made a box half a screen tall above
-  // the field. Side by side the same three sentences take a few lines.
+  const [open, setOpen] = useState(false)
   return (
-    <div role="note" className="rounded-card bg-panel-cool p-[16px] ring-2 ring-inset ring-ink sm:p-[20px]">
-      <p className="flex items-start gap-[10px] text-ink">
-        <svg viewBox="0 0 16 16" className="mt-[1px] size-[20px] shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M8 1.6l6.2 10.8H1.8zM8 6.2v3.1M8 11.2h.01" />
-        </svg>
-        <span className="flex flex-wrap items-baseline gap-x-[12px] gap-y-[2px]">
-          <span className="text-body font-bold leading-[1.3]">Achtung: Herunterladen läuft nicht lokal</span>
-          <span className="text-small text-prose">
-            Das ist das einzige Werkzeug, das Ihr Gerät verlässt. Alle anderen rechnen nur hier.
-          </span>
+    <div role="note" className="rounded-nav bg-panel-cool px-[12px] py-[8px] ring-1 ring-inset ring-rule">
+      <div className="flex flex-wrap items-center justify-between gap-x-[12px] gap-y-[4px] text-small">
+        <span className="flex items-center gap-[8px] text-ink">
+          <svg viewBox="0 0 16 16" className="size-[15px] shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M8 1.6l6.2 10.8H1.8zM8 6.2v3.1M8 11.2h.01" />
+          </svg>
+          <span className="font-semibold">Herunterladen läuft über einen Dienst</span>
+          <span className="text-muted">· Bitte nur laden, was erlaubt ist.</span>
         </span>
-      </p>
-      <ul className="mt-[10px] grid gap-x-[24px] gap-y-[6px] text-small leading-[1.5] text-prose sm:grid-cols-3 sm:pl-[30px] [&_li]:max-w-none">
-        <li>
-          Die Adresse, die Sie einfügen, geht an einen Dienst dieser Seite. Er schlägt dort nach und
-          holt die Datei. Ihre eigenen Dateien sieht er nie.
-        </li>
-        <li>
-          Die Datei läuft durch diesen Dienst zu Ihnen. Gespeichert wird sie dort nicht; alles
-          Weitere — schneiden, umwandeln, trennen — passiert wieder hier im Tab.
-        </li>
-        <li className="font-semibold text-ink">
-          Das Ganze läuft über einen Proxy, und ich hafte dafür absolut nicht. Laden Sie nur
-          herunter, was Sie herunterladen dürfen. Kopierschutz wird hier nicht umgangen.
-        </li>
-      </ul>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+        >
+          {open ? 'Weniger' : 'Hinweis'}
+        </button>
+      </div>
+      {open ? (
+        <ul className="mt-[8px] grid gap-x-[20px] gap-y-[6px] border-t border-line pt-[8px] text-small leading-[1.45] text-prose sm:grid-cols-3 [&_li]:max-w-none">
+          <li>
+            Die Adresse geht an einen Dienst dieser Seite. Ihre lokalen Dateien sieht er nie.
+          </li>
+          <li>
+            Gespeichert wird dort nichts; alles Weitere passiert wieder lokal im Tab.
+          </li>
+          <li className="font-semibold text-ink">
+            Ich hafte dafür absolut nicht. Laden Sie nur herunter, was Sie herunterladen dürfen. Kopierschutz wird nicht umgangen.
+          </li>
+        </ul>
+      ) : null}
     </div>
   )
 }
 
-/**
- * The same place in the app, where the premise above is not true: the app
- * runs the service itself, on this machine, so nothing here goes through a
- * server of the site. Not `panel-cool`, which says "not local" and would be
- * wrong here — but the liability sentence stays, word for word.
- */
 /** Whether the browser believes it has a network — offline the tools work, this one cannot. */
 function useOnline(): boolean {
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
@@ -440,20 +460,27 @@ function useOnline(): boolean {
 }
 
 function AppNotice() {
+  const [open, setOpen] = useState(false)
   return (
-    <div role="note" className="rounded-card bg-panel-soft p-[16px] sm:p-[20px]">
-      <p className="text-body font-bold leading-[1.3] text-ink">Herunterladen läuft über diesen Rechner</p>
-      <ul className="mt-[10px] grid gap-x-[24px] gap-y-[6px] text-small leading-[1.5] text-prose sm:grid-cols-3 [&_li]:max-w-none">
-        <li>
-          Sondra fragt die Seite selbst, mit yt-dlp auf diesem Rechner. Kein fremder Server ist
-          dazwischen; die Seite, von der Sie laden, sieht diesen Rechner.
-        </li>
-        <li>Die Datei landet in der Sitzung; alles Weitere passiert hier.</li>
-        <li>
-          Ich hafte dafür absolut nicht. Laden Sie nur herunter, was Sie herunterladen dürfen.
-          Kopierschutz wird hier nicht umgangen.
-        </li>
-      </ul>
+    <div role="note" className="rounded-nav bg-panel-soft px-[12px] py-[8px] ring-1 ring-inset ring-rule">
+      <div className="flex flex-wrap items-center justify-between gap-x-[12px] gap-y-[4px] text-small">
+        <span className="text-prose">
+          <strong className="font-semibold text-ink">Direkt über diesen Rechner (yt-dlp)</strong> · Bitte nur laden, was Sie herunterladen dürfen.
+        </span>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+        >
+          {open ? 'Weniger' : 'Hinweis'}
+        </button>
+      </div>
+      {open ? (
+        <p className="mt-[6px] border-t border-line pt-[6px] text-small leading-[1.45] text-prose">
+          Sondra fragt die Seite direkt auf diesem Rechner an, ohne fremden Server dazwischen. Ich hafte dafür absolut nicht; Kopierschutz wird nicht umgangen.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -1588,6 +1615,7 @@ export function DownloaderPanel() {
                 type="file"
                 accept=".txt,.m3u,.m3u8,.csv,.json"
                 multiple
+                hidden
                 className="sr-only"
                 tabIndex={-1}
                 aria-hidden
@@ -1615,10 +1643,6 @@ export function DownloaderPanel() {
             </p>
           ) : null}
 
-          {/* What to fetch is asked every time; how to name it, whether to
-              transcribe and which network are said as one line and changed a
-              click further. Three settings open on every visit were most of
-              what stood between the field and the result. */}
           <div className="mt-[4px] flex flex-col gap-[10px] border-t border-line pt-[12px]">
             <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
               <span className="text-small text-prose">Was laden</span>
@@ -1642,11 +1666,12 @@ export function DownloaderPanel() {
                 aria-expanded={settingsOpen}
                 aria-controls="download-settings"
                 onClick={() => setSettingsOpen((open) => !open)}
+                title={settingsSummary}
                 className="press flex items-center gap-[6px] rounded-nav text-left text-small text-muted hover:text-ink sm:ml-auto"
               >
-                <span>{settingsSummary}</span>
+                <span>{filterAudioOnly ? audioPrefLabel : videoPrefLabel}</span>
                 <span className="text-ink underline decoration-rule underline-offset-[3px]">
-                  {settingsOpen ? 'Schliessen' : 'Einstellungen'}
+                  {settingsOpen ? 'Schliessen' : 'Anpassen'}
                 </span>
               </button>
             </div>
@@ -1918,8 +1943,6 @@ export function DownloaderPanel() {
           error.message.toLowerCase().includes('youtube') ||
           error.message.toLowerCase().includes('anmeldung')) ? (
           <Notice tone="error" title="YouTube-Download im Webbrowser blockiert">
-            {/* The reason and the way out as the notice's own text, not a
-                tinted box inside the notice. */}
             <p className="leading-[1.5]">{error.message}</p>
             <div className="mt-[10px]">
               <p className="text-small font-semibold text-ink">Warum klappt der direkte Download hier nicht?</p>
@@ -1928,15 +1951,14 @@ export function DownloaderPanel() {
                 Damit YouTube-Downloads funktionieren, wählen Sie einen der folgenden Wege:
               </p>
               <div className="mt-[10px] flex flex-wrap gap-[8px]">
-                <a
-                  href="https://www.sondra.lizge.ch/download.html"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex items-center gap-[6px] rounded-nav bg-ink px-[12px] py-[6px] text-small font-medium text-on-ink hover:opacity-90"
+                <button
+                  type="button"
+                  onClick={openGetAppDialog}
+                  className="press inline-flex items-center gap-[6px] rounded-nav bg-ink px-[12px] py-[6px] text-small font-medium text-on-ink hover:opacity-90"
                 >
                   Sondra Windows-App herunterladen (Empfohlen)
                   <ArrowRight />
-                </a>
+                </button>
                 <Button
                   size="sm"
                   variant="quiet"
@@ -1983,9 +2005,7 @@ export function DownloaderPanel() {
                   Anonymisierter Dateiname: {filenameFor(result, result.streams[0], { mode: stealthMode })}
                 </p>
               )}
-              {/* Which route answered. Not a detail: it decides the resolution
-                  on offer, and it decides who saw the address. */}
-              <p className="mt-[8px] text-small text-muted">
+              <p className="mt-[6px] text-small text-muted">
                 {result.source === 'service'
                   ? serviceConnection().info?.version.includes('in Sondra')
                     ? 'Über yt-dlp auf diesem Rechner'
@@ -1993,7 +2013,7 @@ export function DownloaderPanel() {
                   : result.source === 'provider'
                     ? 'Über den hinterlegten Anbieter'
                     : result.source === 'youtube'
-                    ? 'YouTube direkt · nur die Fassung mit Bild und Ton in einem'
+                    ? 'YouTube direkt'
                     : result.source === 'aniworld'
                     ? 'AniWorld / SerienStream direkt'
                     : 'Direkte Datei-Adresse'}
@@ -2001,40 +2021,46 @@ export function DownloaderPanel() {
             </div>
           </div>
 
-          {/* The versions on offer as a list, one line each: what it is, its
-              format and size, and the button. They were a bordered box per
-              resolution with a tinted tile per version inside it — three
-              levels of frame for one choice. */}
-          <div className="mt-[16px] flex flex-col">
-            {filterAudioOnly ? (
-              <p className="pb-[8px] text-small text-muted">
-                {filePrefs.audioPref === 'untouched' || targetAudioFormat === 'original' ? (
-                  <>Die Tonspur wird ohne Umwandlung im <span className="value text-ink">Originalformat</span> geladen.</>
-                ) : (
-                  <>
-                    Gespeichert wird der Ton als <span className="value text-ink">{targetAudioFormat.toUpperCase()}</span> (
-                    {audioPrefLabel}); eine Fassung mit höherer Bitrate klingt besser.
-                  </>
-                )}
-              </p>
-            ) : filePrefs.videoPref !== 'best' ? (
-              <p className="pb-[8px] text-small text-muted">
-                Bevorzugte Einstellung: <span className="value text-ink">{videoPrefLabel}</span> — passende Fassungen stehen oben.
-              </p>
-            ) : null}
+          <div className="mt-[14px] flex flex-col">
             {(() => {
-              const displayedStreams =
-                filterAudioOnly && result.streams.some((s) => !s.hasVideo && s.hasAudio)
+              const hasPureAudio = result.streams.some((s) => !s.hasVideo && s.hasAudio)
+              const hasVideoStreams = result.streams.some((s) => s.hasVideo)
+              const displayedStreams = filterAudioOnly
+                ? hasPureAudio
                   ? result.streams.filter((s) => !s.hasVideo && s.hasAudio)
                   : result.streams
-              const rows = groupStreams(displayedStreams, filePrefs.videoPref, filePrefs.audioPref).flatMap((group) =>
-                group.streams.map((stream, index) => ({ group, stream, best: index === 0 && Boolean(stream.bytes) && group.streams.length > 1 })),
+                : hasVideoStreams
+                  ? result.streams.filter((s) => s.hasVideo)
+                  : result.streams
+
+              const groups = groupStreams(displayedStreams, filePrefs.videoPref, filePrefs.audioPref)
+              const rows = groups.flatMap((group, groupIndex) =>
+                group.streams.map((stream, streamIndex) => {
+                  const audioTierLabel =
+                    group.isAudio && group.streams.length > 1
+                      ? streamIndex === 0
+                        ? filePrefs.audioPref === 'low'
+                          ? 'Kompakt'
+                          : 'Beste Qualität'
+                        : streamIndex === group.streams.length - 1
+                          ? filePrefs.audioPref === 'low'
+                            ? 'Beste Qualität'
+                            : 'Kompakt'
+                          : 'Mittlere Qualität'
+                      : null
+                  return {
+                    group,
+                    stream,
+                    best: groupIndex === 0 && streamIndex === 0 && (groups.length > 1 || group.streams.length > 1),
+                    audioTierLabel,
+                  }
+                }),
               )
               const visible = showAllStreams ? rows : rows.slice(0, STREAMS_SHOWN)
               return (
                 <>
                   <ul className="flex flex-col divide-y divide-line border-y border-line">
-                    {visible.map(({ group, stream, best }) => {
+                    {visible.map(({ group, stream, best, audioTierLabel }) => {
                       const bitrate = stream.label.match(/(\d+\s*kbit\/s)/i)?.[1] ?? null
                       const detail = [
                         filterAudioOnly
@@ -2044,7 +2070,6 @@ export function DownloaderPanel() {
                           : stream.ext.toUpperCase(),
                         bitrate,
                         stream.bytes ? formatBytes(stream.bytes) : null,
-                        stream.label.includes('mit Ton') ? 'Bild und Ton' : null,
                         filterAudioOnly && !group.isAudio ? 'Ton aus dem Video' : null,
                       ]
                         .filter(Boolean)
@@ -2053,16 +2078,9 @@ export function DownloaderPanel() {
                         <li key={stream.id} className="flex max-w-none items-center justify-between gap-[12px] py-[10px]">
                           <div className="min-w-0">
                             <p className="truncate text-body text-ink">
-                              {group.isAudio && filterAudioOnly ? 'Ton' : group.title}
-                              {best ? (
-                                <span className="text-small text-muted">
-                                  {' · '}
-                                  {group.isAudio
-                                    ? filePrefs.audioPref === 'low'
-                                      ? 'kompakt'
-                                      : 'beste Qualität'
-                                    : 'bevorzugt'}
-                                </span>
+                              {group.isAudio ? (audioTierLabel ? `Ton · ${audioTierLabel}` : 'Ton') : group.title}
+                              {best && !group.isAudio ? (
+                                <span className="text-small text-muted">{' · empfohlen'}</span>
                               ) : null}
                             </p>
                             <p className="value truncate text-small text-muted">{detail}</p>
@@ -2370,30 +2388,40 @@ export function DownloaderPanel() {
 
                                     {entry.status === 'ready' && entry.result ? (
                                       <>
-                                        {entry.result.streams.length > 1 ? (
-                                          <Select
-                                            aria-label="Fassung"
-                                            value={entry.selectedStreamId}
-                                            disabled={batchBusy}
-                                            onChange={(e) => {
-                                              const val = e.target.value
-                                              patchEntry(entry.id, { selectedStreamId: val })
-                                            }}
-                                            className="w-auto! max-w-[280px] py-[6px]"
-                                          >
-                                            {entry.result.streams.map((s) => (
-                                              <option key={s.id} value={s.id}>
-                                                {s.label} ({s.ext.toUpperCase()}
-                                                {s.bytes ? ` · ${formatBytes(s.bytes)}` : ''})
-                                              </option>
-                                            ))}
-                                          </Select>
-                                        ) : stream ? (
-                                          <span className="value text-small text-muted">
-                                            {stream.ext.toUpperCase()}
-                                            {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
-                                          </span>
-                                        ) : null}
+                                        {(() => {
+                                          const dedupedBatchStreams = groupStreams(
+                                            entry.result.streams,
+                                            filePrefs.videoPref,
+                                            filePrefs.audioPref,
+                                          ).flatMap((g) => g.streams.map((s) => ({ group: g, stream: s })))
+                                          if (dedupedBatchStreams.length > 1) {
+                                            return (
+                                              <Select
+                                                aria-label="Fassung"
+                                                value={entry.selectedStreamId}
+                                                disabled={batchBusy}
+                                                onChange={(e) => {
+                                                  const val = e.target.value
+                                                  patchEntry(entry.id, { selectedStreamId: val })
+                                                }}
+                                                className="w-auto! max-w-[280px] py-[6px]"
+                                              >
+                                                {dedupedBatchStreams.map(({ group: g, stream: s }) => (
+                                                  <option key={s.id} value={s.id}>
+                                                    {g.isAudio ? s.label : g.title} ({s.ext.toUpperCase()}
+                                                    {s.bytes ? ` · ${formatBytes(s.bytes)}` : ''})
+                                                  </option>
+                                                ))}
+                                              </Select>
+                                            )
+                                          }
+                                          return stream ? (
+                                            <span className="value text-small text-muted">
+                                              {stream.ext.toUpperCase()}
+                                              {stream.bytes ? ` · ${formatBytes(stream.bytes)}` : ''}
+                                            </span>
+                                          ) : null
+                                        })()}
 
                                         <Button
                                           size="sm"
@@ -2512,7 +2540,7 @@ export function DownloaderPanel() {
             </Button>
           </div>
           <div className="flex flex-col divide-y divide-line">
-            {history.map((item) => (
+            {history.slice(0, 5).map((item) => (
               <div key={item.id} className="flex flex-col gap-[8px] py-[10px] sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-small text-ink" title={item.title}>
@@ -2561,73 +2589,61 @@ export function DownloaderPanel() {
         </Card>
       ) : null}
 
-      {/* Every way there is, said on the page. The field at the top picks
-          one by itself; this is where someone who wants another one finds
-          out that it exists. A fold labelled „Mehr Wege" hid three whole
-          ways behind one line of grey text, and they went unfound. */}
-      <section aria-labelledby="weitere-wege" className="flex flex-col gap-[12px] border-t-2 border-rule pt-[16px]">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[4px]">
-          <h3 id="weitere-wege" className="display-sm text-ink">
-            Weitere Wege
-          </h3>
-          <p className="text-small text-prose">Das Feld oben wählt den Weg selbst. Hier stehen alle, die es gibt.</p>
-        </div>
-        <div className="grid gap-[8px] sm:grid-cols-3">
-          <WayTile
-            title="Datei oder Stream"
-            hint="Eine Adresse, die direkt auf eine Datei oder eine HLS-Playlist (.m3u8) zeigt. Lädt im Browser, ohne Dienst."
-            action={waysOpen ? 'Schliessen' : 'Öffnen'}
-            pressed={waysOpen}
-            onClick={() => setWaysOpen((open) => !open)}
-          />
-          <WayTile
-            title="YouTube in voller Auflösung"
-            hint={
-              IN_DESKTOP_APP
-                ? 'Läuft in dieser App über ihren eigenen Dienst — nichts einzurichten.'
-                : 'Mit der Windows-App oder einer lokalen Brücke: yt-dlp oder cobalt, mit oder ohne Node.js.'
-            }
-            action="Einrichten"
-            onClick={openSetup}
-          />
-          <WayTile
-            title="Eigener Dienst"
-            hint="Einen Server, einen Docker-Container oder eine Instanz verbinden, deren Adresse Sie haben."
-            action="Verbinden"
-            onClick={openSetup}
-          />
-        </div>
-        {/* Which way the field takes, folded, with the ways themselves —
-            under the field it was one more line about the same thing as
-            this section. */}
-        <Reveal label="Welche Wege das Feld oben probiert">
-          <div className="flex flex-col gap-[8px] text-small leading-[1.5] text-muted">
-            {IN_DESKTOP_APP ? (
-              <p>
-                In der Desktop-App nutzt Sondra direkt yt-dlp auf Ihrem Rechner. Das lädt YouTube und
-                Portale in voller Auflösung ohne fremde Server.
-              </p>
-            ) : (
-              <>
+      <section aria-label="Weitere Wege" className="flex flex-col gap-[12px] border-t border-line pt-[12px]">
+        <Reveal label="Weitere Wege (Direktlink, lokale Brücke, eigener Dienst)">
+          <div className="flex flex-col gap-[12px]">
+            <div className="grid gap-[8px] sm:grid-cols-3">
+              <WayTile
+                title="Datei oder Stream"
+                hint="Eine Adresse, die direkt auf eine Datei oder eine HLS-Playlist (.m3u8) zeigt. Lädt im Browser, ohne Dienst."
+                action={waysOpen ? 'Schliessen' : 'Öffnen'}
+                pressed={waysOpen}
+                onClick={() => setWaysOpen((open) => !open)}
+              />
+              <WayTile
+                title="YouTube in voller Auflösung"
+                hint={
+                  IN_DESKTOP_APP
+                    ? 'Läuft in dieser App über ihren eigenen Dienst — nichts einzurichten.'
+                    : 'Mit der Windows-App oder einer lokalen Brücke: yt-dlp oder cobalt, mit oder ohne Node.js.'
+                }
+                action="Einrichten"
+                onClick={openSetup}
+              />
+              <WayTile
+                title="Eigener Dienst"
+                hint="Einen Server, einen Docker-Container oder eine Instanz verbinden, deren Adresse Sie haben."
+                action="Verbinden"
+                onClick={openSetup}
+              />
+            </div>
+            <div className="flex flex-col gap-[6px] text-small leading-[1.5] text-muted">
+              {IN_DESKTOP_APP ? (
                 <p>
-                  <strong className="text-ink">1. Direkte Mediendateien:</strong> Dateien wie .mp4, .mp3,
-                  Podcasts und HLS-Streams (.m3u8) lädt der Webbrowser direkt herunter.
+                  In der Desktop-App nutzt Sondra direkt yt-dlp auf Ihrem Rechner. Das lädt YouTube und
+                  Portale in voller Auflösung ohne fremde Server.
                 </p>
-                <p>
-                  <strong className="text-ink">2. YouTube & geschützte Portale:</strong> Werden von
-                  YouTube für Webseiten blockiert. Sie funktionieren erst nach Start der{' '}
-                  <a
-                    href="https://www.sondra.lizge.ch/download.html"
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="font-medium underline hover:text-ink"
-                  >
-                    Sondra Windows-App
-                  </a>{' '}
-                  oder der lokalen yt-dlp-Brücke auf Ihrem PC.
-                </p>
-              </>
-            )}
+              ) : (
+                <>
+                  <p>
+                    <strong className="text-ink">1. Direkte Mediendateien:</strong> Dateien wie .mp4, .mp3,
+                    Podcasts und HLS-Streams (.m3u8) lädt der Webbrowser direkt herunter.
+                  </p>
+                  <p>
+                    <strong className="text-ink">2. YouTube & geschützte Portale:</strong> Werden von
+                    YouTube für Webseiten blockiert. Sie funktionieren erst nach Start der{' '}
+                    <button
+                      type="button"
+                      onClick={openGetAppDialog}
+                      className="press font-medium underline hover:text-ink"
+                    >
+                      Sondra Windows-App
+                    </button>{' '}
+                    oder der lokalen yt-dlp-Brücke auf Ihrem PC.
+                  </p>
+                </>
+              )}
+            </div>
           </div>
         </Reveal>
         {/* Always mounted: the service connection and the setup dialog live in
