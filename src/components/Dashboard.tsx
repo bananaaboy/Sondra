@@ -112,10 +112,12 @@ function MachineRow() {
   const entries = [
     {
       label: 'Mehrkern-Rechnen',
-      value: caps.crossOriginIsolated ? 'aktiv' : 'aus',
-      note: caps.crossOriginIsolated
-        ? `FFmpeg darf ${suggestedThreads(caps)} von ${caps.cores} Kernen nutzen`
-        : 'FFmpeg läuft auf einem Kern und ist damit langsamer',
+      value: ffmpeg.native ? 'nativ aktiv' : caps.crossOriginIsolated ? 'aktiv' : 'aus',
+      note: ffmpeg.native
+        ? `Natives FFmpeg nutzt alle ${caps.cores} Kerne direkt`
+        : caps.crossOriginIsolated
+          ? `FFmpeg darf ${suggestedThreads(caps)} von ${caps.cores} Kernen nutzen`
+          : 'FFmpeg läuft auf einem Kern und ist damit langsamer',
     },
     {
       label: 'Grafikkarte',
@@ -142,14 +144,34 @@ function MachineRow() {
     },
     {
       label: 'FFmpeg',
-      value: ffmpeg.loaded ? 'geladen' : 'noch nicht geladen',
-      note: ffmpeg.loaded
-        ? ffmpeg.multiThreaded
-          ? `mehrfädig, ${ffmpeg.threads} Threads`
-          : 'einfädig'
-        : 'wird beim ersten Umwandeln geholt',
+      value: ffmpeg.native
+        ? 'Nativ (Windows-App)'
+        : ffmpeg.loaded
+          ? ffmpeg.multiThreaded
+            ? 'WebAssembly (mehrfädig)'
+            : 'WebAssembly (einfädig)'
+          : 'WebAssembly (noch nicht geladen)',
+      note: ffmpeg.native
+        ? `Natives System-FFmpeg (${ffmpeg.nativePath ? ffmpeg.nativePath.split(/[\\/]/).pop() : 'ffmpeg.exe'}) · ${caps.cores} Kerne${
+            ffmpeg.loaded
+              ? ` · WebAssembly (${ffmpeg.multiThreaded ? `${ffmpeg.threads} Threads` : 'einfädig'}) als Rückfall bereit`
+              : ''
+          }`
+        : ffmpeg.loaded
+          ? ffmpeg.multiThreaded
+            ? `WebAssembly im Browser · mehrfädig, ${ffmpeg.threads} Threads`
+            : 'WebAssembly im Browser · einfädig (1 Thread)'
+          : 'WebAssembly im Browser · wird beim ersten Umwandeln geholt',
     },
   ]
+
+  const ffmpegBarText = ffmpeg.native
+    ? `FFmpeg: Nativ (${ffmpeg.nativePath ? ffmpeg.nativePath.split(/[\\/]/).pop() : 'System'})`
+    : ffmpeg.loaded
+      ? ffmpeg.multiThreaded
+        ? `FFmpeg: WebAssembly (mehrfädig · ${ffmpeg.threads} Threads)`
+        : 'FFmpeg: WebAssembly (einfädig)'
+      : 'FFmpeg: WebAssembly (Bereitschaft)'
 
   const tab = (id: 'system' | 'log', label: string, count?: number) => (
     <button
@@ -179,8 +201,9 @@ function MachineRow() {
         <span className="mr-[4px] text-small text-muted">Unter der Haube</span>
         {tab('system', 'Dieses Gerät')}
         {tab('log', 'Protokoll', logs.length)}
-        {!ffmpeg.loaded ? (
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void loadFfmpeg()}>
+        <span className="ml-auto text-small text-muted">{ffmpegBarText}</span>
+        {!ffmpeg.loaded && !ffmpeg.native ? (
+          <Button size="sm" variant="ghost" onClick={() => void loadFfmpeg()}>
             FFmpeg jetzt laden
           </Button>
         ) : null}
