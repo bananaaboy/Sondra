@@ -286,6 +286,14 @@ export default async function handler(request, response) {
             token: sign(media.previewUrl, { ref: 'https://open.spotify.com/' }),
           })
         }
+        if (streams.length === 0) {
+          response.status(422).json({
+            error: 'spotify.no_preview',
+            message:
+              'Für diesen Spotify-Titel ist keine Direkt-Vorschau verfügbar. Laden Sie diesen Titel bitte über YouTube oder yt-dlp auf diesem Rechner herunter.',
+          })
+          return
+        }
         response.status(200).json({
           status: 'stream',
           kind: 'stream',
