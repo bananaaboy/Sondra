@@ -763,13 +763,16 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   laden“ (übergibt die Folge ans Herunterladen und wechselt dorthin) und
   „Folge 5 gesehen“ (hakt ab, rückt weiter). Die Stelle ist immer die
   nächste ungesehene Folge. Darunter jede Staffel als **Poster**, gerundet,
-  Cover oder grosse Zahl auf Tönung. Die Form kommt vom **höchsten Cover
-  der Serie, die Breite vom breitesten** (gemessen, sobald sie geladen
-  sind, `useTileShape`): ein Poster macht die ganze Reihe 2:3, lauter
-  Standbilder machen sie 16:9; begrenzt zwischen 16:9 und 9:16, ohne Cover
-  2:3. Kein Cover wird beschnitten: eines in anderer Form steht ganz da,
-  und eine unscharfe Kopie seiner selbst füllt den Rest — nicht
-  abgedunkelt, keine Balken. Die kleinen Vorschauen im Fenster
+  Cover oder grosse Zahl auf Tönung. **Jede Kachel ist ein Poster in 2:3**,
+  und welcher Teil eines Covers darin steht, wählt man selbst: im
+  Cover-Feld ist die Vorschau dieselbe Kachel, das Bild lässt sich ziehen
+  (oder mit den Pfeiltasten schieben) und mit „Zoom“ (1–3 ×, auch Plus und
+  Minus) vergrössern; „Zurücksetzen“ erscheint, sobald etwas verstellt ist.
+  Ohne Wahl die Mitte. Gespeichert als `coverFrame` neben dem Cover
+  (Position wie `object-position`, Zoom um denselben Punkt), damit Kachel,
+  Fenster und Vorschau dasselbe zeigen. Zwei Wege davor sind verworfen:
+  die Form vom höchsten Cover (ein Breitbild wurde seitlich abgeschnitten)
+  und das ganze Cover mit unscharfer Füllung (passte nicht). Die kleinen Vorschauen im Fenster
   zeigen das Cover in seiner eigenen Form. Auf dem Bild liegt nichts: Name, Zähler in Mono (mit Haken, wenn alles gesehen
   ist) und Balken stehen darunter, „Hier sind Sie · Folge 4“ als Zeile unter
   dem Balken, die Kachel selbst trägt den Ring. Vorher deckte die

@@ -298,7 +298,7 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Herunterladen (`useMerkliste`, `localStorage` `sondra:saved_links`,
   Projektdatei unter `merkliste`). „Folge n laden“ legt den Eintrag mit
   `requestLookup` ab und wechselt den Tab; das Herunterladen nimmt ihn beim
-  Öffnen (`takePendingLookup`). Covers aus Dateien werden auf 480 px JPEG
+  Öffnen (`takePendingLookup`). Covers aus Dateien werden als JPEG
   verkleinert, weil sie im `localStorage` liegen.
   **Gezählt wird nie über das Ende hinaus:** gesehene Folgen jenseits der
   bekannten Anzahl fallen weg (`cleanWatched`), und jede Änderung am
@@ -311,7 +311,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   ist die Summe der Teile (`withParts`), Gesehenes und Stand bleiben an der
   Staffel; `partsOf`/`partProgress` leiten je Teil Bereich und Fortschritt
   ab. Ein offener Teil ohne Gesehenes wird beim Auflösen einfach
-  weggenommen. Export als `Sondra-Merkliste-<Datum>.json`
+  weggenommen. Kacheln sind immer 2:3; der Ausschnitt eines Covers liegt
+  als `coverFrame` (x, y in %, Zoom 1–3) neben jedem Cover — an der Serie,
+  der Staffel und dem Teil — und wird von `CoverImage` überall gleich
+  gezeichnet. Covers aus Dateien: längere Seite 720 px.
+  Export als `Sondra-Merkliste-<Datum>.json`
   (`exportMerkliste`), Einlesen führt zusammen (`mergeMerkliste`: dieselbe
   Serie per `id` oder Name, die zuletzt geänderte Seite gewinnt) und lässt
   sich zurücknehmen.

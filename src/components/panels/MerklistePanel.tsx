@@ -13,7 +13,7 @@
  * address is followed all the same, only without the loading.
  */
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 
 import { buildUrlWithEpisode, saveBytes, sourceBadgeForUrl } from '../../lib/download'
 import {
@@ -45,6 +45,7 @@ import {
   watchedUpTo,
   withParts,
   withSeason,
+  type CoverFrame,
   type MerkPart,
   type MerkSeason,
   type SeasonPart,
@@ -53,7 +54,7 @@ import {
 } from '../../lib/merkliste'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
-import { Button, Card, Dialog, Notice, RowMark, Select, TextInput, Toggle } from '../ui/primitives'
+import { Button, Card, Dialog, Notice, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
 import type { AudioFilePref, AudioOutputFormat, VideoFilePref } from './DownloaderPanel'
 import {
   AUDIO_QUALITY_OPTIONS,
@@ -146,28 +147,81 @@ function FilmIcon() {
 }
 
 /**
- * A cover from an address or from a file. A file is made small first
- * (`coverFromFile`) — it lives in the list on this device.
+ * A cover from an address or from a file, and the part of it a tile shows.
+ * A file is made small first (`coverFromFile`) — it lives in the list on
+ * this device. Every tile is a 2:3 poster; the preview here is one, and the
+ * picture in it can be dragged (or moved with the arrow keys) and zoomed to
+ * choose what shows. Without that, the middle.
  */
-function CoverField({ value, onChange, label = 'Cover' }: { value: string | undefined; onChange: (value: string | undefined) => void; label?: string }) {
+function CoverField({
+  value,
+  frame,
+  onChange,
+  label = 'Cover',
+}: {
+  value: string | undefined
+  frame?: CoverFrame
+  /** A new picture comes without a frame; a new frame keeps the picture. */
+  onChange: (value: string | undefined, frame: CoverFrame | undefined) => void
+  label?: string
+}) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(value && !value.startsWith('data:') ? value : '')
   const [problem, setProblem] = useState<string | null>(null)
+  const [live, setLive] = useState<CoverFrame | undefined>(frame)
+
+  // Dragging changes the frame many times a second; the list is written once
+  // it rests — and still written if the window closes before that.
+  const pending = useRef<{ timer: number; frame: CoverFrame | undefined } | null>(null)
+  const latest = useRef({ value, onChange })
+  latest.current = { value, onChange }
+  const frameKey = frame ? `${frame.x}/${frame.y}/${frame.zoom}` : ''
+  useEffect(() => {
+    if (!pending.current) setLive(frame)
+    // `frameKey` stands for `frame`, which is a new object on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameKey, value])
+  useEffect(
+    () => () => {
+      const waiting = pending.current
+      if (!waiting) return
+      clearTimeout(waiting.timer)
+      latest.current.onChange(latest.current.value, waiting.frame)
+    },
+    [],
+  )
+  const setFrame = (next: CoverFrame | undefined) => {
+    setLive(next)
+    if (pending.current) clearTimeout(pending.current.timer)
+    const timer = window.setTimeout(() => {
+      pending.current = null
+      latest.current.onChange(latest.current.value, next)
+    }, 250)
+    pending.current = { timer, frame: next }
+  }
+  const pick = (picture: string | undefined) => {
+    if (pending.current) clearTimeout(pending.current.timer)
+    pending.current = null
+    setLive(undefined)
+    onChange(picture, undefined)
+  }
+  const zoom = live?.zoom ?? 1
+
   return (
     <div className="flex flex-col gap-[8px]">
       <span className="text-small text-prose">{label}</span>
-      <div className="flex gap-[12px]">
+      <div className="flex flex-col gap-[14px] sm:flex-row">
         {value ? (
-          <img
+          <FrameEditor
             src={value}
-            alt=""
-            className="block h-auto max-h-[160px] w-[72px] shrink-0 self-start rounded-nav object-cover ring-1 ring-line"
+            frame={live}
+            onFrame={setFrame}
             onError={() => setProblem('Unter dieser Adresse liess sich kein Bild laden.')}
             onLoad={() => setProblem(null)}
           />
         ) : (
-          <span className="relative aspect-[2/3] w-[72px] shrink-0 overflow-hidden rounded-nav bg-panel-mid ring-1 ring-inset ring-line">
-            <span className="absolute inset-0 flex items-center justify-center text-small text-muted">kein Bild</span>
+          <span className="relative aspect-[2/3] w-[120px] shrink-0 overflow-hidden rounded-card bg-panel-mid ring-1 ring-inset ring-line">
+            <span className="absolute inset-0 flex items-center justify-center text-small text-prose">kein Bild</span>
           </span>
         )}
         <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
@@ -179,12 +233,12 @@ function CoverField({ value, onChange, label = 'Cover' }: { value: string | unde
             onChange={(event) => setDraft(event.target.value)}
             onBlur={() => {
               const next = draft.trim()
-              if (next !== (value && !value.startsWith('data:') ? value : '')) onChange(next || undefined)
+              if (next !== (value && !value.startsWith('data:') ? value : '')) pick(next || undefined)
             }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
-                onChange(draft.trim() || undefined)
+                pick(draft.trim() || undefined)
               }
             }}
           />
@@ -202,15 +256,36 @@ function CoverField({ value, onChange, label = 'Cover' }: { value: string | unde
                 onClick={() => {
                   setDraft('')
                   setProblem(null)
-                  onChange(undefined)
+                  pick(undefined)
                 }}
-                className="press rounded-nav text-muted hover:text-ink"
+                className="press rounded-nav text-prose hover:text-ink"
               >
                 Entfernen
               </button>
             ) : null}
           </span>
           {problem ? <span className="text-small text-ink">! {problem}</span> : null}
+          {value ? (
+            <div className="mt-[4px] flex max-w-[360px] flex-col gap-[8px] border-t border-line pt-[10px]">
+              <Slider
+                label="Zoom"
+                display={`${zoom.toFixed(1).replace('.', ',')} ×`}
+                min={1}
+                max={3}
+                step={0.05}
+                value={zoom}
+                onChange={(event) => setFrame({ ...(live ?? MIDDLE), zoom: Number(event.target.value) })}
+              />
+              <span className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[4px] text-small">
+                <span className="text-prose">Bild ziehen, um den Ausschnitt zu wählen.</span>
+                {live ? (
+                  <button type="button" onClick={() => setFrame(undefined)} className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink">
+                    Zurücksetzen
+                  </button>
+                ) : null}
+              </span>
+            </div>
+          ) : null}
           <input
             ref={fileRef}
             type="file"
@@ -224,7 +299,7 @@ function CoverField({ value, onChange, label = 'Cover' }: { value: string | unde
                 const picture = await coverFromFile(file)
                 setDraft('')
                 setProblem(null)
-                onChange(picture)
+                pick(picture)
                 if (merkSaveFailed()) setProblem('Für dieses Bild ist auf dem Gerät kein Platz mehr. Eine Bildadresse braucht keinen.')
               } catch {
                 setProblem('Diese Datei liess sich nicht als Bild lesen.')
@@ -234,6 +309,94 @@ function CoverField({ value, onChange, label = 'Cover' }: { value: string | unde
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * The tile, to choose its part of the cover: drag the picture, or move it
+ * with the arrow keys; plus and minus zoom. The picture follows the pointer
+ * one to one — a drag across the whole range moves the frame from one edge
+ * of the picture to the other.
+ */
+function FrameEditor({
+  src,
+  frame,
+  onFrame,
+  onError,
+  onLoad,
+}: {
+  src: string
+  frame: CoverFrame | undefined
+  onFrame: (frame: CoverFrame | undefined) => void
+  onError: () => void
+  onLoad: () => void
+}) {
+  const boxRef = useRef<HTMLSpanElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+  const drag = useRef<{ x: number; y: number; start: CoverFrame } | null>(null)
+  const current = frame ?? MIDDLE
+  const clampPercent = (value: number) => Math.min(100, Math.max(0, value))
+
+  // How far, in screen pixels, the picture can travel across the tile on each
+  // axis at a zoom: the picture as `object-fit: cover` lays it out, scaled,
+  // less the tile.
+  const travel = (zoom: number) => {
+    const box = boxRef.current
+    const img = imgRef.current
+    if (!box || !img || !img.naturalWidth || !img.naturalHeight) return { x: 0, y: 0 }
+    const fit = Math.max(box.clientWidth / img.naturalWidth, box.clientHeight / img.naturalHeight)
+    return { x: zoom * img.naturalWidth * fit - box.clientWidth, y: zoom * img.naturalHeight * fit - box.clientHeight }
+  }
+  const moveBy = (start: CoverFrame, dx: number, dy: number) => {
+    const room = travel(start.zoom)
+    onFrame({
+      ...start,
+      x: room.x > 0.5 ? clampPercent(start.x - (dx / room.x) * 100) : start.x,
+      y: room.y > 0.5 ? clampPercent(start.y - (dy / room.y) * 100) : start.y,
+    })
+  }
+
+  return (
+    <span
+      ref={boxRef}
+      tabIndex={0}
+      role="group"
+      aria-label="Ausschnitt des Covers: ziehen oder Pfeiltasten, Plus und Minus zoomen"
+      className="relative aspect-[2/3] w-[140px] shrink-0 cursor-grab touch-none overflow-hidden rounded-card bg-stage outline-none ring-1 ring-line focus-visible:ring-2 focus-visible:ring-ink active:cursor-grabbing"
+      onPointerDown={(event) => {
+        event.preventDefault()
+        event.currentTarget.focus()
+        event.currentTarget.setPointerCapture(event.pointerId)
+        drag.current = { x: event.clientX, y: event.clientY, start: current }
+      }}
+      onPointerMove={(event) => {
+        const held = drag.current
+        if (held) moveBy(held.start, event.clientX - held.x, event.clientY - held.y)
+      }}
+      onPointerUp={() => {
+        drag.current = null
+      }}
+      onPointerCancel={() => {
+        drag.current = null
+      }}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 40 : 10
+        const zoomTo = (zoom: number) => onFrame({ ...current, zoom: Math.min(3, Math.max(1, Math.round(zoom * 20) / 20)) })
+        const moves: Record<string, [number, number]> = {
+          ArrowLeft: [step, 0],
+          ArrowRight: [-step, 0],
+          ArrowUp: [0, step],
+          ArrowDown: [0, -step],
+        }
+        if (moves[event.key]) moveBy(current, ...moves[event.key])
+        else if (event.key === '+' || event.key === '=') zoomTo(current.zoom + 0.1)
+        else if (event.key === '-') zoomTo(current.zoom - 0.1)
+        else return
+        event.preventDefault()
+      }}
+    >
+      <CoverImage src={src} frame={frame} imgRef={imgRef} onError={onError} onLoad={onLoad} eager />
+    </span>
   )
 }
 
@@ -557,48 +720,47 @@ function EmptyState({ onAdd, onDownload }: { onAdd: () => void; onDownload: () =
 }
 
 /* -------------------------------------------------------------------------- */
-/* Cover shapes                                                                */
+/* Covers in a tile                                                            */
 /* -------------------------------------------------------------------------- */
 
-/** Height over width of each cover once it has loaded; null while it loads or when it does not. */
-const coverShapes = new Map<string, number | null>()
-const shapeListeners = new Set<() => void>()
-let shapeVersion = 0
-
-function measureCover(url: string) {
-  if (coverShapes.has(url)) return
-  coverShapes.set(url, null)
-  const image = new Image()
-  image.onload = () => {
-    coverShapes.set(url, image.naturalWidth > 0 ? image.naturalHeight / image.naturalWidth : null)
-    shapeVersion += 1
-    shapeListeners.forEach((listener) => listener())
-  }
-  image.src = url
-}
-
-function subscribeShapes(listener: () => void) {
-  shapeListeners.add(listener)
-  return () => shapeListeners.delete(listener)
-}
+const MIDDLE: CoverFrame = { x: 50, y: 50, zoom: 1 }
 
 /**
- * The shape the tiles of one series take: as high as its tallest cover and as
- * wide as its widest. The tiles share the column's width, so that is the
- * tallest cover's shape — the tallest fills a tile from top to bottom, the
- * widest from side to side, and none is cut. A row of posters is 2:3, a row
- * of stills 16:9. Kept between 16:9 and 9:16; with no cover at all, 2:3.
+ * A cover filling a 2:3 box, showing the part someone chose (`CoverFrame`):
+ * `object-position` puts that part in view, and the zoom scales around the
+ * same point, so a frame chosen in the editor looks the same on every tile.
  */
-function useTileShape(covers: (string | undefined)[]): number {
-  const urls = Array.from(new Set(covers.filter((cover): cover is string => Boolean(cover))))
-  const key = urls.join('\n')
-  useSyncExternalStore(subscribeShapes, () => shapeVersion)
-  useEffect(() => {
-    for (const url of key ? key.split('\n') : []) measureCover(url)
-  }, [key])
-  const known = urls.map((url) => coverShapes.get(url)).filter((shape): shape is number => typeof shape === 'number')
-  if (known.length === 0) return 3 / 2
-  return Math.min(16 / 9, Math.max(9 / 16, Math.max(...known)))
+function CoverImage({
+  src,
+  frame,
+  className = '',
+  imgRef,
+  onError,
+  onLoad,
+  eager = false,
+}: {
+  src: string
+  frame?: CoverFrame
+  className?: string
+  imgRef?: Ref<HTMLImageElement>
+  onError?: () => void
+  onLoad?: () => void
+  eager?: boolean
+}) {
+  const { x, y, zoom } = frame ?? MIDDLE
+  return (
+    <img
+      ref={imgRef}
+      src={src}
+      alt=""
+      draggable={false}
+      loading={eager ? 'eager' : 'lazy'}
+      onError={onError}
+      onLoad={onLoad}
+      className={`absolute inset-0 h-full w-full select-none object-cover ${className}`}
+      style={{ objectPosition: `${x}% ${y}%`, transformOrigin: `${x}% ${y}%`, transform: zoom === 1 ? undefined : `scale(${zoom})` }}
+    />
+  )
 }
 
 /* -------------------------------------------------------------------------- */
@@ -622,8 +784,15 @@ function Series({
   const last = whenLabel(item.lastOpenedAt)
   // A season in parts is a tile per part.
   const tiles = seasons.flatMap((season) => partsOf(season).map((part) => ({ season, part })))
-  const coverOf = (season: MerkSeason, part: SeasonPart) => part.cover ?? season.cover ?? item.cover
-  const shape = useTileShape(tiles.map(({ season, part }) => coverOf(season, part)))
+  // The nearest cover with its frame: the part's, the season's, the series'.
+  const coverOf = (season: MerkSeason, part: SeasonPart) =>
+    part.cover
+      ? { src: part.cover, frame: part.coverFrame }
+      : season.cover
+        ? { src: season.cover, frame: season.coverFrame }
+        : item.cover
+          ? { src: item.cover, frame: item.coverFrame }
+          : null
 
   const addSeason = () => {
     const highest = seasons.reduce((max, season) => Math.max(max, season.number), 0)
@@ -693,7 +862,6 @@ function Series({
             season={season}
             part={part}
             cover={coverOf(season, part)}
-            shape={shape}
             current={status !== 'done' && season.number === item.season && partOfEpisode(season, item.episode).index === part.index}
             episode={item.episode}
             onOpen={() => onSeason(season.number, part.index)}
@@ -733,28 +901,24 @@ function Series({
 }
 
 /**
- * One season as a poster: the cover whole, the way it was made, in the
- * series' tile shape (`useTileShape`), with nothing laid over it — and under
- * it the name, the count and a bar for what is seen. A cover of another
- * shape than the tile is not cut to fit: it stands whole, and a blurred copy
- * of itself fills the rest instead of empty bars. The caption used to sit on
- * the picture and hid the bottom third of every poster, a pill sat on its
- * logo. Hover or focus brings up the numbers; a click opens the season.
+ * One season as a poster: 2:3 like every other tile, showing the part of the
+ * cover someone chose in the cover field (`CoverImage`), with nothing laid
+ * over it — and under it the name, the count and a bar for what is seen. The
+ * caption used to sit on the picture and hid the bottom third of every
+ * poster, a pill sat on its logo. Hover or focus brings up the numbers; a
+ * click opens the season.
  */
 function SeasonTile({
   season,
   part,
   cover,
-  shape,
   current,
   episode,
   onOpen,
 }: {
   season: MerkSeason
   part: SeasonPart
-  cover?: string
-  /** Height over width, the same for every tile of the series. */
-  shape: number
+  cover: { src: string; frame?: CoverFrame } | null
   current: boolean
   /** Where the entry stands, for „Hier sind Sie · Folge 4". */
   episode: number | null
@@ -767,9 +931,7 @@ function SeasonTile({
   const split = (season.parts?.length ?? 0) > 1
   // An address that does not answer leaves the number, not a broken image.
   const [broken, setBroken] = useState<string | null>(null)
-  const poster = cover && cover !== broken ? cover : undefined
-  const own = poster ? coverShapes.get(poster) : null
-  const fills = typeof own === 'number' && Math.abs(own - shape) < 0.01
+  const poster = cover && cover.src !== broken ? cover : null
   return (
     <button
       type="button"
@@ -778,24 +940,17 @@ function SeasonTile({
       className="press group flex min-w-0 flex-col gap-[10px] rounded-card text-left"
     >
       <span
-        className={`relative block w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'} ${
+        className={`relative block aspect-[2/3] w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'} ${
           current ? 'ring-2 ring-ink ring-offset-2 ring-offset-canvas' : ''
         }`}
-        style={{ aspectRatio: `1 / ${shape}` }}
       >
         {poster ? (
-          <>
-            {fills ? null : (
-              <img aria-hidden src={poster} alt="" className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl" />
-            )}
-            <img
-              src={poster}
-              alt=""
-              loading="lazy"
-              onError={() => setBroken(poster)}
-              className={`absolute inset-0 h-full w-full ${fills ? 'object-cover' : 'object-contain'} transition-transform duration-[var(--dur-slow)] ease-[var(--ease-settle)] group-hover:scale-[1.04]`}
-            />
-          </>
+          <CoverImage
+            src={poster.src}
+            frame={poster.frame}
+            onError={() => setBroken(poster.src)}
+            className="transition-transform duration-[var(--dur-slow)] ease-[var(--ease-settle)] group-hover:scale-[1.04]"
+          />
         ) : (
           <span
             aria-hidden
@@ -881,7 +1036,13 @@ function SeasonDialog({
   const name = partName(season, part)
   const unit = number === 0 ? 'Film' : 'Folge'
   const units = number === 0 ? 'Filme' : 'Folgen'
-  const cover = part.cover ?? season.cover ?? item.cover
+  const cover = part.cover
+    ? { src: part.cover, frame: part.coverFrame }
+    : season.cover
+      ? { src: season.cover, frame: season.coverFrame }
+      : item.cover
+        ? { src: item.cover, frame: item.coverFrame }
+        : null
   const isHere = item.season === number && partOfEpisode(season, item.episode).index === part.index
   const seenHere = season.watched.filter((n) => n >= part.from && (part.to === null || n <= part.to))
   // Seen in this part, counted from its first episode.
@@ -944,7 +1105,9 @@ function SeasonDialog({
 
         <div className="flex flex-col gap-[16px] sm:flex-row sm:items-end">
           {cover ? (
-            <img src={cover} alt="" className="block h-auto max-h-[200px] w-[96px] shrink-0 rounded-card bg-panel-mid object-cover" />
+            <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-stage">
+              <CoverImage src={cover.src} frame={cover.frame} eager />
+            </span>
           ) : (
             <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-panel-mid">
               <span aria-hidden className="absolute inset-0 flex flex-col items-center justify-center gap-[4px] text-ink/30">
@@ -1108,10 +1271,16 @@ function SeasonDialog({
               <CoverField
                 label="Cover dieses Teils (sonst das der Staffel oder Serie)"
                 value={part.cover}
-                onChange={(cover) => patchPart({ cover })}
+                frame={part.coverFrame}
+                onChange={(cover, coverFrame) => patchPart({ cover, coverFrame })}
               />
             ) : (
-              <CoverField label="Cover dieser Staffel (sonst das der Serie)" value={season.cover} onChange={(cover) => patchSeason({ cover })} />
+              <CoverField
+                label="Cover dieser Staffel (sonst das der Serie)"
+                value={season.cover}
+                frame={season.coverFrame}
+                onChange={(cover, coverFrame) => patchSeason({ cover, coverFrame })}
+              />
             )}
           </Line>
           <Line wide>
@@ -1204,7 +1373,7 @@ function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClos
           />
         </Line>
         <Line wide>
-          <CoverField value={item.cover} onChange={(cover) => update({ cover })} />
+          <CoverField value={item.cover} frame={item.coverFrame} onChange={(cover, coverFrame) => update({ cover, coverFrame })} />
         </Line>
         <Line label="Bewertung">
           <Rating value={item.rating ?? 0} onChange={(rating) => update({ rating })} />
@@ -1343,6 +1512,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [atSeason, setAtSeason] = useState(1)
   const [atEpisode, setAtEpisode] = useState(1)
   const [cover, setCover] = useState<string | undefined>(undefined)
+  const [coverFrame, setCoverFrame] = useState<CoverFrame | undefined>(undefined)
 
   const counts = episodeCounts(typedCounts, seasonCount)
   const position = Math.min(atSeason, seasonCount)
@@ -1364,6 +1534,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     setAtSeason(1)
     setAtEpisode(1)
     setCover(undefined)
+    setCoverFrame(undefined)
   }
 
   const save = () => {
@@ -1383,6 +1554,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
       episode,
       seasons,
       cover,
+      coverFrame,
       status: 'watching',
     })
     setMerkItems((current) => [item, ...current])
@@ -1449,7 +1621,14 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
           </span>
         </Line>
         <Line wide>
-          <CoverField value={cover} onChange={setCover} />
+          <CoverField
+            value={cover}
+            frame={coverFrame}
+            onChange={(picture, frame) => {
+              setCover(picture)
+              setCoverFrame(frame)
+            }}
+          />
         </Line>
         <Line wide>
           <div className="flex flex-wrap items-center justify-between gap-[12px]">
