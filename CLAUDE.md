@@ -311,7 +311,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   ist die Summe der Teile (`withParts`), Gesehenes und Stand bleiben an der
   Staffel; `partsOf`/`partProgress` leiten je Teil Bereich und Fortschritt
   ab. Ein offener Teil ohne Gesehenes wird beim Auflösen einfach
-  weggenommen. Kacheln sind immer 2:3; der Ausschnitt eines Covers liegt
+  weggenommen. Kacheln sind 2:3 (Filmposter) oder je Serie 5:7 (Manga,
+  `tileFormat`, `TILE_FORMATS`); Vorschau und Staffel-Fenster folgen dem
+  Format, der Ausschnitt bleibt gültig. Der Ausschnitt eines Covers liegt
   als `coverFrame` (x, y in %, Zoom 1–3) neben jedem Cover — an der Serie,
   der Staffel und dem Teil — und wird von `CoverImage` überall gleich
   gezeichnet: auf einen Canvas in Gerätepixeln (ResizeObserver mit

@@ -52,6 +52,7 @@ import {
   type MerkSeason,
   type Picture,
   type SeasonPart,
+  type TileFormat,
   type SavedLinkItem,
   type SavedLinkStatus,
 } from '../../lib/merkliste'
@@ -150,6 +151,27 @@ function FilmIcon() {
 }
 
 /**
+ * The two shapes an entry's tiles take, chosen per entry: a film poster —
+ * 2:3, as on ThePosterDB — or a manga volume, 5:7 like the B6 paperback.
+ */
+const TILE_FORMATS: Record<TileFormat, { label: string; ratio: string }> = {
+  poster: { label: 'Filmposter (2:3)', ratio: '2 / 3' },
+  manga: { label: 'Manga (5:7)', ratio: '5 / 7' },
+}
+const ratioOf = (format: TileFormat | undefined) => TILE_FORMATS[format ?? 'poster'].ratio
+
+/** The switch between the two, above the cover it shapes. */
+function FormatChoice({ value, onChange }: { value: TileFormat | undefined; onChange: (format: TileFormat) => void }) {
+  return (
+    <ChoiceRow
+      value={value ?? 'poster'}
+      options={(Object.keys(TILE_FORMATS) as TileFormat[]).map((format) => ({ value: format, label: TILE_FORMATS[format].label }))}
+      onChange={onChange}
+    />
+  )
+}
+
+/**
  * A cover from an address or from a file, and the part of it a tile shows.
  * A file is made small first (`coverFromFile`) — it lives in the list on
  * this device. Every tile is a 2:3 poster; the preview here is one, and the
@@ -159,11 +181,14 @@ function FilmIcon() {
 function CoverField({
   value,
   frame,
+  format,
   onChange,
   label = 'Cover',
 }: {
   value: string | undefined
   frame?: CoverFrame
+  /** The entry's tile shape; the preview is one of its tiles. */
+  format?: TileFormat
   /** A new picture comes without a frame; a new frame keeps the picture. */
   onChange: (value: string | undefined, frame: CoverFrame | undefined) => void
   label?: string
@@ -218,12 +243,16 @@ function CoverField({
           <FrameEditor
             src={value}
             frame={live}
+            format={format}
             onFrame={setFrame}
             onError={() => setProblem('Unter dieser Adresse liess sich kein Bild laden.')}
             onLoad={() => setProblem(null)}
           />
         ) : (
-          <span className="relative aspect-[2/3] w-[120px] shrink-0 overflow-hidden rounded-card bg-panel-mid ring-1 ring-inset ring-line">
+          <span
+            className="relative w-[120px] shrink-0 overflow-hidden rounded-card bg-panel-mid ring-1 ring-inset ring-line"
+            style={{ aspectRatio: ratioOf(format) }}
+          >
             <span className="absolute inset-0 flex items-center justify-center text-small text-prose">kein Bild</span>
           </span>
         )}
@@ -324,12 +353,14 @@ function CoverField({
 function FrameEditor({
   src,
   frame,
+  format,
   onFrame,
   onError,
   onLoad,
 }: {
   src: string
   frame: CoverFrame | undefined
+  format?: TileFormat
   onFrame: (frame: CoverFrame | undefined) => void
   onError: () => void
   onLoad: () => void
@@ -364,7 +395,8 @@ function FrameEditor({
       tabIndex={0}
       role="group"
       aria-label="Ausschnitt des Covers: ziehen oder Pfeiltasten, Plus und Minus zoomen"
-      className="relative aspect-[2/3] w-[140px] shrink-0 cursor-grab touch-none overflow-hidden rounded-card bg-stage outline-none ring-1 ring-line focus-visible:ring-2 focus-visible:ring-ink active:cursor-grabbing"
+      className="relative w-[140px] shrink-0 cursor-grab touch-none overflow-hidden rounded-card bg-stage outline-none ring-1 ring-line focus-visible:ring-2 focus-visible:ring-ink active:cursor-grabbing"
+      style={{ aspectRatio: ratioOf(format) }}
       onPointerDown={(event) => {
         event.preventDefault()
         event.currentTarget.focus()
@@ -991,6 +1023,7 @@ function Series({
             season={season}
             part={part}
             cover={coverOf(season, part)}
+            format={item.tileFormat}
             current={status !== 'done' && season.number === item.season && partOfEpisode(season, item.episode).index === part.index}
             episode={item.episode}
             onOpen={() => onSeason(season.number, part.index)}
@@ -1041,6 +1074,7 @@ function SeasonTile({
   season,
   part,
   cover,
+  format,
   current,
   episode,
   onOpen,
@@ -1048,6 +1082,7 @@ function SeasonTile({
   season: MerkSeason
   part: SeasonPart
   cover: { src: string; frame?: CoverFrame } | null
+  format?: TileFormat
   current: boolean
   /** Where the entry stands, for „Hier sind Sie · Folge 4". */
   episode: number | null
@@ -1069,9 +1104,10 @@ function SeasonTile({
       className="press group flex min-w-0 flex-col gap-[10px] rounded-card text-left"
     >
       <span
-        className={`relative block aspect-[2/3] w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'} ${
+        className={`relative block w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'} ${
           current ? 'ring-2 ring-ink ring-offset-2 ring-offset-canvas' : ''
         }`}
+        style={{ aspectRatio: ratioOf(format) }}
       >
         {poster ? (
           <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} />
@@ -1229,11 +1265,11 @@ function SeasonDialog({
 
         <div className="flex flex-col gap-[16px] sm:flex-row sm:items-end">
           {cover ? (
-            <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-stage">
+            <span className="relative w-[96px] shrink-0 overflow-hidden rounded-card bg-stage" style={{ aspectRatio: ratioOf(item.tileFormat) }}>
               <CoverImage src={cover.src} frame={cover.frame} />
             </span>
           ) : (
-            <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-panel-mid">
+            <span className="relative w-[96px] shrink-0 overflow-hidden rounded-card bg-panel-mid" style={{ aspectRatio: ratioOf(item.tileFormat) }}>
               <span aria-hidden className="absolute inset-0 flex flex-col items-center justify-center gap-[4px] text-ink/30">
                 {number === 0 ? <FilmIcon /> : <span className="display-md">{number}</span>}
                 {split ? <span className="text-small font-semibold text-ink/45">Teil {part.index + 1}</span> : null}
@@ -1396,6 +1432,7 @@ function SeasonDialog({
                 label="Cover dieses Teils (sonst das der Staffel oder Serie)"
                 value={part.cover}
                 frame={part.coverFrame}
+                format={item.tileFormat}
                 onChange={(cover, coverFrame) => patchPart({ cover, coverFrame })}
               />
             ) : (
@@ -1403,6 +1440,7 @@ function SeasonDialog({
                 label="Cover dieser Staffel (sonst das der Serie)"
                 value={season.cover}
                 frame={season.coverFrame}
+                format={item.tileFormat}
                 onChange={(cover, coverFrame) => patchSeason({ cover, coverFrame })}
               />
             )}
@@ -1496,8 +1534,16 @@ function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClos
             onChange={(event) => update({ url: event.target.value })}
           />
         </Line>
+        <Line label="Format der Kacheln" wide>
+          <FormatChoice value={item.tileFormat} onChange={(format) => update({ tileFormat: format === 'manga' ? 'manga' : undefined })} />
+        </Line>
         <Line wide>
-          <CoverField value={item.cover} frame={item.coverFrame} onChange={(cover, coverFrame) => update({ cover, coverFrame })} />
+          <CoverField
+            value={item.cover}
+            frame={item.coverFrame}
+            format={item.tileFormat}
+            onChange={(cover, coverFrame) => update({ cover, coverFrame })}
+          />
         </Line>
         <Line label="Bewertung">
           <Rating value={item.rating ?? 0} onChange={(rating) => update({ rating })} />
@@ -1637,6 +1683,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [atEpisode, setAtEpisode] = useState(1)
   const [cover, setCover] = useState<string | undefined>(undefined)
   const [coverFrame, setCoverFrame] = useState<CoverFrame | undefined>(undefined)
+  const [format, setFormat] = useState<TileFormat>('poster')
 
   const counts = episodeCounts(typedCounts, seasonCount)
   const position = Math.min(atSeason, seasonCount)
@@ -1659,6 +1706,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     setAtEpisode(1)
     setCover(undefined)
     setCoverFrame(undefined)
+    setFormat('poster')
   }
 
   const save = () => {
@@ -1679,6 +1727,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
       seasons,
       cover,
       coverFrame,
+      ...(format === 'manga' ? { tileFormat: format } : {}),
       status: 'watching',
     })
     setMerkItems((current) => [item, ...current])
@@ -1744,10 +1793,14 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
             </span>
           </span>
         </Line>
+        <Line label="Format der Kacheln" wide>
+          <FormatChoice value={format} onChange={setFormat} />
+        </Line>
         <Line wide>
           <CoverField
             value={cover}
             frame={coverFrame}
+            format={format}
             onChange={(picture, frame) => {
               setCover(picture)
               setCoverFrame(frame)

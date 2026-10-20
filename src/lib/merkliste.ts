@@ -26,6 +26,9 @@ import type {
 /** Where an entry stands: being watched, for later, finished. */
 export type SavedLinkStatus = 'watching' | 'later' | 'done'
 
+/** The shape of an entry's tiles: a film poster (2:3) or a manga volume (5:7). */
+export type TileFormat = 'poster' | 'manga'
+
 /** One season of an entry; `number` 0 holds the films. */
 export interface MerkSeason {
   number: number
@@ -96,6 +99,8 @@ export interface SavedLinkItem {
   /** An image address, or a picture stored with the entry (data: URL). */
   cover?: string
   coverFrame?: CoverFrame
+  /** Absent means a film poster. */
+  tileFormat?: TileFormat
   notes?: string
   /** 0–5; 0 is unrated. */
   rating?: number
@@ -162,6 +167,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(seasons ? { seasons } : {}),
     ...(raw.cover ? { cover: raw.cover } : {}),
     ...(raw.cover && normalizeFrame(raw.coverFrame) ? { coverFrame: normalizeFrame(raw.coverFrame) } : {}),
+    ...(raw.tileFormat === 'manga' ? { tileFormat: 'manga' as const } : {}),
     ...(raw.notes ? { notes: raw.notes } : {}),
     ...(typeof raw.rating === 'number' ? { rating: Math.max(0, Math.min(5, Math.round(raw.rating))) } : {}),
   }
