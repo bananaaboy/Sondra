@@ -764,16 +764,21 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   „Folge 5 gesehen“ (hakt ab, rückt weiter). Die Stelle ist immer die
   nächste ungesehene Folge. Darunter jede Staffel als **Poster**, gerundet,
   Cover oder grosse Zahl auf Tönung. Die Form kommt vom **höchsten Cover
-  der Serie** (gemessen, sobald es geladen ist, `useTileShape`): ein Poster
-  macht die ganze Reihe 2:3, lauter Standbilder machen sie 16:9; begrenzt
-  zwischen 16:9 und 9:16, ohne Cover 2:3. Die kleinen Vorschauen im Fenster
+  der Serie, die Breite vom breitesten** (gemessen, sobald sie geladen
+  sind, `useTileShape`): ein Poster macht die ganze Reihe 2:3, lauter
+  Standbilder machen sie 16:9; begrenzt zwischen 16:9 und 9:16, ohne Cover
+  2:3. Kein Cover wird beschnitten: eines in anderer Form steht ganz da,
+  und eine unscharfe Kopie seiner selbst füllt den Rest — nicht
+  abgedunkelt, keine Balken. Die kleinen Vorschauen im Fenster
   zeigen das Cover in seiner eigenen Form. Auf dem Bild liegt nichts: Name, Zähler in Mono (mit Haken, wenn alles gesehen
   ist) und Balken stehen darunter, „Hier sind Sie · Folge 4“ als Zeile unter
   dem Balken, die Kachel selbst trägt den Ring. Vorher deckte die
   Beschriftung das untere Drittel jedes Posters ab und eine Pille das Logo.
   Ein Cover, das nicht lädt, fällt auf die Zahl zurück. Überfahren oder
-  Fokus zeigt Prozent, „4 von 10“, „6 übrig · weiter mit Folge 5“ auf
-  Stage-Schwarz; ein Klick öffnet die Staffel im `Dialog`: alle Folgen als
+  Fokus hebt von unten einen Verlauf mit Prozent und „Noch 6 · weiter mit
+  Folge 5“; das Bild bleibt darüber sichtbar (vorher deckte fast schwarzes
+  Stage das ganze Poster, „zu dunkel“). Ohne Cover weicht die grosse Zahl
+  den Angaben in Tinte; ein Klick öffnet die Staffel im `Dialog`: alle Folgen als
   Zahlen zum Abhaken (Umschalt-Klick: bis hier), Anzahl, Name, eigenes
   Cover. **Jede Staffel hat ihre eigene Folgenzahl**, auch beim Hinzufügen:
   dort steht je Staffel ein Zähler, und eine Staffel, die niemand angefasst
