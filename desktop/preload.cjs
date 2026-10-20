@@ -1,8 +1,8 @@
 /**
  * The one door from Sondra's page into the app around it: the version, the
- * updater, files Windows opened with Sondra, and the screens and windows
- * there are to record. Nothing else of Electron or
- * Node reaches the page.
+ * updater, files Windows opened with Sondra, the screens and windows there
+ * are to record, and the Merkliste's link to Anytype (one action at a time,
+ * never the key). Nothing else of Electron or Node reaches the page.
  */
 
 const { contextBridge, ipcRenderer } = require('electron')
@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('sondraApp', {
   takeOpenedFiles: () => ipcRenderer.invoke('sondra:take-files'),
   captureSources: () => ipcRenderer.invoke('sondra:capture-sources'),
   pickCaptureSource: (id, audio) => ipcRenderer.invoke('sondra:capture-pick', id, audio),
+  anytype: (action, ...args) => ipcRenderer.invoke('sondra:anytype', action, ...args),
   onOpenedFiles: (callback) => {
     const listener = (_event, files) => callback(files)
     ipcRenderer.on('sondra:files', listener)

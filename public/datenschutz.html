@@ -78,7 +78,7 @@
       <a class="back" href="./">Zurück zu Sondra</a>
 
       <h1>Datenschutz</h1>
-      <p class="stand">Stand: 1. Oktober 2026 · gilt für die Website und die Windows-App</p>
+      <p class="stand">Stand: 20. Oktober 2026 · gilt für die Website und die Windows-App</p>
 
       <p class="kurz">
         Sondra bearbeitet Ihre Dateien auf Ihrem Gerät. Nichts davon wird zu uns hochgeladen. Es gibt keine
@@ -111,7 +111,7 @@
           abschalten; dabei wird alles Gespeicherte gelöscht, und die Dateien sind wieder weg, sobald Sie den Tab
           oder die App schliessen. Auf einem fremden oder geteilten Rechner sollten Sie das tun.
         </p>
-        <p>Im Speicher Ihres Browsers (localStorage) legt Sondra ausserdem nur Einstellungen ab:</p>
+        <p>Im Speicher Ihres Browsers (localStorage) legt Sondra ausserdem Ihre Merkliste und Einstellungen ab:</p>
         <ul>
           <li><code>sondra:theme</code>: ob Sie das helle oder dunkle Aussehen gewählt haben.</li>
           <li>
@@ -123,6 +123,11 @@
             geantwortet haben, damit Sie sie wieder auswählen können.
           </li>
           <li><code>sondra:sitzung-behalten</code>: ob die Sitzung auf diesem Gerät behalten wird.</li>
+          <li>
+            <code>sondra:saved_links</code>: Ihre Merkliste — Serien, was Sie gesehen haben, Notizen, Bewertungen
+            und Covers, die Sie aus Dateien gewählt haben. <code>sondra:merkliste_removed</code>: wann Sie eine
+            Serie entfernt haben, damit ein Abgleich mit Anytype sie nicht zurückbringt.
+          </li>
           <li><code>sondra:sprache</code>, <code>sondra:sprachmodell</code>: Sprache und Genauigkeit, die Sie für Untertitel gewählt haben.</li>
         </ul>
         <p>
@@ -257,6 +262,14 @@
             Die App schreibt ein Protokoll nach <code>%APPDATA%\Sondra\sondra.log</code>: Startzeiten,
             den lokalen Port und Fehlermeldungen. Es bleibt auf Ihrem Rechner und wird nur verschickt, wenn Sie
             es selbst jemandem geben.
+          </li>
+          <li>
+            Verbinden Sie die Merkliste mit Anytype, spricht die App mit der Anytype-App auf Ihrem Rechner
+            (<code>127.0.0.1:31009</code>) und legt dort im Space, den Sie wählen, die Seite „Sondra ·
+            Merkliste“ ab. Den Zugangsschlüssel, den Anytype dafür ausgibt, speichert die App mit der
+            Verschlüsselung von Windows in <code>%APPDATA%\Sondra</code>; „Trennen“ löscht ihn. Was Anytype mit
+            der Seite tut, etwa sie mit Ihren anderen Geräten abgleichen, richtet sich nach Anytype und Ihren
+            Einstellungen dort. Covers aus Dateien gehen nicht mit.
           </li>
           <li>
             Einstellungen und Protokoll liegen in <code>%APPDATA%\Sondra</code>. Nach dem Deinstallieren

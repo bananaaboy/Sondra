@@ -675,3 +675,120 @@ export function mergeMerkliste(current: SavedLinkItem[], incoming: SavedLinkItem
   }
   return { items: next, added, updated, same, kept }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Removals and the shared copy                                                */
+/* -------------------------------------------------------------------------- */
+
+const REMOVED_KEY = 'sondra:merkliste_removed'
+
+/**
+ * When each entry was taken off the list, by id. A copy kept elsewhere — the
+ * page in Anytype — still holds a removed entry; without this, the next
+ * merge would bring it back.
+ */
+let removals: Record<string, number> = (() => {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(REMOVED_KEY) ?? '{}')
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {}
+  } catch {
+    return {}
+  }
+})()
+
+function persistRemovals() {
+  try {
+    localStorage.setItem(REMOVED_KEY, JSON.stringify(removals))
+  } catch {
+    // Without it, a removed entry may come back from Anytype once.
+  }
+}
+
+export function merkRemovals(): Record<string, number> {
+  return removals
+}
+
+export function noteRemoved(id: string): void {
+  removals = { ...removals, [id]: Date.now() }
+  persistRemovals()
+}
+
+export function noteRestored(id: string): void {
+  if (!(id in removals)) return
+  const { [id]: _gone, ...rest } = removals
+  removals = rest
+  persistRemovals()
+}
+
+/** Stands in for a picture from a file, which stays on its device. */
+export const LOCAL_PICTURE = 'sondra:lokal'
+
+/** An entry as it travels to another device: pictures from files left behind. */
+export function travelling(item: SavedLinkItem): SavedLinkItem {
+  const away = <T extends { cover?: string; coverFrame?: CoverFrame }>(holder: T): T =>
+    holder.cover?.startsWith('data:') ? { ...holder, cover: LOCAL_PICTURE, coverFrame: undefined } : holder
+  return {
+    ...away(item),
+    ...(item.seasons
+      ? {
+          seasons: item.seasons.map((season) => ({
+            ...away(season),
+            ...(season.parts ? { parts: season.parts.map((part) => away(part)) } : {}),
+          })),
+        }
+      : {}),
+  }
+}
+
+/** An arrived entry with this device's own pictures put back where it left them. */
+function withLocalPictures(item: SavedLinkItem, local: SavedLinkItem | undefined): SavedLinkItem {
+  const back = <T extends { cover?: string; coverFrame?: CoverFrame }>(holder: T, mine: T | undefined): T =>
+    holder.cover === LOCAL_PICTURE
+      ? mine?.cover?.startsWith('data:')
+        ? { ...holder, cover: mine.cover, coverFrame: mine.coverFrame }
+        : { ...holder, cover: undefined, coverFrame: undefined }
+      : holder
+  const localSeasons = local?.seasons ?? []
+  return {
+    ...back(item, local),
+    ...(item.seasons
+      ? {
+          seasons: item.seasons.map((season) => {
+            const mine = localSeasons.find((entry) => entry.number === season.number)
+            return {
+              ...back(season, mine),
+              ...(season.parts ? { parts: season.parts.map((part, i) => back(part, mine?.parts?.[i])) } : {}),
+            }
+          }),
+        }
+      : {}),
+  }
+}
+
+/**
+ * This device's list merged with a copy kept elsewhere: per series the side
+ * changed last wins (`mergeMerkliste`), what was removed on either side after
+ * its last change stays removed, and pictures from files stay where they were
+ * chosen.
+ */
+export function mergeShared(
+  current: SavedLinkItem[],
+  remote: { items: SavedLinkItem[]; removed: Record<string, number> },
+): { items: SavedLinkItem[]; removed: Record<string, number> } {
+  const removed = { ...removals }
+  for (const [id, at] of Object.entries(remote.removed)) {
+    if (typeof at === 'number' && !(removed[id] >= at)) removed[id] = at
+  }
+  const gone = (item: SavedLinkItem) => removed[item.id] !== undefined && removed[item.id] >= item.updatedAt
+  const merged = mergeMerkliste(current, remote.items.filter((item) => !gone(item)))
+  const items = merged.items
+    .filter((item) => !gone(item))
+    .map((item) => withLocalPictures(item, current.find((entry) => entry.id === item.id)))
+  return { items, removed }
+}
+
+/** Takes the merged removals as this device's own. */
+export function adoptRemovals(next: Record<string, number>): void {
+  removals = next
+  persistRemovals()
+}

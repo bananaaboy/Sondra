@@ -79,7 +79,11 @@ Merkliste
   Ausschnitt wählen Sie durch Ziehen und Zoomen; dazu Notiz und Bewertung.
   Gespeichert nur auf diesem Rechner; „Exportieren“ unter der Liste macht
   eine Datei daraus, „Aus Datei einlesen“ holt sie auf einem anderen Gerät
-  zurück.
+  zurück. Mit Anytype verbinden: Unter der Liste „Mit Anytype verbinden“
+  wählen, Anytype offen haben, den vierstelligen Code aus Anytype eintippen
+  und einen Space wählen. Sondra legt dort die Seite „Sondra · Merkliste“ an
+  und gleicht sie bei jeder Änderung ab; Anytype bringt sie auf Ihre anderen
+  Geräte, Sondra auf einem anderen Rechner holt sie dort zurück.
 
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →

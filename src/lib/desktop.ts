@@ -84,6 +84,8 @@ export interface AppBridge {
   captureSources?: () => Promise<CaptureSource[]>
   /** Sets the source the next getDisplayMedia gets; `audio` adds the system's sound. */
   pickCaptureSource?: (id: string, audio: boolean) => Promise<boolean>
+  /** The Merkliste's link to Anytype (desktop/anytype.mjs); missing in apps older than 1.1.4. */
+  anytype?: (action: string, ...args: unknown[]) => Promise<unknown>
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   installUpdate: () => Promise<boolean>

@@ -15,6 +15,15 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
+import {
+  ANYTYPE_PROBLEM,
+  anytype,
+  anytypeAvailable,
+  inStepWithAnytype,
+  syncMerkliste,
+  type AnytypeError,
+  type AnytypeStatus,
+} from '../../lib/anytype'
 import { buildUrlWithEpisode, saveBytes, sourceBadgeForUrl } from '../../lib/download'
 import {
   advance,
@@ -27,6 +36,8 @@ import {
   markRange,
   mergeMerkliste,
   merkSaveFailed,
+  noteRemoved,
+  noteRestored,
   partName,
   partOfEpisode,
   partProgress,
@@ -489,6 +500,8 @@ export function MerklistePanel() {
   const [editing, setEditing] = useState<string | null>(null)
   const [season, setSeason] = useState<{ id: string; number: number; part: number } | null>(null)
   const [removed, setRemoved] = useState<{ item: SavedLinkItem; index: number } | null>(null)
+  const [anytypeOpen, setAnytypeOpen] = useState(false)
+  const anytypeLink = useAnytype(items)
 
   // The series that is open, if one is. It has a history entry of its own,
   // so back — the browser's, the mouse's, a swipe on a phone — returns to
@@ -540,6 +553,8 @@ export function MerklistePanel() {
 
   const remove = (item: SavedLinkItem) => {
     setRemoved({ item, index: items.findIndex((entry) => entry.id === item.id) })
+    // Remembered, so the copy in Anytype does not bring it back.
+    noteRemoved(item.id)
     setEditing(null)
     setSeason(null)
     setMerkItems((current) => current.filter((entry) => entry.id !== item.id))
@@ -561,6 +576,7 @@ export function MerklistePanel() {
           onClose={() => setSeason(null)}
         />
       ) : null}
+      {anytypeOpen ? <AnytypeDialog link={anytypeLink} onClose={() => setAnytypeOpen(false)} /> : null}
     </>
   )
 
@@ -619,6 +635,7 @@ export function MerklistePanel() {
                   next.splice(Math.max(0, Math.min(removed.index, next.length)), 0, removed.item)
                   return next
                 })
+                noteRestored(removed.item.id)
                 setRemoved(null)
               }}
               className={`${linkClass} font-semibold`}
@@ -651,7 +668,7 @@ export function MerklistePanel() {
         ))
       )}
 
-      <Transfer items={items} />
+      <Transfer items={items} link={anytypeLink} onAnytype={() => setAnytypeOpen(true)} />
       {dialogs}
     </div>
   )
@@ -663,13 +680,286 @@ function openFromHistory(state: unknown): string | null {
   return typeof id === 'string' ? id : null
 }
 
+/* -------------------------------------------------------------------------- */
+/* Anytype                                                                     */
+/* -------------------------------------------------------------------------- */
+
+interface AnytypeLink {
+  /** In the app; in a browser Anytype cannot be reached at all. */
+  available: boolean
+  status: AnytypeStatus | null
+  connected: boolean
+  sync: { running: boolean; at?: number; error?: AnytypeError }
+  run: () => Promise<void>
+  refresh: () => Promise<AnytypeStatus | null>
+}
+
+/**
+ * The Merkliste kept in step with Anytype while the tab is open: once on
+ * arrival, then a moment after each change. A round is read, merge, write
+ * (`syncMerkliste`); a change that only brought the list in step sends
+ * nothing.
+ */
+function useAnytype(items: SavedLinkItem[]): AnytypeLink {
+  const [status, setStatus] = useState<AnytypeStatus | null>(null)
+  const [sync, setSync] = useState<AnytypeLink['sync']>({ running: false })
+  const connected = Boolean(status?.paired && status.space)
+
+  const refresh = async () => {
+    const answer = await anytype.status()
+    const next = answer.ok ? { reachable: answer.reachable, paired: answer.paired, lasting: answer.lasting, space: answer.space } : null
+    setStatus(next)
+    return next
+  }
+  const run = async () => {
+    setSync((current) => ({ ...current, running: true }))
+    const answer = await syncMerkliste()
+    setSync(answer.ok ? { running: false, at: answer.at } : { running: false, error: answer.error })
+    if (!answer.ok && answer.error === 'unauthorized') void refresh()
+  }
+  const latest = useRef({ refresh, run })
+  latest.current = { refresh, run }
+
+  useEffect(() => {
+    if (!anytypeAvailable) return
+    void latest.current.refresh().then((next) => {
+      if (next?.paired && next.space) void latest.current.run()
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!connected || inStepWithAnytype(items)) return
+    const timer = window.setTimeout(() => void latest.current.run(), 2500)
+    return () => window.clearTimeout(timer)
+  }, [items, connected])
+
+  return { available: anytypeAvailable, status, connected, sync, run, refresh }
+}
+
+const clock = (at: number) => new Date(at).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
+
+/**
+ * Connecting the Merkliste to Anytype, step by step — Anytype open, a code
+ * it shows typed in here, a space — and, once connected, the state of it
+ * with what can be done.
+ */
+function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => void }) {
+  const { status } = link
+  const [challenge, setChallenge] = useState<string | null>(null)
+  const [code, setCode] = useState('')
+  const [spaces, setSpaces] = useState<{ id: string; name: string }[] | null>(null)
+  const [pick, setPick] = useState('')
+  const [choosing, setChoosing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  const failed = (error: AnytypeError) => {
+    setProblem(ANYTYPE_PROBLEM[error])
+    setBusy(false)
+  }
+  const askCode = async () => {
+    setBusy(true)
+    setProblem(null)
+    setCode('')
+    const answer = await anytype.challenge()
+    if (!answer.ok) return failed(answer.error)
+    setChallenge(answer.challengeId)
+    setBusy(false)
+  }
+  const pair = async () => {
+    if (!challenge) return
+    setBusy(true)
+    setProblem(null)
+    const answer = await anytype.pair(challenge, code)
+    if (!answer.ok) {
+      if (answer.error === 'wrong-code') setChallenge(null)
+      return failed(answer.error)
+    }
+    setChallenge(null)
+    await link.refresh()
+    await loadSpaces()
+  }
+  const loadSpaces = async () => {
+    setBusy(true)
+    setProblem(null)
+    const answer = await anytype.spaces()
+    if (!answer.ok) return failed(answer.error)
+    setSpaces(answer.spaces)
+    setPick((current) => current || answer.spaces[0]?.id || '')
+    setBusy(false)
+  }
+  const useSpace = async () => {
+    const space = spaces?.find((entry) => entry.id === pick)
+    if (!space) return
+    setBusy(true)
+    setProblem(null)
+    const answer = await anytype.useSpace(space.id, space.name)
+    if (!answer.ok) return failed(answer.error)
+    setChoosing(false)
+    await link.refresh()
+    setBusy(false)
+    await link.run()
+  }
+  const forget = async () => {
+    setBusy(true)
+    await anytype.forget()
+    setChallenge(null)
+    setSpaces(null)
+    await link.refresh()
+    setBusy(false)
+  }
+
+  // Spaces load by themselves once there is a key and none is chosen.
+  const needsSpace = Boolean(status?.paired && (!status.space || choosing))
+  useEffect(() => {
+    if (needsSpace && spaces === null && !busy) void loadSpaces()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsSpace])
+
+  let body: ReactNode
+  if (!status) {
+    body = <p className="text-small text-prose">Sondra fragt bei Anytype nach …</p>
+  } else if (!status.reachable) {
+    body = (
+      <div className="flex flex-col items-start gap-[12px]">
+        <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+          Anytype antwortet auf diesem Rechner nicht. Öffnen Sie die Anytype-App (Version 0.46.7 oder neuer) und melden Sie
+          sich an.
+        </p>
+        <Button type="button" size="sm" variant="quiet" disabled={busy} onClick={() => void link.refresh()}>
+          Nochmal prüfen
+        </Button>
+      </div>
+    )
+  } else if (!status.paired) {
+    body = challenge ? (
+      <form
+        className="flex flex-col items-start gap-[12px]"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (code.length === 4) void pair()
+        }}
+      >
+        <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+          Anytype zeigt jetzt einen vierstelligen Code. Tippen Sie ihn hier ein.
+        </p>
+        <div className="flex flex-wrap items-center gap-[10px]">
+          <TextInput
+            autoFocus
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={4}
+            value={code}
+            onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 4))}
+            placeholder="0000"
+            aria-label="Code aus Anytype"
+            className="w-[120px]! text-center tracking-[0.3em]"
+          />
+          <Button type="submit" size="sm" disabled={busy || code.length !== 4}>
+            Verbinden
+          </Button>
+          <button type="button" onClick={() => void askCode()} disabled={busy} className={`${linkClass} text-small`}>
+            Neuen Code anfordern
+          </button>
+        </div>
+      </form>
+    ) : (
+      <div className="flex flex-col items-start gap-[12px]">
+        <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+          Sondra fragt bei Anytype um Zugang. Anytype zeigt dafür einen vierstelligen Code, den Sie hier eintippen.
+        </p>
+        <Button type="button" size="sm" disabled={busy} onClick={() => void askCode()}>
+          Code anfordern
+        </Button>
+      </div>
+    )
+  } else if (needsSpace) {
+    body = (
+      <div className="flex flex-col items-start gap-[12px]">
+        <p className="text-small text-prose">In welchem Space soll die Merkliste liegen?</p>
+        {spaces === null ? (
+          <p className="text-small text-prose">Die Spaces werden geladen …</p>
+        ) : spaces.length === 0 ? (
+          <p className="text-small text-prose">In Anytype gibt es noch keinen Space. Legen Sie dort einen an.</p>
+        ) : (
+          <ChoiceRow value={pick} options={spaces.map((space) => ({ value: space.id, label: space.name || 'Ohne Namen' }))} onChange={setPick} />
+        )}
+        <div className="flex flex-wrap items-center gap-[12px]">
+          <Button type="button" size="sm" disabled={busy || !pick} onClick={() => void useSpace()}>
+            Diesen Space nehmen
+          </Button>
+          {choosing ? (
+            <button type="button" onClick={() => setChoosing(false)} className={`${linkClass} text-small`}>
+              Abbrechen
+            </button>
+          ) : null}
+        </div>
+      </div>
+    )
+  } else {
+    body = (
+      <div className="flex flex-col items-start gap-[14px]">
+        <p className="text-body text-prose">
+          Verbunden mit dem Space „{status.space?.name || 'Ohne Namen'}“.
+          <span className="text-muted">
+            {' '}
+            {link.sync.running ? 'Gleicht gerade ab …' : link.sync.at ? `Zuletzt abgeglichen um ${clock(link.sync.at)}.` : ''}
+          </span>
+        </p>
+        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[8px]">
+          <Button type="button" size="sm" disabled={link.sync.running} onClick={() => void link.run()}>
+            Jetzt abgleichen
+          </Button>
+          <button
+            type="button"
+            onClick={() => {
+              setSpaces(null)
+              setChoosing(true)
+            }}
+            className={`${linkClass} text-small`}
+          >
+            Anderen Space wählen
+          </button>
+          <button type="button" onClick={() => void forget()} disabled={busy} className={`${linkClass} text-small`}>
+            Trennen
+          </button>
+        </div>
+        {!status.lasting ? (
+          <p className="text-small text-prose">
+            Windows kann den Zugang hier nicht verschlüsselt ablegen; nach einem Neustart von Sondra fragt es nach einem neuen
+            Code.
+          </p>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="Merkliste in Anytype" size="md">
+      <div className="flex flex-col gap-[18px]">
+        <p className="max-w-[62ch] text-small leading-[1.55] text-prose">
+          Sondra legt die Merkliste in Anytype als Seite „Sondra · Merkliste“ ab und gleicht sie bei jeder Änderung ab. Anytype
+          bringt sie verschlüsselt auf Ihre anderen Geräte, auch aufs Handy; Sondra auf einem anderen Rechner holt sie dort
+          wieder ab. Covers aus Dateien bleiben auf diesem Rechner, Covers mit Bildadresse reisen mit.
+        </p>
+        <div className="border-t border-line pt-[16px]">{body}</div>
+        {problem ? (
+          <Notice tone="error" title="Hat nicht geklappt">
+            {problem}
+          </Notice>
+        ) : null}
+      </div>
+    </Dialog>
+  )
+}
+
 /**
  * The list as a file: to keep, or to take to another device. The list lives
  * only on this one, so this is the way it leaves; reading a file in merges
  * it, and one click takes the merge back. One quiet line at the foot of the
  * list — it was a paragraph with two framed buttons.
  */
-function Transfer({ items }: { items: SavedLinkItem[] }) {
+function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: AnytypeLink; onAnytype: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [done, setDone] = useState<{ before: SavedLinkItem[]; message: string } | null>(null)
@@ -706,7 +996,15 @@ function Transfer({ items }: { items: SavedLinkItem[] }) {
   return (
     <div className="flex flex-col gap-[12px] border-t border-line pt-[14px]">
       <div className="flex flex-wrap items-baseline justify-between gap-x-[20px] gap-y-[6px] text-small">
-        <span className="text-prose">Nur auf diesem Gerät gespeichert.</span>
+        <span className="text-prose">
+          {link.connected
+            ? link.sync.running
+              ? 'Gleicht mit Anytype ab …'
+              : `Mit Anytype abgeglichen · „${link.status?.space?.name || 'Ohne Namen'}“${link.sync.at && !link.sync.error ? ` · ${clock(link.sync.at)}` : ''}`
+            : link.available
+              ? 'Nur auf diesem Gerät gespeichert.'
+              : 'Nur auf diesem Gerät gespeichert. Mit Anytype abgleichen geht in der Sondra-App.'}
+        </span>
         <span className="flex flex-wrap gap-x-[18px] gap-y-[4px]">
           {items.length > 0 ? (
             <button type="button" onClick={exportFile} className={linkClass}>
@@ -716,8 +1014,18 @@ function Transfer({ items }: { items: SavedLinkItem[] }) {
           <button type="button" onClick={() => fileRef.current?.click()} className={linkClass}>
             Aus Datei einlesen
           </button>
+          {link.available ? (
+            <button type="button" onClick={onAnytype} className={linkClass}>
+              {link.connected ? 'Anytype' : 'Mit Anytype verbinden'}
+            </button>
+          ) : null}
         </span>
       </div>
+      {link.connected && link.sync.error ? (
+        <Notice tone="warn" title="Abgleich mit Anytype">
+          {ANYTYPE_PROBLEM[link.sync.error]}
+        </Notice>
+      ) : null}
       {problem ? (
         <Notice tone="error" title="Nicht eingelesen">
           {problem}

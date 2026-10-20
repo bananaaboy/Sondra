@@ -326,5 +326,23 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   (`exportMerkliste`), Einlesen führt zusammen (`mergeMerkliste`: dieselbe
   Serie per `id` oder Name, die zuletzt geänderte Seite gewinnt) und lässt
   sich zurücknehmen.
+- **Merkliste in Anytype** (nur in der App): `desktop/anytype.mjs` spricht im
+  Hauptprozess mit Anytypes lokaler API (`127.0.0.1:31009`, `Anytype-Version:
+  2025-11-08`), koppelt über den vierstelligen Code (`/v1/auth/challenges`,
+  `/v1/auth/api_keys`) und legt den Schlüssel mit `safeStorage` verschlüsselt
+  in `userData` ab; die Seite sieht ihn nie, sie schickt über
+  `sondraApp.anytype(action, …)` eine Aktion nach der anderen. Im Browser geht
+  es nicht: Anytypes API sendet keine CORS-Kopfzeilen (anytype-heart,
+  `core/api/server`), und die Merkliste sagt das in einem Satz statt eines
+  toten Knopfs. In Anytype liegt eine Seite „Sondra · Merkliste“: oben
+  lesbar, unten ein Datenblock (Base64 im Codeblock, damit Anytypes
+  Markdown-Umbau ihn nicht verbiegt). Ein Abgleich (`syncMerkliste` in
+  `lib/anytype.ts`) liest, führt zusammen (`mergeShared`: je Serie gewinnt die
+  zuletzt geänderte Seite, Entferntes bleibt entfernt über
+  `sondra:merkliste_removed`, Covers aus Dateien bleiben auf ihrem Gerät) und
+  schreibt nur, wenn Anytype nicht schon genau das hält — verglichen mit der
+  Seite, nicht mit dem zuletzt Geschriebenen. Läuft beim Öffnen des Tabs und
+  2,5 s nach jeder Änderung. `npm run verify:anytype` spielt das gegen eine
+  nachgebaute Anytype-API durch.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.

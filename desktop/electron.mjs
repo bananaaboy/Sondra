@@ -21,8 +21,9 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, safeStorage, session, shell } from 'electron'
 
+import { createAnytype } from './anytype.mjs'
 import { startDownloader } from './downloader.mjs'
 import { offerFile, startServer } from './server.mjs'
 import { setupUpdates } from './updater.mjs'
@@ -152,6 +153,22 @@ ipcMain.handle('sondra:capture-sources', async () => {
 ipcMain.handle('sondra:capture-pick', (_event, id, audio) => {
   capturePick = typeof id === 'string' ? { id, audio: Boolean(audio) } : null
   return true
+})
+
+/**
+ * The Merkliste's link to Anytype (desktop/anytype.mjs), made on first use:
+ * the page asks for one action at a time and never sees the key.
+ */
+let anytype = null
+ipcMain.handle('sondra:anytype', (_event, action, ...args) => {
+  anytype ??= createAnytype({
+    dataDir: app.getPath('userData'),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+    canEncrypt: () => safeStorage.isEncryptionAvailable(),
+    log,
+  })
+  return anytype.handle(String(action), args)
 })
 
 ipcMain.handle('sondra:take-files', () => {
