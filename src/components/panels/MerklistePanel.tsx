@@ -490,12 +490,37 @@ export function MerklistePanel() {
   const [season, setSeason] = useState<{ id: string; number: number; part: number } | null>(null)
   const [removed, setRemoved] = useState<{ item: SavedLinkItem; index: number } | null>(null)
 
+  // The series that is open, if one is. It has a history entry of its own,
+  // so back — the browser's, the mouse's, a swipe on a phone — returns to
+  // the overview instead of leaving the tab; and coming back to the tab
+  // through history opens it again.
+  const [openId, setOpenId] = useState<string | null>(() => openFromHistory(window.history.state))
+  const scrollBack = useRef(0)
+  useEffect(() => {
+    const onPop = (event: PopStateEvent) => {
+      const id = openFromHistory(event.state)
+      setOpenId(id)
+      if (!id) requestAnimationFrame(() => window.scrollTo({ top: scrollBack.current }))
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+  const openSeries = (id: string) => {
+    scrollBack.current = window.scrollY
+    const state: unknown = window.history.state
+    window.history.pushState({ ...(state && typeof state === 'object' ? state : {}), merkliste: id }, '')
+    setOpenId(id)
+    window.scrollTo({ top: 0 })
+  }
+  const closeSeries = () => {
+    if (openFromHistory(window.history.state)) window.history.back()
+    else setOpenId(null)
+  }
+
   const watchingCount = useMemo(() => items.filter((item) => statusOf(item) === 'watching').length, [items])
   const seenTotal = useMemo(() => items.reduce((sum, item) => sum + itemProgress(item).watched, 0), [items])
 
-  // Grouped by where each entry stands — what is being watched first, with
-  // its seasons in view; what is for later or finished as a line each. The
-  // groups took the place of a row of filter chips that said the same.
+  // Grouped by where each entry stands, the latest first within each.
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const found = items.filter(
@@ -509,6 +534,7 @@ export function MerklistePanel() {
     })).filter((group) => group.entries.length > 0)
   }, [items, query])
 
+  const openItem = openId ? (items.find((item) => item.id === openId) ?? null) : null
   const editingItem = items.find((item) => item.id === editing) ?? null
   const seasonItem = season ? (items.find((item) => item.id === season.id) ?? null) : null
 
@@ -517,6 +543,39 @@ export function MerklistePanel() {
     setEditing(null)
     setSeason(null)
     setMerkItems((current) => current.filter((entry) => entry.id !== item.id))
+    if (openId === item.id) closeSeries()
+  }
+
+  const dialogs = (
+    <>
+      <AddDialog open={adding} onClose={() => setAdding(false)} />
+      {editingItem ? (
+        <SeriesDialog item={editingItem} onClose={() => setEditing(null)} onRemove={() => remove(editingItem)} />
+      ) : null}
+      {seasonItem && season ? (
+        <SeasonDialog
+          item={seasonItem}
+          number={season.number}
+          part={season.part}
+          onPart={(part) => setSeason({ ...season, part })}
+          onClose={() => setSeason(null)}
+        />
+      ) : null}
+    </>
+  )
+
+  if (openItem) {
+    return (
+      <>
+        <SeriesPage
+          item={openItem}
+          onBack={closeSeries}
+          onEdit={() => setEditing(openItem.id)}
+          onSeason={(number, part) => setSeason({ id: openItem.id, number, part })}
+        />
+        {dialogs}
+      </>
+    )
   }
 
   return (
@@ -576,49 +635,32 @@ export function MerklistePanel() {
         <p className="text-small text-prose">Nichts gefunden für „{query.trim()}“.</p>
       ) : (
         groups.map((group) => (
-          <section key={group.value} aria-label={group.label} className="flex flex-col">
-            <h3 className="flex items-baseline gap-[10px] pb-[10px] text-subheading text-ink">
+          <section key={group.value} aria-label={group.label} className="flex flex-col gap-[14px]">
+            <h3 className="flex items-baseline gap-[10px] border-b border-line pb-[10px] text-subheading text-ink">
               {group.label}
               <span className="value text-small text-muted">{group.entries.length}</span>
             </h3>
-            {group.entries.map((item) =>
-              group.value === 'watching' ? (
-                <Series
-                  key={item.id}
-                  item={item}
-                  onEdit={() => setEditing(item.id)}
-                  onSeason={(number, part) => setSeason({ id: item.id, number, part })}
-                />
-              ) : (
-                <ShelfRow
-                  key={item.id}
-                  item={item}
-                  onEdit={() => setEditing(item.id)}
-                  onSeason={(number, part) => setSeason({ id: item.id, number, part })}
-                />
-              ),
-            )}
+            {/* Posters stand on one line at their foot, like books on a shelf,
+                whatever their shape. */}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] items-end gap-x-[14px] gap-y-[24px] sm:grid-cols-[repeat(auto-fill,minmax(156px,1fr))] sm:gap-x-[18px]">
+              {group.entries.map((item) => (
+                <SeriesTile key={item.id} item={item} onOpen={() => openSeries(item.id)} />
+              ))}
+            </div>
           </section>
         ))
       )}
 
       <Transfer items={items} />
-
-      <AddDialog open={adding} onClose={() => setAdding(false)} />
-      {editingItem ? (
-        <SeriesDialog item={editingItem} onClose={() => setEditing(null)} onRemove={() => remove(editingItem)} />
-      ) : null}
-      {seasonItem && season ? (
-        <SeasonDialog
-          item={seasonItem}
-          number={season.number}
-          part={season.part}
-          onPart={(part) => setSeason({ ...season, part })}
-          onClose={() => setSeason(null)}
-        />
-      ) : null}
+      {dialogs}
     </div>
   )
+}
+
+/** The series a history entry has open, if any. */
+function openFromHistory(state: unknown): string | null {
+  const id = state && typeof state === 'object' ? (state as { merkliste?: unknown }).merkliste : null
+  return typeof id === 'string' ? id : null
 }
 
 /**
@@ -928,183 +970,247 @@ function addSeasonTo(item: SavedLinkItem) {
 }
 
 /** The rating beside a name, small: drawn stars, only the ones given. */
-function Stars({ value }: { value?: number }) {
+function Stars({ value, size = 'size-[13px]' }: { value?: number; size?: string }) {
   if (!value) return null
   return (
     <span aria-label={`${value} von 5`} className="inline-flex shrink-0 text-ink">
       {Array.from({ length: value }, (_, i) => (
-        <StarIcon key={i} filled className="size-[13px]" />
+        <StarIcon key={i} filled className={size} />
       ))}
     </span>
   )
 }
 
+/** The cover a series is shown with: its own, else that of its first season. */
+function seriesCover(item: SavedLinkItem): { src: string; frame?: CoverFrame } | null {
+  if (item.cover) return { src: item.cover, frame: item.coverFrame }
+  const first = seasonsOf(item)[0]
+  return first ? coverOf(item, first, partsOf(first)[0]) : null
+}
+
+/** „Staffel 3, Folge 5", „Alles gesehen", „Nicht angefangen" — where a series stands, in a few words. */
+function standLabel(item: SavedLinkItem): string {
+  const status = statusOf(item)
+  const seasons = seasonsOf(item)
+  const kind = episodeKindOf(item.url) ?? 'series'
+  if (caughtUp(seasons)) return 'Alles gesehen'
+  if (status === 'done') return `${itemProgress(item).watched} gesehen`
+  if (status === 'later' && itemProgress(item).watched === 0) return 'Nicht angefangen'
+  return positionLabel(item.season, item.episode, kind)
+}
+
+/** A poster without a cover: the name itself, set on the tint. */
+function NamePoster({ title, large = false }: { title: string; large?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`absolute inset-0 flex items-center justify-center p-[12%] text-center font-semibold leading-[1.15] text-ink/45 ${
+        large ? 'text-heading-sm' : 'text-subheading'
+      }`}
+    >
+      <span className="line-clamp-4 break-words">{title}</span>
+    </span>
+  )
+}
+
 /**
- * A series being watched: its name, where it stands and how far, the next
- * step as a button, and its seasons as a shelf of small posters. The
- * progress is said once — in words above, per season on the tiles — where it
- * used to be a bar over a row of bars.
+ * One series in the overview: its poster, its name, where it stands, a bar.
+ * Everything else — seasons, buttons — is one click further, on the
+ * series' own page. Hover or focus brings up how far and how many seasons.
  */
-function Series({
+function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void }) {
+  const progress = itemProgress(item)
+  const cover = seriesCover(item)
+  const [broken, setBroken] = useState<string | null>(null)
+  const poster = cover && cover.src !== broken ? cover : null
+  const count = seasonsOf(item).filter((season) => season.number > 0).length
+  const done = caughtUp(seasonsOf(item))
+  const stand = standLabel(item)
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${item.title}: ${stand}, ${progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}`}
+      className="press group flex min-w-0 flex-col gap-[10px] rounded-card text-left"
+    >
+      <span
+        className={`relative block w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'}`}
+        style={{ aspectRatio: ratioOf(item.tileFormat) }}
+      >
+        {poster ? <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} /> : <NamePoster title={item.title} />}
+        <span
+          aria-hidden
+          className={`absolute inset-x-0 bottom-0 flex translate-y-[6px] flex-col gap-[4px] px-[12px] pb-[12px] pt-[52px] opacity-0 transition-[opacity,translate] duration-[var(--dur-base)] ease-[var(--ease-settle)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 ${
+            poster ? 'bg-gradient-to-t from-stage/80 via-stage/45 to-transparent text-stage-ink' : 'bg-gradient-to-t from-panel-strong via-panel-strong/80 to-transparent text-ink'
+          }`}
+        >
+          <span className="text-subheading leading-none">
+            {progress.fraction !== null ? `${Math.round(progress.fraction * 100)} %` : progress.watched}
+          </span>
+          <span className="text-small font-semibold">
+            {count} {count === 1 ? 'Staffel' : 'Staffeln'} · öffnen
+          </span>
+        </span>
+      </span>
+      <span className="flex min-w-0 flex-col gap-[4px] px-[1px]">
+        <span className="truncate text-body font-semibold leading-snug text-ink" title={item.title}>
+          {item.title}
+        </span>
+        <span className="flex items-center gap-[6px] text-small text-prose">
+          {done ? <RowMark state="done" /> : null}
+          <span className="truncate">{stand}</span>
+        </span>
+        <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${item.title}: gesehen`} />
+      </span>
+    </button>
+  )
+}
+
+/**
+ * One series on its own page: the poster large, where it stands, the next
+ * step, and its seasons as tiles. Reached from the overview; back returns to
+ * it — the link, or the browser's back.
+ */
+function SeriesPage({
   item,
+  onBack,
   onEdit,
   onSeason,
 }: {
   item: SavedLinkItem
+  onBack: () => void
   onEdit: () => void
   onSeason: (number: number, part: number) => void
 }) {
   const openHere = useOpenHere()
   const progress = itemProgress(item)
+  const status = statusOf(item)
+  const seasons = seasonsOf(item)
   const kind = episodeKindOf(item.url) ?? 'series'
+  const cover = seriesCover(item)
+  const [broken, setBroken] = useState<string | null>(null)
+  const poster = cover && cover.src !== broken ? cover : null
   const last = whenLabel(item.lastOpenedAt)
   const hasUrl = Boolean(item.url.trim())
-  const meta = [
-    progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`,
-    hasUrl ? sourceBadgeForUrl(item.url) : null,
-    last ? `zuletzt ${last}` : null,
-  ].filter(Boolean)
+  const seasonCount = seasons.filter((season) => season.number > 0).length
+  const hasFilms = seasons.some((season) => season.number === 0)
+  const next = status !== 'done' && item.episode !== null && !caughtUp(seasons)
 
   return (
-    <article aria-label={item.title} className="flex flex-col gap-[14px] border-t border-line py-[18px]">
-      <div className="flex flex-col gap-[10px] sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h4 className="flex min-w-0 items-center gap-[10px] text-body font-semibold text-ink">
-            <span className="min-w-0 truncate">{item.title}</span>
-            <Stars value={item.rating} />
-          </h4>
-          <p className="mt-[2px] text-small text-muted">
-            {item.episode !== null ? <span className="text-prose">{positionLabel(item.season, item.episode, kind)}</span> : null}
-            {item.episode !== null && meta.length ? ' · ' : null}
-            {meta.join(' · ')}
-          </p>
-          {item.notes ? (
-            <p className="mt-[4px] max-w-[72ch] truncate text-small text-prose" title={item.notes}>
-              {item.notes}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-[8px]">
-          {hasUrl ? (
-            <Button type="button" size="sm" onClick={() => openHere(item)}>
-              {item.episode !== null ? `${hereLabel(item)} laden` : 'Nachsehen'}
-            </Button>
-          ) : null}
-          {item.episode !== null ? (
-            <Button type="button" size="sm" variant={hasUrl ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
-              {hereLabel(item)} gesehen
-            </Button>
-          ) : null}
-          <button type="button" onClick={onEdit} className={`${linkClass} px-[4px] py-[6px] text-small`}>
-            Bearbeiten
-          </button>
-        </div>
-      </div>
-      <SeasonTiles item={item} onSeason={onSeason} />
-    </article>
-  )
-}
-
-/**
- * A series for later or finished: one line — a small cover, the name, how
- * far — with its seasons a click away. Their tiles all said the same thing
- * (nothing seen, or everything), and a finished series stood as tall as one
- * in progress.
- */
-function ShelfRow({
-  item,
-  onEdit,
-  onSeason,
-}: {
-  item: SavedLinkItem
-  onEdit: () => void
-  onSeason: (number: number, part: number) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const seasons = seasonsOf(item)
-  const status = statusOf(item)
-  const progress = itemProgress(item)
-  const kind = episodeKindOf(item.url) ?? 'series'
-  const first = seasons[0]
-  const thumb = first ? coverOf(item, first, partsOf(first)[0]) : null
-  const count = seasons.filter((season) => season.number > 0).length
-  const meta = [
-    count ? `${count} ${count === 1 ? 'Staffel' : 'Staffeln'}` : null,
-    status === 'done'
-      ? caughtUp(seasons)
-        ? 'alles gesehen'
-        : `${progress.watched} gesehen`
-      : progress.watched > 0
-        ? `weiter bei ${positionLabel(item.season, item.episode, kind)}`
-        : 'nicht angefangen',
-  ].filter(Boolean)
-
-  return (
-    <article aria-label={item.title} className="border-t border-line">
-      <div className="flex items-center gap-[12px] py-[10px]">
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-          className="press group flex min-w-0 flex-1 items-center gap-[14px] rounded-nav text-left"
-        >
+    <div className="flex flex-col gap-[32px]">
+      <Card tone="cream">
+        <button type="button" onClick={onBack} className="press mt-[8px] inline-flex items-center gap-[6px] rounded-nav text-small text-ink hover:underline">
+          <svg viewBox="0 0 16 16" aria-hidden className="size-[14px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 3.5L5.5 8l4.5 4.5" />
+          </svg>
+          Merkliste
+        </button>
+        <div className="mt-[18px] flex flex-col gap-[20px] sm:flex-row sm:items-end sm:gap-[28px]">
           <span
-            className="relative w-[36px] shrink-0 overflow-hidden rounded-nav bg-panel-mid"
+            className={`relative block w-[132px] shrink-0 overflow-hidden rounded-card sm:w-[168px] ${poster ? 'bg-stage' : 'bg-panel-mid'}`}
             style={{ aspectRatio: ratioOf(item.tileFormat) }}
           >
-            {thumb ? (
-              <CoverImage src={thumb.src} frame={thumb.frame} />
-            ) : (
-              <span aria-hidden className="absolute inset-0 flex items-center justify-center text-small font-semibold text-ink/45">
-                {item.title.trim().charAt(0).toUpperCase()}
-              </span>
-            )}
+            {poster ? <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} /> : <NamePoster title={item.title} large />}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex min-w-0 items-center gap-[10px] text-body font-semibold text-ink">
-              <span className="min-w-0 truncate">{item.title}</span>
-              <Stars value={item.rating} />
-            </span>
-            <span className="block truncate text-small text-muted">{meta.join(' · ')}</span>
-          </span>
-          <svg
-            viewBox="0 0 16 16"
-            aria-hidden
-            className={`size-[14px] shrink-0 text-ink transition-transform duration-[var(--dur-base)] ${open ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M4 6l4 4 4-4" />
-          </svg>
-          <span className="sr-only">{open ? 'Staffeln verbergen' : 'Staffeln zeigen'}</span>
-        </button>
-        <button type="button" onClick={onEdit} className={`${linkClass} shrink-0 px-[4px] py-[6px] text-small`}>
-          Bearbeiten
-        </button>
-      </div>
-      {open ? (
-        <div className="rise pb-[18px] pt-[4px]">
-          <SeasonTiles item={item} onSeason={onSeason} />
+          <div className="flex min-w-0 flex-1 flex-col gap-[10px]">
+            <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[4px]">
+              <h2 className="display-md min-w-0 break-words">{item.title}</h2>
+              <Stars value={item.rating} size="size-[16px]" />
+            </div>
+            <div className="flex max-w-[520px] flex-col gap-[6px]">
+              <p className="text-body text-prose">
+                {standLabel(item)}
+                <span className="text-muted">
+                  {' · '}
+                  {progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}
+                </span>
+              </p>
+              <ProgressBar fraction={progress.fraction} label={`${item.title}: gesehen`} />
+              <p className="text-small text-muted">
+                {[hasUrl ? sourceBadgeForUrl(item.url) : null, last ? `zuletzt ${last}` : null, STATUS_OPTIONS.find((option) => option.value === status)?.label]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+            {item.notes ? <p className="max-w-[72ch] text-small leading-[1.55] text-prose">{item.notes}</p> : null}
+            <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
+              {hasUrl && next ? (
+                <Button type="button" size="sm" onClick={() => openHere(item)}>
+                  {hereLabel(item)} laden
+                </Button>
+              ) : null}
+              {next ? (
+                <Button type="button" size="sm" variant={hasUrl ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
+                  {hereLabel(item)} gesehen
+                </Button>
+              ) : null}
+              {hasUrl && !next ? (
+                <Button type="button" size="sm" variant="quiet" onClick={() => openHere(item)}>
+                  Nachsehen
+                </Button>
+              ) : null}
+              <Button type="button" size="sm" variant="quiet" onClick={onEdit}>
+                Bearbeiten
+              </Button>
+            </div>
+          </div>
         </div>
-      ) : null}
-    </article>
+      </Card>
+
+      <section aria-label="Staffeln" className="flex flex-col gap-[14px]">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-[20px] gap-y-[6px] border-b border-line pb-[10px]">
+          <h3 className="flex items-baseline gap-[10px] text-subheading text-ink">
+            {kind === 'list' ? 'Liste' : 'Staffeln'}
+            <span className="value text-small text-muted">{seasonCount}</span>
+          </h3>
+          {kind === 'series' ? (
+            <span className="flex flex-wrap gap-x-[18px] gap-y-[4px] text-small">
+              <button type="button" onClick={() => addSeasonTo(item)} className={linkClass}>
+                <PlusIcon />
+                Staffel hinzufügen
+              </button>
+              {!hasFilms ? (
+                <button
+                  type="button"
+                  onClick={() => updateMerkItem(item.id, { seasons: [...seasons, { number: 0, episodes: null, watched: [] }] })}
+                  className={linkClass}
+                >
+                  <PlusIcon />
+                  Filme hinzufügen
+                </button>
+              ) : null}
+            </span>
+          ) : null}
+        </div>
+        <SeasonTiles item={item} onSeason={onSeason} large />
+      </section>
+    </div>
   )
 }
 
 /**
- * The seasons of a series as small posters — a part of a season is a poster
- * of its own. A shelf: as many to a row as fit, each about 120 px wide. At
- * 240 px a series of four seasons took a screen; the poster still reads at
- * half that, and the numbers sit under it.
+ * The seasons of a series as posters — a part of a season is a poster of its
+ * own — as many to a row as fit.
  */
-function SeasonTiles({ item, onSeason }: { item: SavedLinkItem; onSeason: (number: number, part: number) => void }) {
+function SeasonTiles({
+  item,
+  onSeason,
+  large = false,
+}: {
+  item: SavedLinkItem
+  onSeason: (number: number, part: number) => void
+  large?: boolean
+}) {
   const status = statusOf(item)
   const tiles = seasonsOf(item).flatMap((season) => partsOf(season).map((part) => ({ season, part })))
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-[10px] sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))] sm:gap-[12px]">
+    <div
+      className={`grid gap-[10px] sm:gap-[14px] ${
+        large
+          ? 'grid-cols-[repeat(auto-fill,minmax(100px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))]'
+          : 'grid-cols-[repeat(auto-fill,minmax(100px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))]'
+      }`}
+    >
       {tiles.map(({ season, part }) => (
         <SeasonTile
           key={`${season.number}-${part.index}`}

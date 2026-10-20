@@ -763,23 +763,22 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   zeigte jede Staffel als 240-px-Poster (auch fertige), einen Balken über
   einer Reihe Balken, „Hier sind Sie“ doppelt, und die Fenster jedes Feld
   auf einmal.
-  - **Nach Stand gruppiert** — „Am Schauen“, „Später“, „Fertig“ als
-    Überschriften mit Zahl — statt Filter-Chips. Suche erst ab sechs
-    Einträgen, neben „Serie hinzufügen“; kein „Zum Herunterladen“ (das
-    steht in der Reiterleiste).
-  - **Am Schauen:** Name (16 px, halbfett) mit Sternen, darunter einmal in
-    Worten, wo und wie weit („Staffel 3, Folge 5 · 78 von 100 gesehen ·
-    AniWorld · zuletzt gestern“), die Notiz als eine Zeile; rechts „Folge 5
-    laden“ (übergibt ans Herunterladen) und „Folge 5 gesehen“ (hakt ab,
-    rückt auf die nächste ungesehene). Darunter die Staffeln als **Regal
-    kleiner Poster** (~120 px, so viele je Reihe wie passen): Bild ohne
-    Beschriftung darauf, darunter Name, Balken und Zähler in Mono (Haken
-    bei alles gesehen); die aktuelle trägt den Ring. Überfahren hebt von
-    unten einen Verlauf mit Prozent und „Weiter mit Folge 5“, das Bild
-    bleibt sichtbar.
-  - **Später und Fertig** sind je eine Zeile — kleines Cover, Name,
-    „3 Staffeln · alles gesehen“ —, die Staffeln einen Klick dahinter
-    (Pfeil). Ihre Kacheln sagten alle dasselbe.
+  - **Zwei Ebenen** (am selben Tag auf Wunsch): zuerst nur die Serien als
+    Poster nebeneinander, nach Stand gruppiert — „Am Schauen“, „Später“,
+    „Fertig“ als Überschriften mit Zahl, statt Filter-Chips. Je Poster
+    darunter der Name, wo es steht („Staffel 3, Folge 5“, „Alles
+    gesehen“, „Nicht angefangen“) und ein Balken; Poster stehen auf einer
+    Linie an ihrem Fuss, auch wenn Film- und Manga-Format sich mischen.
+    Ohne Cover trägt das Poster den Namen. Suche erst ab sechs Einträgen.
+  - **Ein Klick öffnet die Serie** als eigene Seite: „‹ Merkliste“ zurück,
+    das Poster gross, Name mit Sternen, „Staffel 3, Folge 5 · 78 von 100
+    gesehen“, Balken, Quelle und zuletzt, die Notiz, dann „Folge 5
+    laden“, „Folge 5 gesehen“, „Bearbeiten“. Darunter „Staffeln“ mit
+    „Staffel hinzufügen“ und die Staffeln als Poster mit Name, Balken und
+    Zähler; die aktuelle trägt den Ring. Die offene Serie hat einen
+    eigenen Eintrag im Verlauf (`history.state.merkliste`): Zurück im
+    Browser, an der Maus oder per Wischen führt zur Übersicht, nicht aus
+    dem Tab, und Neuladen bleibt in der Serie.
   - **Kacheln:** Poster in 2:3 oder je Serie Manga in 5:7 („Format der
     Kacheln“ neben „Cover“). Der Ausschnitt eines Covers wird im
     Cover-Feld gewählt — die Vorschau ist dieselbe Kachel, ziehen oder
