@@ -37,6 +37,7 @@ export interface MerkSeason {
   title?: string
   /** A picture for this season's tile; the entry's cover otherwise. */
   cover?: string
+  coverFrame?: CoverFrame
   /**
    * A season shown in parts — „Teil 1", „Teil 2" — each a tile of its own.
    * The episodes keep counting through the season, as the sites number
@@ -51,6 +52,27 @@ export interface MerkPart {
   episodes: number | null
   title?: string
   cover?: string
+  coverFrame?: CoverFrame
+}
+
+/**
+ * The part of a cover a 2:3 tile shows: where the picture sits, 0–100 % across
+ * and down (as `object-position`), and how far it is zoomed in (1–3). Without
+ * one, the middle, unzoomed.
+ */
+export interface CoverFrame {
+  x: number
+  y: number
+  zoom: number
+}
+
+function normalizeFrame(raw: unknown): CoverFrame | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const { x, y, zoom } = raw as Partial<CoverFrame>
+  if (typeof x !== 'number' || typeof y !== 'number' || typeof zoom !== 'number') return undefined
+  const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
+  const frame = { x: clamp(x, 0, 100), y: clamp(y, 0, 100), zoom: clamp(zoom, 1, 3) }
+  return frame.x === 50 && frame.y === 50 && frame.zoom === 1 ? undefined : frame
 }
 
 export interface SavedLinkItem {
@@ -73,6 +95,7 @@ export interface SavedLinkItem {
   seasons?: MerkSeason[]
   /** An image address, or a picture stored with the entry (data: URL). */
   cover?: string
+  coverFrame?: CoverFrame
   notes?: string
   /** 0–5; 0 is unrated. */
   rating?: number
@@ -106,6 +129,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
             watched: Array.isArray(s.watched) ? s.watched : [],
             ...(s.title ? { title: String(s.title) } : {}),
             ...(s.cover ? { cover: String(s.cover) } : {}),
+            ...(s.cover && normalizeFrame(s.coverFrame) ? { coverFrame: normalizeFrame(s.coverFrame) } : {}),
           }
           const parts = Array.isArray(s.parts)
             ? s.parts
@@ -114,6 +138,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
                   episodes: typeof part.episodes === 'number' && part.episodes > 0 ? Math.floor(part.episodes) : null,
                   ...(part.title ? { title: String(part.title) } : {}),
                   ...(part.cover ? { cover: String(part.cover) } : {}),
+                  ...(part.cover && normalizeFrame(part.coverFrame) ? { coverFrame: normalizeFrame(part.coverFrame) } : {}),
                 }))
             : []
           return parts.length >= 2 ? withParts(season, parts) : { ...season, watched: cleanWatched(season.watched, season.episodes) }
@@ -136,6 +161,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     lastOpenedAt: typeof raw.lastOpenedAt === 'number' ? raw.lastOpenedAt : undefined,
     ...(seasons ? { seasons } : {}),
     ...(raw.cover ? { cover: raw.cover } : {}),
+    ...(raw.cover && normalizeFrame(raw.coverFrame) ? { coverFrame: normalizeFrame(raw.coverFrame) } : {}),
     ...(raw.notes ? { notes: raw.notes } : {}),
     ...(typeof raw.rating === 'number' ? { rating: Math.max(0, Math.min(5, Math.round(raw.rating))) } : {}),
   }
@@ -397,7 +423,9 @@ export function withParts(season: MerkSeason, parts: MerkPart[]): MerkSeason {
   if (parts.length < 2) {
     const only = parts[0]
     const episodes = only ? only.episodes : season.episodes
-    return { ...rest, episodes, cover: rest.cover ?? only?.cover, watched: cleanWatched(season.watched, episodes) }
+    // The last part's cover becomes the season's, if the season had none.
+    const picture = rest.cover ? { cover: rest.cover, coverFrame: rest.coverFrame } : { cover: only?.cover, coverFrame: only?.coverFrame }
+    return { ...rest, ...picture, episodes, watched: cleanWatched(season.watched, episodes) }
   }
   const fixed = parts.map((part, i) => (i < parts.length - 1 && part.episodes === null ? { ...part, episodes: 1 } : part))
   const episodes = fixed.every((part) => part.episodes !== null) ? fixed.reduce((sum, part) => sum + (part.episodes ?? 0), 0) : null
@@ -406,7 +434,12 @@ export function withParts(season: MerkSeason, parts: MerkPart[]): MerkSeason {
 
 /** The parts as stored, for changing one of them. */
 export function storedParts(season: MerkSeason): MerkPart[] {
-  return partsOf(season).map(({ episodes, title, cover }) => ({ episodes, ...(title ? { title } : {}), ...(cover ? { cover } : {}) }))
+  return partsOf(season).map(({ episodes, title, cover, coverFrame }) => ({
+    episodes,
+    ...(title ? { title } : {}),
+    ...(cover ? { cover } : {}),
+    ...(cover && coverFrame ? { coverFrame } : {}),
+  }))
 }
 
 /**
@@ -501,13 +534,14 @@ export function takePendingLookup(): SavedLinkItem | null {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A picked image, made small enough to live in the list: at most 480 px
- * wide, as JPEG. A phone photo straight in would fill the space the browser
- * gives the whole site after two or three covers.
+ * A picked image, made small enough to live in the list: at most 720 px on
+ * its longer side, as JPEG — a poster comes out 480 × 720, a still 720 × 405,
+ * enough to choose a part of it for a tile. A phone photo straight in would
+ * fill the space the browser gives the whole site after two or three covers.
  */
-export async function coverFromFile(file: File, maxWidth = 480): Promise<string> {
+export async function coverFromFile(file: File, longest = 720): Promise<string> {
   const bitmap = await createImageBitmap(file)
-  const scale = Math.min(1, maxWidth / bitmap.width)
+  const scale = Math.min(1, longest / Math.max(bitmap.width, bitmap.height))
   const width = Math.max(1, Math.round(bitmap.width * scale))
   const height = Math.max(1, Math.round(bitmap.height * scale))
   const canvas = document.createElement('canvas')

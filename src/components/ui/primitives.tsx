@@ -267,7 +267,10 @@ export function Slider({
         <span className="text-small text-prose">{label}</span>
         <span className="value text-small text-ink">{display}</span>
       </div>
-      <input type="range" {...props} />
+      {/* `value` was taken off for nothing and never reached the input: every
+          slider in the app started in the middle and showed its own drag, not
+          the setting — a preset, a loaded project or a reset never moved it. */}
+      <input type="range" value={value} {...props} />
     </div>
   )
 }
