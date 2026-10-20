@@ -567,10 +567,11 @@ function subscribeShapes(listener: () => void) {
 }
 
 /**
- * The shape the tiles of one series take: that of its tallest cover, so the
- * tallest is shown whole and every tile in the row stands as high as it. A
- * poster makes them 2:3, a still from the series makes them wide. Kept
- * between 16:9 and 9:16; with no cover at all, 2:3.
+ * The shape the tiles of one series take: as high as its tallest cover and as
+ * wide as its widest. The tiles share the column's width, so that is the
+ * tallest cover's shape — the tallest fills a tile from top to bottom, the
+ * widest from side to side, and none is cut. A row of posters is 2:3, a row
+ * of stills 16:9. Kept between 16:9 and 9:16; with no cover at all, 2:3.
  */
 function useTileShape(covers: (string | undefined)[]): number {
   const urls = Array.from(new Set(covers.filter((cover): cover is string => Boolean(cover))))
@@ -704,12 +705,13 @@ function Series({ item, onEdit, onSeason }: { item: SavedLinkItem; onEdit: () =>
 }
 
 /**
- * One season as a poster: the cover the way it was made, in the shape of
- * the series' tallest cover (`useTileShape`), with nothing laid over it —
- * and under it the name, the count and a bar for what is seen. The caption
- * used to sit on the picture and hid the bottom third of every poster, a
- * pill sat on its logo. Hover or focus brings up the numbers; a click opens
- * the season.
+ * One season as a poster: the cover whole, the way it was made, in the
+ * series' tile shape (`useTileShape`), with nothing laid over it — and under
+ * it the name, the count and a bar for what is seen. A cover of another
+ * shape than the tile is not cut to fit: it stands whole, and a blurred copy
+ * of itself fills the rest instead of empty bars. The caption used to sit on
+ * the picture and hid the bottom third of every poster, a pill sat on its
+ * logo. Hover or focus brings up the numbers; a click opens the season.
  */
 function SeasonTile({
   season,
@@ -735,6 +737,8 @@ function SeasonTile({
   // An address that does not answer leaves the number, not a broken image.
   const [broken, setBroken] = useState<string | null>(null)
   const poster = cover && cover !== broken ? cover : undefined
+  const own = poster ? coverShapes.get(poster) : null
+  const fills = typeof own === 'number' && Math.abs(own - shape) < 0.01
   return (
     <button
       type="button"
@@ -749,37 +753,51 @@ function SeasonTile({
         style={{ aspectRatio: `1 / ${shape}` }}
       >
         {poster ? (
-          <img
-            src={poster}
-            alt=""
-            loading="lazy"
-            onError={() => setBroken(poster)}
-            className="absolute inset-0 h-full w-full object-cover transition-transform duration-[var(--dur-slow)] ease-[var(--ease-settle)] group-hover:scale-[1.04]"
-          />
+          <>
+            {fills ? null : (
+              <img aria-hidden src={poster} alt="" className="absolute inset-0 h-full w-full scale-125 object-cover blur-2xl" />
+            )}
+            <img
+              src={poster}
+              alt=""
+              loading="lazy"
+              onError={() => setBroken(poster)}
+              className={`absolute inset-0 h-full w-full ${fills ? 'object-cover' : 'object-contain'} transition-transform duration-[var(--dur-slow)] ease-[var(--ease-settle)] group-hover:scale-[1.04]`}
+            />
+          </>
         ) : (
-          <span aria-hidden className="absolute inset-0 flex items-center justify-center text-ink/30">
+          <span
+            aria-hidden
+            className="absolute inset-0 flex items-center justify-center text-ink/30 transition-opacity duration-[var(--dur-base)] group-hover:opacity-0 group-focus-visible:opacity-0"
+          >
             {season.number === 0 ? <FilmIcon /> : <span className="font-display text-[clamp(48px,7vw,84px)] leading-none">{season.number}</span>}
           </span>
         )}
 
-        {/* The numbers, on hover and on keyboard focus. */}
+        {/* The numbers, on hover and on keyboard focus: a shade rising from
+            the bottom, so the picture stays in view above them. It used to
+            cover the whole poster in near-black. */}
         <span
           aria-hidden
-          className="absolute inset-0 flex flex-col justify-end gap-[6px] bg-stage/90 p-[14px] text-stage-ink opacity-0 transition-opacity duration-[var(--dur-base)] group-hover:opacity-100 group-focus-visible:opacity-100"
+          className={`absolute inset-x-0 bottom-0 flex translate-y-[6px] flex-col gap-[6px] px-[14px] pb-[14px] pt-[64px] opacity-0 transition-[opacity,translate] duration-[var(--dur-base)] ease-[var(--ease-settle)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 ${
+            poster ? 'bg-gradient-to-t from-stage/80 via-stage/45 to-transparent text-stage-ink' : 'text-ink'
+          }`}
         >
-          <span className="text-small text-stage-muted">{name}</span>
-          <span className="text-heading-sm leading-none">
-            {progress.fraction !== null ? `${Math.round(progress.fraction * 100)} %` : `${progress.watched}`}
+          <span className="flex items-baseline gap-[8px]">
+            <span className="text-heading-sm leading-none">
+              {progress.fraction !== null ? `${Math.round(progress.fraction * 100)} %` : progress.watched}
+            </span>
+            <span className={`text-small ${poster ? 'text-stage-ink/85' : 'text-prose'}`}>
+              {progress.fraction !== null ? 'gesehen' : progress.watched === 1 ? `${unit} gesehen` : `${unit === 'Film' ? 'Filme' : 'Folgen'} gesehen`}
+            </span>
           </span>
-          <span className="text-small">{counted}</span>
-          <span className="text-small">
+          <span className="text-small font-semibold">
             {progress.complete
               ? 'Alles gesehen'
               : progress.total
-                ? `${progress.total - progress.watched} übrig · weiter mit ${unit} ${progress.next}`
+                ? `Noch ${progress.total - progress.watched} · weiter mit ${unit} ${progress.next}`
                 : `Weiter mit ${unit} ${progress.next}`}
           </span>
-          <span className="mt-[4px] text-micro text-stage-muted">Klicken für {unit === 'Film' ? 'Filme' : 'Folgen'} und Details</span>
         </span>
       </span>
 
