@@ -759,6 +759,216 @@ export function isAniworldUrl(value: string): boolean {
   }
 }
 
+export interface LinkEpisodeInfo {
+  season: number
+  episode: number | null
+  isEpisodicUrl: boolean
+  seriesSlug: string | null
+}
+
+/**
+ * Extracts season (`0` = Filme/Specials, `1+` = Staffel) and episode (`null` = ganze Staffel / alle, `1+` = Folge)
+ * from AniWorld, SerienStream, YouTube playlists, or generic episodic URLs.
+ */
+export function parseLinkEpisodeInfo(rawUrl: string): LinkEpisodeInfo {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return { season: 1, episode: 1, isEpisodicUrl: false, seriesSlug: null }
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`)
+    const path = parsed.pathname
+
+    if (ANIWORLD_HOSTS.test(parsed.hostname)) {
+      const slugMatch = path.match(/\/(?:anime|serie)\/stream\/([^/?#]+)/i)
+      const seriesSlug = slugMatch ? slugMatch[1] : null
+      const isFilme = /\/filme(?:\/|$)/i.test(path)
+      const staffelMatch = path.match(/\/staffel-(\d+)/i)
+      const episodeMatch = path.match(/\/(?:episode|film)-(\d+)/i)
+      const season = isFilme ? 0 : staffelMatch ? Math.max(1, Number(staffelMatch[1])) : 1
+      const episode = episodeMatch ? Math.max(1, Number(episodeMatch[1])) : null
+      return { season, episode, isEpisodicUrl: true, seriesSlug }
+    }
+
+    // YouTube playlist index or generic query params (?season=1&episode=2 or &index=3)
+    const qSeason = parsed.searchParams.get('season') || parsed.searchParams.get('staffel')
+    const qEpisode = parsed.searchParams.get('episode') || parsed.searchParams.get('folge') || parsed.searchParams.get('index')
+    if (qSeason || qEpisode || parsed.searchParams.has('list')) {
+      const season = qSeason && Number.isFinite(Number(qSeason)) ? Math.max(0, Number(qSeason)) : 1
+      const episode = qEpisode && Number.isFinite(Number(qEpisode)) ? Math.max(1, Number(qEpisode)) : null
+      return { season, episode, isEpisodicUrl: true, seriesSlug: null }
+    }
+
+    // Generic path patterns: /staffel-1/episode-2, /season-1/episode-2, /s01e02, /episode-5, /folge-5
+    const sxeMatch = path.match(/\/s(\d{1,2})e(\d{1,3})(?:\/|$|-|\.)/i)
+    if (sxeMatch) {
+      return {
+        season: Math.max(0, Number(sxeMatch[1])),
+        episode: Math.max(1, Number(sxeMatch[2])),
+        isEpisodicUrl: true,
+        seriesSlug: null,
+      }
+    }
+
+    const genericSeasonMatch = path.match(/\/(?:staffel|season)[-_]?(\d+)/i)
+    const genericEpMatch = path.match(/\/(?:episode|folge|ep|film)[-_]?(\d+)/i)
+    if (genericSeasonMatch || genericEpMatch) {
+      return {
+        season: genericSeasonMatch ? Math.max(0, Number(genericSeasonMatch[1])) : 1,
+        episode: genericEpMatch ? Math.max(1, Number(genericEpMatch[1])) : null,
+        isEpisodicUrl: true,
+        seriesSlug: null,
+      }
+    }
+
+    return { season: 1, episode: 1, isEpisodicUrl: false, seriesSlug: null }
+  } catch {
+    return { season: 1, episode: 1, isEpisodicUrl: false, seriesSlug: null }
+  }
+}
+
+/**
+ * Rewrites a URL when the user changes Staffel (`season`: `0` = Filme, `1+` = Staffel)
+ * or Episode (`episode`: `null` = ganze Staffel/Liste, `1+` = Folge).
+ */
+export function buildUrlWithEpisode(rawUrl: string, season: number, episode: number | null): string {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return rawUrl
+  try {
+    const hasProtocol = /^https?:\/\//i.test(trimmed)
+    const parsed = new URL(hasProtocol ? trimmed : `https://${trimmed}`)
+    const cleanSeason = Math.max(0, Math.floor(Number.isFinite(season) ? season : 1))
+    const cleanEpisode = episode !== null && Number.isFinite(episode) && episode >= 1 ? Math.floor(episode) : null
+
+    if (ANIWORLD_HOSTS.test(parsed.hostname)) {
+      const baseMatch = parsed.pathname.match(/^(\/(?:anime|serie)\/stream\/[^/?#]+)/i)
+      if (baseMatch) {
+        const basePath = baseMatch[1].replace(/\/$/, '')
+        if (cleanSeason === 0) {
+          parsed.pathname = cleanEpisode ? `${basePath}/filme/film-${cleanEpisode}` : `${basePath}/filme`
+        } else {
+          parsed.pathname = cleanEpisode
+            ? `${basePath}/staffel-${cleanSeason}/episode-${cleanEpisode}`
+            : `${basePath}/staffel-${cleanSeason}`
+        }
+        return parsed.toString()
+      }
+    }
+
+    // Generic /s01e02 pattern in pathname
+    if (/\/s\d{1,2}e\d{1,3}(?=\/|$|-|\.)/i.test(parsed.pathname)) {
+      const sPad = String(Math.max(1, cleanSeason)).padStart(2, '0')
+      const ePad = String(cleanEpisode ?? 1).padStart(2, '0')
+      parsed.pathname = parsed.pathname.replace(/\/s\d{1,2}e\d{1,3}(?=\/|$|-|\.)/i, `/s${sPad}e${ePad}`)
+      return parsed.toString()
+    }
+
+    // Generic /staffel-X or /season-X and /episode-Y or /folge-Y in pathname
+    let pathUpdated = false
+    let nextPath = parsed.pathname
+    if (/\/(staffel|season)([-_]?)\d+/i.test(nextPath)) {
+      nextPath = nextPath.replace(/\/(staffel|season)([-_]?)\d+/i, (_m, word, sep) => `/${word}${sep}${Math.max(1, cleanSeason)}`)
+      pathUpdated = true
+    }
+    if (/\/(episode|folge|ep|film)([-_]?)\d+/i.test(nextPath)) {
+      if (cleanEpisode !== null) {
+        nextPath = nextPath.replace(/\/(episode|folge|ep|film)([-_]?)\d+/i, (_m, word, sep) => `/${word}${sep}${cleanEpisode}`)
+      } else {
+        nextPath = nextPath.replace(/\/(episode|folge|ep|film)[-_]?\d+\/?$/i, '')
+      }
+      pathUpdated = true
+    } else if (pathUpdated && cleanEpisode !== null) {
+      nextPath = `${nextPath.replace(/\/$/, '')}/episode-${cleanEpisode}`
+    }
+    if (pathUpdated) {
+      parsed.pathname = nextPath
+      return parsed.toString()
+    }
+
+    // YouTube playlist or URL with query parameters
+    if (parsed.searchParams.has('list') || parsed.searchParams.has('index')) {
+      if (cleanEpisode !== null) {
+        parsed.searchParams.set('index', String(cleanEpisode))
+      } else {
+        parsed.searchParams.delete('index')
+      }
+      return parsed.toString()
+    }
+
+    if (parsed.searchParams.has('season') || parsed.searchParams.has('staffel') || parsed.searchParams.has('episode') || parsed.searchParams.has('folge')) {
+      if (parsed.searchParams.has('staffel')) parsed.searchParams.set('staffel', String(cleanSeason))
+      else if (parsed.searchParams.has('season')) parsed.searchParams.set('season', String(cleanSeason))
+      if (cleanEpisode !== null) {
+        if (parsed.searchParams.has('folge')) parsed.searchParams.set('folge', String(cleanEpisode))
+        else parsed.searchParams.set('episode', String(cleanEpisode))
+      } else {
+        parsed.searchParams.delete('episode')
+        parsed.searchParams.delete('folge')
+      }
+      return parsed.toString()
+    }
+
+    return rawUrl
+  } catch {
+    return rawUrl
+  }
+}
+
+/** Derives a human-readable default title from a URL for saved links. */
+export function deriveLinkTitle(rawUrl: string): string {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return 'Gespeicherter Link'
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`)
+    const host = parsed.hostname.replace(/^www\./i, '')
+    if (ANIWORLD_HOSTS.test(host)) {
+      const slugMatch = parsed.pathname.match(/\/(?:anime|serie)\/stream\/([^/?#]+)/i)
+      if (slugMatch) {
+        return decodeURIComponent(slugMatch[1])
+          .replace(/[-_]+/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+      }
+    }
+    const segments = parsed.pathname
+      .split('/')
+      .filter(Boolean)
+      .filter((s) => !/^(?:watch|stream|anime|serie|video|embed|v|staffel-\d+|episode-\d+|filme|film-\d+)$/i.test(s))
+    const last = segments[segments.length - 1]
+    if (last && last.length > 2) {
+      const cleaned = decodeURIComponent(last)
+        .replace(/\.[a-z0-9]{2,4}$/i, '')
+        .replace(/[-_]+/g, ' ')
+        .trim()
+      if (cleaned) return cleaned.replace(/\b\w/g, (c) => c.toUpperCase())
+    }
+    const vParam = parsed.searchParams.get('v')
+    if (vParam) return `${host} (${vParam})`
+    return host
+  } catch {
+    return trimmed.slice(0, 48)
+  }
+}
+
+/** Returns a short portal/source badge label for a URL. */
+export function sourceBadgeForUrl(rawUrl: string): string {
+  try {
+    const host = new URL(/^https?:\/\//i.test(rawUrl.trim()) ? rawUrl.trim() : `https://${rawUrl.trim()}`).hostname
+      .replace(/^www\./i, '')
+      .toLowerCase()
+    if (/aniworld/.test(host)) return 'AniWorld'
+    if (/s\.to|serienstream/.test(host)) return 'SerienStream'
+    if (/youtube\.com|youtu\.be/.test(host)) return 'YouTube'
+    if (/twitch\.tv/.test(host)) return 'Twitch'
+    if (/tiktok\.com/.test(host)) return 'TikTok'
+    if (/instagram\.com/.test(host)) return 'Instagram'
+    if (/soundcloud\.com/.test(host)) return 'SoundCloud'
+    if (/spotify\.com/.test(host)) return 'Spotify'
+    if (/ardmediathek|ard\.de|zdf\.de|arte\.tv|srf\.ch|orf\.at|3sat\.de/.test(host)) return 'Mediathek'
+    if (/vimeo\.com/.test(host)) return 'Vimeo'
+    return host
+  } catch {
+    return 'Link'
+  }
+}
+
 export function isPortalUrl(value: string): boolean {
   try {
     return PORTAL_HOSTS.test(new URL(value.trim()).hostname)
