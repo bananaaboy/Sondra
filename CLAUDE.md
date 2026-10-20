@@ -300,5 +300,15 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `requestLookup` ab und wechselt den Tab; das Herunterladen nimmt ihn beim
   Öffnen (`takePendingLookup`). Covers aus Dateien werden auf 480 px JPEG
   verkleinert, weil sie im `localStorage` liegen.
+  **Gezählt wird nie über das Ende hinaus:** gesehene Folgen jenseits der
+  bekannten Anzahl fallen weg (`cleanWatched`), und jede Änderung am
+  Gesehenen setzt den Stand über `settle` auf die erste ungesehene Folge —
+  ab der Staffel, dann die folgenden, dann Lücken davor; ist alles gesehen,
+  wird der Eintrag „Fertig“. Vorher ging der Stand einfach eins weiter, und
+  „Alle gesehen“ liess eine Staffel mit 39 Folgen auf „Folge 40“ stehen
+  („40/39“). Export als `Sondra-Merkliste-<Datum>.json`
+  (`exportMerkliste`), Einlesen führt zusammen (`mergeMerkliste`: dieselbe
+  Serie per `id` oder Name, die zuletzt geänderte Seite gewinnt) und lässt
+  sich zurücknehmen.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
