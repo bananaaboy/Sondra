@@ -770,7 +770,14 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Minus) vergrössern; „Zurücksetzen“ erscheint, sobald etwas verstellt ist.
   Ohne Wahl die Mitte. Gespeichert als `coverFrame` neben dem Cover
   (Position wie `object-position`, Zoom um denselben Punkt), damit Kachel,
-  Fenster und Vorschau dasselbe zeigen. Zwei Wege davor sind verworfen:
+  Fenster und Vorschau dasselbe zeigen. **Covers werden selbst
+  verkleinert, nie vom Browser:** ein Poster von 2000 × 3000 in eine Kachel
+  von 240 px gequetscht sah überschärft aus — treppige Kanten, Flimmern in
+  feinen Linien. Jetzt zeichnet `CoverImage` auf einen Canvas genau in den
+  Gerätepixeln der Kachel, aus einer Halbierungs-Pyramide (jede Stufe der
+  Mittelwert von je 2 × 2 Pixeln, einmal je Bild gerechnet) und mit einem
+  kurzen letzten Schritt. Das Bild selbst zoomt beim Überfahren nicht mehr:
+  jede Skalierung danach wäre wieder ein Weichzeichner. Zwei Wege davor sind verworfen:
   die Form vom höchsten Cover (ein Breitbild wurde seitlich abgeschnitten)
   und das ganze Cover mit unscharfer Füllung (passte nicht). Die kleinen Vorschauen im Fenster
   zeigen das Cover in seiner eigenen Form. Auf dem Bild liegt nichts: Name, Zähler in Mono (mit Haken, wenn alles gesehen

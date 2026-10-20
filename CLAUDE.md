@@ -314,7 +314,12 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   weggenommen. Kacheln sind immer 2:3; der Ausschnitt eines Covers liegt
   als `coverFrame` (x, y in %, Zoom 1–3) neben jedem Cover — an der Serie,
   der Staffel und dem Teil — und wird von `CoverImage` überall gleich
-  gezeichnet. Covers aus Dateien: längere Seite 720 px.
+  gezeichnet: auf einen Canvas in Gerätepixeln (ResizeObserver mit
+  `device-pixel-content-box`; weicht der Wert von CSS × `devicePixelRatio`
+  ab, gilt das Produkt), aus einer Pyramide von Halbierungen (`halve`), nie
+  als `<img>`, das der Browser in einem Schritt verkleinert — das sah
+  überschärft aus. Covers aus Dateien: längere Seite 720 px, ebenso in
+  Halbschritten, als WebP 0.9 (sonst JPEG 0.92).
   Export als `Sondra-Merkliste-<Datum>.json`
   (`exportMerkliste`), Einlesen führt zusammen (`mergeMerkliste`: dieselbe
   Serie per `id` oder Name, die zuletzt geänderte Seite gewinnt) und lässt
