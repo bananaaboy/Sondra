@@ -34,7 +34,7 @@ export function Stepper({
 }) {
   const clamp = (next: number) => Math.min(max, Math.max(min, next))
   return (
-    <span className="inline-flex items-center rounded-nav bg-raised ring-1 ring-inset ring-rule">
+    <span className="inline-flex w-max items-center rounded-nav bg-raised ring-1 ring-inset ring-rule">
       <button
         type="button"
         aria-label={`${label} zurück`}

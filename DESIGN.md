@@ -762,12 +762,19 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   „zuletzt gestern“, ein dünner Balken für das Gesehene —, rechts „Folge 5
   laden“ (übergibt die Folge ans Herunterladen und wechselt dorthin) und
   „Folge 5 gesehen“ (hakt ab, rückt weiter). Die Stelle ist immer die
-  nächste ungesehene Folge. Darunter jede Staffel als **Kachel** (3:4,
-  gerundet, Cover oder grosse Zahl auf Tönung, unten Name, Zähler in Mono und
-  Balken; „Hier sind Sie“ / „Gesehen“ als Pille). Überfahren oder Fokus
-  zeigt Prozent, „4 von 10“, „6 übrig · weiter mit Folge 5“ auf Stage-Schwarz;
-  ein Klick öffnet die Staffel im `Dialog`: alle Folgen als Zahlen zum
-  Abhaken (Umschalt-Klick: bis hier), Anzahl, Name, eigenes Cover. Die Serie
+  nächste ungesehene Folge. Darunter jede Staffel als **Poster** (2:3 wie
+  auf ThePosterDB, gerundet, Cover oder grosse Zahl auf Tönung). Auf dem
+  Bild liegt nichts: Name, Zähler in Mono (mit Haken, wenn alles gesehen
+  ist) und Balken stehen darunter, „Hier sind Sie · Folge 4“ als Zeile unter
+  dem Balken, die Kachel selbst trägt den Ring. Vorher deckte die
+  Beschriftung das untere Drittel jedes Posters ab und eine Pille das Logo.
+  Ein Cover, das nicht lädt, fällt auf die Zahl zurück. Überfahren oder
+  Fokus zeigt Prozent, „4 von 10“, „6 übrig · weiter mit Folge 5“ auf
+  Stage-Schwarz; ein Klick öffnet die Staffel im `Dialog`: alle Folgen als
+  Zahlen zum Abhaken (Umschalt-Klick: bis hier), Anzahl, Name, eigenes
+  Cover. **Jede Staffel hat ihre eigene Folgenzahl**, auch beim Hinzufügen:
+  dort steht je Staffel ein Zähler, und eine Staffel, die niemand angefasst
+  hat, übernimmt die Zahl der vorigen. Die Serie
   selbst („Bearbeiten“): Name, Adresse (darf leer sein), Cover per Adresse
   oder Datei (auf 480 px verkleinert), Notiz, Bewertung mit gezeichneten
   Sternen, Stand, Laden als, Qualität, Sprachfassung, Untertitel.
