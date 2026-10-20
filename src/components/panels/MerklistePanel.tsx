@@ -23,8 +23,13 @@ import {
   createMerkItem,
   exportMerkliste,
   itemProgress,
+  markRange,
   mergeMerkliste,
   merkSaveFailed,
+  partName,
+  partOfEpisode,
+  partProgress,
+  partsOf,
   readMerklisteFile,
   requestLookup,
   seasonName,
@@ -32,12 +37,17 @@ import {
   seasonsOf,
   setMerkItems,
   settle,
+  splitSeason,
+  storedParts,
   toggleWatched,
   updateMerkItem,
   useMerkliste,
   watchedUpTo,
+  withParts,
   withSeason,
+  type MerkPart,
   type MerkSeason,
+  type SeasonPart,
   type SavedLinkItem,
   type SavedLinkStatus,
 } from '../../lib/merkliste'
@@ -283,7 +293,7 @@ export function MerklistePanel() {
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
-  const [season, setSeason] = useState<{ id: string; number: number } | null>(null)
+  const [season, setSeason] = useState<{ id: string; number: number; part: number } | null>(null)
   const [removed, setRemoved] = useState<{ item: SavedLinkItem; index: number } | null>(null)
 
   const counts = useMemo(() => {
@@ -397,7 +407,7 @@ export function MerklistePanel() {
             key={item.id}
             item={item}
             onEdit={() => setEditing(item.id)}
-            onSeason={(number) => setSeason({ id: item.id, number })}
+            onSeason={(number, part) => setSeason({ id: item.id, number, part })}
           />
         ))
       )}
@@ -409,7 +419,13 @@ export function MerklistePanel() {
         <SeriesDialog item={editingItem} onClose={() => setEditing(null)} onRemove={() => remove(editingItem)} />
       ) : null}
       {seasonItem && season ? (
-        <SeasonDialog item={seasonItem} number={season.number} onClose={() => setSeason(null)} />
+        <SeasonDialog
+          item={seasonItem}
+          number={season.number}
+          part={season.part}
+          onPart={(part) => setSeason({ ...season, part })}
+          onClose={() => setSeason(null)}
+        />
       ) : null}
     </div>
   )
@@ -589,14 +605,25 @@ function useTileShape(covers: (string | undefined)[]): number {
 /* One series                                                                  */
 /* -------------------------------------------------------------------------- */
 
-function Series({ item, onEdit, onSeason }: { item: SavedLinkItem; onEdit: () => void; onSeason: (number: number) => void }) {
+function Series({
+  item,
+  onEdit,
+  onSeason,
+}: {
+  item: SavedLinkItem
+  onEdit: () => void
+  onSeason: (number: number, part: number) => void
+}) {
   const openHere = useOpenHere()
   const seasons = seasonsOf(item)
   const progress = itemProgress(item)
   const status = statusOf(item)
   const kind = episodeKindOf(item.url) ?? 'series'
   const last = whenLabel(item.lastOpenedAt)
-  const shape = useTileShape(seasons.map((season) => season.cover ?? item.cover))
+  // A season in parts is a tile per part.
+  const tiles = seasons.flatMap((season) => partsOf(season).map((part) => ({ season, part })))
+  const coverOf = (season: MerkSeason, part: SeasonPart) => part.cover ?? season.cover ?? item.cover
+  const shape = useTileShape(tiles.map(({ season, part }) => coverOf(season, part)))
 
   const addSeason = () => {
     const highest = seasons.reduce((max, season) => Math.max(max, season.number), 0)
@@ -660,15 +687,16 @@ function Series({ item, onEdit, onSeason }: { item: SavedLinkItem; onEdit: () =>
       </div>
 
       <div className="grid grid-cols-2 gap-[12px] sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6">
-        {seasons.map((season) => (
+        {tiles.map(({ season, part }) => (
           <SeasonTile
-            key={season.number}
+            key={`${season.number}-${part.index}`}
             season={season}
-            cover={season.cover ?? item.cover}
+            part={part}
+            cover={coverOf(season, part)}
             shape={shape}
-            current={status !== 'done' && season.number === item.season}
+            current={status !== 'done' && season.number === item.season && partOfEpisode(season, item.episode).index === part.index}
             episode={item.episode}
-            onOpen={() => onSeason(season.number)}
+            onOpen={() => onSeason(season.number, part.index)}
           />
         ))}
       </div>
@@ -715,6 +743,7 @@ function Series({ item, onEdit, onSeason }: { item: SavedLinkItem; onEdit: () =>
  */
 function SeasonTile({
   season,
+  part,
   cover,
   shape,
   current,
@@ -722,6 +751,7 @@ function SeasonTile({
   onOpen,
 }: {
   season: MerkSeason
+  part: SeasonPart
   cover?: string
   /** Height over width, the same for every tile of the series. */
   shape: number
@@ -730,10 +760,11 @@ function SeasonTile({
   episode: number | null
   onOpen: () => void
 }) {
-  const progress = seasonProgress(season)
-  const name = seasonName(season)
+  const progress = partProgress(season, part)
+  const name = partName(season, part)
   const unit = season.number === 0 ? 'Film' : 'Folge'
   const counted = progress.total ? `${progress.watched} von ${progress.total}` : `${progress.watched} gesehen`
+  const split = (season.parts?.length ?? 0) > 1
   // An address that does not answer leaves the number, not a broken image.
   const [broken, setBroken] = useState<string | null>(null)
   const poster = cover && cover !== broken ? cover : undefined
@@ -768,9 +799,10 @@ function SeasonTile({
         ) : (
           <span
             aria-hidden
-            className="absolute inset-0 flex items-center justify-center text-ink/30 transition-opacity duration-[var(--dur-base)] group-hover:opacity-0 group-focus-visible:opacity-0"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-[6px] text-ink/30 transition-opacity duration-[var(--dur-base)] group-hover:opacity-0 group-focus-visible:opacity-0"
           >
             {season.number === 0 ? <FilmIcon /> : <span className="font-display text-[clamp(48px,7vw,84px)] leading-none">{season.number}</span>}
+            {split ? <span className="text-body font-semibold text-ink/45">Teil {part.index + 1}</span> : null}
           </span>
         )}
 
@@ -824,44 +856,100 @@ function SeasonTile({
 /* A season, opened                                                            */
 /* -------------------------------------------------------------------------- */
 
-function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: number; onClose: () => void }) {
+function SeasonDialog({
+  item,
+  number,
+  part: partIndex,
+  onPart,
+  onClose,
+}: {
+  item: SavedLinkItem
+  number: number
+  /** Which part of the season is open; 0 when it is one piece. */
+  part: number
+  onPart: (part: number) => void
+  onClose: () => void
+}) {
   const openHere = useOpenHere()
   const season = seasonsOf(item).find((entry) => entry.number === number)
   if (!season) return null
-  const progress = seasonProgress(season)
-  const name = seasonName(season)
+  const parts = partsOf(season)
+  const split = parts.length > 1
+  const part = parts[Math.min(partIndex, parts.length - 1)]
+  const last = part.index === parts.length - 1
+  const progress = partProgress(season, part)
+  const name = partName(season, part)
   const unit = number === 0 ? 'Film' : 'Folge'
   const units = number === 0 ? 'Filme' : 'Folgen'
-  const highestSeen = season.watched.length ? Math.max(...season.watched) : 0
-  const shownCount = season.episodes ?? Math.max(12, highestSeen + 4, item.season === number && item.episode ? item.episode + 4 : 0)
-  const isHere = item.season === number
+  const cover = part.cover ?? season.cover ?? item.cover
+  const isHere = item.season === number && partOfEpisode(season, item.episode).index === part.index
+  const seenHere = season.watched.filter((n) => n >= part.from && (part.to === null || n <= part.to))
+  // Seen in this part, counted from its first episode.
+  const reachedHere = seenHere.length ? Math.max(...seenHere) - part.from + 1 : 0
+  const shownCount =
+    part.episodes ?? Math.max(12, reachedHere + 4, isHere && item.episode ? item.episode - part.from + 1 + 4 : 0)
 
   // Ticking episodes moves „Hier sind Sie" to the first one not seen — from
   // this season on, and to „Fertig" once nothing is left.
   const setSeasons = (seasons: MerkSeason[]) => updateMerkItem(item.id, settle(item, seasons, number))
-  const patchSeason = (change: Partial<MerkSeason>) => {
-    const seasons = withSeason(item, number, (entry) => ({ ...entry, ...change }))
-    const shorter = isHere && item.episode !== null && change.episodes != null && item.episode > change.episodes
+  const changeSeason = (change: (entry: MerkSeason) => MerkSeason) => {
+    const seasons = withSeason(item, number, change)
+    const updated = seasons.find((entry) => entry.number === number)
+    const shorter = item.season === number && item.episode !== null && updated?.episodes != null && item.episode > updated.episodes
     const longer = statusOf(item) === 'done' && caughtUp(seasonsOf(item)) && !caughtUp(seasons)
     // A count that cuts off where the entry stands, or that adds episodes to
     // a series seen to the end, moves the position; a name or a cover does not.
     updateMerkItem(item.id, shorter || longer ? settle(item, seasons, item.season) : { seasons })
   }
+  const patchSeason = (change: Partial<MerkSeason>) => changeSeason((entry) => ({ ...entry, ...change }))
+  const patchPart = (change: Partial<MerkPart>) =>
+    changeSeason((entry) => withParts(entry, storedParts(entry).map((stored, i) => (i === part.index ? { ...stored, ...change } : stored))))
+
+  const addPart = () => {
+    changeSeason((entry) => {
+      const stored = storedParts(entry)
+      const end = stored.length - 1
+      // The part that was open gets a length before another follows it.
+      if (stored[end].episodes === null) stored[end] = { ...stored[end], episodes: Math.max(12, reachedHere) }
+      return withParts(entry, [...stored, { episodes: null }])
+    })
+    onPart(parts.length)
+  }
+  const removePart = () => {
+    changeSeason((entry) => {
+      const stored = storedParts(entry)
+      // Its episodes go to the part before it (to the next one for the first).
+      // An open part with nothing seen in it is simply taken away — the part
+      // before keeps its length instead of becoming open as well.
+      const into = part.index > 0 ? part.index - 1 : 1
+      const a = stored[into].episodes
+      const b = stored[part.index].episodes
+      const episodes = b === null && seenHere.length === 0 ? a : a === null || b === null ? null : a + b
+      stored[into] = { ...stored[into], episodes }
+      return withParts(entry, stored.filter((_, i) => i !== part.index))
+    })
+    onPart(Math.max(0, part.index - 1))
+  }
 
   return (
     <Dialog open onClose={onClose} title={`${item.title} · ${name}`}>
       <div className="flex flex-col gap-[20px]">
+        {split ? (
+          <ChoiceRow
+            value={String(part.index)}
+            options={parts.map((entry) => ({ value: String(entry.index), label: entry.title || `Teil ${entry.index + 1}` }))}
+            onChange={(value) => onPart(Number(value))}
+          />
+        ) : null}
+
         <div className="flex flex-col gap-[16px] sm:flex-row sm:items-end">
-          {season.cover ?? item.cover ? (
-            <img
-              src={season.cover ?? item.cover}
-              alt=""
-              className="block h-auto max-h-[200px] w-[96px] shrink-0 rounded-card bg-panel-mid object-cover"
-            />
+          {cover ? (
+            <img src={cover} alt="" className="block h-auto max-h-[200px] w-[96px] shrink-0 rounded-card bg-panel-mid object-cover" />
           ) : (
             <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-panel-mid">
-              <span aria-hidden className="absolute inset-0 flex items-center justify-center text-ink/30">
+              <span aria-hidden className="absolute inset-0 flex flex-col items-center justify-center gap-[4px] text-ink/30">
                 {number === 0 ? <FilmIcon /> : <span className="display-md">{number}</span>}
+                {split ? <span className="text-small font-semibold text-ink/45">Teil {part.index + 1}</span> : null}
               </span>
             </span>
           )}
@@ -877,6 +965,7 @@ function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: 
                 : progress.total
                   ? `Noch ${progress.total - progress.watched} — weiter mit ${unit} ${progress.next}.`
                   : `Weiter mit ${unit} ${progress.next}. Wie viele es gibt, steht unten.`}
+              {split && part.to !== null ? ` ${units} ${part.from} bis ${part.to} der Staffel.` : null}
             </p>
           </div>
           {isHere && item.episode !== null && !progress.complete ? (
@@ -897,7 +986,17 @@ function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: 
               </Button>
             </span>
           ) : !progress.complete ? (
-            <Button type="button" variant="quiet" onClick={() => updateMerkItem(item.id, settle(item, seasonsOf(item), number))}>
+            <Button
+              type="button"
+              variant="quiet"
+              onClick={() =>
+                updateMerkItem(item.id, {
+                  season: number,
+                  episode: progress.next,
+                  status: statusOf(item) === 'done' ? 'watching' : statusOf(item),
+                })
+              }
+            >
               Hier weiterschauen
             </Button>
           ) : null}
@@ -911,16 +1010,16 @@ function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: 
             <span className="flex gap-[16px] text-small">
               <button
                 type="button"
-                disabled={!season.episodes}
-                onClick={() => season.episodes && setSeasons(watchedUpTo(item, number, season.episodes))}
+                disabled={part.to === null}
+                onClick={() => part.to !== null && setSeasons(markRange(item, number, part.from, part.to, true))}
                 className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink disabled:opacity-40 disabled:no-underline"
               >
                 Alle gesehen
               </button>
               <button
                 type="button"
-                disabled={season.watched.length === 0}
-                onClick={() => setSeasons(withSeason(item, number, (entry) => ({ ...entry, watched: [] })))}
+                disabled={progress.watched === 0}
+                onClick={() => setSeasons(markRange(item, number, part.from, part.to ?? Infinity, false))}
                 className="press rounded-nav text-muted hover:text-ink disabled:opacity-40"
               >
                 Zurücksetzen
@@ -928,7 +1027,7 @@ function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: 
             </span>
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-[6px]">
-            {Array.from({ length: shownCount }, (_, i) => i + 1).map((episode) => {
+            {Array.from({ length: shownCount }, (_, i) => part.from + i).map((episode) => {
               const seen = season.watched.includes(episode)
               const here = isHere && item.episode === episode
               return (
@@ -950,29 +1049,53 @@ function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: 
               )
             })}
           </div>
-          {season.episodes === null ? (
+          {part.episodes === null ? (
             <p className="text-small text-muted">
-              Wie viele {units} diese Staffel hat, ist noch nicht gesagt — bis dahin stehen hier so viele, wie gebraucht werden.
+              Wie viele {units} {split ? 'dieser Teil' : 'diese Staffel'} hat, ist noch nicht gesagt — bis dahin stehen hier so
+              viele, wie gebraucht werden.
             </p>
           ) : null}
         </div>
 
         <div className="grid grid-cols-[minmax(0,1fr)] gap-x-[32px] gap-y-[4px] sm:grid-cols-2">
-          <Line label={`Wie viele ${units}`}>
+          <Line label={split ? `Wie viele ${units} in diesem Teil` : `Wie viele ${units}`}>
             <div className="flex flex-wrap items-center gap-[12px]">
-              {season.episodes !== null ? (
-                <Stepper label={`Anzahl ${units}`} value={season.episodes} max={2000} onChange={(episodes) => patchSeason({ episodes })} />
-              ) : null}
-              <div className="w-max">
-                <Toggle
-                  label="Noch unbekannt"
-                  checked={season.episodes === null}
-                  onChange={(unknown) => patchSeason({ episodes: unknown ? null : Math.max(highestSeen, 12) })}
+              {part.episodes !== null ? (
+                <Stepper
+                  label={`Anzahl ${units}`}
+                  value={part.episodes}
+                  max={2000}
+                  onChange={(episodes) => (split ? patchPart({ episodes }) : patchSeason({ episodes }))}
                 />
-              </div>
+              ) : null}
+              {/* Only the last part can still be open; the ones before it
+                  have to end somewhere for the next to begin. */}
+              {last ? (
+                <div className="w-max">
+                  <Toggle
+                    label="Noch unbekannt"
+                    checked={part.episodes === null}
+                    onChange={(unknown) => {
+                      const episodes = unknown ? null : Math.max(reachedHere, 12)
+                      if (split) patchPart({ episodes })
+                      else patchSeason({ episodes })
+                    }}
+                  />
+                </div>
+              ) : null}
             </div>
           </Line>
-          <Line label="Name">
+          {split ? (
+            <Line label="Name dieses Teils">
+              <TextInput
+                value={part.title ?? ''}
+                placeholder={`${seasonName(season)} · Teil ${part.index + 1}`}
+                onChange={(event) => patchPart({ title: event.target.value || undefined })}
+                className="font-sans"
+              />
+            </Line>
+          ) : null}
+          <Line label={split ? 'Name der Staffel' : 'Name'}>
             <TextInput
               value={season.title ?? ''}
               placeholder={number === 0 ? 'Filme' : `Staffel ${number}`}
@@ -981,36 +1104,77 @@ function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: 
             />
           </Line>
           <Line wide>
-            <CoverField
-              label="Cover dieser Staffel (sonst das der Serie)"
-              value={season.cover}
-              onChange={(cover) => patchSeason({ cover })}
-            />
+            {split ? (
+              <CoverField
+                label="Cover dieses Teils (sonst das der Staffel oder Serie)"
+                value={part.cover}
+                onChange={(cover) => patchPart({ cover })}
+              />
+            ) : (
+              <CoverField label="Cover dieser Staffel (sonst das der Serie)" value={season.cover} onChange={(cover) => patchSeason({ cover })} />
+            )}
           </Line>
-          {seasonsOf(item).length > 1 ? (
-            <Line wide>
-              <button
-                type="button"
-                onClick={() => {
-                  const rest = withSeason(item, number, () => null)
-                  const fallback = rest[0]
-                  updateMerkItem(item.id, {
-                    seasons: rest,
-                    ...(item.season === number && fallback ? { season: fallback.number, episode: seasonProgress(fallback).next } : {}),
-                  })
-                  onClose()
-                }}
-                className="press self-start rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
-              >
-                {name} entfernen
-              </button>
-            </Line>
-          ) : null}
+          <Line wide>
+            <div className="flex flex-wrap items-baseline gap-x-[20px] gap-y-[8px] text-small">
+              {split ? (
+                <>
+                  <button type="button" onClick={addPart} className={linkClass}>
+                    <PlusIcon />
+                    Teil hinzufügen
+                  </button>
+                  <button type="button" onClick={removePart} className={linkClass}>
+                    Diesen Teil auflösen
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    changeSeason(splitSeason)
+                    onPart(0)
+                  }}
+                  className={linkClass}
+                >
+                  In Teile teilen
+                </button>
+              )}
+              {seasonsOf(item).length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rest = withSeason(item, number, () => null)
+                    const fallback = rest[0]
+                    updateMerkItem(item.id, {
+                      seasons: rest,
+                      ...(item.season === number && fallback ? { season: fallback.number, episode: seasonProgress(fallback).next } : {}),
+                    })
+                    onClose()
+                  }}
+                  className={linkClass}
+                >
+                  {seasonName(season)} entfernen
+                </button>
+              ) : null}
+            </div>
+            {split ? (
+              <p className="text-small text-muted">
+                Die {units} zählen durch die ganze Staffel, wie auf den Seiten: Teil 2 beginnt dort, wo Teil 1 endet. Ein aufgelöster
+                Teil geht im Teil davor auf; nichts Gesehenes geht verloren.
+              </p>
+            ) : (
+              <p className="text-small text-muted">
+                Für Staffeln, die in Teilen erscheinen — jeder Teil wird eine eigene Kachel mit eigenem Cover.
+              </p>
+            )}
+          </Line>
         </div>
       </div>
     </Dialog>
   )
 }
+
+const linkClass =
+  'press inline-flex items-center gap-[6px] rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink'
 
 /* -------------------------------------------------------------------------- */
 /* A series, edited                                                            */

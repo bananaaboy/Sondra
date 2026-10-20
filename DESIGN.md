@@ -782,7 +782,13 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Zahlen zum Abhaken (Umschalt-Klick: bis hier), Anzahl, Name, eigenes
   Cover. **Jede Staffel hat ihre eigene Folgenzahl**, auch beim Hinzufügen:
   dort steht je Staffel ein Zähler, und eine Staffel, die niemand angefasst
-  hat, übernimmt die Zahl der vorigen. Ist alles gesehen, steht die Serie auf
+  hat, übernimmt die Zahl der vorigen. **Eine Staffel kann in Teilen
+  erscheinen** („In Teile teilen“ im Staffel-Fenster): jeder Teil ist eine
+  eigene Kachel mit eigenem Namen („Staffel 2 · Teil 1“, oder frei), Cover,
+  Folgenzahl und Fortschritt; im Fenster wechseln Pillen zwischen den
+  Teilen. Die Folgen zählen durch die ganze Staffel wie auf den Seiten —
+  Teil 2 beginnt dort, wo Teil 1 endet —, so bleiben Adresse und Stand
+  unberührt. Nur der letzte Teil darf noch offen sein. Ist alles gesehen, steht die Serie auf
   „Fertig“ statt auf einer Folge, die es nicht gibt; eine neue Staffel holt
   sie zurück. Unter der Liste eine Zeile: „Die Merkliste liegt nur auf
   diesem Gerät“, daneben „Exportieren“ und „Aus Datei einlesen“ (stille
