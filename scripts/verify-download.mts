@@ -12,7 +12,16 @@
  * in it goes back through `api/stream.js` with a token of its own.
  */
 
-import { audioFor, extractAddresses, isHlsPlaylistText, parseM3u8 } from '../src/lib/download'
+import {
+  audioFor,
+  buildUrlWithEpisode,
+  deriveLinkTitle,
+  extractAddresses,
+  isHlsPlaylistText,
+  parseLinkEpisodeInfo,
+  parseM3u8,
+  sourceBadgeForUrl,
+} from '../src/lib/download'
 import { verify } from '../api/_shared.js'
 import { rewritePlaylist } from '../api/stream.js'
 
@@ -109,6 +118,35 @@ check('Segment durch den Dienst, mit Referer', [segmentClaim?.u, segmentClaim?.i
   'https://seite.example.com/',
 ])
 check('Private Adresse wird nicht signiert', lines[7], 'https://localhost/intern.ts')
+
+/* -- Link-Einstellungen (Staffel / Episode / Titel) -------------------------- */
+
+check(
+  'AniWorld Staffel & Episode lesen',
+  parseLinkEpisodeInfo('https://aniworld.to/anime/stream/jujutsu-kaisen/staffel-2/episode-5'),
+  { season: 2, episode: 5, isEpisodicUrl: true, seriesSlug: 'jujutsu-kaisen' },
+)
+check(
+  'AniWorld Staffel & Episode umschreiben',
+  buildUrlWithEpisode('https://aniworld.to/anime/stream/jujutsu-kaisen/staffel-1/episode-1', 2, 7),
+  'https://aniworld.to/anime/stream/jujutsu-kaisen/staffel-2/episode-7',
+)
+check(
+  'AniWorld Ganze Staffel umschreiben',
+  buildUrlWithEpisode('https://aniworld.to/anime/stream/jujutsu-kaisen/staffel-1/episode-3', 2, null),
+  'https://aniworld.to/anime/stream/jujutsu-kaisen/staffel-2',
+)
+check(
+  'AniWorld Filme umschreiben',
+  buildUrlWithEpisode('https://aniworld.to/anime/stream/jujutsu-kaisen/staffel-1/episode-1', 0, 1),
+  'https://aniworld.to/anime/stream/jujutsu-kaisen/filme/film-1',
+)
+check(
+  'AniWorld Titel aus Adresse ableiten',
+  deriveLinkTitle('https://aniworld.to/anime/stream/solo-leveling/staffel-1/episode-4'),
+  'Solo Leveling',
+)
+check('AniWorld Badge erkennen', sourceBadgeForUrl('https://aniworld.to/anime/stream/solo-leveling'), 'AniWorld')
 
 if (failures > 0) {
   console.log(`\n${failures} Prüfung(en) fehlgeschlagen.`)
