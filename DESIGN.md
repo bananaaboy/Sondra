@@ -758,59 +758,60 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   (unterstrichen) und „Nicht jetzt". Kein Rahmen, keine Fläche — als
   getönter Balken über dem Feld sah er aus wie ein zweites Textfeld.
 - **Die Merkliste ist ein eigener Tab** (`#merkliste`, `MerklistePanel.tsx`,
-  20.10.2026): jede Serie ein Abschnitt — Name, Quelle, „Staffel 3, Folge 5“,
-  „zuletzt gestern“, ein dünner Balken für das Gesehene —, rechts „Folge 5
-  laden“ (übergibt die Folge ans Herunterladen und wechselt dorthin) und
-  „Folge 5 gesehen“ (hakt ab, rückt weiter). Die Stelle ist immer die
-  nächste ungesehene Folge. Darunter jede Staffel als **Poster**, gerundet,
-  Cover oder grosse Zahl auf Tönung. **Jede Kachel ist ein Poster in 2:3**
-  — oder, je Serie umschaltbar („Format der Kacheln“ in „Bearbeiten“ und
-  beim Hinzufügen, direkt über dem Cover), ein Manga-Band in 5:7 (B6) —,
-  und welcher Teil eines Covers darin steht, wählt man selbst: im
-  Cover-Feld ist die Vorschau dieselbe Kachel, das Bild lässt sich ziehen
-  (oder mit den Pfeiltasten schieben) und mit „Zoom“ (1–3 ×, auch Plus und
-  Minus) vergrössern; „Zurücksetzen“ erscheint, sobald etwas verstellt ist.
-  Ohne Wahl die Mitte. Gespeichert als `coverFrame` neben dem Cover
-  (Position wie `object-position`, Zoom um denselben Punkt), damit Kachel,
-  Fenster und Vorschau dasselbe zeigen. **Covers werden selbst
-  verkleinert, nie vom Browser:** ein Poster von 2000 × 3000 in eine Kachel
-  von 240 px gequetscht sah überschärft aus — treppige Kanten, Flimmern in
-  feinen Linien. Jetzt zeichnet `CoverImage` auf einen Canvas genau in den
-  Gerätepixeln der Kachel, aus einer Halbierungs-Pyramide (jede Stufe der
-  Mittelwert von je 2 × 2 Pixeln, einmal je Bild gerechnet) und mit einem
-  kurzen letzten Schritt. Das Bild selbst zoomt beim Überfahren nicht mehr:
-  jede Skalierung danach wäre wieder ein Weichzeichner. Zwei Wege davor sind verworfen:
-  die Form vom höchsten Cover (ein Breitbild wurde seitlich abgeschnitten)
-  und das ganze Cover mit unscharfer Füllung (passte nicht). Die kleinen Vorschauen im Fenster
-  zeigen das Cover in seiner eigenen Form. Auf dem Bild liegt nichts: Name, Zähler in Mono (mit Haken, wenn alles gesehen
-  ist) und Balken stehen darunter, „Hier sind Sie · Folge 4“ als Zeile unter
-  dem Balken, die Kachel selbst trägt den Ring. Vorher deckte die
-  Beschriftung das untere Drittel jedes Posters ab und eine Pille das Logo.
-  Ein Cover, das nicht lädt, fällt auf die Zahl zurück. Überfahren oder
-  Fokus hebt von unten einen Verlauf mit Prozent und „Noch 6 · weiter mit
-  Folge 5“; das Bild bleibt darüber sichtbar (vorher deckte fast schwarzes
-  Stage das ganze Poster, „zu dunkel“). Ohne Cover weicht die grosse Zahl
-  den Angaben in Tinte; ein Klick öffnet die Staffel im `Dialog`: alle Folgen als
-  Zahlen zum Abhaken (Umschalt-Klick: bis hier), Anzahl, Name, eigenes
-  Cover. **Jede Staffel hat ihre eigene Folgenzahl**, auch beim Hinzufügen:
-  dort steht je Staffel ein Zähler, und eine Staffel, die niemand angefasst
-  hat, übernimmt die Zahl der vorigen. **Eine Staffel kann in Teilen
-  erscheinen** („In Teile teilen“ im Staffel-Fenster): jeder Teil ist eine
-  eigene Kachel mit eigenem Namen („Staffel 2 · Teil 1“, oder frei), Cover,
-  Folgenzahl und Fortschritt; im Fenster wechseln Pillen zwischen den
-  Teilen. Die Folgen zählen durch die ganze Staffel wie auf den Seiten —
-  Teil 2 beginnt dort, wo Teil 1 endet —, so bleiben Adresse und Stand
-  unberührt. Nur der letzte Teil darf noch offen sein. Ist alles gesehen, steht die Serie auf
-  „Fertig“ statt auf einer Folge, die es nicht gibt; eine neue Staffel holt
-  sie zurück. Unter der Liste eine Zeile: „Die Merkliste liegt nur auf
-  diesem Gerät“, daneben „Exportieren“ und „Aus Datei einlesen“ (stille
-  Knöpfe); nach dem Einlesen ein Satz, was neu, neuer, gleich oder hier
-  neuer war, und „Rückgängig“. Die Serie
-  selbst („Bearbeiten“): Name, Adresse (darf leer sein), Cover per Adresse
-  oder Datei (auf 480 px verkleinert), Notiz, Bewertung mit gezeichneten
-  Sternen, Stand, Laden als, Qualität, Sprachfassung, Untertitel.
-  „Staffel hinzufügen“ ist eine Zeile unter den Kacheln, keine Kachel.
-  Daten in `lib/merkliste.ts`, gemeinsam mit „Merken“ im Herunterladen.
+  Daten in `lib/merkliste.ts`, gemeinsam mit „Merken“ im Herunterladen).
+  Am 20.10.2026 entrümpelt, nachdem sie „sehr cluttered“ war: jede Serie
+  zeigte jede Staffel als 240-px-Poster (auch fertige), einen Balken über
+  einer Reihe Balken, „Hier sind Sie“ doppelt, und die Fenster jedes Feld
+  auf einmal.
+  - **Nach Stand gruppiert** — „Am Schauen“, „Später“, „Fertig“ als
+    Überschriften mit Zahl — statt Filter-Chips. Suche erst ab sechs
+    Einträgen, neben „Serie hinzufügen“; kein „Zum Herunterladen“ (das
+    steht in der Reiterleiste).
+  - **Am Schauen:** Name (16 px, halbfett) mit Sternen, darunter einmal in
+    Worten, wo und wie weit („Staffel 3, Folge 5 · 78 von 100 gesehen ·
+    AniWorld · zuletzt gestern“), die Notiz als eine Zeile; rechts „Folge 5
+    laden“ (übergibt ans Herunterladen) und „Folge 5 gesehen“ (hakt ab,
+    rückt auf die nächste ungesehene). Darunter die Staffeln als **Regal
+    kleiner Poster** (~120 px, so viele je Reihe wie passen): Bild ohne
+    Beschriftung darauf, darunter Name, Balken und Zähler in Mono (Haken
+    bei alles gesehen); die aktuelle trägt den Ring. Überfahren hebt von
+    unten einen Verlauf mit Prozent und „Weiter mit Folge 5“, das Bild
+    bleibt sichtbar.
+  - **Später und Fertig** sind je eine Zeile — kleines Cover, Name,
+    „3 Staffeln · alles gesehen“ —, die Staffeln einen Klick dahinter
+    (Pfeil). Ihre Kacheln sagten alle dasselbe.
+  - **Kacheln:** Poster in 2:3 oder je Serie Manga in 5:7 („Format der
+    Kacheln“ neben „Cover“). Der Ausschnitt eines Covers wird im
+    Cover-Feld gewählt — die Vorschau ist dieselbe Kachel, ziehen oder
+    Pfeiltasten, „Zoom“ 1–3 ×, „Zurücksetzen“ —, gespeichert als
+    `coverFrame`. Covers werden selbst verkleinert, nie vom Browser:
+    `CoverImage` zeichnet auf einen Canvas in Gerätepixeln aus einer
+    Halbierungs-Pyramide; als `<img>` sah ein grosses Poster überschärft
+    aus. Das Bild zoomt beim Überfahren nicht. Verworfen: die Form vom
+    höchsten Cover (Breitbild seitlich abgeschnitten) und das ganze Cover
+    mit unscharfer Füllung.
+  - **Staffeln:** jede hat ihre eigene Folgenzahl; eine Staffel kann in
+    Teilen erscheinen, jeder Teil eine Kachel, die Folgen zählen durch
+    (Teil 2 beginnt, wo Teil 1 endet). Ist alles gesehen, steht die Serie
+    auf „Fertig“; eine neue Staffel holt sie zurück.
+  - **Staffel-Fenster** (`size="md"`): Teil-Pillen, dann was man dort tut —
+    „4 von 12 Folgen gesehen“, Balken, „Folge 5 laden / gesehen“, die
+    Folgen als Zahlen zum Abhaken (Umschalt: bis hier), „Alle gesehen“,
+    „Zurücksetzen“. Anzahl, Name, Cover und Teile stehen eingeklappt in
+    „Staffel bearbeiten …“ (`Reveal`) — offen, solange die Anzahl noch
+    unbekannt ist.
+  - **Bearbeiten:** drei Gruppen ohne Linie über jedem Feld — was die Serie
+    ist (Name, Stand, Bewertung, Staffeln mit „Staffel/Filme hinzufügen“,
+    Notiz), wie sie aussieht (Cover mit Format), und eingeklappt
+    „Herunterladen · Host“ (Adresse, Laden als, Qualität, Sprachfassung,
+    Untertitel). Unten „Von der Merkliste nehmen“ und „Fertig“.
+  - **Hinzufügen** (`size="md"`): Name, Staffeln, Folgen (je Staffel ein
+    Zähler, eine unberührte übernimmt die Zahl der vorigen), „Gerade bei —
+    was davor liegt, gilt als gesehen“; Adresse, Filme und Cover
+    eingeklappt.
+  - Unter der Liste eine Zeile: „Nur auf diesem Gerät gespeichert.“ mit
+    „Exportieren“ und „Aus Datei einlesen“ als Links; nach dem Einlesen ein
+    Satz, was neu, neuer, gleich oder hier neuer war, und „Rückgängig“.
 - **Staffel und Folge stehen nur da, wo die Adresse sie hat**
   (`episodeKindOf`), als **ein** Element (`EpisodePicker`): „‹ Staffel 3 ·
   Folge 5 ›“, die Pfeile gehen eine Folge zurück oder weiter, ein Klick auf
