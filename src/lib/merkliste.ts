@@ -37,6 +37,20 @@ export interface MerkSeason {
   title?: string
   /** A picture for this season's tile; the entry's cover otherwise. */
   cover?: string
+  /**
+   * A season shown in parts — „Teil 1", „Teil 2" — each a tile of its own.
+   * The episodes keep counting through the season, as the sites number
+   * them: a second part of twelve after twelve holds episodes 13 to 24.
+   * `episodes` is then the sum of the parts. Only the last part may be of
+   * unknown length. Absent, or fewer than two, means one piece.
+   */
+  parts?: MerkPart[]
+}
+
+export interface MerkPart {
+  episodes: number | null
+  title?: string
+  cover?: string
 }
 
 export interface SavedLinkItem {
@@ -86,14 +100,23 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ? raw.seasons
         .filter((s): s is MerkSeason => Boolean(s) && typeof s.number === 'number')
         .map((s) => {
-          const episodes = typeof s.episodes === 'number' && s.episodes > 0 ? Math.floor(s.episodes) : null
-          return {
+          const season: MerkSeason = {
             number: Math.max(0, Math.floor(s.number)),
-            episodes,
-            watched: cleanWatched(Array.isArray(s.watched) ? s.watched : [], episodes),
+            episodes: typeof s.episodes === 'number' && s.episodes > 0 ? Math.floor(s.episodes) : null,
+            watched: Array.isArray(s.watched) ? s.watched : [],
             ...(s.title ? { title: String(s.title) } : {}),
             ...(s.cover ? { cover: String(s.cover) } : {}),
           }
+          const parts = Array.isArray(s.parts)
+            ? s.parts
+                .filter((part): part is MerkPart => Boolean(part) && typeof part === 'object')
+                .map((part) => ({
+                  episodes: typeof part.episodes === 'number' && part.episodes > 0 ? Math.floor(part.episodes) : null,
+                  ...(part.title ? { title: String(part.title) } : {}),
+                  ...(part.cover ? { cover: String(part.cover) } : {}),
+                }))
+            : []
+          return parts.length >= 2 ? withParts(season, parts) : { ...season, watched: cleanWatched(season.watched, season.episodes) }
         })
     : undefined
   const item: SavedLinkItem = {
@@ -308,6 +331,102 @@ export function watchedUpTo(item: SavedLinkItem, seasonNumber: number, episode: 
     ...season,
     watched: [...season.watched.filter((n) => n > episode), ...Array.from({ length: episode }, (_, i) => i + 1)],
   }))
+}
+
+/* -------------------------------------------------------------------------- */
+/* Parts of a season                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** A part with the episode numbers it holds; `to` is open while its length is. */
+export interface SeasonPart extends MerkPart {
+  index: number
+  from: number
+  to: number | null
+}
+
+/** The parts of a season in order — one, the whole season, when it is not split. */
+export function partsOf(season: MerkSeason): SeasonPart[] {
+  if (!season.parts || season.parts.length < 2) {
+    return [{ index: 0, from: 1, to: season.episodes, episodes: season.episodes }]
+  }
+  let from = 1
+  return season.parts.map((part, index) => {
+    const to = part.episodes === null ? null : from + part.episodes - 1
+    const entry: SeasonPart = { ...part, index, from, to }
+    from = (to ?? from) + 1
+    return entry
+  })
+}
+
+/** How far a part is seen, counted on its own episodes. */
+export function partProgress(season: MerkSeason, part: SeasonPart): SeasonProgress {
+  const inside = (n: number) => n >= part.from && (part.to === null || n <= part.to)
+  const watched = season.watched.filter(inside).length
+  const total = part.episodes
+  let next = part.from
+  while (season.watched.includes(next)) next += 1
+  if (part.to !== null) next = Math.min(next, part.to)
+  return {
+    watched,
+    total,
+    fraction: total ? Math.min(1, watched / total) : null,
+    next,
+    complete: total !== null && watched >= total,
+  }
+}
+
+/** „Staffel 2 · Teil 1", or the part's own name; the season's name when it is one piece. */
+export function partName(season: MerkSeason, part: SeasonPart): string {
+  if (!season.parts || season.parts.length < 2) return seasonName(season)
+  return part.title || `${seasonName(season)} · Teil ${part.index + 1}`
+}
+
+/** The part an episode belongs to. */
+export function partOfEpisode(season: MerkSeason, episode: number | null): SeasonPart {
+  const parts = partsOf(season)
+  if (episode === null) return parts[0]
+  return parts.find((part) => episode >= part.from && (part.to === null || episode <= part.to)) ?? parts[parts.length - 1]
+}
+
+/**
+ * A season with new parts: the length becomes their sum, a part of unknown
+ * length before the last gets one episode, and one part left is no split.
+ */
+export function withParts(season: MerkSeason, parts: MerkPart[]): MerkSeason {
+  const { parts: _old, ...rest } = season
+  if (parts.length < 2) {
+    const only = parts[0]
+    const episodes = only ? only.episodes : season.episodes
+    return { ...rest, episodes, cover: rest.cover ?? only?.cover, watched: cleanWatched(season.watched, episodes) }
+  }
+  const fixed = parts.map((part, i) => (i < parts.length - 1 && part.episodes === null ? { ...part, episodes: 1 } : part))
+  const episodes = fixed.every((part) => part.episodes !== null) ? fixed.reduce((sum, part) => sum + (part.episodes ?? 0), 0) : null
+  return { ...rest, parts: fixed, episodes, watched: cleanWatched(season.watched, episodes) }
+}
+
+/** The parts as stored, for changing one of them. */
+export function storedParts(season: MerkSeason): MerkPart[] {
+  return partsOf(season).map(({ episodes, title, cover }) => ({ episodes, ...(title ? { title } : {}), ...(cover ? { cover } : {}) }))
+}
+
+/**
+ * „In Teile teilen": two parts, the known length halved; an open length
+ * keeps what is seen in the first part and leaves the second open.
+ */
+export function splitSeason(season: MerkSeason): MerkSeason {
+  const total = season.episodes
+  const highest = season.watched.length ? Math.max(...season.watched) : 0
+  const first = total !== null ? Math.max(1, Math.ceil(total / 2)) : Math.max(12, highest)
+  const second = total !== null ? Math.max(1, total - first) : null
+  return withParts(season, [{ episodes: first }, { episodes: second }])
+}
+
+/** Marks a range of a season — a part — as seen, or as not seen. */
+export function markRange(item: SavedLinkItem, seasonNumber: number, from: number, to: number, seen: boolean): MerkSeason[] {
+  return withSeason(item, seasonNumber, (season) => {
+    const rest = season.watched.filter((n) => n < from || n > to)
+    return { ...season, watched: seen ? [...rest, ...Array.from({ length: to - from + 1 }, (_, i) => from + i)] : rest }
+  })
 }
 
 /** Every season has a known length and all of it is seen. */
