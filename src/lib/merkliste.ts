@@ -533,25 +533,68 @@ export function takePendingLookup(): SavedLinkItem | null {
 /* Covers                                                                      */
 /* -------------------------------------------------------------------------- */
 
+/** Anything a cover can be drawn from. */
+export type Picture = HTMLImageElement | HTMLCanvasElement | ImageBitmap
+
+export function pictureSize(picture: Picture): { width: number; height: number } {
+  return picture instanceof HTMLImageElement
+    ? { width: picture.naturalWidth, height: picture.naturalHeight }
+    : { width: picture.width, height: picture.height }
+}
+
+/**
+ * A picture at half its size, every four pixels drawn as their average.
+ * Halving again and again, then one short last step, is how a large picture
+ * gets small without the jagged, over-sharpened look of one long jump — the
+ * look a 2000 × 3000 poster had when the browser squeezed it into a tile.
+ */
+export function halve(picture: Picture): HTMLCanvasElement | null {
+  const { width, height } = pictureSize(picture)
+  if (width < 2 || height < 2) return null
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(width / 2)
+  canvas.height = Math.round(height / 2)
+  const context = canvas.getContext('2d')
+  if (!context) return null
+  // Plain bilinear: at exactly half, that is the average of each 2 × 2.
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'low'
+  context.drawImage(picture, 0, 0, canvas.width, canvas.height)
+  return canvas
+}
+
 /**
  * A picked image, made small enough to live in the list: at most 720 px on
- * its longer side, as JPEG — a poster comes out 480 × 720, a still 720 × 405,
- * enough to choose a part of it for a tile. A phone photo straight in would
- * fill the space the browser gives the whole site after two or three covers.
+ * its longer side — a poster comes out 480 × 720, a still 720 × 405, enough
+ * to choose a part of it for a tile. Made small in halves (`halve`), then
+ * stored as WebP, or JPEG where the browser cannot write WebP. A phone photo
+ * straight in would fill the space the browser gives the whole site after
+ * two or three covers.
  */
 export async function coverFromFile(file: File, longest = 720): Promise<string> {
   const bitmap = await createImageBitmap(file)
   const scale = Math.min(1, longest / Math.max(bitmap.width, bitmap.height))
   const width = Math.max(1, Math.round(bitmap.width * scale))
   const height = Math.max(1, Math.round(bitmap.height * scale))
+  let source: Picture = bitmap
+  for (;;) {
+    const size = pictureSize(source)
+    if (size.width / 2 < width || size.height / 2 < height) break
+    const next = halve(source)
+    if (!next) break
+    source = next
+  }
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const context = canvas.getContext('2d')
   if (!context) throw new Error('Das Bild liess sich nicht verkleinern.')
-  context.drawImage(bitmap, 0, 0, width, height)
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(source, 0, 0, width, height)
   bitmap.close()
-  return canvas.toDataURL('image/jpeg', 0.82)
+  const webp = canvas.toDataURL('image/webp', 0.9)
+  return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.92)
 }
 
 /* -------------------------------------------------------------------------- */

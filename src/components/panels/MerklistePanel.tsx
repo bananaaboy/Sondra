@@ -13,7 +13,7 @@
  * address is followed all the same, only without the loading.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { buildUrlWithEpisode, saveBytes, sourceBadgeForUrl } from '../../lib/download'
 import {
@@ -23,6 +23,7 @@ import {
   createMerkItem,
   exportMerkliste,
   itemProgress,
+  halve,
   markRange,
   mergeMerkliste,
   merkSaveFailed,
@@ -30,6 +31,7 @@ import {
   partOfEpisode,
   partProgress,
   partsOf,
+  pictureSize,
   readMerklisteFile,
   requestLookup,
   seasonName,
@@ -48,6 +50,7 @@ import {
   type CoverFrame,
   type MerkPart,
   type MerkSeason,
+  type Picture,
   type SeasonPart,
   type SavedLinkItem,
   type SavedLinkStatus,
@@ -332,20 +335,19 @@ function FrameEditor({
   onLoad: () => void
 }) {
   const boxRef = useRef<HTMLSpanElement>(null)
-  const imgRef = useRef<HTMLImageElement>(null)
+  const natural = useRef<{ width: number; height: number } | null>(null)
   const drag = useRef<{ x: number; y: number; start: CoverFrame } | null>(null)
   const current = frame ?? MIDDLE
   const clampPercent = (value: number) => Math.min(100, Math.max(0, value))
 
   // How far, in screen pixels, the picture can travel across the tile on each
-  // axis at a zoom: the picture as `object-fit: cover` lays it out, scaled,
-  // less the tile.
+  // axis at a zoom: the picture as it covers the tile, scaled, less the tile.
   const travel = (zoom: number) => {
     const box = boxRef.current
-    const img = imgRef.current
-    if (!box || !img || !img.naturalWidth || !img.naturalHeight) return { x: 0, y: 0 }
-    const fit = Math.max(box.clientWidth / img.naturalWidth, box.clientHeight / img.naturalHeight)
-    return { x: zoom * img.naturalWidth * fit - box.clientWidth, y: zoom * img.naturalHeight * fit - box.clientHeight }
+    const picture = natural.current
+    if (!box || !picture) return { x: 0, y: 0 }
+    const fit = Math.max(box.clientWidth / picture.width, box.clientHeight / picture.height)
+    return { x: zoom * picture.width * fit - box.clientWidth, y: zoom * picture.height * fit - box.clientHeight }
   }
   const moveBy = (start: CoverFrame, dx: number, dy: number) => {
     const room = travel(start.zoom)
@@ -395,7 +397,15 @@ function FrameEditor({
         event.preventDefault()
       }}
     >
-      <CoverImage src={src} frame={frame} imgRef={imgRef} onError={onError} onLoad={onLoad} eager />
+      <CoverImage
+        src={src}
+        frame={frame}
+        onError={onError}
+        onLoad={(size) => {
+          natural.current = size
+          onLoad()
+        }}
+      />
     </span>
   )
 }
@@ -726,39 +736,158 @@ function EmptyState({ onAdd, onDownload }: { onAdd: () => void; onDownload: () =
 const MIDDLE: CoverFrame = { x: 50, y: 50, zoom: 1 }
 
 /**
- * A cover filling a 2:3 box, showing the part someone chose (`CoverFrame`):
- * `object-position` puts that part in view, and the zoom scales around the
- * same point, so a frame chosen in the editor looks the same on every tile.
+ * A loaded cover and the same picture at half, a quarter, an eighth … of its
+ * size, made once and shared by every tile that shows it. Each drawing picks
+ * the step just larger than it needs and makes only one short last step from
+ * there.
+ */
+interface CoverSource {
+  width: number
+  height: number
+  levels: Picture[]
+}
+
+const coverSources = new Map<string, Promise<CoverSource>>()
+
+function loadCover(src: string): Promise<CoverSource> {
+  const known = coverSources.get(src)
+  if (known) return known
+  const loading = new Promise<CoverSource>((resolve, reject) => {
+    const image = new Image()
+    image.decoding = 'async'
+    image.onload = () =>
+      image.naturalWidth && image.naturalHeight
+        ? resolve({ width: image.naturalWidth, height: image.naturalHeight, levels: [image] })
+        : reject(new Error('empty'))
+    image.onerror = () => reject(new Error('unreadable'))
+    image.src = src
+  })
+  // A cover that failed may answer later; it is not remembered as broken.
+  loading.catch(() => coverSources.delete(src))
+  coverSources.set(src, loading)
+  return loading
+}
+
+function coverLevel(source: CoverSource, step: number): Picture {
+  while (source.levels.length <= step) {
+    const next = halve(source.levels[source.levels.length - 1])
+    if (!next) break
+    source.levels.push(next)
+  }
+  return source.levels[Math.min(step, source.levels.length - 1)]
+}
+
+/**
+ * Draws the part of a cover a frame chooses onto a canvas of w × h device
+ * pixels — the same part `object-fit: cover`, `object-position` and a
+ * scale around that point would show, worked out here instead of left to the
+ * browser's own downscaling.
+ */
+function drawCover(canvas: HTMLCanvasElement, source: CoverSource, frame: CoverFrame | undefined, w: number, h: number) {
+  const { x, y, zoom } = frame ?? MIDDLE
+  if (canvas.width !== w) canvas.width = w
+  if (canvas.height !== h) canvas.height = h
+  const context = canvas.getContext('2d')
+  if (!context) return
+  const fit = Math.max(w / source.width, h / source.height)
+  const left = (w - source.width * fit) * (x / 100)
+  const top = (h - source.height * fit) * (y / 100)
+  const originX = w * (x / 100)
+  const originY = h * (y / 100)
+  const sw = w / zoom / fit
+  const sh = h / zoom / fit
+  const sx = Math.min(source.width - sw, Math.max(0, (originX * (1 - 1 / zoom) - left) / fit))
+  const sy = Math.min(source.height - sh, Math.max(0, (originY * (1 - 1 / zoom) - top) / fit))
+  // The half-size step whose part is still at least as large as the canvas.
+  const step = sw > w ? Math.floor(Math.log2(sw / w)) : 0
+  const level = coverLevel(source, step)
+  const scale = pictureSize(level).width / source.width
+  context.clearRect(0, 0, w, h)
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(level, sx * scale, sy * scale, sw * scale, sh * scale, 0, 0, w, h)
+}
+
+/**
+ * A cover filling its box, showing the part someone chose (`CoverFrame`),
+ * drawn at exactly the box's device pixels (`drawCover`). As an `<img>` the
+ * browser squeezed a large poster into a tile in one step, and it looked
+ * over-sharpened; and a frame chosen in the editor looks the same on every
+ * tile.
  */
 function CoverImage({
   src,
   frame,
-  className = '',
-  imgRef,
   onError,
   onLoad,
-  eager = false,
 }: {
   src: string
   frame?: CoverFrame
-  className?: string
-  imgRef?: Ref<HTMLImageElement>
   onError?: () => void
-  onLoad?: () => void
-  eager?: boolean
+  /** With the picture's own size, once it is there. */
+  onLoad?: (size: { width: number; height: number }) => void
 }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [loaded, setLoaded] = useState<{ src: string; source: CoverSource } | null>(null)
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
+  const callbacks = useRef({ onError, onLoad })
+  callbacks.current = { onError, onLoad }
+
+  useEffect(() => {
+    let alive = true
+    loadCover(src).then(
+      (source) => {
+        if (!alive) return
+        setLoaded({ src, source })
+        callbacks.current.onLoad?.({ width: source.width, height: source.height })
+      },
+      () => {
+        if (alive) callbacks.current.onError?.()
+      },
+    )
+    return () => {
+      alive = false
+    }
+  }, [src])
+
+  // The box in device pixels, so one pixel drawn is one pixel shown — also
+  // after the page is zoomed or the window moves to another screen.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const observer = new ResizeObserver(([entry]) => {
+      // The exact device box where it is right; where it disagrees with the
+      // CSS box times the pixel ratio by more than rounding (an emulated
+      // ratio, an older engine), the product.
+      const device = entry.devicePixelContentBoxSize?.[0]
+      const pick = (exact: number | undefined, css: number) => {
+        const scaled = css * devicePixelRatio
+        return Math.max(1, Math.round(exact !== undefined && Math.abs(exact - scaled) <= 1 ? exact : scaled))
+      }
+      const w = pick(device?.inlineSize, entry.contentRect.width)
+      const h = pick(device?.blockSize, entry.contentRect.height)
+      setSize((old) => (old && old.w === w && old.h === h ? old : { w, h }))
+    })
+    try {
+      observer.observe(canvas, { box: 'device-pixel-content-box' })
+    } catch {
+      observer.observe(canvas)
+    }
+    return () => observer.disconnect()
+  }, [])
+
+  const source = loaded && loaded.src === src ? loaded.source : null
   const { x, y, zoom } = frame ?? MIDDLE
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current
+    if (canvas && source && size) drawCover(canvas, source, { x, y, zoom }, size.w, size.h)
+  }, [source, size, x, y, zoom])
+
   return (
-    <img
-      ref={imgRef}
-      src={src}
-      alt=""
-      draggable={false}
-      loading={eager ? 'eager' : 'lazy'}
-      onError={onError}
-      onLoad={onLoad}
-      className={`absolute inset-0 h-full w-full select-none object-cover ${className}`}
-      style={{ objectPosition: `${x}% ${y}%`, transformOrigin: `${x}% ${y}%`, transform: zoom === 1 ? undefined : `scale(${zoom})` }}
+    <canvas
+      ref={canvasRef}
+      aria-hidden
+      className={`absolute inset-0 h-full w-full transition-opacity duration-[var(--dur-base)] ${source && size ? 'opacity-100' : 'opacity-0'}`}
     />
   )
 }
@@ -945,12 +1074,7 @@ function SeasonTile({
         }`}
       >
         {poster ? (
-          <CoverImage
-            src={poster.src}
-            frame={poster.frame}
-            onError={() => setBroken(poster.src)}
-            className="transition-transform duration-[var(--dur-slow)] ease-[var(--ease-settle)] group-hover:scale-[1.04]"
-          />
+          <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} />
         ) : (
           <span
             aria-hidden
@@ -1106,7 +1230,7 @@ function SeasonDialog({
         <div className="flex flex-col gap-[16px] sm:flex-row sm:items-end">
           {cover ? (
             <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-stage">
-              <CoverImage src={cover.src} frame={cover.frame} eager />
+              <CoverImage src={cover.src} frame={cover.frame} />
             </span>
           ) : (
             <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-panel-mid">
