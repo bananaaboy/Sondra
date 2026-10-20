@@ -826,6 +826,7 @@ export function DownloaderPanel() {
   const [batchBusy, setBatchBusy] = useState(false)
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [downloadingStreamId, setDownloadingStreamId] = useState<string | null>(null)
   const [progress, setProgress] = useState<{ loaded: number; total: number | null } | null>(null)
   /** What the last „Laden“ put into the session, so it can still be saved. */
   const [taken, setTaken] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null)
@@ -1211,6 +1212,12 @@ export function DownloaderPanel() {
     setBatchTitle(null)
     setTaken(null)
 
+    let timedOut = false
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 30000)
+
     if (targets.length === 1) {
       try {
         const found = await resolveViaService(targets[0], controller.signal, {
@@ -1246,9 +1253,23 @@ export function DownloaderPanel() {
           )
           return
         }
+        if (!found.streams || found.streams.length === 0) {
+          setError({
+            code: 'no_streams',
+            message: 'Unter dieser Adresse wurden keine abspielbaren Datenströme gefunden.',
+          })
+          return
+        }
         setResult(found)
         log('holen', `${found.title} — ${found.streams.length} Spur(en) verfügbar`)
       } catch (cause) {
+        if (timedOut) {
+          setError({
+            code: 'timeout',
+            message: 'Zeitüberschreitung: Die Adresse antwortete nicht innerhalb von 30 Sekunden.',
+          })
+          return
+        }
         if (cause instanceof DOMException && cause.name === 'AbortError') return
         const studio = cause instanceof StudioError ? cause : null
         setError({
@@ -1257,6 +1278,7 @@ export function DownloaderPanel() {
         })
         log('holen', studio?.message ?? String(cause), 'error')
       } finally {
+        clearTimeout(timeoutTimer)
         setLooking(false)
       }
       return
@@ -1348,8 +1370,18 @@ export function DownloaderPanel() {
 
     const task = (async (): Promise<StudioResult | null> => {
       patchEntry(id, { status: 'resolving', error: undefined })
+      const timeoutController = new AbortController()
+      let timedOut = false
+      const timeoutTimer = setTimeout(() => {
+        timedOut = true
+        timeoutController.abort()
+      }, 30000)
+
+      const onSignalAbort = () => timeoutController.abort()
+      signal?.addEventListener('abort', onSignalAbort)
+
       try {
-        const res = await resolveViaService(entry.url, signal, {
+        const res = await resolveViaService(entry.url, timeoutController.signal, {
           language: filePrefsRef.current.aniworldLanguage,
         })
         if (res.isPlaylist) {
@@ -1386,10 +1418,24 @@ export function DownloaderPanel() {
         // on disk was that one.
         const named = res.source === 'direct' && entry.sourceTitle ? { ...res, title: entry.sourceTitle } : res
         const bestStream = defaultStream(named)
+        if (!named.streams || named.streams.length === 0) {
+          patchEntry(id, {
+            status: 'error',
+            error: 'Keine abspielbaren Mediendaten für diese Adresse gefunden.',
+          })
+          return null
+        }
         patchEntry(id, { status: 'ready', result: named, selectedStreamId: bestStream?.id ?? named.streams[0]?.id })
         log('holen', `${named.title} — bereit`)
         return named
       } catch (cause) {
+        if (timedOut) {
+          patchEntry(id, {
+            status: 'error',
+            error: 'Zeitüberschreitung beim Suchen der Mediendaten. Bitte erneut versuchen.',
+          })
+          return null
+        }
         if (cause instanceof DOMException && cause.name === 'AbortError') {
           // Cancelled, not failed: it can be asked again.
           patchEntry(id, { status: 'pending' })
@@ -1399,6 +1445,8 @@ export function DownloaderPanel() {
         patchEntry(id, { status: 'error', error: msg })
         return null
       } finally {
+        clearTimeout(timeoutTimer)
+        signal?.removeEventListener('abort', onSignalAbort)
         resolvingMapRef.current.delete(id)
       }
     })()
@@ -1506,6 +1554,7 @@ export function DownloaderPanel() {
     if (!result) return
     const controller = new AbortController()
     abortRef.current = controller
+    setDownloadingStreamId(stream.id)
     setBusy(stream.label)
     setError(null)
     setTaken(null)
@@ -1549,6 +1598,7 @@ export function DownloaderPanel() {
       log('holen', studio?.message ?? String(cause), 'error')
     } finally {
       setBusy(null)
+      setDownloadingStreamId(null)
       setProgress(null)
       abortRef.current = null
     }
@@ -1563,11 +1613,22 @@ export function DownloaderPanel() {
     if (!res) {
       res = await resolveBatchItem(id, externalSignal)
       entry = entryById(id)
-      if (!res || !entry) return
+      if (!res || !entry) {
+        if (entry && entry.status !== 'error') {
+          patchEntry(id, { status: 'error', error: 'Konnte Mediendaten nicht auflösen.' })
+        }
+        return
+      }
     }
 
-    const stream = res.streams.find((s) => s.id === entry!.selectedStreamId) || res.streams[0]
-    if (!stream) return
+    const stream = res.streams?.find((s) => s.id === entry!.selectedStreamId) || res.streams?.[0]
+    if (!stream) {
+      patchEntry(id, {
+        status: 'error',
+        error: 'Kein abspielbarer Medienstream für diese Adresse gefunden.',
+      })
+      return
+    }
 
     const controller = externalSignal ? null : new AbortController()
     if (controller) {
@@ -1770,41 +1831,50 @@ export function DownloaderPanel() {
             </label>
             <div className="flex flex-col gap-[8px] sm:flex-row">
               <div className="relative min-w-0 flex-1">
-                <svg
-                  aria-hidden
-                  viewBox="0 0 24 24"
-                  className="pointer-events-none absolute left-[14px] top-1/2 size-[18px] -translate-y-1/2 text-muted"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                <div
+                  className={`relative flex h-[52px] w-full items-center rounded-nav border-2 border-dashed bg-raised transition-colors ${
+                    isDragOver ? 'border-ink bg-panel-soft' : 'border-rule hover:border-muted focus-within:border-ink'
+                  }`}
                 >
-                  <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1" />
-                  <path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1" />
-                </svg>
-                <input
-                  id="download-address"
-                  value={url}
-                  onChange={(event) => {
-                    setUrl(event.target.value)
-                    setError(null)
-                    setResult(null)
-                    replaceBatch(null)
-                    setProgress(null)
-                  }}
-                  placeholder="Link hier einfügen"
-                  type="text"
-                  inputMode="url"
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-label="Adresse zum Herunterladen"
-                  aria-describedby="download-address-hint"
-                  className="value h-[48px] w-full cursor-text rounded-nav border-0 bg-raised pl-[42px] pr-[12px] text-body text-prose outline-none ring-1 ring-inset ring-rule placeholder:font-sans placeholder:text-muted hover:ring-muted focus:ring-2 focus:ring-ink"
-                />
+                  <span className="pointer-events-none absolute right-[12px] top-[4px] text-[11px] font-medium text-muted">
+                    .txt / .m3u mit Links hier ablegbar
+                  </span>
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 24 24"
+                    className="pointer-events-none absolute left-[14px] top-1/2 size-[18px] -translate-y-1/2 text-muted"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1" />
+                    <path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1" />
+                  </svg>
+                  <input
+                    id="download-address"
+                    value={url}
+                    onChange={(event) => {
+                      setUrl(event.target.value)
+                      setError(null)
+                      setResult(null)
+                      replaceBatch(null)
+                      setProgress(null)
+                    }}
+                    placeholder="Link hier einfügen"
+                    type="text"
+                    inputMode="url"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label="Adresse zum Herunterladen"
+                    aria-describedby="download-address-hint"
+                    className="value h-full w-full cursor-text rounded-nav border-0 bg-transparent pl-[42px] pr-[210px] pt-[8px] text-body text-prose outline-none placeholder:font-sans placeholder:text-muted"
+                  />
+                </div>
               </div>
               <div className="flex shrink-0 items-center gap-[8px]">
-                <Button type="submit" disabled={looking || url.trim().length === 0} className="h-[48px] flex-1 shrink-0 py-0 sm:flex-initial">
+                <Button type="submit" disabled={looking || url.trim().length === 0} className="h-[52px] flex-1 shrink-0 py-0 sm:flex-initial">
                   {looking ? 'Wird gesucht …' : 'Nachsehen'}
                 </Button>
                 <Button
@@ -1817,7 +1887,7 @@ export function DownloaderPanel() {
                       ? 'Steht auf der Merkliste — ein Klick übernimmt den jetzigen Stand und die Einstellungen'
                       : 'Auf die Merkliste setzen, mit Staffel, Folge und Einstellungen'
                   }
-                  className="h-[48px] shrink-0 py-0"
+                  className="h-[52px] shrink-0 py-0"
                 >
                   <BookmarkIcon filled={Boolean(matchingSavedLink(url))} />
                   {matchingSavedLink(url) ? 'Gemerkt' : 'Merken'}
@@ -2361,14 +2431,23 @@ export function DownloaderPanel() {
                             </p>
                             <p className="value truncate text-small text-muted">{detail}</p>
                           </div>
-                          <Button size="sm" disabled={busy !== null} onClick={() => void take(stream)} className="shrink-0">
-                            {busy === stream.label
-                              ? 'Lädt …'
-                              : filterAudioOnly
-                                ? targetAudioFormat === 'original' || filePrefs.audioPref === 'untouched'
-                                  ? 'Original laden'
-                                  : `${targetAudioFormat.toUpperCase()} laden`
-                                : 'Laden'}
+                          <Button
+                            size="sm"
+                            disabled={busy !== null}
+                            onClick={() => void take(stream)}
+                            className="shrink-0"
+                          >
+                            {downloadingStreamId === stream.id
+                              ? busy && busy !== stream.label
+                                ? busy
+                                : 'Lädt …'
+                              : busy !== null
+                                ? 'Warten …'
+                                : filterAudioOnly
+                                  ? targetAudioFormat === 'original' || filePrefs.audioPref === 'untouched'
+                                    ? 'Original laden'
+                                    : `${targetAudioFormat.toUpperCase()} laden`
+                                  : 'Laden'}
                           </Button>
                         </li>
                       )
@@ -2417,9 +2496,11 @@ export function DownloaderPanel() {
               <Progress
                 value={progress?.total ? progress.loaded / progress.total : null}
                 label={
-                  progress
-                    ? `${formatBytes(progress.loaded)}${progress.total ? ` von ${formatBytes(progress.total)}` : ''}`
-                    : 'läuft'
+                  busy !== null && busy !== result.streams.find((s) => s.id === downloadingStreamId)?.label
+                    ? busy
+                    : progress
+                      ? `${formatBytes(progress.loaded)}${progress.total ? ` von ${formatBytes(progress.total)}` : ''}`
+                      : 'Lädt …'
                 }
               />
               <button
@@ -2654,12 +2735,19 @@ export function DownloaderPanel() {
                                     ) : null}
 
                                     {entry.status === 'resolving' ? (
-                                      <>
+                                      <div className="flex items-center gap-[8px]">
                                         <span className="value text-small text-muted">Wird gesucht …</span>
-                                        <Button size="sm" variant="quiet" disabled>
-                                          Laden
-                                        </Button>
-                                      </>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            resolvingMapRef.current.delete(entry.id)
+                                            patchEntry(entry.id, { status: 'pending' })
+                                          }}
+                                          className="press rounded-nav text-small text-ink underline underline-offset-2"
+                                        >
+                                          Abbrechen
+                                        </button>
+                                      </div>
                                     ) : null}
 
                                     {entry.status === 'ready' && entry.result ? (
@@ -2710,7 +2798,24 @@ export function DownloaderPanel() {
                                     ) : null}
 
                                     {entry.status === 'downloading' ? (
-                                      <span className="value text-small text-muted">Wird geladen …</span>
+                                      <div className="flex items-center gap-[8px]">
+                                        <span className="value text-small text-muted">
+                                          {entry.progress?.total
+                                            ? `${formatBytes(entry.progress.loaded)} von ${formatBytes(entry.progress.total)}`
+                                            : 'Wird geladen …'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const c = itemAbortControllers.current.get(entry.id)
+                                            c?.abort()
+                                            patchEntry(entry.id, { status: 'ready', progress: null })
+                                          }}
+                                          className="press rounded-nav text-small text-ink underline underline-offset-2"
+                                        >
+                                          Abbrechen
+                                        </button>
+                                      </div>
                                     ) : null}
 
                                     {entry.status === 'done' && entry.taken ? (
