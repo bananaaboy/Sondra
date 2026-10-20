@@ -757,22 +757,29 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   die Adresse ohne `https://www.` in Mono, dann „Einfügen und nachsehen"
   (unterstrichen) und „Nicht jetzt". Kein Rahmen, keine Fläche — als
   getönter Balken über dem Feld sah er aus wie ein zweites Textfeld.
-- **Die Merkliste** (20.10.2026, „wo man am Schauen ist"; `Merkliste.tsx`):
-  was jemand verfolgt, je eine Zeile — Titel, Quelle, die Stelle („Staffel
-  17, Folge 4", bei Playlists „Nr. 12"), „zuletzt gestern" —, rechts „Weiter
-  mit Folge 5" (setzt weiter und sieht gleich nach), die jetzige Folge als
-  zweiter Knopf, „Bearbeiten" als Textlink. Alles andere — Name, Stand
-  (Am Schauen / Später / Fertig), Staffel und Folge mit `Stepper`, Laden
-  als, Qualität, Sprachfassung, Untertitel, Adresse, Entfernen mit
-  „Rückgängig" — steht als Felder mit Linie darunter, wenn man sie öffnet.
-  Sortiert nach Stand, darin nach zuletzt geöffnet; Filter als `ChoiceRow`
-  mit Zahlen. Vorher „Gespeicherte Links": jede Zeile mit offener
-  Einstellungsleiste in einem gerahmten Kasten, Versalien-Etiketten, Pillen
-  für Quelle und Stand — vier Einträge füllten den Bildschirm.
+- **Die Merkliste ist ein eigener Tab** (`#merkliste`, `MerklistePanel.tsx`,
+  20.10.2026): jede Serie ein Abschnitt — Name, Quelle, „Staffel 3, Folge 5“,
+  „zuletzt gestern“, ein dünner Balken für das Gesehene —, rechts „Folge 5
+  laden“ (übergibt die Folge ans Herunterladen und wechselt dorthin) und
+  „Folge 5 gesehen“ (hakt ab, rückt weiter). Die Stelle ist immer die
+  nächste ungesehene Folge. Darunter jede Staffel als **Kachel** (3:4,
+  gerundet, Cover oder grosse Zahl auf Tönung, unten Name, Zähler in Mono und
+  Balken; „Hier sind Sie“ / „Gesehen“ als Pille). Überfahren oder Fokus
+  zeigt Prozent, „4 von 10“, „6 übrig · weiter mit Folge 5“ auf Stage-Schwarz;
+  ein Klick öffnet die Staffel im `Dialog`: alle Folgen als Zahlen zum
+  Abhaken (Umschalt-Klick: bis hier), Anzahl, Name, eigenes Cover. Die Serie
+  selbst („Bearbeiten“): Name, Adresse (darf leer sein), Cover per Adresse
+  oder Datei (auf 480 px verkleinert), Notiz, Bewertung mit gezeichneten
+  Sternen, Stand, Laden als, Qualität, Sprachfassung, Untertitel.
+  „Staffel hinzufügen“ ist eine Zeile unter den Kacheln, keine Kachel.
+  Daten in `lib/merkliste.ts`, gemeinsam mit „Merken“ im Herunterladen.
 - **Staffel und Folge stehen nur da, wo die Adresse sie hat**
-  (`episodeKindOf`): bei einer Serie „Wo Sie sind" mit Staffeln/Filme,
-  Staffel, Folge, „Ganze Staffel" und „Nächste Folge", darunter die
-  Sprachfassung; bei einer Playlist nur „Nr."; bei einem einzelnen Video gar
+  (`episodeKindOf`), als **ein** Element (`EpisodePicker`): „‹ Staffel 3 ·
+  Folge 5 ›“, die Pfeile gehen eine Folge zurück oder weiter, ein Klick auf
+  die Mitte öffnet ein Popover mit den Staffeln, den Folgen als Zahlen (laut
+  Merkliste gesehene getönt) und „Die ganze Staffel laden“. Daneben die
+  Sprachfassung als Liste. Vorher fünf Bedienelemente in fünf Formen für
+  eine Stelle. Bei einer Playlist nur „Nr.“, bei einem einzelnen Video gar
   nicht. Qualität und „Untertitel erstellen" (ein `Toggle`, nicht der Chip
   „Lokale KI") stehen in der Zeile „Was laden". „Merken" steht einmal,
   neben „Nachsehen"; die Einstellungen hinter dem Knopf oben sind Felder

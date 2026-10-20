@@ -53,6 +53,16 @@ export const ACTIONS: ToolAction[] = [
   },
 
   {
+    id: 'merkliste',
+    panel: 'merkliste',
+    group: 'holen',
+    label: 'Merkliste',
+    hint: 'Serien und Listen verfolgen: Staffeln, Folgen, was gesehen ist',
+    kinds: [],
+    keywords: ['merkliste', 'watchlist', 'serie', 'serien', 'staffel', 'folge', 'episode', 'anime', 'fortschritt', 'gesehen', 'tracker'],
+  },
+
+  {
     id: 'shortcuts',
     panel: 'start',
     group: 'holen',

@@ -55,7 +55,9 @@ import { AdvancedDownloader } from './DownloaderAdvanced'
 import { openGetAppDialog } from '../GetApp'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { ZipSave } from '../ZipSave'
-import { AUDIO_QUALITY_OPTIONS, LANGUAGE_OPTIONS, Merkliste, Stepper, VIDEO_QUALITY_OPTIONS, episodeKindOf } from './Merkliste'
+import { setMerkItems, takePendingLookup, useMerkliste, type SavedLinkItem } from '../../lib/merkliste'
+import { AUDIO_QUALITY_OPTIONS, LANGUAGE_OPTIONS, VIDEO_QUALITY_OPTIONS, episodeKindOf } from './merklisteShared'
+import { EpisodePicker } from './EpisodePicker'
 
 export type AudioOutputFormat = 'original' | 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus'
 
@@ -553,67 +555,9 @@ function saveDownloadHistory(items: DownloadHistoryItem[]): void {
   }
 }
 
-/** Where an entry of the Merkliste stands: being watched, for later, finished. */
-export type SavedLinkStatus = 'watching' | 'later' | 'done'
-
-export interface SavedLinkItem {
-  id: string
-  url: string
-  title: string
-  language: AniworldLanguagePref
-  season: number
-  episode: number | null
-  mode: 'video' | 'audio'
-  audioFormat: AudioOutputFormat
-  videoPref: VideoFilePref
-  audioPref: AudioFilePref
-  autoTranscribe: boolean
-  updatedAt: number
-  /** Missing on entries saved before the Merkliste; read as „watching". */
-  status?: SavedLinkStatus
-  /** When it was last looked up from the list — „zuletzt gestern". */
-  lastOpenedAt?: number
-}
-
-const SAVED_LINKS_KEY = 'sondra:saved_links'
-
-function loadSavedLinks(): SavedLinkItem[] {
-  try {
-    const raw = localStorage.getItem(SAVED_LINKS_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.map((item: Partial<SavedLinkItem>) => {
-      const epInfo = parseLinkEpisodeInfo(item.url || '')
-      return {
-        id: item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        url: item.url || '',
-        title: item.title || deriveLinkTitle(item.url || ''),
-        language: item.language || 'auto',
-        season: typeof item.season === 'number' ? item.season : epInfo.season,
-        episode: item.episode === null || typeof item.episode === 'number' ? item.episode : epInfo.episode ?? 1,
-        mode: item.mode === 'audio' ? 'audio' : 'video',
-        audioFormat: item.audioFormat || 'mp3',
-        videoPref: item.videoPref || 'untouched',
-        audioPref: item.audioPref || 'high',
-        autoTranscribe: Boolean(item.autoTranscribe),
-        updatedAt: item.updatedAt || Date.now(),
-        status: item.status === 'later' || item.status === 'done' ? item.status : 'watching',
-        lastOpenedAt: typeof item.lastOpenedAt === 'number' ? item.lastOpenedAt : undefined,
-      }
-    })
-  } catch {
-    return []
-  }
-}
-
-function saveSavedLinks(items: SavedLinkItem[]): void {
-  try {
-    localStorage.setItem(SAVED_LINKS_KEY, JSON.stringify(items))
-  } catch {
-    /* ignore storage errors */
-  }
-}
+// The Merkliste's entries live in their own store (`lib/merkliste.ts`), shared
+// with the Merkliste tab; the types are re-exported for older imports.
+export type { SavedLinkItem, SavedLinkStatus } from '../../lib/merkliste'
 
 function BookmarkIcon({ filled }: { filled?: boolean }) {
   return (
@@ -699,6 +643,7 @@ const STREAMS_SHOWN = 6
 
 export function DownloaderPanel() {
   const addAsset = useSession((state) => state.addAsset)
+  const setPanel = useSession((state) => state.setPanel)
   const log = useSession((state) => state.log)
   const [waysOpen, setWaysOpen] = useState(false)
 
@@ -944,7 +889,8 @@ export function DownloaderPanel() {
     })
   }, [])
 
-  const [savedLinks, setSavedLinks] = useState<SavedLinkItem[]>(loadSavedLinks)
+  const savedLinks = useMerkliste()
+  const setSavedLinks = setMerkItems
   const [linkSeason, setLinkSeason] = useState<number>(1)
   const [linkEpisode, setLinkEpisode] = useState<number | null>(1)
 
@@ -975,7 +921,6 @@ export function DownloaderPanel() {
       if (!state) return
       if (Array.isArray(state.savedLinks)) {
         setSavedLinks(state.savedLinks)
-        saveSavedLinks(state.savedLinks)
       }
       if (state.filePrefs) updateFilePrefs(state.filePrefs)
       if (typeof state.url === 'string') setUrl(state.url)
@@ -1041,23 +986,9 @@ export function DownloaderPanel() {
           updatedAt: Date.now(),
         }
       })
-      saveSavedLinks(updated)
       return updated
     })
   }, [])
-
-  const removeSavedLink = useCallback(
-    (id: string) => {
-      setSavedLinks((prev) => {
-        const target = prev.find((i) => i.id === id)
-        const updated = prev.filter((item) => item.id !== id)
-        saveSavedLinks(updated)
-        if (target) log('holen', `Von der Merkliste genommen: ${target.title}`)
-        return updated
-      })
-    },
-    [log],
-  )
 
   const saveOrUpdateLink = useCallback(
     (customUrl?: string, customTitle?: string) => {
@@ -1104,7 +1035,6 @@ export function DownloaderPanel() {
                 }
               : item,
           )
-          saveSavedLinks(updated)
           log('holen', `Merkliste aktualisiert: ${existing.title} (S${seasonToSave}${episodeToSave ? ` E${episodeToSave}` : ' Alle'})`)
           return updated
         }
@@ -1124,7 +1054,6 @@ export function DownloaderPanel() {
           updatedAt: Date.now(),
         }
         const updated = [newItem, ...prev]
-        saveSavedLinks(updated)
         log('holen', `Auf die Merkliste gesetzt: ${newItem.title}`)
         return updated
       })
@@ -1395,6 +1324,14 @@ export function DownloaderPanel() {
       void look(targetUrl, item.language)
     }
   }
+
+  // „Weiter" in the Merkliste tab hands its entry over and switches here.
+  useEffect(() => {
+    const pending = takePendingLookup()
+    if (pending) openSavedLink(pending, Boolean(pending.url.trim()))
+    // Once, on arrival; the request is taken and gone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /**
    * Looks one entry up. Resolves to its result, or to null when it failed or
@@ -1926,6 +1863,22 @@ export function DownloaderPanel() {
               </div>
             ) : null}
 
+            {matchingSavedLink(url) ? (
+              <p className="flex flex-wrap items-center gap-x-[12px] text-small text-prose">
+                <span className="flex items-center gap-[8px]">
+                  <BookmarkIcon filled />
+                  Steht auf der Merkliste
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPanel('merkliste')}
+                  className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                >
+                  Zur Merkliste
+                </button>
+              </p>
+            ) : null}
+
             <div id="download-address-hint" className="flex flex-col gap-[2px] text-small leading-[1.5] text-muted [&_p]:max-w-none">
               {/* One line, not two: what it takes, then how to give it more
                   than one. */}
@@ -2068,70 +2021,40 @@ export function DownloaderPanel() {
               </span>
             ) : null}
 
-            {/* Season and episode only where the address has them: on an
-                empty field or a single video they were a box of controls
-                that did nothing. */}
+            {/* Season and episode only where the address has them, as one
+                control (`EpisodePicker`), with the language beside it. */}
             {episodeKind ? (
               <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px] border-t border-line pt-[10px]">
-                <span className="text-small text-prose">{episodeKind === 'list' ? 'Stelle in der Liste' : 'Wo Sie sind'}</span>
-                {episodeKind === 'series' ? (
-                  <ChoiceRow
-                    value={linkSeason === 0 ? 'filme' : 'staffel'}
-                    options={[
-                      { value: 'staffel', label: 'Staffeln' },
-                      { value: 'filme', label: 'Filme' },
-                    ]}
-                    onChange={(value) => applyLinkSeasonEpisode(value === 'filme' ? 0 : Math.max(1, linkSeason), linkEpisode)}
-                  />
-                ) : null}
-                {episodeKind === 'series' && linkSeason > 0 ? (
-                  <span className="flex items-center gap-[8px] text-small text-prose">
-                    Staffel
-                    <Stepper label="Staffel" value={linkSeason} max={99} onChange={(value) => applyLinkSeasonEpisode(value, linkEpisode)} />
-                  </span>
-                ) : null}
-                {linkEpisode !== null ? (
-                  <span className="flex items-center gap-[8px] text-small text-prose">
-                    {episodeKind === 'list' ? 'Nr.' : linkSeason === 0 ? 'Film' : 'Folge'}
-                    <Stepper
-                      label={episodeKind === 'list' ? 'Nummer' : linkSeason === 0 ? 'Film' : 'Folge'}
-                      value={linkEpisode}
-                      onChange={(value) => applyLinkSeasonEpisode(linkSeason, value)}
-                    />
-                  </span>
-                ) : null}
-                <div className="w-max">
-                  <Toggle
-                    label={episodeKind === 'list' ? 'Ganze Liste' : linkSeason === 0 ? 'Alle Filme' : 'Ganze Staffel'}
-                    checked={linkEpisode === null}
-                    onChange={(whole) => applyLinkSeasonEpisode(linkSeason, whole ? null : 1)}
-                  />
-                </div>
-                {linkEpisode !== null ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="quiet"
-                    onClick={() => applyLinkSeasonEpisode(linkSeason, linkEpisode + 1, Boolean(url.trim()))}
-                  >
-                    {episodeKind === 'list' ? 'Nächster Titel' : linkSeason === 0 ? 'Nächster Film' : 'Nächste Folge'}
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-            {episodeKind === 'series' ? (
-              <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[8px]">
-                <span className="text-small text-prose">Sprachfassung</span>
-                <ChoiceRow
-                  value={filePrefs.aniworldLanguage}
-                  options={LANGUAGE_OPTIONS}
-                  onChange={(value) => {
-                    updateFilePrefs({ aniworldLanguage: value })
-                    const matched = matchingSavedLink(url)
-                    if (matched) updateSavedLink(matched.id, { language: value })
-                    if (result || batchEntries) void look(undefined, value)
-                  }}
+                <span className="text-small text-prose">{episodeKind === 'list' ? 'Stelle' : 'Folge'}</span>
+                <EpisodePicker
+                  kind={episodeKind}
+                  season={linkSeason}
+                  episode={linkEpisode}
+                  merk={matchingSavedLink(url)}
+                  onChange={(season, episode, lookUp) => applyLinkSeasonEpisode(season, episode, lookUp && Boolean(url.trim()))}
                 />
+                {episodeKind === 'series' ? (
+                  <label className="flex items-center gap-[10px] text-small text-prose">
+                    Sprachfassung
+                    <Select
+                      value={filePrefs.aniworldLanguage}
+                      onChange={(event) => {
+                        const value = event.target.value as AniworldLanguagePref
+                        updateFilePrefs({ aniworldLanguage: value })
+                        const matched = matchingSavedLink(url)
+                        if (matched) updateSavedLink(matched.id, { language: value })
+                        if (result || batchEntries) void look(undefined, value)
+                      }}
+                      className="w-auto! py-[6px]"
+                    >
+                      {LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value} title={option.title}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                ) : null}
               </div>
             ) : null}
 
@@ -2868,42 +2791,6 @@ export function DownloaderPanel() {
           })()}
         </Card>
       ) : null}
-
-      {/* The Merkliste: what someone is following and where they are in it. */}
-      <Merkliste
-        items={savedLinks}
-        audioFormats={AUDIO_FORMAT_CONFIGS}
-        currentUrl={url}
-        currentSaved={Boolean(matchingSavedLink(url))}
-        onSaveCurrent={() => saveOrUpdateLink()}
-        onAdd={(address, title) => saveOrUpdateLink(address, title)}
-        onOpen={(item) => {
-          updateSavedLink(item.id, { lastOpenedAt: Date.now() })
-          openSavedLink(item, true)
-        }}
-        onNext={(item) => {
-          const nextEpisode = (item.episode ?? 0) + 1
-          const nextUrl = buildUrlWithEpisode(item.url, item.season, nextEpisode)
-          updateSavedLink(item.id, { episode: nextEpisode, url: nextUrl, lastOpenedAt: Date.now(), status: 'watching' })
-          openSavedLink({ ...item, episode: nextEpisode, url: nextUrl }, true)
-          window.scrollTo({ top: 0, behavior: 'smooth' })
-        }}
-        onUpdate={updateSavedLink}
-        onRemove={removeSavedLink}
-        onRestore={(item, index) => {
-          setSavedLinks((prev) => {
-            if (prev.some((entry) => entry.id === item.id)) return prev
-            const next = [...prev]
-            next.splice(Math.max(0, Math.min(index, next.length)), 0, item)
-            saveSavedLinks(next)
-            return next
-          })
-        }}
-        onCopy={(item) => {
-          void navigator.clipboard.writeText(item.url)
-          log('holen', `Adresse in die Zwischenablage kopiert: ${item.title}`)
-        }}
-      />
 
       {/* Download-Verlauf (Historie) */}
       {history.length > 0 ? (
