@@ -70,6 +70,14 @@ const PROJECT_KEY = 'merkliste'
 const uniqueSorted = (numbers: number[]) =>
   Array.from(new Set(numbers.filter((n) => Number.isInteger(n) && n >= 1))).sort((a, b) => a - b)
 
+/**
+ * Seen marks as stored: whole numbers, once each, in order — and none past
+ * the end of a season whose length is known. „40 von 39" came from a mark
+ * one past the end.
+ */
+const cleanWatched = (numbers: number[], episodes: number | null) =>
+  uniqueSorted(numbers).filter((n) => episodes === null || n <= episodes)
+
 function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
   const info = parseLinkEpisodeInfo(raw.url || '')
   const season = typeof raw.season === 'number' ? raw.season : info.season
@@ -77,15 +85,18 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
   const seasons = Array.isArray(raw.seasons)
     ? raw.seasons
         .filter((s): s is MerkSeason => Boolean(s) && typeof s.number === 'number')
-        .map((s) => ({
-          number: Math.max(0, Math.floor(s.number)),
-          episodes: typeof s.episodes === 'number' && s.episodes > 0 ? Math.floor(s.episodes) : null,
-          watched: uniqueSorted(Array.isArray(s.watched) ? s.watched : []),
-          ...(s.title ? { title: String(s.title) } : {}),
-          ...(s.cover ? { cover: String(s.cover) } : {}),
-        }))
+        .map((s) => {
+          const episodes = typeof s.episodes === 'number' && s.episodes > 0 ? Math.floor(s.episodes) : null
+          return {
+            number: Math.max(0, Math.floor(s.number)),
+            episodes,
+            watched: cleanWatched(Array.isArray(s.watched) ? s.watched : [], episodes),
+            ...(s.title ? { title: String(s.title) } : {}),
+            ...(s.cover ? { cover: String(s.cover) } : {}),
+          }
+        })
     : undefined
-  return {
+  const item: SavedLinkItem = {
     id: raw.id || `merk-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     url: raw.url || '',
     title: raw.title || (raw.url ? deriveLinkTitle(raw.url) : 'Ohne Namen'),
@@ -105,6 +116,15 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(raw.notes ? { notes: raw.notes } : {}),
     ...(typeof raw.rating === 'number' ? { rating: Math.max(0, Math.min(5, Math.round(raw.rating))) } : {}),
   }
+  // A position past the end of its season — saved by „Alle gesehen" before
+  // it knew better, or left there by a count made smaller — moves to the
+  // first episode not seen. A „Fertig" set by hand stays.
+  const length = seasons?.find((s) => s.number === season)?.episodes ?? null
+  if (seasons && typeof episode === 'number' && length !== null && episode > length) {
+    const settled = settle(item, seasons, season)
+    return { ...item, season: settled.season, episode: settled.episode, status: settled.status === 'done' ? 'done' : item.status }
+  }
+  return item
 }
 
 function load(): SavedLinkItem[] {
@@ -225,17 +245,18 @@ export interface SeasonProgress {
   total: number | null
   /** 0–1 when the total is known. */
   fraction: number | null
-  /** The first episode not yet seen. */
+  /** The first episode not yet seen; the last one when all are. */
   next: number
   /** Every episode is seen (only when the total is known). */
   complete: boolean
 }
 
 export function seasonProgress(season: MerkSeason): SeasonProgress {
-  const watched = season.watched.length
   const total = season.episodes
+  const watched = total === null ? season.watched.length : season.watched.filter((n) => n <= total).length
   let next = 1
   while (season.watched.includes(next)) next += 1
+  if (total !== null) next = Math.min(next, total)
   return {
     watched,
     total,
@@ -247,14 +268,14 @@ export function seasonProgress(season: MerkSeason): SeasonProgress {
 
 export function itemProgress(item: SavedLinkItem): { watched: number; total: number | null; fraction: number | null } {
   const seasons = seasonsOf(item)
-  const watched = seasons.reduce((sum, season) => sum + season.watched.length, 0)
+  const watched = seasons.reduce((sum, season) => sum + seasonProgress(season).watched, 0)
   const known = seasons.every((season) => season.episodes !== null)
   const total = known ? seasons.reduce((sum, season) => sum + (season.episodes ?? 0), 0) : null
   // With one season's size still open, the bar measures the ones that are
   // known instead of staying empty.
   const sized = seasons.filter((season) => season.episodes !== null)
   const sizedTotal = sized.reduce((sum, season) => sum + (season.episodes ?? 0), 0)
-  const sizedWatched = sized.reduce((sum, season) => sum + Math.min(season.watched.length, season.episodes ?? 0), 0)
+  const sizedWatched = sized.reduce((sum, season) => sum + seasonProgress(season).watched, 0)
   return { watched, total, fraction: sizedTotal ? Math.min(1, sizedWatched / sizedTotal) : null }
 }
 
@@ -268,7 +289,7 @@ export function withSeason(item: SavedLinkItem, number: number, change: (season:
       continue
     }
     const changed = change(season)
-    if (changed) next.push({ ...changed, watched: uniqueSorted(changed.watched) })
+    if (changed) next.push({ ...changed, watched: cleanWatched(changed.watched, changed.episodes) })
   }
   return next
 }
@@ -289,23 +310,44 @@ export function watchedUpTo(item: SavedLinkItem, seasonNumber: number, episode: 
   }))
 }
 
+/** Every season has a known length and all of it is seen. */
+export function caughtUp(seasons: MerkSeason[]): boolean {
+  return seasons.length > 0 && seasons.every((season) => seasonProgress(season).complete)
+}
+
 /**
- * „Weiter": the current episode counts as seen and the position moves to the
- * next one — into the next season when this one is known to be over.
+ * Where an entry stands once its seen marks changed: the first episode not
+ * yet seen, from the given season on — the seasons after it first, then the
+ * gaps left before it. With everything seen there is nothing left to stand
+ * at: the entry is finished and stays at the last episode. Before, the
+ * position simply went one further, and „Alle gesehen" left a series of 39
+ * at „Folge 40".
  */
-export function advance(item: SavedLinkItem): Pick<SavedLinkItem, 'seasons' | 'season' | 'episode'> {
-  const current = item.episode ?? 0
-  let seasons = item.episode ? watchedUpTo(item, item.season, item.episode) : seasonsOf(item)
-  const thisSeason = seasons.find((season) => season.number === item.season)
-  const total = thisSeason?.episodes ?? null
-  if (total !== null && current >= total && item.season > 0) {
-    const following = item.season + 1
-    if (!seasons.some((season) => season.number === following)) {
-      seasons = [...seasons, { number: following, episodes: null, watched: [] }]
-    }
-    return { seasons, season: following, episode: 1 }
+export function settle(
+  item: SavedLinkItem,
+  seasons: MerkSeason[],
+  from: number,
+): Pick<SavedLinkItem, 'seasons' | 'season' | 'episode' | 'status'> {
+  const ordered = [...seasons].sort((a, b) => (a.number === 0 ? 1 : b.number === 0 ? -1 : a.number - b.number))
+  const start = Math.max(0, ordered.findIndex((season) => season.number === from))
+  for (const season of [...ordered.slice(start), ...ordered.slice(0, start)]) {
+    const progress = seasonProgress(season)
+    if (progress.complete) continue
+    const status = !item.status || item.status === 'done' ? 'watching' : item.status
+    return { seasons, season: season.number, episode: progress.next, status }
   }
-  return { seasons, season: item.season, episode: current + 1 }
+  const last = ordered.find((season) => season.number === from) ?? ordered[ordered.length - 1]
+  return { seasons, season: last?.number ?? from, episode: last?.episodes ?? item.episode, status: 'done' }
+}
+
+/**
+ * „Folge 5 gesehen": everything up to the current episode counts as seen,
+ * and the entry moves on to the first one not seen — into the next season
+ * when this one is over, and to „Fertig" when nothing is left.
+ */
+export function advance(item: SavedLinkItem): Pick<SavedLinkItem, 'seasons' | 'season' | 'episode' | 'status'> {
+  const seasons = item.episode ? watchedUpTo(item, item.season, item.episode) : seasonsOf(item)
+  return settle(item, seasons, item.season)
 }
 
 /** „Staffel 2", „Filme", or the season's own name. */
@@ -357,4 +399,77 @@ export async function coverFromFile(file: File, maxWidth = 480): Promise<string>
   context.drawImage(bitmap, 0, 0, width, height)
   bitmap.close()
   return canvas.toDataURL('image/jpeg', 0.82)
+}
+
+/* -------------------------------------------------------------------------- */
+/* Export and import                                                           */
+/* -------------------------------------------------------------------------- */
+
+const EXPORT_KIND = 'sondra-merkliste'
+
+/**
+ * The whole list as a file of its own: to keep, or to take to another
+ * device. Covers chosen from a file travel inside it; covers given as an
+ * address stay an address.
+ */
+export function exportMerkliste(list: SavedLinkItem[] = items): string {
+  return JSON.stringify({ kind: EXPORT_KIND, version: 1, exportedAt: new Date().toISOString(), items: list }, null, 2)
+}
+
+/** Reads a file `exportMerkliste` wrote (or a bare list of entries). */
+export function readMerklisteFile(text: string): SavedLinkItem[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new Error('Die Datei ist keine Merkliste — sie lässt sich nicht als JSON lesen.')
+  }
+  const list = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === 'object' && Array.isArray((parsed as { items?: unknown }).items)
+      ? (parsed as { items: unknown[] }).items
+      : null
+  if (!list) throw new Error('In der Datei steht keine Merkliste.')
+  const entries = list.filter((entry): entry is Partial<SavedLinkItem> => Boolean(entry) && typeof entry === 'object')
+  if (entries.length === 0) throw new Error('Die Merkliste in der Datei ist leer.')
+  return entries.map((entry) => normalize(entry))
+}
+
+export interface MerkImport {
+  items: SavedLinkItem[]
+  added: number
+  updated: number
+  /** Entries already the same here. */
+  same: number
+  /** Entries this device had changed more recently than the file; kept as they are. */
+  kept: number
+}
+
+/**
+ * Brings a file's entries into the list. The same series — same entry, or
+ * the same name — is not doubled: whichever side was changed last wins, so
+ * reading in an older export never undoes what was ticked off since.
+ */
+export function mergeMerkliste(current: SavedLinkItem[], incoming: SavedLinkItem[]): MerkImport {
+  const next = [...current]
+  let added = 0
+  let updated = 0
+  let same = 0
+  let kept = 0
+  const nameOf = (item: SavedLinkItem) => item.title.trim().toLowerCase()
+  for (const entry of incoming) {
+    const index = next.findIndex((item) => item.id === entry.id || nameOf(item) === nameOf(entry))
+    if (index === -1) {
+      next.push(entry)
+      added += 1
+    } else if (entry.updatedAt > next[index].updatedAt) {
+      next[index] = { ...entry, id: next[index].id }
+      updated += 1
+    } else if (entry.updatedAt === next[index].updatedAt) {
+      same += 1
+    } else {
+      kept += 1
+    }
+  }
+  return { items: next, added, updated, same, kept }
 }

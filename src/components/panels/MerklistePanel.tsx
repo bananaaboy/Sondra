@@ -13,20 +13,25 @@
  * address is followed all the same, only without the loading.
  */
 
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 
-import { buildUrlWithEpisode, sourceBadgeForUrl } from '../../lib/download'
+import { buildUrlWithEpisode, saveBytes, sourceBadgeForUrl } from '../../lib/download'
 import {
   advance,
+  caughtUp,
   coverFromFile,
   createMerkItem,
+  exportMerkliste,
   itemProgress,
+  mergeMerkliste,
   merkSaveFailed,
+  readMerklisteFile,
   requestLookup,
   seasonName,
   seasonProgress,
   seasonsOf,
   setMerkItems,
+  settle,
   toggleWatched,
   updateMerkItem,
   useMerkliste,
@@ -38,7 +43,7 @@ import {
 } from '../../lib/merkliste'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
-import { Button, Card, Dialog, RowMark, Select, TextInput, Toggle } from '../ui/primitives'
+import { Button, Card, Dialog, Notice, RowMark, Select, TextInput, Toggle } from '../ui/primitives'
 import type { AudioFilePref, AudioOutputFormat, VideoFilePref } from './DownloaderPanel'
 import {
   AUDIO_QUALITY_OPTIONS,
@@ -142,19 +147,19 @@ function CoverField({ value, onChange, label = 'Cover' }: { value: string | unde
     <div className="flex flex-col gap-[8px]">
       <span className="text-small text-prose">{label}</span>
       <div className="flex gap-[12px]">
-        <span className="relative aspect-[2/3] w-[72px] shrink-0 overflow-hidden rounded-nav bg-panel-mid ring-1 ring-inset ring-line">
-          {value ? (
-            <img
-              src={value}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-              onError={() => setProblem('Unter dieser Adresse liess sich kein Bild laden.')}
-              onLoad={() => setProblem(null)}
-            />
-          ) : (
+        {value ? (
+          <img
+            src={value}
+            alt=""
+            className="block h-auto max-h-[160px] w-[72px] shrink-0 self-start rounded-nav object-cover ring-1 ring-line"
+            onError={() => setProblem('Unter dieser Adresse liess sich kein Bild laden.')}
+            onLoad={() => setProblem(null)}
+          />
+        ) : (
+          <span className="relative aspect-[2/3] w-[72px] shrink-0 overflow-hidden rounded-nav bg-panel-mid ring-1 ring-inset ring-line">
             <span className="absolute inset-0 flex items-center justify-center text-small text-muted">kein Bild</span>
-          )}
-        </span>
+          </span>
+        )}
         <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
           <TextInput
             value={draft}
@@ -246,7 +251,7 @@ const textAreaClass =
 function markSeen(item: SavedLinkItem) {
   const next = advance(item)
   const url = item.url.trim() ? buildUrlWithEpisode(item.url, next.season, next.episode) : item.url
-  updateMerkItem(item.id, { ...next, url, status: 'watching', lastOpenedAt: Date.now() })
+  updateMerkItem(item.id, { ...next, url, lastOpenedAt: Date.now() })
 }
 
 /** Opens the current episode in the downloader without moving on. */
@@ -397,6 +402,8 @@ export function MerklistePanel() {
         ))
       )}
 
+      <Transfer items={items} />
+
       <AddDialog open={adding} onClose={() => setAdding(false)} />
       {editingItem ? (
         <SeriesDialog item={editingItem} onClose={() => setEditing(null)} onRemove={() => remove(editingItem)} />
@@ -404,6 +411,97 @@ export function MerklistePanel() {
       {seasonItem && season ? (
         <SeasonDialog item={seasonItem} number={season.number} onClose={() => setSeason(null)} />
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * The list as a file: to keep, or to take to another device. The list lives
+ * only on this one, so this is the way it leaves; reading a file in merges
+ * it, and one click takes the merge back.
+ */
+function Transfer({ items }: { items: SavedLinkItem[] }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+  const [done, setDone] = useState<{ before: SavedLinkItem[]; message: string } | null>(null)
+
+  const exportFile = () => {
+    const day = new Date().toISOString().slice(0, 10)
+    saveBytes(new TextEncoder().encode(exportMerkliste(items)), `Sondra-Merkliste-${day}.json`, 'application/json')
+  }
+
+  const importFile = async (file: File) => {
+    setProblem(null)
+    setDone(null)
+    try {
+      const incoming = readMerklisteFile(await file.text())
+      const before = items
+      const result = mergeMerkliste(before, incoming)
+      if (!setMerkItems(result.items)) {
+        setMerkItems(before)
+        setProblem('Für die eingelesene Liste reicht der Speicher auf diesem Gerät nicht — meist sind es zu grosse Cover.')
+        return
+      }
+      const parts = [
+        result.added ? `${result.added} neu` : null,
+        result.updated ? `${result.updated} auf neuerem Stand` : null,
+        result.same ? `${result.same} schon gleich` : null,
+        result.kept ? `${result.kept} hier neuer, behalten` : null,
+      ].filter(Boolean)
+      setDone({ before, message: `Eingelesen: ${parts.join(' · ')}.` })
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'Die Datei liess sich nicht lesen.')
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-[12px] border-t border-line pt-[14px]">
+      <div className="flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[10px]">
+        <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+          Die Merkliste liegt nur auf diesem Gerät. Als Datei lässt sie sich sichern und auf einem anderen einlesen.
+        </p>
+        <span className="flex flex-wrap gap-[8px]">
+          {items.length > 0 ? (
+            <Button type="button" variant="quiet" size="sm" onClick={exportFile}>
+              Exportieren
+            </Button>
+          ) : null}
+          <Button type="button" variant="quiet" size="sm" onClick={() => fileRef.current?.click()}>
+            Aus Datei einlesen
+          </Button>
+        </span>
+      </div>
+      {problem ? (
+        <Notice tone="error" title="Nicht eingelesen">
+          {problem}
+        </Notice>
+      ) : null}
+      {done ? (
+        <p role="status" className="rise flex flex-wrap items-center gap-x-[12px] text-small text-prose">
+          <span>{done.message}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setMerkItems(done.before)
+              setDone(null)
+            }}
+            className="press rounded-nav font-semibold text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+          >
+            Rückgängig
+          </button>
+        </p>
+      ) : null}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) void importFile(file)
+        }}
+      />
     </div>
   )
 }
@@ -443,6 +541,50 @@ function EmptyState({ onAdd, onDownload }: { onAdd: () => void; onDownload: () =
 }
 
 /* -------------------------------------------------------------------------- */
+/* Cover shapes                                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Height over width of each cover once it has loaded; null while it loads or when it does not. */
+const coverShapes = new Map<string, number | null>()
+const shapeListeners = new Set<() => void>()
+let shapeVersion = 0
+
+function measureCover(url: string) {
+  if (coverShapes.has(url)) return
+  coverShapes.set(url, null)
+  const image = new Image()
+  image.onload = () => {
+    coverShapes.set(url, image.naturalWidth > 0 ? image.naturalHeight / image.naturalWidth : null)
+    shapeVersion += 1
+    shapeListeners.forEach((listener) => listener())
+  }
+  image.src = url
+}
+
+function subscribeShapes(listener: () => void) {
+  shapeListeners.add(listener)
+  return () => shapeListeners.delete(listener)
+}
+
+/**
+ * The shape the tiles of one series take: that of its tallest cover, so the
+ * tallest is shown whole and every tile in the row stands as high as it. A
+ * poster makes them 2:3, a still from the series makes them wide. Kept
+ * between 16:9 and 9:16; with no cover at all, 2:3.
+ */
+function useTileShape(covers: (string | undefined)[]): number {
+  const urls = Array.from(new Set(covers.filter((cover): cover is string => Boolean(cover))))
+  const key = urls.join('\n')
+  useSyncExternalStore(subscribeShapes, () => shapeVersion)
+  useEffect(() => {
+    for (const url of key ? key.split('\n') : []) measureCover(url)
+  }, [key])
+  const known = urls.map((url) => coverShapes.get(url)).filter((shape): shape is number => typeof shape === 'number')
+  if (known.length === 0) return 3 / 2
+  return Math.min(16 / 9, Math.max(9 / 16, Math.max(...known)))
+}
+
+/* -------------------------------------------------------------------------- */
 /* One series                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -453,10 +595,13 @@ function Series({ item, onEdit, onSeason }: { item: SavedLinkItem; onEdit: () =>
   const status = statusOf(item)
   const kind = episodeKindOf(item.url) ?? 'series'
   const last = whenLabel(item.lastOpenedAt)
+  const shape = useTileShape(seasons.map((season) => season.cover ?? item.cover))
 
   const addSeason = () => {
     const highest = seasons.reduce((max, season) => Math.max(max, season.number), 0)
-    updateMerkItem(item.id, { seasons: [...seasons, { number: highest + 1, episodes: null, watched: [] }] })
+    const next = [...seasons, { number: highest + 1, episodes: null, watched: [] }]
+    // A series seen to the end goes on where the new season starts.
+    updateMerkItem(item.id, caughtUp(seasons) ? settle(item, next, highest + 1) : { seasons: next })
   }
 
   return (
@@ -519,6 +664,7 @@ function Series({ item, onEdit, onSeason }: { item: SavedLinkItem; onEdit: () =>
             key={season.number}
             season={season}
             cover={season.cover ?? item.cover}
+            shape={shape}
             current={status !== 'done' && season.number === item.season}
             episode={item.episode}
             onOpen={() => onSeason(season.number)}
@@ -558,22 +704,25 @@ function Series({ item, onEdit, onSeason }: { item: SavedLinkItem; onEdit: () =>
 }
 
 /**
- * One season as a poster: the cover the way it was made — 2:3, as on
- * ThePosterDB and every streaming shelf, with nothing laid over it — and
- * under it the name, the count and a bar for what is seen. The caption used
- * to sit on the picture and hid the bottom third of every poster, a pill sat
- * on its logo. Hover or focus brings up the numbers; a click opens the
- * season.
+ * One season as a poster: the cover the way it was made, in the shape of
+ * the series' tallest cover (`useTileShape`), with nothing laid over it —
+ * and under it the name, the count and a bar for what is seen. The caption
+ * used to sit on the picture and hid the bottom third of every poster, a
+ * pill sat on its logo. Hover or focus brings up the numbers; a click opens
+ * the season.
  */
 function SeasonTile({
   season,
   cover,
+  shape,
   current,
   episode,
   onOpen,
 }: {
   season: MerkSeason
   cover?: string
+  /** Height over width, the same for every tile of the series. */
+  shape: number
   current: boolean
   /** Where the entry stands, for „Hier sind Sie · Folge 4". */
   episode: number | null
@@ -594,9 +743,10 @@ function SeasonTile({
       className="press group flex min-w-0 flex-col gap-[10px] rounded-card text-left"
     >
       <span
-        className={`relative block aspect-[2/3] w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'} ${
+        className={`relative block w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'} ${
           current ? 'ring-2 ring-ink ring-offset-2 ring-offset-canvas' : ''
         }`}
+        style={{ aspectRatio: `1 / ${shape}` }}
       >
         {poster ? (
           <img
@@ -668,26 +818,35 @@ function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: 
   const shownCount = season.episodes ?? Math.max(12, highestSeen + 4, item.season === number && item.episode ? item.episode + 4 : 0)
   const isHere = item.season === number
 
-  const setSeasons = (seasons: MerkSeason[], moveHere = true) => {
-    const updated = seasons.find((entry) => entry.number === number)
-    const next = updated ? seasonProgress(updated).next : 1
-    updateMerkItem(item.id, moveHere ? { seasons, season: number, episode: next } : { seasons })
+  // Ticking episodes moves „Hier sind Sie" to the first one not seen — from
+  // this season on, and to „Fertig" once nothing is left.
+  const setSeasons = (seasons: MerkSeason[]) => updateMerkItem(item.id, settle(item, seasons, number))
+  const patchSeason = (change: Partial<MerkSeason>) => {
+    const seasons = withSeason(item, number, (entry) => ({ ...entry, ...change }))
+    const shorter = isHere && item.episode !== null && change.episodes != null && item.episode > change.episodes
+    const longer = statusOf(item) === 'done' && caughtUp(seasonsOf(item)) && !caughtUp(seasons)
+    // A count that cuts off where the entry stands, or that adds episodes to
+    // a series seen to the end, moves the position; a name or a cover does not.
+    updateMerkItem(item.id, shorter || longer ? settle(item, seasons, item.season) : { seasons })
   }
-  const patchSeason = (change: Partial<MerkSeason>) => setSeasons(withSeason(item, number, (entry) => ({ ...entry, ...change })), false)
 
   return (
     <Dialog open onClose={onClose} title={`${item.title} · ${name}`}>
       <div className="flex flex-col gap-[20px]">
         <div className="flex flex-col gap-[16px] sm:flex-row sm:items-end">
-          <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-panel-mid">
-            {season.cover ?? item.cover ? (
-              <img src={season.cover ?? item.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
-            ) : (
+          {season.cover ?? item.cover ? (
+            <img
+              src={season.cover ?? item.cover}
+              alt=""
+              className="block h-auto max-h-[200px] w-[96px] shrink-0 rounded-card bg-panel-mid object-cover"
+            />
+          ) : (
+            <span className="relative aspect-[2/3] w-[96px] shrink-0 overflow-hidden rounded-card bg-panel-mid">
               <span aria-hidden className="absolute inset-0 flex items-center justify-center text-ink/30">
                 {number === 0 ? <FilmIcon /> : <span className="display-md">{number}</span>}
               </span>
-            )}
-          </span>
+            </span>
+          )}
           <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
             <p className="text-heading-sm text-ink">
               {progress.total ? `${progress.watched} von ${progress.total} ${units}` : `${progress.watched} ${progress.watched === 1 ? unit : units}`}{' '}
@@ -720,7 +879,7 @@ function SeasonDialog({ item, number, onClose }: { item: SavedLinkItem; number: 
               </Button>
             </span>
           ) : !progress.complete ? (
-            <Button type="button" variant="quiet" onClick={() => updateMerkItem(item.id, { season: number, episode: progress.next, status: 'watching' })}>
+            <Button type="button" variant="quiet" onClick={() => updateMerkItem(item.id, settle(item, seasonsOf(item), number))}>
               Hier weiterschauen
             </Button>
           ) : null}

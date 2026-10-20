@@ -167,7 +167,7 @@ export function EpisodePicker({
               {kind === 'list' ? 'Nummer in der Liste' : season === 0 ? 'Film' : 'Folge'}
               {merkSeason ? (
                 <span className="text-muted">
-                  {merkSeason.watched.length} gesehen{merkSeason.episodes ? ` von ${merkSeason.episodes}` : ''}
+                  {seasonProgress(merkSeason).watched} gesehen{merkSeason.episodes ? ` von ${merkSeason.episodes}` : ''}
                 </span>
               ) : null}
             </span>
