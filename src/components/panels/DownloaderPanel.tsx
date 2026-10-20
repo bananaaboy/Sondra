@@ -30,7 +30,6 @@ import {
   isSupportedUrl,
   parseLinkEpisodeInfo,
   saveBytes,
-  sourceBadgeForUrl,
 } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { getProjectToolState, setProjectToolState } from '../../lib/project'
@@ -56,6 +55,7 @@ import { AdvancedDownloader } from './DownloaderAdvanced'
 import { openGetAppDialog } from '../GetApp'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { ZipSave } from '../ZipSave'
+import { AUDIO_QUALITY_OPTIONS, LANGUAGE_OPTIONS, Merkliste, Stepper, VIDEO_QUALITY_OPTIONS, episodeKindOf } from './Merkliste'
 
 export type AudioOutputFormat = 'original' | 'mp3' | 'wav' | 'm4a' | 'flac' | 'opus'
 
@@ -553,6 +553,9 @@ function saveDownloadHistory(items: DownloadHistoryItem[]): void {
   }
 }
 
+/** Where an entry of the Merkliste stands: being watched, for later, finished. */
+export type SavedLinkStatus = 'watching' | 'later' | 'done'
+
 export interface SavedLinkItem {
   id: string
   url: string
@@ -566,6 +569,10 @@ export interface SavedLinkItem {
   audioPref: AudioFilePref
   autoTranscribe: boolean
   updatedAt: number
+  /** Missing on entries saved before the Merkliste; read as „watching". */
+  status?: SavedLinkStatus
+  /** When it was last looked up from the list — „zuletzt gestern". */
+  lastOpenedAt?: number
 }
 
 const SAVED_LINKS_KEY = 'sondra:saved_links'
@@ -591,6 +598,8 @@ function loadSavedLinks(): SavedLinkItem[] {
         audioPref: item.audioPref || 'high',
         autoTranscribe: Boolean(item.autoTranscribe),
         updatedAt: item.updatedAt || Date.now(),
+        status: item.status === 'later' || item.status === 'done' ? item.status : 'watching',
+        lastOpenedAt: typeof item.lastOpenedAt === 'number' ? item.lastOpenedAt : undefined,
       }
     })
   } catch {
@@ -938,10 +947,6 @@ export function DownloaderPanel() {
   const [savedLinks, setSavedLinks] = useState<SavedLinkItem[]>(loadSavedLinks)
   const [linkSeason, setLinkSeason] = useState<number>(1)
   const [linkEpisode, setLinkEpisode] = useState<number | null>(1)
-  const [editingSavedId, setEditingSavedId] = useState<string | null>(null)
-  const [newSavedUrl, setNewSavedUrl] = useState('')
-  const [newSavedTitle, setNewSavedTitle] = useState('')
-  const [addingSavedLink, setAddingSavedLink] = useState(false)
 
   // Sync linkSeason / linkEpisode when URL is pasted or typed and contains episodic markers
   useEffect(() => {
@@ -1047,7 +1052,7 @@ export function DownloaderPanel() {
         const target = prev.find((i) => i.id === id)
         const updated = prev.filter((item) => item.id !== id)
         saveSavedLinks(updated)
-        if (target) log('holen', `Gespeicherten Link entfernt: ${target.title}`)
+        if (target) log('holen', `Von der Merkliste genommen: ${target.title}`)
         return updated
       })
     },
@@ -1100,7 +1105,7 @@ export function DownloaderPanel() {
               : item,
           )
           saveSavedLinks(updated)
-          log('holen', `Gespeicherter Link aktualisiert: ${existing.title} (S${seasonToSave}${episodeToSave ? ` E${episodeToSave}` : ' Alle'})`)
+          log('holen', `Merkliste aktualisiert: ${existing.title} (S${seasonToSave}${episodeToSave ? ` E${episodeToSave}` : ' Alle'})`)
           return updated
         }
 
@@ -1120,7 +1125,7 @@ export function DownloaderPanel() {
         }
         const updated = [newItem, ...prev]
         saveSavedLinks(updated)
-        log('holen', `Link gespeichert: ${newItem.title}`)
+        log('holen', `Auf die Merkliste gesetzt: ${newItem.title}`)
         return updated
       })
     },
@@ -1747,6 +1752,8 @@ export function DownloaderPanel() {
           ? 'AniWorld: Eng-Sub'
           : 'AniWorld: Sprache Auto'
 
+  const episodeKind = episodeKindOf(url)
+
   // The folded settings, said: what is in force without opening them.
   const settingsSummary = [
     videoPrefLabel,
@@ -1779,6 +1786,7 @@ export function DownloaderPanel() {
             variant={settingsOpen ? 'primary' : 'quiet'}
             aria-expanded={settingsOpen}
             aria-controls="download-settings"
+            title={settingsSummary}
             onClick={() => setSettingsOpen((open) => !open)}
           >
             <SettingsGearIcon />
@@ -1864,18 +1872,18 @@ export function DownloaderPanel() {
                 </Button>
                 <Button
                   type="button"
-                  variant={matchingSavedLink(url) ? 'primary' : 'quiet'}
+                  variant="quiet"
                   disabled={url.trim().length === 0}
                   onClick={() => saveOrUpdateLink()}
                   title={
                     matchingSavedLink(url)
-                      ? 'Gespeicherten Link mit aktuellen Einstellungen (Sprache, Staffel, Episode, Qualität) aktualisieren'
-                      : 'Diesen Link samt Einstellungen (Sprache, Staffel, Episode, Qualität) unter „Gespeicherte Links“ merken'
+                      ? 'Steht auf der Merkliste — ein Klick übernimmt den jetzigen Stand und die Einstellungen'
+                      : 'Auf die Merkliste setzen, mit Staffel, Folge und Einstellungen'
                   }
                   className="h-[48px] shrink-0 py-0"
                 >
                   <BookmarkIcon filled={Boolean(matchingSavedLink(url))} />
-                  {matchingSavedLink(url) ? 'Gespeichert' : 'Link speichern'}
+                  {matchingSavedLink(url) ? 'Gemerkt' : 'Merken'}
                 </Button>
               </div>
             </div>
@@ -1976,227 +1984,53 @@ export function DownloaderPanel() {
             </p>
           ) : null}
 
+          {/* What to load, in one row: picture or sound, the format, the
+              quality, and whether to transcribe. The quality used to sit in a
+              tinted box with the series controls and again in the settings,
+              and the transcription switch was a chip called „Lokale KI". */}
           <div className="mt-[4px] flex flex-col gap-[10px] border-t border-line pt-[12px]">
-            <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px]">
-              <span className="text-small text-prose">Was laden</span>
-              <ChoiceRow
-                value={filterAudioOnly ? 'audio' : 'video'}
-                options={[
-                  { value: 'video', label: 'Video mit Ton' },
-                  { value: 'audio', label: 'Nur Ton' },
-                ]}
-                onChange={(value) => setFilterAudioOnly(value === 'audio')}
-              />
-              {filterAudioOnly ? (
+            <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px]">
+              <div className="flex flex-wrap items-center gap-[10px]">
+                <span className="text-small text-prose">Was laden</span>
                 <ChoiceRow
-                  value={targetAudioFormat}
-                  options={AUDIO_FORMAT_CONFIGS.map((format) => ({ value: format.id, label: format.label, title: format.desc }))}
-                  onChange={setTargetAudioFormat}
-                />
-              ) : null}
-              <button
-                type="button"
-                aria-pressed={autoTranscribe}
-                onClick={() => {
-                  const next = !autoTranscribe
-                  setAutoTranscribe(next)
-                  log('holen', next ? 'Lokale KI: Automatische Whisper-Untertitel nach dem Laden aktiviert' : 'Lokale KI: Automatische Untertitel deaktiviert')
-                }}
-                title="Erstellt beim Herunterladen automatisch Untertitel (.srt) mit der lokalen Whisper-KI auf diesem Gerät"
-                className={`press inline-flex items-center gap-[6px] rounded-nav px-[10px] py-[6px] text-small font-medium transition-colors ${
-                  autoTranscribe
-                    ? 'bg-ink text-on-ink ring-1 ring-inset ring-ink'
-                    : 'bg-panel-soft text-ink ring-1 ring-inset ring-line hover:ring-ink'
-                }`}
-              >
-                <span>Lokale KI</span>
-                <span className="text-micro opacity-80">{autoTranscribe ? 'Untertitel an' : 'Untertitel'}</span>
-              </button>
-              <button
-                type="button"
-                aria-expanded={settingsOpen}
-                aria-controls="download-settings"
-                onClick={() => setSettingsOpen((open) => !open)}
-                title={settingsSummary}
-                className="press flex items-center gap-[6px] rounded-nav text-left text-small text-muted hover:text-ink sm:ml-auto"
-              >
-                <span>{filterAudioOnly ? audioPrefLabel : videoPrefLabel}</span>
-                <span className="text-ink underline decoration-rule underline-offset-[3px]">
-                  {settingsOpen ? 'Schliessen' : 'Anpassen'}
-                </span>
-              </button>
-            </div>
-            {filterAudioOnly ? (
-              <span className="text-small leading-[1.45] text-muted">
-                {AUDIO_FORMAT_CONFIGS.find((format) => format.id === targetAudioFormat)?.desc}.{' '}
-                {filePrefs.audioPref === 'untouched' || targetAudioFormat === 'original'
-                  ? 'Die Datei wird nach Möglichkeit direkt und unverändert übernommen.'
-                  : 'Die Tonspur wird herausgelöst und in der gewählten Qualitätsstufe gespeichert.'}
-              </span>
-            ) : null}
-
-            {/* Universal per-link settings bar: Sprache · Staffel · Episode · Qualität */}
-            <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px] rounded-nav bg-panel-soft px-[12px] py-[10px] ring-1 ring-inset ring-rule">
-              <div className="flex flex-wrap items-center gap-[8px]">
-                <span className="flex items-center gap-[6px] text-small font-semibold text-ink">
-                  <span aria-hidden className="size-[7px] shrink-0 rounded-pill bg-ink" />
-                  {isAniworldTarget ? 'AniWorld / SerienStream' : 'Sprache'}
-                </span>
-                <ChoiceRow
-                  value={filePrefs.aniworldLanguage}
+                  value={filterAudioOnly ? 'audio' : 'video'}
                   options={[
-                    { value: 'auto', label: 'Auto', title: 'Automatisch beste verfügbare Fassung (Deutsch bevorzugt)' },
-                    { value: 'ger_sub', label: 'Ger-Sub (OmU)', title: 'Originalton mit deutschem Untertitel' },
-                    { value: 'ger_dub', label: 'Ger-Dub', title: 'Deutsche Synchronisation' },
-                    { value: 'eng_sub', label: 'Eng-Sub', title: 'Originalton mit englischem Untertitel' },
+                    { value: 'video', label: 'Video mit Ton' },
+                    { value: 'audio', label: 'Nur Ton' },
                   ]}
-                  onChange={(val) => {
-                    const nextLang = val as AniworldLanguagePref
-                    updateFilePrefs({ aniworldLanguage: nextLang })
-                    const matched = matchingSavedLink(url)
-                    if (matched) updateSavedLink(matched.id, { language: nextLang })
-                    if (result || batchEntries) void look(undefined, nextLang)
-                  }}
+                  onChange={(value) => setFilterAudioOnly(value === 'audio')}
                 />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-[6px]">
-                <span className="text-small font-medium text-ink">Staffel</span>
-                <button
-                  type="button"
-                  aria-pressed={linkSeason === 0}
-                  onClick={() => applyLinkSeasonEpisode(linkSeason === 0 ? 1 : 0, linkEpisode)}
-                  title="Zwischen regulären Staffeln und Filmen/Specials wechseln"
-                  className={`press rounded-nav px-[8px] py-[4px] text-small font-medium transition-colors ${
-                    linkSeason === 0
-                      ? 'bg-ink text-on-ink ring-1 ring-inset ring-ink'
-                      : 'bg-raised text-ink ring-1 ring-inset ring-rule hover:ring-ink'
-                  }`}
-                >
-                  Filme
-                </button>
-                {linkSeason > 0 ? (
-                  <div className="inline-flex items-center rounded-nav bg-raised ring-1 ring-inset ring-rule">
-                    <button
-                      type="button"
-                      aria-label="Vorherige Staffel"
-                      disabled={linkSeason <= 1}
-                      onClick={() => applyLinkSeasonEpisode(Math.max(1, linkSeason - 1), linkEpisode)}
-                      className="press px-[8px] py-[4px] text-small font-semibold text-ink disabled:opacity-40"
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      max={99}
-                      aria-label="Staffel Nummer"
-                      value={linkSeason}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10)
-                        if (!Number.isNaN(val) && val >= 1) {
-                          applyLinkSeasonEpisode(val, linkEpisode)
-                        }
-                      }}
-                      className="value w-[38px] border-0 bg-transparent text-center text-small font-semibold text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                    />
-                    <button
-                      type="button"
-                      aria-label="Nächste Staffel"
-                      onClick={() => applyLinkSeasonEpisode(linkSeason + 1, linkEpisode)}
-                      className="press px-[8px] py-[4px] text-small font-semibold text-ink"
-                    >
-                      +
-                    </button>
-                  </div>
+                {filterAudioOnly ? (
+                  <ChoiceRow
+                    value={targetAudioFormat}
+                    options={AUDIO_FORMAT_CONFIGS.map((format) => ({ value: format.id, label: format.label, title: format.desc }))}
+                    onChange={setTargetAudioFormat}
+                  />
                 ) : null}
               </div>
-
-              <div className="flex flex-wrap items-center gap-[6px]">
-                <span className="text-small font-medium text-ink">Episode</span>
-                <button
-                  type="button"
-                  aria-pressed={linkEpisode === null}
-                  onClick={() => applyLinkSeasonEpisode(linkSeason, linkEpisode === null ? 1 : null)}
-                  title="Ganze Staffel / Playlist oder einzelne Episode wählen"
-                  className={`press rounded-nav px-[8px] py-[4px] text-small font-medium transition-colors ${
-                    linkEpisode === null
-                      ? 'bg-ink text-on-ink ring-1 ring-inset ring-ink'
-                      : 'bg-raised text-ink ring-1 ring-inset ring-rule hover:ring-ink'
-                  }`}
-                >
-                  Alle
-                </button>
-                {linkEpisode !== null ? (
-                  <>
-                    <div className="inline-flex items-center rounded-nav bg-raised ring-1 ring-inset ring-rule">
-                      <button
-                        type="button"
-                        aria-label="Vorherige Episode"
-                        disabled={linkEpisode <= 1}
-                        onClick={() => applyLinkSeasonEpisode(linkSeason, Math.max(1, linkEpisode - 1))}
-                        className="press px-[8px] py-[4px] text-small font-semibold text-ink disabled:opacity-40"
-                      >
-                        −
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        max={9999}
-                        aria-label="Episode Nummer"
-                        value={linkEpisode}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value, 10)
-                          if (!Number.isNaN(val) && val >= 1) {
-                            applyLinkSeasonEpisode(linkSeason, val)
-                          }
-                        }}
-                        className="value w-[44px] border-0 bg-transparent text-center text-small font-semibold text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      />
-                      <button
-                        type="button"
-                        aria-label="Nächste Episode"
-                        onClick={() => applyLinkSeasonEpisode(linkSeason, linkEpisode + 1)}
-                        className="press px-[8px] py-[4px] text-small font-semibold text-ink"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => applyLinkSeasonEpisode(linkSeason, linkEpisode + 1, Boolean( url.trim() ))}
-                      title="Direkt zur nächsten Folge schalten und nachsehen"
-                      className="press rounded-nav bg-raised px-[8px] py-[4px] text-small font-semibold text-ink ring-1 ring-inset ring-rule hover:ring-ink"
-                    >
-                      +1 Folge
-                    </button>
-                  </>
-                ) : null}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-[6px] sm:ml-auto">
-                <span className="text-small text-muted">Qualität</span>
+              <label className="flex items-center gap-[10px] text-small text-prose">
+                Qualität
                 {filterAudioOnly ? (
                   <Select
-                    aria-label="Ton-Qualität"
                     value={filePrefs.audioPref}
                     onChange={(e) => {
                       const nextPref = e.target.value as AudioFilePref
                       updateFilePrefs({ audioPref: nextPref })
+                      if (nextPref === 'untouched') setTargetAudioFormat('original')
+                      else if (nextPref === 'lossless' && targetAudioFormat !== 'wav' && targetAudioFormat !== 'flac') setTargetAudioFormat('flac')
                       const matched = matchingSavedLink(url)
                       if (matched) updateSavedLink(matched.id, { audioPref: nextPref })
                     }}
-                    className="w-auto! py-[4px] text-small"
+                    className="w-auto! py-[6px]"
                   >
-                    <option value="untouched">Original (1:1)</option>
-                    <option value="high">Hoch (320 kbps)</option>
-                    <option value="medium">Mittel (192 kbps)</option>
-                    <option value="low">Kompakt (128 kbps)</option>
-                    <option value="lossless">Verlustfrei</option>
+                    {AUDIO_QUALITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </Select>
                 ) : (
                   <Select
-                    aria-label="Video-Qualität"
                     value={filePrefs.videoPref}
                     onChange={(e) => {
                       const nextPref = e.target.value as VideoFilePref
@@ -2204,108 +2038,135 @@ export function DownloaderPanel() {
                       const matched = matchingSavedLink(url)
                       if (matched) updateSavedLink(matched.id, { videoPref: nextPref })
                     }}
-                    className="w-auto! py-[4px] text-small"
+                    className="w-auto! py-[6px]"
                   >
-                    <option value="untouched">Original (1:1)</option>
-                    <option value="best">Beste (bis 4K)</option>
-                    <option value="1080p">1080p Full HD</option>
-                    <option value="720p">720p HD</option>
-                    <option value="480p">480p SD</option>
-                    <option value="360p">360p Kompakt</option>
+                    {VIDEO_QUALITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </Select>
                 )}
+              </label>
+              <div className="w-max">
+                <Toggle
+                  label="Untertitel erstellen"
+                  checked={autoTranscribe}
+                  onChange={(next) => {
+                    setAutoTranscribe(next)
+                    log('holen', next ? 'Untertitel werden nach dem Laden auf diesem Gerät erstellt' : 'Keine Untertitel nach dem Laden')
+                  }}
+                />
               </div>
             </div>
+            {filterAudioOnly ? (
+              <span className="text-small leading-[1.45] text-muted">
+                {AUDIO_FORMAT_CONFIGS.find((format) => format.id === targetAudioFormat)?.desc}.{' '}
+                {filePrefs.audioPref === 'untouched' || targetAudioFormat === 'original'
+                  ? 'Die Datei wird nach Möglichkeit direkt und unverändert übernommen.'
+                  : 'Die Tonspur wird herausgelöst und in der gewählten Qualität gespeichert.'}
+              </span>
+            ) : null}
 
-            <div
-              id="download-settings"
-              hidden={!settingsOpen}
-              className="mt-[4px] grid gap-x-[24px] gap-y-[14px] rounded-card border border-line bg-raised p-[16px] sm:grid-cols-2"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-[8px] border-b border-line pb-[10px] sm:col-span-2">
-                <div>
-                  <h3 className="text-subheading text-ink">Download-Einstellungen für Dateitypen</h3>
-                  <p className="text-small text-muted">
-                    Legen Sie für verschiedene Dateien fest, ob sie in tieferer Qualität geladen oder gar nicht angepasst und direkt heruntergeladen werden sollen.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-[8px]">
-                <label htmlFor="video-pref-select" className="text-small font-medium text-ink">
-                  Video-Dateien (MP4, WebM, Streams)
-                </label>
-                <Select
-                  id="video-pref-select"
-                  value={filePrefs.videoPref}
-                  onChange={(e) => updateFilePrefs({ videoPref: e.target.value as VideoFilePref })}
-                >
-                  <option value="untouched">Gar nicht anpassen — einfach direkt herunterladen (Original)</option>
-                  <option value="best">Beste verfügbare Qualität (bis 4K / 1080p)</option>
-                  <option value="1080p">Standard Full-HD (1080p bevorzugt)</option>
-                  <option value="720p">Mittlere Qualität (720p HD — spart Speicher)</option>
-                  <option value="480p">Tiefere Qualität (480p Kompakt — schnelle Downloads)</option>
-                  <option value="360p">Minimale Qualität (360p — kleinste Datei)</option>
-                </Select>
-                {filePrefs.videoPref !== 'untouched' && filePrefs.videoPref !== 'best' ? (
-                  <div className="flex flex-col gap-[4px] pt-[2px]">
-                    <span className="text-small text-muted">Wenn die Quelle nur in höherer Auflösung vorliegt:</span>
-                    <ChoiceRow
-                      value={filePrefs.videoAdaptMode}
-                      options={[
-                        { value: 'stream_only', label: 'Nur passende Spur wählen (ohne Neucodierung)' },
-                        { value: 'reencode_lower', label: `Aktiv auf ${filePrefs.videoPref} verkleinern` },
-                      ]}
-                      onChange={(mode) => updateFilePrefs({ videoAdaptMode: mode as VideoAdaptMode })}
-                    />
-                  </div>
-                ) : (
-                  <span className="text-small leading-[1.45] text-muted">
-                    {filePrefs.videoPref === 'untouched'
-                      ? 'Videos werden ohne Qualitätsänderung oder Konvertierung genau so geladen, wie die Quelle sie liefert.'
-                      : 'Wählt automatisch die höchste verfügbare Video-Auflösung.'}
+            {/* Season and episode only where the address has them: on an
+                empty field or a single video they were a box of controls
+                that did nothing. */}
+            {episodeKind ? (
+              <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[10px] border-t border-line pt-[10px]">
+                <span className="text-small text-prose">{episodeKind === 'list' ? 'Stelle in der Liste' : 'Wo Sie sind'}</span>
+                {episodeKind === 'series' ? (
+                  <ChoiceRow
+                    value={linkSeason === 0 ? 'filme' : 'staffel'}
+                    options={[
+                      { value: 'staffel', label: 'Staffeln' },
+                      { value: 'filme', label: 'Filme' },
+                    ]}
+                    onChange={(value) => applyLinkSeasonEpisode(value === 'filme' ? 0 : Math.max(1, linkSeason), linkEpisode)}
+                  />
+                ) : null}
+                {episodeKind === 'series' && linkSeason > 0 ? (
+                  <span className="flex items-center gap-[8px] text-small text-prose">
+                    Staffel
+                    <Stepper label="Staffel" value={linkSeason} max={99} onChange={(value) => applyLinkSeasonEpisode(value, linkEpisode)} />
                   </span>
-                )}
+                ) : null}
+                {linkEpisode !== null ? (
+                  <span className="flex items-center gap-[8px] text-small text-prose">
+                    {episodeKind === 'list' ? 'Nr.' : linkSeason === 0 ? 'Film' : 'Folge'}
+                    <Stepper
+                      label={episodeKind === 'list' ? 'Nummer' : linkSeason === 0 ? 'Film' : 'Folge'}
+                      value={linkEpisode}
+                      onChange={(value) => applyLinkSeasonEpisode(linkSeason, value)}
+                    />
+                  </span>
+                ) : null}
+                <div className="w-max">
+                  <Toggle
+                    label={episodeKind === 'list' ? 'Ganze Liste' : linkSeason === 0 ? 'Alle Filme' : 'Ganze Staffel'}
+                    checked={linkEpisode === null}
+                    onChange={(whole) => applyLinkSeasonEpisode(linkSeason, whole ? null : 1)}
+                  />
+                </div>
+                {linkEpisode !== null ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="quiet"
+                    onClick={() => applyLinkSeasonEpisode(linkSeason, linkEpisode + 1, Boolean(url.trim()))}
+                  >
+                    {episodeKind === 'list' ? 'Nächster Titel' : linkSeason === 0 ? 'Nächster Film' : 'Nächste Folge'}
+                  </Button>
+                ) : null}
               </div>
-
-              <div className="flex flex-col gap-[8px]">
-                <label htmlFor="audio-pref-select" className="text-small font-medium text-ink">
-                  Ton- & Musik-Dateien (MP3, M4A, Opus, WAV)
-                </label>
-                <Select
-                  id="audio-pref-select"
-                  value={filePrefs.audioPref}
-                  onChange={(e) => {
-                    const nextPref = e.target.value as AudioFilePref
-                    updateFilePrefs({ audioPref: nextPref })
-                    if (nextPref === 'untouched') {
-                      setTargetAudioFormat('original')
-                    } else if (nextPref === 'lossless' && targetAudioFormat !== 'wav' && targetAudioFormat !== 'flac') {
-                      setTargetAudioFormat('flac')
-                    }
+            ) : null}
+            {episodeKind === 'series' ? (
+              <div className="flex flex-wrap items-center gap-x-[20px] gap-y-[8px]">
+                <span className="text-small text-prose">Sprachfassung</span>
+                <ChoiceRow
+                  value={filePrefs.aniworldLanguage}
+                  options={LANGUAGE_OPTIONS}
+                  onChange={(value) => {
+                    updateFilePrefs({ aniworldLanguage: value })
+                    const matched = matchingSavedLink(url)
+                    if (matched) updateSavedLink(matched.id, { language: value })
+                    if (result || batchEntries) void look(undefined, value)
                   }}
-                >
-                  <option value="untouched">Gar nicht anpassen — Original-Audiodatei direkt laden</option>
-                  <option value="high">Hohe Qualität (320 kbps / beste Tonspur)</option>
-                  <option value="medium">Mittlere Qualität (192 kbps — ausgewogen)</option>
-                  <option value="low">Tiefere Qualität (128 kbps — kleine Datei, ideal für Sprache)</option>
-                  <option value="lossless">Verlustfrei (WAV / FLAC ohne Qualitätsverlust)</option>
-                </Select>
-                <span className="text-small leading-[1.45] text-muted">
-                  {filePrefs.audioPref === 'untouched'
-                    ? 'Audiodateien werden gar nicht umgewandelt oder neu getaggt, sondern 1:1 heruntergeladen.'
-                    : filePrefs.audioPref === 'low'
-                      ? 'Bevorzugt kleinere Tonspuren und komprimiert auf 128 kbit/s für geringen Speicherplatz.'
-                      : filePrefs.audioPref === 'medium'
-                        ? 'Konvertiert auf 192 kbit/s für gute Qualität bei moderater Dateigröße.'
-                        : filePrefs.audioPref === 'lossless'
-                          ? 'Speichert unkomprimiert bzw. verlustfrei als FLAC oder WAV.'
-                          : 'Nutzt 320 kbit/s bzw. die höchste verfügbare Bitrate inklusive Cover & Metadaten.'}
-                </span>
+                />
               </div>
+            ) : null}
+
+            {/* The rest, behind „Einstellungen" at the top: set once, rarely
+                changed. Fields with a line, like every form here — it was a
+                framed white box that repeated the quality, the language and
+                the transcription switch from above. */}
+            <div id="download-settings" hidden={!settingsOpen} className="rise flex flex-col gap-[4px] border-t-2 border-rule pt-[12px]">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[4px] pb-[4px]">
+                <h3 className="text-body font-semibold text-ink">Einstellungen</h3>
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(false)}
+                  className="press rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                >
+                  Fertig
+                </button>
+              </div>
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-x-[32px] gap-y-[4px] sm:grid-cols-2">
+              {filePrefs.videoPref !== 'untouched' && filePrefs.videoPref !== 'best' ? (
+                <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
+                  <span className="text-small text-prose">Wenn es das Video nur grösser gibt</span>
+                  <ChoiceRow
+                    value={filePrefs.videoAdaptMode}
+                    options={[
+                      { value: 'stream_only', label: 'Nächstbeste Spur, nichts neu rechnen' },
+                      { value: 'reencode_lower', label: `Auf ${filePrefs.videoPref} verkleinern` },
+                    ]}
+                    onChange={(mode) => updateFilePrefs({ videoAdaptMode: mode as VideoAdaptMode })}
+                  />
+                </div>
+              ) : null}
 
               <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
-                <label htmlFor="direct-pref-select" className="text-small font-medium text-ink">
+                <label htmlFor="direct-pref-select" className="text-small text-prose">
                   Direkte Datei-Links & andere Dateien
                 </label>
                 <Select
@@ -2324,7 +2185,7 @@ export function DownloaderPanel() {
               </div>
 
               <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
-                <label htmlFor="delivery-mode-select" className="text-small font-medium text-ink">
+                <label htmlFor="delivery-mode-select" className="text-small text-prose">
                   Verhalten beim Herunterladen
                 </label>
                 <Select
@@ -2346,7 +2207,7 @@ export function DownloaderPanel() {
               </div>
 
               <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
-                <label htmlFor="stealth-mode-select" className="text-small font-medium text-ink">
+                <label htmlFor="stealth-mode-select" className="text-small text-prose">
                   Dateiname
                 </label>
                 <Select id="stealth-mode-select" value={stealthMode} onChange={(e) => setStealthMode(e.target.value as StealthMode)}>
@@ -2369,44 +2230,9 @@ export function DownloaderPanel() {
                 ) : null}
               </div>
 
-              <div className="flex flex-col justify-center border-t border-line pt-[10px]">
-                <Toggle
-                  label="Untertitel dazu erstellen"
-                  hint="Nach dem Laden schreibt Whisper auf diesem Gerät mit, als .srt neben der Datei."
-                  checked={autoTranscribe}
-                  onChange={setAutoTranscribe}
-                />
-              </div>
-
-              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
-                <label htmlFor="aniworld-language-select" className="flex items-center gap-[6px] text-small font-semibold text-ink">
-                  <span aria-hidden className="size-[7px] shrink-0 rounded-pill bg-ink" />
-                  Sprachfassung (AniWorld, SerienStream &amp; mehrsprachige Streams)
-                </label>
-                <Select
-                  id="aniworld-language-select"
-                  value={filePrefs.aniworldLanguage}
-                  onChange={(e) => {
-                    const nextLang = e.target.value as AniworldLanguagePref
-                    updateFilePrefs({ aniworldLanguage: nextLang })
-                    const matched = matchingSavedLink(url)
-                    if (matched) updateSavedLink(matched.id, { language: nextLang })
-                    if (result || batchEntries) void look(undefined, nextLang)
-                  }}
-                >
-                  <option value="auto">Automatisch — Bevorzugt deutsche Synchronisation (Ger-Dub) oder Untertitel (Ger-Sub)</option>
-                  <option value="ger_sub">Deutsch Sub (Ger-Sub / OmU — Originalton mit deutschem Untertitel)</option>
-                  <option value="ger_dub">Deutsch Dub (Ger-Dub — Deutsche Synchronfassung)</option>
-                  <option value="eng_sub">Englisch Sub (Eng-Sub — Originalton mit englischem Untertitel)</option>
-                </Select>
-                <span className="text-small leading-[1.45] text-muted">
-                  Bestimmt die bevorzugte Sprachfassung für Anime, Serien und mehrsprachige Streams. Falls die gewünschte Fassung nicht existiert, wird automatisch die nächstbeste Fassung gewählt.
-                </span>
-              </div>
-
               {IN_DESKTOP_APP ? (
                 <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
-                  <label htmlFor="adapter-select" className="text-small font-medium text-ink">
+                  <label htmlFor="adapter-select" className="text-small text-prose">
                     Netzwerk
                   </label>
                   <div className="flex flex-wrap items-center gap-[12px]">
@@ -2438,6 +2264,7 @@ export function DownloaderPanel() {
                   </div>
                 </div>
               ) : null}
+              </div>
             </div>
           </div>
         </form>
@@ -2530,24 +2357,17 @@ export function DownloaderPanel() {
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-start gap-[8px]">
-              <Button
-                type="button"
-                size="sm"
-                variant={matchingSavedLink(url) ? 'primary' : 'quiet'}
-                onClick={() => saveOrUpdateLink(url, result.title)}
-              >
-                <BookmarkIcon filled={Boolean(matchingSavedLink(url))} />
-                {matchingSavedLink(url) ? 'Gespeichert' : 'Link speichern'}
-              </Button>
-              {linkEpisode !== null ? (
+              {/* „Merken" stands once, next to the field; here only the step
+                  on, and only where there is a next one. It showed „Nächste
+                  Folge" under a single video too. */}
+              {episodeKind && linkEpisode !== null ? (
                 <Button
                   type="button"
                   size="sm"
                   variant="quiet"
                   onClick={() => applyLinkSeasonEpisode(linkSeason, linkEpisode + 1, true)}
-                  title="Direkt zur nächsten Episode springen und nachsehen"
                 >
-                  Nächste Folge (Ep. {linkEpisode + 1})
+                  {episodeKind === 'list' ? `Weiter mit Nr. ${linkEpisode + 1}` : linkSeason === 0 ? `Weiter mit Film ${linkEpisode + 1}` : `Weiter mit Folge ${linkEpisode + 1}`}
                   <ArrowRight />
                 </Button>
               ) : null}
@@ -3049,397 +2869,41 @@ export function DownloaderPanel() {
         </Card>
       ) : null}
 
-      {/* Gespeicherte Links & Serien-Tracker */}
-      <Card tone="cream">
-        <div className="flex flex-wrap items-center justify-between gap-[10px] border-b border-line pb-[10px]">
-          <div>
-            <h3 className="flex items-center gap-[8px] text-subheading text-ink">
-              <BookmarkIcon filled={savedLinks.length > 0} />
-              Gespeicherte Links
-              {savedLinks.length > 0 ? (
-                <span className="value rounded-pill bg-panel-soft px-[8px] py-[2px] text-micro font-semibold text-ink ring-1 ring-inset ring-rule">
-                  {savedLinks.length}
-                </span>
-              ) : null}
-            </h3>
-            <p className="mt-[2px] text-small text-muted">
-              Merken Sie sich Links, Anime, Serien oder Playlists samt Sprache, Staffel, Episode und Qualität.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-[8px]">
-            {url.trim().length > 0 ? (
-              <Button
-                type="button"
-                size="sm"
-                variant={matchingSavedLink(url) ? 'primary' : 'quiet'}
-                onClick={() => saveOrUpdateLink()}
-              >
-                <BookmarkIcon filled={Boolean(matchingSavedLink(url))} />
-                {matchingSavedLink(url) ? 'Aktuellen Stand speichern' : 'Aktuelle Adresse merken'}
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant={addingSavedLink ? 'primary' : 'quiet'}
-              onClick={() => setAddingSavedLink((open) => !open)}
-            >
-              {addingSavedLink ? 'Schliessen' : '+ Link hinzufügen'}
-            </Button>
-          </div>
-        </div>
-
-        {addingSavedLink ? (
-          <form
-            className="mt-[12px] flex flex-col gap-[8px] rounded-card border border-line bg-raised p-[12px] sm:flex-row sm:items-end"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (!newSavedUrl.trim()) return
-              saveOrUpdateLink(newSavedUrl, newSavedTitle || undefined)
-              setNewSavedUrl('')
-              setNewSavedTitle('')
-              setAddingSavedLink(false)
-            }}
-          >
-            <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
-              <label htmlFor="new-saved-url" className="text-small font-medium text-ink">
-                Adresse (z. B. AniWorld, SerienStream, YouTube, Podcast …)
-              </label>
-              <input
-                id="new-saved-url"
-                type="text"
-                value={newSavedUrl}
-                onChange={(e) => setNewSavedUrl(e.target.value)}
-                placeholder="https://aniworld.to/anime/stream/..."
-                className="value h-[38px] w-full rounded-nav border-0 bg-panel-soft px-[12px] text-small text-ink outline-none ring-1 ring-inset ring-rule focus:ring-2 focus:ring-ink"
-              />
-            </div>
-            <div className="flex flex-col gap-[4px] sm:w-[220px]">
-              <label htmlFor="new-saved-title" className="text-small font-medium text-ink">
-                Name (optional)
-              </label>
-              <input
-                id="new-saved-title"
-                type="text"
-                value={newSavedTitle}
-                onChange={(e) => setNewSavedTitle(e.target.value)}
-                placeholder="Wird automatisch erkannt"
-                className="h-[38px] w-full rounded-nav border-0 bg-panel-soft px-[12px] text-small text-ink outline-none ring-1 ring-inset ring-rule focus:ring-2 focus:ring-ink"
-              />
-            </div>
-            <Button type="submit" size="sm" disabled={!newSavedUrl.trim()} className="h-[38px] shrink-0">
-              Speichern
-            </Button>
-          </form>
-        ) : null}
-
-        {savedLinks.length === 0 ? (
-          <p className="pt-[12px] text-small text-muted">
-            Noch keine Links gespeichert. Fügen Sie oben eine Adresse ein und klicken Sie auf „Link speichern“ oder auf „+ Link hinzufügen“.
-          </p>
-        ) : (
-          <div className="mt-[10px] flex flex-col divide-y divide-line">
-            {savedLinks.map((item) => {
-              const badge = sourceBadgeForUrl(item.url)
-              const isEditingTitle = editingSavedId === item.id
-              const langLabel =
-                item.language === 'ger_sub'
-                  ? 'Ger-Sub'
-                  : item.language === 'ger_dub'
-                    ? 'Ger-Dub'
-                    : item.language === 'eng_sub'
-                      ? 'Eng-Sub'
-                      : 'Auto'
-              const posLabel =
-                item.season === 0
-                  ? item.episode
-                    ? `Filme · Film ${item.episode}`
-                    : 'Alle Filme'
-                  : item.episode
-                    ? `Staffel ${item.season} · Folge ${item.episode}`
-                    : `Staffel ${item.season} · Alle Folgen`
-
-              return (
-                <div key={item.id} className="flex flex-col gap-[10px] py-[12px] first:pt-[4px] last:pb-0">
-                  <div className="flex flex-col gap-[8px] sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-[8px]">
-                        <span className="rounded-pill bg-panel-strong px-[8px] py-[2px] text-micro font-semibold text-ink">
-                          {badge}
-                        </span>
-                        {isEditingTitle ? (
-                          <input
-                            type="text"
-                            value={item.title}
-                            autoFocus
-                            onChange={(e) => updateSavedLink(item.id, { title: e.target.value })}
-                            onBlur={() => setEditingSavedId(null)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === 'Escape') setEditingSavedId(null)
-                            }}
-                            className="h-[28px] min-w-[200px] rounded-nav border-0 bg-raised px-[8px] text-body font-semibold text-ink outline-none ring-1 ring-inset ring-ink"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditingSavedId(item.id)}
-                            title="Klicken zum Umbenennen"
-                            className="press truncate text-left text-body font-semibold text-ink hover:underline"
-                          >
-                            {item.title}
-                          </button>
-                        )}
-                        <span className="value rounded-nav bg-panel-soft px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-rule">
-                          {posLabel} · {langLabel}
-                        </span>
-                      </div>
-                      <p className="value mt-[2px] truncate text-small text-muted" title={item.url}>
-                        {item.url}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-[6px]">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => openSavedLink(item, true)}
-                        title="Link und alle seine Einstellungen übernehmen und sofort nachsehen"
-                      >
-                        Nachsehen
-                      </Button>
-                      {item.episode !== null ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="quiet"
-                          onClick={() => {
-                            const nextEp = (item.episode ?? 1) + 1
-                            const nextUrl = buildUrlWithEpisode(item.url, item.season, nextEp)
-                            updateSavedLink(item.id, { episode: nextEp, url: nextUrl })
-                            openSavedLink({ ...item, episode: nextEp, url: nextUrl }, true)
-                          }}
-                          title="Direkt auf die nächste Episode schalten und nachsehen"
-                        >
-                          +1 Folge (Ep. {(item.episode ?? 1) + 1})
-                        </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(item.url)
-                          log('holen', `Adresse in Zwischenablage kopiert: ${item.title}`)
-                        }}
-                      >
-                        Kopieren
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeSavedLink(item.id)}
-                      >
-                        Löschen
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Per-Link Settings Bar: Sprache · Staffel · Episode · Modus · Qualität · KI-UT */}
-                  <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[8px] rounded-nav bg-panel-soft px-[10px] py-[8px] ring-1 ring-inset ring-rule">
-                    <div className="flex flex-wrap items-center gap-[6px]">
-                      <span className="text-micro font-semibold uppercase tracking-wide text-muted">Sprache</span>
-                      <ChoiceRow
-                        value={item.language}
-                        options={[
-                          { value: 'auto', label: 'Auto' },
-                          { value: 'ger_sub', label: 'Ger-Sub' },
-                          { value: 'ger_dub', label: 'Ger-Dub' },
-                          { value: 'eng_sub', label: 'Eng-Sub' },
-                        ]}
-                        onChange={(val) => updateSavedLink(item.id, { language: val as AniworldLanguagePref })}
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-[6px]">
-                      <span className="text-micro font-semibold uppercase tracking-wide text-muted">Staffel</span>
-                      <button
-                        type="button"
-                        aria-pressed={item.season === 0}
-                        onClick={() => updateSavedLink(item.id, { season: item.season === 0 ? 1 : 0 })}
-                        className={`press rounded-nav px-[7px] py-[3px] text-small font-medium transition-colors ${
-                          item.season === 0
-                            ? 'bg-ink text-on-ink ring-1 ring-inset ring-ink'
-                            : 'bg-raised text-ink ring-1 ring-inset ring-rule hover:ring-ink'
-                        }`}
-                      >
-                        Filme
-                      </button>
-                      {item.season > 0 ? (
-                        <div className="inline-flex items-center rounded-nav bg-raised ring-1 ring-inset ring-rule">
-                          <button
-                            type="button"
-                            aria-label="Vorherige Staffel"
-                            disabled={item.season <= 1}
-                            onClick={() => updateSavedLink(item.id, { season: Math.max(1, item.season - 1) })}
-                            className="press px-[7px] py-[3px] text-small font-semibold text-ink disabled:opacity-40"
-                          >
-                            −
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={99}
-                            aria-label={`Staffel für ${item.title}`}
-                            value={item.season}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10)
-                              if (!Number.isNaN(val) && val >= 1) {
-                                updateSavedLink(item.id, { season: val })
-                              }
-                            }}
-                            className="value w-[34px] border-0 bg-transparent text-center text-small font-semibold text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                          <button
-                            type="button"
-                            aria-label="Nächste Staffel"
-                            onClick={() => updateSavedLink(item.id, { season: item.season + 1 })}
-                            className="press px-[7px] py-[3px] text-small font-semibold text-ink"
-                          >
-                            +
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-[6px]">
-                      <span className="text-micro font-semibold uppercase tracking-wide text-muted">Episode</span>
-                      <button
-                        type="button"
-                        aria-pressed={item.episode === null}
-                        onClick={() => updateSavedLink(item.id, { episode: item.episode === null ? 1 : null })}
-                        className={`press rounded-nav px-[7px] py-[3px] text-small font-medium transition-colors ${
-                          item.episode === null
-                            ? 'bg-ink text-on-ink ring-1 ring-inset ring-ink'
-                            : 'bg-raised text-ink ring-1 ring-inset ring-rule hover:ring-ink'
-                        }`}
-                      >
-                        Alle
-                      </button>
-                      {item.episode !== null ? (
-                        <div className="inline-flex items-center rounded-nav bg-raised ring-1 ring-inset ring-rule">
-                          <button
-                            type="button"
-                            aria-label="Vorherige Episode"
-                            disabled={item.episode <= 1}
-                            onClick={() => updateSavedLink(item.id, { episode: Math.max(1, (item.episode ?? 1) - 1) })}
-                            className="press px-[7px] py-[3px] text-small font-semibold text-ink disabled:opacity-40"
-                          >
-                            −
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={9999}
-                            aria-label={`Episode für ${item.title}`}
-                            value={item.episode}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10)
-                              if (!Number.isNaN(val) && val >= 1) {
-                                updateSavedLink(item.id, { episode: val })
-                              }
-                            }}
-                            className="value w-[40px] border-0 bg-transparent text-center text-small font-semibold text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                          <button
-                            type="button"
-                            aria-label="Nächste Episode"
-                            onClick={() => updateSavedLink(item.id, { episode: (item.episode ?? 1) + 1 })}
-                            className="press px-[7px] py-[3px] text-small font-semibold text-ink"
-                          >
-                            +
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-[6px]">
-                      <span className="text-micro font-semibold uppercase tracking-wide text-muted">Modus</span>
-                      <ChoiceRow
-                        value={item.mode}
-                        options={[
-                          { value: 'video', label: 'Video' },
-                          { value: 'audio', label: 'Nur Ton' },
-                        ]}
-                        onChange={(val) => updateSavedLink(item.id, { mode: val as 'video' | 'audio' })}
-                      />
-                      {item.mode === 'audio' ? (
-                        <Select
-                          aria-label={`Ton-Format für ${item.title}`}
-                          value={item.audioFormat}
-                          onChange={(e) => updateSavedLink(item.id, { audioFormat: e.target.value as AudioOutputFormat })}
-                          className="w-auto! py-[3px] text-small"
-                        >
-                          {AUDIO_FORMAT_CONFIGS.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.label}
-                            </option>
-                          ))}
-                        </Select>
-                      ) : null}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-[6px] sm:ml-auto">
-                      <span className="text-micro font-semibold uppercase tracking-wide text-muted">Qualität</span>
-                      {item.mode === 'audio' ? (
-                        <Select
-                          aria-label={`Ton-Qualität für ${item.title}`}
-                          value={item.audioPref}
-                          onChange={(e) => updateSavedLink(item.id, { audioPref: e.target.value as AudioFilePref })}
-                          className="w-auto! py-[3px] text-small"
-                        >
-                          <option value="untouched">Original (1:1)</option>
-                          <option value="high">Hoch (320k)</option>
-                          <option value="medium">Mittel (192k)</option>
-                          <option value="low">Kompakt (128k)</option>
-                          <option value="lossless">Verlustfrei</option>
-                        </Select>
-                      ) : (
-                        <Select
-                          aria-label={`Video-Qualität für ${item.title}`}
-                          value={item.videoPref}
-                          onChange={(e) => updateSavedLink(item.id, { videoPref: e.target.value as VideoFilePref })}
-                          className="w-auto! py-[3px] text-small"
-                        >
-                          <option value="untouched">Original (1:1)</option>
-                          <option value="best">Beste (bis 4K)</option>
-                          <option value="1080p">1080p Full HD</option>
-                          <option value="720p">720p HD</option>
-                          <option value="480p">480p SD</option>
-                          <option value="360p">360p Kompakt</option>
-                        </Select>
-                      )}
-                      <button
-                        type="button"
-                        aria-pressed={item.autoTranscribe}
-                        onClick={() => updateSavedLink(item.id, { autoTranscribe: !item.autoTranscribe })}
-                        title="Automatische lokale Whisper-Untertitel (.srt) beim Herunterladen für diesen Link"
-                        className={`press rounded-nav px-[8px] py-[4px] text-micro font-semibold transition-colors ${
-                          item.autoTranscribe
-                            ? 'bg-ink text-on-ink ring-1 ring-inset ring-ink'
-                            : 'bg-raised text-ink ring-1 ring-inset ring-rule hover:ring-ink'
-                        }`}
-                      >
-                        {item.autoTranscribe ? 'KI-UT an' : 'KI-UT'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Card>
+      {/* The Merkliste: what someone is following and where they are in it. */}
+      <Merkliste
+        items={savedLinks}
+        audioFormats={AUDIO_FORMAT_CONFIGS}
+        currentUrl={url}
+        currentSaved={Boolean(matchingSavedLink(url))}
+        onSaveCurrent={() => saveOrUpdateLink()}
+        onAdd={(address, title) => saveOrUpdateLink(address, title)}
+        onOpen={(item) => {
+          updateSavedLink(item.id, { lastOpenedAt: Date.now() })
+          openSavedLink(item, true)
+        }}
+        onNext={(item) => {
+          const nextEpisode = (item.episode ?? 0) + 1
+          const nextUrl = buildUrlWithEpisode(item.url, item.season, nextEpisode)
+          updateSavedLink(item.id, { episode: nextEpisode, url: nextUrl, lastOpenedAt: Date.now(), status: 'watching' })
+          openSavedLink({ ...item, episode: nextEpisode, url: nextUrl }, true)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        onUpdate={updateSavedLink}
+        onRemove={removeSavedLink}
+        onRestore={(item, index) => {
+          setSavedLinks((prev) => {
+            if (prev.some((entry) => entry.id === item.id)) return prev
+            const next = [...prev]
+            next.splice(Math.max(0, Math.min(index, next.length)), 0, item)
+            saveSavedLinks(next)
+            return next
+          })
+        }}
+        onCopy={(item) => {
+          void navigator.clipboard.writeText(item.url)
+          log('holen', `Adresse in die Zwischenablage kopiert: ${item.title}`)
+        }}
+      />
 
       {/* Download-Verlauf (Historie) */}
       {history.length > 0 ? (
@@ -3502,7 +2966,7 @@ export function DownloaderPanel() {
                     size="sm"
                     variant="ghost"
                     onClick={() => saveOrUpdateLink(item.url, item.title)}
-                    title="Diesen Link zu „Gespeicherte Links“ hinzufügen"
+                    title="Auf die Merkliste setzen"
                   >
                     <BookmarkIcon filled={Boolean(matchingSavedLink(item.url))} />
                     Merken
