@@ -52,6 +52,13 @@ export const PANELS: PanelMeta[] = [
     ),
   },
   {
+    id: 'merkliste',
+    slug: 'merkliste',
+    label: 'Merkliste',
+    summary: 'Serien und Listen, die Sie schauen — Staffeln, Folgen, Fortschritt',
+    icon: <path d="M4.2 2.4h7.6v11.2L8 10.9l-3.8 2.7zM6.2 5.6h3.6" />,
+  },
+  {
     id: 'converter',
     slug: 'umwandeln',
     label: 'Umwandeln',

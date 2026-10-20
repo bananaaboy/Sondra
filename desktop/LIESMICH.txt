@@ -68,6 +68,13 @@ Herunterladen von Videoportalen
   auf diesem Rechner. Eine Stream-Adresse (.m3u8) wird Stück für Stück
   geladen und hier zu einer MP4 zusammengefügt.
 
+Merkliste
+  Unter „Merkliste“ Serien und Listen festhalten, die Sie schauen: jede
+  Staffel als Kachel mit Cover und Fortschritt, ein Klick zeigt die Folgen
+  zum Abhaken. „Folge … laden“ holt die nächste Folge im Herunterladen,
+  „Folge … gesehen“ hakt sie ab. Cover per Bildadresse oder Datei, dazu Notiz
+  und Bewertung. Gespeichert nur auf diesem Rechner.
+
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →
   Deinstallieren.

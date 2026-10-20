@@ -19,6 +19,7 @@ import { useSession } from '../state/store'
  */
 const TOOLS = {
   downloader: () => import('./panels/DownloaderPanel').then((m) => ({ default: m.DownloaderPanel })),
+  merkliste: () => import('./panels/MerklistePanel').then((m) => ({ default: m.MerklistePanel })),
   converter: () => import('./panels/ConverterPanel').then((m) => ({ default: m.ConverterPanel })),
   audio: () => import('./panels/AudioEditorPanel').then((m) => ({ default: m.AudioEditorPanel })),
   video: () => import('./panels/VideoPanel').then((m) => ({ default: m.VideoPanel })),
@@ -35,6 +36,7 @@ const TOOLS = {
 } satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType<{ hidden?: boolean }> | ComponentType }>>
 
 const DownloaderPanel = lazy(TOOLS.downloader)
+const MerklistePanel = lazy(TOOLS.merkliste)
 const ConverterPanel = lazy(TOOLS.converter)
 const AudioEditorPanel = lazy(TOOLS.audio)
 const VideoPanel = lazy(TOOLS.video)
@@ -326,6 +328,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     hasAssets ||
     panel === 'start' ||
     panel === 'downloader' ||
+    panel === 'merkliste' ||
     panel === 'video' ||
     panel === 'images' ||
     panel === 'audio' ||
@@ -349,6 +352,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
               <Suspense fallback={<ToolLoading />}>
                 {panel === 'start' ? <Home /> : null}
                 {panel === 'downloader' ? <DownloaderPanel /> : null}
+                {panel === 'merkliste' ? <MerklistePanel /> : null}
                 {panel === 'converter' ? <ConverterPanel /> : null}
                 {panel === 'audio' ? <AudioEditorPanel /> : null}
                 {panel === 'video' ? <VideoPanel /> : null}

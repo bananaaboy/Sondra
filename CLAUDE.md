@@ -293,5 +293,12 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   immer; hinter einem Schul- oder Firmenproxy hilft der Zertifikatspeicher
   des Systems (`tls.getCACertificates('system')`), nie `rejectUnauthorized:
   false`. `npm run verify:download` prüft das ohne Netz.
+- **Merkliste** (`#merkliste`, `MerklistePanel.tsx`, Daten in
+  `lib/merkliste.ts`): ein Speicher für den Tab und „Merken“ im
+  Herunterladen (`useMerkliste`, `localStorage` `sondra:saved_links`,
+  Projektdatei unter `merkliste`). „Folge n laden“ legt den Eintrag mit
+  `requestLookup` ab und wechselt den Tab; das Herunterladen nimmt ihn beim
+  Öffnen (`takePendingLookup`). Covers aus Dateien werden auf 480 px JPEG
+  verkleinert, weil sie im `localStorage` liegen.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
