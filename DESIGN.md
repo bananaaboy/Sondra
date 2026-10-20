@@ -811,6 +811,12 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   - Unter der Liste eine Zeile: „Nur auf diesem Gerät gespeichert.“ mit
     „Exportieren“ und „Aus Datei einlesen“ als Links; nach dem Einlesen ein
     Satz, was neu, neuer, gleich oder hier neuer war, und „Rückgängig“.
+  - **Anytype** (nur in der App): ein dritter Link „Mit Anytype verbinden“
+    öffnet ein Fenster, das Schritt für Schritt führt — Anytype offen? Code
+    anfordern, die vier Ziffern eintippen, Space wählen —, danach steht in
+    der Zeile „Mit Anytype abgeglichen · „Space“ · 14:55“, ein Fehler als
+    `Notice` darunter. Im Browser steht statt des Knopfs der Satz „Mit
+    Anytype abgleichen geht in der Sondra-App“: dort ginge er nie.
 - **Staffel und Folge stehen nur da, wo die Adresse sie hat**
   (`episodeKindOf`), als **ein** Element (`EpisodePicker`): „‹ Staffel 3 ·
   Folge 5 ›“, die Pfeile gehen eine Folge zurück oder weiter, ein Klick auf
