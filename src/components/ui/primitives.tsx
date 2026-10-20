@@ -20,7 +20,7 @@
  * and graphite.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 
@@ -417,13 +417,19 @@ export function Reveal({
   label,
   children,
   className = '',
+  defaultOpen = false,
 }: {
   label: string
   children: ReactNode
   className?: string
+  /** Open on first show — when what is inside is needed now. Taken once. */
+  defaultOpen?: boolean
 }) {
+  // Read once: a prop that flipped later would fold the section away under
+  // the hand that is filling it in.
+  const [initiallyOpen] = useState(defaultOpen)
   return (
-    <details className={`group border-t border-line ${className}`}>
+    <details open={initiallyOpen || undefined} className={`group border-t border-line ${className}`}>
       <summary className="press inline-flex cursor-pointer list-none items-center gap-[8px] py-[8px] text-small text-muted hover:text-ink">
         <span className="value text-ink">
           <span className="group-open:hidden">+</span>
@@ -457,11 +463,14 @@ export function Dialog({
   onClose,
   title,
   children,
+  size = 'lg',
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
+  /** `md` for a short form or a single task, `lg` for a full sheet. */
+  size?: 'md' | 'lg'
 }) {
   const ref = useRef<HTMLDialogElement>(null)
 
@@ -483,7 +492,7 @@ export function Dialog({
       onClick={(event) => {
         if (event.target === ref.current) onClose()
       }}
-      className="m-auto w-[min(920px,calc(100vw-24px))] bg-canvas p-0 text-prose ring-1 ring-rule backdrop:bg-ink/50"
+      className={`m-auto ${size === 'md' ? 'w-[min(680px,calc(100vw-24px))]' : 'w-[min(920px,calc(100vw-24px))]'} bg-canvas p-0 text-prose ring-1 ring-rule backdrop:bg-ink/50`}
     >
       <div className="flex max-h-[min(88vh,900px)] flex-col">
         <div className="flex items-center justify-between gap-[12px] border-b-2 border-rule px-[24px] py-[16px]">

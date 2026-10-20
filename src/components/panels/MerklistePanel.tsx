@@ -58,7 +58,7 @@ import {
 } from '../../lib/merkliste'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
-import { Button, Card, Dialog, Notice, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
+import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
 import type { AudioFilePref, AudioOutputFormat, VideoFilePref } from './DownloaderPanel'
 import {
   AUDIO_QUALITY_OPTIONS,
@@ -105,9 +105,9 @@ function ProgressBar({ fraction, label }: { fraction: number | null; label: stri
   )
 }
 
-function StarIcon({ filled }: { filled: boolean }) {
+function StarIcon({ filled, className = 'size-[18px]' }: { filled: boolean; className?: string }) {
   return (
-    <svg viewBox="0 0 16 16" className="size-[18px]" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" aria-hidden>
+    <svg viewBox="0 0 16 16" className={className} fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" aria-hidden>
       <path d="M8 1.9l1.85 3.85 4.2.58-3.06 2.95.75 4.18L8 11.45l-3.74 2.01.75-4.18L1.95 6.33l4.2-.58z" />
     </svg>
   )
@@ -237,7 +237,7 @@ function CoverField({
 
   return (
     <div className="flex flex-col gap-[8px]">
-      <span className="text-small text-prose">{label}</span>
+      {label ? <span className="text-small text-prose">{label}</span> : null}
       <div className="flex flex-col gap-[14px] sm:flex-row">
         {value ? (
           <FrameEditor
@@ -442,16 +442,6 @@ function FrameEditor({
   )
 }
 
-/** A form line: the rule, the question, the answer. */
-function Line({ label, children, wide = false }: { label?: string; children: ReactNode; wide?: boolean }) {
-  return (
-    <div className={`flex flex-col gap-[8px] border-t border-line pt-[10px] ${wide ? 'sm:col-span-2' : ''}`}>
-      {label ? <span className="text-small text-prose">{label}</span> : null}
-      {children}
-    </div>
-  )
-}
-
 const textAreaClass =
   'min-h-[84px] w-full rounded-nav border-0 bg-raised px-[12px] py-[8px] text-small leading-[1.5] text-prose outline-none ring-1 ring-inset ring-rule hover:ring-muted focus:ring-2 focus:ring-ink'
 
@@ -494,33 +484,30 @@ const hereLabel = (item: SavedLinkItem) => {
 export function MerklistePanel() {
   const items = useMerkliste()
   const setPanel = useSession((state) => state.setPanel)
-  const [filter, setFilter] = useState<'all' | SavedLinkStatus>('all')
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
   const [season, setSeason] = useState<{ id: string; number: number; part: number } | null>(null)
   const [removed, setRemoved] = useState<{ item: SavedLinkItem; index: number } | null>(null)
 
-  const counts = useMemo(() => {
-    const result: Record<SavedLinkStatus, number> = { watching: 0, later: 0, done: 0 }
-    for (const item of items) result[statusOf(item)] += 1
-    return result
-  }, [items])
+  const watchingCount = useMemo(() => items.filter((item) => statusOf(item) === 'watching').length, [items])
   const seenTotal = useMemo(() => items.reduce((sum, item) => sum + itemProgress(item).watched, 0), [items])
 
-  const shown = useMemo(() => {
-    const order: Record<SavedLinkStatus, number> = { watching: 0, later: 1, done: 2 }
+  // Grouped by where each entry stands — what is being watched first, with
+  // its seasons in view; what is for later or finished as a line each. The
+  // groups took the place of a row of filter chips that said the same.
+  const groups = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return items
-      .filter((item) => filter === 'all' || statusOf(item) === filter)
-      .filter((item) => !needle || item.title.toLowerCase().includes(needle) || (item.notes ?? '').toLowerCase().includes(needle))
-      .slice()
-      .sort(
-        (a, b) =>
-          order[statusOf(a)] - order[statusOf(b)] ||
-          (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt),
-      )
-  }, [items, filter, query])
+    const found = items.filter(
+      (item) => !needle || item.title.toLowerCase().includes(needle) || (item.notes ?? '').toLowerCase().includes(needle),
+    )
+    return STATUS_OPTIONS.map((option) => ({
+      ...option,
+      entries: found
+        .filter((item) => statusOf(item) === option.value)
+        .sort((a, b) => (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt)),
+    })).filter((group) => group.entries.length > 0)
+  }, [items, query])
 
   const editingItem = items.find((item) => item.id === editing) ?? null
   const seasonItem = season ? (items.find((item) => item.id === season.id) ?? null) : null
@@ -533,7 +520,7 @@ export function MerklistePanel() {
   }
 
   return (
-    <div className="flex flex-col gap-[16px]">
+    <div className="flex flex-col gap-[32px]">
       <Card tone="cream">
         <div className="mt-[8px] flex flex-wrap items-end justify-between gap-x-[16px] gap-y-[12px]">
           <div className="min-w-0">
@@ -541,44 +528,25 @@ export function MerklistePanel() {
             <p className="mt-[4px] text-body text-prose">
               {items.length === 0
                 ? 'Serien, Staffeln und Listen, die Sie schauen — mit dem, was Sie schon gesehen haben.'
-                : `${counts.watching} am Schauen · ${seenTotal} ${seenTotal === 1 ? 'Folge' : 'Folgen'} gesehen`}
+                : `${watchingCount} am Schauen · ${seenTotal} ${seenTotal === 1 ? 'Folge' : 'Folgen'} gesehen`}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-[8px]">
-            <Button type="button" variant="quiet" size="sm" onClick={() => setPanel('downloader')}>
-              Zum Herunterladen
-            </Button>
-            <Button type="button" size="sm" onClick={() => setAdding(true)}>
-              Serie hinzufügen
-            </Button>
-          </div>
-        </div>
-
-        {items.length > 1 ? (
-          <div className="mt-[16px] flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[10px] border-t border-line pt-[12px]">
-            <ChoiceRow
-              value={filter}
-              options={[
-                { value: 'all', label: `Alle ${items.length}` },
-                ...STATUS_OPTIONS.filter((option) => counts[option.value] > 0).map((option) => ({
-                  value: option.value,
-                  label: `${option.label} ${counts[option.value]}`,
-                })),
-              ]}
-              onChange={(value) => setFilter(value)}
-            />
+          <div className="flex w-full flex-wrap items-center gap-[8px] sm:w-auto">
             {items.length > 5 ? (
               <TextInput
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="In der Merkliste suchen"
+                placeholder="Suchen"
                 aria-label="In der Merkliste suchen"
-                className="font-sans sm:max-w-[280px]"
+                className="min-w-0 flex-1 font-sans sm:w-[220px] sm:flex-none"
               />
             ) : null}
+            <Button type="button" size="sm" onClick={() => setAdding(true)}>
+              Serie hinzufügen
+            </Button>
           </div>
-        ) : null}
+        </div>
 
         {removed ? (
           <p role="status" className="rise mt-[12px] flex flex-wrap items-center gap-x-[12px] text-small text-prose">
@@ -594,7 +562,7 @@ export function MerklistePanel() {
                 })
                 setRemoved(null)
               }}
-              className="press rounded-nav font-semibold text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+              className={`${linkClass} font-semibold`}
             >
               Rückgängig
             </button>
@@ -604,16 +572,33 @@ export function MerklistePanel() {
 
       {items.length === 0 ? (
         <EmptyState onAdd={() => setAdding(true)} onDownload={() => setPanel('downloader')} />
-      ) : shown.length === 0 ? (
-        <p className="text-small text-muted">In dieser Auswahl steht gerade nichts.</p>
+      ) : groups.length === 0 ? (
+        <p className="text-small text-prose">Nichts gefunden für „{query.trim()}“.</p>
       ) : (
-        shown.map((item) => (
-          <Series
-            key={item.id}
-            item={item}
-            onEdit={() => setEditing(item.id)}
-            onSeason={(number, part) => setSeason({ id: item.id, number, part })}
-          />
+        groups.map((group) => (
+          <section key={group.value} aria-label={group.label} className="flex flex-col">
+            <h3 className="flex items-baseline gap-[10px] pb-[10px] text-subheading text-ink">
+              {group.label}
+              <span className="value text-small text-muted">{group.entries.length}</span>
+            </h3>
+            {group.entries.map((item) =>
+              group.value === 'watching' ? (
+                <Series
+                  key={item.id}
+                  item={item}
+                  onEdit={() => setEditing(item.id)}
+                  onSeason={(number, part) => setSeason({ id: item.id, number, part })}
+                />
+              ) : (
+                <ShelfRow
+                  key={item.id}
+                  item={item}
+                  onEdit={() => setEditing(item.id)}
+                  onSeason={(number, part) => setSeason({ id: item.id, number, part })}
+                />
+              ),
+            )}
+          </section>
         ))
       )}
 
@@ -639,7 +624,8 @@ export function MerklistePanel() {
 /**
  * The list as a file: to keep, or to take to another device. The list lives
  * only on this one, so this is the way it leaves; reading a file in merges
- * it, and one click takes the merge back.
+ * it, and one click takes the merge back. One quiet line at the foot of the
+ * list — it was a paragraph with two framed buttons.
  */
 function Transfer({ items }: { items: SavedLinkItem[] }) {
   const fileRef = useRef<HTMLInputElement>(null)
@@ -677,19 +663,17 @@ function Transfer({ items }: { items: SavedLinkItem[] }) {
 
   return (
     <div className="flex flex-col gap-[12px] border-t border-line pt-[14px]">
-      <div className="flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[10px]">
-        <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
-          Die Merkliste liegt nur auf diesem Gerät. Als Datei lässt sie sich sichern und auf einem anderen einlesen.
-        </p>
-        <span className="flex flex-wrap gap-[8px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-[20px] gap-y-[6px] text-small">
+        <span className="text-prose">Nur auf diesem Gerät gespeichert.</span>
+        <span className="flex flex-wrap gap-x-[18px] gap-y-[4px]">
           {items.length > 0 ? (
-            <Button type="button" variant="quiet" size="sm" onClick={exportFile}>
+            <button type="button" onClick={exportFile} className={linkClass}>
               Exportieren
-            </Button>
+            </button>
           ) : null}
-          <Button type="button" variant="quiet" size="sm" onClick={() => fileRef.current?.click()}>
+          <button type="button" onClick={() => fileRef.current?.click()} className={linkClass}>
             Aus Datei einlesen
-          </Button>
+          </button>
         </span>
       </div>
       {problem ? (
@@ -706,7 +690,7 @@ function Transfer({ items }: { items: SavedLinkItem[] }) {
               setMerkItems(done.before)
               setDone(null)
             }}
-            className="press rounded-nav font-semibold text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+            className={`${linkClass} font-semibold`}
           >
             Rückgängig
           </button>
@@ -732,10 +716,9 @@ function EmptyState({ onAdd, onDownload }: { onAdd: () => void; onDownload: () =
     <div className="grid gap-[24px] border-t border-line pt-[20px] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="flex flex-col gap-[12px]">
         <p className="text-subheading text-ink">Noch nichts auf der Merkliste</p>
-        <p className="text-small leading-[1.55] text-prose">
-          Eine Serie hinzufügen, sagen, wie viele Staffeln und Folgen sie hat, und abhaken, was gesehen ist. Jede
-          Staffel wird eine Kachel mit Cover und Fortschritt. Steht eine Adresse dabei, lädt „Weiter mit Folge …“ die
-          nächste gleich im Herunterladen.
+        <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+          Eine Serie hinzufügen, Staffeln und Folgen angeben, abhaken, was gesehen ist. Mit einer Adresse holt „Folge …
+          laden“ die nächste gleich im Herunterladen.
         </p>
         <div className="flex flex-wrap gap-[8px]">
           <Button type="button" onClick={onAdd}>
@@ -747,11 +730,11 @@ function EmptyState({ onAdd, onDownload }: { onAdd: () => void; onDownload: () =
         </div>
       </div>
       {/* What it will look like, drawn with the tile itself. */}
-      <div aria-hidden className="grid grid-cols-3 gap-[10px] opacity-60">
+      <div aria-hidden className="grid grid-cols-4 gap-[10px] self-start opacity-60">
         {[1, 2, 3].map((n) => (
           <span key={n} className="relative aspect-[2/3] overflow-hidden rounded-card bg-panel-mid">
-            <span className="display-md absolute inset-0 flex items-center justify-center text-ink/30">{n}</span>
-            <span className="absolute inset-x-[10px] bottom-[10px]">
+            <span className="absolute inset-0 flex items-center justify-center text-[36px] leading-none text-ink/30">{n}</span>
+            <span className="absolute inset-x-[8px] bottom-[8px]">
               <ProgressBar fraction={n === 1 ? 1 : n === 2 ? 0.45 : 0} label="" />
             </span>
           </span>
@@ -928,6 +911,40 @@ function CoverImage({
 /* One series                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/** The nearest cover with its frame: the part's, the season's, the series'. */
+function coverOf(item: SavedLinkItem, season: MerkSeason, part: SeasonPart): { src: string; frame?: CoverFrame } | null {
+  if (part.cover) return { src: part.cover, frame: part.coverFrame }
+  if (season.cover) return { src: season.cover, frame: season.coverFrame }
+  if (item.cover) return { src: item.cover, frame: item.coverFrame }
+  return null
+}
+
+/** A season after the last; a series seen to the end goes on where it starts. */
+function addSeasonTo(item: SavedLinkItem) {
+  const seasons = seasonsOf(item)
+  const highest = seasons.reduce((max, season) => Math.max(max, season.number), 0)
+  const next = [...seasons, { number: highest + 1, episodes: null, watched: [] }]
+  updateMerkItem(item.id, caughtUp(seasons) ? settle(item, next, highest + 1) : { seasons: next })
+}
+
+/** The rating beside a name, small: drawn stars, only the ones given. */
+function Stars({ value }: { value?: number }) {
+  if (!value) return null
+  return (
+    <span aria-label={`${value} von 5`} className="inline-flex shrink-0 text-ink">
+      {Array.from({ length: value }, (_, i) => (
+        <StarIcon key={i} filled className="size-[13px]" />
+      ))}
+    </span>
+  )
+}
+
+/**
+ * A series being watched: its name, where it stands and how far, the next
+ * step as a button, and its seasons as a shelf of small posters. The
+ * progress is said once — in words above, per season on the tiles — where it
+ * used to be a bar over a row of bars.
+ */
 function Series({
   item,
   onEdit,
@@ -938,137 +955,177 @@ function Series({
   onSeason: (number: number, part: number) => void
 }) {
   const openHere = useOpenHere()
-  const seasons = seasonsOf(item)
   const progress = itemProgress(item)
-  const status = statusOf(item)
   const kind = episodeKindOf(item.url) ?? 'series'
   const last = whenLabel(item.lastOpenedAt)
-  // A season in parts is a tile per part.
-  const tiles = seasons.flatMap((season) => partsOf(season).map((part) => ({ season, part })))
-  // The nearest cover with its frame: the part's, the season's, the series'.
-  const coverOf = (season: MerkSeason, part: SeasonPart) =>
-    part.cover
-      ? { src: part.cover, frame: part.coverFrame }
-      : season.cover
-        ? { src: season.cover, frame: season.coverFrame }
-        : item.cover
-          ? { src: item.cover, frame: item.coverFrame }
-          : null
-
-  const addSeason = () => {
-    const highest = seasons.reduce((max, season) => Math.max(max, season.number), 0)
-    const next = [...seasons, { number: highest + 1, episodes: null, watched: [] }]
-    // A series seen to the end goes on where the new season starts.
-    updateMerkItem(item.id, caughtUp(seasons) ? settle(item, next, highest + 1) : { seasons: next })
-  }
+  const hasUrl = Boolean(item.url.trim())
+  const meta = [
+    progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`,
+    hasUrl ? sourceBadgeForUrl(item.url) : null,
+    last ? `zuletzt ${last}` : null,
+  ].filter(Boolean)
 
   return (
-    <section aria-label={item.title} className="flex flex-col gap-[14px] border-t border-line pt-[16px]">
-      <div className="flex flex-col gap-[12px] sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-[12px] gap-y-[2px]">
-            <h3 className="min-w-0 truncate text-subheading text-ink">{item.title}</h3>
-            {item.rating ? (
-              <span className="text-small text-muted" aria-label={`${item.rating} von 5`}>
-                <span className="inline-flex translate-y-[3px] text-ink">
-                  {Array.from({ length: item.rating }, (_, i) => (
-                    <StarIcon key={i} filled />
-                  ))}
-                </span>
-              </span>
-            ) : null}
-          </div>
+    <article aria-label={item.title} className="flex flex-col gap-[14px] border-t border-line py-[18px]">
+      <div className="flex flex-col gap-[10px] sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h4 className="flex min-w-0 items-center gap-[10px] text-body font-semibold text-ink">
+            <span className="min-w-0 truncate">{item.title}</span>
+            <Stars value={item.rating} />
+          </h4>
           <p className="mt-[2px] text-small text-muted">
-            {[
-              item.url.trim() ? sourceBadgeForUrl(item.url) : 'ohne Adresse',
-              status === 'done' ? null : positionLabel(item.season, item.episode, kind),
-              last ? `zuletzt ${last}` : null,
-              status !== 'watching' ? STATUS_OPTIONS.find((option) => option.value === status)?.label : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
+            {item.episode !== null ? <span className="text-prose">{positionLabel(item.season, item.episode, kind)}</span> : null}
+            {item.episode !== null && meta.length ? ' · ' : null}
+            {meta.join(' · ')}
           </p>
-          <div className="mt-[8px] flex max-w-[460px] items-center gap-[12px]">
-            <ProgressBar fraction={progress.fraction} label={`${item.title}: gesehen`} />
-            <span className="value shrink-0 text-small text-prose">
-              {progress.total ? `${progress.watched}/${progress.total}` : `${progress.watched} gesehen`}
-            </span>
-          </div>
+          {item.notes ? (
+            <p className="mt-[4px] max-w-[72ch] truncate text-small text-prose" title={item.notes}>
+              {item.notes}
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-[8px]">
-          {item.url.trim() ? (
-            <Button type="button" size="sm" variant={status === 'done' ? 'quiet' : 'primary'} onClick={() => openHere(item)}>
-              {item.episode !== null && status !== 'done' ? `${hereLabel(item)} laden` : 'Nachsehen'}
+          {hasUrl ? (
+            <Button type="button" size="sm" onClick={() => openHere(item)}>
+              {item.episode !== null ? `${hereLabel(item)} laden` : 'Nachsehen'}
             </Button>
           ) : null}
-          {status !== 'done' && item.episode !== null ? (
-            <Button type="button" size="sm" variant={item.url.trim() ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
+          {item.episode !== null ? (
+            <Button type="button" size="sm" variant={hasUrl ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
               {hereLabel(item)} gesehen
             </Button>
           ) : null}
-          <button
-            type="button"
-            onClick={onEdit}
-            className="press rounded-nav px-[4px] py-[6px] text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
-          >
+          <button type="button" onClick={onEdit} className={`${linkClass} px-[4px] py-[6px] text-small`}>
             Bearbeiten
           </button>
         </div>
       </div>
-
-      <div className="grid grid-cols-2 gap-[12px] sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6">
-        {tiles.map(({ season, part }) => (
-          <SeasonTile
-            key={`${season.number}-${part.index}`}
-            season={season}
-            part={part}
-            cover={coverOf(season, part)}
-            format={item.tileFormat}
-            current={status !== 'done' && season.number === item.season && partOfEpisode(season, item.episode).index === part.index}
-            episode={item.episode}
-            onOpen={() => onSeason(season.number, part.index)}
-          />
-        ))}
-      </div>
-
-      {/* Adding a season is a line under the tiles, not a tile of its own:
-          as a tile it took a whole row of the grid's height for one word. */}
-      <div className="flex flex-wrap items-baseline justify-between gap-x-[24px] gap-y-[6px]">
-        {item.notes ? <p className="max-w-[72ch] text-small leading-[1.55] text-prose">{item.notes}</p> : <span />}
-        {kind === 'series' ? (
-          <span className="flex gap-[16px] text-small">
-            <button
-              type="button"
-              onClick={addSeason}
-              className="press inline-flex items-center gap-[6px] rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
-            >
-              <PlusIcon />
-              Staffel hinzufügen
-            </button>
-            {!seasons.some((season) => season.number === 0) ? (
-              <button
-                type="button"
-                onClick={() => updateMerkItem(item.id, { seasons: [...seasons, { number: 0, episodes: null, watched: [] }] })}
-                className="press inline-flex items-center gap-[6px] rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
-              >
-                <PlusIcon />
-                Filme hinzufügen
-              </button>
-            ) : null}
-          </span>
-        ) : null}
-      </div>
-    </section>
+      <SeasonTiles item={item} onSeason={onSeason} />
+    </article>
   )
 }
 
 /**
- * One season as a poster: 2:3 like every other tile, showing the part of the
- * cover someone chose in the cover field (`CoverImage`), with nothing laid
- * over it — and under it the name, the count and a bar for what is seen. The
- * caption used to sit on the picture and hid the bottom third of every
- * poster, a pill sat on its logo. Hover or focus brings up the numbers; a
- * click opens the season.
+ * A series for later or finished: one line — a small cover, the name, how
+ * far — with its seasons a click away. Their tiles all said the same thing
+ * (nothing seen, or everything), and a finished series stood as tall as one
+ * in progress.
+ */
+function ShelfRow({
+  item,
+  onEdit,
+  onSeason,
+}: {
+  item: SavedLinkItem
+  onEdit: () => void
+  onSeason: (number: number, part: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const seasons = seasonsOf(item)
+  const status = statusOf(item)
+  const progress = itemProgress(item)
+  const kind = episodeKindOf(item.url) ?? 'series'
+  const first = seasons[0]
+  const thumb = first ? coverOf(item, first, partsOf(first)[0]) : null
+  const count = seasons.filter((season) => season.number > 0).length
+  const meta = [
+    count ? `${count} ${count === 1 ? 'Staffel' : 'Staffeln'}` : null,
+    status === 'done'
+      ? caughtUp(seasons)
+        ? 'alles gesehen'
+        : `${progress.watched} gesehen`
+      : progress.watched > 0
+        ? `weiter bei ${positionLabel(item.season, item.episode, kind)}`
+        : 'nicht angefangen',
+  ].filter(Boolean)
+
+  return (
+    <article aria-label={item.title} className="border-t border-line">
+      <div className="flex items-center gap-[12px] py-[10px]">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="press group flex min-w-0 flex-1 items-center gap-[14px] rounded-nav text-left"
+        >
+          <span
+            className="relative w-[36px] shrink-0 overflow-hidden rounded-nav bg-panel-mid"
+            style={{ aspectRatio: ratioOf(item.tileFormat) }}
+          >
+            {thumb ? (
+              <CoverImage src={thumb.src} frame={thumb.frame} />
+            ) : (
+              <span aria-hidden className="absolute inset-0 flex items-center justify-center text-small font-semibold text-ink/45">
+                {item.title.trim().charAt(0).toUpperCase()}
+              </span>
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-center gap-[10px] text-body font-semibold text-ink">
+              <span className="min-w-0 truncate">{item.title}</span>
+              <Stars value={item.rating} />
+            </span>
+            <span className="block truncate text-small text-muted">{meta.join(' · ')}</span>
+          </span>
+          <svg
+            viewBox="0 0 16 16"
+            aria-hidden
+            className={`size-[14px] shrink-0 text-ink transition-transform duration-[var(--dur-base)] ${open ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 6l4 4 4-4" />
+          </svg>
+          <span className="sr-only">{open ? 'Staffeln verbergen' : 'Staffeln zeigen'}</span>
+        </button>
+        <button type="button" onClick={onEdit} className={`${linkClass} shrink-0 px-[4px] py-[6px] text-small`}>
+          Bearbeiten
+        </button>
+      </div>
+      {open ? (
+        <div className="rise pb-[18px] pt-[4px]">
+          <SeasonTiles item={item} onSeason={onSeason} />
+        </div>
+      ) : null}
+    </article>
+  )
+}
+
+/**
+ * The seasons of a series as small posters — a part of a season is a poster
+ * of its own. A shelf: as many to a row as fit, each about 120 px wide. At
+ * 240 px a series of four seasons took a screen; the poster still reads at
+ * half that, and the numbers sit under it.
+ */
+function SeasonTiles({ item, onSeason }: { item: SavedLinkItem; onSeason: (number: number, part: number) => void }) {
+  const status = statusOf(item)
+  const tiles = seasonsOf(item).flatMap((season) => partsOf(season).map((part) => ({ season, part })))
+  return (
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-[10px] sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))] sm:gap-[12px]">
+      {tiles.map(({ season, part }) => (
+        <SeasonTile
+          key={`${season.number}-${part.index}`}
+          season={season}
+          part={part}
+          cover={coverOf(item, season, part)}
+          format={item.tileFormat}
+          current={status !== 'done' && season.number === item.season && partOfEpisode(season, item.episode).index === part.index}
+          onOpen={() => onSeason(season.number, part.index)}
+        />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * One season as a poster, showing the part of the cover someone chose
+ * (`CoverImage`), with nothing laid over it — under it the name, then a bar
+ * and the count. The current one wears a ring; where exactly it stands is
+ * said once, above the shelf. Hover or focus brings up the numbers; a click
+ * opens the season.
  */
 function SeasonTile({
   season,
@@ -1076,7 +1133,6 @@ function SeasonTile({
   cover,
   format,
   current,
-  episode,
   onOpen,
 }: {
   season: MerkSeason
@@ -1084,8 +1140,6 @@ function SeasonTile({
   cover: { src: string; frame?: CoverFrame } | null
   format?: TileFormat
   current: boolean
-  /** Where the entry stands, for „Hier sind Sie · Folge 4". */
-  episode: number | null
   onOpen: () => void
 }) {
   const progress = partProgress(season, part)
@@ -1101,7 +1155,7 @@ function SeasonTile({
       type="button"
       onClick={onOpen}
       aria-label={`${name}: ${counted}${progress.complete ? ', alles gesehen' : `, weiter mit ${unit} ${progress.next}`}${current ? ', hier sind Sie' : ''}`}
-      className="press group flex min-w-0 flex-col gap-[10px] rounded-card text-left"
+      className="press group flex min-w-0 flex-col gap-[8px] rounded-card text-left"
     >
       <span
         className={`relative block w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'} ${
@@ -1114,54 +1168,41 @@ function SeasonTile({
         ) : (
           <span
             aria-hidden
-            className="absolute inset-0 flex flex-col items-center justify-center gap-[6px] text-ink/30 transition-opacity duration-[var(--dur-base)] group-hover:opacity-0 group-focus-visible:opacity-0"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-[4px] text-ink/30 transition-opacity duration-[var(--dur-base)] group-hover:opacity-0 group-focus-visible:opacity-0"
           >
-            {season.number === 0 ? <FilmIcon /> : <span className="font-display text-[clamp(48px,7vw,84px)] leading-none">{season.number}</span>}
-            {split ? <span className="text-body font-semibold text-ink/45">Teil {part.index + 1}</span> : null}
+            {season.number === 0 ? <FilmIcon /> : <span className="text-[44px] leading-none">{season.number}</span>}
+            {split ? <span className="text-small font-semibold text-ink/45">Teil {part.index + 1}</span> : null}
           </span>
         )}
 
         {/* The numbers, on hover and on keyboard focus: a shade rising from
-            the bottom, so the picture stays in view above them. It used to
-            cover the whole poster in near-black. */}
+            the bottom, so the picture stays in view above them. */}
         <span
           aria-hidden
-          className={`absolute inset-x-0 bottom-0 flex translate-y-[6px] flex-col gap-[6px] px-[14px] pb-[14px] pt-[64px] opacity-0 transition-[opacity,translate] duration-[var(--dur-base)] ease-[var(--ease-settle)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 ${
+          className={`absolute inset-x-0 bottom-0 flex translate-y-[6px] flex-col gap-[4px] px-[10px] pb-[10px] pt-[44px] opacity-0 transition-[opacity,translate] duration-[var(--dur-base)] ease-[var(--ease-settle)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 ${
             poster ? 'bg-gradient-to-t from-stage/80 via-stage/45 to-transparent text-stage-ink' : 'text-ink'
           }`}
         >
-          <span className="flex items-baseline gap-[8px]">
-            <span className="text-heading-sm leading-none">
-              {progress.fraction !== null ? `${Math.round(progress.fraction * 100)} %` : progress.watched}
-            </span>
-            <span className={`text-small ${poster ? 'text-stage-ink/85' : 'text-prose'}`}>
-              {progress.fraction !== null ? 'gesehen' : progress.watched === 1 ? `${unit} gesehen` : `${unit === 'Film' ? 'Filme' : 'Folgen'} gesehen`}
-            </span>
+          <span className="text-subheading leading-none">
+            {progress.fraction !== null ? `${Math.round(progress.fraction * 100)} %` : progress.watched}
           </span>
-          <span className="text-small font-semibold">
-            {progress.complete
-              ? 'Alles gesehen'
-              : progress.total
-                ? `Noch ${progress.total - progress.watched} · weiter mit ${unit} ${progress.next}`
-                : `Weiter mit ${unit} ${progress.next}`}
+          <span className="text-small font-semibold leading-snug text-balance">
+            {progress.complete ? 'Alles gesehen' : `Weiter mit ${unit} ${progress.next}`}
           </span>
         </span>
       </span>
 
-      <span className="flex flex-col gap-[6px] px-[2px]">
-        <span className="flex min-w-0 items-baseline justify-between gap-[8px]">
-          <span className="min-w-0 truncate text-body font-semibold text-ink">{name}</span>
-          <span className="value flex shrink-0 items-center gap-[4px] text-small text-prose">
+      <span className="flex min-w-0 flex-col gap-[5px] px-[1px]">
+        <span className="truncate text-small font-semibold text-ink">{name}</span>
+        <span className="flex items-center gap-[8px]">
+          <span className="min-w-0 flex-1">
+            <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${name}: gesehen`} />
+          </span>
+          <span className="value flex shrink-0 items-center gap-[2px] text-small text-prose">
             {progress.complete ? <RowMark state="done" /> : null}
-            {progress.total ? `${progress.watched}/${progress.total}` : `${progress.watched} gesehen`}
+            {progress.total ? `${progress.watched}/${progress.total}` : `${progress.watched}/?`}
           </span>
         </span>
-        <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${name}: gesehen`} />
-        {current ? (
-          <span className="text-small text-ink">
-            Hier sind Sie{episode ? ` · ${unit} ${episode}` : ''}
-          </span>
-        ) : null}
       </span>
     </button>
   )
@@ -1196,13 +1237,6 @@ function SeasonDialog({
   const name = partName(season, part)
   const unit = number === 0 ? 'Film' : 'Folge'
   const units = number === 0 ? 'Filme' : 'Folgen'
-  const cover = part.cover
-    ? { src: part.cover, frame: part.coverFrame }
-    : season.cover
-      ? { src: season.cover, frame: season.coverFrame }
-      : item.cover
-        ? { src: item.cover, frame: item.coverFrame }
-        : null
   const isHere = item.season === number && partOfEpisode(season, item.episode).index === part.index
   const seenHere = season.watched.filter((n) => n >= part.from && (part.to === null || n <= part.to))
   // Seen in this part, counted from its first episode.
@@ -1253,7 +1287,7 @@ function SeasonDialog({
   }
 
   return (
-    <Dialog open onClose={onClose} title={`${item.title} · ${name}`}>
+    <Dialog open onClose={onClose} title={`${item.title} · ${name}`} size="md">
       <div className="flex flex-col gap-[20px]">
         {split ? (
           <ChoiceRow
@@ -1263,32 +1297,17 @@ function SeasonDialog({
           />
         ) : null}
 
-        <div className="flex flex-col gap-[16px] sm:flex-row sm:items-end">
-          {cover ? (
-            <span className="relative w-[96px] shrink-0 overflow-hidden rounded-card bg-stage" style={{ aspectRatio: ratioOf(item.tileFormat) }}>
-              <CoverImage src={cover.src} frame={cover.frame} />
-            </span>
-          ) : (
-            <span className="relative w-[96px] shrink-0 overflow-hidden rounded-card bg-panel-mid" style={{ aspectRatio: ratioOf(item.tileFormat) }}>
-              <span aria-hidden className="absolute inset-0 flex flex-col items-center justify-center gap-[4px] text-ink/30">
-                {number === 0 ? <FilmIcon /> : <span className="display-md">{number}</span>}
-                {split ? <span className="text-small font-semibold text-ink/45">Teil {part.index + 1}</span> : null}
-              </span>
-            </span>
-          )}
-          <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
-            <p className="text-heading-sm text-ink">
+        {/* Where it stands and the next step — what the window is opened for. */}
+        <div className="flex flex-wrap items-end justify-between gap-x-[20px] gap-y-[12px]">
+          <div className="flex min-w-0 flex-1 basis-[260px] flex-col gap-[8px]">
+            <p className="text-subheading text-ink">
               {progress.total ? `${progress.watched} von ${progress.total} ${units}` : `${progress.watched} ${progress.watched === 1 ? unit : units}`}{' '}
               <span className="text-body text-muted">gesehen</span>
             </p>
             <ProgressBar fraction={progress.fraction} label={`${name}: gesehen`} />
             <p className="text-small text-prose">
-              {progress.complete
-                ? 'Alles gesehen.'
-                : progress.total
-                  ? `Noch ${progress.total - progress.watched} — weiter mit ${unit} ${progress.next}.`
-                  : `Weiter mit ${unit} ${progress.next}. Wie viele es gibt, steht unten.`}
-              {split && part.to !== null ? ` ${units} ${part.from} bis ${part.to} der Staffel.` : null}
+              {progress.complete ? 'Alles gesehen.' : `Weiter mit ${unit} ${progress.next}.`}
+              {split && part.to !== null ? ` ${units} ${part.from}–${part.to} der Staffel.` : null}
             </p>
           </div>
           {isHere && item.episode !== null && !progress.complete ? (
@@ -1296,6 +1315,7 @@ function SeasonDialog({
               {item.url.trim() ? (
                 <Button
                   type="button"
+                  size="sm"
                   onClick={() => {
                     openHere(item)
                     onClose()
@@ -1304,13 +1324,14 @@ function SeasonDialog({
                   {hereLabel(item)} laden
                 </Button>
               ) : null}
-              <Button type="button" variant={item.url.trim() ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
+              <Button type="button" size="sm" variant={item.url.trim() ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
                 {hereLabel(item)} gesehen
               </Button>
             </span>
           ) : !progress.complete ? (
             <Button
               type="button"
+              size="sm"
               variant="quiet"
               onClick={() =>
                 updateMerkItem(item.id, {
@@ -1325,17 +1346,15 @@ function SeasonDialog({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-[10px] border-t border-line pt-[12px]">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[4px]">
-            <span className="text-small text-prose">
-              {units} — antippen zum Abhaken
-            </span>
-            <span className="flex gap-[16px] text-small">
+        <div className="flex flex-col gap-[10px]">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[4px] text-small">
+            <span className="text-prose">Antippen zum Abhaken, mit Umschalt alles bis dort</span>
+            <span className="flex gap-[16px]">
               <button
                 type="button"
                 disabled={part.to === null}
                 onClick={() => part.to !== null && setSeasons(markRange(item, number, part.from, part.to, true))}
-                className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink disabled:opacity-40 disabled:no-underline"
+                className={`${linkClass} disabled:no-underline disabled:opacity-40`}
               >
                 Alle gesehen
               </button>
@@ -1343,7 +1362,7 @@ function SeasonDialog({
                 type="button"
                 disabled={progress.watched === 0}
                 onClick={() => setSeasons(markRange(item, number, part.from, part.to ?? Infinity, false))}
-                className="press rounded-nav text-muted hover:text-ink disabled:opacity-40"
+                className="press rounded-nav text-prose hover:text-ink disabled:opacity-40"
               >
                 Zurücksetzen
               </button>
@@ -1372,64 +1391,66 @@ function SeasonDialog({
               )
             })}
           </div>
-          {part.episodes === null ? (
-            <p className="text-small text-muted">
-              Wie viele {units} {split ? 'dieser Teil' : 'diese Staffel'} hat, ist noch nicht gesagt — bis dahin stehen hier so
-              viele, wie gebraucht werden.
-            </p>
-          ) : null}
         </div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-[32px] gap-y-[4px] sm:grid-cols-2">
-          <Line label={split ? `Wie viele ${units} in diesem Teil` : `Wie viele ${units}`}>
-            <div className="flex flex-wrap items-center gap-[12px]">
-              {part.episodes !== null ? (
-                <Stepper
-                  label={`Anzahl ${units}`}
-                  value={part.episodes}
-                  max={2000}
-                  onChange={(episodes) => (split ? patchPart({ episodes }) : patchSeason({ episodes }))}
-                />
-              ) : null}
-              {/* Only the last part can still be open; the ones before it
-                  have to end somewhere for the next to begin. */}
-              {last ? (
-                <div className="w-max">
-                  <Toggle
-                    label="Noch unbekannt"
-                    checked={part.episodes === null}
-                    onChange={(unknown) => {
-                      const episodes = unknown ? null : Math.max(reachedHere, 12)
-                      if (split) patchPart({ episodes })
-                      else patchSeason({ episodes })
-                    }}
-                  />
+        {/* Everything that changes the season rather than what is seen, folded
+            away — open from the start while its length is still unknown. */}
+        <Reveal
+          label={`${split ? 'Teil' : number === 0 ? 'Filme' : 'Staffel'} bearbeiten: Anzahl, Name, Cover${number === 0 ? '' : ', Teile'}`}
+          defaultOpen={part.episodes === null}
+        >
+          <div className="flex flex-col gap-[18px] pt-[10px]">
+            <div className="grid gap-[16px] sm:grid-cols-2">
+              <Group label={split ? `${units} in diesem Teil` : `Wie viele ${units}`}>
+                <div className="flex flex-wrap items-center gap-[12px]">
+                  {part.episodes !== null ? (
+                    <Stepper
+                      label={`Anzahl ${units}`}
+                      value={part.episodes}
+                      max={2000}
+                      onChange={(episodes) => (split ? patchPart({ episodes }) : patchSeason({ episodes }))}
+                    />
+                  ) : null}
+                  {/* Only the last part can still be open; the ones before it
+                      have to end somewhere for the next to begin. */}
+                  {last ? (
+                    <div className="w-max">
+                      <Toggle
+                        label="Noch unbekannt"
+                        checked={part.episodes === null}
+                        onChange={(unknown) => {
+                          const episodes = unknown ? null : Math.max(reachedHere, 12)
+                          if (split) patchPart({ episodes })
+                          else patchSeason({ episodes })
+                        }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
+              </Group>
+              {split ? (
+                <Group label="Name dieses Teils">
+                  <TextInput
+                    value={part.title ?? ''}
+                    placeholder={`${seasonName(season)} · Teil ${part.index + 1}`}
+                    onChange={(event) => patchPart({ title: event.target.value || undefined })}
+                    className="font-sans"
+                  />
+                </Group>
+              ) : (
+                <Group label="Name">
+                  <TextInput
+                    value={season.title ?? ''}
+                    placeholder={number === 0 ? 'Filme' : `Staffel ${number}`}
+                    onChange={(event) => patchSeason({ title: event.target.value || undefined })}
+                    className="font-sans"
+                  />
+                </Group>
+              )}
             </div>
-          </Line>
-          {split ? (
-            <Line label="Name dieses Teils">
-              <TextInput
-                value={part.title ?? ''}
-                placeholder={`${seasonName(season)} · Teil ${part.index + 1}`}
-                onChange={(event) => patchPart({ title: event.target.value || undefined })}
-                className="font-sans"
-              />
-            </Line>
-          ) : null}
-          <Line label={split ? 'Name der Staffel' : 'Name'}>
-            <TextInput
-              value={season.title ?? ''}
-              placeholder={number === 0 ? 'Filme' : `Staffel ${number}`}
-              onChange={(event) => patchSeason({ title: event.target.value || undefined })}
-              className="font-sans"
-            />
-          </Line>
-          <Line wide>
             {split ? (
               <CoverField
-                label="Cover dieses Teils (sonst das der Staffel oder Serie)"
+                label="Cover dieses Teils — sonst das der Staffel oder Serie"
                 value={part.cover}
                 frame={part.coverFrame}
                 format={item.tileFormat}
@@ -1437,15 +1458,13 @@ function SeasonDialog({
               />
             ) : (
               <CoverField
-                label="Cover dieser Staffel (sonst das der Serie)"
+                label="Cover — sonst das der Serie"
                 value={season.cover}
                 frame={season.coverFrame}
                 format={item.tileFormat}
                 onChange={(cover, coverFrame) => patchSeason({ cover, coverFrame })}
               />
             )}
-          </Line>
-          <Line wide>
             <div className="flex flex-wrap items-baseline gap-x-[20px] gap-y-[8px] text-small">
               {split ? (
                 <>
@@ -1457,7 +1476,7 @@ function SeasonDialog({
                     Diesen Teil auflösen
                   </button>
                 </>
-              ) : (
+              ) : number > 0 ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1468,7 +1487,7 @@ function SeasonDialog({
                 >
                   In Teile teilen
                 </button>
-              )}
+              ) : null}
               {seasonsOf(item).length > 1 ? (
                 <button
                   type="button"
@@ -1487,18 +1506,8 @@ function SeasonDialog({
                 </button>
               ) : null}
             </div>
-            {split ? (
-              <p className="text-small text-muted">
-                Die {units} zählen durch die ganze Staffel, wie auf den Seiten: Teil 2 beginnt dort, wo Teil 1 endet. Ein aufgelöster
-                Teil geht im Teil davor auf; nichts Gesehenes geht verloren.
-              </p>
-            ) : (
-              <p className="text-small text-muted">
-                Für Staffeln, die in Teilen erscheinen — jeder Teil wird eine eigene Kachel mit eigenem Cover.
-              </p>
-            )}
-          </Line>
-        </div>
+          </div>
+        </Reveal>
       </div>
     </Dialog>
   )
@@ -1507,151 +1516,200 @@ function SeasonDialog({
 const linkClass =
   'press inline-flex items-center gap-[6px] rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink'
 
+/** A label over its control, without a rule — the dialogs had a line over every field. */
+function Group({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={`flex min-w-0 flex-col gap-[6px] ${className}`}>
+      <span className="text-small text-prose">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+/** „Cover" with the tile shape beside it — the two decide one picture. */
+function CoverWithFormat({
+  value,
+  frame,
+  format,
+  onChange,
+  onFormat,
+}: {
+  value: string | undefined
+  frame?: CoverFrame
+  format?: TileFormat
+  onChange: (value: string | undefined, frame: CoverFrame | undefined) => void
+  onFormat: (format: TileFormat) => void
+}) {
+  return (
+    <div className="flex flex-col gap-[10px]">
+      <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px]">
+        <span className="text-small text-prose">Cover</span>
+        <FormatChoice value={format} onChange={onFormat} />
+      </div>
+      <CoverField label="" value={value} frame={frame} format={format} onChange={onChange} />
+    </div>
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 /* A series, edited                                                            */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Three groups instead of twelve ruled lines: what the series is (name,
+ * stand, rating, seasons, note), how it looks (cover and tile shape), and —
+ * folded away — how it is loaded.
+ */
 function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClose: () => void; onRemove: () => void }) {
   const update = (patch: Partial<SavedLinkItem>) => updateMerkItem(item.id, patch)
   const seasons = seasonsOf(item)
   const hasFilms = seasons.some((season) => season.number === 0)
+  const seasonCount = seasons.filter((season) => season.number > 0).length
   const kind = episodeKindOf(item.url)
+  const host = (() => {
+    try {
+      return item.url.trim() ? new URL(/^https?:\/\//i.test(item.url.trim()) ? item.url.trim() : `https://${item.url.trim()}`).host : ''
+    } catch {
+      return ''
+    }
+  })()
   return (
     <Dialog open onClose={onClose} title={item.title || 'Ohne Namen'}>
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-x-[32px] gap-y-[4px] sm:grid-cols-2">
-        <Line label="Name">
-          <TextInput value={item.title} onChange={(event) => update({ title: event.target.value })} className="font-sans" />
-        </Line>
-        <Line label="Stand">
-          <ChoiceRow value={statusOf(item)} options={STATUS_OPTIONS} onChange={(status) => update({ status })} />
-        </Line>
-        <Line label="Adresse (leer lassen, wenn nichts geladen werden soll)" wide>
-          <TextInput
-            value={item.url}
-            placeholder="https://…"
-            inputMode="url"
-            spellCheck={false}
-            onChange={(event) => update({ url: event.target.value })}
-          />
-        </Line>
-        <Line label="Format der Kacheln" wide>
-          <FormatChoice value={item.tileFormat} onChange={(format) => update({ tileFormat: format === 'manga' ? 'manga' : undefined })} />
-        </Line>
-        <Line wide>
-          <CoverField
+      <div className="flex flex-col gap-[22px]">
+        <div className="grid gap-x-[28px] gap-y-[18px] sm:grid-cols-2">
+          <Group label="Name">
+            <TextInput value={item.title} onChange={(event) => update({ title: event.target.value })} className="font-sans" />
+          </Group>
+          <Group label="Stand">
+            <ChoiceRow value={statusOf(item)} options={STATUS_OPTIONS} onChange={(status) => update({ status })} />
+          </Group>
+          <Group label="Bewertung">
+            <Rating value={item.rating ?? 0} onChange={(rating) => update({ rating })} />
+          </Group>
+          <Group label={`${seasonCount} ${seasonCount === 1 ? 'Staffel' : 'Staffeln'}${hasFilms ? ', dazu Filme' : ''}`}>
+            <span className="flex flex-wrap gap-x-[18px] gap-y-[4px] text-small">
+              <button type="button" onClick={() => addSeasonTo(item)} className={linkClass}>
+                <PlusIcon />
+                Staffel hinzufügen
+              </button>
+              {!hasFilms ? (
+                <button
+                  type="button"
+                  onClick={() => update({ seasons: [...seasons, { number: 0, episodes: null, watched: [] }] })}
+                  className={linkClass}
+                >
+                  <PlusIcon />
+                  Filme hinzufügen
+                </button>
+              ) : null}
+            </span>
+          </Group>
+          <Group label="Notiz" className="sm:col-span-2">
+            <textarea
+              value={item.notes ?? ''}
+              onChange={(event) => update({ notes: event.target.value || undefined })}
+              placeholder="Wo es spannend wurde, mit wem Sie schauen …"
+              className={textAreaClass}
+            />
+          </Group>
+        </div>
+
+        <div className="border-t border-line pt-[16px]">
+          <CoverWithFormat
             value={item.cover}
             frame={item.coverFrame}
             format={item.tileFormat}
             onChange={(cover, coverFrame) => update({ cover, coverFrame })}
+            onFormat={(format) => update({ tileFormat: format === 'manga' ? 'manga' : undefined })}
           />
-        </Line>
-        <Line label="Bewertung">
-          <Rating value={item.rating ?? 0} onChange={(rating) => update({ rating })} />
-        </Line>
-        <Line label="Staffeln und Filme">
-          <span className="text-small text-prose">
-            {seasons.filter((season) => season.number > 0).length} Staffeln{hasFilms ? ', dazu Filme' : ''}. Einzelne Staffeln
-            über ihre Kachel.
-          </span>
-          {!hasFilms ? (
-            <button
-              type="button"
-              onClick={() => update({ seasons: [...seasons, { number: 0, episodes: null, watched: [] }] })}
-              className="press self-start rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
-            >
-              Filme hinzufügen
-            </button>
-          ) : null}
-        </Line>
-        <Line label="Notiz" wide>
-          <textarea
-            value={item.notes ?? ''}
-            onChange={(event) => update({ notes: event.target.value || undefined })}
-            placeholder="Wo es spannend wurde, mit wem Sie schauen, was Sie nicht vergessen wollen …"
-            className={textAreaClass}
-          />
-        </Line>
-        <Line label="Laden als">
-          <div className="flex flex-wrap items-center gap-[8px]">
-            <ChoiceRow
-              value={item.mode}
-              options={[
-                { value: 'video', label: 'Video mit Ton' },
-                { value: 'audio', label: 'Nur Ton' },
-              ]}
-              onChange={(mode) => update({ mode })}
-            />
-            {item.mode === 'audio' ? (
-              <Select
-                aria-label="Tonformat"
-                value={item.audioFormat}
-                onChange={(event) => update({ audioFormat: event.target.value as AudioOutputFormat })}
-                className="w-auto! py-[6px]"
-              >
-                {AUDIO_FORMATS.map((entry) => (
-                  <option key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </option>
-                ))}
-              </Select>
+        </div>
+
+        <Reveal label={host ? `Herunterladen · ${host}` : 'Herunterladen: Adresse und Einstellungen'} className="-mb-[8px]">
+          <div className="grid gap-x-[28px] gap-y-[18px] pt-[10px] sm:grid-cols-2">
+            <Group label="Adresse — leer, wenn nichts geladen werden soll" className="sm:col-span-2">
+              <TextInput
+                value={item.url}
+                placeholder="https://…"
+                inputMode="url"
+                spellCheck={false}
+                onChange={(event) => update({ url: event.target.value })}
+              />
+            </Group>
+            <Group label="Laden als">
+              <div className="flex flex-wrap items-center gap-[8px]">
+                <ChoiceRow
+                  value={item.mode}
+                  options={[
+                    { value: 'video', label: 'Video mit Ton' },
+                    { value: 'audio', label: 'Nur Ton' },
+                  ]}
+                  onChange={(mode) => update({ mode })}
+                />
+                {item.mode === 'audio' ? (
+                  <Select
+                    aria-label="Tonformat"
+                    value={item.audioFormat}
+                    onChange={(event) => update({ audioFormat: event.target.value as AudioOutputFormat })}
+                    className="w-auto! py-[6px]"
+                  >
+                    {AUDIO_FORMATS.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.label}
+                      </option>
+                    ))}
+                  </Select>
+                ) : null}
+              </div>
+            </Group>
+            <Group label="Qualität">
+              {item.mode === 'audio' ? (
+                <Select value={item.audioPref} onChange={(event) => update({ audioPref: event.target.value as AudioFilePref })}>
+                  {AUDIO_QUALITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Select value={item.videoPref} onChange={(event) => update({ videoPref: event.target.value as VideoFilePref })}>
+                  {VIDEO_QUALITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Group>
+            {kind !== 'list' ? (
+              <Group label="Sprachfassung">
+                <Select value={item.language} onChange={(event) => update({ language: event.target.value as SavedLinkItem['language'] })}>
+                  {LANGUAGE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </Group>
             ) : null}
+            <div className="self-end">
+              <Toggle
+                label="Untertitel dazu erstellen"
+                hint="Whisper schreibt nach dem Laden auf diesem Gerät mit."
+                checked={item.autoTranscribe}
+                onChange={(autoTranscribe) => update({ autoTranscribe })}
+              />
+            </div>
           </div>
-        </Line>
-        <Line label="Qualität">
-          {item.mode === 'audio' ? (
-            <Select value={item.audioPref} onChange={(event) => update({ audioPref: event.target.value as AudioFilePref })}>
-              {AUDIO_QUALITY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <Select value={item.videoPref} onChange={(event) => update({ videoPref: event.target.value as VideoFilePref })}>
-              {VIDEO_QUALITY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Line>
-        {kind !== 'list' ? (
-          <Line label="Sprachfassung">
-            <Select value={item.language} onChange={(event) => update({ language: event.target.value as SavedLinkItem['language'] })}>
-              {LANGUAGE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </Line>
-        ) : null}
-        <Line>
-          <Toggle
-            label="Untertitel dazu erstellen"
-            hint="Whisper schreibt nach dem Laden auf diesem Gerät mit."
-            checked={item.autoTranscribe}
-            onChange={(autoTranscribe) => update({ autoTranscribe })}
-          />
-        </Line>
-        <Line wide>
-          <div className="flex flex-wrap items-center justify-between gap-[12px]">
-            <span className="text-small text-muted">Änderungen gelten sofort.</span>
-            <span className="flex items-center gap-[16px]">
-              <button
-                type="button"
-                onClick={onRemove}
-                className="press rounded-nav text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
-              >
-                Von der Merkliste nehmen
-              </button>
-              <Button type="button" size="sm" onClick={onClose}>
-                Fertig
-              </Button>
-            </span>
-          </div>
-        </Line>
+        </Reveal>
+
+        <div className="flex flex-wrap items-center justify-between gap-[12px] border-t border-line pt-[14px]">
+          <button type="button" onClick={onRemove} className={`${linkClass} text-small`}>
+            Von der Merkliste nehmen
+          </button>
+          <Button type="button" size="sm" onClick={onClose}>
+            Fertig
+          </Button>
+        </div>
       </div>
     </Dialog>
   )
@@ -1736,30 +1794,40 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Serie hinzufügen">
+    <Dialog open={open} onClose={onClose} title="Serie hinzufügen" size="md">
       <form
-        className="grid grid-cols-[minmax(0,1fr)] gap-x-[32px] gap-y-[4px] sm:grid-cols-2"
+        className="flex flex-col gap-[20px]"
         onSubmit={(event) => {
           event.preventDefault()
           if (title.trim() || url.trim()) save()
         }}
       >
-        <Line label="Name">
+        <Group label="Name">
           <TextInput autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Wie die Serie heisst" className="font-sans" />
-        </Line>
-        <Line label="Adresse (wahlweise)">
-          <TextInput value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://…" inputMode="url" spellCheck={false} />
-        </Line>
-        <Line label="Staffeln">
-          <Stepper label="Anzahl Staffeln" value={seasonCount} max={60} onChange={setSeasonCount} />
-        </Line>
-        <Line label="Filme dazu">
-          <Stepper label="Anzahl Filme" value={films} min={0} max={200} onChange={setFilms} />
-        </Line>
-        <Line label={seasonCount > 1 ? 'Folgen je Staffel' : 'Folgen'} wide>
-          {countsUnknown ? null : seasonCount > 1 ? (
-            <>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(184px,1fr))] gap-x-[20px] gap-y-[8px]">
+        </Group>
+
+        <div className="flex flex-wrap gap-x-[28px] gap-y-[16px]">
+          <Group label="Staffeln">
+            <Stepper label="Anzahl Staffeln" value={seasonCount} max={60} onChange={setSeasonCount} />
+          </Group>
+          {seasonCount === 1 ? (
+            <Group label="Folgen">
+              <span className="flex flex-wrap items-center gap-[12px]">
+                {countsUnknown ? null : (
+                  <Stepper label="Anzahl Folgen" value={counts[0]} max={2000} onChange={(value) => setCount(0, value)} />
+                )}
+                <span className="w-max">
+                  <Toggle label="Noch unbekannt" checked={countsUnknown} onChange={setCountsUnknown} />
+                </span>
+              </span>
+            </Group>
+          ) : null}
+        </div>
+
+        {seasonCount > 1 ? (
+          <Group label="Folgen je Staffel — eine Staffel übernimmt die Zahl der vorigen, bis Sie sie ändern">
+            {countsUnknown ? null : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(176px,1fr))] gap-x-[20px] gap-y-[8px]">
                 {counts.map((count, i) => (
                   <span key={i} className="flex items-center justify-between gap-[10px] text-small text-prose">
                     Staffel {i + 1}
@@ -1767,16 +1835,14 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
                   </span>
                 ))}
               </div>
-              <span className="text-small text-muted">Jede Staffel übernimmt die Zahl der vorigen, bis Sie sie ändern.</span>
-            </>
-          ) : (
-            <Stepper label="Anzahl Folgen" value={counts[0]} max={2000} onChange={(value) => setCount(0, value)} />
-          )}
-          <div className="w-max">
-            <Toggle label="Noch unbekannt" checked={countsUnknown} onChange={setCountsUnknown} />
-          </div>
-        </Line>
-        <Line label="Gerade bei" wide>
+            )}
+            <span className="w-max">
+              <Toggle label="Noch unbekannt" checked={countsUnknown} onChange={setCountsUnknown} />
+            </span>
+          </Group>
+        ) : null}
+
+        <Group label="Gerade bei — was davor liegt, gilt als gesehen">
           <span className="flex flex-wrap items-center gap-[12px] text-small text-prose">
             <span className="flex items-center gap-[8px]">
               Staffel <Stepper label="Gerade bei Staffel" value={position} max={seasonCount} onChange={setAtSeason} />
@@ -1792,36 +1858,39 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
               {positionCount !== null ? <span className="value text-muted">von {positionCount}</span> : null}
             </span>
           </span>
-        </Line>
-        <Line label="Format der Kacheln" wide>
-          <FormatChoice value={format} onChange={setFormat} />
-        </Line>
-        <Line wide>
-          <CoverField
-            value={cover}
-            frame={coverFrame}
-            format={format}
-            onChange={(picture, frame) => {
-              setCover(picture)
-              setCoverFrame(frame)
-            }}
-          />
-        </Line>
-        <Line wide>
-          <div className="flex flex-wrap items-center justify-between gap-[12px]">
-            <span className="text-small text-muted">
-              Was vor „Gerade bei“ liegt, gilt als gesehen. Alles lässt sich später ändern.
-            </span>
-            <span className="flex gap-[8px]">
-              <Button type="button" size="sm" variant="quiet" onClick={onClose}>
-                Abbrechen
-              </Button>
-              <Button type="submit" size="sm" disabled={!title.trim() && !url.trim()}>
-                Auf die Merkliste
-              </Button>
-            </span>
+        </Group>
+
+        <Reveal label="Adresse, Filme und Cover" className="-mb-[8px]">
+          <div className="flex flex-col gap-[18px] pt-[10px]">
+            <div className="grid gap-x-[28px] gap-y-[16px] sm:grid-cols-[minmax(0,1fr)_auto]">
+              <Group label="Adresse — zum Laden im Herunterladen">
+                <TextInput value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://…" inputMode="url" spellCheck={false} />
+              </Group>
+              <Group label="Filme dazu">
+                <Stepper label="Anzahl Filme" value={films} min={0} max={200} onChange={setFilms} />
+              </Group>
+            </div>
+            <CoverWithFormat
+              value={cover}
+              frame={coverFrame}
+              format={format}
+              onChange={(picture, frame) => {
+                setCover(picture)
+                setCoverFrame(frame)
+              }}
+              onFormat={setFormat}
+            />
           </div>
-        </Line>
+        </Reveal>
+
+        <div className="flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[14px]">
+          <Button type="button" size="sm" variant="quiet" onClick={onClose}>
+            Abbrechen
+          </Button>
+          <Button type="submit" size="sm" disabled={!title.trim() && !url.trim()}>
+            Auf die Merkliste
+          </Button>
+        </div>
       </form>
     </Dialog>
   )
