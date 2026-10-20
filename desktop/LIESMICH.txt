@@ -70,8 +70,8 @@ Herunterladen von Videoportalen
 
 Merkliste
   Unter „Merkliste“ Serien und Listen festhalten, die Sie schauen: jede
-  Staffel als Kachel mit Cover und Fortschritt, ein Klick zeigt die Folgen
-  zum Abhaken. „Folge … laden“ holt die nächste Folge im Herunterladen,
+  Staffel als Poster im Format 2:3, darunter der Fortschritt, jede mit ihrer
+  eigenen Folgenzahl; ein Klick zeigt die Folgen zum Abhaken. „Folge … laden“ holt die nächste Folge im Herunterladen,
   „Folge … gesehen“ hakt sie ab. Cover per Bildadresse oder Datei, dazu Notiz
   und Bewertung. Gespeichert nur auf diesem Rechner.
 
