@@ -70,14 +70,15 @@ Herunterladen von Videoportalen
 
 Merkliste
   Unter „Merkliste“ Serien und Listen festhalten, die Sie schauen: jede
-  Staffel als Poster, darunter der Fortschritt, jede mit ihrer eigenen
-  Folgenzahl; eine Staffel in Teilen („In Teile teilen“) bekommt je Teil
-  eine Kachel. Ein Klick zeigt die Folgen zum Abhaken. „Folge … laden“ holt
-  die nächste Folge im Herunterladen, „Folge … gesehen“ hakt sie ab. Cover
-  per Bildadresse oder Datei, den Ausschnitt wählen Sie durch Ziehen und
-  Zoomen; dazu Notiz und Bewertung. Gespeichert nur auf diesem Rechner;
-  „Exportieren“ unter der Liste macht eine Datei daraus, „Aus Datei
-  einlesen“ holt sie auf einem anderen Gerät zurück.
+  Staffel als Poster (Filmposter 2:3 oder Manga 5:7, je Serie), darunter der
+  Fortschritt, jede mit ihrer eigenen Folgenzahl; eine Staffel in Teilen
+  („In Teile teilen“) bekommt je Teil eine Kachel. Ein Klick zeigt die
+  Folgen zum Abhaken. „Folge … laden“ holt die nächste Folge im
+  Herunterladen, „Folge … gesehen“ hakt sie ab. Cover per Bildadresse oder
+  Datei, den Ausschnitt wählen Sie durch Ziehen und Zoomen; dazu Notiz und
+  Bewertung. Gespeichert nur auf diesem Rechner; „Exportieren“ unter der
+  Liste macht eine Datei daraus, „Aus Datei einlesen“ holt sie auf einem
+  anderen Gerät zurück.
 
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →

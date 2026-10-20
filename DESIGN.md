@@ -763,7 +763,9 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   laden“ (übergibt die Folge ans Herunterladen und wechselt dorthin) und
   „Folge 5 gesehen“ (hakt ab, rückt weiter). Die Stelle ist immer die
   nächste ungesehene Folge. Darunter jede Staffel als **Poster**, gerundet,
-  Cover oder grosse Zahl auf Tönung. **Jede Kachel ist ein Poster in 2:3**,
+  Cover oder grosse Zahl auf Tönung. **Jede Kachel ist ein Poster in 2:3**
+  — oder, je Serie umschaltbar („Format der Kacheln“ in „Bearbeiten“ und
+  beim Hinzufügen, direkt über dem Cover), ein Manga-Band in 5:7 (B6) —,
   und welcher Teil eines Covers darin steht, wählt man selbst: im
   Cover-Feld ist die Vorschau dieselbe Kachel, das Bild lässt sich ziehen
   (oder mit den Pfeiltasten schieben) und mit „Zoom“ (1–3 ×, auch Plus und
