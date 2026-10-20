@@ -757,6 +757,26 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   die Adresse ohne `https://www.` in Mono, dann „Einfügen und nachsehen"
   (unterstrichen) und „Nicht jetzt". Kein Rahmen, keine Fläche — als
   getönter Balken über dem Feld sah er aus wie ein zweites Textfeld.
+- **Die Merkliste** (20.10.2026, „wo man am Schauen ist"; `Merkliste.tsx`):
+  was jemand verfolgt, je eine Zeile — Titel, Quelle, die Stelle („Staffel
+  17, Folge 4", bei Playlists „Nr. 12"), „zuletzt gestern" —, rechts „Weiter
+  mit Folge 5" (setzt weiter und sieht gleich nach), die jetzige Folge als
+  zweiter Knopf, „Bearbeiten" als Textlink. Alles andere — Name, Stand
+  (Am Schauen / Später / Fertig), Staffel und Folge mit `Stepper`, Laden
+  als, Qualität, Sprachfassung, Untertitel, Adresse, Entfernen mit
+  „Rückgängig" — steht als Felder mit Linie darunter, wenn man sie öffnet.
+  Sortiert nach Stand, darin nach zuletzt geöffnet; Filter als `ChoiceRow`
+  mit Zahlen. Vorher „Gespeicherte Links": jede Zeile mit offener
+  Einstellungsleiste in einem gerahmten Kasten, Versalien-Etiketten, Pillen
+  für Quelle und Stand — vier Einträge füllten den Bildschirm.
+- **Staffel und Folge stehen nur da, wo die Adresse sie hat**
+  (`episodeKindOf`): bei einer Serie „Wo Sie sind" mit Staffeln/Filme,
+  Staffel, Folge, „Ganze Staffel" und „Nächste Folge", darunter die
+  Sprachfassung; bei einer Playlist nur „Nr."; bei einem einzelnen Video gar
+  nicht. Qualität und „Untertitel erstellen" (ein `Toggle`, nicht der Chip
+  „Lokale KI") stehen in der Zeile „Was laden". „Merken" steht einmal,
+  neben „Nachsehen"; die Einstellungen hinter dem Knopf oben sind Felder
+  mit Linie und wiederholen nichts, was schon in der Zeile steht.
 - **Mehrere Listen beim Herunterladen** tragen ihren Namen als Überschrift
   und „x von n geladen" in Mono, getrennt durch eine Linie; eingeklappt wird
   auf drei Einträge, „n weitere zeigen" darunter. Kein Kasten je Liste, kein
