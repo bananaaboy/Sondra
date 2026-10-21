@@ -104,6 +104,12 @@ export interface SavedLinkItem {
   notes?: string
   /** 0–5; 0 is unrated. */
   rating?: number
+  /** Standard duration in minutes per regular episode (default 24). */
+  episodeDuration?: number
+  /** Standard duration in minutes for films (default 90). */
+  filmDuration?: number
+  /** Episode-specific duration exceptions in minutes, keyed as `${season}:${episode}`, e.g. { '1:1': 48 } */
+  durations?: Record<string, number>
 }
 
 const KEY = 'sondra:saved_links'
@@ -170,6 +176,9 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(raw.tileFormat === 'manga' ? { tileFormat: 'manga' as const } : {}),
     ...(raw.notes ? { notes: raw.notes } : {}),
     ...(typeof raw.rating === 'number' ? { rating: Math.max(0, Math.min(5, Math.round(raw.rating))) } : {}),
+    ...(typeof raw.episodeDuration === 'number' && raw.episodeDuration > 0 ? { episodeDuration: Math.round(raw.episodeDuration) } : {}),
+    ...(typeof raw.filmDuration === 'number' && raw.filmDuration > 0 ? { filmDuration: Math.round(raw.filmDuration) } : {}),
+    ...(raw.durations && typeof raw.durations === 'object' ? { durations: raw.durations } : {}),
   }
   // A position past the end of its season — saved by „Alle gesehen" before
   // it knew better, or left there by a count made smaller — moves to the
@@ -840,6 +849,52 @@ export function formatWatchMinutes(totalMinutes: number): { short: string; long:
   return { short, long }
 }
 
+
+/** The duration of an episode in minutes, accounting for film duration and exceptions. */
+export function durationOfEpisode(item: SavedLinkItem, seasonNumber: number, episodeNumber: number): number {
+  const key = `${seasonNumber}:${episodeNumber}`
+  if (item.durations && typeof item.durations[key] === 'number' && item.durations[key] > 0) {
+    return Math.round(item.durations[key])
+  }
+  if (seasonNumber === 0) {
+    return item.filmDuration ?? 90
+  }
+  return item.episodeDuration ?? 24
+}
+
+/** The total watched duration of a series in minutes, taking exceptions into account. */
+export function itemWatchedMinutes(item: SavedLinkItem): number {
+  let minutes = 0
+  const seasons = seasonsOf(item)
+  for (const season of seasons) {
+    for (const ep of season.watched) {
+      minutes += durationOfEpisode(item, season.number, ep)
+    }
+  }
+  return minutes
+}
+
+/** The remaining duration of unseen episodes in known seasons of a series. */
+export function itemRemainingMinutes(item: SavedLinkItem): { minutes: number; known: boolean; remainingCount: number } {
+  let minutes = 0
+  let allKnown = true
+  let remainingCount = 0
+  const seasons = seasonsOf(item)
+  for (const season of seasons) {
+    if (season.episodes === null) {
+      allKnown = false
+      continue
+    }
+    for (let ep = 1; ep <= season.episodes; ep++) {
+      if (!season.watched.includes(ep)) {
+        minutes += durationOfEpisode(item, season.number, ep)
+        remainingCount += 1
+      }
+    }
+  }
+  return { minutes, known: allKnown, remainingCount }
+}
+
 export function calculateMerklisteStats(items: SavedLinkItem[]): MerklisteStats {
   const totalSeries = items.length
   const watchingCount = items.filter((i) => (i.status ?? 'watching') === 'watching').length
@@ -866,8 +921,8 @@ export function calculateMerklisteStats(items: SavedLinkItem[]): MerklisteStats 
   const overallProgressPercent =
     knownTotalEpisodes > 0 ? Math.min(100, Math.round((knownWatchedEpisodes / knownTotalEpisodes) * 100)) : null
 
-  // Watch time estimate: 24 minutes per episode average (standard for anime & series)
-  const watchMinutes = seenTotal * 24
+  // Watch time calculated from each episode's duration and exceptions
+  const watchMinutes = items.reduce((sum, item) => sum + itemWatchedMinutes(item), 0)
   const watchTime = formatWatchMinutes(watchMinutes)
 
   let totalSeasons = 0
@@ -995,9 +1050,14 @@ export interface BingePlan {
   finishAt3PerDay: string
 }
 
-export function calculateBingePlan(episodesRemaining: number, minutesPerEpisode: number = 24): BingePlan {
+export function calculateBingePlan(
+  episodesRemaining: number,
+  minutesPerEpisode: number = 24,
+  exactMinutes?: number,
+): BingePlan {
   const count = Math.max(0, episodesRemaining)
-  const watchTime = formatWatchMinutes(count * minutesPerEpisode)
+  const totalMinutes = typeof exactMinutes === 'number' && exactMinutes > 0 ? exactMinutes : count * minutesPerEpisode
+  const watchTime = formatWatchMinutes(totalMinutes)
   const formatDate = (daysAhead: number) => {
     const d = new Date()
     d.setDate(d.getDate() + daysAhead)
