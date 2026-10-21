@@ -246,6 +246,21 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   heraus; ohne Wahl lehnt er ab. Ton des Rechners ist Loopback (ganzer
   Rechner). MediaRecorder-WebM wird mit FFmpeg per Stream-Kopie nachgearbeitet,
   sonst fehlen Dauer und Index.
+- **Portabel** (`Sondra-Portable[-arm64]-<Version>.exe`, im Release auch als
+  `Sondra-Portable.exe`): electron-builders Ziel „portable“, gebaut aus
+  demselben entpackten App-Ordner wie das Setup (`--prepackaged`), nicht ein
+  zweites Mal gepackt. Der Starter entpackt bei jedem Start in einen
+  temporären Ordner und sagt über `PORTABLE_EXECUTABLE_DIR`, wo die .exe
+  liegt. Die Daten liegen in `Sondra-Daten` daneben (`app.setPath` vor dem
+  Single-Instance-Lock; nicht schreibbar → `%APPDATA%\Sondra Portabel`),
+  der Port ist 47198 statt 47199 — sonst nähme sie neben der installierten
+  App einen zufälligen und damit bei jedem Start eine leere Merkliste. Keine
+  Registrierung (`registerSondraProjectIcon` aus). Sie ersetzt sich nicht
+  selbst: der Updater liest nur `latest.yml` und bietet die neue Datei an
+  (`available`, `download`). `latest.yml` nennt weiter nur das Setup; das
+  Build-Skript stellt sie wieder her, falls der Portable-Lauf sie anfasst.
+  Der Workflow startet sie zweimal aus einem eigenen Ordner und prüft
+  Datenordner und Port.
 - **Arm64**: `npm run build:desktop -- --arm64` (und `--store --arm64`). Der
   Workflow baut x64 auf `windows-latest` und arm64 auf `windows-11-arm`, beide
   mit denselben Prüfungen; der Release-Job legt beide Setups ins Release und

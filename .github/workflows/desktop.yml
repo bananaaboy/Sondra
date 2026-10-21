@@ -1,4 +1,5 @@
-# Builds the Windows installer, installs it, and starts the installed app once.
+# Builds the Windows installer, installs it, and starts the installed app once;
+# builds the portable .exe beside it and starts that from a folder of its own.
 #
 # A tag `v<version>`, or a manual run with "release" ticked, additionally publishes the tested installer as a GitHub
 # release — under its versioned name and as `Sondra-Setup.exe`, which the
@@ -150,6 +151,43 @@ jobs:
           }
           Write-Host 'Installiert, gestartet, Sondra im eigenen Fenster geladen.'
 
+      # The portable build, started the way it is used: copied into a folder
+      # of its own (a USB stick, say), run twice. Its data has to land beside
+      # it in Sondra-Daten, on its own port, and the page has to load.
+      - name: Start the portable build
+        shell: pwsh
+        run: |
+          $portable = Get-ChildItem release -Filter 'Sondra-Portable-*.exe' | Select-Object -First 1
+          if (-not $portable) { throw 'Keine portable Fassung gebaut.' }
+          Write-Host "Portabel: $($portable.Name), $([math]::Round($portable.Length / 1MB)) MB"
+          $stick = Join-Path $env:RUNNER_TEMP 'stick'
+          New-Item -ItemType Directory -Force $stick | Out-Null
+          $exe = Join-Path $stick $portable.Name
+          Copy-Item $portable.FullName $exe
+          $report = Join-Path $env:RUNNER_TEMP 'portable.json'
+          $env:SONDRA_SMOKE = $report
+          Get-Process Sondra -ErrorAction SilentlyContinue | Stop-Process -Force
+          foreach ($run in 1..2) {
+            Remove-Item $report -ErrorAction SilentlyContinue
+            # The launcher unpacks the app, waits for it and clears up after.
+            $process = Start-Process -FilePath $exe -PassThru
+            if (-not $process.WaitForExit(180000)) { $process.Kill(); throw "Portabel, Start ${run}: hat sich nicht wieder beendet." }
+            if (-not (Test-Path $report)) { throw "Portabel, Start ${run}: kein Bericht geschrieben." }
+            $seen = Get-Content $report -Raw | ConvertFrom-Json
+            Write-Host "Portabel, Start ${run}:"
+            $seen | Format-List
+            if ($seen.error) { throw "Portabel, Start ${run} fehlgeschlagen: $($seen.error)" }
+            if (-not $seen.isolated) { throw "Portabel, Start ${run}: Seite nicht isoliert." }
+            if ($seen.tools -lt 10) { throw "Portabel, Start ${run}: nur $($seen.tools) Werkzeuge sichtbar." }
+            $expected = Join-Path $stick 'Sondra-Daten'
+            if ($seen.userData -ne $expected) { throw "Portabel: Daten in $($seen.userData), erwartet $expected." }
+            if ($seen.url -notlike '*:47198/*') { throw "Portabel: Seite auf $($seen.url), erwartet Port 47198." }
+          }
+          $log = Join-Path $stick 'Sondra-Daten\sondra.log'
+          Get-Content $log -Tail 6
+          if (-not (Select-String -Path $log -Pattern 'portabel' -Quiet)) { throw 'Das Log weiss nichts von der portablen Fassung.' }
+          Write-Host 'Portable Fassung gestartet, Daten neben der Datei.'
+
       # The smoke test above proves the window opens; this one opens a file
       # and presses the buttons in every tool of the installed app.
       - name: Click through the installed app
@@ -253,6 +291,7 @@ jobs:
           path: |
             release/Sondra-Setup-*.exe
             release/Sondra-Setup-*.exe.blockmap
+            release/Sondra-Portable-*.exe
             release/latest.yml
           retention-days: 30
 
@@ -297,6 +336,12 @@ jobs:
           if (-not $setup -or -not $armSetup) { throw 'Ein Setup fehlt (x64 oder arm64).' }
           Copy-Item $setup.FullName release/Sondra-Setup.exe
           Copy-Item $armSetup.FullName release/Sondra-Setup-arm64.exe
+          # The portable build, also under a fixed name for the website's link.
+          $portable = Get-ChildItem release -Filter "Sondra-Portable-$version.exe" | Select-Object -First 1
+          $armPortable = Get-ChildItem release-arm64 -Filter "Sondra-Portable-arm64-$version.exe" | Select-Object -First 1
+          if (-not $portable -or -not $armPortable) { throw 'Eine portable Fassung fehlt (x64 oder arm64).' }
+          Copy-Item $portable.FullName release/Sondra-Portable.exe
+          Copy-Item $armPortable.FullName release/Sondra-Portable-arm64.exe
           node scripts/merge-update-info.mjs release/latest.yml release-arm64/latest.yml release/latest.yml
           if ($LASTEXITCODE -ne 0) { throw 'latest.yml nicht zusammengefuehrt.' }
 
@@ -307,9 +352,11 @@ jobs:
 
           **Stille Installation:** ``Sondra-Setup-$version.exe /S``
 
+          **Ohne Installation:** Sondra-Portable.exe (Arm: Sondra-Portable-arm64.exe) startet ohne Setup und ohne Windows-Abfrage, auch vom USB-Stick. Die Daten liegen daneben im Ordner „Sondra-Daten“; nichts kommt ins Startmenü oder in die Registrierung. Die portable Fassung ersetzt sich nicht selbst — Sondra zeigt oben an, wenn eine neue erschienen ist.
+
           **Aktualisieren:** Ab 1.0.7 sucht Sondra selbst nach neuen Fassungen, lädt sie im Hintergrund und fragt, ob sie jetzt neu starten soll.
 
-          Das Setup ist nicht signiert. Windows SmartScreen kann beim ersten Start warnen („Weitere Informationen“ → „Trotzdem ausführen“), und die intelligente App-Steuerung blockiert unsignierte Setups ganz.
+          Setup und portable Fassung sind nicht signiert. Windows SmartScreen kann beim ersten Start warnen („Weitere Informationen“ → „Trotzdem ausführen“), und die intelligente App-Steuerung blockiert unsignierte Programme ganz.
 
           Datenschutz: https://www.sondra.lizge.ch/datenschutz.html
           "@
@@ -320,5 +367,6 @@ jobs:
           # fetch only the parts that changed.
           $extra = @('release/latest.yml', "$($setup.FullName).blockmap", "$($armSetup.FullName).blockmap") | Where-Object { Test-Path $_ }
           if (-not (Test-Path 'release/latest.yml')) { throw 'latest.yml fehlt: ohne sie findet die App kein Update.' }
-          gh release create $tag $setup.FullName release/Sondra-Setup.exe $armSetup.FullName release/Sondra-Setup-arm64.exe @extra `
+          gh release create $tag $setup.FullName release/Sondra-Setup.exe $armSetup.FullName release/Sondra-Setup-arm64.exe `
+            $portable.FullName release/Sondra-Portable.exe $armPortable.FullName release/Sondra-Portable-arm64.exe @extra `
             --target $env:GITHUB_SHA --title "Sondra $version" --notes $notes

@@ -29,13 +29,48 @@ import { startDownloader } from './downloader.mjs'
 import { offerFile, startServer } from './server.mjs'
 import { setupUpdates } from './updater.mjs'
 
-const PORT = 47199
 /**
  * Installed from the Microsoft Store (an MSIX package). The Store signs,
  * hosts and updates it; the app's own updater and fetching yt-dlp would both
  * be things the Store does not allow, so both stay off in this build.
  */
 const IN_STORE = process.windowsStore === true
+/**
+ * The portable build (electron-builder's „portable“ target): one .exe that
+ * unpacks itself into a temporary folder on every start and runs from there.
+ * Its launcher says where the .exe itself lies.
+ */
+const PORTABLE_EXE_DIR = IN_STORE ? null : (process.env.PORTABLE_EXECUTABLE_DIR ?? null)
+/**
+ * Its own port beside the installed app's: both may run at once, each with
+ * its own data folder, and the second would otherwise take a random port —
+ * a new origin, and with it an empty Merkliste, on every start.
+ */
+const PORT = PORTABLE_EXE_DIR ? 47198 : 47199
+
+/**
+ * The portable build keeps everything in „Sondra-Daten“ next to the .exe, so
+ * it travels with the file — on a USB stick to another computer — and leaves
+ * nothing in the profile. Where that folder cannot be written (a read-only
+ * share, a protected folder), it uses a folder of its own in %APPDATA%, still
+ * apart from the installed app. Set before the single-instance lock, which
+ * Electron files under this folder too.
+ */
+function portableData() {
+  if (!PORTABLE_EXE_DIR) return null
+  const beside = path.join(PORTABLE_EXE_DIR, 'Sondra-Daten')
+  try {
+    fs.mkdirSync(beside, { recursive: true })
+    const probe = path.join(beside, '.schreibprobe')
+    fs.writeFileSync(probe, '')
+    fs.rmSync(probe, { force: true })
+    return beside
+  } catch {
+    return path.join(app.getPath('appData'), 'Sondra Portabel')
+  }
+}
+const PORTABLE_DATA = portableData()
+if (PORTABLE_DATA) app.setPath('userData', PORTABLE_DATA)
 const SMOKE = process.env.SONDRA_SMOKE
 /** Tests answer the app's questions in advance: `yes` or `no`. */
 const ANSWER = process.env.SONDRA_ASK
@@ -335,7 +370,7 @@ function within(promise, ms) {
 
 async function open() {
   trimLog()
-  log(`Start ${app.getVersion()} · ${process.platform} ${process.arch} · Electron ${process.versions.electron}${IN_STORE ? ' · Microsoft Store' : ''}`)
+  log(`Start ${app.getVersion()} · ${process.platform} ${process.arch} · Electron ${process.versions.electron}${IN_STORE ? ' · Microsoft Store' : ''}${PORTABLE_DATA ? ` · portabel, Daten in ${PORTABLE_DATA}` : ''}`)
   if (withoutGpu) log('Ohne Grafikbeschleunigung, weil die GPU in den letzten 24 Stunden abgestürzt ist.')
 
   // The default menu is English and mostly developer tools; the page carries
@@ -392,7 +427,7 @@ async function open() {
     window: () => window,
     version: app.getVersion(),
     enabled: app.isPackaged && process.platform === 'win32' && !IN_STORE && !SMOKE && !ANSWER && process.env.SONDRA_UPDATES !== 'off',
-    channel: IN_STORE ? 'store' : 'setup',
+    channel: IN_STORE ? 'store' : PORTABLE_DATA ? 'portable' : 'setup',
   })
 
   // The page title is written for a browser tab; the window is "Sondra
@@ -502,7 +537,7 @@ async function open() {
         `({ isolated: crossOriginIsolated, heading: document.querySelector('h1,h2')?.textContent ?? null,
             tools: document.querySelectorAll('section button').length })`,
       )
-      fs.writeFileSync(SMOKE, JSON.stringify({ url, ...seen }))
+      fs.writeFileSync(SMOKE, JSON.stringify({ url, ...seen, userData: app.getPath('userData') }))
       app.exit(0)
     })
   }
@@ -541,7 +576,9 @@ async function open() {
 }
 
 function registerSondraProjectIcon() {
-  if (process.platform !== 'win32' || IN_STORE || SMOKE || !app.isPackaged) return
+  // The portable build writes nothing into the registry: it runs from a
+  // temporary copy that is gone once it closes.
+  if (process.platform !== 'win32' || IN_STORE || PORTABLE_DATA || SMOKE || !app.isPackaged) return
   const exe = process.execPath
   const entries = [
     ['HKCU\\Software\\Classes\\.sondra', '/ve', '/d', 'Sondra.Projekt', '/f'],

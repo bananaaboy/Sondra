@@ -6,16 +6,24 @@
  * it happens, in the downloader. The header's spot goes to the thing people
  * actually came looking for up there: the app.
  *
- * Three ways, weighted as asked: the setup and the Microsoft Store are the two
- * large tiles side by side, the website installed as an app is the narrow one
- * underneath. The store tile links to the listing; without one it stays in
+ * Four ways, weighted as asked: the setup and the Microsoft Store are the two
+ * large tiles side by side; the website installed as an app and the portable
+ * build are the two narrow ones underneath. The store tile links to the listing; without one it stays in
  * place and says „Bald verfügbar" on its face — on a tile this size a
  * hover-only hint reads as broken.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-import { IN_DESKTOP_APP, MICROSOFT_STORE, WINDOWS_SETUP, WINDOWS_SETUP_ARM64, onWindowsArm } from '../lib/desktop'
+import {
+  IN_DESKTOP_APP,
+  MICROSOFT_STORE,
+  WINDOWS_PORTABLE,
+  WINDOWS_PORTABLE_ARM64,
+  WINDOWS_SETUP,
+  WINDOWS_SETUP_ARM64,
+  onWindowsArm,
+} from '../lib/desktop'
 import { useBrowserInstall } from '../lib/install'
 import { Mark } from './AppShell'
 
@@ -48,6 +56,17 @@ function SetupIcon({ className = 'h-5 w-5' }: { className?: string }) {
     <svg viewBox="0 0 20 20" className={`${className} shrink-0`} fill="none" aria-hidden>
       <path d="M4 3.5h8l4 4v9H4z M12 3.5v4h4" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
       <path d="M10 9v5M7.8 11.8 10 14l2.2-2.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** A USB stick: the portable build runs from wherever the file lies. */
+function StickIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={`${className} shrink-0`} fill="none" aria-hidden>
+      <rect x="5.5" y="7.5" width="9" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M7.5 7.5v-5h5v5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M9 4.6h.01M11 4.6h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   )
 }
@@ -120,10 +139,13 @@ const MAIN = 'group relative flex min-h-[300px] flex-col overflow-hidden rounded
 function DefenderDialog({
   open,
   downloadUrl,
+  portable,
   onClose,
 }: {
   open: boolean
   downloadUrl: string
+  /** The portable build: nothing is installed, the file starts as it is. */
+  portable: boolean
   onClose: () => void
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -173,13 +195,13 @@ function DefenderDialog({
         </figure>
 
         <p className="m-0 text-small leading-[1.55] text-prose">
-          Die Warnung sagt nichts über den Inhalt der Datei. Windows kennt den Herausgeber nicht, weil das Setup nicht
+          Die Warnung sagt nichts über den Inhalt der Datei. Windows kennt den Herausgeber nicht, weil die Datei nicht
           signiert ist — eine Signatur setzt ein kostenpflichtiges Zertifikat voraus. Neue, selten geladene Programme
           stuft SmartScreen deshalb vorsorglich als „unbekannt“ ein.
         </p>
 
         <div className="flex flex-col gap-[8px] border-t border-line pt-[12px]">
-          <p className="m-0 text-small font-semibold text-ink">So starten Sie die Installation</p>
+          <p className="m-0 text-small font-semibold text-ink">{portable ? 'So starten Sie Sondra' : 'So starten Sie die Installation'}</p>
           <ol className="m-0 list-decimal space-y-[4px] pl-[20px] text-small text-prose">
             <li>
               Im blauen Fenster auf <strong className="font-semibold text-ink">„Weitere Informationen“</strong> klicken.
@@ -189,7 +211,7 @@ function DefenderDialog({
             </li>
           </ol>
           <p className="m-0 text-small leading-[1.55] text-muted">
-            Ist die intelligente App-Steuerung eingeschaltet, blockiert Windows unsignierte Setups ganz.
+            Ist die intelligente App-Steuerung eingeschaltet, blockiert Windows unsignierte Programme ganz.
             {MICROSOFT_STORE ? (
               <>
                 {' '}
@@ -212,7 +234,7 @@ function DefenderDialog({
             className="press inline-flex items-center gap-[8px] rounded-nav bg-ink px-[20px] py-[12px] text-body font-semibold text-on-ink hover:bg-ink-hover"
           >
             <DownloadIcon />
-            Setup laden
+            {portable ? 'Portable laden' : 'Setup laden'}
           </a>
           <button
             type="button"
@@ -239,7 +261,7 @@ export function GetAppButton() {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
-  const [defenderUrl, setDefenderUrl] = useState<string | null>(null)
+  const [defender, setDefender] = useState<{ url: string; portable: boolean } | null>(null)
   const browser = useBrowserInstall()
   /** Windows on Arm gets its own build as the main offer, the other one beside it. */
   const [arm, setArm] = useState(false)
@@ -323,7 +345,7 @@ export function GetAppButton() {
                 rel="noopener"
                 onClick={(e) => {
                   e.preventDefault()
-                  setDefenderUrl(arm ? WINDOWS_SETUP_ARM64 : WINDOWS_SETUP)
+                  setDefender({ url: arm ? WINDOWS_SETUP_ARM64 : WINDOWS_SETUP, portable: false })
                 }}
                 className={`${MAIN} press bg-ink text-on-ink`}
               >
@@ -379,42 +401,71 @@ export function GetAppButton() {
               )}
             </div>
 
-            {/* The narrow one: no setup at all, and the one way that works
-                with Smart App Control while the setup is unsigned. */}
-            <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft px-[20px] py-[16px] text-ink sm:flex-row sm:items-center sm:gap-[18px] sm:px-[28px]">
-              <span className="flex min-w-0 flex-1 items-center gap-[16px]">
-                <WindowIcon className="h-[28px] w-[28px]" />
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-body font-semibold">Website als App</span>
-                  <span className="text-small text-prose">
-                    {browser.installed
-                      ? 'Ist installiert — Sondra steht im Startmenü.'
-                      : browser.available
-                        ? 'Ohne Setup, aus Edge oder Chrome. Läuft auch mit der intelligenten App-Steuerung.'
-                        : 'In Edge oder Chrome: Menü ⋯ → Apps → „Sondra installieren“. Läuft auch mit der intelligenten App-Steuerung.'}
+            <div className="grid grid-cols-1 gap-[14px] md:grid-cols-2">
+              {/* The narrow ones. The website as an app: no setup at all, and
+                  the one way that works with Smart App Control while the setup
+                  is unsigned. */}
+              <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft px-[20px] py-[16px] text-ink sm:flex-row sm:items-center sm:gap-[18px] sm:px-[28px]">
+                <span className="flex min-w-0 flex-1 items-center gap-[16px]">
+                  <WindowIcon className="h-[28px] w-[28px]" />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-body font-semibold">Website als App</span>
+                    <span className="text-small text-prose">
+                      {browser.installed
+                        ? 'Ist installiert — Sondra steht im Startmenü.'
+                        : browser.available
+                          ? 'Ohne Setup, aus Edge oder Chrome. Läuft auch mit der intelligenten App-Steuerung.'
+                          : 'In Edge oder Chrome: Menü ⋯ → Apps → „Sondra installieren“. Läuft auch mit der intelligenten App-Steuerung.'}
+                    </span>
                   </span>
                 </span>
-              </span>
-              {browser.available && !browser.installed ? (
-                <button
-                  type="button"
-                  onClick={() => void browser.install().then((done) => done && close())}
+                {browser.available && !browser.installed ? (
+                  <button
+                    type="button"
+                    onClick={() => void browser.install().then((done) => done && close())}
+                    className="press shrink-0 self-start rounded-nav px-[16px] py-[9px] text-small font-semibold text-ink ring-1 ring-inset ring-rule hover:bg-panel-mid sm:self-auto"
+                  >
+                    Installieren
+                  </button>
+                ) : null}
+              </div>
+
+              {/* The portable build: one .exe, nothing installed, its data in
+                  „Sondra-Daten“ beside it — for a USB stick or a computer
+                  without rights to install. */}
+              <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft px-[20px] py-[16px] text-ink sm:flex-row sm:items-center sm:gap-[18px] sm:px-[28px]">
+                <span className="flex min-w-0 flex-1 items-center gap-[16px]">
+                  <StickIcon className="h-[28px] w-[28px]" />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-body font-semibold">Portabel</span>
+                    <span className="text-small text-prose">
+                      Eine .exe ohne Installation, auch vom USB-Stick. Die Daten liegen daneben im Ordner „Sondra-Daten“.
+                    </span>
+                  </span>
+                </span>
+                <a
+                  href={arm ? WINDOWS_PORTABLE_ARM64 : WINDOWS_PORTABLE}
+                  rel="noopener"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setDefender({ url: arm ? WINDOWS_PORTABLE_ARM64 : WINDOWS_PORTABLE, portable: true })
+                  }}
                   className="press shrink-0 self-start rounded-nav px-[16px] py-[9px] text-small font-semibold text-ink ring-1 ring-inset ring-rule hover:bg-panel-mid sm:self-auto"
                 >
-                  Installieren
-                </button>
-              ) : null}
+                  Herunterladen
+                </a>
+              </div>
             </div>
           </div>
 
           <p className="max-w-[72ch] text-small leading-[1.5] text-muted">
-            Das Setup ist noch nicht signiert. Warnt Windows, „Weitere Informationen“ und dann
+            Setup und portable Fassung sind noch nicht signiert. Warnt Windows, „Weitere Informationen“ und dann
             „Trotzdem ausführen“ wählen. Mit eingeschalteter intelligenter App-Steuerung startet es
             nicht — dann die Website als App nehmen; Videoportale lädt sie wie die Website, YouTube
             meist in 360p.{' '}
             <button
               type="button"
-              onClick={() => setDefenderUrl(arm ? WINDOWS_SETUP : WINDOWS_SETUP_ARM64)}
+              onClick={() => setDefender({ url: arm ? WINDOWS_SETUP : WINDOWS_SETUP_ARM64, portable: false })}
               className="text-ink underline underline-offset-[3px] hover:no-underline"
             >
               {arm ? 'Setup für x64-Prozessoren' : 'Setup für Arm-Prozessoren'}
@@ -423,7 +474,12 @@ export function GetAppButton() {
         </div>
       </dialog>
 
-      <DefenderDialog open={Boolean(defenderUrl)} downloadUrl={defenderUrl ?? ''} onClose={() => setDefenderUrl(null)} />
+      <DefenderDialog
+        open={Boolean(defender)}
+        downloadUrl={defender?.url ?? ''}
+        portable={defender?.portable ?? false}
+        onClose={() => setDefender(null)}
+      />
     </>
   )
 }
