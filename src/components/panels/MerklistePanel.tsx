@@ -403,7 +403,7 @@ function CoverField({
                 onChange={(event) => setFrame({ ...(live ?? MIDDLE), zoom: Number(event.target.value) })}
               />
               <span className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[4px] text-small">
-                <span className="text-prose">Bild ziehen, um den Ausschnitt zu wählen.</span>
+                <span className="text-prose">Bild ziehen, um den Ausschnitt zu wählen. Passt es genau ins Format, erst zoomen.</span>
                 {live ? (
                   <button type="button" onClick={() => setFrame(undefined)} className="press rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink">
                     Zurücksetzen
@@ -489,7 +489,10 @@ function FrameEditor({
       tabIndex={0}
       role="group"
       aria-label="Ausschnitt des Covers: ziehen oder Pfeiltasten, Plus und Minus zoomen"
-      className="relative w-[140px] shrink-0 cursor-grab touch-none overflow-hidden rounded-card bg-stage outline-none ring-1 ring-line focus-visible:ring-2 focus-visible:ring-ink active:cursor-grabbing"
+      // A block of its own: as an inline span inside the wrapper the 1.1.6
+      // layout put around it, width and aspect ratio did nothing — the tile
+      // measured 0 × 0, and there was no picture to drag.
+      className="relative block w-[140px] shrink-0 cursor-grab touch-none overflow-hidden rounded-card bg-stage outline-none ring-1 ring-line focus-visible:ring-2 focus-visible:ring-ink active:cursor-grabbing"
       style={{ aspectRatio: ratioOf(format) }}
       onPointerDown={(event) => {
         event.preventDefault()

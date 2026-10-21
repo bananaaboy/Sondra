@@ -270,7 +270,7 @@ export function Slider({
       {/* `value` was taken off for nothing and never reached the input: every
           slider in the app started in the middle and showed its own drag, not
           the setting — a preset, a loaded project or a reset never moved it. */}
-      <input type="range" value={value} {...props} />
+      <input type="range" value={value} aria-label={label} {...props} />
     </div>
   )
 }
