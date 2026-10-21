@@ -11,6 +11,9 @@
  * tooltip, and the setup of the newest version is one click away — an update
  * that silently falls back to „Nach Updates suchen“ reads as one that never
  * existed.
+ *
+ * The portable build cannot replace itself; when a newer version is out, the
+ * control becomes the download of that version's portable file.
  */
 
 import { useEffect, useState } from 'react'
@@ -20,6 +23,14 @@ import { keepSession } from '../lib/sessionStore'
 
 const BASE = 'press flex items-center gap-[8px] rounded-nav px-[12px] py-[8px] text-small'
 
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" aria-hidden>
+      <path d="M8 2.5v7.5M4.8 6.8 8 10l3.2-3.2M3 13h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
 
 function RefreshIcon() {
   return (
@@ -82,6 +93,22 @@ export function AppUpdateButton() {
     )
   }
 
+  if (state.status === 'available' && state.download) {
+    return (
+      <a
+        href={state.download}
+        target="_blank"
+        rel="noreferrer"
+        className={`${BASE} bg-ink font-semibold text-on-ink hover:bg-ink-hover`}
+        title={`Version ${state.version} → ${state.next}. Die neue Datei ersetzt diese; der Ordner „Sondra-Daten“ daneben bleibt.`}
+      >
+        <DownloadIcon />
+        <span className="hidden sm:inline">{state.next} herunterladen</span>
+        <span className="sm:hidden">Update</span>
+      </a>
+    )
+  }
+
   if (state.status === 'downloading') {
     return (
       <span role="status" className={`${BASE} bg-panel-soft text-prose`}>
@@ -109,12 +136,12 @@ export function AppUpdateButton() {
           <span className="sm:hidden">Erneut</span>
         </button>
         <a
-          href={WINDOWS_SETUP}
+          href={state.download ?? WINDOWS_SETUP}
           target="_blank"
           rel="noreferrer"
           className="press rounded-nav px-[8px] py-[8px] text-small text-ink underline underline-offset-4 hover:bg-panel-soft"
         >
-          Setup laden
+          {state.channel === 'portable' ? 'Neueste laden' : 'Setup laden'}
         </a>
       </span>
     )

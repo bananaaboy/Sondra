@@ -2,11 +2,18 @@
  * Builds Sondra as an installed desktop app: Electron window, NSIS installer.
  *
  *   npm run build:desktop            →   release/Sondra-Setup-<version>.exe  (on Windows)
+ *                                         release/Sondra-Portable-<version>.exe
  *   npm run build:desktop -- --dir   →   release/<platform>-unpacked/        (any OS, for testing)
  *   npm run build:desktop -- --store →   release/Sondra-Store-<version>.appx (on Windows)
  *
- * `--arm64` builds either for Windows on Arm instead: Sondra-Setup-arm64-…
- * and Sondra-Store-arm64-…. The page, FFmpeg and the models are WebAssembly
+ * `--arm64` builds either for Windows on Arm instead: Sondra-Setup-arm64-…,
+ * Sondra-Portable-arm64-… and Sondra-Store-arm64-….
+ *
+ * The portable build is one .exe that starts without installing anything
+ * (electron-builder's „portable“ target: it unpacks itself into a temporary
+ * folder on every start). It is made from the same unpacked app as the
+ * setup, not packaged a second time, and keeps its data beside itself
+ * (desktop/electron.mjs). It has no updater of its own and no latest.yml. The page, FFmpeg and the models are WebAssembly
  * and the same for both; only Electron differs. One latest.yml lists both
  * setups (the workflow merges them, x64 first), and the updater picks the
  * one whose name carries its own architecture.
@@ -241,4 +248,33 @@ if (forStore) {
   // gains little.
   const env = arm ? { ...process.env, ELECTRON_BUILDER_7Z_FILTER: 'BCJ' } : process.env
   execFileSync(process.execPath, [builder, ...args, '--publish', 'never'], { cwd: DESKTOP, stdio: 'inherit', env })
+
+  if (!onlyDir) {
+    step('Portable Fassung bauen')
+    const unpacked = path.resolve('release', arm ? 'win-arm64-unpacked' : 'win-unpacked')
+    // latest.yml is how installed apps find their update, and it must keep
+    // naming the setup; the portable build has no business in it.
+    const updateInfo = path.resolve('release', 'latest.yml')
+    const kept = fs.existsSync(updateInfo) ? fs.readFileSync(updateInfo) : null
+    execFileSync(
+      process.execPath,
+      [
+        builder,
+        '--win',
+        'portable',
+        archFlag,
+        '--prepackaged',
+        unpacked,
+        `-c.portable.artifactName=Sondra-Portable${archTag}-\${version}.\${ext}`,
+        ...(arm ? ['-c.toolsets.nsis=1.2.1'] : []),
+        '--publish',
+        'never',
+      ],
+      { cwd: DESKTOP, stdio: 'inherit', env },
+    )
+    if (kept && !fs.readFileSync(updateInfo).equals(kept)) {
+      fs.writeFileSync(updateInfo, kept)
+      console.log('  latest.yml des Setups wiederhergestellt')
+    }
+  }
 }

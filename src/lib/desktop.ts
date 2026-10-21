@@ -16,6 +16,10 @@ export const WINDOWS_SETUP = 'https://github.com/bananaaboy/Sondra/releases/late
 /** The same for Windows on Arm (from 1.0.13 on). */
 export const WINDOWS_SETUP_ARM64 = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Setup-arm64.exe'
 
+/** The portable build: one .exe, no installation, its data beside it (from 1.1.9 on). */
+export const WINDOWS_PORTABLE = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Portable.exe'
+export const WINDOWS_PORTABLE_ARM64 = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Portable-arm64.exe'
+
 type ArchNavigator = Navigator & {
   userAgentData?: { platform?: string; getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }> }
 }
@@ -48,15 +52,20 @@ export const IN_DESKTOP_APP = typeof navigator !== 'undefined' && /\bElectron\//
 
 /** Where the installed app's updater stands, as the app reports it. */
 export interface UpdateState {
-  status: 'off' | 'idle' | 'checking' | 'current' | 'downloading' | 'ready' | 'error'
+  status: 'off' | 'idle' | 'checking' | 'current' | 'downloading' | 'ready' | 'available' | 'error'
   /** The running version. */
   version: string
   /** The version being fetched or ready to install. */
   next?: string
   percent?: number
   message?: string
-  /** `store`: installed from the Microsoft Store, which updates it. */
-  channel?: 'setup' | 'store'
+  /**
+   * `store`: installed from the Microsoft Store, which updates it.
+   * `portable`: the portable build, which cannot replace itself; a newer
+   * version is `available` as a file at `download`.
+   */
+  channel?: 'setup' | 'store' | 'portable'
+  download?: string
 }
 
 /** A file Windows opened with Sondra, fetchable once from the app's server. */

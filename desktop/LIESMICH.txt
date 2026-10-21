@@ -10,6 +10,18 @@ Installieren
 Stille Installation
   Sondra-Setup-<Version>.exe /S
 
+Ohne Installation (portabel)
+  Sondra-Portable-<Version>.exe (Arm: Sondra-Portable-arm64-<Version>.exe)
+  startet ohne Setup und ohne Windows-Abfrage, auch von einem USB-Stick.
+  Alles, was Sondra sich merkt — Merkliste, Einstellungen, Protokoll —,
+  liegt im Ordner „Sondra-Daten“ neben der Datei und geht mit ihr mit;
+  nichts kommt ins Startmenü oder in die Registrierung. Lässt sich dort
+  nicht schreiben, nimmt Sondra %APPDATA%\Sondra Portabel. Jeder Start
+  entpackt die App erst in einen temporären Ordner; das dauert ein paar
+  Sekunden länger als beim Setup. Ein Abgleich mit Anytype muss auf jedem
+  Rechner neu verbunden werden, weil Windows den Schlüssel nur für diesen
+  Rechner verschlüsselt.
+
 Starten
   Sondra öffnet sich in einem eigenen Fenster, ohne Browser. Fenster
   schliessen beendet Sondra.
@@ -113,8 +125,12 @@ Aktualisieren
   beim Setup. Klappt das nicht, steht dort „Update nicht möglich“ mit dem
   Grund und daneben „Setup laden“: das neuere Setup einfach darüber
   installieren. Jeder Schritt des Updates steht im Protokoll.
+  Die portable Fassung ersetzt sich nicht selbst. Ist eine neuere da, steht
+  oben rechts „x.y.z herunterladen“; die neue Datei an die Stelle der alten
+  legen, der Ordner „Sondra-Daten“ daneben bleibt.
 
 Wenn etwas nicht geht
   Sondra schreibt ein Protokoll nach %APPDATA%\Sondra\sondra.log (in die
-  Adresszeile des Explorers einfügen). Lädt die Oberfläche nicht, zeigt das
+  Adresszeile des Explorers einfügen), die portable Fassung nach
+  Sondra-Daten\sondra.log neben der Datei. Lädt die Oberfläche nicht, zeigt das
   Fenster den Grund und einen Link „Erneut versuchen“.
