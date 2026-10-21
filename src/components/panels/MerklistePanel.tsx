@@ -13,7 +13,7 @@
  * address is followed all the same, only without the loading.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import {
   ANYTYPE_PROBLEM,
@@ -41,6 +41,9 @@ import {
   allHistory,
   allTags,
   checkOnlineUpdates,
+  onlineNews,
+  takeOnlineNews,
+  type OnlineNews,
   itemProgress,
   halve,
   markRange,
@@ -1932,6 +1935,13 @@ function NamePoster({ title, large = false }: { title: string; large?: boolean }
  * Everything else — seasons, buttons — is one click further, on the
  * series' own page. Hover or focus brings up how far and how many seasons.
  */
+/** „Staffel 2 mit 12 Folgen“, „Staffel 1, Folgen 29–30“: what is new online, in words. */
+function newsLabel(news: OnlineNews): string {
+  if (news.newSeason) return `Staffel ${news.season} mit ${news.to} ${news.to === 1 ? 'Folge' : 'Folgen'}`
+  if (news.countUnknown) return `Staffel ${news.season} hat ${news.to} Folgen`
+  return `Staffel ${news.season}, ${news.from === news.to ? `Folge ${news.from}` : `Folgen ${news.from}–${news.to}`}`
+}
+
 function SeriesTile({
   item,
   onOpen,
@@ -1944,6 +1954,7 @@ function SeriesTile({
   onFocus?: (event: React.FocusEvent<HTMLDivElement>) => void
 }) {
   const progress = itemProgress(item)
+  const news = onlineNews(item)
   const cover = seriesCover(item)
   const [broken, setBroken] = useState<string | null>(null)
   const poster = cover && cover.src !== broken ? cover : null
@@ -1991,7 +2002,7 @@ function SeriesTile({
         {/* Rating badge top-right */}
         {item.rating ? (
           <span className="absolute top-[8px] right-[8px] z-10 flex items-center gap-[3px] rounded-pill bg-stage/85 px-[6px] py-[2px] text-micro font-semibold text-stage-ink backdrop-blur-xs ring-1 ring-inset ring-white/15">
-            <span className="text-amber-400">★</span>
+            <span className="text-stage-accent">★</span>
             <span>{item.rating}</span>
           </span>
         ) : null}
@@ -2045,10 +2056,10 @@ function SeriesTile({
         <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${item.title}: gesehen`} />
         <div className="flex items-center justify-between gap-[4px] min-h-[1.25em] text-micro">
           <span className="text-muted font-mono truncate">{badge || '\u00A0'}</span>
-          {item.onlineAvailable?.hasNew ? (
+          {news ? (
             <span
               className="shrink-0 flex items-center gap-[3px] font-sans font-medium text-accent-strong"
-              title={`Auf AniWorld ist Staffel ${item.onlineAvailable.maxSeason}, Folge ${item.onlineAvailable.maxEpisode} verfügbar`}
+              title={`Neu auf AniWorld: ${newsLabel(news)}`}
             >
               <span className="size-[4px] rounded-full bg-accent-strong" />
               <span>Neu</span>
@@ -2080,6 +2091,7 @@ function SeriesPage({
 }) {
   const openHere = useOpenHere()
   const progress = itemProgress(item)
+  const news = onlineNews(item)
   const status = statusOf(item)
   const seasons = seasonsOf(item)
   const kind = episodeKindOf(item.url) ?? 'series'
@@ -2208,12 +2220,12 @@ function SeriesPage({
               </div>
             ) : null}
 
-            {item.onlineAvailable?.hasNew ? (
+            {news ? (
               <div className="mt-[2px] flex flex-wrap items-center justify-between gap-[10px] rounded-card border border-line bg-panel-soft/60 px-[12px] py-[8px]">
                 <div className="flex items-center gap-[8px] text-small text-ink">
                   <span className="size-[6px] shrink-0 rounded-full bg-accent-strong" />
                   <span>
-                    Auf AniWorld neu online: <strong>Staffel {item.onlineAvailable.maxSeason}, Folge {item.onlineAvailable.maxEpisode}</strong>
+                    Neu auf AniWorld: <strong>{newsLabel(news)}</strong>
                   </span>
                 </div>
                 <Button
@@ -2221,13 +2233,11 @@ function SeriesPage({
                   size="sm"
                   variant="quiet"
                   onClick={() => {
-                    updateMerkItem(item.id, {
-                      season: item.onlineAvailable!.maxSeason,
-                      episode: item.onlineAvailable!.maxEpisode,
-                    })
+                    const taken = takeOnlineNews(item)
+                    if (taken) updateMerkItem(item.id, taken)
                   }}
                 >
-                  Zur neuen Folge springen
+                  Auf die Merkliste nehmen
                 </Button>
               </div>
             ) : null}
@@ -2954,16 +2964,16 @@ function ShuffleDialog({
             {poster ? <CoverImage src={poster.src} frame={poster.frame} /> : <NamePoster title={item.title} />}
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
-            <div className="flex flex-wrap items-center justify-between gap-[8px]">
-              <span className="text-micro font-mono uppercase tracking-[0.06em] text-muted">Zufallsauswahl</span>
+            <div className="flex flex-wrap items-baseline gap-x-[10px] gap-y-[4px]">
+              <h3 className="display-sm min-w-0 break-words">{item.title}</h3>
               {item.rating ? (
                 <span className="flex items-center gap-[3px] text-small font-semibold text-ink">
-                  <StarIcon filled className="size-[13px] text-amber-500" />
+                  <StarIcon filled className="size-[13px] text-ink" />
                   <span>{item.rating}</span>
+                  <span className="sr-only"> von 5 Sternen</span>
                 </span>
               ) : null}
             </div>
-            <h3 className="display-sm min-w-0 break-words">{item.title}</h3>
             <p className="text-body text-prose">
               {stand}
               <span className="text-muted">
@@ -3225,7 +3235,7 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
     ctx.fillStyle = '#4e6355'
     ctx.font = '15px system-ui, -apple-system, sans-serif'
     const today = new Date().toLocaleDateString('de-CH', { day: 'numeric', month: 'long', year: 'numeric' })
-    ctx.fillText(`Prüfprotokoll vom ${today}`, 40, 96)
+    ctx.fillText(`Stand vom ${today}`, 40, 96)
 
     // 4 Stats Cards
     const cards = [
@@ -3274,22 +3284,27 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
       const lW = (stats.laterCount / stats.totalSeries) * barW
       const dW = (stats.doneCount / stats.totalSeries) * barW
 
+      // The palette's greens, as in the window: ink, faint, rule.
       ctx.fillStyle = '#0b4a22'
       ctx.fillRect(barX, barY, wW, barH)
-      ctx.fillStyle = '#d97706'
-      ctx.fillRect(barX + wW, barY, lW, barH)
       ctx.fillStyle = '#799081'
+      ctx.fillRect(barX + wW, barY, lW, barH)
+      ctx.fillStyle = '#a7bca9'
       ctx.fillRect(barX + wW + lW, barY, dW, barH)
     }
 
-    // Legend
+    // Legend: the colour in the dot, the words in prose — light green text
+    // on the paper would not be readable.
     ctx.font = '14px system-ui, sans-serif'
-    ctx.fillStyle = '#0b4a22'
-    ctx.fillText(`● Am Schauen: ${stats.watchingCount} (${stats.watchingPercent}%)`, 40, 345)
-    ctx.fillStyle = '#d97706'
-    ctx.fillText(`● Später: ${stats.laterCount} (${stats.laterPercent}%)`, 280, 345)
-    ctx.fillStyle = '#799081'
-    ctx.fillText(`● Fertig: ${stats.doneCount} (${stats.donePercent}%)`, 460, 345)
+    const legend = (x: number, color: string, text: string) => {
+      ctx.fillStyle = color
+      ctx.fillText('●', x, 345)
+      ctx.fillStyle = '#111a14'
+      ctx.fillText(text, x + 18, 345)
+    }
+    legend(40, '#0b4a22', `Am Schauen: ${stats.watchingCount} (${stats.watchingPercent}%)`)
+    legend(280, '#799081', `Später: ${stats.laterCount} (${stats.laterPercent}%)`)
+    legend(460, '#a7bca9', `Fertig: ${stats.doneCount} (${stats.donePercent}%)`)
 
     // Footer brand
     ctx.fillStyle = '#799081'
@@ -3418,14 +3433,14 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
                   {stats.laterCount > 0 ? (
                     <div
                       style={{ width: `${stats.laterPercent}%` }}
-                      className="h-full bg-amber-600 transition-all"
+                      className="h-full bg-faint transition-all"
                       title={`${stats.laterCount} später (${stats.laterPercent}%)`}
                     />
                   ) : null}
                   {stats.doneCount > 0 ? (
                     <div
                       style={{ width: `${stats.donePercent}%` }}
-                      className="h-full rounded-r-full bg-slate-400 transition-all"
+                      className="h-full rounded-r-full bg-rule transition-all"
                       title={`${stats.doneCount} fertig (${stats.donePercent}%)`}
                     />
                   ) : null}
@@ -3442,20 +3457,20 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
                   <span className="value font-bold text-ink mt-[2px]">{stats.watchingCount}</span>
                   <span className="text-micro text-muted">{stats.watchingPercent}%</span>
                 </div>
-                <div className="flex flex-col rounded-nav bg-amber-500/10 p-[8px] ring-1 ring-inset ring-amber-600/20 text-center">
-                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-amber-700">
-                    <span className="size-[6px] rounded-full bg-amber-600 inline-block" />
+                <div className="flex flex-col rounded-nav bg-panel-soft/60 p-[8px] ring-1 ring-inset ring-rule/30 text-center">
+                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-ink">
+                    <span className="size-[6px] rounded-full bg-faint inline-block" />
                     Später
                   </span>
-                  <span className="value font-bold text-amber-800 mt-[2px]">{stats.laterCount}</span>
+                  <span className="value font-bold text-ink mt-[2px]">{stats.laterCount}</span>
                   <span className="text-micro text-muted">{stats.laterPercent}%</span>
                 </div>
-                <div className="flex flex-col rounded-nav bg-slate-500/10 p-[8px] ring-1 ring-inset ring-slate-400/20 text-center">
-                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-slate-700">
-                    <span className="size-[6px] rounded-full bg-slate-400 inline-block" />
+                <div className="flex flex-col rounded-nav bg-panel-soft/60 p-[8px] ring-1 ring-inset ring-rule/30 text-center">
+                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-ink">
+                    <span className="size-[6px] rounded-full bg-rule inline-block" />
                     Fertig
                   </span>
-                  <span className="value font-bold text-slate-800 mt-[2px]">{stats.doneCount}</span>
+                  <span className="value font-bold text-ink mt-[2px]">{stats.doneCount}</span>
                   <span className="text-micro text-muted">{stats.donePercent}%</span>
                 </div>
               </div>
@@ -3532,7 +3547,7 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
                     const pct = stats.ratedCount > 0 ? Math.round((count / stats.ratedCount) * 100) : 0
                     return (
                       <div key={stars} className="flex items-center gap-[10px] text-small">
-                        <span className="flex w-[38px] items-center justify-end gap-[3px] font-medium text-ink/80">{stars} <StarIcon filled className="size-[11px] text-amber-500" /></span>
+                        <span className="flex w-[38px] items-center justify-end gap-[3px] font-medium text-ink/80">{stars} <StarIcon filled className="size-[11px] text-ink" /></span>
                         <div className="h-[8px] flex-1 overflow-hidden rounded-full bg-panel-mid">
                           <div
                             className="h-full rounded-full bg-ink transition-all"
@@ -3608,10 +3623,18 @@ const linkClass =
   'press inline-flex items-center gap-[6px] rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink'
 
 /** A label over its control, without a rule — the dialogs had a line over every field. */
+/**
+ * A field or a row of choices under its name. Named as a group, so a screen
+ * reader says the name on reaching what is inside — the span alone named
+ * nothing, and every field in these dialogs was read out blank.
+ */
 function Group({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+  const id = useId()
   return (
-    <div className={`flex min-w-0 flex-col gap-[6px] ${className}`}>
-      <span className="text-small text-prose">{label}</span>
+    <div role="group" aria-labelledby={id} className={`flex min-w-0 flex-col gap-[6px] ${className}`}>
+      <span id={id} className="text-small text-prose">
+        {label}
+      </span>
       {children}
     </div>
   )
@@ -3919,7 +3942,7 @@ function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClos
               <button
                 type="button"
                 onClick={onRemove}
-                className="press inline-flex items-center gap-[6px] rounded-nav text-small text-red-600 dark:text-red-400 hover:underline"
+                className="press inline-flex items-center gap-[6px] rounded-nav text-small font-semibold text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
               >
                 Von der Merkliste nehmen
               </button>
@@ -4248,7 +4271,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
                 const badge = sourceBadgeForUrl(url)
                 if (!derived && !info.isEpisodicUrl) return null
                 return (
-                  <span className="text-micro font-medium text-emerald-700 dark:text-emerald-400">
+                  <span className="text-micro font-medium text-ink">
                     Erkannt: {badge ? `[${badge}] ` : ''}{derived ? `„${derived}“ · ` : ''}
                     {info.isEpisodicUrl ? `Staffel ${info.season}, Folge ${info.episode ?? 'alle'}` : ''}
                   </span>

@@ -5,7 +5,8 @@
  *
  * The client used to send the status again on every reply, and every send
  * drew another reply: some 50 000 frames a second for as long as the switch
- * was on. Here each change is one frame.
+ * was on. Here each change is one frame, and READY counts even when the pipe
+ * hands it over in pieces.
  *
  *   npm run verify:discord
  */
@@ -42,7 +43,12 @@ const server = net.createServer((socket) => {
       const head = Buffer.alloc(8)
       head.writeInt32LE(1, 0)
       head.writeInt32LE(payload.length, 4)
-      socket.write(Buffer.concat([head, payload]))
+      const frame = Buffer.concat([head, payload])
+      // READY in two pieces, as a pipe may deliver it.
+      if (op === 0) {
+        socket.write(frame.subarray(0, 12))
+        setTimeout(() => socket.write(frame.subarray(12)), 60)
+      } else socket.write(frame)
     }
   })
 })

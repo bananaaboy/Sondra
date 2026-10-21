@@ -350,11 +350,20 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   nie eine Folge auf; geht sie nicht, heisst die Antwort `status: 'unknown'`,
   und „Online prüfen“ sagt es in einem Satz. AniWorld steht hinter
   DDoS-Guard und lässt Rechenzentren nicht durch — geprüft wird gegen
-  nachgebaute Seiten (`verify:extractors`, `verify:resolve`).
+  nachgebaute Seiten (`verify:extractors`, `verify:resolve`). Gezählt werden
+  nur Links auf die eigene Serie (`/stream/<slug>/staffel-n`); jeder
+  Staffel-Link und `data-season-id` machten die „Staffel 21“ einer fremden
+  Serie zur neuesten. **Neu ist, was die Liste nicht kennt** (`onlineNews`):
+  eine fehlende Staffel oder Folgen über die bekannte Zahl hinaus — im
+  Rückstand sein ist nichts Neues. „Auf die Merkliste nehmen“
+  (`takeOnlineNews`) ergänzt Staffel oder Zahl, bei geteilten Staffeln den
+  letzten Teil, und lässt den Stand über `settle` auf der ersten ungesehenen
+  Folge; vorher sprang „Zur neuen Folge springen“ über Ungesehenes hinweg.
 - **Discord** (nur in der App, aus bis zum Schalter in der Merkliste,
   `desktop/discord.mjs`): spricht Discords lokale Pipe direkt. Gesendet wird
   erst nach `READY` und dann einmal je Änderung — vorher löste jede Antwort
-  Discords einen neuen Rahmen aus, rund 50 000 je Sekunde. Ausschalten
+  Discords einen neuen Rahmen aus, rund 50 000 je Sekunde. Rahmen, die die
+  Pipe in Stücken liefert, werden gesammelt, bis sie ganz sind. Ausschalten
   schliesst die Pipe; Discord nimmt den Status dann selbst weg. `npm run
   verify:discord` spielt das gegen eine nachgebaute Pipe durch.
 - **Merkliste** (`#merkliste`, `MerklistePanel.tsx`, Daten in
@@ -386,6 +395,10 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   als `<img>`, das der Browser in einem Schritt verkleinert — das sah
   überschärft aus. Covers aus Dateien: längere Seite 720 px, ebenso in
   Halbschritten, als WebP 0.9 (sonst JPEG 0.92).
+  Statistik und ihr Bild in den Grüntönen der Palette (`ink`, `faint`,
+  `rule`): Tailwinds Amber und Slate lagen im dunklen Thema bei Lc 0 bis 17,
+  „Fertig“ war unsichtbar. Felder in den Fenstern stehen in `Group`, einer
+  benannten Gruppe — die Beschriftung allein nannte für Screenreader nichts.
   Export als `Sondra-Merkliste-<Datum>.json`
   (`exportMerkliste`), Einlesen führt zusammen (`mergeMerkliste`: dieselbe
   Serie per `id` oder Name, die zuletzt geänderte Seite gewinnt) und lässt
