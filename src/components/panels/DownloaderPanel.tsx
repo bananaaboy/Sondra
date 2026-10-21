@@ -55,7 +55,7 @@ import { AdvancedDownloader } from './DownloaderAdvanced'
 import { openGetAppDialog } from '../GetApp'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { ZipSave } from '../ZipSave'
-import { setMerkItems, takePendingLookup, useMerkliste, type SavedLinkItem } from '../../lib/merkliste'
+import { setMerkItems, takePendingBatchLookup, takePendingLookup, useMerkliste, type SavedLinkItem } from '../../lib/merkliste'
 import { AUDIO_QUALITY_OPTIONS, LANGUAGE_OPTIONS, VIDEO_QUALITY_OPTIONS, episodeKindOf } from './merklisteShared'
 import { EpisodePicker } from './EpisodePicker'
 
@@ -1347,8 +1347,27 @@ export function DownloaderPanel() {
     }
   }
 
-  // „Weiter" in the Merkliste tab hands its entry over and switches here.
+  // „Weiter" oder „Nächste Folgen laden" in der Merkliste übergibt Einträge hierher.
   useEffect(() => {
+    const pendingBatch = takePendingBatchLookup()
+    if (pendingBatch && pendingBatch.length > 0) {
+      const initial: BatchItem[] = pendingBatch.map((b) => ({
+        id: `batch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        url: b.url,
+        titleHint: b.title,
+        status: 'pending',
+      }))
+      setUrl(pendingBatch.map((b) => b.url).join(', '))
+      replaceBatch(initial)
+      setLooking(false)
+      const controller = new AbortController()
+      void resolveAll(
+        initial.map((item) => item.id),
+        controller.signal,
+      )
+      return
+    }
+
     const pending = takePendingLookup()
     if (pending) openSavedLink(pending, Boolean(pending.url.trim()))
     // Once, on arrival; the request is taken and gone.

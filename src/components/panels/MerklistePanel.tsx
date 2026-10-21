@@ -37,6 +37,9 @@ import {
   durationOfEpisode,
   exportMerkliste,
   itemRemainingMinutes,
+  allHistory,
+  allTags,
+  checkOnlineUpdates,
   itemProgress,
   halve,
   markRange,
@@ -51,6 +54,7 @@ import {
   pictureSize,
   pickRandomCandidate,
   readMerklisteFile,
+  requestBatchLookup,
   requestLookup,
   seasonName,
   seasonProgress,
@@ -62,11 +66,13 @@ import {
   splitSeason,
   storedParts,
   toggleWatched,
+  undoWatchHistory,
   updateMerkItem,
   useMerkliste,
   watchedUpTo,
   withParts,
   withSeason,
+  type BatchLookupItem,
   type CoverFrame,
   type MerklisteSortOption,
   type MerkPart,
@@ -77,6 +83,8 @@ import {
   type SavedLinkItem,
   type SavedLinkStatus,
 } from '../../lib/merkliste'
+import { isDiscordRpcEnabled, setDiscordRpcEnabled, updateDiscordPresence } from '../../lib/desktop'
+import { isAniworldUrl } from '../../lib/download'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
 import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
@@ -569,8 +577,14 @@ export function MerklistePanel() {
   const [removed, setRemoved] = useState<{ item: SavedLinkItem; index: number } | null>(null)
   const [anytypeOpen, setAnytypeOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [shuffleOpen, setShuffleOpen] = useState(false)
   const [sortBy, setSortBy] = useState<MerklisteSortOption>('recent')
+  const [filterStatus, setFilterStatus] = useState<'all' | SavedLinkStatus>('all')
+  const [filterTag, setFilterTag] = useState<string | null>(null)
+  const [onlyOpen, setOnlyOpen] = useState(false)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [discordRpcOn, setDiscordRpcOn] = useState(() => isDiscordRpcEnabled())
   const anytypeLink = useAnytype(items)
 
   // The series that is open, if one is. It has a history entry of its own,
@@ -601,21 +615,113 @@ export function MerklistePanel() {
   }
 
   const stats = useMemo(() => calculateMerklisteStats(items), [items])
+  const availableTags = useMemo(() => allTags(items), [items])
+
+  const filteredItems = useMemo(() => {
+    let list = items
+    const needle = query.trim().toLowerCase()
+    if (needle) {
+      list = list.filter(
+        (item) =>
+          item.title.toLowerCase().includes(needle) ||
+          (item.notes ?? '').toLowerCase().includes(needle) ||
+          (item.tags ?? []).some((t) => t.toLowerCase().includes(needle)),
+      )
+    }
+    if (filterStatus !== 'all') {
+      list = list.filter((item) => statusOf(item) === filterStatus)
+    }
+    if (filterTag) {
+      list = list.filter((item) => (item.tags ?? []).includes(filterTag))
+    }
+    if (onlyOpen) {
+      list = list.filter((item) => !caughtUp(seasonsOf(item)))
+    }
+    return list
+  }, [items, query, filterStatus, filterTag, onlyOpen])
 
   // Grouped by where each entry stands, sorted according to sortBy within each.
   const groups = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    const found = items.filter(
-      (item) => !needle || item.title.toLowerCase().includes(needle) || (item.notes ?? '').toLowerCase().includes(needle),
-    )
     return STATUS_OPTIONS.map((option) => {
-      const entries = found.filter((item) => statusOf(item) === option.value)
+      const entries = filteredItems.filter((item) => statusOf(item) === option.value)
       return {
         ...option,
         entries: sortMerkItems(entries, sortBy),
       }
     }).filter((group) => group.entries.length > 0)
-  }, [items, query, sortBy])
+  }, [filteredItems, sortBy])
+
+  const allVisibleItems = useMemo(() => groups.flatMap((g) => g.entries), [groups])
+
+  // Global keyboard shortcuts in overview
+  useEffect(() => {
+    if (openId || adding || editing || season || statsOpen || shuffleOpen || historyOpen || anytypeOpen) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return
+      }
+
+      if (e.key === 'ArrowRight' || e.key === 'j') {
+        e.preventDefault()
+        setFocusedId((current) => {
+          if (!current) return allVisibleItems[0]?.id ?? null
+          const idx = allVisibleItems.findIndex((i) => i.id === current)
+          const next = allVisibleItems[Math.min(allVisibleItems.length - 1, idx + 1)]
+          return next?.id ?? current
+        })
+      } else if (e.key === 'ArrowLeft' || e.key === 'k') {
+        e.preventDefault()
+        setFocusedId((current) => {
+          if (!current) return allVisibleItems[0]?.id ?? null
+          const idx = allVisibleItems.findIndex((i) => i.id === current)
+          const prev = allVisibleItems[Math.max(0, idx - 1)]
+          return prev?.id ?? current
+        })
+      } else if (e.key === 'Enter') {
+        if (focusedId) {
+          const focused = allVisibleItems.find((i) => i.id === focusedId)
+          if (focused) {
+            e.preventDefault()
+            openSeries(focused.id)
+          }
+        }
+      } else if (e.key === '+' || e.key === ' ') {
+        if (focusedId) {
+          const focused = allVisibleItems.find((i) => i.id === focusedId)
+          if (focused && focused.episode !== null && !caughtUp(seasonsOf(focused))) {
+            e.preventDefault()
+            markSeen(focused)
+          }
+        }
+      } else if (e.key === 'Escape') {
+        setFocusedId(null)
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [allVisibleItems, focusedId, openId, adding, editing, season, statsOpen, shuffleOpen, historyOpen, anytypeOpen])
+
+  // Overview Discord presence
+  useEffect(() => {
+    if (openId) return
+    updateDiscordPresence({
+      details: 'Merkliste',
+      state: `${items.length} ${items.length === 1 ? 'Serie' : 'Serien'} (${stats.watchingCount} aktiv)`,
+      assets: {
+        large_image: 'sondra',
+        large_text: 'Sondra Studio',
+      },
+    })
+    return () => {
+      updateDiscordPresence(null)
+    }
+  }, [items.length, stats.watchingCount, openId])
 
   const openItem = openId ? (items.find((item) => item.id === openId) ?? null) : null
   const editingItem = items.find((item) => item.id === editing) ?? null
@@ -635,6 +741,7 @@ export function MerklistePanel() {
     <>
       <AddDialog open={adding} onClose={() => setAdding(false)} />
       {statsOpen ? <StatsDialog items={items} onClose={() => setStatsOpen(false)} /> : null}
+      {historyOpen ? <WatchHistoryDialog items={items} onClose={() => setHistoryOpen(false)} /> : null}
       {shuffleOpen ? (
         <ShuffleDialog
           items={items}
@@ -713,9 +820,19 @@ export function MerklistePanel() {
                   type="button"
                   size="sm"
                   variant="quiet"
+                  onClick={() => setHistoryOpen(true)}
+                  title="Kürzlich gesehene Folgen im Verlauf anzeigen"
+                >
+                  Verlauf
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
                   onClick={() => setShuffleOpen(true)}
                   title="Zufällige Serie aus der Merkliste vorschlagen"
-                 className="inline-flex items-center gap-[6px]">
+                  className="inline-flex items-center gap-[6px]"
+                >
                   <DiceIcon />
                   <span>Würfeln</span>
                 </Button>
@@ -783,10 +900,110 @@ export function MerklistePanel() {
         ) : null}
       </Card>
 
+      {items.length > 0 ? (
+        <div className="flex flex-col gap-[10px] -mt-[12px]">
+          {/* Status filter tabs & controls */}
+          <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px] border-b border-line pb-[10px] text-small">
+            <div className="flex flex-wrap items-center gap-[4px]">
+              {(
+                [
+                  { value: 'all', label: 'Alle' },
+                  { value: 'watching', label: 'Am Schauen' },
+                  { value: 'later', label: 'Für später' },
+                  { value: 'done', label: 'Fertig' },
+                ] as const
+              ).map((tab) => {
+                const active = filterStatus === tab.value
+                const count =
+                  tab.value === 'all' ? items.length : items.filter((i) => statusOf(i) === tab.value).length
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setFilterStatus(tab.value)}
+                    className={`press flex items-center gap-[6px] rounded-nav px-[10px] py-[5px] text-small font-medium transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-panel-strong text-ink font-semibold'
+                        : 'text-prose hover:bg-panel-soft hover:text-ink'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span className="text-micro font-mono text-muted">{count}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-[12px]">
+              <button
+                type="button"
+                onClick={() => setOnlyOpen((prev) => !prev)}
+                className={`press flex items-center gap-[6px] rounded-nav px-[8px] py-[4px] text-small transition-colors cursor-pointer ${
+                  onlyOpen ? 'bg-panel-strong text-ink font-semibold' : 'text-muted hover:text-ink'
+                }`}
+                title="Nur Serien mit noch ungesehenen Folgen anzeigen"
+              >
+                <span>{onlyOpen ? '☑' : '☐'}</span>
+                <span>Nur offene Folgen</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !discordRpcOn
+                  setDiscordRpcOn(next)
+                  setDiscordRpcEnabled(next)
+                }}
+                className={`press flex items-center gap-[5px] rounded-nav px-[8px] py-[4px] text-micro transition-colors cursor-pointer ${
+                  discordRpcOn ? 'bg-panel-strong text-ink font-medium' : 'text-muted hover:text-ink'
+                }`}
+                title="Discord Rich Presence ein- oder ausschalten"
+              >
+                <span className={`size-[6px] rounded-full ${discordRpcOn ? 'bg-emerald-500' : 'bg-muted/40'}`} />
+                <span>Discord: {discordRpcOn ? 'Aktiv' : 'Aus'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Tags row */}
+          {availableTags.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-[6px] text-micro">
+              <span className="text-muted font-sans mr-[2px]">Tags:</span>
+              <button
+                type="button"
+                onClick={() => setFilterTag(null)}
+                className={`press rounded-nav px-[7px] py-[2px] transition-colors cursor-pointer ${
+                  filterTag === null ? 'bg-panel-strong text-ink font-semibold' : 'text-muted hover:text-ink'
+                }`}
+              >
+                Alle Tags
+              </button>
+              {availableTags.map((tag) => {
+                const active = filterTag === tag
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setFilterTag(active ? null : tag)}
+                    className={`press rounded-nav px-[7px] py-[2px] font-sans transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-panel-strong text-ink font-semibold ring-1 ring-inset ring-line'
+                        : 'bg-panel-soft text-prose hover:bg-panel-mid hover:text-ink'
+                    }`}
+                  >
+                    #{tag}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {items.length === 0 ? (
         <EmptyState onAdd={() => setAdding(true)} onDownload={() => setPanel('downloader')} />
       ) : groups.length === 0 ? (
-        <p className="text-small text-prose">Nichts gefunden für „{query.trim()}“.</p>
+        <p className="text-small text-prose">Keine Serien gefunden für die gewählten Filter.</p>
       ) : (
         groups.map((group) => (
           <section key={group.value} aria-label={group.label} className="flex flex-col gap-[14px]">
@@ -798,7 +1015,13 @@ export function MerklistePanel() {
                 whatever their shape. */}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] items-end gap-x-[14px] gap-y-[24px] sm:grid-cols-[repeat(auto-fill,minmax(156px,1fr))] sm:gap-x-[18px]">
               {group.entries.map((item) => (
-                <SeriesTile key={item.id} item={item} onOpen={() => openSeries(item.id)} />
+                <SeriesTile
+                  key={item.id}
+                  item={item}
+                  onOpen={() => openSeries(item.id)}
+                  isFocused={focusedId === item.id}
+                  onFocus={() => setFocusedId(item.id)}
+                />
               ))}
             </div>
           </section>
@@ -1343,8 +1566,13 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
               Exportieren
             </button>
           ) : null}
-          <button type="button" onClick={() => fileRef.current?.click()} className={linkClass}>
-            Aus Datei einlesen
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className={linkClass}
+            title="Sondra JSON, MyAnimeList XML oder AniList JSON einlesen"
+          >
+            Aus Datei einlesen (JSON / MAL-XML)
           </button>
           {link.available ? (
             <button type="button" onClick={onAnytype} className={linkClass}>
@@ -1381,7 +1609,7 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
       <input
         ref={fileRef}
         type="file"
-        accept=".json,application/json"
+        accept=".json,.xml,application/json,text/xml,application/xml"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0]
@@ -1658,7 +1886,17 @@ function NamePoster({ title, large = false }: { title: string; large?: boolean }
  * Everything else — seasons, buttons — is one click further, on the
  * series' own page. Hover or focus brings up how far and how many seasons.
  */
-function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void }) {
+function SeriesTile({
+  item,
+  onOpen,
+  isFocused,
+  onFocus,
+}: {
+  item: SavedLinkItem
+  onOpen: () => void
+  isFocused?: boolean
+  onFocus?: () => void
+}) {
   const progress = itemProgress(item)
   const cover = seriesCover(item)
   const [broken, setBroken] = useState<string | null>(null)
@@ -1670,9 +1908,25 @@ function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void 
   const canAdvance = !done && item.episode !== null
 
   return (
-    <div className="group flex min-w-0 flex-col gap-[10px] rounded-card text-left">
+    <div
+      tabIndex={0}
+      onFocus={onFocus}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          onOpen()
+        } else if ((e.key === '+' || e.key === ' ') && canAdvance) {
+          e.preventDefault()
+          markSeen(item)
+        }
+      }}
+      className={`group flex min-w-0 flex-col gap-[10px] rounded-card text-left outline-none transition-shadow ${
+        isFocused ? 'ring-2 ring-ink ring-offset-2 ring-offset-panel' : 'focus-visible:ring-2 focus-visible:ring-ink'
+      }`}
+    >
       <button
         type="button"
+        tabIndex={-1}
         onClick={onOpen}
         aria-label={`${item.title}: ${stand}, ${progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}`}
         className="press relative block w-full overflow-hidden rounded-card text-left cursor-pointer"
@@ -1707,6 +1961,7 @@ function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void 
       <div className="flex min-w-0 flex-col gap-[4px] px-[1px]">
         <button
           type="button"
+          tabIndex={-1}
           onClick={onOpen}
           className="press truncate text-left text-body font-semibold leading-snug text-ink hover:underline cursor-pointer"
           title={item.title}
@@ -1721,11 +1976,12 @@ function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void 
           {canAdvance ? (
             <button
               type="button"
+              tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation()
                 markSeen(item)
               }}
-              title={`${hereLabel(item)} als gesehen markieren`}
+              title={`${hereLabel(item)} als gesehen markieren (+ oder Leertaste)`}
               className="press shrink-0 rounded-nav bg-panel-soft px-[6px] py-[1px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-mid transition-colors cursor-pointer"
             >
               +1
@@ -1733,7 +1989,20 @@ function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void 
           ) : null}
         </div>
         <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${item.title}: gesehen`} />
-        <span className="text-micro text-muted font-mono truncate min-h-[1.25em] block">{badge || '\u00A0'}</span>
+        <div className="flex items-center justify-between gap-[4px] min-h-[1.25em] text-micro">
+          <span className="text-muted font-mono truncate">{badge || '\u00A0'}</span>
+          {item.onlineAvailable?.hasNew ? (
+            <span
+              className="shrink-0 flex items-center gap-[3px] font-sans font-medium text-accent-strong"
+              title={`Auf AniWorld ist Staffel ${item.onlineAvailable.maxSeason}, Folge ${item.onlineAvailable.maxEpisode} verfügbar`}
+            >
+              <span className="size-[4px] rounded-full bg-accent-strong" />
+              <span>Neu</span>
+            </span>
+          ) : item.tags && item.tags.length > 0 ? (
+            <span className="text-muted/70 font-sans truncate">#{item.tags[0]}</span>
+          ) : null}
+        </div>
       </div>
     </div>
   )
@@ -1768,9 +2037,57 @@ function SeriesPage({
   const seasonCount = seasons.filter((season) => season.number > 0).length
   const hasFilms = seasons.some((season) => season.number === 0)
   const next = status !== 'done' && item.episode !== null && !caughtUp(seasons)
+  const setPanel = useSession((state) => state.setPanel)
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
+
+  // Automatic discreet AniWorld update check
+  useEffect(() => {
+    if (!item.url || !isAniworldUrl(item.url)) return
+    const checked = item.onlineAvailable?.checkedAt ?? 0
+    if (Date.now() - checked > 4 * 60 * 60 * 1000) {
+      void checkOnlineUpdates(item)
+    }
+  }, [item.url, item.id])
+
+  // Discord Rich Presence update when viewing series
+  useEffect(() => {
+    updateDiscordPresence({
+      details: `Merkliste: ${item.title}`,
+      state: item.season === 0 ? `Film ${item.episode ?? 1}` : `Staffel ${item.season} · Folge ${item.episode ?? 1}`,
+      assets: {
+        large_image: 'sondra',
+        large_text: item.title,
+      },
+    })
+    return () => {
+      updateDiscordPresence(null)
+    }
+  }, [item.title, item.season, item.episode])
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdates(true)
+    await checkOnlineUpdates(item)
+    setCheckingUpdates(false)
+  }
+
+  const activeSeason = seasons.find((s) => s.number === item.season) ?? seasons[0]
 
   return (
     <div className="flex flex-col gap-[32px]">
+      {batchModalOpen && activeSeason ? (
+        <BatchDownloadModal
+          item={item}
+          season={activeSeason}
+          onClose={() => setBatchModalOpen(false)}
+          onTransfer={(batch) => {
+            setBatchModalOpen(false)
+            requestBatchLookup(batch)
+            setPanel('downloader')
+          }}
+        />
+      ) : null}
+
       <Card tone="cream">
         <button type="button" onClick={onBack} className="press mt-[8px] inline-flex items-center gap-[6px] rounded-nav text-small text-ink hover:underline">
           <svg viewBox="0 0 16 16" aria-hidden className="size-[14px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1820,10 +2137,55 @@ function SeriesPage({
               </p>
             </div>
             {item.notes ? <p className="max-w-[72ch] text-small leading-[1.55] text-prose">{item.notes}</p> : null}
+            {item.tags && item.tags.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-[8px]">
+                {item.tags.map((tag) => (
+                  <span key={tag} className="text-micro font-sans font-medium text-muted">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            {item.onlineAvailable?.hasNew ? (
+              <div className="mt-[2px] flex flex-wrap items-center justify-between gap-[10px] rounded-card border border-line bg-panel-soft/60 px-[12px] py-[8px]">
+                <div className="flex items-center gap-[8px] text-small text-ink">
+                  <span className="size-[6px] shrink-0 rounded-full bg-accent-strong" />
+                  <span>
+                    Auf AniWorld neu online: <strong>Staffel {item.onlineAvailable.maxSeason}, Folge {item.onlineAvailable.maxEpisode}</strong>
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => {
+                    updateMerkItem(item.id, {
+                      season: item.onlineAvailable!.maxSeason,
+                      episode: item.onlineAvailable!.maxEpisode,
+                    })
+                  }}
+                >
+                  Zur neuen Folge springen
+                </Button>
+              </div>
+            ) : null}
+
             <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
               {hasUrl && next ? (
                 <Button type="button" size="sm" onClick={() => openHere(item)}>
                   {hereLabel(item)} laden
+                </Button>
+              ) : null}
+              {hasUrl ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => setBatchModalOpen(true)}
+                  title="Nächste Folgen in den Downloader übertragen"
+                >
+                  Nächste Folgen laden …
                 </Button>
               ) : null}
               {next ? (
@@ -1834,6 +2196,18 @@ function SeriesPage({
               {hasUrl && !next ? (
                 <Button type="button" size="sm" variant="quiet" onClick={() => openHere(item)}>
                   Nachsehen
+                </Button>
+              ) : null}
+              {hasUrl && isAniworldUrl(item.url) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
+                  disabled={checkingUpdates}
+                  onClick={() => void handleCheckUpdates()}
+                  title="Auf AniWorld nach neuen Staffeln oder Folgen suchen"
+                >
+                  {checkingUpdates ? 'Prüft…' : 'Online prüfen'}
                 </Button>
               ) : null}
               <Button type="button" size="sm" variant="quiet" onClick={onEdit}>
@@ -2577,6 +2951,172 @@ function ShuffleDialog({
             </Button>
           </div>
         </div>
+      </div>
+    </Dialog>
+  )
+}
+
+function WatchHistoryDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () => void }) {
+  const history = useMemo(() => allHistory(items), [items])
+  const [undoneId, setUndoneId] = useState<string | null>(null)
+
+  const handleUndo = (itemId: string, entryId: string) => {
+    undoWatchHistory(itemId, entryId)
+    setUndoneId(entryId)
+    setTimeout(() => setUndoneId(null), 2500)
+  }
+
+  const formatTimestamp = (timestamp: number) => {
+    const d = new Date(timestamp)
+    const now = new Date()
+    const isToday = d.toDateString() === now.toDateString()
+    const time = d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })
+    if (isToday) return `Heute, ${time}`
+    return `${d.toLocaleDateString('de-CH', { day: 'numeric', month: 'short' })}, ${time}`
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="Zuletzt geschaut (Verlauf)" size="md">
+      <div className="flex flex-col gap-[14px] max-h-[65vh] overflow-y-auto pr-[4px]">
+        {history.length === 0 ? (
+          <p className="py-[32px] text-center text-small text-muted">
+            Noch keine Folgen im Verlauf erfasst. Sobald Sie Folgen als gesehen markieren, erscheinen sie hier.
+          </p>
+        ) : (
+          <div className="divide-y divide-line/40">
+            {history.slice(0, 50).map(({ item, entry }) => (
+              <div key={entry.id} className="flex items-center justify-between gap-[12px] py-[10px]">
+                <div className="min-w-0 flex-1">
+                  <p className="text-small font-semibold text-ink truncate">{item.title}</p>
+                  <p className="text-micro text-muted">
+                    {entry.season === 0 ? `Film ${entry.episode}` : `Staffel ${entry.season}, Folge ${entry.episode}`} ·{' '}
+                    {formatTimestamp(entry.at)}
+                  </p>
+                </div>
+                {undoneId === entry.id ? (
+                  <span className="text-micro text-accent-strong font-medium">Zurückgesetzt</span>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="quiet"
+                    onClick={() => handleUndo(item.id, entry.id)}
+                    title="Als ungesehen markieren"
+                  >
+                    Rückgängig
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="mt-[16px] flex justify-end">
+        <Button type="button" size="sm" onClick={onClose}>
+          Schliessen
+        </Button>
+      </div>
+    </Dialog>
+  )
+}
+
+function BatchDownloadModal({
+  item,
+  season,
+  onClose,
+  onTransfer,
+}: {
+  item: SavedLinkItem
+  season: MerkSeason
+  onClose: () => void
+  onTransfer: (batch: BatchLookupItem[]) => void
+}) {
+  const prog = seasonProgress(season)
+  const currentEp = prog.next
+  const total = season.episodes
+
+  const openEpisodes: number[] = []
+  if (total !== null) {
+    for (let e = currentEp; e <= total; e++) {
+      if (!season.watched.includes(e)) openEpisodes.push(e)
+    }
+  } else {
+    for (let i = 0; i < 5; i++) {
+      openEpisodes.push(currentEp + i)
+    }
+  }
+
+  const prepareBatch = (count: number) => {
+    const eps = openEpisodes.slice(0, count)
+    const batch: BatchLookupItem[] = eps.map((ep) => ({
+      url: buildUrlWithEpisode(item.url, season.number, ep),
+      title: `${item.title} - S${season.number}E${ep}`,
+      season: season.number,
+      episode: ep,
+    }))
+    onTransfer(batch)
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="Nächste Folgen in den Downloader übertragen" size="md">
+      <div className="flex flex-col gap-[12px]">
+        <p className="text-small text-prose">
+          Wählen Sie, wie viele Folgen von <strong>{item.title}</strong> (ab Folge {currentEp}) in die
+          Download-Warteschlange übertragen werden sollen:
+        </p>
+        <div className="flex flex-col gap-[8px] pt-[8px]">
+          <Button
+            type="button"
+            size="sm"
+            variant="quiet"
+            onClick={() => prepareBatch(1)}
+            className="w-full justify-between"
+          >
+            <span>Nächste Folge ({season.number === 0 ? `Film ${currentEp}` : `Staffel ${season.number}, Folge ${currentEp}`})</span>
+            <span className="text-micro text-muted">1 Folge</span>
+          </Button>
+          {openEpisodes.length >= 2 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="quiet"
+              onClick={() => prepareBatch(3)}
+              className="w-full justify-between"
+            >
+              <span>Nächste 3 Folgen ({currentEp}–{openEpisodes[Math.min(2, openEpisodes.length - 1)]})</span>
+              <span className="text-micro text-muted">3 Folgen</span>
+            </Button>
+          ) : null}
+          {openEpisodes.length >= 4 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="quiet"
+              onClick={() => prepareBatch(5)}
+              className="w-full justify-between"
+            >
+              <span>Nächste 5 Folgen ({currentEp}–{openEpisodes[Math.min(4, openEpisodes.length - 1)]})</span>
+              <span className="text-micro text-muted">5 Folgen</span>
+            </Button>
+          ) : null}
+          {openEpisodes.length > 1 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="primary"
+              onClick={() => prepareBatch(openEpisodes.length)}
+              className="w-full justify-between"
+            >
+              <span>Alle offenen Folgen ({openEpisodes.length} {openEpisodes.length === 1 ? 'Folge' : 'Folgen'})</span>
+              <span className="text-micro text-on-ink/80">{openEpisodes.length} Folgen</span>
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-[16px] flex justify-end">
+        <Button type="button" size="sm" variant="quiet" onClick={onClose}>
+          Abbrechen
+        </Button>
       </div>
     </Dialog>
   )
@@ -3333,6 +3873,22 @@ function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClos
             />
           </Group>
 
+          <Group label="Tags (durch Komma getrennt)">
+            <TextInput
+              value={(item.tags ?? []).join(', ')}
+              placeholder="Anime, Favorit, Manga …"
+              onChange={(event) =>
+                update({
+                  tags: event.target.value
+                    .split(',')
+                    .map((t) => t.trim().replace(/^#+/, ''))
+                    .filter(Boolean),
+                })
+              }
+              className="font-sans"
+            />
+          </Group>
+
           <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[6px] border-b border-line pb-[10px]">
             <span className="text-small font-semibold text-ink">
               {seasonCount} {seasonCount === 1 ? 'Staffel' : 'Staffeln'}{hasFilms ? ', dazu Filme' : ''}
@@ -3482,6 +4038,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [cover, setCover] = useState<string | undefined>(undefined)
   const [coverFrame, setCoverFrame] = useState<CoverFrame | undefined>(undefined)
   const [format, setFormat] = useState<TileFormat>('poster')
+  const [tags, setTags] = useState('')
 
   const counts = episodeCounts(typedCounts, seasonCount)
   const position = Math.min(atSeason, seasonCount)
@@ -3506,6 +4063,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     setCover(undefined)
     setCoverFrame(undefined)
     setFormat('poster')
+    setTags('')
   }
 
   const save = () => {
@@ -3518,6 +4076,10 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     })
     if (films > 0) seasons.push({ number: 0, episodes: films, watched: [] })
     const address = url.trim() ? (/^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`) : ''
+    const cleanTags = tags
+      .split(',')
+      .map((t) => t.trim().replace(/^#+/, ''))
+      .filter(Boolean)
     const item = createMerkItem({
       title: title.trim() || undefined,
       url: address ? buildUrlWithEpisode(address, position, episode) : '',
@@ -3528,6 +4090,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
       coverFrame,
       ...(format === 'manga' ? { tileFormat: format } : {}),
       status,
+      ...(cleanTags.length > 0 ? { tags: cleanTags } : {}),
     })
     setMerkItems((current) => [item, ...current])
     reset()
@@ -3619,6 +4182,15 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
                   </span>
                 )
               })() : null}
+            </Group>
+
+            <Group label="Tags (durch Komma getrennt)">
+              <TextInput
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                placeholder="Anime, Favorit, Manga …"
+                className="font-sans"
+              />
             </Group>
 
             {/* Staffel- & Episoden-Struktur */}

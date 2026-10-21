@@ -38,6 +38,7 @@ import {
   type VideoOps,
 } from '../../lib/video'
 import { holdScreenAwake } from '../../lib/wakeLock'
+import { updateDiscordPresence } from '../../lib/desktop'
 import { kindFromMime, useActiveAssetOfKind, useAssetsOfKind, useSession } from '../../state/store'
 import { FileDrop } from '../FileDrop'
 import {
@@ -449,6 +450,21 @@ export function VideoPanel() {
       .finally(() => setProbing(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asset?.id, fileBlob, needsLook])
+
+  useEffect(() => {
+    if (!asset) return
+    updateDiscordPresence({
+      details: 'Video-Bearbeitung',
+      state: asset.name,
+      assets: {
+        large_image: 'sondra',
+        large_text: 'Sondra Studio',
+      },
+    })
+    return () => {
+      updateDiscordPresence(null)
+    }
+  }, [asset?.name])
 
   const makeStand = async (remedy: Remedy, facts: DiskFacts) => {
     if (!asset || !fileBlob) return

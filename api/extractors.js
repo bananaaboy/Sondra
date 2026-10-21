@@ -984,6 +984,75 @@ export async function extractAniworldSeason(url, options = {}) {
   }
 }
 
+/**
+ * Checks AniWorld/SerienStream series page to find the latest season
+ * and episode released online.
+ */
+export async function checkAniworldOnlineUpdates(rawUrl, options = {}) {
+  try {
+    const parsed = new URL(rawUrl)
+    if (!ANIWORLD_HOSTS.test(parsed.hostname)) return null
+    const slugMatch = parsed.pathname.match(/\/(?:anime|serie)\/stream\/([^/?#]+)/i)
+    if (!slugMatch) return null
+    const slug = slugMatch[1]
+    const baseType = parsed.pathname.includes('/serie/') ? 'serie' : 'anime'
+    const baseUrl = `${parsed.origin}/${baseType}/stream/${slug}`
+
+    const res = await fetchHtml(baseUrl, options)
+    if (!res.ok) return null
+    const html = await res.text()
+
+    const titleMatch =
+      html.match(/<div class="series-title"[^>]*>[\s\S]*?<h1[^>]*>[\s\S]*?<span>([^<]+)<\/span>/i) ||
+      html.match(/<h1\b[^>]*\bitemprop=['"]name['"][^>]*>[\s\S]*?<span>([^<]+)<\/span>/i) ||
+      html.match(/<meta property="og:title" content="([^"]+)"/i)
+    const seriesTitle = (titleMatch ? titleMatch[1] : 'Anime')
+      .replace(/&#039;/g, "'")
+      .replace(/&amp;/g, '&')
+      .trim()
+
+    // Find all season numbers
+    const seasonMatches = [
+      ...html.matchAll(new RegExp(`/(?:anime|serie)/stream/${slug}/staffel-(\\d+)`, 'gi')),
+      ...html.matchAll(/data-season-id=['"](\d+)['"]/gi),
+      ...html.matchAll(/href=['"][^'"]*staffel-(\d+)['"]/gi),
+    ]
+    const seasonNums = seasonMatches
+      .map((m) => Number(m[1]))
+      .filter((n) => Number.isFinite(n) && n > 0)
+    const maxSeason = seasonNums.length > 0 ? Math.max(...seasonNums) : 1
+
+    let seasonHtml = html
+    if (maxSeason > 1) {
+      try {
+        const seasonRes = await fetchHtml(`${baseUrl}/staffel-${maxSeason}`, options)
+        if (seasonRes.ok) seasonHtml = await seasonRes.text()
+      } catch {}
+    }
+
+    const epMatches = [
+      ...seasonHtml.matchAll(
+        new RegExp(`/(?:anime|serie)/stream/${slug}/staffel-${maxSeason}/episode-(\\d+)`, 'gi'),
+      ),
+      ...seasonHtml.matchAll(/itemprop=['"]episodeNumber['"]\s+content=['"](\d+)['"]/gi),
+      ...seasonHtml.matchAll(/href=['"][^'"]*episode-(\\d+)['"]/gi),
+    ]
+    const epNums = epMatches
+      .map((m) => Number(m[1]))
+      .filter((n) => Number.isFinite(n) && n > 0)
+    const maxEpisode = epNums.length > 0 ? Math.max(...epNums) : 1
+
+    return {
+      seriesTitle,
+      maxSeason,
+      maxEpisode,
+      checkedAt: Date.now(),
+    }
+  } catch {
+    return null
+  }
+}
+
 export function parseAniworldLanguage(pref) {
   if (!pref || pref === 'auto') return null
   const s = String(pref).toLowerCase().trim()
