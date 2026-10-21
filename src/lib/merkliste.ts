@@ -792,3 +792,143 @@ export function adoptRemovals(next: Record<string, number>): void {
   removals = next
   persistRemovals()
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Statistics                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export interface MerklisteStats {
+  totalSeries: number
+  watchingCount: number
+  laterCount: number
+  doneCount: number
+  watchingPercent: number
+  laterPercent: number
+  donePercent: number
+  seenTotal: number
+  knownTotalEpisodes: number
+  knownWatchedEpisodes: number
+  openEpisodesCount: number
+  overallProgressPercent: number | null
+  watchMinutes: number
+  watchTime: { short: string; long: string }
+  totalSeasons: number
+  completedSeasons: number
+  filmCount: number
+  filmsSeen: number
+  ratedCount: number
+  avgRating: string | null
+  ratingDistribution: { stars: number; count: number }[]
+  recentItems: SavedLinkItem[]
+}
+
+export function formatWatchMinutes(totalMinutes: number): { short: string; long: string } {
+  if (totalMinutes <= 0) return { short: '0 Std.', long: '0 Stunden' }
+  const totalHours = Math.round((totalMinutes / 60) * 10) / 10
+  const days = Math.floor(totalMinutes / (60 * 24))
+  const remMinutes = totalMinutes % (60 * 24)
+  const hours = Math.floor(remMinutes / 60)
+  const minutes = remMinutes % 60
+
+  const short = totalHours < 1 ? `${totalMinutes} Min.` : `${totalHours.toLocaleString('de-CH')} Std.`
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days} ${days === 1 ? 'Tag' : 'Tage'}`)
+  if (hours > 0) parts.push(`${hours} ${hours === 1 ? 'Std.' : 'Std.'}`)
+  if (minutes > 0) parts.push(`${minutes} Min.`)
+  const long = parts.length > 0 ? parts.join(', ') : `${totalHours} Std.`
+  return { short, long }
+}
+
+export function calculateMerklisteStats(items: SavedLinkItem[]): MerklisteStats {
+  const totalSeries = items.length
+  const watchingCount = items.filter((i) => (i.status ?? 'watching') === 'watching').length
+  const laterCount = items.filter((i) => i.status === 'later').length
+  const doneCount = items.filter((i) => i.status === 'done').length
+
+  const watchingPercent = totalSeries > 0 ? Math.round((watchingCount / totalSeries) * 100) : 0
+  const laterPercent = totalSeries > 0 ? Math.round((laterCount / totalSeries) * 100) : 0
+  const donePercent = totalSeries > 0 ? Math.round((doneCount / totalSeries) * 100) : 0
+
+  const seenTotal = items.reduce((sum, item) => sum + itemProgress(item).watched, 0)
+
+  let knownTotalEpisodes = 0
+  let knownWatchedEpisodes = 0
+  for (const item of items) {
+    const prog = itemProgress(item)
+    if (prog.total !== null && prog.total > 0) {
+      knownTotalEpisodes += prog.total
+      knownWatchedEpisodes += prog.watched
+    }
+  }
+
+  const openEpisodesCount = Math.max(0, knownTotalEpisodes - knownWatchedEpisodes)
+  const overallProgressPercent =
+    knownTotalEpisodes > 0 ? Math.min(100, Math.round((knownWatchedEpisodes / knownTotalEpisodes) * 100)) : null
+
+  // Watch time estimate: 24 minutes per episode average (standard for anime & series)
+  const watchMinutes = seenTotal * 24
+  const watchTime = formatWatchMinutes(watchMinutes)
+
+  let totalSeasons = 0
+  let completedSeasons = 0
+  let filmCount = 0
+  let filmsSeen = 0
+
+  for (const item of items) {
+    const seasons = seasonsOf(item)
+    for (const season of seasons) {
+      if (season.number === 0) {
+        filmCount += season.episodes ?? season.watched.length
+        filmsSeen += season.watched.length
+      } else {
+        totalSeasons += 1
+        const prog = seasonProgress(season)
+        if (prog.complete) {
+          completedSeasons += 1
+        }
+      }
+    }
+  }
+
+  const ratedItems = items.filter((i) => typeof i.rating === 'number' && i.rating > 0)
+  const ratedCount = ratedItems.length
+  const avgRating =
+    ratedCount > 0
+      ? (ratedItems.reduce((sum, i) => sum + (i.rating ?? 0), 0) / ratedCount).toFixed(1)
+      : null
+
+  const ratingDistribution = [5, 4, 3, 2, 1].map((stars) => ({
+    stars,
+    count: ratedItems.filter((i) => Math.round(i.rating ?? 0) === stars).length,
+  }))
+
+  const recentItems = [...items]
+    .sort((a, b) => (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt))
+    .slice(0, 3)
+
+  return {
+    totalSeries,
+    watchingCount,
+    laterCount,
+    doneCount,
+    watchingPercent,
+    laterPercent,
+    donePercent,
+    seenTotal,
+    knownTotalEpisodes,
+    knownWatchedEpisodes,
+    openEpisodesCount,
+    overallProgressPercent,
+    watchMinutes,
+    watchTime,
+    totalSeasons,
+    completedSeasons,
+    filmCount,
+    filmsSeen,
+    ratedCount,
+    avgRating,
+    ratingDistribution,
+    recentItems,
+  }
+}

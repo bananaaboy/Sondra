@@ -222,6 +222,42 @@ round = await lib.syncMerkliste()
 check('Zurückgezogener Schlüssel', round.ok ? 'ok' : round.error, 'unauthorized')
 check('Danach nicht mehr verbunden', (await call('status')).paired, false)
 check('Getrennt: Schlüsseldatei gelöscht', fs.existsSync(path.join(dataDir, 'anytype-schluessel.bin')), false)
+// Statistics calculation check
+const testItems = [
+  merk.createMerkItem({
+    id: 's1',
+    title: 'Series 1',
+    status: 'watching',
+    rating: 5,
+    seasons: [{ number: 1, episodes: 24, watched: Array.from({ length: 12 }, (_, i) => i + 1) }],
+  }),
+  merk.createMerkItem({
+    id: 's2',
+    title: 'Series 2',
+    status: 'later',
+    seasons: [{ number: 1, episodes: 10, watched: [] }],
+  }),
+  merk.createMerkItem({
+    id: 's3',
+    title: 'Series 3',
+    status: 'done',
+    rating: 4,
+    seasons: [{ number: 1, episodes: 12, watched: Array.from({ length: 12 }, (_, i) => i + 1) }],
+  }),
+]
+const stats = merk.calculateMerklisteStats(testItems)
+check('Statistiken: Serien gesamt', stats.totalSeries, 3)
+check('Statistiken: Am Schauen', stats.watchingCount, 1)
+check('Statistiken: Später', stats.laterCount, 1)
+check('Statistiken: Fertig', stats.doneCount, 1)
+check('Statistiken: Gesehene Folgen', stats.seenTotal, 24)
+check('Statistiken: Bekannte Gesamtfolgen', stats.knownTotalEpisodes, 46)
+check('Statistiken: Fortschritt', stats.overallProgressPercent, 52)
+check('Statistiken: Staffeln abgeschlossen', stats.completedSeasons, 1)
+check('Statistiken: Durchschnittsbewertung', stats.avgRating, '4.5')
+check('Statistiken: Formatierung Sehzeit 222 Folgen', merk.formatWatchMinutes(222 * 24).long, '3 Tage, 16 Std., 48 Min.')
+check('Statistiken: Formatierung 0 Min.', merk.formatWatchMinutes(0).short, '0 Std.')
+
 
 server.close()
 fs.rmSync(dataDir, { recursive: true, force: true })
