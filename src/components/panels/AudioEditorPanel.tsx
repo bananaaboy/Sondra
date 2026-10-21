@@ -761,12 +761,89 @@ export function AudioEditorPanel() {
   if (!asset) {
     return (
       <Card tone="keylime">
-        <h2 className="display-md mt-[8px] mb-[12px]">Schneiden, blenden, angleichen</h2>
-        <p className="mb-[16px] max-w-[62ch] text-body leading-[1.55] text-prose/85">
-          In der Sitzung liegt noch keine Tondatei. Alles hier rechnet direkt auf den Abtastwerten —
-          kein Warten auf eine Engine, und die Ausgangsdatei wird nie verändert.
-        </p>
-        <FileDrop />
+        <div className="flex flex-col gap-[20px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
+            <div>
+              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
+                <span className="size-[6px] rounded-full bg-emerald-500" />
+                100% lokal &amp; verlustfrei
+              </div>
+              <h2 className="display-md mt-[6px]">Ton bearbeiten &amp; schneiden</h2>
+              <p className="mt-[2px] text-small text-muted">
+                Rechnet direkt auf den Abtastwerten im Browser — kein Warten, keine Kompressionsverluste.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              {['WAV', 'MP3', 'FLAC', 'M4A', 'OGG', 'OPUS'].map((fmt) => (
+                <span key={fmt} className="rounded-pill bg-panel-soft px-[8px] py-[3px] text-micro font-semibold text-prose ring-1 ring-inset ring-line/60">
+                  {fmt}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-[20px] items-start">
+            <div className="flex flex-col gap-[12px]">
+              <FileDrop />
+              <p className="text-micro text-muted text-center">
+                Audiodatei hier ablegen oder aus der Sitzung laden. Ausgangsdatei bleibt stets unverändert.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-[10px]">
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M3 10h2l2-6 3 12 3-8 2 4h2" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Wellenform-Schnitt</h4>
+                  <p className="text-micro text-muted leading-relaxed">Präzise Auswahl auf Millisekunden-Ebene, Schneiden, Duplizieren und stufenloses Zoomen.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M5 4v12M9 7v6M13 5v10M17 9v2" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Stille automatisch entfernen</h4>
+                  <p className="text-micro text-muted leading-relaxed">Pausen und Atmer per Schwellenwert aufspüren und mit 5-ms-Überblendungen bereinigen.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 6h12M4 10h12M4 14h12" />
+                    <circle cx="8" cy="6" r="2" fill="currentColor" />
+                    <circle cx="12" cy="10" r="2" fill="currentColor" />
+                    <circle cx="6" cy="14" r="2" fill="currentColor" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Klang, EQ &amp; Filter</h4>
+                  <p className="text-micro text-muted leading-relaxed">3-Band-Equalizer, Hoch-/Tiefpass-Filter und weiches Ein- und Ausblenden.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M12 4v10a3 3 0 11-3-3h3V4zM12 7l5-2v8" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Tonhöhe &amp; Tempo</h4>
+                  <p className="text-micro text-muted leading-relaxed">Tonart transponieren oder Geschwindigkeit beschleunigen/drosseln ohne Micky-Maus-Effekt.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </Card>
     )
   }
@@ -1512,7 +1589,7 @@ export function AudioEditorPanel() {
         onClick={(e) => {
           if (e.target === silenceDialogRef.current) setSilenceModalOpen(false)
         }}
-        className="m-auto w-[min(480px,calc(100vw-32px))] rounded-card bg-raised p-0 text-prose backdrop:bg-ink/50 backdrop:backdrop-blur-[3px] ring-1 ring-inset ring-line shadow-2xl"
+        className="m-auto w-[min(520px,calc(100vw-32px))] rounded-[20px] shadow-2xl overflow-hidden bg-raised p-0 text-prose backdrop:bg-ink/50 backdrop:backdrop-blur-[3px] ring-1 ring-rule/40"
       >
         <div className="flex flex-col gap-[16px] p-[20px]">
           <div className="flex items-start justify-between gap-[12px]">

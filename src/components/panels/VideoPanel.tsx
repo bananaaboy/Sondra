@@ -62,7 +62,7 @@ import {
   IconTransform,
   IconTrim,
 } from '../editor/icons'
-import { Button, Notice, Progress, Select, Slider, Toggle, RotateIcon } from '../ui/primitives'
+import { Button, Card, Notice, Progress, Select, Slider, Toggle, RotateIcon } from '../ui/primitives'
 
 type ToolId = 'trim' | 'crop' | 'transform' | 'look' | 'fade' | 'size' | 'speed' | 'audio' | 'harvest' | 'export'
 
@@ -681,12 +681,89 @@ export function VideoPanel() {
   /* -- nothing to edit ------------------------------------------------------ */
   if (!asset) {
     return (
-      <div className="flex flex-col gap-[16px]">
-        <FileDrop />
-        <p className="text-center text-small text-muted">
-          MP4, MOV, MKV, WebM und AVI. Gerechnet wird mit FFmpeg als WebAssembly, also auf Ihrem Gerät.
-        </p>
-      </div>
+      <Card tone="cream">
+        <div className="flex flex-col gap-[20px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
+            <div>
+              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
+                <span className="size-[6px] rounded-full bg-emerald-500" />
+                FFmpeg WebAssembly Beschleunigt
+              </div>
+              <h2 className="display-md mt-[6px]">Video schneiden, drehen &amp; optimieren</h2>
+              <p className="mt-[2px] text-small text-muted">
+                Volle Videobearbeitung auf Ihrem Rechner — kein Cloud-Upload, keine Größenbegrenzung.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              {['MP4', 'MOV', 'MKV', 'WEBM', 'AVI'].map((fmt) => (
+                <span key={fmt} className="rounded-pill bg-panel-soft px-[8px] py-[3px] text-micro font-semibold text-prose ring-1 ring-inset ring-line/60">
+                  {fmt}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-[20px] items-start">
+            <div className="flex flex-col gap-[12px]">
+              <FileDrop />
+              <p className="text-micro text-muted text-center">
+                Videodatei hier ablegen oder anklicken. Alle Schritte lassen sich jederzeit anpassen.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-[10px]">
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 4l12 12M4 16L16 4" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Verlustfreier Schnitt</h4>
+                  <p className="text-micro text-muted leading-relaxed">Start- und Endpunkt sekundengenau festlegen mit visueller Standbild-Vorschau.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M3 7V3h4M17 7V3h-4M3 13v4h4M17 13v4h-4" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Zuschneiden &amp; Drehen</h4>
+                  <p className="text-micro text-muted leading-relaxed">Seitenverhältnisse für Hoch- &amp; Querformat (16:9, 9:16, 1:1) sowie 90°-Drehung und Spiegelung.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <circle cx="10" cy="10" r="6" />
+                    <path d="M10 4v12" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Farbe, Look &amp; Filter</h4>
+                  <p className="text-micro text-muted leading-relaxed">Helligkeit, Kontrast, Sättigung, Entrauschen, Nachschärfen und cinematische Farblooks.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M11 5L6 9H3v2h3l5 4V5zM15.5 8.5a4 4 0 010 3M17.5 6.5a7 7 0 010 7" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Tonspur &amp; Tempo</h4>
+                  <p className="text-micro text-muted leading-relaxed">Lautstärke normalisieren (EBU R128), stummschalten oder Geschwindigkeit ändern.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
     )
   }
 

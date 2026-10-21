@@ -469,8 +469,8 @@ export function Dialog({
   onClose: () => void
   title: string
   children: ReactNode
-  /** `md` for a short form or a single task, `lg` for a full sheet. */
-  size?: 'md' | 'lg'
+  /** `md` for a short form, `lg` for a standard sheet, `xl` for widescreen dashboards. */
+  size?: 'md' | 'lg' | 'xl'
 }) {
   const ref = useRef<HTMLDialogElement>(null)
 
@@ -492,10 +492,16 @@ export function Dialog({
       onClick={(event) => {
         if (event.target === ref.current) onClose()
       }}
-      className={`m-auto ${size === 'md' ? 'w-[min(680px,calc(100vw-24px))]' : 'w-[min(920px,calc(100vw-24px))]'} bg-canvas p-0 text-prose ring-1 ring-rule backdrop:bg-ink/50`}
+      className={`m-auto ${
+        size === 'md'
+          ? 'w-[min(740px,calc(100vw-28px))]'
+          : size === 'xl'
+          ? 'w-[min(1080px,calc(100vw-36px))]'
+          : 'w-[min(960px,calc(100vw-28px))]'
+      } rounded-[20px] overflow-hidden bg-canvas p-0 text-prose shadow-2xl ring-1 ring-rule/70 backdrop:bg-ink/50 backdrop:backdrop-blur-[2px]`}
     >
       <div className="flex max-h-[min(88vh,900px)] flex-col">
-        <div className="flex items-center justify-between gap-[12px] border-b-2 border-rule px-[24px] py-[16px]">
+        <div className="flex items-center justify-between gap-[12px] border-b border-rule/60 px-[26px] py-[18px]">
           <p className="display-sm">{title}</p>
           <button
             type="button"

@@ -139,7 +139,7 @@ export function CommandPalette() {
           choose(cursor)
         }
       }}
-      className="m-auto w-[min(620px,calc(100vw-24px))] rounded-card bg-canvas p-0 text-prose backdrop:bg-ink/50 backdrop:backdrop-blur-[3px]"
+      className="m-auto w-[min(640px,calc(100vw-24px))] rounded-[20px] shadow-2xl overflow-hidden bg-canvas p-0 text-prose backdrop:bg-ink/50 backdrop:backdrop-blur-[3px] ring-1 ring-rule/40"
     >
       <div className="flex max-h-[min(70vh,560px)] flex-col">
         <div className="flex items-center gap-[8px] border-b border-line px-[16px] py-[16px]">

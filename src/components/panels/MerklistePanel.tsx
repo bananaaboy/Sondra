@@ -78,7 +78,7 @@ import {
 } from '../../lib/merkliste'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
-import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, Stat, TextInput, Toggle } from '../ui/primitives'
+import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
 import type { AudioFilePref, AudioOutputFormat, VideoFilePref } from './DownloaderPanel'
 import {
   AUDIO_QUALITY_OPTIONS,
@@ -162,6 +162,57 @@ function PlusIcon() {
   )
 }
 
+
+function DiceIcon({ className = 'size-[15px]' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="2" width="12" height="12" rx="2.5" />
+      <circle cx="5.5" cy="5.5" r="0.75" fill="currentColor" />
+      <circle cx="10.5" cy="5.5" r="0.75" fill="currentColor" />
+      <circle cx="8" cy="8" r="0.75" fill="currentColor" />
+      <circle cx="5.5" cy="10.5" r="0.75" fill="currentColor" />
+      <circle cx="10.5" cy="10.5" r="0.75" fill="currentColor" />
+    </svg>
+  )
+}
+
+function ImageIcon({ className = 'size-[15px]' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="2.5" width="12" height="11" rx="2" />
+      <circle cx="5.5" cy="6" r="1.25" fill="currentColor" />
+      <path d="M14 10.5l-3.5-3.5-5 5" />
+    </svg>
+  )
+}
+
+function ClipboardIcon({ className = 'size-[15px]' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3.5" y="4" width="9" height="10" rx="1.5" />
+      <path d="M6 3a1 1 0 011-1h2a1 1 0 011 1v1H6V3z" />
+      <path d="M6 8h4M6 10.5h2.5" />
+    </svg>
+  )
+}
+
+function CheckIcon({ className = 'size-[14px]' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
+  )
+}
+
+function SmallFilmIcon({ className = 'size-[14px]' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" aria-hidden>
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <path d="M5 3v10M11 3v10M2 6.5h3M2 9.5h3M11 6.5h3M11 9.5h3" />
+    </svg>
+  )
+}
+
 function FilmIcon() {
   return (
     <svg viewBox="0 0 16 16" className="size-[44px]" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" aria-hidden>
@@ -204,6 +255,7 @@ function CoverField({
   format,
   onChange,
   label = 'Cover',
+  stacked = false,
 }: {
   value: string | undefined
   frame?: CoverFrame
@@ -212,6 +264,7 @@ function CoverField({
   /** A new picture comes without a frame; a new frame keeps the picture. */
   onChange: (value: string | undefined, frame: CoverFrame | undefined) => void
   label?: string
+  stacked?: boolean
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(value && !value.startsWith('data:') ? value : '')
@@ -256,27 +309,31 @@ function CoverField({
   const zoom = live?.zoom ?? 1
 
   return (
-    <div className="flex flex-col gap-[8px]">
+    <div className="flex flex-col gap-[8px] w-full">
       {label ? <span className="text-small text-prose">{label}</span> : null}
-      <div className="flex flex-col gap-[14px] sm:flex-row">
+      <div className={stacked ? "flex flex-col items-center gap-[12px] w-full" : "flex flex-col gap-[14px] sm:flex-row"}>
         {value ? (
-          <FrameEditor
-            src={value}
-            frame={live}
-            format={format}
-            onFrame={setFrame}
-            onError={() => setProblem('Unter dieser Adresse liess sich kein Bild laden.')}
-            onLoad={() => setProblem(null)}
-          />
+          <div className={stacked ? "w-[140px] shrink-0 mx-auto" : ""}>
+            <FrameEditor
+              src={value}
+              frame={live}
+              format={format}
+              onFrame={setFrame}
+              onError={() => setProblem('Unter dieser Adresse liess sich kein Bild laden.')}
+              onLoad={() => setProblem(null)}
+            />
+          </div>
         ) : (
           <span
-            className="relative w-[120px] shrink-0 overflow-hidden rounded-card bg-panel-mid ring-1 ring-inset ring-line"
+            className={`relative shrink-0 overflow-hidden rounded-card bg-panel-mid ring-1 ring-inset ring-line ${
+              stacked ? 'w-[140px] mx-auto' : 'w-[120px]'
+            }`}
             style={{ aspectRatio: ratioOf(format) }}
           >
             <span className="absolute inset-0 flex items-center justify-center text-small text-prose">kein Bild</span>
           </span>
         )}
-        <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
+        <div className="flex min-w-0 flex-1 w-full flex-col gap-[8px]">
           <TextInput
             value={draft}
             placeholder="https://… Bildadresse"
@@ -657,8 +714,9 @@ export function MerklistePanel() {
                   variant="quiet"
                   onClick={() => setShuffleOpen(true)}
                   title="Zufällige Serie aus der Merkliste vorschlagen"
-                >
-                  🎲 Würfeln
+                 className="inline-flex items-center gap-[6px]">
+                  <DiceIcon />
+                  <span>Würfeln</span>
                 </Button>
                 <Button
                   type="button"
@@ -1195,7 +1253,7 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
   }
 
   return (
-    <Dialog open onClose={onClose} title="Merkliste in Anytype" size="md">
+    <Dialog open onClose={onClose} title="Merkliste in Anytype" size="lg">
       <div className="flex flex-col gap-[18px]">
         <p className="max-w-[62ch] text-small leading-[1.55] text-prose">
           Sondra legt die Merkliste in Anytype als Seite „Sondra · Merkliste“ ab und gleicht sie bei jeder Änderung ab. Anytype
@@ -2116,7 +2174,7 @@ function SeasonDialog({
   }
 
   return (
-    <Dialog open onClose={onClose} title={`${item.title} · ${name}`} size="md">
+    <Dialog open onClose={onClose} title={`${item.title} · ${name}`} size="lg">
       <div className="flex flex-col gap-[20px]">
         {split ? (
           <ChoiceRow
@@ -2444,8 +2502,9 @@ function ShuffleDialog({
             <div className="flex flex-wrap items-center justify-between gap-[8px]">
               <span className="text-micro font-mono uppercase tracking-[0.06em] text-muted">Zufallsauswahl</span>
               {item.rating ? (
-                <span className="flex items-center gap-[2px] text-small font-semibold text-ink">
-                  <span className="text-amber-500">★</span> {item.rating}
+                <span className="flex items-center gap-[3px] text-small font-semibold text-ink">
+                  <StarIcon filled className="size-[13px] text-amber-500" />
+                  <span>{item.rating}</span>
                 </span>
               ) : null}
             </div>
@@ -2464,7 +2523,8 @@ function ShuffleDialog({
 
         <div className="flex flex-wrap items-center justify-between gap-[10px] border-t border-line pt-[14px]">
           <Button type="button" size="sm" variant="quiet" onClick={reroll}>
-            🎲 Anderen Vorschlag würfeln
+            <DiceIcon />
+            <span>Anderen Vorschlag würfeln</span>
           </Button>
           <div className="flex flex-wrap items-center gap-[8px]">
             {hasUrl && canAdvance ? (
@@ -2628,11 +2688,11 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
 
   const copySummary = () => {
     const text = [
-      `📊 **Meine Sondra Merkliste**: `,
+      `**Meine Sondra Merkliste**:`,
       `• ${stats.watchingCount} am Schauen · ${stats.laterCount} später · ${stats.doneCount} fertig (${stats.totalSeries} Serien)`,
       `• ${stats.seenTotal} Folgen gesehen (ca. ${stats.watchTime.short} / ${stats.watchTime.long} Sehzeit)`,
       stats.avgRating ? `• ⭐️ Durchschnittsbewertung: ★ ${stats.avgRating}` : null,
-      stats.completedSeasons > 0 ? `• 🏆 ${stats.completedSeasons} Staffeln komplett gesehen` : null,
+      stats.completedSeasons > 0 ? `• ${stats.completedSeasons} Staffeln komplett gesehen` : null,
       ``,
       `Erstellt mit Sondra (https://sondra.lizge.ch)`,
     ].filter(Boolean).join('\n')
@@ -2644,200 +2704,274 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
   }
 
   return (
-    <Dialog open onClose={onClose} title="Statistiken zur Merkliste" size="md">
-      <div className="flex flex-col gap-[20px]">
-        {/* 4 Hero Cards */}
-        <div className="grid grid-cols-2 gap-[10px] sm:grid-cols-4">
-          <div className="flex flex-col justify-between rounded-nav bg-panel-soft p-[12px] ring-1 ring-inset ring-rule">
-            <span className="text-small text-muted">Gesehen</span>
-            <div className="mt-[4px] flex items-baseline gap-[4px]">
-              <span className="value pop text-subheading font-semibold text-ink">{stats.seenTotal}</span>
+    <Dialog open onClose={onClose} title="Statistiken zur Merkliste" size="lg">
+      <div className="flex flex-col gap-[24px]">
+        {/* 4 Hero Metric Cards - Wide, Clean & Modern */}
+        <div className="grid grid-cols-2 gap-[12px] sm:grid-cols-4">
+          <div className="flex flex-col justify-between rounded-card bg-panel-soft/80 p-[16px] ring-1 ring-inset ring-rule/40 transition-colors hover:bg-panel-soft">
+            <div className="flex items-center justify-between text-small text-muted">
+              <span>Gesehen</span>
+              <span className="text-micro font-medium rounded-pill bg-raised px-[6px] py-[1px] text-ink ring-1 ring-inset ring-rule/40">
+                {stats.overallProgressPercent !== null ? `${stats.overallProgressPercent}%` : 'Gesamt'}
+              </span>
+            </div>
+            <div className="mt-[8px] flex items-baseline gap-[4px]">
+              <span className="value pop text-headline font-bold text-ink">{stats.seenTotal}</span>
               <span className="text-small text-muted">{stats.seenTotal === 1 ? 'Folge' : 'Folgen'}</span>
             </div>
-            <span className="mt-[2px] text-micro text-prose">
-              {stats.overallProgressPercent !== null ? `${stats.overallProgressPercent} % aller Folgen` : 'über alle Serien'}
+            <span className="mt-[4px] text-micro text-prose">
+              {stats.knownTotalEpisodes > 0 ? `von ${stats.knownTotalEpisodes} erfassten Folgen` : 'über alle Serien'}
             </span>
           </div>
 
-          <div className="flex flex-col justify-between rounded-nav bg-panel-soft p-[12px] ring-1 ring-inset ring-rule">
-            <span className="text-small text-muted">Sehzeit (ca.)</span>
-            <div className="mt-[4px]">
-              <span className="value pop text-subheading font-semibold text-ink">{stats.watchTime.short}</span>
+          <div className="flex flex-col justify-between rounded-card bg-panel-soft/80 p-[16px] ring-1 ring-inset ring-rule/40 transition-colors hover:bg-panel-soft">
+            <div className="flex items-center justify-between text-small text-muted">
+              <span>Sehzeit</span>
+              <span className="text-micro font-medium rounded-pill bg-raised px-[6px] py-[1px] text-ink ring-1 ring-inset ring-rule/40">
+                Laufzeit
+              </span>
             </div>
-            <span className="mt-[2px] text-micro text-prose truncate" title={stats.watchTime.long}>
+            <div className="mt-[8px]">
+              <span className="value pop text-headline font-bold text-ink">{stats.watchTime.short}</span>
+            </div>
+            <span className="mt-[4px] text-micro text-prose truncate" title={stats.watchTime.long}>
               {stats.watchTime.long}
             </span>
           </div>
 
-          <div className="flex flex-col justify-between rounded-nav bg-panel-soft p-[12px] ring-1 ring-inset ring-rule">
-            <span className="text-small text-muted">Serien</span>
-            <div className="mt-[4px] flex items-baseline gap-[4px]">
-              <span className="value pop text-subheading font-semibold text-ink">{stats.totalSeries}</span>
+          <div className="flex flex-col justify-between rounded-card bg-panel-soft/80 p-[16px] ring-1 ring-inset ring-rule/40 transition-colors hover:bg-panel-soft">
+            <div className="flex items-center justify-between text-small text-muted">
+              <span>Serien</span>
+              <span className="text-micro font-medium rounded-pill bg-raised px-[6px] py-[1px] text-ink ring-1 ring-inset ring-rule/40">
+                Katalog
+              </span>
+            </div>
+            <div className="mt-[8px] flex items-baseline gap-[4px]">
+              <span className="value pop text-headline font-bold text-ink">{stats.totalSeries}</span>
               <span className="text-small text-muted">{stats.totalSeries === 1 ? 'Serie' : 'Serien'}</span>
             </div>
-            <span className="mt-[2px] text-micro text-prose">
-              {stats.watchingCount} am Schauen
+            <span className="mt-[4px] text-micro text-prose">
+              {stats.watchingCount} aktiv am Schauen
             </span>
           </div>
 
-          <div className="flex flex-col justify-between rounded-nav bg-panel-soft p-[12px] ring-1 ring-inset ring-rule">
-            <span className="text-small text-muted">Bewertung</span>
-            <div className="mt-[4px]">
-              <span className="value pop text-subheading font-semibold text-ink">
+          <div className="flex flex-col justify-between rounded-card bg-panel-soft/80 p-[16px] ring-1 ring-inset ring-rule/40 transition-colors hover:bg-panel-soft">
+            <div className="flex items-center justify-between text-small text-muted">
+              <span>Bewertung</span>
+              <span className="text-micro font-medium rounded-pill bg-raised px-[6px] py-[1px] text-ink ring-1 ring-inset ring-rule/40">
+                Schnitt
+              </span>
+            </div>
+            <div className="mt-[8px]">
+              <span className="value pop text-headline font-bold text-ink">
                 {stats.avgRating ? `★ ${stats.avgRating}` : '—'}
               </span>
             </div>
-            <span className="mt-[2px] text-micro text-prose">
-              {stats.ratedCount > 0 ? `${stats.ratedCount} bewertet` : 'Noch keine'}
+            <span className="mt-[4px] text-micro text-prose">
+              {stats.ratedCount > 0 ? `${stats.ratedCount} bewertet` : 'Noch keine Bewertungen'}
             </span>
           </div>
         </div>
 
-        {/* Status distribution */}
-        <div className="flex flex-col gap-[8px]">
-          <div className="flex items-baseline justify-between text-small">
-            <span className="font-medium text-ink">Status-Aufteilung</span>
-            <span className="text-muted">{stats.totalSeries} {stats.totalSeries === 1 ? 'Serie' : 'Serien'}</span>
-          </div>
-          {stats.totalSeries > 0 ? (
-            <div className="flex h-[8px] w-full overflow-hidden rounded-full bg-rule">
-              {stats.watchingCount > 0 ? (
-                <div
-                  style={{ width: `${stats.watchingPercent}%` }}
-                  className="bg-ink transition-all"
-                  title={`${stats.watchingCount} am Schauen (${stats.watchingPercent}%)`}
-                />
-              ) : null}
-              {stats.laterCount > 0 ? (
-                <div
-                  style={{ width: `${stats.laterPercent}%` }}
-                  className="bg-rule transition-all"
-                  title={`${stats.laterCount} später (${stats.laterPercent}%)`}
-                />
-              ) : null}
-              {stats.doneCount > 0 ? (
-                <div
-                  style={{ width: `${stats.donePercent}%` }}
-                  className="bg-faint transition-all"
-                  title={`${stats.doneCount} fertig (${stats.donePercent}%)`}
-                />
-              ) : null}
-            </div>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[4px] text-small">
-            <span className="flex items-center gap-[6px]">
-              <span className="size-[8px] rounded-full bg-ink inline-block" />
-              <span className="text-prose">Am Schauen:</span>
-              <span className="value pop font-medium text-ink">{stats.watchingCount}</span>
-              <span className="text-micro text-muted">({stats.watchingPercent}%)</span>
-            </span>
-            <span className="flex items-center gap-[6px]">
-              <span className="size-[8px] rounded-full bg-rule inline-block" />
-              <span className="text-prose">Später:</span>
-              <span className="value pop font-medium text-ink">{stats.laterCount}</span>
-              <span className="text-micro text-muted">({stats.laterPercent}%)</span>
-            </span>
-            <span className="flex items-center gap-[6px]">
-              <span className="size-[8px] rounded-full bg-faint inline-block" />
-              <span className="text-prose">Fertig:</span>
-              <span className="value pop font-medium text-ink">{stats.doneCount}</span>
-              <span className="text-micro text-muted">({stats.donePercent}%)</span>
-            </span>
-          </div>
-        </div>
+        {/* 2-Column Visual Dashboard: Left Visual Breakdown & Progress, Right Ratings & Activity */}
+        <div className="grid grid-cols-1 gap-[20px] md:grid-cols-2">
+          {/* Left Column: Visual Status Breakdown & Milestones */}
+          <div className="flex flex-col gap-[18px] rounded-card bg-raised p-[18px] ring-1 ring-inset ring-rule/30">
+            {/* Status Breakdown Section */}
+            <div className="flex flex-col gap-[10px]">
+              <div className="flex items-baseline justify-between text-small">
+                <span className="font-semibold text-ink">Status-Verteilung</span>
+                <span className="text-micro text-muted font-mono">{stats.totalSeries} {stats.totalSeries === 1 ? 'Serie' : 'Serien'}</span>
+              </div>
 
-        {/* Detailed stats with Stat primitives */}
-        <div className="flex flex-col">
-          <Stat
-            label="Gesehene Folgen"
-            value={String(stats.seenTotal)}
-            unit={stats.seenTotal === 1 ? 'Folge' : 'Folgen'}
-            note={stats.knownTotalEpisodes > 0 ? `von mindestens ${stats.knownTotalEpisodes} erfassten Folgen` : undefined}
-            emphasis
-          />
-          {stats.overallProgressPercent !== null ? (
-            <Stat
-              label="Gesamtfortschritt"
-              value={`${stats.overallProgressPercent} %`}
-              note="aller Folgen mit bekannter Episodenanzahl"
-            />
-          ) : null}
-          <Stat
-            label="Geschätzte Sehzeit"
-            value={stats.watchTime.short}
-            note={`Entspricht ca. ${stats.watchTime.long} (geschätzt mit 24 Min. pro Folge)`}
-          />
-          <Stat
-            label="Staffeln abgeschlossen"
-            value={`${stats.completedSeasons} von ${stats.totalSeasons}`}
-            note={stats.totalSeasons > 0 ? `${Math.round((stats.completedSeasons / stats.totalSeasons) * 100)} % der Staffeln komplett gesehen` : undefined}
-          />
-          {stats.filmsSeen > 0 || stats.filmCount > 0 ? (
-            <Stat
-              label="Filme & Specials"
-              value={String(stats.filmsSeen)}
-              unit="gesehen"
-              note={stats.filmCount > 0 ? `von ${stats.filmCount} erfasst` : undefined}
-            />
-          ) : null}
-          {stats.ratedCount > 0 ? (
-            <Stat
-              label="Durchschnittsbewertung"
-              value={`★ ${stats.avgRating}`}
-              note={`über ${stats.ratedCount} bewertete ${stats.ratedCount === 1 ? 'Serie' : 'Serien'}`}
-            />
-          ) : null}
-        </div>
-
-        {/* Ratings distribution */}
-        {stats.ratedCount > 0 ? (
-          <div className="flex flex-col gap-[8px] border-t border-line pt-[12px]">
-            <span className="text-small font-medium text-ink">Bewertungs-Verteilung</span>
-            <div className="flex flex-col gap-[6px]">
-              {stats.ratingDistribution.map(({ stars, count }) => (
-                <div key={stars} className="flex items-center gap-[8px] text-small">
-                  <span className="w-[42px] text-right text-muted">{stars} ★</span>
-                  <div className="h-[6px] flex-1 overflow-hidden rounded-full bg-rule">
+              {/* Segmented Progress Bar */}
+              {stats.totalSeries > 0 ? (
+                <div className="flex h-[12px] w-full overflow-hidden rounded-full bg-rule/30 p-[1px]">
+                  {stats.watchingCount > 0 ? (
                     <div
-                      className="h-full bg-ink transition-all"
-                      style={{ width: `${stats.ratedCount > 0 ? (count / stats.ratedCount) * 100 : 0}%` }}
+                      style={{ width: `${stats.watchingPercent}%` }}
+                      className="h-full rounded-l-full bg-ink transition-all"
+                      title={`${stats.watchingCount} am Schauen (${stats.watchingPercent}%)`}
                     />
-                  </div>
-                  <span className="value w-[24px] text-right text-muted">{count}</span>
+                  ) : null}
+                  {stats.laterCount > 0 ? (
+                    <div
+                      style={{ width: `${stats.laterPercent}%` }}
+                      className="h-full bg-amber-600 transition-all"
+                      title={`${stats.laterCount} später (${stats.laterPercent}%)`}
+                    />
+                  ) : null}
+                  {stats.doneCount > 0 ? (
+                    <div
+                      style={{ width: `${stats.donePercent}%` }}
+                      className="h-full rounded-r-full bg-slate-400 transition-all"
+                      title={`${stats.doneCount} fertig (${stats.donePercent}%)`}
+                    />
+                  ) : null}
                 </div>
-              ))}
+              ) : null}
+
+              {/* 3 Visual Metric Badges */}
+              <div className="grid grid-cols-3 gap-[8px] pt-[2px]">
+                <div className="flex flex-col rounded-nav bg-panel-soft/60 p-[8px] ring-1 ring-inset ring-rule/30 text-center">
+                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-ink">
+                    <span className="size-[6px] rounded-full bg-ink inline-block" />
+                    Am Schauen
+                  </span>
+                  <span className="value font-bold text-ink mt-[2px]">{stats.watchingCount}</span>
+                  <span className="text-micro text-muted">{stats.watchingPercent}%</span>
+                </div>
+                <div className="flex flex-col rounded-nav bg-amber-500/10 p-[8px] ring-1 ring-inset ring-amber-600/20 text-center">
+                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-amber-700">
+                    <span className="size-[6px] rounded-full bg-amber-600 inline-block" />
+                    Später
+                  </span>
+                  <span className="value font-bold text-amber-800 mt-[2px]">{stats.laterCount}</span>
+                  <span className="text-micro text-muted">{stats.laterPercent}%</span>
+                </div>
+                <div className="flex flex-col rounded-nav bg-slate-500/10 p-[8px] ring-1 ring-inset ring-slate-400/20 text-center">
+                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-slate-700">
+                    <span className="size-[6px] rounded-full bg-slate-400 inline-block" />
+                    Fertig
+                  </span>
+                  <span className="value font-bold text-slate-800 mt-[2px]">{stats.doneCount}</span>
+                  <span className="text-micro text-muted">{stats.donePercent}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Milestones & Progress */}
+            <div className="flex flex-col gap-[12px] border-t border-line/60 pt-[14px]">
+              <span className="text-small font-semibold text-ink">Fortschritt & Meilensteine</span>
+
+              {/* Overall Progress Bar */}
+              <div className="flex flex-col gap-[4px]">
+                <div className="flex items-center justify-between text-small">
+                  <span className="text-prose">Gesamte Folgen</span>
+                  <span className="value font-semibold text-ink">
+                    {stats.overallProgressPercent !== null ? `${stats.overallProgressPercent} %` : '—'}
+                  </span>
+                </div>
+                <div className="h-[8px] w-full overflow-hidden rounded-full bg-panel-mid">
+                  <div
+                    className="h-full rounded-full bg-ink transition-all"
+                    style={{ width: `${stats.overallProgressPercent ?? 0}%` }}
+                  />
+                </div>
+                <span className="text-micro text-muted">
+                  {stats.seenTotal} von {stats.knownTotalEpisodes || stats.seenTotal} erfassten Folgen gesehen
+                </span>
+              </div>
+
+              {/* Completed Seasons Bar */}
+              <div className="flex flex-col gap-[4px]">
+                <div className="flex items-center justify-between text-small">
+                  <span className="text-prose">Staffeln komplett</span>
+                  <span className="value font-semibold text-ink">
+                    {stats.completedSeasons} von {stats.totalSeasons}
+                  </span>
+                </div>
+                <div className="h-[8px] w-full overflow-hidden rounded-full bg-panel-mid">
+                  <div
+                    className="h-full rounded-full bg-ink transition-all"
+                    style={{ width: `${stats.totalSeasons > 0 ? (stats.completedSeasons / stats.totalSeasons) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="text-micro text-muted">
+                  {stats.totalSeasons > 0 ? `${Math.round((stats.completedSeasons / stats.totalSeasons) * 100)} % aller Staffeln beendet` : 'Keine Staffeln'}
+                </span>
+              </div>
+
+              {/* Films / Specials if any */}
+              {stats.filmsSeen > 0 || stats.filmCount > 0 ? (
+                <div className="flex items-center justify-between rounded-nav bg-panel-soft/40 px-[10px] py-[6px] text-small">
+                  <span className="inline-flex items-center gap-[6px] text-prose"><SmallFilmIcon /> Filme & Specials</span>
+                  <span className="value font-semibold text-ink">
+                    {stats.filmsSeen} {stats.filmCount > 0 ? `von ${stats.filmCount} gesehen` : 'gesehen'}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
-        ) : null}
 
-        {/* Recent items */}
-        {stats.recentItems.length > 0 ? (
-          <div className="flex flex-col gap-[6px] border-t border-line pt-[12px]">
-            <span className="text-small font-medium text-ink">Zuletzt geschaut</span>
-            <div className="flex flex-col divide-y divide-line/60">
-              {stats.recentItems.map((item) => {
-                const prog = itemProgress(item)
-                return (
-                  <div key={item.id} className="flex items-baseline justify-between gap-[12px] py-[6px]">
-                    <span className="text-small font-medium text-ink truncate">{item.title}</span>
-                    <span className="text-micro text-muted shrink-0">
-                      {prog.watched} {prog.total ? `von ${prog.total}` : 'gesehen'}
-                    </span>
-                  </div>
-                )
-              })}
+          {/* Right Column: Visual Rating Chart & Recent Activity */}
+          <div className="flex flex-col gap-[18px] rounded-card bg-raised p-[18px] ring-1 ring-inset ring-rule/30">
+            {/* Ratings Histogram */}
+            <div className="flex flex-col gap-[10px]">
+              <div className="flex items-baseline justify-between text-small">
+                <span className="font-semibold text-ink">Bewertungs-Verteilung</span>
+                <span className="text-micro text-muted">
+                  {stats.ratedCount > 0 ? `Schnitt: ★ ${stats.avgRating}` : 'Noch keine'}
+                </span>
+              </div>
+
+              {stats.ratedCount > 0 ? (
+                <div className="flex flex-col gap-[6px] pt-[2px]">
+                  {stats.ratingDistribution.map(({ stars, count }) => {
+                    const pct = stats.ratedCount > 0 ? Math.round((count / stats.ratedCount) * 100) : 0
+                    return (
+                      <div key={stars} className="flex items-center gap-[10px] text-small">
+                        <span className="flex w-[38px] items-center justify-end gap-[3px] font-medium text-ink/80">{stars} <StarIcon filled className="size-[11px] text-amber-500" /></span>
+                        <div className="h-[8px] flex-1 overflow-hidden rounded-full bg-panel-mid">
+                          <div
+                            className="h-full rounded-full bg-ink transition-all"
+                            style={{ width: `${pct}%` }}
+                            title={`${count} Serien (${pct}%)`}
+                          />
+                        </div>
+                        <span className="value w-[28px] text-right font-medium text-ink">{count}</span>
+                        <span className="w-[34px] text-right text-micro text-muted">{pct}%</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="flex h-[110px] items-center justify-center rounded-nav border border-dashed border-rule/60 text-small text-muted">
+                  Bisher wurden noch keine Serien bewertet.
+                </div>
+              )}
             </div>
-          </div>
-        ) : null}
 
-        {/* Export & Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-[10px] border-t border-line pt-[12px]">
+            {/* Recent Activity List with Visual Progress */}
+            {stats.recentItems.length > 0 ? (
+              <div className="flex flex-col gap-[10px] border-t border-line/60 pt-[14px]">
+                <span className="text-small font-semibold text-ink">Zuletzt aktiv geschaut</span>
+                <div className="flex flex-col gap-[8px]">
+                  {stats.recentItems.slice(0, 4).map((item) => {
+                    const prog = itemProgress(item)
+                    const percent = prog.total ? Math.min(100, Math.round((prog.watched / prog.total) * 100)) : null
+                    return (
+                      <div key={item.id} className="flex flex-col gap-[3px] rounded-nav bg-panel-soft/40 p-[8px] ring-1 ring-inset ring-rule/20">
+                        <div className="flex items-baseline justify-between gap-[8px]">
+                          <span className="text-small font-medium text-ink truncate">{item.title}</span>
+                          <span className="text-micro font-mono text-muted shrink-0">
+                            {prog.watched} {prog.total ? `/ ${prog.total}` : 'gesehen'}
+                          </span>
+                        </div>
+                        {prog.total ? (
+                          <div className="h-[4px] w-full overflow-hidden rounded-full bg-rule/30">
+                            <div className="h-full bg-ink" style={{ width: `${percent}%` }} />
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Export & Actions Footer */}
+        <div className="flex flex-wrap items-center justify-between gap-[12px] border-t border-line pt-[16px]">
           <div className="flex flex-wrap items-center gap-[8px]">
-            <Button type="button" size="sm" variant="quiet" onClick={exportImage} title="Statistiken als PNG-Grafik speichern">
-              🖼️ Als Bild speichern
+            <Button type="button" size="sm" variant="quiet" onClick={exportImage} title="Statistiken als PNG-Grafik speichern" className="inline-flex items-center gap-[6px]">
+              <ImageIcon />
+              <span>Als Bild speichern</span>
             </Button>
-            <Button type="button" size="sm" variant="quiet" onClick={copySummary} title="Zusammenfassung als Text kopieren">
-              {copied ? '✓ Kopiert!' : '📋 Text kopieren'}
+            <Button type="button" size="sm" variant="quiet" onClick={copySummary} title="Zusammenfassung als Text kopieren" className="inline-flex items-center gap-[6px]">
+              {copied ? <CheckIcon /> : <ClipboardIcon />}
+              <span>{copied ? 'Kopiert!' : 'Text kopieren'}</span>
             </Button>
           </div>
           <Button type="button" size="sm" onClick={onClose}>
@@ -2869,20 +3003,22 @@ function CoverWithFormat({
   format,
   onChange,
   onFormat,
+  stacked = false,
 }: {
   value: string | undefined
   frame?: CoverFrame
   format?: TileFormat
   onChange: (value: string | undefined, frame: CoverFrame | undefined) => void
   onFormat: (format: TileFormat) => void
+  stacked?: boolean
 }) {
   return (
-    <div className="flex flex-col gap-[10px]">
-      <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px]">
-        <span className="text-small text-prose">Cover</span>
+    <div className="flex flex-col gap-[10px] w-full">
+      <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[6px]">
+        <span className="text-small font-semibold text-ink">Cover & Format</span>
         <FormatChoice value={format} onChange={onFormat} />
       </div>
-      <CoverField label="" value={value} frame={frame} format={format} onChange={onChange} />
+      <CoverField label="" value={value} frame={frame} format={format} onChange={onChange} stacked={stacked} />
     </div>
   )
 }
@@ -2946,9 +3082,9 @@ function DurationSettings({
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <div className="grid gap-x-[28px] gap-y-[16px] sm:grid-cols-2">
+      <div className={`grid gap-x-[20px] gap-y-[14px] ${hasFilms ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
         <Group label="Standard-Episodendauer">
-          <div className="flex flex-col gap-[8px]">
+          <div className="flex flex-wrap items-center justify-between gap-[10px]">
             <div className="flex items-center gap-[8px]">
               <TextInput
                 type="number"
@@ -2961,12 +3097,12 @@ function DurationSettings({
                     update({ episodeDuration: val })
                   }
                 }}
-                className="w-[90px] font-sans"
+                className="w-[84px] font-sans"
               />
               <span className="text-small text-muted">Minuten pro Folge</span>
             </div>
             <div className="flex flex-wrap items-center gap-[6px]">
-              <span className="text-micro text-muted">Vorschläge:</span>
+              <span className="text-micro text-muted">Schnellwahl:</span>
               {[20, 24, 45, 60].map((preset) => (
                 <button
                   key={preset}
@@ -2987,7 +3123,7 @@ function DurationSettings({
 
         {hasFilms ? (
           <Group label="Standard-Filmdauer">
-            <div className="flex flex-col gap-[8px]">
+            <div className="flex flex-wrap items-center justify-between gap-[10px]">
               <div className="flex items-center gap-[8px]">
                 <TextInput
                   type="number"
@@ -3000,12 +3136,12 @@ function DurationSettings({
                       update({ filmDuration: val })
                     }
                   }}
-                  className="w-[90px] font-sans"
+                  className="w-[84px] font-sans"
                 />
                 <span className="text-small text-muted">Minuten pro Film</span>
               </div>
               <div className="flex flex-wrap items-center gap-[6px]">
-                <span className="text-micro text-muted">Vorschläge:</span>
+                <span className="text-micro text-muted">Schnellwahl:</span>
                 {[90, 105, 120].map((preset) => (
                   <button
                     key={preset}
@@ -3132,20 +3268,61 @@ function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClos
     }
   })()
   return (
-    <Dialog open onClose={onClose} title={item.title || 'Ohne Namen'}>
-      <div className="flex flex-col gap-[22px]">
-        <div className="grid gap-x-[28px] gap-y-[18px] sm:grid-cols-2">
-          <Group label="Name">
+    <Dialog open onClose={onClose} title={item.title || 'Ohne Namen'} size="lg">
+      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-[24px]">
+        {/* Linke Spalte: Cover, Format, Status, Bewertung & Aktionen */}
+        <div className="flex flex-col gap-[18px] border-b md:border-b-0 md:border-r border-line pb-[18px] md:pb-0 md:pr-[24px]">
+          <CoverWithFormat
+            value={item.cover}
+            frame={item.coverFrame}
+            format={item.tileFormat}
+            onChange={(cover, coverFrame) => update({ cover, coverFrame })}
+            onFormat={(format) => update({ tileFormat: format === 'manga' ? 'manga' : undefined })}
+            stacked={true}
+          />
+
+          <div className="flex flex-col gap-[14px] border-t border-line pt-[16px]">
+            <Group label="Stand">
+              <ChoiceRow value={statusOf(item)} options={STATUS_OPTIONS} onChange={(status) => update({ status })} />
+            </Group>
+
+            <Group label="Bewertung">
+              <Rating value={item.rating ?? 0} onChange={(rating) => update({ rating })} />
+            </Group>
+
+            <div className="pt-[10px] border-t border-line/50">
+              <button
+                type="button"
+                onClick={onRemove}
+                className="press inline-flex items-center gap-[6px] rounded-nav text-small text-red-600 dark:text-red-400 hover:underline"
+              >
+                Von der Merkliste nehmen
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Rechte Spalte: Stammdaten, Notizen, Staffeln, Zeiten & Download */}
+        <div className="flex flex-col gap-[18px] min-w-0">
+          <Group label="Name der Serie">
             <TextInput value={item.title} onChange={(event) => update({ title: event.target.value })} className="font-sans" />
           </Group>
-          <Group label="Stand">
-            <ChoiceRow value={statusOf(item)} options={STATUS_OPTIONS} onChange={(status) => update({ status })} />
+
+          <Group label="Notiz">
+            <textarea
+              value={item.notes ?? ''}
+              rows={2}
+              onChange={(event) => update({ notes: event.target.value || undefined })}
+              placeholder="Wo es spannend wurde, mit wem Sie schauen …"
+              className={textAreaClass}
+            />
           </Group>
-          <Group label="Bewertung">
-            <Rating value={item.rating ?? 0} onChange={(rating) => update({ rating })} />
-          </Group>
-          <Group label={`${seasonCount} ${seasonCount === 1 ? 'Staffel' : 'Staffeln'}${hasFilms ? ', dazu Filme' : ''}`}>
-            <span className="flex flex-wrap gap-x-[18px] gap-y-[4px] text-small">
+
+          <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[6px] border-b border-line pb-[10px]">
+            <span className="text-small font-semibold text-ink">
+              {seasonCount} {seasonCount === 1 ? 'Staffel' : 'Staffeln'}{hasFilms ? ', dazu Filme' : ''}
+            </span>
+            <span className="flex flex-wrap gap-x-[16px] gap-y-[4px] text-small">
               <button type="button" onClick={() => addSeasonTo(item)} className={linkClass}>
                 <PlusIcon />
                 Staffel hinzufügen
@@ -3161,122 +3338,101 @@ function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClos
                 </button>
               ) : null}
             </span>
-          </Group>
-          <Group label="Notiz" className="sm:col-span-2">
-            <textarea
-              value={item.notes ?? ''}
-              onChange={(event) => update({ notes: event.target.value || undefined })}
-              placeholder="Wo es spannend wurde, mit wem Sie schauen …"
-              className={textAreaClass}
-            />
-          </Group>
-        </div>
+          </div>
 
-        <div className="border-t border-line pt-[16px]">
-          <CoverWithFormat
-            value={item.cover}
-            frame={item.coverFrame}
-            format={item.tileFormat}
-            onChange={(cover, coverFrame) => update({ cover, coverFrame })}
-            onFormat={(format) => update({ tileFormat: format === 'manga' ? 'manga' : undefined })}
-          />
-        </div>
-
-        <Reveal
-          label={`Episodendauer · Standard ${item.episodeDuration ?? 24} Min.${item.durations && Object.keys(item.durations).length > 0 ? ` · ${Object.keys(item.durations).length} ${Object.keys(item.durations).length === 1 ? 'Ausnahme' : 'Ausnahmen'}` : ''}`}
-          defaultOpen={Boolean(item.episodeDuration || item.filmDuration || (item.durations && Object.keys(item.durations).length > 0))}
-          className="-mb-[8px]"
-        >
-          <div className="pt-[10px]">
+          {/* Dauer & Ausnahmen Karte */}
+          <div className="rounded-card border border-line bg-panel-soft/40 p-[14px]">
+            <div className="mb-[10px] flex items-center justify-between">
+              <span className="text-small font-semibold text-ink">Episodendauer</span>
+              <span className="text-micro text-muted">Standard: {item.episodeDuration ?? 24} Min.</span>
+            </div>
             <DurationSettings item={item} update={update} />
           </div>
-        </Reveal>
 
-        <Reveal label={host ? `Herunterladen · ${host}` : 'Herunterladen: Adresse und Einstellungen'} className="-mb-[8px]">
-          <div className="grid gap-x-[28px] gap-y-[18px] pt-[10px] sm:grid-cols-2">
-            <Group label="Adresse — leer, wenn nichts geladen werden soll" className="sm:col-span-2">
-              <TextInput
-                value={item.url}
-                placeholder="https://…"
-                inputMode="url"
-                spellCheck={false}
-                onChange={(event) => update({ url: event.target.value })}
-              />
-            </Group>
-            <Group label="Laden als">
-              <div className="flex flex-wrap items-center gap-[8px]">
-                <ChoiceRow
-                  value={item.mode}
-                  options={[
-                    { value: 'video', label: 'Video mit Ton' },
-                    { value: 'audio', label: 'Nur Ton' },
-                  ]}
-                  onChange={(mode) => update({ mode })}
+          {/* Herunterladen Einstellungen */}
+          <Reveal label={host ? `Herunterladen · ${host}` : 'Herunterladen: Adresse und Einstellungen'} className="-mb-[4px]">
+            <div className="grid gap-x-[20px] gap-y-[14px] pt-[10px] sm:grid-cols-2">
+              <Group label="Adresse — leer, wenn nichts geladen werden soll" className="sm:col-span-2">
+                <TextInput
+                  value={item.url}
+                  placeholder="https://…"
+                  inputMode="url"
+                  spellCheck={false}
+                  onChange={(event) => update({ url: event.target.value })}
                 />
+              </Group>
+              <Group label="Laden als">
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  <ChoiceRow
+                    value={item.mode}
+                    options={[
+                      { value: 'video', label: 'Video mit Ton' },
+                      { value: 'audio', label: 'Nur Ton' },
+                    ]}
+                    onChange={(mode) => update({ mode })}
+                  />
+                  {item.mode === 'audio' ? (
+                    <Select
+                      aria-label="Tonformat"
+                      value={item.audioFormat}
+                      onChange={(event) => update({ audioFormat: event.target.value as AudioOutputFormat })}
+                      className="w-auto! py-[6px]"
+                    >
+                      {AUDIO_FORMATS.map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.label}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : null}
+                </div>
+              </Group>
+              <Group label="Qualität">
                 {item.mode === 'audio' ? (
-                  <Select
-                    aria-label="Tonformat"
-                    value={item.audioFormat}
-                    onChange={(event) => update({ audioFormat: event.target.value as AudioOutputFormat })}
-                    className="w-auto! py-[6px]"
-                  >
-                    {AUDIO_FORMATS.map((entry) => (
-                      <option key={entry.id} value={entry.id}>
-                        {entry.label}
+                  <Select value={item.audioPref} onChange={(event) => update({ audioPref: event.target.value as AudioFilePref })}>
+                    {AUDIO_QUALITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </Select>
-                ) : null}
-              </div>
-            </Group>
-            <Group label="Qualität">
-              {item.mode === 'audio' ? (
-                <Select value={item.audioPref} onChange={(event) => update({ audioPref: event.target.value as AudioFilePref })}>
-                  {AUDIO_QUALITY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              ) : (
-                <Select value={item.videoPref} onChange={(event) => update({ videoPref: event.target.value as VideoFilePref })}>
-                  {VIDEO_QUALITY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Group>
-            {kind !== 'list' ? (
-              <Group label="Sprachfassung">
-                <Select value={item.language} onChange={(event) => update({ language: event.target.value as SavedLinkItem['language'] })}>
-                  {LANGUAGE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
+                ) : (
+                  <Select value={item.videoPref} onChange={(event) => update({ videoPref: event.target.value as VideoFilePref })}>
+                    {VIDEO_QUALITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
               </Group>
-            ) : null}
-            <div className="self-end">
-              <Toggle
-                label="Untertitel dazu erstellen"
-                hint="Whisper schreibt nach dem Laden auf diesem Gerät mit."
-                checked={item.autoTranscribe}
-                onChange={(autoTranscribe) => update({ autoTranscribe })}
-              />
+              {kind !== 'list' ? (
+                <Group label="Sprachfassung">
+                  <Select value={item.language} onChange={(event) => update({ language: event.target.value as SavedLinkItem['language'] })}>
+                    {LANGUAGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Group>
+              ) : null}
+              <div className="self-end sm:col-span-2">
+                <Toggle
+                  label="Untertitel dazu erstellen"
+                  hint="Whisper schreibt nach dem Laden auf diesem Gerät mit."
+                  checked={item.autoTranscribe}
+                  onChange={(autoTranscribe) => update({ autoTranscribe })}
+                />
+              </div>
             </div>
-          </div>
-        </Reveal>
+          </Reveal>
 
-        <div className="flex flex-wrap items-center justify-between gap-[12px] border-t border-line pt-[14px]">
-          <button type="button" onClick={onRemove} className={`${linkClass} text-small`}>
-            Von der Merkliste nehmen
-          </button>
-          <Button type="button" size="sm" onClick={onClose}>
-            Fertig
-          </Button>
+          <div className="flex items-center justify-end border-t border-line pt-[14px]">
+            <Button type="button" size="sm" onClick={onClose}>
+              Fertig
+            </Button>
+          </div>
         </div>
       </div>
     </Dialog>
@@ -3301,6 +3457,7 @@ function episodeCounts(typed: (number | undefined)[], seasonCount: number): numb
 function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
+  const [status, setStatus] = useState<SavedLinkStatus>('watching')
   const [seasonCount, setSeasonCount] = useState(1)
   const [typedCounts, setTypedCounts] = useState<(number | undefined)[]>([])
   const [countsUnknown, setCountsUnknown] = useState(false)
@@ -3324,6 +3481,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const reset = () => {
     setTitle('')
     setUrl('')
+    setStatus('watching')
     setSeasonCount(1)
     setTypedCounts([])
     setCountsUnknown(false)
@@ -3354,7 +3512,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
       cover,
       coverFrame,
       ...(format === 'manga' ? { tileFormat: format } : {}),
-      status: 'watching',
+      status,
     })
     setMerkItems((current) => [item, ...current])
     reset()
@@ -3362,119 +3520,16 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Serie hinzufügen" size="md">
+    <Dialog open={open} onClose={onClose} title="Serie hinzufügen" size="lg">
       <form
-        className="flex flex-col gap-[20px]"
         onSubmit={(event) => {
           event.preventDefault()
           if (title.trim() || url.trim()) save()
         }}
       >
-        <Group label="Name">
-          <TextInput autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Wie die Serie heisst" className="font-sans" />
-        </Group>
-
-        <div className="flex flex-wrap gap-x-[28px] gap-y-[16px]">
-          <Group label="Staffeln">
-            <Stepper label="Anzahl Staffeln" value={seasonCount} max={60} onChange={setSeasonCount} />
-          </Group>
-          {seasonCount === 1 ? (
-            <Group label="Folgen">
-              <span className="flex flex-wrap items-center gap-[12px]">
-                {countsUnknown ? null : (
-                  <Stepper label="Anzahl Folgen" value={counts[0]} max={2000} onChange={(value) => setCount(0, value)} />
-                )}
-                <span className="w-max">
-                  <Toggle label="Noch unbekannt" checked={countsUnknown} onChange={setCountsUnknown} />
-                </span>
-              </span>
-            </Group>
-          ) : null}
-        </div>
-
-        {seasonCount > 1 ? (
-          <Group label="Folgen je Staffel — eine Staffel übernimmt die Zahl der vorigen, bis Sie sie ändern">
-            {countsUnknown ? null : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(176px,1fr))] gap-x-[20px] gap-y-[8px]">
-                {counts.map((count, i) => (
-                  <span key={i} className="flex items-center justify-between gap-[10px] text-small text-prose">
-                    Staffel {i + 1}
-                    <Stepper label={`Folgen in Staffel ${i + 1}`} value={count} max={2000} onChange={(value) => setCount(i, value)} />
-                  </span>
-                ))}
-              </div>
-            )}
-            <span className="w-max">
-              <Toggle label="Noch unbekannt" checked={countsUnknown} onChange={setCountsUnknown} />
-            </span>
-          </Group>
-        ) : null}
-
-        <Group label="Gerade bei — was davor liegt, gilt als gesehen">
-          <span className="flex flex-wrap items-center gap-[12px] text-small text-prose">
-            <span className="flex items-center gap-[8px]">
-              Staffel <Stepper label="Gerade bei Staffel" value={position} max={seasonCount} onChange={setAtSeason} />
-            </span>
-            <span className="flex items-center gap-[8px]">
-              Folge{' '}
-              <Stepper
-                label="Gerade bei Folge"
-                value={positionCount === null ? atEpisode : Math.min(atEpisode, positionCount)}
-                max={positionCount ?? 2000}
-                onChange={setAtEpisode}
-              />
-              {positionCount !== null ? <span className="value text-muted">von {positionCount}</span> : null}
-            </span>
-          </span>
-        </Group>
-
-        <Reveal label="Adresse, Filme und Cover" className="-mb-[8px]">
-          <div className="flex flex-col gap-[18px] pt-[10px]">
-            <div className="grid gap-x-[28px] gap-y-[16px] sm:grid-cols-[minmax(0,1fr)_auto]">
-              <Group label="Adresse — zum Laden im Herunterladen">
-                <TextInput
-                  value={url}
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setUrl(next)
-                    if (next.trim()) {
-                      const info = parseLinkEpisodeInfo(next)
-                      const derived = deriveLinkTitle(next)
-                      if (derived && (!title.trim() || title === 'Serie' || title === 'Neuer Link')) {
-                        setTitle(derived)
-                      }
-                      if (info.isEpisodicUrl) {
-                        if (info.season > 0) {
-                          setSeasonCount((curr) => Math.max(curr, info.season))
-                          setAtSeason(info.season)
-                        }
-                        if (info.episode !== null && info.episode > 0) {
-                          setAtEpisode(info.episode)
-                        }
-                      }
-                    }
-                  }}
-                  placeholder="https://…"
-                  inputMode="url"
-                  spellCheck={false}
-                />
-                {url.trim() ? (() => {
-                  const derived = deriveLinkTitle(url)
-                  const info = parseLinkEpisodeInfo(url)
-                  const badge = sourceBadgeForUrl(url)
-                  if (!derived && !info.isEpisodicUrl) return null
-                  return (
-                    <span className="text-micro text-muted">
-                      Erkannt: {badge ? `[${badge}] ` : ''}{derived ? `„${derived}“ · ` : ''}
-                      {info.isEpisodicUrl ? `Staffel ${info.season}, Folge ${info.episode ?? 'alle'}` : ''}
-                    </span>
-                  )
-                })() : null}
-              </Group>
-              <Group label="Filme dazu">
-                <Stepper label="Anzahl Filme" value={films} min={0} max={200} onChange={setFilms} />
-              </Group>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-[24px]">
+          {/* Linke Spalte: Cover, Format & Start-Status */}
+          <div className="flex flex-col gap-[18px] border-b md:border-b-0 md:border-r border-line pb-[18px] md:pb-0 md:pr-[24px]">
             <CoverWithFormat
               value={cover}
               frame={coverFrame}
@@ -3484,17 +3539,143 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
                 setCoverFrame(frame)
               }}
               onFormat={setFormat}
+              stacked={true}
             />
-          </div>
-        </Reveal>
 
-        <div className="flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[14px]">
-          <Button type="button" size="sm" variant="quiet" onClick={onClose}>
-            Abbrechen
-          </Button>
-          <Button type="submit" size="sm" disabled={!title.trim() && !url.trim()}>
-            Auf die Merkliste
-          </Button>
+            <div className="flex flex-col gap-[14px] border-t border-line pt-[16px]">
+              <Group label="Start-Status">
+                <ChoiceRow value={status} options={STATUS_OPTIONS} onChange={(nextStatus) => setStatus(nextStatus)} />
+              </Group>
+
+              <Group label="Filme dazu">
+                <Stepper label="Anzahl Filme" value={films} min={0} max={200} onChange={setFilms} />
+              </Group>
+            </div>
+          </div>
+
+          {/* Rechte Spalte: Titel, Adresse, Staffeln & Fortschritt */}
+          <div className="flex flex-col gap-[18px] min-w-0">
+            <Group label="Name der Serie">
+              <TextInput
+                autoFocus
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Wie die Serie heisst"
+                className="font-sans"
+              />
+            </Group>
+
+            <Group label="Web- / Stream-Adresse (zum Laden & Schnellstart)">
+              <TextInput
+                value={url}
+                onChange={(event) => {
+                  const next = event.target.value
+                  setUrl(next)
+                  if (next.trim()) {
+                    const info = parseLinkEpisodeInfo(next)
+                    const derived = deriveLinkTitle(next)
+                    if (derived && (!title.trim() || title === 'Serie' || title === 'Neuer Link')) {
+                      setTitle(derived)
+                    }
+                    if (info.isEpisodicUrl) {
+                      if (info.season > 0) {
+                        setSeasonCount((curr) => Math.max(curr, info.season))
+                        setAtSeason(info.season)
+                      }
+                      if (info.episode !== null && info.episode > 0) {
+                        setAtEpisode(info.episode)
+                      }
+                    }
+                  }
+                }}
+                placeholder="https://…"
+                inputMode="url"
+                spellCheck={false}
+              />
+              {url.trim() ? (() => {
+                const derived = deriveLinkTitle(url)
+                const info = parseLinkEpisodeInfo(url)
+                const badge = sourceBadgeForUrl(url)
+                if (!derived && !info.isEpisodicUrl) return null
+                return (
+                  <span className="text-micro font-medium text-emerald-700 dark:text-emerald-400">
+                    Erkannt: {badge ? `[${badge}] ` : ''}{derived ? `„${derived}“ · ` : ''}
+                    {info.isEpisodicUrl ? `Staffel ${info.season}, Folge ${info.episode ?? 'alle'}` : ''}
+                  </span>
+                )
+              })() : null}
+            </Group>
+
+            {/* Staffel- & Episoden-Struktur */}
+            <div className="rounded-card border border-line bg-panel-soft/40 p-[14px] flex flex-col gap-[12px]">
+              <span className="text-small font-semibold text-ink">Staffeln & Episoden</span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-[18px] gap-y-[12px]">
+                <Group label="Staffeln">
+                  <Stepper label="Anzahl Staffeln" value={seasonCount} max={60} onChange={setSeasonCount} />
+                </Group>
+                {seasonCount === 1 ? (
+                  <Group label="Folgen">
+                    <span className="flex flex-wrap items-center gap-[10px]">
+                      {countsUnknown ? null : (
+                        <Stepper label="Anzahl Folgen" value={counts[0]} max={2000} onChange={(value) => setCount(0, value)} />
+                      )}
+                      <span className="w-max">
+                        <Toggle label="Noch unbekannt" checked={countsUnknown} onChange={setCountsUnknown} />
+                      </span>
+                    </span>
+                  </Group>
+                ) : null}
+              </div>
+
+              {seasonCount > 1 ? (
+                <Group label="Folgen je Staffel">
+                  {countsUnknown ? null : (
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-[14px] gap-y-[8px]">
+                      {counts.map((count, i) => (
+                        <span key={i} className="flex items-center justify-between gap-[8px] text-small text-prose">
+                          Staffel {i + 1}
+                          <Stepper label={`Folgen in Staffel ${i + 1}`} value={count} max={2000} onChange={(value) => setCount(i, value)} />
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <span className="w-max mt-[4px]">
+                    <Toggle label="Noch unbekannt" checked={countsUnknown} onChange={setCountsUnknown} />
+                  </span>
+                </Group>
+              ) : null}
+
+              <div className="border-t border-line/60 pt-[10px]">
+                <Group label="Gerade bei (was davor liegt, gilt als gesehen)">
+                  <span className="flex flex-wrap items-center gap-[12px] text-small text-prose">
+                    <span className="flex items-center gap-[6px]">
+                      Staffel <Stepper label="Gerade bei Staffel" value={position} max={seasonCount} onChange={setAtSeason} />
+                    </span>
+                    <span className="flex items-center gap-[6px]">
+                      Folge{' '}
+                      <Stepper
+                        label="Gerade bei Folge"
+                        value={positionCount === null ? atEpisode : Math.min(atEpisode, positionCount)}
+                        max={positionCount ?? 2000}
+                        onChange={setAtEpisode}
+                      />
+                      {positionCount !== null ? <span className="value text-muted">von {positionCount}</span> : null}
+                    </span>
+                  </span>
+                </Group>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-[8px] border-t border-line pt-[14px]">
+              <Button type="button" size="sm" variant="quiet" onClick={onClose}>
+                Abbrechen
+              </Button>
+              <Button type="submit" size="sm" disabled={!title.trim() && !url.trim()}>
+                Auf die Merkliste
+              </Button>
+            </div>
+          </div>
         </div>
       </form>
     </Dialog>

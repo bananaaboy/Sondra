@@ -68,6 +68,7 @@ typography:
     fontWeight: 300
     letterSpacing: "-0.01em"
 rounded:
+  dialog: "20px"
   card: "16px"
   nav: "10px"
   pill: "999px"
@@ -444,6 +445,43 @@ gedruckt daneben.
 wurde. Die Einheit ist `em` und nicht `ch`: ein `ch` ist die Breite der Null und
 damit breiter als der Durchschnittsbuchstabe, weshalb eine Deckelung bei 68ch
 in Wahrheit bei 90 Zeichen landete.
+
+**Die Dialog- und Lightbox-Regel (Moderne Weite, Rundung & Visuals statt Clutter).**
+Modale Dialoge und Lightboxes (`<dialog>`, Popovers) schweben als fokussierte
+Bühne über der abgedunkelten Seite (`backdrop:bg-ink/50 backdrop-blur-[2px]`).
+- **Eckenabrundungen (`rounded-[20px]`)**: Keine harten, scharfen Ecken mehr.
+  Lightboxes erhalten markante, elegante Eckenabrundungen (`rounded-[20px]`),
+  die dem Fenster ein modernes, freundliches und geschlossenes Erscheinungsbild
+  geben.
+- **Souveräne Breiten-Nutzung & Keine leeren Stellen (Effektives Layout)**:
+  Fenster werden nicht künstlich eng gequetscht, dürfen aber niemals riesige,
+  unbelebte Leerräume („leere Stellen“) erzeugen. Breite (`size="md"` bis 740 px,
+  `size="lg"` bis 960 px) wird aktiv, ausgewogen und effektiv genutzt: Formulare
+  und Editoren teilen sich in ein klares 2-Spalten-Layout (links z. B. visuelle
+  Medien/Poster/Vorschau, Format, Status und Bewertung; rechts strukturierte
+  Eingabe-, Staffel- und Einstellungsfelder). Jede Fläche hat ihre Bestimmung.
+- **Kein Clutter — Grafiken & Diagramme statt Textzeilen**: Verzicht auf
+  überladene Fließtext- und Listenwüsten. Statt fünf Zeilen Textbeschreibungen
+  werden Informationen durch visuelle Grafiken, Fortschrittsbalken,
+  segmentierte Verteilungen und Kennzahl-Karten intuitiv transportiert.
+- **Logische & benutzerfreundliche Platzierung**: Wichtigste Gesamtkennzahlen
+  (Hero Metrics) thronen oben, analytische Verteilungen und Diagramme stehen
+  nebeneinander in der Mitte, Details und Aktionen folgen aufgeräumt am Fuß.
+- **Schön und Modern**: Grosszügige Abstände, feine Konturen (`ring-1 ring-rule/40`),
+  lebendige Akzente aus der Palette und harmonischer Weißraum statt unausgeglichener
+  Löcher.
+
+**Die Ikonografie-Regel (Symbole statt Emojis).**
+Im gesamten Interface gilt: **Keine bunten System-Emojis** (wie 🎲, 🖼️, 📋, 🎬,
+📊, ⭐). Emojis rendern auf jedem Betriebssystem (Windows, macOS, Android, iOS)
+in unterschiedlichen Farben, Stilen und Zeilenhöhen und zerstören das
+ruhige, typografische Bild.
+- **Einfarbige SVG-Vektorsymbole**: Jedes Symbol ist als präzise, geometrische
+  SVG auf einem 16×16- oder 20×20-Raster gezeichnet.
+- **Farbe und Strich**: Verwendet wird ausschliesslich `currentColor` (damit
+  folgt das Symbol immer der aktuellen Tinte oder Textfarbe), mit einer Strichstärke
+  von `1.3` bis `1.5` und weichen Kappen (`strokeLinecap="round"` / `strokeLinejoin="round"`).
+  Piktogramme begleiten Beschriftungen dezent und harmonisch.
 
 ## Elevation & Depth
 
@@ -1027,6 +1065,19 @@ Kurven (`--ease-out`, `--ease-settle`); alles nur Transform und Deckkraft, und
 - **Do** jeden Zustand entwerfen: Fehler, leer, lädt, Fokus, deaktiviert.
 
 ### Don't:
+
+- **Don't** System-Emojis im Interface oder auf Knöpfen verwenden (kein 🎲, 🖼️, 📋, 🎬, ⭐).
+  Emojis sind plattformabhängig, bunt und stören die typografische Ruhe. Nutze
+  stets einfarbige SVG-Symbole mit `currentColor`.
+
+- **Don't** Dialoge und Lightboxes kantig oder überladen („cluttered") bauen.
+  Keine fünf Zeilen Text untereinander stapeln, wo ein Diagramm, ein Verteilungsbalken
+  oder eine Infografik den Sachverhalt auf einen Blick klärt.
+- **Don't** Fenster unnötig eng halten, wenn der Bildschirm Platz für eine
+  aufgeräumte, zwei- oder dreispaltige Visualisierung bietet.
+- **Don't** breite Lightboxes mit einspaltigen, schmalen Feldern füllen, sodass riesige
+  weiße Leerräume („leere Stellen“) entstehen. Breite muss durch ein ausbalanciertes
+  2-Spalten-Layout mit Inhalt, Medien und Struktur effektiv ausgefüllt werden.
 
 - **Don't** eine Karte bauen. Kein weisser Kasten mit Rahmen ringsum und
   Schatten darunter — Weiss markiert ein Feld oder eine Fläche mit eigener

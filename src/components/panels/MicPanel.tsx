@@ -354,31 +354,83 @@ export function MicPanel() {
 
   if (!session) {
     return (
-      <div className="flex max-w-[760px] flex-col gap-[16px]">
-        <h2 className="display-md">Mikrofon testen und einstellen</h2>
-        <p className="text-body leading-[1.55] text-prose">
-          Hören, ob es ankommt und wie laut. Dann für Podcast, Stream, Videocall oder Musik einstellen:
-          drei Sekunden Ruhe, acht Sekunden sprechen — Sondra misst den Raum, nimmt Rauschen und
-          Brummen heraus und zeigt genau, was es getan hat.
-        </p>
-        <p className="text-small text-muted">Die Aufnahmen bleiben in diesem Tab. Nichts wird gesendet.</p>
-        <div className="flex flex-wrap items-center gap-[8px]">
-          <Button onClick={() => void open()} disabled={opening}>
-            {opening ? 'Wird geöffnet…' : 'Mikrofon einschalten'}
-            {!opening ? <ArrowRight /> : null}
-          </Button>
-          {/* The other direction needs no microphone: does Sondra's sound
-              come out at all, and where. */}
-          <Button variant="quiet" onClick={() => void playTestTone().then(setToneReport)}>
-            Ausgang testen
-          </Button>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-[20px] items-start">
+        <div className="flex flex-col gap-[20px] rounded-card bg-panel-soft/40 p-[24px] ring-1 ring-line/60">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
+            <div>
+              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
+                <span className="size-[6px] rounded-full bg-emerald-500" />
+                Live-Analyse im Browser
+              </div>
+              <h2 className="display-md mt-[6px]">Mikrofon testen &amp; einstellen</h2>
+              <p className="mt-[2px] text-small text-muted">
+                Pegel prüfen, Raumakustik messen und Rauschen/Brummen automatisch herausfiltern.
+              </p>
+            </div>
+          </div>
+
+          <p className="text-body leading-[1.55] text-prose">
+            Drei Sekunden Ruhe, acht Sekunden sprechen — Sondra misst den Raum, filtert Störgeräusche
+            heraus und zeigt genau die vorgenommenen Korrekturen an.
+          </p>
+
+          <p className="text-small text-muted">Die Aufnahmen bleiben in diesem Tab. Nichts wird gesendet.</p>
+
+          <div className="flex flex-wrap items-center gap-[8px]">
+            <Button onClick={() => void open()} disabled={opening}>
+              {opening ? 'Wird geöffnet…' : 'Mikrofon einschalten'}
+              {!opening ? <ArrowRight /> : null}
+            </Button>
+            <Button variant="quiet" onClick={() => void playTestTone().then(setToneReport)}>
+              Ausgang testen
+            </Button>
+          </div>
+
+          {toneReport ? <p className="value text-small text-muted">{toneReport}</p> : null}
+          {error ? (
+            <Notice tone="error" title="Das Mikrofon liess sich nicht öffnen">
+              {error}
+            </Notice>
+          ) : null}
         </div>
-        {toneReport ? <p className="value text-small text-muted">{toneReport}</p> : null}
-        {error ? (
-          <Notice tone="error" title="Das Mikrofon liess sich nicht öffnen">
-            {error}
-          </Notice>
-        ) : null}
+
+        <div className="grid grid-cols-1 gap-[10px]">
+          <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+            <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+              <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M10 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3zM5 10a5 5 0 0010 0M10 15v3" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-small font-semibold text-ink">Geräte- &amp; Pegelcheck</h4>
+              <p className="text-micro text-muted leading-relaxed">Echtzeit-Pegelanzeige mit Spitzenwert-Warnung gegen Übersteuerungen.</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+            <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+              <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 10h2l2-6 3 12 3-8 2 4h2" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-small font-semibold text-ink">Automatische Rauschbefreiung</h4>
+              <p className="text-micro text-muted leading-relaxed">Erkennt Lüftersurren, Raumhall und Netzbrummen und berechnet Korrekturfilter.</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+            <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+              <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M4 6h12M4 10h12M4 14h12" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-small font-semibold text-ink">Zielprofile</h4>
+              <p className="text-micro text-muted leading-relaxed">Optimierte Profile für Podcast, Videocall, Live-Streaming oder Gesangsaufnahmen.</p>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

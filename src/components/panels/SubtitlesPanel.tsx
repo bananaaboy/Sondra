@@ -243,13 +243,75 @@ export function SubtitlesPanel() {
   return (
     <div className="flex flex-col gap-[16px]">
       <Card tone="cream">
-        <h2 className="display-md mt-[8px] mb-[12px]">Was gesagt wird, als Text und Untertitel</h2>
-
-        {!asset ? (
-          <div className="mt-[16px]">
-            <FileDrop />
+        <div className="flex flex-col gap-[20px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
+            <div>
+              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
+                <span className="size-[6px] rounded-full bg-emerald-500" />
+                Lokales Whisper KI-Modell
+              </div>
+              <h2 className="display-md mt-[6px]">Was gesagt wird, als Text und Untertitel</h2>
+              <p className="mt-[2px] text-small text-muted">
+                Automatische Spracherkennung läuft vollständig auf Ihrem Gerät — kein Upload zu externen Servern.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              {['SRT', 'VTT', 'TXT', 'JSON'].map((fmt) => (
+                <span key={fmt} className="rounded-pill bg-panel-soft px-[8px] py-[3px] text-micro font-semibold text-prose ring-1 ring-inset ring-line/60">
+                  {fmt}
+                </span>
+              ))}
+            </div>
           </div>
-        ) : (
+
+          {!asset ? (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-[20px] items-start">
+              <div className="flex flex-col gap-[12px]">
+                <FileDrop />
+                <p className="text-micro text-muted text-center">
+                  Video oder Audio hier ablegen. Sprache wird erkannt und getimt.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-[10px]">
+                <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                  <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                    <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M10 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3zM5 10a5 5 0 0010 0M10 15v3" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-small font-semibold text-ink">Lokale Spracherkennung</h4>
+                    <p className="text-micro text-muted leading-relaxed">WebGPU-beschleunigtes Whisper-Modell für Deutsch, Englisch und 90+ Sprachen.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                  <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                    <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M4 4h12v12H4zM7 8h6M7 11h4" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-small font-semibold text-ink">SRT- &amp; VTT-Export</h4>
+                    <p className="text-micro text-muted leading-relaxed">Exakte Zeitstempel für YouTube, Premiere, DaVinci Resolve oder den Sondra Player.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                  <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                    <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M4 6h12M4 10h12M4 14h8" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-small font-semibold text-ink">Transkript-Text</h4>
+                    <p className="text-micro text-muted leading-relaxed">Reinen Fließtext ohne Zeitmarken für Protokolle, Notizen oder Zusammenfassungen kopieren.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
           <>
             <p className="text-small text-prose">
               <span className="value text-ink">{asset.name}</span>
@@ -333,6 +395,7 @@ export function SubtitlesPanel() {
             {stage.kind === 'writing' ? <div className="mt-[16px]"><Progress value={null} label={stage.what} /></div> : null}
           </>
         )}
+        </div>
       </Card>
 
       {error ? (

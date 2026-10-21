@@ -926,12 +926,74 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
   if (!asset) {
     return (
       <Card tone="keylime">
-        <h2 className="display-md mt-[8px] mb-[12px]">Zerlegen und auf Tasten legen</h2>
-        <p className="mb-[16px] max-w-[62ch] text-body leading-[1.55] text-prose/85">
-          Einen Loop oder eine Aufnahme an Schlägen, im Takt, an Pausen oder in gleiche Teile schneiden —
-          jedes Stück liegt danach auf einer Taste und im Pattern.
-        </p>
-        <FileDrop />
+        <div className="flex flex-col gap-[20px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
+            <div>
+              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
+                <span className="size-[6px] rounded-full bg-emerald-500" />
+                MPC-Style Sampler &amp; Sequencer
+              </div>
+              <h2 className="display-md mt-[6px]">Zerlegen und auf Tasten legen</h2>
+              <p className="mt-[2px] text-small text-muted">
+                Loops und Breaks an Schlägen, Pausen oder Takten zerschneiden und per Step-Sequencer abspielen.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              {['WAV', 'MP3', 'FLAC', 'AIFF', 'OGG'].map((fmt) => (
+                <span key={fmt} className="rounded-pill bg-panel-soft px-[8px] py-[3px] text-micro font-semibold text-prose ring-1 ring-inset ring-line/60">
+                  {fmt}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-[20px] items-start">
+            <div className="flex flex-col gap-[12px]">
+              <FileDrop />
+              <p className="text-micro text-muted text-center">
+                Loop oder Drumbreak hier ablegen. Schnittpunkte werden in Echtzeit berechnet.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-[10px]">
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 14l4-8 4 8 4-4" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Transienten-Erkennung</h4>
+                  <p className="text-micro text-muted leading-relaxed">Findet automatisch Kick, Snare, Hi-Hat und perkussive Schläge mit Nulldurchgang-Snap.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M3 4h14v12H3zM3 10h14M8 4v12M13 4v12" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">16-Pad Matrix &amp; Sequencer</h4>
+                  <p className="text-micro text-muted leading-relaxed">Schnitte direkt auf Pads legen und im integrierten 16-Step-Lauflicht arrangieren.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 5h12v10H4zM7 9h6M7 12h4" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Piano-Roll &amp; MIDI</h4>
+                  <p className="text-micro text-muted leading-relaxed">Pads tonal über Tastatur oder USB-MIDI-Keyboard spielen und als MIDI exportieren.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </Card>
     )
   }

@@ -2132,9 +2132,9 @@ export function DownloaderPanel() {
                 changed. Fields with a line, like every form here — it was a
                 framed white box that repeated the quality, the language and
                 the transcription switch from above. */}
-            <div id="download-settings" hidden={!settingsOpen} className="rise flex flex-col gap-[4px] border-t-2 border-rule pt-[12px]">
+            <div id="download-settings" hidden={!settingsOpen} className="rise mt-[16px] flex flex-col gap-[16px] rounded-card bg-panel-soft/50 p-[18px] sm:p-[24px] ring-1 ring-inset ring-line/60">
               <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[4px] pb-[4px]">
-                <h3 className="text-body font-semibold text-ink">Einstellungen</h3>
+                <h3 className="text-body font-semibold text-ink">Download-Einstellungen</h3>
                 <button
                   type="button"
                   onClick={() => setSettingsOpen(false)}

@@ -144,7 +144,7 @@ function DefenderDialog({
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose()
       }}
-      className="pop elevate-lift m-auto max-h-[calc(100dvh-32px)] w-[min(580px,calc(100vw-32px))] overflow-y-auto rounded-card bg-raised p-0 text-prose backdrop:bg-black/60 backdrop:backdrop-blur-[4px]"
+      className="pop m-auto max-h-[calc(100dvh-32px)] w-[min(580px,calc(100vw-32px))] overflow-y-auto rounded-[20px] shadow-2xl overflow-hidden bg-raised p-0 text-prose backdrop:bg-ink/60 backdrop:backdrop-blur-[3px] ring-1 ring-rule/40"
     >
       <div className="flex flex-col gap-[20px] p-[24px] sm:p-[32px]">
         <div className="flex items-start justify-between gap-[16px]">
@@ -290,7 +290,7 @@ export function GetAppButton() {
           // A click on the backdrop lands on the dialog element itself.
           if (event.target === dialogRef.current) close()
         }}
-        className="pop elevate-lift m-auto max-h-[calc(100dvh-32px)] w-[min(1120px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-card bg-raised p-0 text-prose backdrop:bg-black/60 backdrop:backdrop-blur-[4px]"
+        className="pop m-auto max-h-[calc(100dvh-32px)] w-[min(1120px,calc(100vw-32px))] overflow-y-auto overscroll-contain rounded-[20px] shadow-2xl overflow-hidden bg-raised p-0 text-prose backdrop:bg-ink/60 backdrop:backdrop-blur-[3px] ring-1 ring-rule/40"
       >
         <div className="flex flex-col gap-[28px] p-[20px] sm:gap-[36px] sm:p-[40px]">
           <div className="flex items-start justify-between gap-[16px]">
