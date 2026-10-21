@@ -23,6 +23,7 @@ import {
   syncMerkliste,
   type AnytypeError,
   type AnytypeStatus,
+  type FoundNote,
 } from '../../lib/anytype'
 import { buildUrlWithEpisode, saveBytes, sourceBadgeForUrl } from '../../lib/download'
 import {
@@ -753,6 +754,12 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
+  // Step 2: Note selection or creation in selected space
+  const [selectedSpace, setSelectedSpace] = useState<{ id: string; name: string } | null>(null)
+  const [foundNotes, setFoundNotes] = useState<FoundNote[] | null>(null)
+  const [creatingNew, setCreatingNew] = useState(false)
+  const [newNoteName, setNewNoteName] = useState('Sondra · Merkliste (Gerät 2)')
+
   const failed = (error: AnytypeError) => {
     setProblem(ANYTYPE_PROBLEM[error])
     setBusy(false)
@@ -782,29 +789,85 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
   const loadSpaces = async () => {
     setBusy(true)
     setProblem(null)
+    setSelectedSpace(null)
+    setFoundNotes(null)
+    setCreatingNew(false)
     const answer = await anytype.spaces()
     if (!answer.ok) return failed(answer.error)
     setSpaces(answer.spaces)
+    if (answer.spaces.length === 1) {
+      // If only 1 space was granted or available, auto-select it immediately without asking
+      setPick(answer.spaces[0].id)
+      setBusy(false)
+      await loadNotesForSpace(answer.spaces[0])
+      return
+    }
     setPick((current) => current || answer.spaces[0]?.id || '')
     setBusy(false)
   }
-  const useSpace = async () => {
-    const space = spaces?.find((entry) => entry.id === pick)
-    if (!space) return
+
+  const loadNotesForSpace = async (space: { id: string; name: string }) => {
     setBusy(true)
     setProblem(null)
-    const answer = await anytype.useSpace(space.id, space.name)
+    setSelectedSpace(space)
+    setCreatingNew(false)
+    const answer = await anytype.listNotes(space.id)
+    if (!answer.ok) return failed(answer.error)
+    setFoundNotes(answer.notes)
+    setBusy(false)
+  }
+
+  const connectExisting = async (note: FoundNote) => {
+    if (!selectedSpace) return
+    setBusy(true)
+    setProblem(null)
+    const answer = await anytype.useSpace(selectedSpace.id, selectedSpace.name, note.id, note.name)
     if (!answer.ok) return failed(answer.error)
     setChoosing(false)
+    setSelectedSpace(null)
+    setFoundNotes(null)
     await link.refresh()
     setBusy(false)
     await link.run()
   }
+
+  const startNewNote = async () => {
+    if (!selectedSpace) return
+    const name = newNoteName.trim() || 'Sondra · Merkliste (Gerät 2)'
+    setBusy(true)
+    setProblem(null)
+    const answer = await anytype.createNote(selectedSpace.id, name)
+    if (!answer.ok) return failed(answer.error)
+    setChoosing(false)
+    setSelectedSpace(null)
+    setFoundNotes(null)
+    setCreatingNew(false)
+    await link.refresh()
+    setBusy(false)
+    await link.run()
+  }
+
+  const createInitial = async () => {
+    if (!selectedSpace) return
+    setBusy(true)
+    setProblem(null)
+    const answer = await anytype.createNote(selectedSpace.id, 'Sondra · Merkliste')
+    if (!answer.ok) return failed(answer.error)
+    setChoosing(false)
+    setSelectedSpace(null)
+    setFoundNotes(null)
+    await link.refresh()
+    setBusy(false)
+    await link.run()
+  }
+
   const forget = async () => {
     setBusy(true)
     await anytype.forget()
     setChallenge(null)
     setSpaces(null)
+    setSelectedSpace(null)
+    setFoundNotes(null)
     await link.refresh()
     setBusy(false)
   }
@@ -874,33 +937,151 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
       </div>
     )
   } else if (needsSpace) {
-    body = (
-      <div className="flex flex-col items-start gap-[12px]">
-        <p className="text-small text-prose">In welchem Space soll die Merkliste liegen?</p>
-        {spaces === null ? (
-          <p className="text-small text-prose">Die Spaces werden geladen …</p>
-        ) : spaces.length === 0 ? (
-          <p className="text-small text-prose">In Anytype gibt es noch keinen Space. Legen Sie dort einen an.</p>
-        ) : (
-          <ChoiceRow value={pick} options={spaces.map((space) => ({ value: space.id, label: space.name || 'Ohne Namen' }))} onChange={setPick} />
-        )}
-        <div className="flex flex-wrap items-center gap-[12px]">
-          <Button type="button" size="sm" disabled={busy || !pick} onClick={() => void useSpace()}>
-            Diesen Space nehmen
-          </Button>
-          {choosing ? (
-            <button type="button" onClick={() => setChoosing(false)} className={`${linkClass} text-small`}>
-              Abbrechen
-            </button>
-          ) : null}
+    if (selectedSpace) {
+      if (foundNotes === null) {
+        body = <p className="text-small text-prose">Suche nach bestehenden Merklisten in „{selectedSpace.name}“ …</p>
+      } else if (foundNotes.length > 0) {
+        body = (
+          <div className="flex flex-col items-start gap-[14px]">
+            <p className="text-small leading-[1.55] text-prose">
+              In Space <strong>„{selectedSpace.name}“</strong> wurde eine bestehende Merkliste von einem anderen Gerät gefunden:
+            </p>
+            <div className="w-full flex flex-col gap-[10px]">
+              {foundNotes.map((note) => (
+                <div key={note.id} className="p-[14px] rounded-panel bg-raised ring-1 ring-rule flex flex-col gap-[8px]">
+                  <div className="flex items-center justify-between gap-[10px]">
+                    <span className="font-medium text-body text-ink">{note.name}</span>
+                    <span className="text-small text-muted">{note.itemCount} {note.itemCount === 1 ? 'Serie' : 'Serien'} gespeichert</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-[10px] pt-[4px]">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void connectExisting(note)}
+                    >
+                      Bestehende Notiz laden & synchronisieren
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="w-full pt-[12px] border-t border-line flex flex-col items-start gap-[10px]">
+              <p className="text-small text-prose">
+                Oder möchten Sie eine komplett neue, separate Notiz starten (die andere vom anderen Gerät bleibt unverändert)?
+              </p>
+              {creatingNew ? (
+                <div className="w-full flex flex-wrap items-center gap-[10px]">
+                  <TextInput
+                    autoFocus
+                    value={newNoteName}
+                    onChange={(e) => setNewNoteName(e.target.value)}
+                    placeholder="Sondra · Merkliste (Gerät 2)"
+                    aria-label="Name der neuen Notiz"
+                    className="flex-1 min-w-[200px]"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy || !newNoteName.trim()}
+                    onClick={() => void startNewNote()}
+                  >
+                    Neue Notiz erstellen & verbinden
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setCreatingNew(false)}
+                    className={`${linkClass} text-small`}
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
+                  disabled={busy}
+                  onClick={() => setCreatingNew(true)}
+                >
+                  + Neue separate Notiz anlegen
+                </Button>
+              )}
+            </div>
+
+            {spaces && spaces.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => { setSelectedSpace(null); setFoundNotes(null); }}
+                className={`${linkClass} text-small pt-[4px]`}
+              >
+                ← Anderen Space wählen
+              </button>
+            ) : null}
+          </div>
+        )
+      } else {
+        body = (
+          <div className="flex flex-col items-start gap-[12px]">
+            <p className="text-small text-prose">
+              In Space <strong>„{selectedSpace.name}“</strong> gibt es noch keine Merkliste. Sondra wird eine neue Notiz anlegen.
+            </p>
+            <div className="flex flex-wrap items-center gap-[12px]">
+              <Button type="button" size="sm" disabled={busy} onClick={() => void createInitial()}>
+                Notiz anlegen & verbinden
+              </Button>
+              {spaces && spaces.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => { setSelectedSpace(null); setFoundNotes(null); }}
+                  className={`${linkClass} text-small`}
+                >
+                  Anderen Space wählen
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )
+      }
+    } else {
+      body = (
+        <div className="flex flex-col items-start gap-[12px]">
+          <p className="text-small text-prose">In welchem Space soll die Merkliste liegen?</p>
+          {spaces === null ? (
+            <p className="text-small text-prose">Die Spaces werden geladen …</p>
+          ) : spaces.length === 0 ? (
+            <p className="text-small text-prose">In Anytype gibt es noch keinen Space. Legen Sie dort einen an.</p>
+          ) : (
+            <ChoiceRow value={pick} options={spaces.map((space) => ({ value: space.id, label: space.name || 'Ohne Namen' }))} onChange={setPick} />
+          )}
+          <div className="flex flex-wrap items-center gap-[12px]">
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || !pick}
+              onClick={() => {
+                const space = spaces?.find((s) => s.id === pick)
+                if (space) void loadNotesForSpace(space)
+              }}
+            >
+              Diesen Space nehmen
+            </Button>
+            {choosing ? (
+              <button type="button" onClick={() => setChoosing(false)} className={`${linkClass} text-small`}>
+                Abbrechen
+              </button>
+            ) : null}
+          </div>
         </div>
-      </div>
-    )
+      )
+    }
   } else {
     body = (
       <div className="flex flex-col items-start gap-[14px]">
         <p className="text-body text-prose">
-          Verbunden mit dem Space „{status.space?.name || 'Ohne Namen'}“.
+          Verbunden mit dem Space „{status.space?.name || 'Ohne Namen'}“
+          {status.note?.name ? ` · Notiz „${status.note.name}“` : ''}.
           <span className="text-muted">
             {' '}
             {link.sync.running ? 'Gleicht gerade ab …' : link.sync.at ? `Zuletzt abgeglichen um ${clock(link.sync.at)}.` : ''}
@@ -914,11 +1095,13 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
             type="button"
             onClick={() => {
               setSpaces(null)
+              setSelectedSpace(null)
+              setFoundNotes(null)
               setChoosing(true)
             }}
             className={`${linkClass} text-small`}
           >
-            Anderen Space wählen
+            Anderen Space oder Notiz wählen
           </button>
           <button type="button" onClick={() => void forget()} disabled={busy} className={`${linkClass} text-small`}>
             Trennen
@@ -954,10 +1137,7 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
 }
 
 /**
- * The list as a file: to keep, or to take to another device. The list lives
- * only on this one, so this is the way it leaves; reading a file in merges
- * it, and one click takes the merge back. One quiet line at the foot of the
- * list — it was a paragraph with two framed buttons.
+ * The list as a file.
  */
 function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: AnytypeLink; onAnytype: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null)

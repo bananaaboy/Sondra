@@ -35,6 +35,12 @@ import {
 export type AnytypeError = 'unreachable' | 'unauthorized' | 'no-space' | 'wrong-code' | 'missing' | 'busy' | 'rejected' | 'failed'
 type Answer<T> = ({ ok: true } & T) | { ok: false; error: AnytypeError }
 
+export interface FoundNote {
+  id: string
+  name: string
+  itemCount: number
+}
+
 export interface AnytypeStatus {
   /** Anytype is open on this computer and answers. */
   reachable: boolean
@@ -43,6 +49,7 @@ export interface AnytypeStatus {
   /** The key outlives the app (the system can encrypt it). */
   lasting: boolean
   space: { id: string; name: string } | null
+  note?: { id: string; name: string } | null
 }
 
 /** True in the app, where the main process can reach Anytype. */
@@ -62,7 +69,10 @@ export const anytype = {
   challenge: () => ask<{ challengeId: string }>('challenge'),
   pair: (challengeId: string, code: string) => ask<object>('pair', challengeId, code),
   spaces: () => ask<{ spaces: { id: string; name: string }[] }>('spaces'),
-  useSpace: (id: string, name: string) => ask<object>('useSpace', id, name),
+  listNotes: (spaceId?: string) => ask<{ notes: FoundNote[] }>('listNotes', spaceId),
+  useSpace: (id: string, name: string, objectId?: string, objectName?: string) =>
+    ask<object>('useSpace', id, name, objectId, objectName),
+  createNote: (spaceId: string, name: string) => ask<{ id: string; name: string }>('createNote', spaceId, name),
   forget: () => ask<object>('forget'),
 }
 
