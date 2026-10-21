@@ -373,12 +373,22 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
 - **Merkliste in Anytype** (nur in der App): `desktop/anytype.mjs` spricht im
   Hauptprozess mit Anytypes lokaler API (`127.0.0.1:31009`, `Anytype-Version:
   2025-11-08`), koppelt über den vierstelligen Code (`/v1/auth/challenges`,
-  `/v1/auth/api_keys`) und legt den Schlüssel mit `safeStorage` verschlüsselt
-  in `userData` ab; die Seite sieht ihn nie, sie schickt über
-  `sondraApp.anytype(action, …)` eine Aktion nach der anderen. Im Browser geht
-  es nicht: Anytypes API sendet keine CORS-Kopfzeilen (anytype-heart,
-  `core/api/server`), und die Merkliste sagt das in einem Satz statt eines
-  toten Knopfs. In Anytype liegt eine Seite „Sondra · Merkliste“: oben
+  `/v1/auth/api_keys`) und legt den Schlüssel mit `safeStorage` verschlüsselt in
+  `userData` ab; die Seite sieht ihn nie, sie schickt über
+  `sondraApp.anytype(action, …)` eine Aktion nach der anderen. **Seit Anytype
+  0.51.6 kann ein Schlüssel an gewählte Spaces gebunden sein,** und `/v1` lehnt
+  ihn ab (403 `v1_not_available_for_scoped_keys`, „…carries a space grant, which
+  /v1 cannot honor“). Die erste solche Ablehnung schaltet die Verbindung auf
+  `/v2` (`api: 'v2'` in `anytype.json`, neu bestimmt bei jeder Kopplung); ein
+  Schlüssel für alle Spaces bleibt auf `/v1`, wo er immer lief. `/v2` hat kein
+  „ganze Seite ersetzen“: Schreiben liest `?outline=true`, löscht jeden obersten
+  Block (`delete_block`, `recursive`) und fügt den Text als
+  `insert_blocks`-Markdown an — höchstens 512 Ops je PATCH, 256 Blöcke je Op,
+  deshalb `markdownRuns` (zählt jede Zeile, schneidet nur vor einem neuen
+  obersten Block). Ein Space ausserhalb der Freigabe heisst `not-granted`. Im
+  Browser geht es nicht: Anytypes API sendet keine CORS-Kopfzeilen
+  (anytype-heart, `core/api/server`), und die Merkliste sagt das in einem Satz
+  statt eines toten Knopfs. In Anytype liegt eine Seite „Sondra · Merkliste“: oben
   lesbar, unten ein Datenblock (Base64 im Codeblock, damit Anytypes
   Markdown-Umbau ihn nicht verbiegt). Ein Abgleich (`syncMerkliste` in
   `lib/anytype.ts`) liest, führt zusammen (`mergeShared`: je Serie gewinnt die
