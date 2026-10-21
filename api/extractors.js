@@ -995,6 +995,8 @@ export async function checkAniworldOnlineUpdates(rawUrl, options = {}) {
     const slugMatch = parsed.pathname.match(/\/(?:anime|serie)\/stream\/([^/?#]+)/i)
     if (!slugMatch) return null
     const slug = slugMatch[1]
+    // Into a pattern below; a dot or bracket in a slug must stay itself.
+    const slugPattern = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const baseType = parsed.pathname.includes('/serie/') ? 'serie' : 'anime'
     const baseUrl = `${parsed.origin}/${baseType}/stream/${slug}`
 
@@ -1011,12 +1013,10 @@ export async function checkAniworldOnlineUpdates(rawUrl, options = {}) {
       .replace(/&amp;/g, '&')
       .trim()
 
-    // Find all season numbers
-    const seasonMatches = [
-      ...html.matchAll(new RegExp(`/(?:anime|serie)/stream/${slug}/staffel-(\\d+)`, 'gi')),
-      ...html.matchAll(/data-season-id=['"](\d+)['"]/gi),
-      ...html.matchAll(/href=['"][^'"]*staffel-(\d+)['"]/gi),
-    ]
+    // Seasons are the links to this series' own season pages. Any staffel
+    // link or data-season-id counted too, and a sidebar with another series'
+    // „Staffel 21“ — or a database id — became this one's newest season.
+    const seasonMatches = [...html.matchAll(new RegExp(`/(?:anime|serie)/stream/${slugPattern}/staffel-(\\d+)`, 'gi'))]
     const seasonNums = seasonMatches
       .map((m) => Number(m[1]))
       .filter((n) => Number.isFinite(n) && n > 0)
@@ -1032,7 +1032,7 @@ export async function checkAniworldOnlineUpdates(rawUrl, options = {}) {
 
     const epMatches = [
       ...seasonHtml.matchAll(
-        new RegExp(`/(?:anime|serie)/stream/${slug}/staffel-${maxSeason}/episode-(\\d+)`, 'gi'),
+        new RegExp(`/(?:anime|serie)/stream/${slugPattern}/staffel-${maxSeason}/episode-(\\d+)`, 'gi'),
       ),
       ...seasonHtml.matchAll(/itemprop=['"]episodeNumber['"]\s+content=['"](\d+)['"]/gi),
     ]

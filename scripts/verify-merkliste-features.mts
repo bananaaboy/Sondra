@@ -20,6 +20,8 @@ import {
   undoWatchHistory,
   setMerkItems,
   merkItems,
+  onlineNews,
+  takeOnlineNews,
 } from '../src/lib/merkliste'
 import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib/episodeMatch'
 
@@ -292,6 +294,40 @@ console.log('--- Testing Merkliste Mega Features ---')
   online = { maxSeason: 2, maxEpisode: 1 }
   assert.strictEqual(await news.checkNewEpisodes((id) => opened.push(id)), 0, 'ausgeschaltet: nichts')
   console.log('✓ Neue Folgen: einmal gemeldet, erste Prüfung nur gemerkt, Klick öffnet die Serie')
+}
+
+// What AniWorld has beyond the list — and taking it on.
+{
+  const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i)
+  const base = createMerkItem({ id: 'fr', title: 'Frieren', season: 1, episode: 14, seasons: [{ number: 1, episodes: 28, watched: range(1, 13) }] })
+  assert.strictEqual(onlineNews(base, { maxSeason: 1, maxEpisode: 20 }), null, 'nur im Rückstand: nichts Neues')
+  assert.deepStrictEqual(onlineNews(base, { maxSeason: 1, maxEpisode: 30 }), { season: 1, from: 29, to: 30, newSeason: false, countUnknown: false })
+  assert.deepStrictEqual(onlineNews(base, { maxSeason: 2, maxEpisode: 4 }), { season: 2, from: 1, to: 4, newSeason: true, countUnknown: false })
+
+  const more = takeOnlineNews({ ...base, onlineAvailable: { maxSeason: 1, maxEpisode: 30, checkedAt: 0 } })!
+  assert.deepStrictEqual([more.seasons?.[0].episodes, more.season, more.episode], [30, 1, 14], 'Folgen dazu, Stand bleibt bei der ersten ungesehenen')
+
+  const done = createMerkItem({ ...base, status: 'done', episode: 28, seasons: [{ number: 1, episodes: 28, watched: range(1, 28) }], onlineAvailable: { maxSeason: 3, maxEpisode: 10, checkedAt: 0 } })
+  const grown = takeOnlineNews(done)!
+  assert.deepStrictEqual(
+    grown.seasons?.map((season) => `${season.number}:${season.episodes}`),
+    ['1:28', '2:null', '3:10'],
+    'fehlende Staffel davor kommt ohne Zahl dazu',
+  )
+  assert.deepStrictEqual([grown.season, grown.episode, grown.status], [2, 1, 'watching'], 'Fertig wird wieder Am Schauen, ab Staffel 2')
+
+  const split = createMerkItem({
+    ...base,
+    seasons: [{ number: 1, episodes: 24, watched: range(1, 13), parts: [{ episodes: 12 }, { episodes: 12 }] }],
+    onlineAvailable: { maxSeason: 1, maxEpisode: 26, checkedAt: 0 },
+  })
+  const parts = takeOnlineNews(split)!.seasons![0]
+  assert.deepStrictEqual([parts.episodes, parts.parts?.map((part) => part.episodes)], [26, [12, 14]], 'geteilte Staffel: der letzte Teil wächst')
+
+  const open = createMerkItem({ ...base, seasons: [{ number: 1, episodes: null, watched: range(1, 13) }], onlineAvailable: { maxSeason: 1, maxEpisode: 20, checkedAt: 0 } })
+  assert.strictEqual(onlineNews(open)?.countUnknown, true)
+  assert.strictEqual(takeOnlineNews(open)?.seasons?.[0].episodes, 20, 'unbekannte Zahl wird übernommen')
+  console.log('✓ Neu online: nur was die Liste nicht kennt, übernommen ohne Sprung über Ungesehenes')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')

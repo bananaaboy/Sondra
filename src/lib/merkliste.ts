@@ -974,9 +974,7 @@ export async function checkOnlineUpdates(item: SavedLinkItem): Promise<OnlineAva
       seriesTitle?: string
     }
     if (data.status === 'updates' && typeof data.maxSeason === 'number' && typeof data.maxEpisode === 'number') {
-      const hasNew =
-        data.maxSeason > item.season ||
-        (data.maxSeason === item.season && item.episode !== null && data.maxEpisode > item.episode)
+      const hasNew = onlineNews(item, { maxSeason: data.maxSeason, maxEpisode: data.maxEpisode }) !== null
       const info: OnlineAvailableInfo = {
         maxSeason: data.maxSeason,
         maxEpisode: data.maxEpisode,
@@ -993,6 +991,71 @@ export async function checkOnlineUpdates(item: SavedLinkItem): Promise<OnlineAva
     // Offline or server not running
   }
   return null
+}
+
+/** Episodes AniWorld has that the list does not: a season it lacks, or episodes past a known count. */
+export interface OnlineNews {
+  season: number
+  /** First and last episode the list does not know yet. */
+  from: number
+  to: number
+  /** The season itself is not on the list. */
+  newSeason: boolean
+  /** The season is on the list, its number of episodes was not. */
+  countUnknown: boolean
+}
+
+/**
+ * What is new online for this entry. Being behind is not news: episodes 14
+ * to 20 of a season known to have 28 are on the list already. It used to
+ * count as „neu online“, and „Zur neuen Folge springen“ moved the place to
+ * episode 20 with 14 to 19 unseen — past what `settle` would ever choose.
+ */
+export function onlineNews(
+  item: SavedLinkItem,
+  online: Pick<OnlineAvailableInfo, 'maxSeason' | 'maxEpisode'> | undefined = item.onlineAvailable,
+): OnlineNews | null {
+  if (!online || !(online.maxSeason > 0) || !(online.maxEpisode > 0)) return null
+  const { maxSeason, maxEpisode } = online
+  const season = seasonsOf(item).find((entry) => entry.number === maxSeason)
+  if (!season) return { season: maxSeason, from: 1, to: maxEpisode, newSeason: true, countUnknown: false }
+  if (season.episodes === null) {
+    const last = season.watched.length ? Math.max(...season.watched) : 0
+    return maxEpisode > last ? { season: maxSeason, from: last + 1, to: maxEpisode, newSeason: false, countUnknown: true } : null
+  }
+  return maxEpisode > season.episodes
+    ? { season: maxSeason, from: season.episodes + 1, to: maxEpisode, newSeason: false, countUnknown: false }
+    : null
+}
+
+/** A season grown to `to` episodes; when split, its last part grows. */
+function extendSeason(season: MerkSeason, to: number): MerkSeason {
+  if (season.episodes !== null && season.episodes >= to) return season
+  if (!season.parts || season.parts.length < 2) return { ...season, episodes: to }
+  const parts = storedParts(season)
+  const before = parts.slice(0, -1).reduce((sum, part) => sum + (part.episodes ?? 0), 0)
+  parts[parts.length - 1] = { ...parts[parts.length - 1], episodes: Math.max(1, to - before) }
+  return withParts(season, parts)
+}
+
+/**
+ * What is new online, taken onto the list: the season and any missing before
+ * it added, or the season's count raised. The place settles on the first
+ * episode not seen, as after every other change to what is there.
+ */
+export function takeOnlineNews(item: SavedLinkItem): Pick<SavedLinkItem, 'seasons' | 'season' | 'episode' | 'status'> | null {
+  const news = onlineNews(item)
+  if (!news) return null
+  let seasons = seasonsOf(item)
+  if (news.newSeason) {
+    const known = new Set(seasons.map((season) => season.number))
+    for (let number = 1; number <= news.season; number++) {
+      if (!known.has(number)) seasons = [...seasons, { number, episodes: number === news.season ? news.to : null, watched: [] }]
+    }
+  } else {
+    seasons = seasons.map((season) => (season.number === news.season ? extendSeason(season, news.to) : season))
+  }
+  return settle(item, seasons, item.season)
 }
 
 export interface MerkImport {

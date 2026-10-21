@@ -20,6 +20,8 @@ class DiscordRpcClient {
     this.ready = false
     /** A search through the pipes is under way; a second one would race it. */
     this.connecting = false
+    /** Bytes of a frame not yet complete: a pipe may deliver one in pieces. */
+    this.inbox = Buffer.alloc(0)
     this.clientId = DEFAULT_CLIENT_ID
     this.currentActivity = null
     this.reconnectTimer = null
@@ -76,7 +78,12 @@ class DiscordRpcClient {
         // Discord answers every frame. Only READY, its answer to the
         // handshake, is the cue to send what is waiting; sending again on
         // every answer made a loop of some 50 000 frames a second.
-        if (this.ready || !isReady(data)) return
+        if (this.ready) return
+        this.inbox = Buffer.concat([this.inbox, data])
+        const { frames, rest } = readFrames(this.inbox)
+        this.inbox = rest
+        if (!frames.some((frame) => frame?.evt === 'READY')) return
+        this.inbox = Buffer.alloc(0)
         this.ready = true
         if (this.currentActivity && this.enabled) this.sendActivity(this.currentActivity)
       })
@@ -93,6 +100,7 @@ class DiscordRpcClient {
         this.socket = null
         this.connected = false
         this.ready = false
+        this.inbox = Buffer.alloc(0)
         if (this.enabled) {
           this.scheduleReconnect()
         }
@@ -178,19 +186,21 @@ class DiscordRpcClient {
   }
 }
 
-/** True when the frames in `data` include Discord's READY event. */
-function isReady(data) {
+/** The whole frames at the start of `data`, and what is left of one still arriving. */
+function readFrames(data) {
+  const frames = []
   let at = 0
   while (at + 8 <= data.length) {
     const length = data.readInt32LE(at + 4)
+    if (at + 8 + length > data.length) break
     try {
-      if (JSON.parse(data.subarray(at + 8, at + 8 + length).toString('utf8'))?.evt === 'READY') return true
+      frames.push(JSON.parse(data.subarray(at + 8, at + 8 + length).toString('utf8')))
     } catch {
-      return false
+      frames.push(null)
     }
     at += 8 + length
   }
-  return false
+  return { frames, rest: data.subarray(at) }
 }
 
 export const discordRpc = new DiscordRpcClient()

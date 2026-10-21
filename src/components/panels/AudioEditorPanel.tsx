@@ -1625,9 +1625,7 @@ export function AudioEditorPanel() {
           </div>
 
           <div className="rounded-card bg-panel-mid p-[12px] ring-1 ring-inset ring-line/70">
-            <span className="text-micro font-semibold uppercase tracking-[0.05em] text-muted">
-              Vorschau
-            </span>
+            <span className="text-small font-semibold text-ink">Vorschau</span>
             <p className="mt-[4px] text-small text-ink">
               {detectedSilenceRegions.length === 0 ? (
                 <span className="text-muted">Keine stillen Abschnitte unter {silenceThresholdDb} dBFS gefunden (mind. 300 ms Dauer).</span>

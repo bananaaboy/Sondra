@@ -410,10 +410,13 @@ check('Podcast: Episode 1 URL', parsedRss?.items?.[0]?.url, 'https://storage.exa
       <li><a href="/anime/stream/frieren/staffel-1" title="Staffel 1">1</a></li>
       <li><a href="/anime/stream/frieren/staffel-2" title="Staffel 2">2</a></li></ul>
       <a href="/anime/stream/frieren/staffel-1/episode-28">28</a>
-      <aside><a href="/anime/stream/one-piece">One Piece</a></aside>`,
+      <aside><a href="/anime/stream/one-piece">One Piece</a>
+      <a href="/anime/stream/one-piece/staffel-21/episode-1100">Neu: One Piece 1100</a>
+      <div data-season-id="48213"></div></aside>`,
     'https://aniworld.to/anime/stream/frieren/staffel-2': `
       <tr data-episode-id="1"><td><meta itemprop="episodeNumber" content="1" /><a href="/anime/stream/frieren/staffel-2/episode-1">Folge 1</a></td></tr>
-      <tr data-episode-id="2"><td><meta itemprop="episodeNumber" content="7" /><a href="/anime/stream/frieren/staffel-2/episode-7">Folge 7</a></td></tr>`,
+      <tr data-episode-id="2"><td><meta itemprop="episodeNumber" content="7" /><a href="/anime/stream/frieren/staffel-2/episode-7">Folge 7</a></td></tr>
+      <aside><a href="/anime/stream/one-piece/staffel-21/episode-1100">Neu: One Piece 1100</a></aside>`,
   }
   const realFetch = globalThis.fetch
   const asked = []
