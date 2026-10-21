@@ -685,11 +685,7 @@ export function VideoPanel() {
         <div className="flex flex-col gap-[20px]">
           <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
             <div>
-              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
-                <span className="size-[6px] rounded-full bg-emerald-500" />
-                FFmpeg WebAssembly Beschleunigt
-              </div>
-              <h2 className="display-md mt-[6px]">Video schneiden, drehen &amp; optimieren</h2>
+              <h2 className="display-md">Video schneiden, drehen &amp; optimieren</h2>
               <p className="mt-[2px] text-small text-muted">
                 Volle Videobearbeitung auf Ihrem Rechner — kein Cloud-Upload, keine Größenbegrenzung.
               </p>
