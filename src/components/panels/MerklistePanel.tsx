@@ -28,6 +28,7 @@ import {
 import { buildUrlWithEpisode, saveBytes, sourceBadgeForUrl } from '../../lib/download'
 import {
   advance,
+  calculateMerklisteStats,
   caughtUp,
   coverFromFile,
   createMerkItem,
@@ -70,7 +71,7 @@ import {
 } from '../../lib/merkliste'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
-import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
+import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, Stat, TextInput, Toggle } from '../ui/primitives'
 import type { AudioFilePref, AudioOutputFormat, VideoFilePref } from './DownloaderPanel'
 import {
   AUDIO_QUALITY_OPTIONS,
@@ -502,6 +503,7 @@ export function MerklistePanel() {
   const [season, setSeason] = useState<{ id: string; number: number; part: number } | null>(null)
   const [removed, setRemoved] = useState<{ item: SavedLinkItem; index: number } | null>(null)
   const [anytypeOpen, setAnytypeOpen] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
   const anytypeLink = useAnytype(items)
 
   // The series that is open, if one is. It has a history entry of its own,
@@ -531,8 +533,7 @@ export function MerklistePanel() {
     else setOpenId(null)
   }
 
-  const watchingCount = useMemo(() => items.filter((item) => statusOf(item) === 'watching').length, [items])
-  const seenTotal = useMemo(() => items.reduce((sum, item) => sum + itemProgress(item).watched, 0), [items])
+  const stats = useMemo(() => calculateMerklisteStats(items), [items])
 
   // Grouped by where each entry stands, the latest first within each.
   const groups = useMemo(() => {
@@ -565,6 +566,7 @@ export function MerklistePanel() {
   const dialogs = (
     <>
       <AddDialog open={adding} onClose={() => setAdding(false)} />
+      {statsOpen ? <StatsDialog items={items} onClose={() => setStatsOpen(false)} /> : null}
       {editingItem ? (
         <SeriesDialog item={editingItem} onClose={() => setEditing(null)} onRemove={() => remove(editingItem)} />
       ) : null}
@@ -601,13 +603,42 @@ export function MerklistePanel() {
         <div className="mt-[8px] flex flex-wrap items-end justify-between gap-x-[16px] gap-y-[12px]">
           <div className="min-w-0">
             <h2 className="display-md">Merkliste</h2>
-            <p className="mt-[4px] text-body text-prose">
-              {items.length === 0
-                ? 'Serien, Staffeln und Listen, die Sie schauen — mit dem, was Sie schon gesehen haben.'
-                : `${watchingCount} am Schauen · ${seenTotal} ${seenTotal === 1 ? 'Folge' : 'Folgen'} gesehen`}
-            </p>
+            {items.length === 0 ? (
+              <p className="mt-[4px] text-body text-prose">
+                Serien, Staffeln und Listen, die Sie schauen — mit dem, was Sie schon gesehen haben.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setStatsOpen(true)}
+                className="press group mt-[4px] -ml-[6px] inline-flex flex-wrap items-center gap-x-[8px] gap-y-[4px] rounded-nav px-[6px] py-[3px] text-left text-body text-prose hover:bg-panel-soft hover:text-ink transition-colors cursor-pointer"
+                title="Alle Statistiken zur Merkliste anzeigen"
+                aria-label="Statistiken zur Merkliste öffnen"
+              >
+                <span className="font-semibold text-ink">{stats.watchingCount} am Schauen</span>
+                {stats.laterCount > 0 ? <span className="text-muted">· {stats.laterCount} später</span> : null}
+                {stats.doneCount > 0 ? <span className="text-muted">· {stats.doneCount} fertig</span> : null}
+                <span>· {stats.seenTotal} {stats.seenTotal === 1 ? 'Folge' : 'Folgen'} gesehen</span>
+                <span className="text-muted">· ca. {stats.watchTime.short}</span>
+                <span className="inline-flex items-center gap-[3px] font-sans text-small font-medium text-ink/80 underline decoration-dotted underline-offset-2 group-hover:text-ink">
+                  Statistiken
+                  <span aria-hidden className="transition-transform group-hover:translate-x-[2px]">›</span>
+                </span>
+              </button>
+            )}
           </div>
           <div className="flex w-full flex-wrap items-center gap-[8px] sm:w-auto">
+            {items.length > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="quiet"
+                onClick={() => setStatsOpen(true)}
+                title="Statistiken zur Merkliste öffnen"
+              >
+                Statistiken
+              </Button>
+            ) : null}
             {items.length > 5 ? (
               <TextInput
                 type="search"
@@ -2102,6 +2133,211 @@ function SeasonDialog({
             </div>
           </div>
         </Reveal>
+      </div>
+    </Dialog>
+  )
+}
+
+/**
+ * Detailed statistics for the Merkliste: watch time, status distribution,
+ * ratings, and completion metrics.
+ */
+function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () => void }) {
+  const stats = useMemo(() => calculateMerklisteStats(items), [items])
+
+  return (
+    <Dialog open onClose={onClose} title="Statistiken zur Merkliste" size="md">
+      <div className="flex flex-col gap-[20px]">
+        {/* 4 Hero Cards */}
+        <div className="grid grid-cols-2 gap-[10px] sm:grid-cols-4">
+          <div className="flex flex-col justify-between rounded-nav bg-panel-soft p-[12px] ring-1 ring-inset ring-rule">
+            <span className="text-small text-muted">Gesehen</span>
+            <div className="mt-[4px] flex items-baseline gap-[4px]">
+              <span className="value pop text-subheading font-semibold text-ink">{stats.seenTotal}</span>
+              <span className="text-small text-muted">{stats.seenTotal === 1 ? 'Folge' : 'Folgen'}</span>
+            </div>
+            <span className="mt-[2px] text-micro text-prose">
+              {stats.overallProgressPercent !== null ? `${stats.overallProgressPercent} % aller Folgen` : 'über alle Serien'}
+            </span>
+          </div>
+
+          <div className="flex flex-col justify-between rounded-nav bg-panel-soft p-[12px] ring-1 ring-inset ring-rule">
+            <span className="text-small text-muted">Sehzeit (ca.)</span>
+            <div className="mt-[4px]">
+              <span className="value pop text-subheading font-semibold text-ink">{stats.watchTime.short}</span>
+            </div>
+            <span className="mt-[2px] text-micro text-prose truncate" title={stats.watchTime.long}>
+              {stats.watchTime.long}
+            </span>
+          </div>
+
+          <div className="flex flex-col justify-between rounded-nav bg-panel-soft p-[12px] ring-1 ring-inset ring-rule">
+            <span className="text-small text-muted">Serien</span>
+            <div className="mt-[4px] flex items-baseline gap-[4px]">
+              <span className="value pop text-subheading font-semibold text-ink">{stats.totalSeries}</span>
+              <span className="text-small text-muted">{stats.totalSeries === 1 ? 'Serie' : 'Serien'}</span>
+            </div>
+            <span className="mt-[2px] text-micro text-prose">
+              {stats.watchingCount} am Schauen
+            </span>
+          </div>
+
+          <div className="flex flex-col justify-between rounded-nav bg-panel-soft p-[12px] ring-1 ring-inset ring-rule">
+            <span className="text-small text-muted">Bewertung</span>
+            <div className="mt-[4px]">
+              <span className="value pop text-subheading font-semibold text-ink">
+                {stats.avgRating ? `★ ${stats.avgRating}` : '—'}
+              </span>
+            </div>
+            <span className="mt-[2px] text-micro text-prose">
+              {stats.ratedCount > 0 ? `${stats.ratedCount} bewertet` : 'Noch keine'}
+            </span>
+          </div>
+        </div>
+
+        {/* Status distribution */}
+        <div className="flex flex-col gap-[8px]">
+          <div className="flex items-baseline justify-between text-small">
+            <span className="font-medium text-ink">Status-Aufteilung</span>
+            <span className="text-muted">{stats.totalSeries} {stats.totalSeries === 1 ? 'Serie' : 'Serien'}</span>
+          </div>
+          {stats.totalSeries > 0 ? (
+            <div className="flex h-[8px] w-full overflow-hidden rounded-full bg-rule">
+              {stats.watchingCount > 0 ? (
+                <div
+                  style={{ width: `${stats.watchingPercent}%` }}
+                  className="bg-ink transition-all"
+                  title={`${stats.watchingCount} am Schauen (${stats.watchingPercent}%)`}
+                />
+              ) : null}
+              {stats.laterCount > 0 ? (
+                <div
+                  style={{ width: `${stats.laterPercent}%` }}
+                  className="bg-rule transition-all"
+                  title={`${stats.laterCount} später (${stats.laterPercent}%)`}
+                />
+              ) : null}
+              {stats.doneCount > 0 ? (
+                <div
+                  style={{ width: `${stats.donePercent}%` }}
+                  className="bg-faint transition-all"
+                  title={`${stats.doneCount} fertig (${stats.donePercent}%)`}
+                />
+              ) : null}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[4px] text-small">
+            <span className="flex items-center gap-[6px]">
+              <span className="size-[8px] rounded-full bg-ink inline-block" />
+              <span className="text-prose">Am Schauen:</span>
+              <span className="value pop font-medium text-ink">{stats.watchingCount}</span>
+              <span className="text-micro text-muted">({stats.watchingPercent}%)</span>
+            </span>
+            <span className="flex items-center gap-[6px]">
+              <span className="size-[8px] rounded-full bg-rule inline-block" />
+              <span className="text-prose">Später:</span>
+              <span className="value pop font-medium text-ink">{stats.laterCount}</span>
+              <span className="text-micro text-muted">({stats.laterPercent}%)</span>
+            </span>
+            <span className="flex items-center gap-[6px]">
+              <span className="size-[8px] rounded-full bg-faint inline-block" />
+              <span className="text-prose">Fertig:</span>
+              <span className="value pop font-medium text-ink">{stats.doneCount}</span>
+              <span className="text-micro text-muted">({stats.donePercent}%)</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Detailed stats with Stat primitives */}
+        <div className="flex flex-col">
+          <Stat
+            label="Gesehene Folgen"
+            value={String(stats.seenTotal)}
+            unit={stats.seenTotal === 1 ? 'Folge' : 'Folgen'}
+            note={stats.knownTotalEpisodes > 0 ? `von mindestens ${stats.knownTotalEpisodes} erfassten Folgen` : undefined}
+            emphasis
+          />
+          {stats.overallProgressPercent !== null ? (
+            <Stat
+              label="Gesamtfortschritt"
+              value={`${stats.overallProgressPercent} %`}
+              note="aller Folgen mit bekannter Episodenanzahl"
+            />
+          ) : null}
+          <Stat
+            label="Geschätzte Sehzeit"
+            value={stats.watchTime.short}
+            note={`Entspricht ca. ${stats.watchTime.long} (geschätzt mit 24 Min. pro Folge)`}
+          />
+          <Stat
+            label="Staffeln abgeschlossen"
+            value={`${stats.completedSeasons} von ${stats.totalSeasons}`}
+            note={stats.totalSeasons > 0 ? `${Math.round((stats.completedSeasons / stats.totalSeasons) * 100)} % der Staffeln komplett gesehen` : undefined}
+          />
+          {stats.filmsSeen > 0 || stats.filmCount > 0 ? (
+            <Stat
+              label="Filme & Specials"
+              value={String(stats.filmsSeen)}
+              unit="gesehen"
+              note={stats.filmCount > 0 ? `von ${stats.filmCount} erfasst` : undefined}
+            />
+          ) : null}
+          {stats.ratedCount > 0 ? (
+            <Stat
+              label="Durchschnittsbewertung"
+              value={`★ ${stats.avgRating}`}
+              note={`über ${stats.ratedCount} bewertete ${stats.ratedCount === 1 ? 'Serie' : 'Serien'}`}
+            />
+          ) : null}
+        </div>
+
+        {/* Ratings distribution */}
+        {stats.ratedCount > 0 ? (
+          <div className="flex flex-col gap-[8px] border-t border-line pt-[12px]">
+            <span className="text-small font-medium text-ink">Bewertungs-Verteilung</span>
+            <div className="flex flex-col gap-[6px]">
+              {stats.ratingDistribution.map(({ stars, count }) => (
+                <div key={stars} className="flex items-center gap-[8px] text-small">
+                  <span className="w-[42px] text-right text-muted">{stars} ★</span>
+                  <div className="h-[6px] flex-1 overflow-hidden rounded-full bg-rule">
+                    <div
+                      className="h-full bg-ink transition-all"
+                      style={{ width: `${stats.ratedCount > 0 ? (count / stats.ratedCount) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <span className="value w-[24px] text-right text-muted">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Recent items */}
+        {stats.recentItems.length > 0 ? (
+          <div className="flex flex-col gap-[6px] border-t border-line pt-[12px]">
+            <span className="text-small font-medium text-ink">Zuletzt geschaut</span>
+            <div className="flex flex-col divide-y divide-line/60">
+              {stats.recentItems.map((item) => {
+                const prog = itemProgress(item)
+                return (
+                  <div key={item.id} className="flex items-baseline justify-between gap-[12px] py-[6px]">
+                    <span className="text-small font-medium text-ink truncate">{item.title}</span>
+                    <span className="text-micro text-muted shrink-0">
+                      {prog.watched} {prog.total ? `von ${prog.total}` : 'gesehen'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Close Button */}
+        <div className="flex justify-end border-t border-line pt-[12px]">
+          <Button type="button" size="sm" onClick={onClose}>
+            Schließen
+          </Button>
+        </div>
       </div>
     </Dialog>
   )
