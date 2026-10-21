@@ -225,13 +225,13 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
         try {
           const detail = await call('GET', `/v1/spaces/${space}/objects/${encodeURIComponent(id)}?format=md`)
           const md = detail?.object?.markdown || ''
-          const match = md.match(/sondra-merkliste\n([\s\S]*?)```/)
+          const match = md.match(/```(?:sondra-merkliste)?\s*([\s\S]*?)```/)
           if (match) {
             try {
               const raw = match[1].replace(/[^A-Za-z0-9+/=]/g, '')
               const decoded = Buffer.from(raw, 'base64').toString('utf8')
               const parsed = JSON.parse(decoded)
-              if (Array.isArray(parsed.items)) itemCount = parsed.items.length
+              if (parsed?.kind === 'sondra-merkliste' && Array.isArray(parsed.items)) itemCount = parsed.items.length
             } catch {}
           }
         } catch {}
@@ -256,7 +256,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       return {}
     },
 
-    async createNote(spaceId, name, initialMarkdown = '') {
+    async createNote(spaceId, name, spaceName = '', initialMarkdown = '') {
       if (!key) throw new AnytypeError('unauthorized')
       const targetSpace = spaceId || config.spaceId
       if (!targetSpace) throw new AnytypeError('no-space')
@@ -270,6 +270,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       })
       if (!answer?.object?.id) throw new AnytypeError('failed', 'keine Objekt-ID')
       config.spaceId = targetSpace
+      if (typeof spaceName === 'string' && spaceName) config.spaceName = spaceName
       config.objectId = answer.object.id
       config.objectName = pageName
       saveConfig()

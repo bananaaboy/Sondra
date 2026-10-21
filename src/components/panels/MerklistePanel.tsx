@@ -20,6 +20,7 @@ import {
   anytype,
   anytypeAvailable,
   inStepWithAnytype,
+  resetAnytypeCache,
   syncMerkliste,
   type AnytypeError,
   type AnytypeStatus,
@@ -843,7 +844,7 @@ function useAnytype(items: SavedLinkItem[]): AnytypeLink {
 
   const refresh = async () => {
     const answer = await anytype.status()
-    const next = answer.ok ? { reachable: answer.reachable, paired: answer.paired, lasting: answer.lasting, space: answer.space } : null
+    const next = answer.ok ? { reachable: answer.reachable, paired: answer.paired, lasting: answer.lasting, space: answer.space, note: answer.note } : null
     setStatus(next)
     return next
   }
@@ -868,6 +869,18 @@ function useAnytype(items: SavedLinkItem[]): AnytypeLink {
     const timer = window.setTimeout(() => void latest.current.run(), 2500)
     return () => window.clearTimeout(timer)
   }, [items, connected])
+
+  // Periodic and on-focus background synchronization with Anytype
+  useEffect(() => {
+    if (!connected) return
+    const onFocus = () => void latest.current.run()
+    window.addEventListener('focus', onFocus)
+    const interval = window.setInterval(() => void latest.current.run(), 30_000)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      window.clearInterval(interval)
+    }
+  }, [connected])
 
   return { available: anytypeAvailable, status, connected, sync, run, refresh }
 }
@@ -956,6 +969,7 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
     if (!selectedSpace) return
     setBusy(true)
     setProblem(null)
+    resetAnytypeCache()
     const answer = await anytype.useSpace(selectedSpace.id, selectedSpace.name, note.id, note.name)
     if (!answer.ok) return failed(answer.error)
     setChoosing(false)
@@ -971,7 +985,8 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
     const name = newNoteName.trim() || 'Sondra · Merkliste (Gerät 2)'
     setBusy(true)
     setProblem(null)
-    const answer = await anytype.createNote(selectedSpace.id, name)
+    resetAnytypeCache()
+    const answer = await anytype.createNote(selectedSpace.id, name, selectedSpace.name)
     if (!answer.ok) return failed(answer.error)
     setChoosing(false)
     setSelectedSpace(null)
@@ -986,7 +1001,8 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
     if (!selectedSpace) return
     setBusy(true)
     setProblem(null)
-    const answer = await anytype.createNote(selectedSpace.id, 'Sondra · Merkliste')
+    resetAnytypeCache()
+    const answer = await anytype.createNote(selectedSpace.id, 'Sondra · Merkliste', selectedSpace.name)
     if (!answer.ok) return failed(answer.error)
     setChoosing(false)
     setSelectedSpace(null)
@@ -998,6 +1014,7 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
 
   const forget = async () => {
     setBusy(true)
+    resetAnytypeCache()
     await anytype.forget()
     setChallenge(null)
     setSpaces(null)
@@ -1696,7 +1713,7 @@ function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void 
         >
           {item.title}
         </button>
-        <div className="flex items-center justify-between gap-[6px] text-small text-prose">
+        <div className="flex items-center justify-between gap-[6px] text-small text-prose min-h-[22px]">
           <span className="flex items-center gap-[6px] min-w-0 truncate">
             {done ? <RowMark state="done" /> : null}
             <span className="truncate">{stand}</span>
@@ -1716,9 +1733,7 @@ function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void 
           ) : null}
         </div>
         <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${item.title}: gesehen`} />
-        {badge ? (
-          <span className="text-micro text-muted font-mono truncate">{badge}</span>
-        ) : null}
+        <span className="text-micro text-muted font-mono truncate min-h-[1.25em] block">{badge || '\u00A0'}</span>
       </div>
     </div>
   )
