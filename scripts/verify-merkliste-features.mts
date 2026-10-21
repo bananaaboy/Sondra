@@ -21,6 +21,7 @@ import {
   setMerkItems,
   merkItems,
 } from '../src/lib/merkliste'
+import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib/episodeMatch'
 
 console.log('--- Testing Merkliste Mega Features ---')
 
@@ -177,6 +178,120 @@ console.log('--- Testing Merkliste Mega Features ---')
   const maxEpisode = Math.max(...epNums)
   assert.strictEqual(maxEpisode, 21, 'Should discover episode 21 as max episode')
   console.log('✓ AniWorld season & episode online detection logic verified')
+}
+
+// 7. The player recognises episodes by file name and ticks them off
+{
+  const guesses: [string, { title: string; season: number | null; episode: number } | null][] = [
+    ['Frieren S01E13.mkv', { title: 'Frieren', season: 1, episode: 13 }],
+    ['Frieren.S02E03.1080p.WEB.x264.mkv', { title: 'Frieren', season: 2, episode: 3 }],
+    ['Dark.1x05.German.mp4', { title: 'Dark', season: 1, episode: 5 }],
+    ['[SubsPlease] Frieren - 13 (1080p) [ABCD1234].mkv', { title: 'Frieren', season: null, episode: 13 }],
+    ['Mob Psycho 100 II - 04v2.mkv', { title: 'Mob Psycho 100 II', season: null, episode: 4 }],
+    ['Nana Staffel 1 Folge 20.mp4', { title: 'Nana', season: 1, episode: 20 }],
+    ['Vinland Saga Episode 7.mp4', { title: 'Vinland Saga', season: null, episode: 7 }],
+    ['Urlaub 2024.mp4', null],
+    ['Konzert.mp3', null],
+  ]
+  for (const [name, expected] of guesses) {
+    const guess = guessEpisode(name)
+    if (expected === null) {
+      // A bare number at the end is a guess only; it must not match a series.
+      assert.ok(guess === null || matchEpisode(name, []) === null, `${name}: keine Folge`)
+    } else {
+      assert.deepStrictEqual(guess, expected, `${name}: erkannt`)
+    }
+  }
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1)
+  const list = [
+    createMerkItem({ id: 'fr', title: 'Frieren', season: 1, episode: 13, seasons: [{ number: 1, episodes: 28, watched: range(12) }] }),
+    createMerkItem({ id: 'mob', title: 'Mob Psycho 100', season: 1, episode: 1, seasons: [{ number: 1, episodes: 12, watched: [] }] }),
+    createMerkItem({ id: 'mob2', title: 'Mob Psycho 100 II', season: 1, episode: 1, seasons: [{ number: 1, episodes: 13, watched: [] }] }),
+    createMerkItem({
+      id: 'jojo',
+      title: 'JoJo',
+      season: 2,
+      episode: 4,
+      seasons: [
+        { number: 1, episodes: 26, watched: range(26) },
+        { number: 2, episodes: 39, watched: range(3) },
+      ],
+    }),
+  ]
+  const at = (name: string) => {
+    const match = matchEpisode(name, list)
+    return match ? [match.item.id, match.season, match.episode] : null
+  }
+  assert.deepStrictEqual(at('Frieren S01E13.mkv'), ['fr', 1, 13], 'Frieren S01E13')
+  assert.deepStrictEqual(at('[SubsPlease] Frieren - 13 (1080p).mkv'), ['fr', 1, 13], 'Frieren ohne Staffel')
+  assert.deepStrictEqual(at('Mob Psycho 100 II - 04.mkv'), ['mob2', 1, 4], 'der längere Titel gewinnt')
+  assert.deepStrictEqual(at('JoJo - 05.mkv'), ['jojo', 2, 5], 'ohne Staffel: die, bei der der Eintrag steht')
+  assert.deepStrictEqual(at('JoJo - 30.mkv'), ['jojo', 2, 30], 'passt in die Staffel, bei der der Eintrag steht')
+  assert.deepStrictEqual(at('JoJo - 45.mkv'), ['jojo', 2, 19], 'darüber hinaus durchgezählt: Folge 45 ist Staffel 2, Folge 19')
+  assert.deepStrictEqual(at('Frieren S01E40.mkv'), null, 'über das Ende hinaus: keine Folge')
+  assert.deepStrictEqual(at('Bleach S01E01.mkv'), null, 'nicht auf der Liste')
+
+  const frieren = list[0]
+  const match = matchEpisode('Frieren S01E13.mkv', list)!
+  assert.strictEqual(alreadySeen(match), false)
+  const next = seenEpisode(frieren, 1, 13)
+  assert.deepStrictEqual([next.season, next.episode], [1, 14], 'abgehakt: der Stand geht auf Folge 14')
+  assert.ok(next.seasons?.[0].watched.includes(13) && !next.seasons?.[0].watched.includes(14), 'nur diese Folge')
+  assert.strictEqual(next.history?.at(-1)?.episode, 13, 'steht im Verlauf')
+  const ahead = seenEpisode(frieren, 1, 20)
+  assert.deepStrictEqual([ahead.season, ahead.episode], [1, 13], 'vorausgeschaut: der Stand bleibt bei der ersten offenen')
+  const newSeason = seenEpisode(frieren, 2, 1)
+  assert.ok(newSeason.seasons?.some((season) => season.number === 2 && season.watched.includes(1)), 'fehlende Staffel kommt dazu')
+  console.log('✓ Abspielen: Folgen am Dateinamen erkannt und abgehakt')
+}
+
+// 8. New episodes: announced in the app once, never on the first look
+{
+  let online = { maxSeason: 1, maxEpisode: 12 }
+  const asked: string[] = []
+  const notices: { title: string; body?: string; onclick: (() => void) | null; close: () => void }[] = []
+  const store = new Map<string, string>()
+  Object.assign(globalThis, {
+    window: { sondraApp: {}, focus: () => {}, addEventListener: () => {}, dispatchEvent: () => true, setTimeout, clearTimeout, setInterval, clearInterval },
+    localStorage: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    },
+    fetch: async (_url: string, init: { body: string }) => {
+      asked.push(JSON.parse(init.body).url)
+      return { ok: true, json: async () => ({ status: 'updates', ...online }) }
+    },
+    Notification: class {
+      static permission = 'granted'
+      onclick: (() => void) | null = null
+      constructor(public title: string, options: { body?: string }) {
+        notices.push(Object.assign(this, { body: options.body, close: () => {} }))
+      }
+    },
+  })
+  const news = await import('../src/lib/newEpisodes')
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1)
+  setMerkItems([
+    createMerkItem({ id: 'fr', title: 'Frieren', status: 'watching', url: 'https://aniworld.to/anime/stream/frieren', updatedAt: 500, season: 1, episode: 13, seasons: [{ number: 1, episodes: null, watched: range(12) }] }),
+    createMerkItem({ id: 'later', title: 'Später', status: 'later', url: 'https://aniworld.to/anime/stream/spaeter', updatedAt: 500 }),
+    createMerkItem({ id: 'yt', title: 'Ohne AniWorld', status: 'watching', url: 'https://www.youtube.com/watch?v=x', updatedAt: 500 }),
+  ])
+  const opened: string[] = []
+  assert.strictEqual(await news.checkNewEpisodes((id) => opened.push(id)), 0, 'erste Runde: nur merken')
+  assert.deepStrictEqual(asked, ['https://aniworld.to/anime/stream/frieren'], 'nur „Am Schauen“ auf AniWorld')
+  assert.strictEqual(merkItems().find((item) => item.id === 'fr')?.updatedAt, 500, 'eine Prüfung ist keine Änderung')
+  assert.strictEqual(await news.checkNewEpisodes((id) => opened.push(id)), 0, 'gleiche Folge: nichts')
+  online = { maxSeason: 1, maxEpisode: 13 }
+  assert.strictEqual(await news.checkNewEpisodes((id) => opened.push(id)), 1, 'neue Folge: gemeldet')
+  assert.strictEqual(notices[0]?.title, 'Neue Folge: Frieren')
+  notices[0].onclick?.()
+  assert.deepStrictEqual(opened, ['fr'], 'Klick öffnet die Serie')
+  assert.strictEqual(await news.checkNewEpisodes((id) => opened.push(id)), 0, 'dieselbe Folge nicht zweimal')
+  news.setNewEpisodesOn(false)
+  online = { maxSeason: 2, maxEpisode: 1 }
+  assert.strictEqual(await news.checkNewEpisodes((id) => opened.push(id)), 0, 'ausgeschaltet: nichts')
+  console.log('✓ Neue Folgen: einmal gemeldet, erste Prüfung nur gemerkt, Klick öffnet die Serie')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')

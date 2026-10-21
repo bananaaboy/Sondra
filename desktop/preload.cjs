@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('sondraApp', {
   setDiscordEnabled: (enabled) => ipcRenderer.invoke('sondra:discord-enabled', enabled),
   setAlwaysOnTop: (flag) => ipcRenderer.invoke('sondra:always-on-top', flag),
   isAlwaysOnTop: () => ipcRenderer.invoke('sondra:is-always-on-top'),
+  focusWindow: () => ipcRenderer.invoke('sondra:focus'),
   onOpenedFiles: (callback) => {
     const listener = (_event, files) => callback(files)
     ipcRenderer.on('sondra:files', listener)

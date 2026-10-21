@@ -533,6 +533,12 @@ export function SettingsMenu({
           <>
             <Group>
               <Switch label="Automatisch weiter" hint="Nach dem Ende den nächsten Titel der Liste" on={settings.autoNext} onChange={(autoNext) => update({ autoNext })} />
+              <Switch
+                label="In der Merkliste abhaken"
+                hint="Eine Folge, deren Dateiname auf der Merkliste steht, ab 90 % als gesehen"
+                on={settings.merkliste}
+                onChange={(merkliste) => update({ merkliste })}
+              />
             </Group>
             <Group title="Wiederholen">
               {REPEATS.map((repeat) => (

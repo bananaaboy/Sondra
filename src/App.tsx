@@ -6,6 +6,7 @@ import { Footer, Header } from './components/AppShell'
 import { useFfmpegPrefetch } from './hooks/useFfmpegPrefetch'
 import { useGlobalIngest } from './hooks/useGlobalIngest'
 import { useKeptSession } from './hooks/useKeptSession'
+import { useNewEpisodes } from './hooks/useNewEpisodes'
 import { usePanelRoute } from './hooks/usePanelRoute'
 import { useTheme } from './hooks/useTheme'
 
@@ -15,6 +16,7 @@ export default function App() {
   useFfmpegPrefetch()
   useKeptSession()
   usePanelRoute()
+  useNewEpisodes()
 
   return (
     <ErrorBoundary>

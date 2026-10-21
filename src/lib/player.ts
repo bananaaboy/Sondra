@@ -175,6 +175,8 @@ export interface PlayerSettings {
   autoNext: boolean
   repeat: Repeat
   skip: number
+  /** A file named like an episode on the Merkliste is ticked off at 90 %. */
+  merkliste: boolean
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -207,6 +209,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   autoNext: true,
   repeat: 'aus',
   skip: 10,
+  merkliste: true,
 }
 
 export const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3]
@@ -252,6 +255,7 @@ export function rememberedSettings(): PlayerSettings {
       autoNext: saved.autoNext !== false,
       repeat: oneOf(saved.repeat, ['aus', 'titel', 'liste'] as const, d.repeat),
       skip: oneOf(saved.skip, SKIPS, d.skip),
+      merkliste: saved.merkliste !== false,
     }
   } catch {
     return DEFAULT_SETTINGS

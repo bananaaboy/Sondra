@@ -213,7 +213,15 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   dann noch scheitert, steht als Satz da, FFmpegs Zeilen einen Klick
   dahinter. `npm run verify:convert` schickt jedes Format mit den üblichen
   Einstellungen durch den echten Kern, jeden Lauf in eigenem Prozess — ein
-  Absturz dort beendet den Prozess wie sonst den Tab.
+  Absturz dort beendet den Prozess wie sonst den Tab. **Vorlagen**
+  (`lib/convertPresets.ts`, 21.10.2026): „Für WhatsApp“, „Instagram Reel“,
+  „Hörbuch“, „Klein für E-Mail“ als Pillen unter dem Format, je mit dem, was
+  sie für ein Video und — wo sinnvoll — für einen Ton bedeuten; eigene
+  Vorlagen sind die Einstellungen unter einem Namen im `localStorage`
+  (`sondra:umwandeln:vorlagen`). Reel braucht `videoFrame: 'vertical'`
+  (1080 × 1920, eingepasst mit Rändern, nie beschnitten). Die Bildrate steht
+  deshalb für jedes Videoformat da, nicht nur für GIF. `verify:convert`
+  schickt jede Vorlage durch den echten Kern.
 - **Abspielen** (`PlayerPanel.tsx`, `lib/player.ts`): der Media Player,
   nur zum Ansehen und Anhören. Dateien werden nie in die Sitzung gelesen,
   sondern über eine Object-URL auf dem File abgespielt; solange das Werkzeug
@@ -311,6 +319,24 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   immer; hinter einem Schul- oder Firmenproxy hilft der Zertifikatspeicher
   des Systems (`tls.getCACertificates('system')`), nie `rejectUnauthorized:
   false`. `npm run verify:download` prüft das ohne Netz.
+- **Abspielen hakt in der Merkliste ab** (`lib/episodeMatch.ts`,
+  `player/MerklisteTick.tsx`): aus dem Dateinamen Serie, Staffel und Folge
+  („S01E13“, „1x13“, „Titel - 13“, „Staffel 1 Folge 13“), der längste
+  passende Titel der Liste gewinnt; ohne Staffel im Namen die eine Staffel,
+  die, bei der der Eintrag steht, oder durchgezählt. Ab 90 % wird genau diese
+  Folge abgehakt (`seenEpisode`, nie andere, nie wieder ab), der Stand rückt
+  über `settle`; unter dem Bild steht es mit „Rückgängig“, abschaltbar im
+  Zahnrad („In der Merkliste abhaken“). Eine Serie von aussen öffnen:
+  `requestOpenSeries` + Reiter wechseln.
+- **Neue Folgen melden** (nur in der App, `lib/newEpisodes.ts`): eine Minute
+  nach dem Start, dann alle drei Stunden, jede Serie „Am Schauen“ mit
+  AniWorld-Adresse nacheinander über das eigene `/api/resolve`. Gemeldet wird
+  über eine Windows-Benachrichtigung nur, was seit der letzten Prüfung
+  dazukam — die erste merkt sich nur den Stand —, jede Folge einmal; ein
+  Klick holt das Fenster nach vorn (`sondra:focus`) und öffnet die Serie.
+  **Eine Online-Prüfung ist keine Änderung:** `checkOnlineUpdates` setzt
+  `updatedAt` nicht mehr, sonst gewann die ältere Fassung dieses Rechners
+  beim Abgleich mit Anytype über Folgen, die anderswo abgehakt wurden.
 - **Merkliste** (`#merkliste`, `MerklistePanel.tsx`, Daten in
   `lib/merkliste.ts`): ein Speicher für den Tab und „Merken“ im
   Herunterladen (`useMerkliste`, `localStorage` `sondra:saved_links`,

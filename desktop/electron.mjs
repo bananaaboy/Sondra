@@ -224,6 +224,15 @@ ipcMain.handle('sondra:discord-enabled', (_event, enabled) => {
   return true
 })
 
+// A click on a notice (a new episode) brings the window forward.
+ipcMain.handle('sondra:focus', () => {
+  if (!window) return false
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.focus()
+  return true
+})
+
 ipcMain.handle('sondra:always-on-top', (_event, flag) => {
   if (window) {
     window.setAlwaysOnTop(Boolean(flag), 'floating')

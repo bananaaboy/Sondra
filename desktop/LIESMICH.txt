@@ -95,7 +95,14 @@ Merkliste
   wählen, Anytype offen haben, den vierstelligen Code aus Anytype eintippen
   und einen Space wählen. Sondra legt dort die Seite „Sondra · Merkliste“ an
   und gleicht sie bei jeder Änderung ab; Anytype bringt sie auf Ihre anderen
-  Geräte, Sondra auf einem anderen Rechner holt sie dort zurück.
+  Geräte, Sondra auf einem anderen Rechner holt sie dort zurück. Liegt im
+  Space schon eine Merkliste, lädt Sondra sie beim Verbinden („Nicht laden —
+  beide Listen zusammenführen“ behält auch die dieses Rechners).
+  Abspielen hakt ab: Heisst eine Datei wie eine Folge auf der Liste
+  („Frieren S01E13.mkv“), hakt Sondra sie ab 90 % ab; unter dem Bild steht
+  es, mit „Rückgängig“. Neue Folgen: Ist „Neue Folgen melden“ an, prüft
+  Sondra alle drei Stunden die Serien „Am Schauen“ mit AniWorld-Adresse und
+  meldet eine neue Folge über Windows; ein Klick öffnet die Serie.
 
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →
