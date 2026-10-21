@@ -7,9 +7,10 @@
  *   npm run verify:anytype
  *
  * The stand-in is strict where Anytype is — the version header, the key —
- * and rewrites a page's Markdown on the way in the way an editor might
- * (lines of the code block joined and re-cut, spaces trimmed), so the data
- * block has to survive that.
+ * and rewrites a page's Markdown on the way in the way Anytype's export
+ * hands it back (a code block loses its language, anytype-heart
+ * core/converter/md) and an editor might (lines of the code block joined and
+ * re-cut, spaces trimmed), so the data block has to survive that.
  */
 
 import fs from 'node:fs'
@@ -34,12 +35,12 @@ const objects = new Map<string, { id: string; name: string; markdown: string; ar
 let objectCount = 0
 let validKey = KEY
 
-/** What an editor might do to Markdown: code lines re-cut at 60, trailing spaces gone. */
+/** What Anytype and an editor do to Markdown: no code language, code lines re-cut at 60, trailing spaces gone. */
 function reflow(markdown: string): string {
-  return markdown.replace(/```([a-z-]*)\n([\s\S]*?)```/g, (_all, lang: string, code: string) => {
+  return markdown.replace(/```([a-z-]*)\n([\s\S]*?)```/g, (_all, _lang: string, code: string) => {
     const joined = code.replace(/\s+/g, '')
     const lines = joined.match(/.{1,60}/g) ?? []
-    return '```' + lang + '\n' + lines.join('\n') + '\n```'
+    return '```\n' + lines.join('\n') + '\n```'
   }).replace(/[ \t]+$/gm, '')
 }
 
@@ -213,6 +214,56 @@ page.markdown = lib.merklisteToMarkdown([{ ...other.items[0], episode: 2, update
 await lib.syncMerkliste()
 check('Älterer Stand von dort überschreibt nichts', merk.merkItems().find((item) => item.id === 'jojo')?.episode, 4)
 check('Und wird auf der Seite ersetzt', lib.merklisteFromMarkdown(page.markdown)?.items.find((item) => item.id === 'jojo')?.episode, 4)
+
+// Removed, then read back in from a file: the file wins, also on the page,
+// although the page still remembers the removal.
+const titles = () => merk.merkItems().map((item) => item.title).sort()
+merk.setMerkItems((current) => [...current, merk.createMerkItem({ id: 'mob', title: 'Mob', updatedAt: 300 }), merk.createMerkItem({ id: 'nana', title: 'Nana', updatedAt: 300 })])
+await lib.syncMerkliste()
+const file = merk.exportMerkliste()
+for (const id of ['frieren', 'mob', 'nana']) {
+  merk.noteRemoved(id)
+  merk.setMerkItems((current) => current.filter((item) => item.id !== id))
+}
+await lib.syncMerkliste()
+check('Drei entfernt, auch auf der Seite', lib.merklisteFromMarkdown(page.markdown)?.items.map((item) => item.title), ['JoJo'])
+const imported = merk.importMerkliste(merk.readMerklisteFile(file))
+check('Einlesen meldet', [imported.result.added, imported.result.same], [3, 1])
+await lib.syncMerkliste()
+await lib.syncMerkliste()
+check('Eingelesenes bleibt nach dem Abgleich', titles(), ['Frieren', 'JoJo', 'Mob', 'Nana'])
+check('Und steht auf der Seite', lib.merklisteFromMarkdown(page.markdown)?.items.map((item) => item.title).sort(), ['Frieren', 'JoJo', 'Mob', 'Nana'])
+check('Verbrauchte Entfernungen reisen nicht weiter', Object.keys(lib.merklisteFromMarkdown(page.markdown)?.removed ?? {}).filter((id) => id !== 'dark'), [])
+
+// Reading in taken back: what the file added goes, also from the page.
+const extra = merk.exportMerkliste([merk.createMerkItem({ id: 'ghibli', title: 'Ghibli', updatedAt: 400 })])
+const second = merk.importMerkliste(merk.readMerklisteFile(extra))
+await lib.syncMerkliste()
+merk.revertImport(second.before)
+await lib.syncMerkliste()
+await lib.syncMerkliste()
+check('Einlesen rückgängig: bleibt weg', titles(), ['Frieren', 'JoJo', 'Mob', 'Nana'])
+check('Einlesen rückgängig: auch auf der Seite', lib.merklisteFromMarkdown(page.markdown)?.items.some((item) => item.id === 'ghibli'), false)
+
+// A removal undone after the round already took it to the page.
+const nana = merk.merkItems().find((item) => item.id === 'nana') ?? merk.createMerkItem({ id: 'nana', title: 'Nana', updatedAt: 300 })
+const nanaAt = merk.merkItems().indexOf(nana)
+merk.noteRemoved('nana')
+merk.setMerkItems((current) => current.filter((item) => item.id !== 'nana'))
+await lib.syncMerkliste()
+merk.restoreMerkItem(nana, nanaAt)
+await lib.syncMerkliste()
+await lib.syncMerkliste()
+check('Rückgängig nach dem Abgleich hält', titles(), ['Frieren', 'JoJo', 'Mob', 'Nana'])
+
+// A data block Sondra cannot read is not written over.
+const intact = page.markdown
+page.markdown = intact.replace(/```\n[\s\S]*?```/, '```\nkaputt\n```')
+const bent = page.markdown
+round = await lib.syncMerkliste()
+check('Unlesbarer Datenblock: Abgleich hält an', round.ok ? 'ok' : round.error, 'unreadable')
+check('Unlesbarer Datenblock: Seite unverändert', page.markdown, bent)
+page.markdown = intact
 
 // The page deleted in Anytype: the next round makes a new one.
 objects.clear()

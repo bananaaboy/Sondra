@@ -43,10 +43,9 @@ import {
   itemProgress,
   halve,
   markRange,
-  mergeMerkliste,
+  importMerkliste,
   merkSaveFailed,
   noteRemoved,
-  noteRestored,
   partName,
   partOfEpisode,
   partProgress,
@@ -56,6 +55,8 @@ import {
   readMerklisteFile,
   requestBatchLookup,
   requestLookup,
+  restoreMerkItem,
+  revertImport,
   seasonName,
   seasonProgress,
   seasonsOf,
@@ -883,13 +884,7 @@ export function MerklistePanel() {
             <button
               type="button"
               onClick={() => {
-                setMerkItems((current) => {
-                  if (current.some((entry) => entry.id === removed.item.id)) return current
-                  const next = [...current]
-                  next.splice(Math.max(0, Math.min(removed.index, next.length)), 0, removed.item)
-                  return next
-                })
-                noteRestored(removed.item.id)
+                restoreMerkItem(removed.item, removed.index)
                 setRemoved(null)
               }}
               className={`${linkClass} font-semibold`}
@@ -1528,11 +1523,8 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
     setProblem(null)
     setDone(null)
     try {
-      const incoming = readMerklisteFile(await file.text())
-      const before = items
-      const result = mergeMerkliste(before, incoming)
-      if (!setMerkItems(result.items)) {
-        setMerkItems(before)
+      const { result, before, saved } = importMerkliste(readMerklisteFile(await file.text()))
+      if (!saved) {
         setProblem('Für die eingelesene Liste reicht der Speicher auf diesem Gerät nicht — meist sind es zu grosse Cover.')
         return
       }
@@ -1597,7 +1589,7 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
           <button
             type="button"
             onClick={() => {
-              setMerkItems(done.before)
+              revertImport(done.before)
               setDone(null)
             }}
             className={`${linkClass} font-semibold`}
