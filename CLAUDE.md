@@ -342,7 +342,17 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `sondra:merkliste_removed`, Covers aus Dateien bleiben auf ihrem Gerät) und
   schreibt nur, wenn Anytype nicht schon genau das hält — verglichen mit der
   Seite, nicht mit dem zuletzt Geschriebenen. Läuft beim Öffnen des Tabs und
-  2,5 s nach jeder Änderung. `npm run verify:anytype` spielt das gegen eine
-  nachgebaute Anytype-API durch.
+  2,5 s nach jeder Änderung. **Was bewusst zurückkommt, gilt als jetzt
+  geändert** — „Rückgängig“ nach dem Entfernen (`restoreMerkItem`), eine
+  eingelesene Datei (`importMerkliste`), das Zurücknehmen davon
+  (`revertImport`). Die Seite in Anytype kennt die Entfernung noch, und eine
+  Entfernung schlägt jede ältere Änderung: vorher meldete das Einlesen
+  „3 neu“, und der nächste Abgleich nahm die drei wieder weg. Eine Entfernung,
+  die eine spätere Änderung überholt hat, fällt aus der Liste. Anytypes
+  Export lässt die Sprache am Codeblock weg; gelesen wird deshalb ab
+  „## Sondra-Daten“. Steht dort ein Block, den Sondra nicht lesen kann, wird
+  die Seite nie überschrieben (`unreadable`). Die Liste gehört allein
+  `lib/merkliste.ts`; das Herunterladen hält keine eigene Kopie im Projekt.
+  `npm run verify:anytype` spielt das gegen eine nachgebaute Anytype-API durch.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.

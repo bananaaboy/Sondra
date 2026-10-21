@@ -32,7 +32,16 @@ import {
   type SavedLinkItem,
 } from './merkliste'
 
-export type AnytypeError = 'unreachable' | 'unauthorized' | 'no-space' | 'wrong-code' | 'missing' | 'busy' | 'rejected' | 'failed'
+export type AnytypeError =
+  | 'unreachable'
+  | 'unauthorized'
+  | 'no-space'
+  | 'wrong-code'
+  | 'missing'
+  | 'busy'
+  | 'rejected'
+  | 'unreadable'
+  | 'failed'
 type Answer<T> = ({ ok: true } & T) | { ok: false; error: AnytypeError }
 
 export interface FoundNote {
@@ -86,6 +95,8 @@ export const ANYTYPE_PROBLEM: Record<AnytypeError, string> = {
   missing: 'Die Seite in Anytype ist nicht mehr da; beim nächsten Abgleich legt Sondra sie neu an.',
   busy: 'Anytype ist gerade beschäftigt. Gleich noch einmal.',
   rejected: 'Anytype hat die Anfrage abgelehnt.',
+  unreadable:
+    'Der Datenblock auf der Seite in Anytype lässt sich nicht lesen. Sondra schreibt nicht darüber, damit dort nichts verloren geht. Wählen Sie unter „Anytype“ eine andere Notiz oder legen Sie eine neue an.',
   failed: 'Der Abgleich mit Anytype ist gescheitert. Die Einzelheiten stehen in sondra.log.',
 }
 
@@ -238,6 +249,9 @@ export function syncMerkliste(): Promise<Answer<SyncResult>> {
     if (!read.ok) return read
     let received = 0
     const remote = read.markdown ? merklisteFromMarkdown(read.markdown) : null
+    // A page that carries a data block Sondra cannot read holds another
+    // device's list, maybe; writing this one over it would lose that.
+    if (!remote && read.markdown?.includes(DATA_HEADING)) return { ok: false, error: 'unreadable' }
     if (remote) {
       const before = merkItems()
       const merged = mergeShared(before, remote)

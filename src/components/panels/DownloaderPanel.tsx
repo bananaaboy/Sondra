@@ -909,8 +909,8 @@ export function DownloaderPanel() {
   // Persist and restore with .sondra project files
   useEffect(() => {
     const onProjectLoaded = () => {
+      // The Merkliste restores itself from the project (lib/merkliste.ts).
       const state = getProjectToolState<{
-        savedLinks?: SavedLinkItem[]
         filePrefs?: Partial<DownloadFilePreferences>
         url?: string
         linkSeason?: number
@@ -920,9 +920,6 @@ export function DownloaderPanel() {
         autoTranscribe?: boolean
       }>('downloader')
       if (!state) return
-      if (Array.isArray(state.savedLinks)) {
-        setSavedLinks(state.savedLinks)
-      }
       if (state.filePrefs) updateFilePrefs(state.filePrefs)
       if (typeof state.url === 'string') setUrl(state.url)
       if (typeof state.linkSeason === 'number') setLinkSeason(state.linkSeason)
@@ -937,7 +934,6 @@ export function DownloaderPanel() {
 
   useEffect(() => {
     setProjectToolState('downloader', {
-      savedLinks,
       filePrefs,
       url,
       linkSeason,
@@ -946,7 +942,7 @@ export function DownloaderPanel() {
       targetAudioFormat,
       autoTranscribe,
     })
-  }, [savedLinks, filePrefs, url, linkSeason, linkEpisode, filterAudioOnly, targetAudioFormat, autoTranscribe])
+  }, [filePrefs, url, linkSeason, linkEpisode, filterAudioOnly, targetAudioFormat, autoTranscribe])
 
   const matchingSavedLink = useCallback(
     (candidateUrl: string): SavedLinkItem | undefined => {

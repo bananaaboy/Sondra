@@ -1119,6 +1119,9 @@ export function mergeShared(
   const items = merged.items
     .filter((item) => !gone(item))
     .map((item) => withLocalPictures(item, current.find((entry) => entry.id === item.id)))
+  // An entry changed after its removal is back on the list; its removal is
+  // spent and need not travel any further.
+  for (const item of items) if (removed[item.id] !== undefined) delete removed[item.id]
   return { items, removed }
 }
 
@@ -1126,6 +1129,64 @@ export function mergeShared(
 export function adoptRemovals(next: Record<string, number>): void {
   removals = next
   persistRemovals()
+}
+
+/**
+ * An entry put back on purpose — the removal undone, a file read in — counts
+ * as changed now. Its removal is still noted on the page in Anytype, and
+ * only a change after it keeps the next round from taking the entry off
+ * again.
+ */
+const revived = (item: SavedLinkItem, now: number): SavedLinkItem =>
+  removals[item.id] !== undefined && removals[item.id] >= item.updatedAt ? { ...item, updatedAt: now } : item
+
+/** A removed entry back where it was. */
+export function restoreMerkItem(item: SavedLinkItem, index: number): void {
+  const back = revived(item, Date.now())
+  noteRestored(item.id)
+  setMerkItems((current) => {
+    if (current.some((entry) => entry.id === item.id)) return current
+    const next = [...current]
+    next.splice(Math.max(0, Math.min(index, next.length)), 0, back)
+    return next
+  })
+}
+
+/**
+ * A file read in: its entries join the list (`mergeMerkliste`) and stay,
+ * also those that were removed here before. Nothing changes when the device
+ * cannot store the result.
+ */
+export function importMerkliste(incoming: SavedLinkItem[]): { result: MerkImport; before: SavedLinkItem[]; saved: boolean } {
+  const before = items
+  const result = mergeMerkliste(before, incoming)
+  const now = Date.now()
+  const known = new Set(before.map((item) => item.id))
+  result.items = result.items.map((item) => (known.has(item.id) ? item : revived(item, now)))
+  if (!setMerkItems(result.items)) {
+    setMerkItems(before)
+    return { result, before, saved: false }
+  }
+  for (const item of result.items) if (!known.has(item.id)) noteRestored(item.id)
+  return { result, before, saved: true }
+}
+
+/**
+ * A file read in taken back out, also from the page in Anytype: what it
+ * added counts as removed, what it changed is put back as changed now —
+ * otherwise the next round would bring the file's version back.
+ */
+export function revertImport(before: SavedLinkItem[]): void {
+  const now = Date.now()
+  const earlier = new Set(before.map((item) => item.id))
+  for (const item of items) if (!earlier.has(item.id)) noteRemoved(item.id)
+  const current = new Map(items.map((item) => [item.id, item]))
+  setMerkItems(
+    before.map((item) => {
+      const later = current.get(item.id)
+      return later && later.updatedAt !== item.updatedAt ? { ...item, updatedAt: Math.max(now, later.updatedAt + 1) } : item
+    }),
+  )
 }
 
 
