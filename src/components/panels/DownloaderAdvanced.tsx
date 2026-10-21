@@ -975,7 +975,7 @@ export function AdvancedDownloader({ url }: { url: string }) {
             </div>
           ) : null}
 
-          <Dialog open={setupDialog} onClose={() => setSetupDialog(false)} title="Dienst einrichten">
+          <Dialog open={setupDialog} onClose={() => setSetupDialog(false)} title="Dienst einrichten" size="lg">
             <div className="flex flex-col gap-[20px]">
                 {connected ? (
                   <>

@@ -216,23 +216,85 @@ export function MixPanel() {
     <div className="flex flex-col gap-[16px]">
       {picker.input}
       <Card tone="cream">
-        <h2 className="display-md mt-[8px] mb-[12px]">Stimme und Musik mischen</h2>
-        <p className="max-w-[64ch] text-small leading-[1.55] text-prose">
-          Die Musik läuft unter der Stimme und wird leiser, sobald jemand spricht — wie im Radio oder in einem Podcast.
-        </p>
-
-        {candidates.length < 2 ? (
-          <div className="mt-[16px] flex flex-col items-start gap-[12px]">
-            <p className="text-small text-prose">
-              {candidates.length === 0
-                ? 'Dafür braucht es zwei Dateien: eine Aufnahme mit Stimme und eine mit Musik.'
-                : `Noch eine Datei mit Musik dazu, dann geht es los. Die Stimme ist ${candidates[0].name}.`}
-            </p>
-            <Button onClick={picker.open} disabled={picker.busy}>
-              {picker.busy ? 'Wird gelesen …' : 'Dateien öffnen'}
-            </Button>
+        <div className="flex flex-col gap-[20px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
+            <div>
+              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
+                <span className="size-[6px] rounded-full bg-emerald-500" />
+                Ducking &amp; Mehrspur-Mischung
+              </div>
+              <h2 className="display-md mt-[6px]">Stimme und Musik mischen</h2>
+              <p className="mt-[2px] text-small text-muted">
+                Die Musik läuft unter der Stimme und duckt sich automatisch, sobald gesprochen wird — wie im Rundfunk.
+              </p>
+            </div>
           </div>
-        ) : (
+
+          {candidates.length < 2 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-[20px] items-start">
+              <div className="flex flex-col gap-[14px] rounded-card bg-panel-soft/60 p-[24px] ring-1 ring-line/60">
+                <div className="grid size-[44px] place-items-center rounded-pill bg-raised ring-1 ring-line text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[20px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 3h12v14H4zM2 8h16M2 12h16" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-body font-semibold text-ink">
+                    {candidates.length === 0
+                      ? 'Zwei Tonspuren benötigt'
+                      : `Noch eine Musikspur hinzufügen (Stimme: ${candidates[0].name})`}
+                  </h4>
+                  <p className="mt-[4px] text-small text-muted leading-relaxed">
+                    Wählen Sie eine Aufnahme mit Stimme (Podcast, Kommentar) und eine zweite mit Musik oder Atmosphäre.
+                  </p>
+                </div>
+                <div>
+                  <Button onClick={picker.open} disabled={picker.busy}>
+                    {picker.busy ? 'Wird gelesen …' : 'Dateien öffnen'}
+                    {!picker.busy ? <ArrowRight /> : null}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-[10px]">
+                <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                  <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                    <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M4 14l4-8 4 8 4-4" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-small font-semibold text-ink">Automatisches Ducking</h4>
+                    <p className="text-micro text-muted leading-relaxed">Musikpegel sinkt sanft um z.B. 12 dB ab, sobald Pegel auf der Stimmspur anliegt.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                  <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                    <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M3 10h14M3 6h10M3 14h6" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-small font-semibold text-ink">Weiche Blenden</h4>
+                    <p className="text-micro text-muted leading-relaxed">Regulierbare Einschwing- und Rückkehrzeiten verhindern abruptes Pumpen.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                  <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                    <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M12 4v10a3 3 0 11-3-3h3V4zM12 7l5-2v8" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-small font-semibold text-ink">Export als Sendemischung</h4>
+                    <p className="text-micro text-muted leading-relaxed">Verlustfreie WAV- oder MP3-Ausgabe direkt bereit zur Veröffentlichung.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
           <>
             <div className="mt-[16px] grid max-w-[720px] gap-[16px] sm:grid-cols-2">
               <Field label="Stimme">
@@ -378,6 +440,7 @@ export function MixPanel() {
         )}
 
         {decoding ? <div className="mt-[16px]"><Progress value={null} label="Ton wird gelesen" /></div> : null}
+        </div>
       </Card>
 
       {error ? (

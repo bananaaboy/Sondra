@@ -54,7 +54,7 @@ import {
   IconSize,
   IconTransform,
 } from '../editor/icons'
-import { Button, Notice, Progress, Slider, TextInput, Toggle, RotateIcon } from '../ui/primitives'
+import { Button, Card, Notice, Progress, Slider, TextInput, Toggle, RotateIcon } from '../ui/primitives'
 import { ZipSave } from '../ZipSave'
 
 type ToolId = 'crop' | 'transform' | 'size' | 'color' | 'sharpen' | 'export' | 'batch'
@@ -374,12 +374,89 @@ export function ImagePanel() {
   /* -- nothing to edit ------------------------------------------------------ */
   if (!asset) {
     return (
-      <div className="flex flex-col gap-[16px]">
-        <FileDrop accept={IMAGE_ACCEPT} prompt="Bild hierher ziehen — Foto, Grafik, Bildschirmfoto" />
-        <p className="text-center text-small text-muted">
-          JPEG, PNG, WebP, GIF und meist auch AVIF und HEIC. Alles wird hier im Tab gerechnet.
-        </p>
-      </div>
+      <Card tone="cream">
+        <div className="flex flex-col gap-[20px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
+            <div>
+              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
+                <span className="size-[6px] rounded-full bg-emerald-500" />
+                Schnell &amp; verlustarm im Browser
+              </div>
+              <h2 className="display-md mt-[6px]">Bilder bearbeiten, skalieren &amp; umwandeln</h2>
+              <p className="mt-[2px] text-small text-muted">
+                Einzelbilder oder ganze Fotostapel verarbeiten — pixelgenau, ohne Cloud-Übertragung.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              {['WEBP', 'PNG', 'JPEG', 'AVIF', 'GIF', 'HEIC'].map((fmt) => (
+                <span key={fmt} className="rounded-pill bg-panel-soft px-[8px] py-[3px] text-micro font-semibold text-prose ring-1 ring-inset ring-line/60">
+                  {fmt}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-[20px] items-start">
+            <div className="flex flex-col gap-[12px]">
+              <FileDrop accept={IMAGE_ACCEPT} prompt="Bild hierher ziehen — Foto, Grafik, Bildschirmfoto" />
+              <p className="text-micro text-muted text-center">
+                Mehrere Bilder auf einmal ablegen startet automatisch den Stapel-Modus.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-[10px]">
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 6h12v10H4zM8 4v4M12 4v4" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Zuschnitt &amp; Verhältnisse</h4>
+                  <p className="text-micro text-muted leading-relaxed">Freies Freistellen oder genormte Seitenverhältnisse (16:9, 4:3, 1:1, Social Formate).</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M3 17l6-6M9 17H3v-6M17 3l-6 6M11 3h6v6" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Pixelgenaue Skalierung</h4>
+                  <p className="text-micro text-muted leading-relaxed">Exakte Auflösung in Pixeln oder Prozent vorgeben mit hochqualitativer Interpolation.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <circle cx="10" cy="10" r="5" />
+                    <path d="M10 2v3M10 15v3M2 10h3M15 10h3" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Farbe, Helligkeit &amp; Schärfe</h4>
+                  <p className="text-micro text-muted leading-relaxed">Kontrast, Farbsättigung, Weichzeichner oder selektive Scharfzeichnung.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 4h10v10H4zM8 8h10v10H8z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Stapelverarbeitung (Batch)</h4>
+                  <p className="text-micro text-muted leading-relaxed">Mehrere Bilder in einem Rutsch umwandeln, verkleinern und gesammelt als ZIP speichern.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
     )
   }
 

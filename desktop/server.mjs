@@ -142,11 +142,12 @@ function fileFor(root, pathname) {
   } catch {
     return null
   }
-  const candidate = path.resolve(root, '.' + path.posix.normalize(decoded))
-  const inside = candidate === root || candidate.startsWith(root + path.sep)
+  const resolvedRoot = path.resolve(root)
+  const candidate = path.resolve(resolvedRoot, '.' + path.posix.normalize(decoded))
+  const inside = candidate === resolvedRoot || candidate.startsWith(resolvedRoot + path.sep)
   if (!inside) return null
   if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate
-  return path.extname(decoded) ? null : path.join(root, 'index.html')
+  return path.extname(decoded) ? null : path.join(resolvedRoot, 'index.html')
 }
 
 /**

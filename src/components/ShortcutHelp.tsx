@@ -626,7 +626,7 @@ export function ShortcutHelp() {
     (searchQuery.trim() === '' || 'sampler'.includes(searchQuery.toLowerCase()) || 'pad'.includes(searchQuery.toLowerCase()))
 
   return (
-    <Dialog open={open} onClose={() => setOpen(false)} title="Tastenkürzel & Gesten">
+    <Dialog open={open} onClose={() => setOpen(false)} title="Tastenkürzel & Gesten" size="lg">
       <div className="flex flex-col gap-[20px]">
         {/* Search and Quick Tip Bar */}
         <div className="flex flex-col gap-[12px] sm:flex-row sm:items-center sm:justify-between">

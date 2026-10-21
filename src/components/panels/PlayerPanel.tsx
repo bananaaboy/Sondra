@@ -1479,45 +1479,109 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     return (
       <div className="flex flex-col gap-[24px]">
         {fileInputs}
-        <div className="flex flex-col gap-[12px]">
-          <div
-            onDragEnter={(event) => {
-              if (!event.dataTransfer.types.includes('Files')) return
-              event.preventDefault()
-              event.stopPropagation()
-              setDragging(true)
-            }}
-            onDragOver={(event) => {
-              if (!event.dataTransfer.types.includes('Files')) return
-              event.preventDefault()
-              event.stopPropagation()
-              event.dataTransfer.dropEffect = 'copy'
-              if (!dragging) setDragging(true)
-            }}
-            onDragLeave={(event) => {
-              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-              setDragging(false)
-            }}
-            onDrop={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              setDragging(false)
-              if (event.dataTransfer.files.length) void addFiles(Array.from(event.dataTransfer.files), true)
-            }}
-            className={`flex flex-col items-center gap-[12px] rounded-card p-[28px] text-center transition-colors duration-[var(--dur-fast)] ${
-              dragging ? 'bg-panel-mid ring-2 ring-inset ring-ink' : 'bg-panel-soft ring-1 ring-inset ring-line'
-            }`}
-          >
-            <p className="text-body text-prose">Video oder Musik hierher ziehen — mehrere werden eine Wiedergabeliste</p>
-            <Button onClick={() => pickRef.current?.click()}>
-              Dateien auswählen
-              <ArrowRight />
-            </Button>
+        <div className="flex flex-col gap-[20px]">
+          <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
+            <div>
+              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
+                <span className="size-[6px] rounded-full bg-emerald-500" />
+                Sofortstart ohne Einlesen
+              </div>
+              <h2 className="display-md mt-[6px]">Medien direkt von der Festplatte abspielen</h2>
+              <p className="mt-[2px] text-small text-muted">
+                Selbst riesige 4K-Filme und Mehrkanal-Aufnahmen öffnen augenblicklich ohne Upload.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              {['MP4', 'MKV', 'AVI', 'MOV', 'WEBM', 'MP3', 'FLAC', 'WAV'].map((fmt) => (
+                <span key={fmt} className="rounded-pill bg-panel-soft px-[8px] py-[3px] text-micro font-semibold text-prose ring-1 ring-inset ring-line/60">
+                  {fmt}
+                </span>
+              ))}
+            </div>
           </div>
-          <p className="max-w-[62ch] text-small text-muted">
-            Auch grosse Filme öffnen sofort: abgespielt wird direkt von der Festplatte, nichts wird hochgeladen oder in die Sitzung
-            gelesen. Eine .srt oder .vtt mit gleichem Namen wird der Untertitel. MP4, MKV, AVI, MOV, WebM, MP3, FLAC, WAV und mehr.
-          </p>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-[20px] items-start">
+            <div
+              onDragEnter={(event) => {
+                if (!event.dataTransfer.types.includes('Files')) return
+                event.preventDefault()
+                event.stopPropagation()
+                setDragging(true)
+              }}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes('Files')) return
+                event.preventDefault()
+                event.stopPropagation()
+                event.dataTransfer.dropEffect = 'copy'
+                if (!dragging) setDragging(true)
+              }}
+              onDragLeave={(event) => {
+                if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+                setDragging(false)
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                setDragging(false)
+                if (event.dataTransfer.files.length) void addFiles(Array.from(event.dataTransfer.files), true)
+              }}
+              className={`flex flex-col items-center justify-center gap-[14px] rounded-card p-[36px] text-center transition-colors duration-[var(--dur-fast)] min-h-[220px] ${
+                dragging ? 'bg-panel-mid ring-2 ring-inset ring-ink' : 'bg-panel-soft ring-1 ring-inset ring-line'
+              }`}
+            >
+              <div className="grid size-[48px] place-items-center rounded-pill bg-raised ring-1 ring-line text-ink">
+                <svg viewBox="0 0 20 20" className="size-[22px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M4 3h12v14H4zM8 7l6 3-6 3V7z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-body font-medium text-ink">Video oder Musik hierher ziehen</p>
+                <p className="mt-[2px] text-small text-muted">Mehrere Dateien werden automatisch zu einer Wiedergabeliste kombiniert.</p>
+              </div>
+              <Button onClick={() => pickRef.current?.click()}>
+                Dateien auswählen
+                <ArrowRight />
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-[10px]">
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M13 2L3 14h7v6l10-12h-7V2z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Direktes Festplatten-Streaming</h4>
+                  <p className="text-micro text-muted leading-relaxed">Kein Zwischenspeichern im RAM. Startet sofort ohne Ruckeln auch bei 50+ GB Dateien.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 5h12v10H4zM7 9h6M7 12h4" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Automatische Untertitel</h4>
+                  <p className="text-micro text-muted leading-relaxed">Begleitende .srt- oder .vtt-Dateien im selben Ordner werden automatisch verknüpft.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-[12px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-inset ring-line/50">
+                <div className="grid size-[32px] shrink-0 place-items-center rounded-nav bg-raised ring-1 ring-line/70 text-ink">
+                  <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M3 10h3M14 10h3M6 6h8v8H6z" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-small font-semibold text-ink">Equalizer, Tempo &amp; A-B Loop</h4>
+                  <p className="text-micro text-muted leading-relaxed">Feinjustierung des Klangs, variable Abspielgeschwindigkeit und Schleifen-Marker.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         {sessionRow}
       </div>
