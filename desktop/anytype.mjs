@@ -20,7 +20,7 @@ import path from 'node:path'
 export const ANYTYPE_API = 'http://127.0.0.1:31009'
 /** The API version asked for; the reference of 8 November 2025. */
 export const ANYTYPE_VERSION = '2025-11-08'
-/** The page the list lives on. */
+/** The default page name the list lives on. */
 export const PAGE_NAME = 'Sondra · Merkliste'
 
 /** A failure the page can name: Anytype closed, key withdrawn, a wrong code … */
@@ -49,7 +49,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
   const configFile = path.join(dataDir, 'anytype.json')
 
   let key = null
-  /** @type {{ spaceId?: string, spaceName?: string, objectId?: string }} */
+  /** @type {{ spaceId?: string, spaceName?: string, objectId?: string, objectName?: string }} */
   let config = {}
   try {
     config = JSON.parse(fs.readFileSync(configFile, 'utf8')) ?? {}
@@ -118,10 +118,28 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
   async function findPage() {
     const space = needSpace()
     if (config.objectId) return config.objectId
-    const found = await call('POST', `/v1/spaces/${space}/search`, { query: PAGE_NAME, types: ['page'] })
-    const page = (found?.data ?? []).find((object) => object?.name === PAGE_NAME && !object.archived)
+    const targetName = config.objectName || PAGE_NAME
+
+    let page = null
+    try {
+      const found = await call('POST', `/v1/spaces/${space}/search`, { query: targetName, types: ['page'], type: 'page' })
+      page = (found?.data ?? []).find((object) => object?.name === targetName && !object.archived)
+      if (!page && targetName.includes('·')) {
+        const sub = await call('POST', `/v1/spaces/${space}/search`, { query: 'Sondra', types: ['page'], type: 'page' })
+        page = (sub?.data ?? []).find((object) => object?.name === targetName && !object.archived)
+      }
+    } catch {}
+
+    if (!page) {
+      try {
+        const list = await call('GET', `/v1/spaces/${space}/objects?limit=50`)
+        page = (list?.data ?? []).find((object) => object?.name === targetName && !object.archived)
+      } catch {}
+    }
+
     if (!page) return null
     config.objectId = page.id
+    config.objectName = page.name || targetName
     saveConfig()
     return page.id
   }
@@ -139,6 +157,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
         paired: Boolean(key),
         lasting: canEncrypt(),
         space: key && config.spaceId ? { id: config.spaceId, name: config.spaceName ?? '' } : null,
+        note: key && config.objectId ? { id: config.objectId, name: config.objectName || PAGE_NAME } : null,
       }
     },
 
@@ -175,11 +194,87 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       }
     },
 
-    async useSpace(id, name) {
+    async listNotes(spaceId) {
+      if (!key) throw new AnytypeError('unauthorized')
+      const targetSpace = spaceId || config.spaceId
+      if (!targetSpace) throw new AnytypeError('no-space')
+      const space = encodeURIComponent(targetSpace)
+
+      const candidates = new Map()
+      try {
+        const found = await call('POST', `/v1/spaces/${space}/search`, { query: 'Sondra', types: ['page'], type: 'page' })
+        for (const obj of found?.data ?? []) {
+          if (obj?.id && !obj.archived && typeof obj?.name === 'string' && obj.name.includes('Sondra')) {
+            candidates.set(obj.id, obj)
+          }
+        }
+      } catch {}
+
+      try {
+        const list = await call('GET', `/v1/spaces/${space}/objects?limit=50`)
+        for (const obj of list?.data ?? []) {
+          if (obj?.id && !obj.archived && typeof obj?.name === 'string' && obj.name.includes('Sondra')) {
+            candidates.set(obj.id, obj)
+          }
+        }
+      } catch {}
+
+      const notes = []
+      for (const [id, obj] of candidates.entries()) {
+        let itemCount = 0
+        try {
+          const detail = await call('GET', `/v1/spaces/${space}/objects/${encodeURIComponent(id)}?format=md`)
+          const md = detail?.object?.markdown || ''
+          const match = md.match(/sondra-merkliste\n([\s\S]*?)```/)
+          if (match) {
+            try {
+              const raw = match[1].replace(/[^A-Za-z0-9+/=]/g, '')
+              const decoded = Buffer.from(raw, 'base64').toString('utf8')
+              const parsed = JSON.parse(decoded)
+              if (Array.isArray(parsed.items)) itemCount = parsed.items.length
+            } catch {}
+          }
+        } catch {}
+        notes.push({
+          id,
+          name: obj.name,
+          itemCount,
+        })
+      }
+      return { notes }
+    },
+
+    async useSpace(id, name, objectId, objectName) {
       if (typeof id !== 'string' || !id) throw new AnytypeError('rejected')
-      config = { spaceId: id, spaceName: typeof name === 'string' ? name : '' }
+      config = {
+        spaceId: id,
+        spaceName: typeof name === 'string' ? name : '',
+        objectId: typeof objectId === 'string' && objectId ? objectId : undefined,
+        objectName: typeof objectName === 'string' && objectName ? objectName : undefined,
+      }
       saveConfig()
       return {}
+    },
+
+    async createNote(spaceId, name, initialMarkdown = '') {
+      if (!key) throw new AnytypeError('unauthorized')
+      const targetSpace = spaceId || config.spaceId
+      if (!targetSpace) throw new AnytypeError('no-space')
+      const space = encodeURIComponent(targetSpace)
+      const pageName = typeof name === 'string' && name.trim() ? name.trim() : PAGE_NAME
+
+      const answer = await call('POST', `/v1/spaces/${space}/objects`, {
+        name: pageName,
+        type_key: 'page',
+        body: initialMarkdown,
+      })
+      if (!answer?.object?.id) throw new AnytypeError('failed', 'keine Objekt-ID')
+      config.spaceId = targetSpace
+      config.objectId = answer.object.id
+      config.objectName = pageName
+      saveConfig()
+      log(`Anytype: Seite „${pageName}“ angelegt`)
+      return { id: answer.object.id, name: pageName }
     },
 
     /** The page's text, or null while there is no page yet. */
@@ -206,6 +301,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
     async write(markdown) {
       if (typeof markdown !== 'string') throw new AnytypeError('rejected')
       const space = needSpace()
+      const targetName = config.objectName || PAGE_NAME
       const id = await findPage()
       if (id) {
         try {
@@ -216,11 +312,12 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
           delete config.objectId
         }
       }
-      const answer = await call('POST', `/v1/spaces/${space}/objects`, { name: PAGE_NAME, type_key: 'page', body: markdown })
+      const answer = await call('POST', `/v1/spaces/${space}/objects`, { name: targetName, type_key: 'page', body: markdown })
       if (!answer?.object?.id) throw new AnytypeError('failed', 'keine Objekt-ID')
       config.objectId = answer.object.id
+      config.objectName = targetName
       saveConfig()
-      log(`Anytype: Seite „${PAGE_NAME}“ angelegt`)
+      log(`Anytype: Seite „${targetName}“ angelegt`)
       return {}
     },
 

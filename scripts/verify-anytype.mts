@@ -70,6 +70,11 @@ const server = http.createServer((request, response) => {
       const data = [...objects.values()].filter((object) => object.name.includes(json.query ?? '')).map(({ markdown: _m, ...rest }) => rest)
       return answer(200, { data, pagination: {} })
     }
+    const listObjects = url.pathname.match(/^\/v1\/spaces\/([^/]+)\/objects$/)
+    if (request.method === 'GET' && listObjects) {
+      const data = [...objects.values()].map(({ markdown: _m, ...rest }) => rest)
+      return answer(200, { data, pagination: {} })
+    }
     const create = url.pathname.match(/^\/v1\/spaces\/([^/]+)\/objects$/)
     if (request.method === 'POST' && create) {
       objectCount += 1
@@ -108,13 +113,14 @@ let link = createAnytype(vault)
 const call = (action: string, ...args: unknown[]) => link.handle(action, args) as Promise<Record<string, unknown>>
 
 check('Ohne Anytype: nicht erreichbar', (await createAnytype({ ...vault, api: 'http://127.0.0.1:9' }).handle('status')).reachable, false)
-check('Erreichbar, noch nicht verbunden', await call('status'), { ok: true, reachable: true, paired: false, lasting: true, space: null })
+check('Erreichbar, noch nicht verbunden', await call('status'), { ok: true, reachable: true, paired: false, lasting: true, space: null, note: null })
 check('Code anfordern', await call('challenge'), { ok: true, challengeId: 'challenge-1' })
 check('Falscher Code', await call('pair', 'challenge-1', '0000'), { ok: false, error: 'wrong-code' })
 check('Richtiger Code', await call('pair', 'challenge-1', CODE), { ok: true })
 check('Schlüssel liegt verschlüsselt', fs.readFileSync(path.join(dataDir, 'anytype-schluessel.bin'), 'utf8'), `geheim:${KEY}`)
 check('Spaces', (await call('spaces')).spaces, [{ id: 'space-a', name: 'Privat' }, { id: 'space-b', name: 'Familie' }])
 check('Ohne Space kein Lesen', await call('read'), { ok: false, error: 'no-space' })
+check('Noch keine Notizen', (await call('listNotes', 'space-a')).notes, [])
 check('Space wählen', await call('useSpace', 'space-a', 'Privat'), { ok: true })
 check('Noch keine Seite', await call('read'), { ok: true, markdown: null })
 check('Unbekannte Aktion', await call('deleteEverything'), { ok: false, error: 'rejected' })
@@ -159,6 +165,18 @@ check('Datenblock übersteht das Umbrechen', back?.items.map((item) => [item.id,
 check('Bild aus Datei reist nicht mit', back?.items[0].cover, merk.LOCAL_PICTURE)
 check('Bildadresse reist mit', back?.items[1].cover, 'https://bild.example/dark.jpg')
 
+// ListNotes finds the newly created note and counts items
+const foundNotes = (await call('listNotes', 'space-a')).notes as { id: string; name: string; itemCount: number }[]
+check('Notizen im Space auflisten', foundNotes.map((n) => [n.name, n.itemCount]), [[PAGE_NAME, 2]])
+
+// Create separate new note
+const createdNote = (await call('createNote', 'space-a', 'Sondra · Merkliste (Gerät 2)')) as { id: string; name: string }
+check('Neue separate Notiz erstellen', createdNote.name, 'Sondra · Merkliste (Gerät 2)')
+check('Beide Notizen bleiben erhalten', [...objects.values()].map((o) => o.name).sort(), [PAGE_NAME, 'Sondra · Merkliste (Gerät 2)'].sort())
+
+// Connect back to the first note
+await call('useSpace', 'space-a', 'Privat', page.id, PAGE_NAME)
+
 round = await lib.syncMerkliste()
 check('Unverändert: nichts geschrieben, nichts empfangen', round.ok && round.received, 0)
 
@@ -172,6 +190,12 @@ const mine = merk.merkItems()
 check('Von dort: neuere Folge übernommen', mine.find((item) => item.id === 'jojo')?.episode, 4)
 check('Von dort: neue Serie dazu', mine.map((item) => item.id).sort(), ['dark', 'frieren', 'jojo'])
 check('Eigenes Bild bleibt', mine.find((item) => item.id === 'jojo')?.cover, 'data:image/webp;base64,AAAA')
+
+// Multi-device test: simulate a second device connecting with EMPTY local items
+merk.setMerkItems([])
+round = await lib.syncMerkliste()
+check('Zweites leeres Gerät lädt alle Daten statt zu löschen', merk.merkItems().length > 0, true)
+check('Auf Anytype bleibt die Liste vollständig', (lib.merklisteFromMarkdown(page.markdown)?.items.length ?? 0) >= 3, true)
 
 // Removed here: it must not come back from the page.
 merk.noteRemoved('dark')
