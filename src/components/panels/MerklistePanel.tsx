@@ -25,9 +25,10 @@ import {
   type AnytypeStatus,
   type FoundNote,
 } from '../../lib/anytype'
-import { buildUrlWithEpisode, saveBytes, sourceBadgeForUrl } from '../../lib/download'
+import { buildUrlWithEpisode, deriveLinkTitle, parseLinkEpisodeInfo, saveBytes, sourceBadgeForUrl } from '../../lib/download'
 import {
   advance,
+  calculateBingePlan,
   calculateMerklisteStats,
   caughtUp,
   coverFromFile,
@@ -45,6 +46,7 @@ import {
   partProgress,
   partsOf,
   pictureSize,
+  pickRandomCandidate,
   readMerklisteFile,
   requestLookup,
   seasonName,
@@ -52,6 +54,8 @@ import {
   seasonsOf,
   setMerkItems,
   settle,
+  sortMerkItems,
+  SORT_OPTIONS,
   splitSeason,
   storedParts,
   toggleWatched,
@@ -61,6 +65,7 @@ import {
   withParts,
   withSeason,
   type CoverFrame,
+  type MerklisteSortOption,
   type MerkPart,
   type MerkSeason,
   type Picture,
@@ -504,6 +509,8 @@ export function MerklistePanel() {
   const [removed, setRemoved] = useState<{ item: SavedLinkItem; index: number } | null>(null)
   const [anytypeOpen, setAnytypeOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
+  const [shuffleOpen, setShuffleOpen] = useState(false)
+  const [sortBy, setSortBy] = useState<MerklisteSortOption>('recent')
   const anytypeLink = useAnytype(items)
 
   // The series that is open, if one is. It has a history entry of its own,
@@ -535,19 +542,20 @@ export function MerklistePanel() {
 
   const stats = useMemo(() => calculateMerklisteStats(items), [items])
 
-  // Grouped by where each entry stands, the latest first within each.
+  // Grouped by where each entry stands, sorted according to sortBy within each.
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase()
     const found = items.filter(
       (item) => !needle || item.title.toLowerCase().includes(needle) || (item.notes ?? '').toLowerCase().includes(needle),
     )
-    return STATUS_OPTIONS.map((option) => ({
-      ...option,
-      entries: found
-        .filter((item) => statusOf(item) === option.value)
-        .sort((a, b) => (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt)),
-    })).filter((group) => group.entries.length > 0)
-  }, [items, query])
+    return STATUS_OPTIONS.map((option) => {
+      const entries = found.filter((item) => statusOf(item) === option.value)
+      return {
+        ...option,
+        entries: sortMerkItems(entries, sortBy),
+      }
+    }).filter((group) => group.entries.length > 0)
+  }, [items, query, sortBy])
 
   const openItem = openId ? (items.find((item) => item.id === openId) ?? null) : null
   const editingItem = items.find((item) => item.id === editing) ?? null
@@ -567,6 +575,17 @@ export function MerklistePanel() {
     <>
       <AddDialog open={adding} onClose={() => setAdding(false)} />
       {statsOpen ? <StatsDialog items={items} onClose={() => setStatsOpen(false)} /> : null}
+      {shuffleOpen ? (
+        <ShuffleDialog
+          items={items}
+          open={shuffleOpen}
+          onClose={() => setShuffleOpen(false)}
+          onOpenSeries={(id) => {
+            setShuffleOpen(false)
+            openSeries(id)
+          }}
+        />
+      ) : null}
       {editingItem ? (
         <SeriesDialog item={editingItem} onClose={() => setEditing(null)} onRemove={() => remove(editingItem)} />
       ) : null}
@@ -629,15 +648,40 @@ export function MerklistePanel() {
           </div>
           <div className="flex w-full flex-wrap items-center gap-[8px] sm:w-auto">
             {items.length > 0 ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="quiet"
-                onClick={() => setStatsOpen(true)}
-                title="Statistiken zur Merkliste öffnen"
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => setShuffleOpen(true)}
+                  title="Zufällige Serie aus der Merkliste vorschlagen"
+                >
+                  🎲 Würfeln
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
+                  onClick={() => setStatsOpen(true)}
+                  title="Statistiken zur Merkliste öffnen"
+                >
+                  Statistiken
+                </Button>
+              </>
+            ) : null}
+            {items.length > 1 ? (
+              <Select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as MerklisteSortOption)}
+                aria-label="Merkliste sortieren"
+                className="w-auto! text-small font-sans"
               >
-                Statistiken
-              </Button>
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
             ) : null}
             {items.length > 5 ? (
               <TextInput
@@ -1545,22 +1589,33 @@ function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void 
   const count = seasonsOf(item).filter((season) => season.number > 0).length
   const done = caughtUp(seasonsOf(item))
   const stand = standLabel(item)
+  const badge = item.url ? sourceBadgeForUrl(item.url) : null
+  const canAdvance = !done && item.episode !== null
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`${item.title}: ${stand}, ${progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}`}
-      className="press group flex min-w-0 flex-col gap-[10px] rounded-card text-left"
-    >
-      <span
-        className={`relative block w-full overflow-hidden rounded-card ${poster ? 'bg-stage' : 'bg-panel-mid'}`}
+    <div className="group flex min-w-0 flex-col gap-[10px] rounded-card text-left">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`${item.title}: ${stand}, ${progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}`}
+        className="press relative block w-full overflow-hidden rounded-card text-left cursor-pointer"
         style={{ aspectRatio: ratioOf(item.tileFormat) }}
       >
         {poster ? <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} /> : <NamePoster title={item.title} />}
+        
+        {/* Rating badge top-right */}
+        {item.rating ? (
+          <span className="absolute top-[8px] right-[8px] z-10 flex items-center gap-[3px] rounded-pill bg-stage/85 px-[6px] py-[2px] text-micro font-semibold text-stage-ink backdrop-blur-xs ring-1 ring-inset ring-white/15">
+            <span className="text-amber-400">★</span>
+            <span>{item.rating}</span>
+          </span>
+        ) : null}
+
+        {/* Hover overlay */}
         <span
           aria-hidden
           className={`absolute inset-x-0 bottom-0 flex translate-y-[6px] flex-col gap-[4px] px-[12px] pb-[12px] pt-[52px] opacity-0 transition-[opacity,translate] duration-[var(--dur-base)] ease-[var(--ease-settle)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 ${
-            poster ? 'bg-gradient-to-t from-stage/80 via-stage/45 to-transparent text-stage-ink' : 'bg-gradient-to-t from-panel-strong via-panel-strong/80 to-transparent text-ink'
+            poster ? 'bg-gradient-to-t from-stage/85 via-stage/50 to-transparent text-stage-ink' : 'bg-gradient-to-t from-panel-strong via-panel-strong/80 to-transparent text-ink'
           }`}
         >
           <span className="text-subheading leading-none">
@@ -1570,18 +1625,42 @@ function SeriesTile({ item, onOpen }: { item: SavedLinkItem; onOpen: () => void 
             {count} {count === 1 ? 'Staffel' : 'Staffeln'} · öffnen
           </span>
         </span>
-      </span>
-      <span className="flex min-w-0 flex-col gap-[4px] px-[1px]">
-        <span className="truncate text-body font-semibold leading-snug text-ink" title={item.title}>
+      </button>
+
+      <div className="flex min-w-0 flex-col gap-[4px] px-[1px]">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="press truncate text-left text-body font-semibold leading-snug text-ink hover:underline cursor-pointer"
+          title={item.title}
+        >
           {item.title}
-        </span>
-        <span className="flex items-center gap-[6px] text-small text-prose">
-          {done ? <RowMark state="done" /> : null}
-          <span className="truncate">{stand}</span>
-        </span>
+        </button>
+        <div className="flex items-center justify-between gap-[6px] text-small text-prose">
+          <span className="flex items-center gap-[6px] min-w-0 truncate">
+            {done ? <RowMark state="done" /> : null}
+            <span className="truncate">{stand}</span>
+          </span>
+          {canAdvance ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                markSeen(item)
+              }}
+              title={`${hereLabel(item)} als gesehen markieren`}
+              className="press shrink-0 rounded-nav bg-panel-soft px-[6px] py-[1px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-mid transition-colors cursor-pointer"
+            >
+              +1
+            </button>
+          ) : null}
+        </div>
         <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${item.title}: gesehen`} />
-      </span>
-    </button>
+        {badge ? (
+          <span className="text-micro text-muted font-mono truncate">{badge}</span>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
@@ -1645,6 +1724,32 @@ function SeriesPage({
                 </span>
               </p>
               <ProgressBar fraction={progress.fraction} label={`${item.title}: gesehen`} />
+              {progress.total && progress.total > progress.watched ? (() => {
+                const rem = progress.total - progress.watched
+                const plan = calculateBingePlan(rem)
+                return (
+                  <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[2px] text-micro text-muted">
+                    <span className="font-medium text-prose">Noch {rem} {rem === 1 ? 'Folge' : 'Folgen'} ({plan.watchTime.short})</span>
+                    <span>·</span>
+                    <span>1/Tag: fertig {plan.finishAt1PerDay}</span>
+                    <span>·</span>
+                    <span>2/Tag: fertig {plan.finishAt2PerDay}</span>
+                  </div>
+                )
+              })() : null}
+              {progress.total && progress.total > progress.watched ? (() => {
+                const rem = progress.total - progress.watched
+                const plan = calculateBingePlan(rem)
+                return (
+                  <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[2px] text-micro text-muted">
+                    <span className="font-medium text-prose">Noch {rem} {rem === 1 ? 'Folge' : 'Folgen'} ({plan.watchTime.short})</span>
+                    <span>·</span>
+                    <span>1/Tag: fertig {plan.finishAt1PerDay}</span>
+                    <span>·</span>
+                    <span>2/Tag: fertig {plan.finishAt2PerDay}</span>
+                  </div>
+                )
+              })() : null}
               <p className="text-small text-muted">
                 {[hasUrl ? sourceBadgeForUrl(item.url) : null, last ? `zuletzt ${last}` : null, STATUS_OPTIONS.find((option) => option.value === status)?.label]
                   .filter(Boolean)
@@ -1934,6 +2039,24 @@ function SeasonDialog({
               {progress.complete ? 'Alles gesehen.' : `Weiter mit ${unit} ${progress.next}.`}
               {split && part.to !== null ? ` ${units} ${part.from}–${part.to} der Staffel.` : null}
             </p>
+            {progress.total && !progress.complete && progress.total > progress.watched ? (() => {
+              const rem = progress.total - progress.watched
+              const plan = calculateBingePlan(rem)
+              return (
+                <p className="text-micro text-muted">
+                  Noch {rem} {rem === 1 ? unit : units} ({plan.watchTime.short}) · fertig bei 1/Tag: {plan.finishAt1PerDay}
+                </p>
+              )
+            })() : null}
+            {progress.total && !progress.complete && progress.total > progress.watched ? (() => {
+              const rem = progress.total - progress.watched
+              const plan = calculateBingePlan(rem)
+              return (
+                <p className="text-micro text-muted">
+                  Noch {rem} {rem === 1 ? unit : units} ({plan.watchTime.short}) · fertig bei 1/Tag: {plan.finishAt1PerDay}
+                </p>
+              )
+            })() : null}
           </div>
           {isHere && item.episode !== null && !progress.complete ? (
             <span className="flex flex-wrap gap-[8px]">
@@ -2142,8 +2265,259 @@ function SeasonDialog({
  * Detailed statistics for the Merkliste: watch time, status distribution,
  * ratings, and completion metrics.
  */
+
+/**
+ * Was soll ich schauen? (Shuffle / Random Pick)
+ */
+function ShuffleDialog({
+  items,
+  open,
+  onClose,
+  onOpenSeries,
+}: {
+  items: SavedLinkItem[]
+  open: boolean
+  onClose: () => void
+  onOpenSeries: (id: string) => void
+}) {
+  const [currentId, setCurrentId] = useState<string | null>(null)
+  const openHere = useOpenHere()
+
+  useEffect(() => {
+    if (open) {
+      const initial = pickRandomCandidate(items)
+      setCurrentId(initial?.id ?? null)
+    }
+  }, [open, items])
+
+  const item = items.find((i) => i.id === currentId) ?? items[0] ?? null
+
+  const reroll = () => {
+    const next = pickRandomCandidate(items, currentId ?? undefined)
+    setCurrentId(next?.id ?? null)
+  }
+
+  if (!open || !item) return null
+
+  const progress = itemProgress(item)
+  const stand = standLabel(item)
+  const cover = seriesCover(item)
+  const poster = cover && cover.src ? cover : null
+  const hasUrl = Boolean(item.url?.trim())
+  const canAdvance = !caughtUp(seasonsOf(item)) && item.episode !== null
+
+  return (
+    <Dialog open onClose={onClose} title="Was soll ich schauen?" size="md">
+      <div className="flex flex-col gap-[20px]">
+        <div className="flex flex-col gap-[16px] sm:flex-row sm:items-center">
+          <div
+            className={`relative w-[110px] shrink-0 overflow-hidden rounded-card sm:w-[130px] ${poster ? 'bg-stage' : 'bg-panel-mid'}`}
+            style={{ aspectRatio: ratioOf(item.tileFormat) }}
+          >
+            {poster ? <CoverImage src={poster.src} frame={poster.frame} /> : <NamePoster title={item.title} />}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-[8px]">
+            <div className="flex flex-wrap items-center justify-between gap-[8px]">
+              <span className="text-micro font-mono uppercase tracking-[0.06em] text-muted">Zufallsauswahl</span>
+              {item.rating ? (
+                <span className="flex items-center gap-[2px] text-small font-semibold text-ink">
+                  <span className="text-amber-500">★</span> {item.rating}
+                </span>
+              ) : null}
+            </div>
+            <h3 className="display-sm min-w-0 break-words">{item.title}</h3>
+            <p className="text-body text-prose">
+              {stand}
+              <span className="text-muted">
+                {' · '}
+                {progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}
+              </span>
+            </p>
+            <ProgressBar fraction={progress.fraction} label={`${item.title}: gesehen`} />
+            {item.notes ? <p className="text-small text-muted line-clamp-2">{item.notes}</p> : null}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-[10px] border-t border-line pt-[14px]">
+          <Button type="button" size="sm" variant="quiet" onClick={reroll}>
+            🎲 Anderen Vorschlag würfeln
+          </Button>
+          <div className="flex flex-wrap items-center gap-[8px]">
+            {hasUrl && canAdvance ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  openHere(item)
+                  onClose()
+                }}
+              >
+                {hereLabel(item)} laden
+              </Button>
+            ) : null}
+            {canAdvance ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={hasUrl ? 'quiet' : 'primary'}
+                onClick={() => markSeen(item)}
+              >
+                {hereLabel(item)} gesehen
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="quiet"
+              onClick={() => {
+                onClose()
+                onOpenSeries(item.id)
+              }}
+            >
+              Serie öffnen
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
 function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () => void }) {
   const stats = useMemo(() => calculateMerklisteStats(items), [items])
+  const [copied, setCopied] = useState(false)
+
+  const exportImage = () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 900
+    canvas.height = 500
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // Background paper
+    ctx.fillStyle = '#f8faf8'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    // Border
+    ctx.strokeStyle = '#a7bca9'
+    ctx.lineWidth = 2
+    ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40)
+
+    // Inner rule
+    ctx.strokeStyle = '#cbd7cf'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(40, 110)
+    ctx.lineTo(canvas.width - 40, 110)
+    ctx.stroke()
+
+    // Title
+    ctx.fillStyle = '#0b4a22'
+    ctx.font = 'bold 30px system-ui, -apple-system, sans-serif'
+    ctx.fillText('Sondra · Merkliste Statistik', 40, 70)
+
+    // Subtitle / Date
+    ctx.fillStyle = '#4e6355'
+    ctx.font = '15px system-ui, -apple-system, sans-serif'
+    const today = new Date().toLocaleDateString('de-CH', { day: 'numeric', month: 'long', year: 'numeric' })
+    ctx.fillText(`Prüfprotokoll vom ${today}`, 40, 96)
+
+    // 4 Stats Cards
+    const cards = [
+      { label: 'Gesehene Folgen', val: `${stats.seenTotal}`, sub: stats.seenTotal === 1 ? 'Folge' : 'Folgen' },
+      { label: 'Geschätzte Sehzeit', val: `${stats.watchTime.short}`, sub: stats.watchTime.long },
+      { label: 'Katalog', val: `${stats.totalSeries}`, sub: `${stats.watchingCount} am Schauen` },
+      { label: 'Bewertungsschnitt', val: stats.avgRating ? `★ ${stats.avgRating}` : '—', sub: `${stats.ratedCount} bewertet` },
+    ]
+
+    cards.forEach((c, idx) => {
+      const x = 40 + idx * 205
+      const y = 135
+      ctx.fillStyle = '#e0f0e5'
+      ctx.fillRect(x, y, 195, 110)
+      ctx.strokeStyle = '#a7bca9'
+      ctx.strokeRect(x, y, 195, 110)
+
+      ctx.fillStyle = '#4e6355'
+      ctx.font = '13px system-ui, sans-serif'
+      ctx.fillText(c.label, x + 14, y + 28)
+
+      ctx.fillStyle = '#0b4a22'
+      ctx.font = 'bold 26px system-ui, sans-serif'
+      ctx.fillText(c.val, x + 14, y + 68)
+
+      ctx.fillStyle = '#111a14'
+      ctx.font = '12px system-ui, sans-serif'
+      ctx.fillText(c.sub.slice(0, 24), x + 14, y + 94)
+    })
+
+    // Status breakdown
+    ctx.fillStyle = '#111a14'
+    ctx.font = 'bold 15px system-ui, sans-serif'
+    ctx.fillText('Status-Aufteilung', 40, 285)
+
+    // Progress bar
+    const barX = 40
+    const barY = 300
+    const barW = canvas.width - 80
+    const barH = 14
+    ctx.fillStyle = '#cbd7cf'
+    ctx.fillRect(barX, barY, barW, barH)
+
+    if (stats.totalSeries > 0) {
+      const wW = (stats.watchingCount / stats.totalSeries) * barW
+      const lW = (stats.laterCount / stats.totalSeries) * barW
+      const dW = (stats.doneCount / stats.totalSeries) * barW
+
+      ctx.fillStyle = '#0b4a22'
+      ctx.fillRect(barX, barY, wW, barH)
+      ctx.fillStyle = '#d97706'
+      ctx.fillRect(barX + wW, barY, lW, barH)
+      ctx.fillStyle = '#799081'
+      ctx.fillRect(barX + wW + lW, barY, dW, barH)
+    }
+
+    // Legend
+    ctx.font = '14px system-ui, sans-serif'
+    ctx.fillStyle = '#0b4a22'
+    ctx.fillText(`● Am Schauen: ${stats.watchingCount} (${stats.watchingPercent}%)`, 40, 345)
+    ctx.fillStyle = '#d97706'
+    ctx.fillText(`● Später: ${stats.laterCount} (${stats.laterPercent}%)`, 280, 345)
+    ctx.fillStyle = '#799081'
+    ctx.fillText(`● Fertig: ${stats.doneCount} (${stats.donePercent}%)`, 460, 345)
+
+    // Footer brand
+    ctx.fillStyle = '#799081'
+    ctx.font = '13px monospace'
+    ctx.fillText('Erstellt mit Sondra · https://sondra.lizge.ch', 40, 430)
+
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Sondra-Merkliste-Statistik-${new Date().toISOString().slice(0, 10)}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    }, 'image/png')
+  }
+
+  const copySummary = () => {
+    const text = [
+      `📊 **Meine Sondra Merkliste**: `,
+      `• ${stats.watchingCount} am Schauen · ${stats.laterCount} später · ${stats.doneCount} fertig (${stats.totalSeries} Serien)`,
+      `• ${stats.seenTotal} Folgen gesehen (ca. ${stats.watchTime.short} / ${stats.watchTime.long} Sehzeit)`,
+      stats.avgRating ? `• ⭐️ Durchschnittsbewertung: ★ ${stats.avgRating}` : null,
+      stats.completedSeasons > 0 ? `• 🏆 ${stats.completedSeasons} Staffeln komplett gesehen` : null,
+      ``,
+      `Erstellt mit Sondra (https://sondra.lizge.ch)`,
+    ].filter(Boolean).join('\n')
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   return (
     <Dialog open onClose={onClose} title="Statistiken zur Merkliste" size="md">
@@ -2332,8 +2706,16 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
           </div>
         ) : null}
 
-        {/* Close Button */}
-        <div className="flex justify-end border-t border-line pt-[12px]">
+        {/* Export & Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-[10px] border-t border-line pt-[12px]">
+          <div className="flex flex-wrap items-center gap-[8px]">
+            <Button type="button" size="sm" variant="quiet" onClick={exportImage} title="Statistiken als PNG-Grafik speichern">
+              🖼️ Als Bild speichern
+            </Button>
+            <Button type="button" size="sm" variant="quiet" onClick={copySummary} title="Zusammenfassung als Text kopieren">
+              {copied ? '✓ Kopiert!' : '📋 Text kopieren'}
+            </Button>
+          </div>
           <Button type="button" size="sm" onClick={onClose}>
             Schließen
           </Button>
@@ -2694,7 +3076,44 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
           <div className="flex flex-col gap-[18px] pt-[10px]">
             <div className="grid gap-x-[28px] gap-y-[16px] sm:grid-cols-[minmax(0,1fr)_auto]">
               <Group label="Adresse — zum Laden im Herunterladen">
-                <TextInput value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://…" inputMode="url" spellCheck={false} />
+                <TextInput
+                  value={url}
+                  onChange={(event) => {
+                    const next = event.target.value
+                    setUrl(next)
+                    if (next.trim()) {
+                      const info = parseLinkEpisodeInfo(next)
+                      const derived = deriveLinkTitle(next)
+                      if (derived && (!title.trim() || title === 'Serie' || title === 'Neuer Link')) {
+                        setTitle(derived)
+                      }
+                      if (info.isEpisodicUrl) {
+                        if (info.season > 0) {
+                          setSeasonCount((curr) => Math.max(curr, info.season))
+                          setAtSeason(info.season)
+                        }
+                        if (info.episode !== null && info.episode > 0) {
+                          setAtEpisode(info.episode)
+                        }
+                      }
+                    }
+                  }}
+                  placeholder="https://…"
+                  inputMode="url"
+                  spellCheck={false}
+                />
+                {url.trim() ? (() => {
+                  const derived = deriveLinkTitle(url)
+                  const info = parseLinkEpisodeInfo(url)
+                  const badge = sourceBadgeForUrl(url)
+                  if (!derived && !info.isEpisodicUrl) return null
+                  return (
+                    <span className="text-micro text-muted">
+                      Erkannt: {badge ? `[${badge}] ` : ''}{derived ? `„${derived}“ · ` : ''}
+                      {info.isEpisodicUrl ? `Staffel ${info.season}, Folge ${info.episode ?? 'alle'}` : ''}
+                    </span>
+                  )
+                })() : null}
               </Group>
               <Group label="Filme dazu">
                 <Stepper label="Anzahl Filme" value={films} min={0} max={200} onChange={setFilms} />
