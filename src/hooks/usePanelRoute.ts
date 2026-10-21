@@ -57,6 +57,11 @@ export function usePanelRoute() {
   useEffect(() => {
     const onPop = () => {
       const target = panelFromHash() ?? 'start'
+      // Only a step that changes the tool is the URL's to answer for. Back
+      // from a series to the Merkliste stays on the same tool: no effect
+      // runs to clear the flag, and the next click on a tab then left the
+      // address on #merkliste — a reload opened the wrong tool.
+      if (target === useSession.getState().panel) return
       fromUrl.current = true
       setPanel(target)
     }

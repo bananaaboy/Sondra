@@ -149,7 +149,10 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
 - **Jedes Werkzeug hat eine Adresse.** `#umwandeln`, `#tonart`,
   `#spuren-trennen` — die Slugs stehen in `panelMeta.tsx`, das Routing in
   `usePanelRoute`. Der Start ist die blanke Wurzel. Ein neues Panel ohne Slug
-  ist unfertig.
+  ist unfertig. Ein `popstate`, das beim selben Werkzeug bleibt (zurück von
+  einer Serie zur Merkliste), setzt keine Marke „kommt aus der Adresse“ —
+  sonst schrieb der nächste Reiterklick die Adresse nicht, und Neuladen
+  öffnete das falsche Werkzeug.
 - **`muted` auf einer Tönung ist der Fallstrick dieser Welt.** Auf
   `panel-mid` mass er sich im dunklen Thema dreimal bei Lc 59.3, Boden ist 60.
   Auf getöntem Grund gehört Sekundärtext auf `prose` oder die Tönung auf
@@ -326,8 +329,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   die, bei der der Eintrag steht, oder durchgezählt. Ab 90 % wird genau diese
   Folge abgehakt (`seenEpisode`, nie andere, nie wieder ab), der Stand rückt
   über `settle`; unter dem Bild steht es mit „Rückgängig“, abschaltbar im
-  Zahnrad („In der Merkliste abhaken“). Eine Serie von aussen öffnen:
-  `requestOpenSeries` + Reiter wechseln.
+  Zahnrad („In der Merkliste abhaken“). **Abgehakt wird nur, was in derselben
+  Datei unter 90 % lief** (`armed` in `MerklisteTick`): beim Wechsel zur
+  nächsten Datei kommt der Name einen Render vor der zurückgesetzten Uhr an,
+  und mit „Automatisch weiter“ war jede Folge abgehakt, sobald sie begann.
+  Eine Serie von aussen öffnen: `requestOpenSeries` + Reiter wechseln.
 - **Neue Folgen melden** (nur in der App, `lib/newEpisodes.ts`): eine Minute
   nach dem Start, dann alle drei Stunden, jede Serie „Am Schauen“ mit
   AniWorld-Adresse nacheinander über das eigene `/api/resolve`. Gemeldet wird
@@ -337,6 +343,20 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   **Eine Online-Prüfung ist keine Änderung:** `checkOnlineUpdates` setzt
   `updatedAt` nicht mehr, sonst gewann die ältere Fassung dieses Rechners
   beim Abgleich mit Anytype über Folgen, die anderswo abgehakt wurden.
+  **`/api/resolve` liest Optionen aus dem geparsten `body`,** nie aus
+  `request.body?.…`: der Server der App (und `dev:service`) reicht den Körper
+  als Text weiter, Vercel als Objekt. So lief in der App die Prüfung nie,
+  und Sprache und Netzwerkadapter fehlten beim Auflösen. Eine Prüfung löst
+  nie eine Folge auf; geht sie nicht, heisst die Antwort `status: 'unknown'`,
+  und „Online prüfen“ sagt es in einem Satz. AniWorld steht hinter
+  DDoS-Guard und lässt Rechenzentren nicht durch — geprüft wird gegen
+  nachgebaute Seiten (`verify:extractors`, `verify:resolve`).
+- **Discord** (nur in der App, aus bis zum Schalter in der Merkliste,
+  `desktop/discord.mjs`): spricht Discords lokale Pipe direkt. Gesendet wird
+  erst nach `READY` und dann einmal je Änderung — vorher löste jede Antwort
+  Discords einen neuen Rahmen aus, rund 50 000 je Sekunde. Ausschalten
+  schliesst die Pipe; Discord nimmt den Status dann selbst weg. `npm run
+  verify:discord` spielt das gegen eine nachgebaute Pipe durch.
 - **Merkliste** (`#merkliste`, `MerklistePanel.tsx`, Daten in
   `lib/merkliste.ts`): ein Speicher für den Tab und „Merken“ im
   Herunterladen (`useMerkliste`, `localStorage` `sondra:saved_links`,

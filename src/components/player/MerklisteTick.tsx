@@ -7,7 +7,7 @@
  * plays.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { alreadySeen, matchEpisode, seenEpisode, SEEN_AT } from '../../lib/episodeMatch'
 import { requestOpenSeries, setMerkItems, updateMerkItem, useMerkliste, type SavedLinkItem } from '../../lib/merkliste'
@@ -22,10 +22,22 @@ export function MerklisteTick({ name, time, duration, enabled }: { name: string;
   const key = match ? `${name}|${match.item.id}|${match.season}|${match.episode}` : null
   /** What this file ticked off, and the entry as it was before. */
   const [ticked, setTicked] = useState<{ key: string; before: SavedLinkItem; undone: boolean } | null>(null)
+  /**
+   * The file seen playing short of 90 %. On a switch to the next file the
+   * name changes one render before the player resets its clock, so the new
+   * episode met the old one's end — and with „Automatisch weiter“ every
+   * episode was ticked off the moment it began.
+   */
+  const armed = useRef<string | null>(null)
 
   useEffect(() => {
     if (!match || !key || ticked?.key === key) return
-    if (!(duration > 0) || time / duration < SEEN_AT || alreadySeen(match)) return
+    if (!(duration > 0)) return
+    if (time / duration < SEEN_AT) {
+      armed.current = key
+      return
+    }
+    if (armed.current !== key || alreadySeen(match)) return
     const before = match.item
     updateMerkItem(before.id, seenEpisode(before, match.season, match.episode))
     setTicked({ key, before, undone: false })

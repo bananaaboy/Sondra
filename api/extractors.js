@@ -1035,7 +1035,6 @@ export async function checkAniworldOnlineUpdates(rawUrl, options = {}) {
         new RegExp(`/(?:anime|serie)/stream/${slug}/staffel-${maxSeason}/episode-(\\d+)`, 'gi'),
       ),
       ...seasonHtml.matchAll(/itemprop=['"]episodeNumber['"]\s+content=['"](\d+)['"]/gi),
-      ...seasonHtml.matchAll(/href=['"][^'"]*episode-(\\d+)['"]/gi),
     ]
     const epNums = epMatches
       .map((m) => Number(m[1]))
