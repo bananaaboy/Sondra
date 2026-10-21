@@ -324,10 +324,13 @@ jobs:
           if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) {
             throw "Tag $env:GITHUB_REF_NAME passt nicht zur Version $version in package.json."
           }
-          # A release that already exists is left as it is: its files are
-          # what was published, and a rerun must not fail on it.
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
+          # A published release is left as it is: its files are what was
+          # published, and a rerun must not fail on it. A draft is what an
+          # earlier attempt left when an upload broke off; it is finished here.
+          $existing = $null
+          $view = gh release view $tag --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) { $existing = $view | ConvertFrom-Json }
+          if ($existing -and -not $existing.isDraft) {
             Write-Host "Release $tag gibt es schon, bleibt unverändert."
             exit 0
           }
@@ -365,8 +368,30 @@ jobs:
           # latest.yml is what the installed app's updater reads; it names the
           # versioned installer and its SHA-512. The blockmap lets the updater
           # fetch only the parts that changed.
-          $extra = @('release/latest.yml', "$($setup.FullName).blockmap", "$($armSetup.FullName).blockmap") | Where-Object { Test-Path $_ }
+          $extra = @("$($setup.FullName).blockmap", "$($armSetup.FullName).blockmap") | Where-Object { Test-Path $_ }
           if (-not (Test-Path 'release/latest.yml')) { throw 'latest.yml fehlt: ohne sie findet die App kein Update.' }
-          gh release create $tag $setup.FullName release/Sondra-Setup.exe $armSetup.FullName release/Sondra-Setup-arm64.exe `
-            $portable.FullName release/Sondra-Portable.exe $armPortable.FullName release/Sondra-Portable-arm64.exe @extra `
-            --target $env:GITHUB_SHA --title "Sondra $version" --notes $notes
+
+          # A draft first, the files one by one, published only when all are
+          # there: an installed app never sees a release whose setup is
+          # missing. One upload of a gigabyte at once broke off with HTTP 408
+          # (1.1.9, first attempt) and took the whole release with it; each
+          # file now gets four tries. latest.yml goes last.
+          if (-not $existing) {
+            gh release create $tag --draft --target $env:GITHUB_SHA --title "Sondra $version" --notes $notes
+            if ($LASTEXITCODE -ne 0) { throw "Entwurf für $tag nicht angelegt." }
+          }
+          $files = @($setup.FullName, 'release/Sondra-Setup.exe', $armSetup.FullName, 'release/Sondra-Setup-arm64.exe',
+            $portable.FullName, 'release/Sondra-Portable.exe', $armPortable.FullName, 'release/Sondra-Portable-arm64.exe') + $extra + @('release/latest.yml')
+          foreach ($file in $files) {
+            $done = $false
+            foreach ($try in 1..4) {
+              gh release upload $tag $file --clobber
+              if ($LASTEXITCODE -eq 0) { $done = $true; break }
+              Write-Host "Hochladen von $(Split-Path $file -Leaf) gescheitert (Versuch $try), gleich noch einmal."
+              Start-Sleep -Seconds (10 * $try)
+            }
+            if (-not $done) { throw "$(Split-Path $file -Leaf) liess sich nicht hochladen; der Entwurf $tag bleibt, ein neuer Lauf macht ihn fertig." }
+          }
+          gh release edit $tag --draft=false
+          if ($LASTEXITCODE -ne 0) { throw "$tag liess sich nicht veröffentlichen." }
+          Write-Host "Release $tag mit $($files.Count) Dateien veröffentlicht."
