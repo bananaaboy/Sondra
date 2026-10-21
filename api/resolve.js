@@ -256,30 +256,27 @@ export default async function handler(request, response) {
    */
   const targetStr = target.toString()
 
-  if (request.body?.checkUpdates || request.query?.checkUpdates) {
-    if (isAniworldUrl(targetStr)) {
-      try {
-        const updates = await checkAniworldOnlineUpdates(targetStr, {
-          localAddress: request.body?.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
-        })
-        if (updates) {
-          response.status(200).json({
-            status: 'updates',
-            ...updates,
-          })
-          return
-        }
-      } catch (err) {
-        // Fall through to regular resolving if check failed
-      }
+  // The Merkliste asks how far a series is online, never for a stream: a
+  // check that fails says so and ends here. Falling through used to resolve
+  // the episode's hosters for nothing, on every series opened.
+  if ((body.checkUpdates || request.query?.checkUpdates) && isAniworldUrl(targetStr)) {
+    let updates = null
+    try {
+      updates = await checkAniworldOnlineUpdates(targetStr, {
+        localAddress: body.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
+      })
+    } catch {
+      // Answered below as unknown.
     }
+    response.status(200).json(updates ? { status: 'updates', ...updates } : { status: 'unknown' })
+    return
   }
 
   if (isAniworldUrl(targetStr) || isHosterUrl(targetStr) || isBilibiliUrl(targetStr) || isSpotifyUrl(targetStr)) {
     try {
       const media = await extractDirectMedia(targetStr, {
-        localAddress: request.body?.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
-        language: request.body?.language,
+        localAddress: body.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
+        language: body.language,
       })
       if (media && media.isPlaylist) {
         response.status(200).json({

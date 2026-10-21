@@ -16,6 +16,10 @@ class DiscordRpcClient {
   constructor() {
     this.socket = null
     this.connected = false
+    /** Discord answered the handshake (READY); activities go out only after it. */
+    this.ready = false
+    /** A search through the pipes is under way; a second one would race it. */
+    this.connecting = false
     this.clientId = DEFAULT_CLIENT_ID
     this.currentActivity = null
     this.reconnectTimer = null
@@ -42,7 +46,8 @@ class DiscordRpcClient {
   }
 
   connect() {
-    if (this.socket || !this.enabled) return
+    if (this.socket || this.connecting || !this.enabled) return
+    this.connecting = true
 
     // Search for Discord pipe on Windows (discord-ipc-0 to discord-ipc-9)
     const pipePrefix = process.platform === 'win32' ? '\\\\?\\pipe\\discord-ipc-' : '/tmp/discord-ipc-'
@@ -50,6 +55,7 @@ class DiscordRpcClient {
     const tryPipe = (index) => {
       if (index > 9 || !this.enabled) {
         // Retry in 30 seconds if Discord wasn't running
+        this.connecting = false
         this.scheduleReconnect()
         return
       }
@@ -57,27 +63,36 @@ class DiscordRpcClient {
       const path = `${pipePrefix}${index}`
       const sock = net.createConnection(path)
 
+      let opened = false
       sock.on('connect', () => {
+        opened = true
+        this.connecting = false
         this.socket = sock
         this.connected = true
         this.sendHandshake()
       })
 
-      sock.on('data', (_data) => {
-        // Discord response received; if we have a pending activity, send it
-        if (this.currentActivity && this.enabled) {
-          this.sendActivity(this.currentActivity)
-        }
+      sock.on('data', (data) => {
+        // Discord answers every frame. Only READY, its answer to the
+        // handshake, is the cue to send what is waiting; sending again on
+        // every answer made a loop of some 50 000 frames a second.
+        if (this.ready || !isReady(data)) return
+        this.ready = true
+        if (this.currentActivity && this.enabled) this.sendActivity(this.currentActivity)
       })
 
       sock.on('error', () => {
         sock.destroy()
-        tryPipe(index + 1)
+        // A pipe that never opened: try the next one. One that was open and
+        // failed is handled by 'close'.
+        if (!opened) tryPipe(index + 1)
       })
 
       sock.on('close', () => {
+        if (!opened) return
         this.socket = null
         this.connected = false
+        this.ready = false
         if (this.enabled) {
           this.scheduleReconnect()
         }
@@ -127,7 +142,7 @@ class DiscordRpcClient {
   }
 
   sendActivity(activity) {
-    if (!this.socket || !this.connected || !this.enabled) return
+    if (!this.socket || !this.connected || !this.ready || !this.enabled) return
     const nonce = Math.random().toString(36).slice(2)
     const payload = JSON.stringify({
       cmd: 'SET_ACTIVITY',
@@ -159,7 +174,23 @@ class DiscordRpcClient {
       this.socket = null
     }
     this.connected = false
+    this.ready = false
   }
+}
+
+/** True when the frames in `data` include Discord's READY event. */
+function isReady(data) {
+  let at = 0
+  while (at + 8 <= data.length) {
+    const length = data.readInt32LE(at + 4)
+    try {
+      if (JSON.parse(data.subarray(at + 8, at + 8 + length).toString('utf8'))?.evt === 'READY') return true
+    } catch {
+      return false
+    }
+    at += 8 + length
+  }
+  return false
 }
 
 export const discordRpc = new DiscordRpcClient()

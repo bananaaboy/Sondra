@@ -20,6 +20,7 @@ import {
   extractAniworld,
   extractAniworldSeason,
   extractDirectHoster,
+  checkAniworldOnlineUpdates,
   isAniworldUrl,
   isAniworldSeasonUrl,
   isVoeUrl,
@@ -396,6 +397,47 @@ check('Podcast: Titel', parsedRss?.title, 'Sondra Audio Talk')
 check('Podcast: Author', parsedRss?.seriesTitle, 'Sondra Studio')
 check('Podcast: Episode 1 Titel', parsedRss?.items?.[0]?.title, 'Episode 1: Web Audio & MIDI')
 check('Podcast: Episode 1 URL', parsedRss?.items?.[0]?.url, 'https://storage.example/ep1.mp3')
+
+// AniWorld: how far a series is online (the Merkliste's check). The pages
+// come from a stand-in for fetch, since the check only takes AniWorld's own
+// hosts: the series page names its seasons — and links to other series,
+// which must not count — and the newest season lists its episodes.
+{
+  const pages = {
+    'https://aniworld.to/anime/stream/frieren': `
+      <div class="series-title"><h1 itemprop="name"><span>Frieren &amp; Co</span></h1></div>
+      <ul><li><a href="/anime/stream/frieren/filme">Filme</a></li>
+      <li><a href="/anime/stream/frieren/staffel-1" title="Staffel 1">1</a></li>
+      <li><a href="/anime/stream/frieren/staffel-2" title="Staffel 2">2</a></li></ul>
+      <a href="/anime/stream/frieren/staffel-1/episode-28">28</a>
+      <aside><a href="/anime/stream/one-piece">One Piece</a></aside>`,
+    'https://aniworld.to/anime/stream/frieren/staffel-2': `
+      <tr data-episode-id="1"><td><meta itemprop="episodeNumber" content="1" /><a href="/anime/stream/frieren/staffel-2/episode-1">Folge 1</a></td></tr>
+      <tr data-episode-id="2"><td><meta itemprop="episodeNumber" content="7" /><a href="/anime/stream/frieren/staffel-2/episode-7">Folge 7</a></td></tr>`,
+  }
+  const realFetch = globalThis.fetch
+  const asked = []
+  globalThis.fetch = async (url) => {
+    asked.push(String(url))
+    const body = pages[String(url)]
+    return new Response(body ?? 'nicht da', { status: body ? 200 : 404, headers: { 'Content-Type': 'text/html' } })
+  }
+  try {
+    const online = await checkAniworldOnlineUpdates('https://aniworld.to/anime/stream/frieren/staffel-1/episode-13')
+    check('AniWorld online: Titel', online?.seriesTitle, 'Frieren & Co')
+    check('AniWorld online: neueste Staffel', online?.maxSeason, 2)
+    check('AniWorld online: neueste Folge darin', online?.maxEpisode, 7)
+    check(
+      'AniWorld online: Serienseite und neueste Staffel gelesen',
+      asked.join(' '),
+      'https://aniworld.to/anime/stream/frieren https://aniworld.to/anime/stream/frieren/staffel-2',
+    )
+    check('AniWorld online: fremde Seite nicht geprüft', await checkAniworldOnlineUpdates('https://example.com/anime/stream/frieren'), null)
+    check('AniWorld online: Seite nicht erreichbar', await checkAniworldOnlineUpdates('https://aniworld.to/anime/stream/gibt-es-nicht'), null)
+  } finally {
+    globalThis.fetch = realFetch
+  }
+}
 
 if (typeof server.closeAllConnections === 'function') {
   server.closeAllConnections()

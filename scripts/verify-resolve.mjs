@@ -20,7 +20,7 @@
 
 import http from 'node:http'
 
-import { filenameFrom, finalUrlFrom, looksLikeMedia, nameFrom, probe, sizeFrom } from '../api/resolve.js'
+import resolveHandler, { filenameFrom, finalUrlFrom, looksLikeMedia, nameFrom, probe, sizeFrom } from '../api/resolve.js'
 import { allowedTarget, getSecret } from '../api/_shared.js'
 
 let failures = 0
@@ -201,6 +201,53 @@ try {
   prodSecretError = true
 }
 check('SONDRA_SECRET in production enforced', prodSecretError, true)
+
+/* -- the Merkliste's online check, as the app sends it ---------------------- */
+
+// The app's server and dev-service hand the handler the body as a string;
+// Vercel hands it an object. Read only from `request.body?.…`, a string body
+// lost its options: the check never ran, and the episode's hosters were
+// resolved instead. AniWorld itself comes from a stand-in for fetch.
+{
+  const realFetch = globalThis.fetch
+  const asked = []
+  globalThis.fetch = async (url) => {
+    asked.push(String(url))
+    if (String(url) === 'https://aniworld.to/anime/stream/frieren') {
+      return new Response('<a href="/anime/stream/frieren/staffel-1/episode-28">28</a>', { status: 200 })
+    }
+    return new Response('nicht da', { status: 404 })
+  }
+  const call = async (body) => {
+    let status = 0
+    let json = null
+    await resolveHandler({ method: 'POST', body, query: {}, headers: {} }, {
+      status(code) {
+        status = code
+        return this
+      },
+      json(value) {
+        json = value
+        return this
+      },
+      setHeader() {},
+    })
+    return { status, json }
+  }
+  try {
+    const text = await call(JSON.stringify({ url: 'https://aniworld.to/anime/stream/frieren/staffel-1/episode-13', checkUpdates: true }))
+    check('Online-Prüfung, Körper als Text: Antwort', text.status, 200)
+    check('Online-Prüfung, Körper als Text: Stand', `${text.json?.status} S${text.json?.maxSeason} F${text.json?.maxEpisode}`, 'updates S1 F28')
+    const object = await call({ url: 'https://aniworld.to/anime/stream/frieren/staffel-1/episode-13', checkUpdates: true })
+    check('Online-Prüfung, Körper als Objekt: Stand', object.json?.maxEpisode, 28)
+    asked.length = 0
+    const unreachable = await call(JSON.stringify({ url: 'https://aniworld.to/anime/stream/weg/staffel-1/episode-1', checkUpdates: true }))
+    check('Online-Prüfung ohne Seite: unbekannt statt Fehler', `${unreachable.status} ${unreachable.json?.status}`, '200 unknown')
+    check('Online-Prüfung ohne Seite: keine Folge aufgelöst', asked.join(' '), 'https://aniworld.to/anime/stream/weg')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+}
 
 if (typeof server.closeAllConnections === 'function') {
   server.closeAllConnections()

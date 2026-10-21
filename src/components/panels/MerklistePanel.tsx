@@ -2094,6 +2094,8 @@ function SeriesPage({
   const setPanel = useSession((state) => state.setPanel)
   const [batchModalOpen, setBatchModalOpen] = useState(false)
   const [checkingUpdates, setCheckingUpdates] = useState(false)
+  /** What a check asked for by hand found, when it found no new episode. */
+  const [checkNote, setCheckNote] = useState<string | null>(null)
 
   // Automatic discreet AniWorld update check
   useEffect(() => {
@@ -2121,8 +2123,13 @@ function SeriesPage({
 
   const handleCheckUpdates = async () => {
     setCheckingUpdates(true)
-    await checkOnlineUpdates(item)
+    setCheckNote(null)
+    const info = await checkOnlineUpdates(item)
     setCheckingUpdates(false)
+    // A new episode shows itself above; anything else is said here, or the
+    // button looked as if it had done nothing.
+    if (!info) setCheckNote('AniWorld war nicht zu erreichen. Später noch einmal.')
+    else if (!info.hasNew) setCheckNote(`Nichts Neues: online bis Staffel ${info.maxSeason}, Folge ${info.maxEpisode}.`)
   }
 
   const activeSeason = seasons.find((s) => s.number === item.season) ?? seasons[0]
@@ -2268,6 +2275,11 @@ function SeriesPage({
                 Bearbeiten
               </Button>
             </div>
+            {checkNote ? (
+              <p role="status" className="text-small text-prose">
+                {checkNote}
+              </p>
+            ) : null}
           </div>
         </div>
       </Card>
@@ -3865,6 +3877,10 @@ function DurationSettings({
 
 function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClose: () => void; onRemove: () => void }) {
   const update = (patch: Partial<SavedLinkItem>) => updateMerkItem(item.id, patch)
+  // The field keeps what was typed; only the tags read from it are stored.
+  // Rebuilt from the stored tags, a comma vanished the moment it was typed,
+  // and „Anime, Klassiker“ became the one tag „AnimeKlassiker“.
+  const [tagText, setTagText] = useState(() => (item.tags ?? []).join(', '))
   const seasons = seasonsOf(item)
   const hasFilms = seasons.some((season) => season.number === 0)
   const seasonCount = seasons.filter((season) => season.number > 0).length
@@ -3929,16 +3945,18 @@ function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClos
 
           <Group label="Tags (durch Komma getrennt)">
             <TextInput
-              value={(item.tags ?? []).join(', ')}
+              value={tagText}
+              aria-label="Tags, durch Komma getrennt"
               placeholder="Anime, Favorit, Manga …"
-              onChange={(event) =>
+              onChange={(event) => {
+                setTagText(event.target.value)
                 update({
                   tags: event.target.value
                     .split(',')
                     .map((t) => t.trim().replace(/^#+/, ''))
                     .filter(Boolean),
                 })
-              }
+              }}
               className="font-sans"
             />
           </Group>
@@ -4241,6 +4259,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
             <Group label="Tags (durch Komma getrennt)">
               <TextInput
                 value={tags}
+                aria-label="Tags, durch Komma getrennt"
                 onChange={(event) => setTags(event.target.value)}
                 placeholder="Anime, Favorit, Manga …"
                 className="font-sans"
