@@ -483,6 +483,11 @@ ruhige, typografische Bild.
   von `1.3` bis `1.5` und weichen Kappen (`strokeLinecap="round"` / `strokeLinejoin="round"`).
   Piktogramme begleiten Beschriftungen dezent und harmonisch.
 
+**Die Anti-Pill-Indikator-Regel (Keine überflüssigen Eyebrow-Badges).**
+Es braucht im gesamten Interface **nie irgendwelche dekorativen Pill-Indikatoren, Badge-Plaketten oder Eyebrows** über Überschriften oder Modulen (z. B. „100% lokal & verlustfrei", „Schnell & verlustarm im Browser", „Sofortstart ohne Einlesen", „Live-Analyse im Browser").
+- **Kein Marketing-Geklingel**: Solche Indikatoren wirken wie Werbe-Slogans statt wie ein präzises, ruhiges Arbeitsgerät. Sie erzeugen visuelle Unruhe („Clutter") und stören den Lesefluss.
+- **Klare Typografie ohne Vorbau**: Die Überschrift (`display-md` / `<h2>`) beginnt direkt und ruhig oben an der Karte ohne vorgeschaltete Pillen oder Statuspunkte. Relevante technische Fakten gehören sachlich in den Untertitel oder in die strukturierten Kacheln selbst.
+
 ## Elevation & Depth
 
 Es gibt **genau eine Tiefenstufe**, und sie ist im Ruhezustand nirgends auf dem
@@ -1069,6 +1074,9 @@ Kurven (`--ease-out`, `--ease-settle`); alles nur Transform und Deckkraft, und
 - **Don't** System-Emojis im Interface oder auf Knöpfen verwenden (kein 🎲, 🖼️, 📋, 🎬, ⭐).
   Emojis sind plattformabhängig, bunt und stören die typografische Ruhe. Nutze
   stets einfarbige SVG-Symbole mit `currentColor`.
+- **Don't** dekorative Pill-Indikatoren, Eyebrow-Badges oder Plaketten über Überschriften kleben
+  (kein „Schnell & verlustarm im Browser", kein „100% lokal & verlustfrei", keine grünen Statuspunkte über Titeln).
+  Das Interface braucht keine Slogan-Banderolen; Überschriften beginnen direkt, aufgeräumt und ruhig.
 
 - **Don't** Dialoge und Lightboxes kantig oder überladen („cluttered") bauen.
   Keine fünf Zeilen Text untereinander stapeln, wo ein Diagramm, ein Verteilungsbalken
