@@ -638,10 +638,18 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   2-px-Linie darunter, die auf der Abschnittslinie der Kopfzeile aufliegt; die
   übrigen in Prosa. Bis zum 23.9.2026 war sie ein weisser Kasten mit Ring und
   gefüllter Auswahl unter einer getönten Sitzungsleiste — drei Bänder, bevor
-  ein Werkzeug etwas sagte, und das Hauptargument für „mega cluttered". Auf dem
-  Handy läuft sie randlos bis an den Rand und wird gewischt; auf der Startseite
-  des Handys fehlt sie, weil die Kacheln darunter dasselbe Menü sind.
-  Pfeiltasten wechseln den Reiter, der gewählte bleibt der einzige mit
+  ein Werkzeug etwas sagte, und das Hauptargument für „mega cluttered". Die
+  sechzehn Reiter brauchen rund 1300 px; bis zum 21.10.2026 lief die Zeile
+  darunter seitlich weiter und endete auf jedem Laptop in einem
+  abgeschnittenen Wort („Miki…“), das sich mit der Maus nicht wischen liess.
+  **Jetzt stehen so viele, wie passen, der Rest hinter „Mehr“** (mit der
+  Anzahl daneben): gemessen an einer unsichtbaren Kopie der Zeile, in
+  Reihenfolge und ohne Lücken; der gewählte Reiter steht immer in der Zeile,
+  notfalls an letzter Stelle. „Mehr“ öffnet eine Liste mit Symbol, Name und
+  dem einen Satz, was das Werkzeug tut — zwei Spalten, auf dem Handy so breit
+  wie der Schirm. Auf der Startseite des Handys fehlt die Zeile weiter, weil
+  die Kacheln darunter dasselbe Menü sind. Pfeiltasten wechseln den Reiter,
+  auch zu denen hinter „Mehr“; der gewählte bleibt der einzige mit
   `tabIndex 0`.
 - **Werkzeugschiene** (`Rail`): senkrecht 84 px breit auf Feldweiss, Symbol
   über Beschriftung in Label-Grösse; ein Werkzeug mit geänderter Einstellung
@@ -656,7 +664,9 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   der Wortmarken-Schrift, „Studio" in Public Sans. Darunter drei Kacheln:
   Setup (.exe) und Microsoft Store als die zwei grossen nebeneinander (bis
   420 px hoch, Name in 48 px, die Dateiart als Courier-Pille, die Handlung am
-  Fuss), „Website als App" schmal über die volle Breite darunter. Die
+  Fuss), darunter zwei schmale nebeneinander: „Website als App" und
+  „Portabel" (eine .exe ohne Installation, Daten im Ordner „Sondra-Daten“
+  daneben); der Windows-Hinweis gilt für Setup und portable Datei. Die
   Setup-Kachel ist die eine Fläche in Tinte: die fünf Balken des Zeichens
   liegen riesig und blass darauf, gleiten beim Öffnen nacheinander herein
   (`bar-in`, der eine Bewegungsmoment des Fensters) und rücken bei Hover
@@ -851,12 +861,26 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
     Zähler, eine unberührte übernimmt die Zahl der vorigen), „Gerade bei —
     was davor liegt, gilt als gesehen“; Adresse, Filme und Cover
     eingeklappt.
+  - **Zustände** (21.10.2026, „Hover und Active sehen komisch aus“): die
+    Filter über der Liste sind Pillen wie auf der Startseite — gewählt in
+    Tinte, die übrigen getönt mit Haarlinie; vorher war Hover dieselbe
+    Tönung wie „gewählt“. Ein Poster ohne Cover hat seine getönte Fläche
+    auch in Ruhe, nicht erst beim Überfahren. Der Ring liegt um das Poster,
+    nicht um die ganze Spalte, und nur bei Tastatur (Tab, Pfeile) — ein
+    Klick setzte vorher einen bleibenden Ring. „+1“ ist eine kleine Pille,
+    beim Überfahren in Tinte. „Nur offene Folgen“ ist eine Pille mit
+    gezeichnetem Haken statt ☑/☐, der Discord-Schalter erscheint nur in der
+    App, wo er wirkt.
   - Unter der Liste eine Zeile: „Nur auf diesem Gerät gespeichert.“ mit
     „Exportieren“ und „Aus Datei einlesen“ als Links; nach dem Einlesen ein
     Satz, was neu, neuer, gleich oder hier neuer war, und „Rückgängig“.
   - **Anytype** (nur in der App): ein dritter Link „Mit Anytype verbinden“
     öffnet ein Fenster, das Schritt für Schritt führt — Anytype offen? Code
-    anfordern, die vier Ziffern eintippen, Space wählen —, danach steht in
+    anfordern, die vier Ziffern eintippen, Space wählen; liegt dort schon
+    eine Merkliste, ist „Aus Anytype laden“ der Knopf und „Nicht laden —
+    beide Listen zusammenführen“ der Link daneben, mit einem Satz, was
+    ersetzt wird; scheitert ein Schritt, steht der Grund von Anytype klein
+    darunter und „Erneut“ daneben —, danach steht in
     der Zeile „Mit Anytype abgeglichen · „Space“ · 14:55“, ein Fehler als
     `Notice` darunter. Im Browser steht statt des Knopfs der Satz „Mit
     Anytype abgleichen geht in der Sondra-App“: dort ginge er nie.

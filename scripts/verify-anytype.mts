@@ -31,9 +31,13 @@ function check(label: string, actual: unknown, expected: unknown) {
 
 const KEY = 'schluessel-123'
 const CODE = '4711'
-const objects = new Map<string, { id: string; name: string; markdown: string; archived: boolean }>()
+const objects = new Map<string, { id: string; name: string; markdown: string; archived: boolean; space: string }>()
 let objectCount = 0
 let validKey = KEY
+/** Pages deleted for good in Anytype: it answers 410 for them. */
+const gone = new Set<string>()
+/** A shared space with reading rights only: writing there is 403. */
+const READ_ONLY = 'space-c'
 
 /** What Anytype and an editor do to Markdown: no code language, code lines re-cut at 60, trailing spaces gone. */
 function reflow(markdown: string): string {
@@ -68,18 +72,21 @@ const server = http.createServer((request, response) => {
     }
     const search = url.pathname.match(/^\/v1\/spaces\/([^/]+)\/search$/)
     if (request.method === 'POST' && search) {
-      const data = [...objects.values()].filter((object) => object.name.includes(json.query ?? '')).map(({ markdown: _m, ...rest }) => rest)
+      const data = [...objects.values()]
+        .filter((object) => object.space === search[1] && !gone.has(object.id) && object.name.includes(json.query ?? ''))
+        .map(({ markdown: _m, ...rest }) => rest)
       return answer(200, { data, pagination: {} })
     }
     const listObjects = url.pathname.match(/^\/v1\/spaces\/([^/]+)\/objects$/)
     if (request.method === 'GET' && listObjects) {
-      const data = [...objects.values()].map(({ markdown: _m, ...rest }) => rest)
+      const data = [...objects.values()].filter((object) => object.space === listObjects[1] && !gone.has(object.id)).map(({ markdown: _m, ...rest }) => rest)
       return answer(200, { data, pagination: {} })
     }
     const create = url.pathname.match(/^\/v1\/spaces\/([^/]+)\/objects$/)
+    if (request.method === 'POST' && create && create[1] === READ_ONLY) return answer(403, { message: 'forbidden' })
     if (request.method === 'POST' && create) {
       objectCount += 1
-      const object = { id: `object-${objectCount}`, name: json.name, markdown: reflow(json.body ?? ''), archived: false }
+      const object = { id: `object-${objectCount}`, name: json.name, markdown: reflow(json.body ?? ''), archived: false, space: create[1] }
       objects.set(object.id, object)
       return answer(201, { object })
     }
@@ -87,7 +94,9 @@ const server = http.createServer((request, response) => {
     if (one) {
       const object = objects.get(decodeURIComponent(one[2]))
       if (!object) return answer(404, { message: 'not found' })
+      if (gone.has(object.id)) return answer(410, { message: 'object deleted' })
       if (request.method === 'GET') return answer(200, { object })
+      if (request.method === 'PATCH' && one[1] === READ_ONLY) return answer(403, { message: 'forbidden' })
       if (request.method === 'PATCH') {
         if (typeof json.markdown === 'string') object.markdown = reflow(json.markdown)
         return answer(200, { object })
@@ -264,6 +273,31 @@ round = await lib.syncMerkliste()
 check('Unlesbarer Datenblock: Abgleich hält an', round.ok ? 'ok' : round.error, 'unreadable')
 check('Unlesbarer Datenblock: Seite unverändert', page.markdown, bent)
 page.markdown = intact
+
+// Connecting with „Aus Anytype laden“: the page's list replaces this one,
+// and the replaced one can be taken back in.
+const onPage = lib.merklisteFromMarkdown(page.markdown)!.items.map((item) => item.title).sort()
+merk.setMerkItems([merk.createMerkItem({ id: 'nur-hier', title: 'Nur hier', updatedAt: 500 })])
+const loaded = await lib.loadFromAnytype()
+check('Laden: Liste aus Anytype ersetzt diese', titles(), onPage)
+check('Laden: meldet, wie viele', loaded.ok && [loaded.loaded, loaded.empty, loaded.before.map((item) => item.title)], [onPage.length, false, ['Nur hier']])
+check('Laden: danach nichts zu schreiben', lib.inStepWithAnytype(merk.merkItems()), true)
+if (loaded.ok) merk.importMerkliste(loaded.before)
+await lib.syncMerkliste()
+check('Bisherige dazugenommen, auch auf der Seite', lib.merklisteFromMarkdown(page.markdown)?.items.some((item) => item.id === 'nur-hier'), true)
+
+// A shared space with reading rights only: the round says so, the key stays.
+await call('useSpace', READ_ONLY, 'Geteilt')
+round = await lib.syncMerkliste()
+check('Nur Leserechte: Abgleich sagt es', round.ok ? 'ok' : round.error, 'forbidden')
+check('Nur Leserechte: Grund steht dabei', !round.ok && Boolean(round.detail?.includes('403')), true)
+check('Nur Leserechte: Zugang bleibt', (await call('status')).paired, true)
+await call('useSpace', 'space-a', 'Privat', page.id, PAGE_NAME)
+
+// The page deleted for good (410): found missing, made anew.
+gone.add(page.id)
+round = await lib.syncMerkliste()
+check('Endgültig gelöschte Seite (410) wird neu angelegt', [round.ok, [...objects.values()].filter((object) => !gone.has(object.id)).length >= 1], [true, true])
 
 // The page deleted in Anytype: the next round makes a new one.
 objects.clear()
