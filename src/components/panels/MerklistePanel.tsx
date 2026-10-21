@@ -1470,7 +1470,10 @@ function AnytypeDialog({ link, count, onClose }: { link: AnytypeLink; count: num
             <p className="text-small text-prose">Die Spaces werden geladen …</p>
           )
         ) : spaces.length === 0 ? (
-          <p className="text-small text-prose">In Anytype gibt es noch keinen Space. Legen Sie dort einen an.</p>
+          <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+            Anytype zeigt Sondra keinen Space. Legen Sie dort einen an — oder trennen Sie, verbinden Sie neu und geben Sie beim
+            Bestätigen in Anytype einen Space frei.
+          </p>
         ) : (
           <ChoiceRow value={pick} options={spaces.map((space) => ({ value: space.id, label: space.name || 'Ohne Namen' }))} onChange={setPick} />
         )}

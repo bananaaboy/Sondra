@@ -9,6 +9,13 @@
  * (Electron's safeStorage); the page learns whether there is one, never what
  * it is.
  *
+ * Two dialects. `/v1` is what every Anytype since 0.46.7 speaks. Since
+ * 0.51.6 the pairing lets the user hand out only some spaces, and `/v1`
+ * refuses such a key outright („…carries a space grant, which /v1 cannot
+ * honor"); `/v2` takes it. The first such refusal switches this link to
+ * `/v2` for good — a key that may see everything stays on `/v1`, where it
+ * always worked.
+ *
  * Kept free of Electron itself so `scripts/verify-anytype.mjs` can run it
  * under Node against a stand-in for Anytype.
  */
@@ -22,6 +29,40 @@ export const ANYTYPE_API = 'http://127.0.0.1:31009'
 export const ANYTYPE_VERSION = '2025-11-08'
 /** The default page name the list lives on. */
 export const PAGE_NAME = 'Sondra · Merkliste'
+/** `/v2` takes at most 512 ops per PATCH and 256 blocks per op; a run may run over by a list item's few lines. */
+const V2_MAX_OPS = 500
+const V2_MAX_BLOCKS = 200
+
+/**
+ * The page's markdown in runs `/v2` takes as one `insert_blocks` each. Every
+ * line outside the code fence is counted as a block — more than Anytype
+ * makes of them, never fewer — and a run is cut only where a new block
+ * starts at the top, never inside the fence or under a list item.
+ */
+export function markdownRuns(markdown, max = V2_MAX_BLOCKS) {
+  const runs = []
+  let run = []
+  let lines = 0
+  let fenced = false
+  let blank = true
+  for (const line of markdown.split('\n')) {
+    const fence = /^\s*```/.test(line)
+    const counted = !fenced && line.trim() !== ''
+    const opens = counted && (blank || fence || /^(?:[-*+] |\d+[.)] |#{1,6} |> )/.test(line))
+    if (opens && lines >= max) {
+      runs.push(run.join('\n'))
+      run = []
+      lines = 0
+    }
+    if (counted) lines += 1
+    if (fence) fenced = !fenced
+    blank = line.trim() === ''
+    run.push(line)
+  }
+  const last = run.join('\n')
+  if (last.trim()) runs.push(last)
+  return runs
+}
 
 /** A failure the page can name: Anytype closed, key withdrawn, a wrong code … */
 class AnytypeError extends Error {
@@ -49,7 +90,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
   const configFile = path.join(dataDir, 'anytype.json')
 
   let key = null
-  /** @type {{ spaceId?: string, spaceName?: string, objectId?: string, objectName?: string }} */
+  /** @type {{ spaceId?: string, spaceName?: string, objectId?: string, objectName?: string, api?: 'v2' }} */
   let config = {}
   try {
     config = JSON.parse(fs.readFileSync(configFile, 'utf8')) ?? {}
@@ -98,26 +139,96 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
     }
     if (response.ok) return response.status === 204 ? null : response.json()
     const text = await response.text().catch(() => '')
-    // Anytype answers errors as { message, … }; the sentence is what helps.
+    // Anytype answers errors as { message, … } (and /v2 adds a code); the
+    // sentence is what helps.
     let message = text
+    let reason = ''
     try {
-      message = JSON.parse(text)?.message ?? text
+      const parsed = JSON.parse(text)
+      message = parsed?.message ?? text
+      reason = typeof parsed?.code === 'string' ? parsed.code : ''
     } catch {
       // Not JSON; the text as it came.
     }
     const detail = `${method} ${route.split('?')[0]}: HTTP ${response.status} ${String(message).slice(0, 160)}`.trim()
+    // A key bound to chosen spaces: /v1 cannot take it, /v2 can.
+    if (response.status === 403 && reason === 'v1_not_available_for_scoped_keys') throw new AnytypeError('scoped-key', detail)
     if (auth && response.status === 401) {
       // The key was withdrawn in Anytype's settings; a new code is needed.
       dropKey()
       throw new AnytypeError('unauthorized', detail)
     }
+    // A space the key was not given when it was paired (/v2 only).
+    if (response.status === 403 && reason === 'space_not_granted') throw new AnytypeError('not-granted', detail)
     // Forbidden is about this space or object (a shared space with reading
-    // rights only), not about the key: it stays.
+    // rights only, a key paired for reading), not about the key: it stays.
     if (response.status === 403) throw new AnytypeError('forbidden', detail)
     // 410: deleted in Anytype, emptied from its bin.
     if (response.status === 404 || response.status === 410) throw new AnytypeError('missing', detail)
     if (response.status === 429) throw new AnytypeError('busy', detail)
     throw new AnytypeError(response.status === 400 ? 'rejected' : 'failed', detail)
+  }
+
+  /**
+   * The few things Sondra asks of Anytype, in both dialects. Rows come back
+   * as `{ id, name, archived }`; `/v2` leaves archived objects out of its
+   * lists by itself.
+   */
+  const v2 = () => config.api === 'v2'
+  const object = (space, id) => `/spaces/${space}/objects/${encodeURIComponent(id)}`
+  const dialect = {
+    async spaces() {
+      const answer = v2() ? await call('GET', '/v2/spaces?ids=full&limit=100') : await call('GET', '/v1/spaces?limit=100')
+      return answer?.data ?? []
+    },
+    async search(space, query) {
+      const answer = v2()
+        ? await call('POST', `/v2/spaces/${space}/search?ids=full&limit=50`, { query, type: 'page' })
+        : await call('POST', `/v1/spaces/${space}/search`, { query, types: ['page'], type: 'page' })
+      return answer?.data ?? []
+    },
+    async list(space) {
+      const answer = await call('GET', `/${v2() ? 'v2' : 'v1'}/spaces/${space}/objects?limit=50`)
+      return answer?.data ?? []
+    },
+    /** The page as markdown; a page in Anytype's bin counts as gone. */
+    async read(space, id) {
+      if (v2()) {
+        const answer = await call('GET', `/v2${object(space, id)}?format=md`)
+        return String(answer?.markdown ?? '')
+      }
+      const answer = await call('GET', `/v1${object(space, id)}?format=md`)
+      if (answer?.object?.archived) throw new AnytypeError('missing')
+      return String(answer?.object?.markdown ?? '')
+    },
+    /** A new page; its id. */
+    async create(space, name, markdown) {
+      const answer = v2()
+        ? await call('POST', `/v2/spaces/${space}/objects`, { type: 'page', name, markdown })
+        : await call('POST', `/v1/spaces/${space}/objects`, { name, type_key: 'page', body: markdown })
+      const id = v2() ? answer?.id : answer?.object?.id
+      if (!id) throw new AnytypeError('failed', 'keine Objekt-ID')
+      return id
+    },
+    /**
+     * The page's text replaced. `/v1` takes it whole; `/v2` has no such
+     * call — its own way to start a page over is to delete every top block
+     * and insert the new ones, as one batch where the limits allow.
+     */
+    async replace(space, id, markdown) {
+      if (!v2()) {
+        await call('PATCH', `/v1${object(space, id)}`, { markdown })
+        return
+      }
+      const outline = (await call('GET', `/v2${object(space, id)}?outline=true`))?.outline ?? []
+      const ops = [
+        ...outline.filter((block) => block?.indent === 0 && block.id).map((block) => ({ op: 'delete_block', id: block.id, recursive: true })),
+        ...markdownRuns(markdown).map((run) => ({ op: 'insert_blocks', markdown: run, position: 'last' })),
+      ]
+      for (let at = 0; at < ops.length; at += V2_MAX_OPS) {
+        await call('PATCH', `/v2${object(space, id)}`, { ops: ops.slice(at, at + V2_MAX_OPS) })
+      }
+    },
   }
 
   const needSpace = () => {
@@ -132,21 +243,21 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
     if (config.objectId) return config.objectId
     const targetName = config.objectName || PAGE_NAME
 
+    const named = (rows) => rows.find((row) => row?.name === targetName && !row.archived)
     let page = null
     try {
-      const found = await call('POST', `/v1/spaces/${space}/search`, { query: targetName, types: ['page'], type: 'page' })
-      page = (found?.data ?? []).find((object) => object?.name === targetName && !object.archived)
-      if (!page && targetName.includes('·')) {
-        const sub = await call('POST', `/v1/spaces/${space}/search`, { query: 'Sondra', types: ['page'], type: 'page' })
-        page = (sub?.data ?? []).find((object) => object?.name === targetName && !object.archived)
-      }
-    } catch {}
+      page = named(await dialect.search(space, targetName))
+      if (!page && targetName.includes('·')) page = named(await dialect.search(space, 'Sondra'))
+    } catch (error) {
+      if (error.code === 'scoped-key') throw error
+    }
 
     if (!page) {
       try {
-        const list = await call('GET', `/v1/spaces/${space}/objects?limit=50`)
-        page = (list?.data ?? []).find((object) => object?.name === targetName && !object.archived)
-      } catch {}
+        page = named(await dialect.list(space))
+      } catch (error) {
+        if (error.code === 'scoped-key') throw error
+      }
     }
 
     if (!page) return null
@@ -192,15 +303,20 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       if (!answer?.api_key) throw new AnytypeError('failed', 'kein api_key')
       key = answer.api_key
       saveKey()
+      // A new key may see more or less than the old one: which dialect it
+      // needs is found out again.
+      if (config.api) {
+        delete config.api
+        saveConfig()
+      }
       log('Anytype: verbunden')
       return {}
     },
 
     async spaces() {
       if (!key) throw new AnytypeError('unauthorized')
-      const answer = await call('GET', '/v1/spaces?limit=100')
       return {
-        spaces: (answer?.data ?? [])
+        spaces: (await dialect.spaces())
           .filter((space) => typeof space?.id === 'string')
           .map((space) => ({ id: space.id, name: String(space.name ?? '') })),
       }
@@ -213,30 +329,24 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       const space = encodeURIComponent(targetSpace)
 
       const candidates = new Map()
-      try {
-        const found = await call('POST', `/v1/spaces/${space}/search`, { query: 'Sondra', types: ['page'], type: 'page' })
-        for (const obj of found?.data ?? []) {
-          if (obj?.id && !obj.archived && typeof obj?.name === 'string' && obj.name.includes('Sondra')) {
-            candidates.set(obj.id, obj)
-          }
+      const take = (rows) => {
+        for (const obj of rows) {
+          if (obj?.id && !obj.archived && typeof obj?.name === 'string' && obj.name.includes('Sondra')) candidates.set(obj.id, obj)
         }
-      } catch {}
-
-      try {
-        const list = await call('GET', `/v1/spaces/${space}/objects?limit=50`)
-        for (const obj of list?.data ?? []) {
-          if (obj?.id && !obj.archived && typeof obj?.name === 'string' && obj.name.includes('Sondra')) {
-            candidates.set(obj.id, obj)
-          }
+      }
+      for (const look of [() => dialect.search(space, 'Sondra'), () => dialect.list(space)]) {
+        try {
+          take(await look())
+        } catch (error) {
+          if (error.code === 'scoped-key') throw error
         }
-      } catch {}
+      }
 
       const notes = []
       for (const [id, obj] of candidates.entries()) {
         let itemCount = 0
         try {
-          const detail = await call('GET', `/v1/spaces/${space}/objects/${encodeURIComponent(id)}?format=md`)
-          const md = detail?.object?.markdown || ''
+          const md = await dialect.read(space, id)
           const match = md.match(/```(?:sondra-merkliste)?\s*([\s\S]*?)```/)
           if (match) {
             try {
@@ -263,6 +373,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
         spaceName: typeof name === 'string' ? name : '',
         objectId: typeof objectId === 'string' && objectId ? objectId : undefined,
         objectName: typeof objectName === 'string' && objectName ? objectName : undefined,
+        api: config.api,
       }
       saveConfig()
       return {}
@@ -275,19 +386,14 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       const space = encodeURIComponent(targetSpace)
       const pageName = typeof name === 'string' && name.trim() ? name.trim() : PAGE_NAME
 
-      const answer = await call('POST', `/v1/spaces/${space}/objects`, {
-        name: pageName,
-        type_key: 'page',
-        body: initialMarkdown,
-      })
-      if (!answer?.object?.id) throw new AnytypeError('failed', 'keine Objekt-ID')
+      const id = await dialect.create(space, pageName, typeof initialMarkdown === 'string' ? initialMarkdown : '')
       config.spaceId = targetSpace
       if (typeof spaceName === 'string' && spaceName) config.spaceName = spaceName
-      config.objectId = answer.object.id
+      config.objectId = id
       config.objectName = pageName
       saveConfig()
       log(`Anytype: Seite „${pageName}“ angelegt`)
-      return { id: answer.object.id, name: pageName }
+      return { id, name: pageName }
     },
 
     /** The page's text, or null while there is no page yet. */
@@ -296,9 +402,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       let id = await findPage()
       if (!id) return { markdown: null }
       try {
-        const answer = await call('GET', `/v1/spaces/${space}/objects/${encodeURIComponent(id)}?format=md`)
-        if (answer?.object?.archived) throw new AnytypeError('missing')
-        return { markdown: String(answer?.object?.markdown ?? '') }
+        return { markdown: await dialect.read(space, id) }
       } catch (error) {
         if (error.code !== 'missing') throw error
         // Deleted in Anytype: look again by name, else there is none — and
@@ -308,9 +412,7 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
         id = await findPage()
         if (!id) return { markdown: null }
         try {
-          const answer = await call('GET', `/v1/spaces/${space}/objects/${encodeURIComponent(id)}?format=md`)
-          if (answer?.object?.archived) throw new AnytypeError('missing')
-          return { markdown: String(answer?.object?.markdown ?? '') }
+          return { markdown: await dialect.read(space, id) }
         } catch (again) {
           if (again.code !== 'missing') throw again
           delete config.objectId
@@ -328,16 +430,14 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       const id = await findPage()
       if (id) {
         try {
-          await call('PATCH', `/v1/spaces/${space}/objects/${encodeURIComponent(id)}`, { markdown })
+          await dialect.replace(space, id, markdown)
           return {}
         } catch (error) {
           if (error.code !== 'missing') throw error
           delete config.objectId
         }
       }
-      const answer = await call('POST', `/v1/spaces/${space}/objects`, { name: targetName, type_key: 'page', body: markdown })
-      if (!answer?.object?.id) throw new AnytypeError('failed', 'keine Objekt-ID')
-      config.objectId = answer.object.id
+      config.objectId = await dialect.create(space, targetName, markdown)
       config.objectName = targetName
       saveConfig()
       log(`Anytype: Seite „${targetName}“ angelegt`)
@@ -363,7 +463,17 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
       const run = Object.hasOwn(actions, action) ? actions[action] : null
       if (!run) return { ok: false, error: 'rejected' }
       try {
-        return { ok: true, ...(await run(...args)) }
+        try {
+          return { ok: true, ...(await run(...args)) }
+        } catch (error) {
+          if (error?.code !== 'scoped-key' || config.api === 'v2') throw error
+          // Refused on /v1 for its space grant: the same step once more on
+          // /v2, and /v2 from now on.
+          config.api = 'v2'
+          saveConfig()
+          log('Anytype: Schlüssel mit Space-Freigabe, weiter über /v2')
+          return { ok: true, ...(await run(...args)) }
+        }
       } catch (error) {
         const code = error instanceof AnytypeError ? error.code : 'failed'
         const detail = String((error instanceof AnytypeError ? error.detail : error?.message) || '').slice(0, 240)

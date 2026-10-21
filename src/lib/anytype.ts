@@ -42,6 +42,7 @@ export type AnytypeError =
   | 'busy'
   | 'rejected'
   | 'forbidden'
+  | 'not-granted'
   | 'unreadable'
   | 'failed'
 /** A failure carries Anytype's own reason in `detail`, for the log and the dialog. */
@@ -98,7 +99,10 @@ export const ANYTYPE_PROBLEM: Record<AnytypeError, string> = {
   missing: 'Die Seite in Anytype ist nicht mehr da; beim nächsten Abgleich legt Sondra sie neu an.',
   busy: 'Anytype ist gerade beschäftigt. Gleich noch einmal.',
   rejected: 'Anytype hat die Anfrage abgelehnt.',
-  forbidden: 'In diesem Space darf Sondra nichts anlegen oder ändern — vermutlich haben Sie dort nur Leserechte. Wählen Sie einen anderen Space.',
+  forbidden:
+    'In diesem Space darf Sondra nichts anlegen oder ändern — Sie haben dort nur Leserechte, oder Sondra wurde beim Verbinden nur Lesen erlaubt. Wählen Sie einen anderen Space oder verbinden Sie neu.',
+  'not-granted':
+    'Diesen Space hat Anytype für Sondra nicht freigegeben. Wählen Sie einen freigegebenen Space, oder verbinden Sie neu und geben Sie ihn beim Bestätigen in Anytype frei.',
   unreadable:
     'Der Datenblock auf der Seite in Anytype lässt sich nicht lesen. Sondra schreibt nicht darüber, damit dort nichts verloren geht. Wählen Sie unter „Anytype“ eine andere Notiz oder legen Sie eine neue an.',
   failed: 'Der Abgleich mit Anytype ist gescheitert. Die Einzelheiten stehen in sondra.log.',

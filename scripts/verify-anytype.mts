@@ -11,6 +11,11 @@
  * hands it back (a code block loses its language, anytype-heart
  * core/converter/md) and an editor might (lines of the code block joined and
  * re-cut, spaces trimmed), so the data block has to survive that.
+ *
+ * It speaks `/v2` as well (anytype-heart 0.51.6): a key paired for chosen
+ * spaces is refused on `/v1` the way Anytype refuses it, and `/v2` holds a
+ * page as blocks with ids, takes no whole-page replace, and keeps to its
+ * limits — 512 ops per PATCH, 256 blocks per op, strict bodies.
  */
 
 import fs from 'node:fs'
@@ -30,8 +35,80 @@ function check(label: string, actual: unknown, expected: unknown) {
 /* -- The stand-in ------------------------------------------------------------ */
 
 const KEY = 'schluessel-123'
+/** A key paired for space-a only: /v1 refuses it, /v2 takes it. */
+const SCOPED_KEY = 'schluessel-space-a'
+const GRANTED = ['space-a']
+let issueScoped = false
 const CODE = '4711'
-const objects = new Map<string, { id: string; name: string; markdown: string; archived: boolean; space: string }>()
+
+/** A page's top blocks, as Anytype splits Markdown: the code block whole, every list item and heading its own. */
+function blocksOf(markdown: string): string[] {
+  const blocks: string[] = []
+  let current: string[] = []
+  let fenced = false
+  const flush = () => {
+    if (current.some((line) => line.trim())) blocks.push(current.join('\n'))
+    current = []
+  }
+  for (const line of markdown.split('\n')) {
+    const fence = line.trimStart().startsWith('```')
+    if (fenced) {
+      current.push(line)
+      if (fence) {
+        fenced = false
+        flush()
+      }
+      continue
+    }
+    if (fence) {
+      flush()
+      current.push(line)
+      fenced = true
+      continue
+    }
+    if (!line.trim()) {
+      flush()
+      continue
+    }
+    if (/^(?:[-*+] |#{1,6} )/.test(line)) flush()
+    current.push(line)
+  }
+  flush()
+  return blocks
+}
+
+let blockCount = 0
+/** A page as Anytype holds it: blocks with lasting ids; its Markdown is what an export makes of them. */
+class Page {
+  blocks: { id: string; text: string }[] = []
+  constructor(
+    public id: string,
+    public name: string,
+    markdown: string,
+    public space: string,
+    public archived = false,
+  ) {
+    this.markdown = markdown
+  }
+  static from(texts: string[]) {
+    return texts.map((text) => ({ id: `blk-${(blockCount += 1)}`, text }))
+  }
+  get markdown() {
+    return this.blocks.map((block) => block.text).join('\n\n')
+  }
+  set markdown(value: string) {
+    this.blocks = Page.from(blocksOf(value))
+  }
+  get row() {
+    return { id: this.id, name: this.name, archived: this.archived, space: this.space }
+  }
+  toJSON() {
+    return { ...this.row, markdown: this.markdown }
+  }
+}
+const objects = new Map<string, Page>()
+/** What the /v2 side was sent: PATCH rounds, the largest batch and run, /v1 calls with the scoped key. */
+const seen = { patches: 0, maxOps: 0, maxBlocks: 0, v1Scoped: 0 }
 let objectCount = 0
 let validKey = KEY
 /** Pages deleted for good in Anytype: it answers 410 for them. */
@@ -64,9 +141,20 @@ const server = http.createServer((request, response) => {
       return json.app_name === 'Sondra' ? answer(201, { challenge_id: 'challenge-1' }) : answer(400, {})
     }
     if (request.method === 'POST' && url.pathname === '/v1/auth/api_keys') {
-      return json.challenge_id === 'challenge-1' && json.code === CODE ? answer(201, { api_key: KEY }) : answer(400, { message: 'invalid code' })
+      return json.challenge_id === 'challenge-1' && json.code === CODE
+        ? answer(201, { api_key: issueScoped ? SCOPED_KEY : KEY })
+        : answer(400, { message: 'invalid code' })
     }
     if (request.headers.authorization !== `Bearer ${validKey}`) return answer(401, { message: 'unauthorized' })
+    if (validKey === SCOPED_KEY && url.pathname.startsWith('/v1/')) {
+      seen.v1Scoped += 1
+      return answer(403, {
+        status: 403,
+        code: 'v1_not_available_for_scoped_keys',
+        message: `key "Sondra" carries a space grant (spaces [${GRANTED.join(' ')}] with readwrite access), which /v1 cannot honor — call the same route on /v2, or issue an unscoped key for /v1`,
+      })
+    }
+    if (url.pathname.startsWith('/v2/')) return v2(request.method ?? 'GET', url, json, answer)
     if (request.method === 'GET' && url.pathname === '/v1/spaces') {
       return answer(200, { data: [{ id: 'space-a', name: 'Privat' }, { id: 'space-b', name: 'Familie' }], pagination: {} })
     }
@@ -74,19 +162,19 @@ const server = http.createServer((request, response) => {
     if (request.method === 'POST' && search) {
       const data = [...objects.values()]
         .filter((object) => object.space === search[1] && !gone.has(object.id) && object.name.includes(json.query ?? ''))
-        .map(({ markdown: _m, ...rest }) => rest)
+        .map((object) => object.row)
       return answer(200, { data, pagination: {} })
     }
     const listObjects = url.pathname.match(/^\/v1\/spaces\/([^/]+)\/objects$/)
     if (request.method === 'GET' && listObjects) {
-      const data = [...objects.values()].filter((object) => object.space === listObjects[1] && !gone.has(object.id)).map(({ markdown: _m, ...rest }) => rest)
+      const data = [...objects.values()].filter((object) => object.space === listObjects[1] && !gone.has(object.id)).map((object) => object.row)
       return answer(200, { data, pagination: {} })
     }
     const create = url.pathname.match(/^\/v1\/spaces\/([^/]+)\/objects$/)
     if (request.method === 'POST' && create && create[1] === READ_ONLY) return answer(403, { message: 'forbidden' })
     if (request.method === 'POST' && create) {
       objectCount += 1
-      const object = { id: `object-${objectCount}`, name: json.name, markdown: reflow(json.body ?? ''), archived: false, space: create[1] }
+      const object = new Page(`object-${objectCount}`, json.name, reflow(json.body ?? ''), create[1])
       objects.set(object.id, object)
       return answer(201, { object })
     }
@@ -105,6 +193,82 @@ const server = http.createServer((request, response) => {
     answer(404, { message: 'no route' })
   })
 })
+
+/** The /v2 routes Sondra uses, as strict as Anytype's. */
+function v2(method: string, url: URL, json: Record<string, unknown>, answer: (status: number, json?: unknown) => void) {
+  const refuse = (status: number, code: string, message: string) => answer(status, { status, code, message, issues: [] })
+  const only = (allowed: string[]) => Object.keys(json).find((key) => !allowed.includes(key))
+  if (method === 'GET' && url.pathname === '/v2/spaces') {
+    const all = [{ id: 'space-a', name: 'Privat' }, { id: 'space-b', name: 'Familie' }]
+    return answer(200, { data: all.filter((space) => GRANTED.includes(space.id)), total: 1, offset: 0, limit: 100, has_more: false, has_not_granted_spaces: true })
+  }
+  const inSpace = url.pathname.match(/^\/v2\/spaces\/([^/]+)\/(.*)$/)
+  if (!inSpace) return refuse(404, 'not_found', 'no route')
+  const [, space, rest] = inSpace
+  if (!GRANTED.includes(space)) return refuse(403, 'space_not_granted', `space "${space}" is not granted to this key`)
+  if (method === 'POST' && rest === 'search') {
+    const stray = only(['query', 'type', 'filter', 'filters', 'sorts', 'fields'])
+    if (stray) return refuse(400, 'validation_failed', `unknown key "${stray}"`)
+    const data = [...objects.values()]
+      .filter((object) => object.space === space && !gone.has(object.id) && !object.archived && object.name.includes(String(json.query ?? '')))
+      .map((object) => ({ id: object.id, name: object.name, type: 'page' }))
+    return answer(200, { data, total: data.length, offset: 0, limit: 50, has_more: false })
+  }
+  if (method === 'GET' && rest === 'objects') {
+    const data = [...objects.values()].filter((object) => object.space === space && !gone.has(object.id) && !object.archived).map((object) => ({ id: object.id, name: object.name, type: 'page' }))
+    return answer(200, { data, total: data.length, offset: 0, limit: 50, has_more: false })
+  }
+  if (method === 'POST' && rest === 'objects') {
+    const stray = only(['type', 'name', 'properties', 'markdown'])
+    if (stray) return refuse(400, 'validation_failed', `unknown key "${stray}" — the shortcut accepts type, name, properties, markdown`)
+    if (json.type !== 'page') return refuse(400, 'validation_failed', 'unknown type')
+    objectCount += 1
+    const object = new Page(`object-${objectCount}`, String(json.name ?? ''), reflow(String(json.markdown ?? '')), space)
+    objects.set(object.id, object)
+    return answer(201, { id: object.id, type: 'page', etag: 'e1' })
+  }
+  const one = rest.match(/^objects\/([^/]+)$/)
+  if (!one) return refuse(404, 'not_found', 'no route')
+  const object = objects.get(decodeURIComponent(one[1]))
+  if (!object || object.space !== space) return refuse(404, 'not_found', 'object not found')
+  if (gone.has(object.id)) return refuse(410, 'gone', 'object deleted')
+  if (method === 'GET' && url.searchParams.get('format') === 'md') {
+    if (url.searchParams.get('outline')) return refuse(400, 'validation_failed', 'format=md and outline are mutually exclusive')
+    return answer(200, { id: object.id, type: 'page', etag: 'e1', markdown: object.markdown })
+  }
+  if (method === 'GET' && url.searchParams.get('outline') === 'true') {
+    return answer(200, { id: object.id, type: 'page', etag: 'e1', outline: object.blocks.map((block) => ({ indent: 0, id: block.id, type: 'text', text: block.text.slice(0, 80) })) })
+  }
+  if (method === 'PATCH') {
+    const stray = only(['ops'])
+    if (stray) return refuse(400, 'validation_failed', `unknown key "${stray}" — the PATCH body carries only ops`)
+    const ops = json.ops as Record<string, unknown>[]
+    if (!Array.isArray(ops) || ops.length === 0) return refuse(400, 'validation_failed', 'ops missing')
+    if (ops.length > 512) return refuse(400, 'validation_failed', `${ops.length} ops exceed the 512-op limit`)
+    // One batch is atomic: worked on a copy, kept only when every op went through.
+    let blocks = [...object.blocks]
+    for (const [index, op] of ops.entries()) {
+      if (op.op === 'delete_block') {
+        if (!blocks.some((block) => block.id === op.id)) return refuse(400, 'validation_failed', `ops[${index}]: unknown block "${String(op.id)}"`)
+        blocks = blocks.filter((block) => block.id !== op.id)
+      } else if (op.op === 'insert_blocks') {
+        if (op.position !== undefined && op.position !== 'first' && op.position !== 'last') return refuse(400, 'validation_failed', 'invalid position')
+        const run = blocksOf(reflow(String(op.markdown ?? '')))
+        if (run.length > 256) return refuse(400, 'validation_failed', `ops[${index}]: ${run.length} blocks exceed the 256-block per-op limit`)
+        seen.maxBlocks = Math.max(seen.maxBlocks, run.length)
+        blocks = op.position === 'first' ? [...Page.from(run), ...blocks] : [...blocks, ...Page.from(run)]
+      } else {
+        return refuse(400, 'validation_failed', `ops[${index}]: op "${String(op.op)}" not used here`)
+      }
+    }
+    object.blocks = blocks
+    seen.patches += 1
+    seen.maxOps = Math.max(seen.maxOps, ops.length)
+    return answer(200, { id: object.id, etag: 'e2', diff_stats: {} })
+  }
+  return refuse(405, 'method_not_allowed', method)
+}
+
 await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
 const address = server.address()
 const api = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`
@@ -310,6 +474,56 @@ round = await lib.syncMerkliste()
 check('Zurückgezogener Schlüssel', round.ok ? 'ok' : round.error, 'unauthorized')
 check('Danach nicht mehr verbunden', (await call('status')).paired, false)
 check('Getrennt: Schlüsseldatei gelöscht', fs.existsSync(path.join(dataDir, 'anytype-schluessel.bin')), false)
+
+/* -- A key for chosen spaces (Anytype 0.51.6): /v2 --------------------------- */
+
+// Paired anew; this time the user handed Sondra only „Privat“.
+issueScoped = true
+validKey = SCOPED_KEY
+await call('challenge')
+check('Neu verbunden, nur für einen Space', await call('pair', 'challenge-1', CODE), { ok: true })
+const config = () => JSON.parse(fs.readFileSync(path.join(dataDir, 'anytype.json'), 'utf8'))
+check('Spaces: /v1 lehnt ab, /v2 nennt den freigegebenen', (await call('spaces')).spaces, [{ id: 'space-a', name: 'Privat' }])
+check('Ab jetzt /v2', config().api, 'v2')
+const v1Before = seen.v1Scoped
+round = await lib.syncMerkliste()
+check('Abgleich über /v2', round.ok, true)
+check('Kein /v1 mehr nach dem Wechsel', seen.v1Scoped, v1Before)
+const v2Page = [...objects.values()].find((object) => object.space === 'space-a' && !gone.has(object.id))!
+check('Liste steht auf der Seite (/v2)', lib.merklisteFromMarkdown(v2Page.markdown)?.items.map((item) => item.title).sort(), titles())
+
+// A long list: more blocks than one op, later more ops than one PATCH.
+// Those already on the page stay: the merge keeps them.
+const kept = titles().length
+const many = Array.from({ length: 600 }, (_, i) => merk.createMerkItem({ id: `serie-${i}`, title: `Serie ${i}`, updatedAt: 1000 + i }))
+merk.setMerkItems(many)
+round = await lib.syncMerkliste()
+check('600 Serien über /v2 geschrieben', [round.ok, lib.merklisteFromMarkdown(v2Page.markdown)?.items.length], [true, 600 + kept])
+check('Je Op höchstens 256 Blöcke', seen.maxBlocks <= 256, true)
+const patchesBefore = seen.patches
+merk.setMerkItems((current) => current.map((item) => (item.id === 'serie-7' ? { ...item, episode: 9, updatedAt: 5000 } : item)))
+round = await lib.syncMerkliste()
+check('Zweites Schreiben: in Runden zu höchstens 512 Ops', [round.ok, seen.maxOps <= 512, seen.patches - patchesBefore > 1], [true, true, true])
+const after = lib.merklisteFromMarkdown(v2Page.markdown)
+check('Danach genau die neue Fassung', [after?.items.length, after?.items.find((item) => item.id === 'serie-7')?.episode, blocksOf(v2Page.markdown).filter((block) => block.startsWith('## Sondra-Daten')).length], [600 + kept, 9, 1])
+
+// A space chosen before, which this key was not given.
+await call('useSpace', 'space-b', 'Familie')
+round = await lib.syncMerkliste()
+check('Nicht freigegebener Space: Abgleich sagt es', round.ok ? 'ok' : round.error, 'not-granted')
+await call('useSpace', 'space-a', 'Privat', v2Page.id, PAGE_NAME)
+
+// New page and the list of pages, over /v2.
+const thirdNote = (await call('createNote', 'space-a', 'Sondra · Merkliste (Gerät 3)', 'Privat')) as { ok: boolean; name: string }
+check('Neue Notiz über /v2', [thirdNote.ok, thirdNote.name], [true, 'Sondra · Merkliste (Gerät 3)'])
+const notesV2 = ((await call('listNotes', 'space-a')).notes as { name: string; itemCount: number }[]).find((note) => note.name === PAGE_NAME)
+check('Notizen über /v2 mit Anzahl', notesV2?.itemCount, 600 + kept)
+await call('useSpace', 'space-a', 'Privat', v2Page.id, PAGE_NAME)
+
+// The next run of the app goes to /v2 straight away.
+link = createAnytype(vault)
+const v1AtRestart = seen.v1Scoped
+check('Nach Neustart gleich über /v2', [(await lib.syncMerkliste()).ok, seen.v1Scoped - v1AtRestart], [true, 0])
 // Statistics calculation check
 const testItems = [
   merk.createMerkItem({

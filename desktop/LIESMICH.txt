@@ -97,7 +97,9 @@ Merkliste
   und gleicht sie bei jeder Änderung ab; Anytype bringt sie auf Ihre anderen
   Geräte, Sondra auf einem anderen Rechner holt sie dort zurück. Liegt im
   Space schon eine Merkliste, lädt Sondra sie beim Verbinden („Nicht laden —
-  beide Listen zusammenführen“ behält auch die dieses Rechners).
+  beide Listen zusammenführen“ behält auch die dieses Rechners). Fragt
+  Anytype beim Bestätigen, welche Spaces Sondra sehen darf, geben Sie den
+  Space der Merkliste frei; Sondra sieht dann nur die freigegebenen.
   Abspielen hakt ab: Heisst eine Datei wie eine Folge auf der Liste
   („Frieren S01E13.mkv“), hakt Sondra sie ab 90 % ab; unter dem Bild steht
   es, mit „Rückgängig“. Neue Folgen: Ist „Neue Folgen melden“ an, prüft
