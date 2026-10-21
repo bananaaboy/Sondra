@@ -114,9 +114,9 @@ function CutWaveformStrip() {
   return (
     <div
       aria-hidden
-      className="mt-[6px] flex h-[28px] w-full items-center justify-between gap-[3px] rounded-nav bg-panel-soft px-[8px] ring-1 ring-inset ring-line"
+      className="mt-[6px] flex h-[28px] w-full min-w-0 items-center justify-between gap-[3px] overflow-hidden rounded-nav bg-panel-soft px-[8px] ring-1 ring-inset ring-line"
     >
-      <div className="flex flex-1 items-center justify-between gap-[2px]">
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-[2px] overflow-hidden">
         {WAVE_BARS_LEFT.map((h, i) => (
           <span
             key={`l-${i}`}
@@ -134,7 +134,7 @@ function CutWaveformStrip() {
           />
         ))}
       </div>
-      <div className="flex flex-1 items-center justify-between gap-[2px]">
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-[2px] overflow-hidden">
         {WAVE_BARS_RIGHT.map((h, i) => (
           <span
             key={`r-${i}`}

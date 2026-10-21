@@ -91,21 +91,33 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       })
-    } catch {
-      throw new AnytypeError('unreachable')
+    } catch (failure) {
+      throw new AnytypeError('unreachable', `${method} ${route.split('?')[0]}: ${failure?.name === 'AbortError' ? `keine Antwort nach ${timeout / 1000} s` : (failure?.message ?? failure)}`)
     } finally {
       clearTimeout(timer)
     }
     if (response.ok) return response.status === 204 ? null : response.json()
-    const detail = await response.text().catch(() => '')
-    if (auth && (response.status === 401 || response.status === 403)) {
+    const text = await response.text().catch(() => '')
+    // Anytype answers errors as { message, … }; the sentence is what helps.
+    let message = text
+    try {
+      message = JSON.parse(text)?.message ?? text
+    } catch {
+      // Not JSON; the text as it came.
+    }
+    const detail = `${method} ${route.split('?')[0]}: HTTP ${response.status} ${String(message).slice(0, 160)}`.trim()
+    if (auth && response.status === 401) {
       // The key was withdrawn in Anytype's settings; a new code is needed.
       dropKey()
-      throw new AnytypeError('unauthorized')
+      throw new AnytypeError('unauthorized', detail)
     }
-    if (response.status === 404) throw new AnytypeError('missing')
-    if (response.status === 429) throw new AnytypeError('busy')
-    throw new AnytypeError(response.status === 400 ? 'rejected' : 'failed', `${response.status} ${detail.slice(0, 200)}`)
+    // Forbidden is about this space or object (a shared space with reading
+    // rights only), not about the key: it stays.
+    if (response.status === 403) throw new AnytypeError('forbidden', detail)
+    // 410: deleted in Anytype, emptied from its bin.
+    if (response.status === 404 || response.status === 410) throw new AnytypeError('missing', detail)
+    if (response.status === 429) throw new AnytypeError('busy', detail)
+    throw new AnytypeError(response.status === 400 ? 'rejected' : 'failed', detail)
   }
 
   const needSpace = () => {
@@ -289,13 +301,23 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
         return { markdown: String(answer?.object?.markdown ?? '') }
       } catch (error) {
         if (error.code !== 'missing') throw error
-        // Deleted in Anytype: look again by name, else there is none.
+        // Deleted in Anytype: look again by name, else there is none — and
+        // one found by name that is gone as well counts as none.
         delete config.objectId
         saveConfig()
         id = await findPage()
         if (!id) return { markdown: null }
-        const answer = await call('GET', `/v1/spaces/${space}/objects/${encodeURIComponent(id)}?format=md`)
-        return { markdown: String(answer?.object?.markdown ?? '') }
+        try {
+          const answer = await call('GET', `/v1/spaces/${space}/objects/${encodeURIComponent(id)}?format=md`)
+          if (answer?.object?.archived) throw new AnytypeError('missing')
+          return { markdown: String(answer?.object?.markdown ?? '') }
+        } catch (again) {
+          if (again.code !== 'missing') throw again
+          delete config.objectId
+          delete config.objectName
+          saveConfig()
+          return { markdown: null }
+        }
       }
     },
 
@@ -344,8 +366,11 @@ export function createAnytype({ dataDir, encrypt, decrypt, canEncrypt, log = () 
         return { ok: true, ...(await run(...args)) }
       } catch (error) {
         const code = error instanceof AnytypeError ? error.code : 'failed'
-        if (code === 'failed') log(`Anytype: ${action} gescheitert ${error?.detail || error?.message || error}`)
-        return { ok: false, error: code }
+        const detail = String((error instanceof AnytypeError ? error.detail : error?.message) || '').slice(0, 240)
+        // Every failure with its reason, so sondra.log says which step stopped.
+        // A closed Anytype is no news on the status check.
+        if (!(action === 'status' && code === 'unreachable')) log(`Anytype: ${action} → ${code}${detail ? ` (${detail})` : ''}`)
+        return { ok: false, error: code, ...(detail ? { detail } : {}) }
       }
     },
   }

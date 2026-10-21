@@ -1851,9 +1851,14 @@ export function DownloaderPanel() {
                     isDragOver ? 'border-ink bg-panel-soft' : 'border-rule hover:border-muted focus-within:border-ink'
                   }`}
                 >
-                  <span className="pointer-events-none absolute right-[12px] top-[4px] text-[11px] font-medium text-muted">
-                    .txt / .m3u mit Links hier ablegbar
-                  </span>
+                  {/* Only where the field has room for it and is still empty: on a
+                      phone it lay over the placeholder, and over any address
+                      typed in; the sentence under the field says the same. */}
+                  {url ? null : (
+                    <span className="pointer-events-none absolute right-[12px] top-[4px] hidden text-[11px] font-medium text-muted md:block">
+                      .txt / .m3u mit Links hier ablegbar
+                    </span>
+                  )}
                   <svg
                     aria-hidden
                     viewBox="0 0 24 24"

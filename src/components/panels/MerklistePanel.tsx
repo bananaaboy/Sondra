@@ -20,6 +20,7 @@ import {
   anytype,
   anytypeAvailable,
   inStepWithAnytype,
+  loadFromAnytype,
   resetAnytypeCache,
   syncMerkliste,
   type AnytypeError,
@@ -84,7 +85,7 @@ import {
   type SavedLinkItem,
   type SavedLinkStatus,
 } from '../../lib/merkliste'
-import { isDiscordRpcEnabled, setDiscordRpcEnabled, updateDiscordPresence } from '../../lib/desktop'
+import { APP_BRIDGE, isDiscordRpcEnabled, setDiscordRpcEnabled, updateDiscordPresence } from '../../lib/desktop'
 import { isAniworldUrl } from '../../lib/download'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
@@ -766,7 +767,7 @@ export function MerklistePanel() {
           onClose={() => setSeason(null)}
         />
       ) : null}
-      {anytypeOpen ? <AnytypeDialog link={anytypeLink} onClose={() => setAnytypeOpen(false)} /> : null}
+      {anytypeOpen ? <AnytypeDialog link={anytypeLink} count={items.length} onClose={() => setAnytypeOpen(false)} /> : null}
     </>
   )
 
@@ -899,7 +900,7 @@ export function MerklistePanel() {
         <div className="flex flex-col gap-[10px] -mt-[12px]">
           {/* Status filter tabs & controls */}
           <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px] border-b border-line pb-[10px] text-small">
-            <div className="flex flex-wrap items-center gap-[4px]">
+            <div role="radiogroup" aria-label="Stand" className="flex flex-wrap items-center gap-[6px]">
               {(
                 [
                   { value: 'all', label: 'Alle' },
@@ -915,15 +916,17 @@ export function MerklistePanel() {
                   <button
                     key={tab.value}
                     type="button"
+                    role="radio"
+                    aria-checked={active}
                     onClick={() => setFilterStatus(tab.value)}
-                    className={`press flex items-center gap-[6px] rounded-nav px-[10px] py-[5px] text-small font-medium transition-colors cursor-pointer ${
+                    className={`press flex items-center gap-[6px] rounded-pill px-[12px] py-[5px] text-small font-medium ${
                       active
-                        ? 'bg-panel-strong text-ink font-semibold'
-                        : 'text-prose hover:bg-panel-soft hover:text-ink'
+                        ? 'bg-ink font-semibold text-on-ink'
+                        : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
                     }`}
                   >
                     <span>{tab.label}</span>
-                    <span className="text-micro font-mono text-muted">{count}</span>
+                    <span className={`value text-micro ${active ? 'text-on-ink/75' : 'text-muted'}`}>{count}</span>
                   </button>
                 )
               })}
@@ -932,31 +935,40 @@ export function MerklistePanel() {
             <div className="flex flex-wrap items-center gap-[12px]">
               <button
                 type="button"
+                aria-pressed={onlyOpen}
                 onClick={() => setOnlyOpen((prev) => !prev)}
-                className={`press flex items-center gap-[6px] rounded-nav px-[8px] py-[4px] text-small transition-colors cursor-pointer ${
-                  onlyOpen ? 'bg-panel-strong text-ink font-semibold' : 'text-muted hover:text-ink'
+                className={`press flex items-center gap-[6px] rounded-pill px-[12px] py-[5px] text-small ${
+                  onlyOpen
+                    ? 'bg-ink font-semibold text-on-ink'
+                    : 'text-prose ring-1 ring-inset ring-line hover:bg-panel-soft hover:text-ink'
                 }`}
                 title="Nur Serien mit noch ungesehenen Folgen anzeigen"
               >
-                <span>{onlyOpen ? '☑' : '☐'}</span>
+                {onlyOpen ? (
+                  <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" fill="none" aria-hidden>
+                    <path d="M3.5 8.4l2.9 2.9 6.1-6.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : null}
                 <span>Nur offene Folgen</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !discordRpcOn
-                  setDiscordRpcOn(next)
-                  setDiscordRpcEnabled(next)
-                }}
-                className={`press flex items-center gap-[5px] rounded-nav px-[8px] py-[4px] text-micro transition-colors cursor-pointer ${
-                  discordRpcOn ? 'bg-panel-strong text-ink font-medium' : 'text-muted hover:text-ink'
-                }`}
-                title="Discord Rich Presence ein- oder ausschalten"
-              >
-                <span className={`size-[6px] rounded-full ${discordRpcOn ? 'bg-emerald-500' : 'bg-muted/40'}`} />
-                <span>Discord: {discordRpcOn ? 'Aktiv' : 'Aus'}</span>
-              </button>
+              {/* Only in the app: a web page cannot reach Discord on this computer. */}
+              {APP_BRIDGE?.setDiscordPresence ? (
+                <button
+                  type="button"
+                  aria-pressed={discordRpcOn}
+                  onClick={() => {
+                    const next = !discordRpcOn
+                    setDiscordRpcOn(next)
+                    setDiscordRpcEnabled(next)
+                  }}
+                  className="press flex items-center gap-[6px] rounded-pill px-[10px] py-[5px] text-small text-prose hover:bg-panel-soft hover:text-ink"
+                  title="In Discord zeigen, was Sie gerade schauen"
+                >
+                  <span aria-hidden className={`size-[7px] rounded-pill ${discordRpcOn ? 'bg-accent-strong' : 'ring-1 ring-inset ring-rule'}`} />
+                  <span>Discord {discordRpcOn ? 'an' : 'aus'}</span>
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -967,8 +979,9 @@ export function MerklistePanel() {
               <button
                 type="button"
                 onClick={() => setFilterTag(null)}
-                className={`press rounded-nav px-[7px] py-[2px] transition-colors cursor-pointer ${
-                  filterTag === null ? 'bg-panel-strong text-ink font-semibold' : 'text-muted hover:text-ink'
+                aria-pressed={filterTag === null}
+                className={`press rounded-pill px-[9px] py-[3px] ${
+                  filterTag === null ? 'bg-ink font-semibold text-on-ink' : 'text-prose ring-1 ring-inset ring-line hover:bg-panel-soft hover:text-ink'
                 }`}
               >
                 Alle Tags
@@ -980,10 +993,9 @@ export function MerklistePanel() {
                     key={tag}
                     type="button"
                     onClick={() => setFilterTag(active ? null : tag)}
-                    className={`press rounded-nav px-[7px] py-[2px] font-sans transition-colors cursor-pointer ${
-                      active
-                        ? 'bg-panel-strong text-ink font-semibold ring-1 ring-inset ring-line'
-                        : 'bg-panel-soft text-prose hover:bg-panel-mid hover:text-ink'
+                    aria-pressed={active}
+                    className={`press rounded-pill px-[9px] py-[3px] ${
+                      active ? 'bg-ink font-semibold text-on-ink' : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
                     }`}
                   >
                     #{tag}
@@ -1008,14 +1020,20 @@ export function MerklistePanel() {
             </h3>
             {/* Posters stand on one line at their foot, like books on a shelf,
                 whatever their shape. */}
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] items-end gap-x-[14px] gap-y-[24px] sm:grid-cols-[repeat(auto-fill,minmax(156px,1fr))] sm:gap-x-[18px]">
+            <div
+              onPointerDown={() => setFocusedId(null)}
+              className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] items-end gap-x-[14px] gap-y-[24px] sm:grid-cols-[repeat(auto-fill,minmax(156px,1fr))] sm:gap-x-[18px]"
+            >
               {group.entries.map((item) => (
                 <SeriesTile
                   key={item.id}
                   item={item}
                   onOpen={() => openSeries(item.id)}
                   isFocused={focusedId === item.id}
-                  onFocus={() => setFocusedId(item.id)}
+                  onFocus={(event) => {
+                    // Tab sets the keyboard's place; a click does not.
+                    if ((event.target as HTMLElement).matches(':focus-visible')) setFocusedId(item.id)
+                  }}
                 />
               ))}
             </div>
@@ -1110,7 +1128,7 @@ const clock = (at: number) => new Date(at).toLocaleTimeString('de-CH', { hour: '
  * it shows typed in here, a space — and, once connected, the state of it
  * with what can be done.
  */
-function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => void }) {
+function AnytypeDialog({ link, count, onClose }: { link: AnytypeLink; count: number; onClose: () => void }) {
   const { status } = link
   const [challenge, setChallenge] = useState<string | null>(null)
   const [code, setCode] = useState('')
@@ -1118,16 +1136,18 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
   const [pick, setPick] = useState('')
   const [choosing, setChoosing] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<string | null>(null)
-
-  // Step 2: Note selection or creation in selected space
+  const [problem, setProblem] = useState<{ text: string; detail?: string } | null>(null)
+  // The space being looked at, the lists found there, and which one is meant.
   const [selectedSpace, setSelectedSpace] = useState<{ id: string; name: string } | null>(null)
   const [foundNotes, setFoundNotes] = useState<FoundNote[] | null>(null)
+  const [noteId, setNoteId] = useState('')
   const [creatingNew, setCreatingNew] = useState(false)
   const [newNoteName, setNewNoteName] = useState('Sondra · Merkliste (Gerät 2)')
+  /** What „Aus Anytype laden“ replaced, to take it back in. */
+  const [loaded, setLoaded] = useState<{ count: number; before: SavedLinkItem[] } | null>(null)
 
-  const failed = (error: AnytypeError) => {
-    setProblem(ANYTYPE_PROBLEM[error])
+  const failed = (answer: { error: AnytypeError; detail?: string }) => {
+    setProblem({ text: ANYTYPE_PROBLEM[answer.error], detail: answer.detail })
     setBusy(false)
   }
   const askCode = async () => {
@@ -1135,7 +1155,7 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
     setProblem(null)
     setCode('')
     const answer = await anytype.challenge()
-    if (!answer.ok) return failed(answer.error)
+    if (!answer.ok) return failed(answer)
     setChallenge(answer.challengeId)
     setBusy(false)
   }
@@ -1146,7 +1166,7 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
     const answer = await anytype.pair(challenge, code)
     if (!answer.ok) {
       if (answer.error === 'wrong-code') setChallenge(null)
-      return failed(answer.error)
+      return failed(answer)
     }
     setChallenge(null)
     await link.refresh()
@@ -1159,77 +1179,62 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
     setFoundNotes(null)
     setCreatingNew(false)
     const answer = await anytype.spaces()
-    if (!answer.ok) return failed(answer.error)
+    if (!answer.ok) return failed(answer)
     setSpaces(answer.spaces)
-    if (answer.spaces.length === 1) {
-      // If only 1 space was granted or available, auto-select it immediately without asking
-      setPick(answer.spaces[0].id)
-      setBusy(false)
-      await loadNotesForSpace(answer.spaces[0])
-      return
-    }
-    setPick((current) => current || answer.spaces[0]?.id || '')
     setBusy(false)
+    // With one space there is nothing to choose.
+    if (answer.spaces.length === 1) return loadNotesForSpace(answer.spaces[0])
+    setPick((current) => (answer.spaces.some((space) => space.id === current) ? current : (answer.spaces[0]?.id ?? '')))
   }
-
   const loadNotesForSpace = async (space: { id: string; name: string }) => {
     setBusy(true)
     setProblem(null)
     setSelectedSpace(space)
+    setFoundNotes(null)
     setCreatingNew(false)
     const answer = await anytype.listNotes(space.id)
-    if (!answer.ok) return failed(answer.error)
-    setFoundNotes(answer.notes)
+    if (!answer.ok) return failed(answer)
+    // The fullest list first: that is the one people mean.
+    const notes = [...answer.notes].sort((a, b) => b.itemCount - a.itemCount)
+    setFoundNotes(notes)
+    setNoteId(notes[0]?.id ?? '')
     setBusy(false)
   }
-
-  const connectExisting = async (note: FoundNote) => {
+  const finish = async () => {
+    setChoosing(false)
+    setSelectedSpace(null)
+    setFoundNotes(null)
+    setCreatingNew(false)
+    await link.refresh()
+    setBusy(false)
+    await link.run()
+  }
+  /** Connects to a list in Anytype: loading it here unless asked to keep both. */
+  const connect = async (note: FoundNote, mode: 'load' | 'merge') => {
     if (!selectedSpace) return
     setBusy(true)
     setProblem(null)
     resetAnytypeCache()
     const answer = await anytype.useSpace(selectedSpace.id, selectedSpace.name, note.id, note.name)
-    if (!answer.ok) return failed(answer.error)
-    setChoosing(false)
-    setSelectedSpace(null)
-    setFoundNotes(null)
-    await link.refresh()
-    setBusy(false)
-    await link.run()
+    if (!answer.ok) return failed(answer)
+    setLoaded(null)
+    if (mode === 'load') {
+      const result = await loadFromAnytype()
+      if (!result.ok) return failed(result)
+      if (!result.empty) setLoaded({ count: result.loaded, before: result.before })
+    }
+    await finish()
   }
-
-  const startNewNote = async () => {
+  const createNote = async (name: string) => {
     if (!selectedSpace) return
-    const name = newNoteName.trim() || 'Sondra · Merkliste (Gerät 2)'
     setBusy(true)
     setProblem(null)
     resetAnytypeCache()
     const answer = await anytype.createNote(selectedSpace.id, name, selectedSpace.name)
-    if (!answer.ok) return failed(answer.error)
-    setChoosing(false)
-    setSelectedSpace(null)
-    setFoundNotes(null)
-    setCreatingNew(false)
-    await link.refresh()
-    setBusy(false)
-    await link.run()
+    if (!answer.ok) return failed(answer)
+    setLoaded(null)
+    await finish()
   }
-
-  const createInitial = async () => {
-    if (!selectedSpace) return
-    setBusy(true)
-    setProblem(null)
-    resetAnytypeCache()
-    const answer = await anytype.createNote(selectedSpace.id, 'Sondra · Merkliste', selectedSpace.name)
-    if (!answer.ok) return failed(answer.error)
-    setChoosing(false)
-    setSelectedSpace(null)
-    setFoundNotes(null)
-    await link.refresh()
-    setBusy(false)
-    await link.run()
-  }
-
   const forget = async () => {
     setBusy(true)
     resetAnytypeCache()
@@ -1238,8 +1243,21 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
     setSpaces(null)
     setSelectedSpace(null)
     setFoundNotes(null)
+    setLoaded(null)
     await link.refresh()
     setBusy(false)
+  }
+  const takeBack = () => {
+    if (!loaded) return
+    importMerkliste(loaded.before)
+    setLoaded(null)
+  }
+  const chooseAgain = () => {
+    setProblem(null)
+    setSpaces(null)
+    setSelectedSpace(null)
+    setFoundNotes(null)
+    setChoosing(true)
   }
 
   // Spaces load by themselves once there is a key and none is chosen.
@@ -1248,6 +1266,13 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
     if (needsSpace && spaces === null && !busy) void loadSpaces()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsSpace])
+
+  const otherSpace =
+    spaces && spaces.length > 1 ? (
+      <button type="button" onClick={() => void loadSpaces()} disabled={busy} className={`${linkClass} text-small`}>
+        Anderen Space wählen
+      </button>
+    ) : null
 
   let body: ReactNode
   if (!status) {
@@ -1306,171 +1331,163 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
         </Button>
       </div>
     )
-  } else if (needsSpace) {
-    if (selectedSpace) {
-      if (foundNotes === null) {
-        body = <p className="text-small text-prose">Suche nach bestehenden Merklisten in „{selectedSpace.name}“ …</p>
-      } else if (foundNotes.length > 0) {
-        body = (
-          <div className="flex flex-col items-start gap-[14px]">
-            <p className="text-small leading-[1.55] text-prose">
-              In Space <strong>„{selectedSpace.name}“</strong> wurde eine bestehende Merkliste von einem anderen Gerät gefunden:
-            </p>
-            <div className="w-full flex flex-col gap-[10px]">
-              {foundNotes.map((note) => (
-                <div key={note.id} className="p-[14px] rounded-panel bg-raised ring-1 ring-rule flex flex-col gap-[8px]">
-                  <div className="flex items-center justify-between gap-[10px]">
-                    <span className="font-medium text-body text-ink">{note.name}</span>
-                    <span className="text-small text-muted">{note.itemCount} {note.itemCount === 1 ? 'Serie' : 'Serien'} gespeichert</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-[10px] pt-[4px]">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => void connectExisting(note)}
-                    >
-                      Bestehende Notiz laden & synchronisieren
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="w-full pt-[12px] border-t border-line flex flex-col items-start gap-[10px]">
-              <p className="text-small text-prose">
-                Oder möchten Sie eine komplett neue, separate Notiz starten (die andere vom anderen Gerät bleibt unverändert)?
-              </p>
-              {creatingNew ? (
-                <div className="w-full flex flex-wrap items-center gap-[10px]">
-                  <TextInput
-                    autoFocus
-                    value={newNoteName}
-                    onChange={(e) => setNewNoteName(e.target.value)}
-                    placeholder="Sondra · Merkliste (Gerät 2)"
-                    aria-label="Name der neuen Notiz"
-                    className="flex-1 min-w-[200px]"
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={busy || !newNoteName.trim()}
-                    onClick={() => void startNewNote()}
-                  >
-                    Neue Notiz erstellen & verbinden
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={() => setCreatingNew(false)}
-                    className={`${linkClass} text-small`}
-                  >
-                    Abbrechen
-                  </button>
-                </div>
+  } else if (needsSpace && selectedSpace) {
+    const note = foundNotes?.find((entry) => entry.id === noteId) ?? foundNotes?.[0] ?? null
+    if (foundNotes === null) {
+      body = problem ? (
+        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[8px]">
+          <Button type="button" size="sm" variant="quiet" disabled={busy} onClick={() => void loadNotesForSpace(selectedSpace)}>
+            Erneut suchen
+          </Button>
+          {otherSpace}
+        </div>
+      ) : (
+        <p className="text-small text-prose">Sondra sucht in „{selectedSpace.name || 'Ohne Namen'}“ nach einer Merkliste …</p>
+      )
+    } else if (note) {
+      body = (
+        <div className="flex flex-col items-start gap-[16px]">
+          <div className="flex flex-col gap-[6px]">
+            <p className="text-body text-ink">
+              In „{selectedSpace.name || 'Ohne Namen'}“ liegt schon eine Merkliste
+              {foundNotes.length === 1 ? (
+                <>
+                  : <span className="font-semibold">„{note.name}“</span> mit {note.itemCount} {note.itemCount === 1 ? 'Serie' : 'Serien'}.
+                </>
               ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="quiet"
-                  disabled={busy}
-                  onClick={() => setCreatingNew(true)}
-                >
-                  + Neue separate Notiz anlegen
-                </Button>
+                '. Welche?'
               )}
-            </div>
-
-            {spaces && spaces.length > 1 ? (
-              <button
-                type="button"
-                onClick={() => { setSelectedSpace(null); setFoundNotes(null); }}
-                className={`${linkClass} text-small pt-[4px]`}
-              >
-                ← Anderen Space wählen
-              </button>
+            </p>
+            {foundNotes.length > 1 ? (
+              <ChoiceRow
+                value={note.id}
+                options={foundNotes.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.itemCount}` }))}
+                onChange={setNoteId}
+              />
             ) : null}
           </div>
-        )
-      } else {
-        body = (
-          <div className="flex flex-col items-start gap-[12px]">
-            <p className="text-small text-prose">
-              In Space <strong>„{selectedSpace.name}“</strong> gibt es noch keine Merkliste. Sondra wird eine neue Notiz anlegen.
-            </p>
-            <div className="flex flex-wrap items-center gap-[12px]">
-              <Button type="button" size="sm" disabled={busy} onClick={() => void createInitial()}>
-                Notiz anlegen & verbinden
-              </Button>
-              {spaces && spaces.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => { setSelectedSpace(null); setFoundNotes(null); }}
-                  className={`${linkClass} text-small`}
-                >
-                  Anderen Space wählen
-                </button>
-              ) : null}
-            </div>
+          <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[8px]">
+            <Button type="button" size="sm" disabled={busy} onClick={() => void connect(note, 'load')}>
+              Aus Anytype laden
+            </Button>
+            <button type="button" disabled={busy} onClick={() => void connect(note, 'merge')} className={`${linkClass} text-small`}>
+              Nicht laden — beide Listen zusammenführen
+            </button>
           </div>
-        )
-      }
+          <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+            {count > 0
+              ? `„Aus Anytype laden“ ersetzt die ${count} ${count === 1 ? 'Serie' : 'Serien'} auf diesem Gerät durch die Liste aus Anytype; danach lässt sich die bisherige wieder dazunehmen. „Zusammenführen“ behält beide.`
+              : 'Auf diesem Gerät ist die Merkliste noch leer.'}
+          </p>
+          <div className="flex w-full flex-col items-start gap-[10px] border-t border-line pt-[14px]">
+            {creatingNew ? (
+              <div className="flex w-full flex-wrap items-center gap-[10px]">
+                <TextInput
+                  autoFocus
+                  value={newNoteName}
+                  onChange={(event) => setNewNoteName(event.target.value)}
+                  aria-label="Name der neuen Notiz"
+                  className="min-w-[200px] flex-1"
+                />
+                <Button type="button" size="sm" disabled={busy || !newNoteName.trim()} onClick={() => void createNote(newNoteName.trim())}>
+                  Anlegen und verbinden
+                </Button>
+                <button type="button" onClick={() => setCreatingNew(false)} className={`${linkClass} text-small`}>
+                  Abbrechen
+                </button>
+              </div>
+            ) : (
+              <p className="flex flex-wrap items-center gap-x-[18px] gap-y-[6px] text-small text-prose">
+                <button type="button" disabled={busy} onClick={() => setCreatingNew(true)} className={linkClass}>
+                  Eigene, neue Notiz anlegen
+                </button>
+                {otherSpace}
+              </p>
+            )}
+          </div>
+        </div>
+      )
     } else {
       body = (
         <div className="flex flex-col items-start gap-[12px]">
-          <p className="text-small text-prose">In welchem Space soll die Merkliste liegen?</p>
-          {spaces === null ? (
-            <p className="text-small text-prose">Die Spaces werden geladen …</p>
-          ) : spaces.length === 0 ? (
-            <p className="text-small text-prose">In Anytype gibt es noch keinen Space. Legen Sie dort einen an.</p>
+          <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+            In „{selectedSpace.name || 'Ohne Namen'}“ gibt es noch keine Merkliste. Sondra legt die Seite „Sondra · Merkliste“ an
+            {count > 0 ? ` — mit den ${count} ${count === 1 ? 'Serie' : 'Serien'} dieses Geräts` : ''}.
+          </p>
+          <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[8px]">
+            <Button type="button" size="sm" disabled={busy} onClick={() => void createNote('Sondra · Merkliste')}>
+              Anlegen und verbinden
+            </Button>
+            {otherSpace}
+          </div>
+        </div>
+      )
+    }
+  } else if (needsSpace) {
+    body = (
+      <div className="flex flex-col items-start gap-[12px]">
+        <p className="text-small text-prose">In welchem Space soll die Merkliste liegen?</p>
+        {spaces === null ? (
+          problem ? (
+            <Button type="button" size="sm" variant="quiet" disabled={busy} onClick={() => void loadSpaces()}>
+              Spaces erneut laden
+            </Button>
           ) : (
-            <ChoiceRow value={pick} options={spaces.map((space) => ({ value: space.id, label: space.name || 'Ohne Namen' }))} onChange={setPick} />
-          )}
-          <div className="flex flex-wrap items-center gap-[12px]">
+            <p className="text-small text-prose">Die Spaces werden geladen …</p>
+          )
+        ) : spaces.length === 0 ? (
+          <p className="text-small text-prose">In Anytype gibt es noch keinen Space. Legen Sie dort einen an.</p>
+        ) : (
+          <ChoiceRow value={pick} options={spaces.map((space) => ({ value: space.id, label: space.name || 'Ohne Namen' }))} onChange={setPick} />
+        )}
+        <div className="flex flex-wrap items-center gap-[12px]">
+          {spaces && spaces.length > 0 ? (
             <Button
               type="button"
               size="sm"
               disabled={busy || !pick}
               onClick={() => {
-                const space = spaces?.find((s) => s.id === pick)
+                const space = spaces.find((entry) => entry.id === pick)
                 if (space) void loadNotesForSpace(space)
               }}
             >
               Diesen Space nehmen
             </Button>
-            {choosing ? (
-              <button type="button" onClick={() => setChoosing(false)} className={`${linkClass} text-small`}>
-                Abbrechen
-              </button>
-            ) : null}
-          </div>
+          ) : null}
+          {choosing ? (
+            <button type="button" onClick={() => setChoosing(false)} className={`${linkClass} text-small`}>
+              Abbrechen
+            </button>
+          ) : null}
         </div>
-      )
-    }
+      </div>
+    )
   } else {
     body = (
       <div className="flex flex-col items-start gap-[14px]">
         <p className="text-body text-prose">
-          Verbunden mit dem Space „{status.space?.name || 'Ohne Namen'}“
+          Verbunden mit „{status.space?.name || 'Ohne Namen'}“
           {status.note?.name ? ` · Notiz „${status.note.name}“` : ''}.
           <span className="text-muted">
             {' '}
             {link.sync.running ? 'Gleicht gerade ab …' : link.sync.at ? `Zuletzt abgeglichen um ${clock(link.sync.at)}.` : ''}
           </span>
         </p>
+        {loaded ? (
+          <p role="status" className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-small text-prose">
+            <span>
+              Aus Anytype geladen: {loaded.count} {loaded.count === 1 ? 'Serie' : 'Serien'}.
+            </span>
+            <button type="button" onClick={takeBack} className={`${linkClass} font-semibold`}>
+              Bisherige Liste dieses Geräts dazunehmen
+            </button>
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[8px]">
           <Button type="button" size="sm" disabled={link.sync.running} onClick={() => void link.run()}>
             Jetzt abgleichen
           </Button>
-          <button
-            type="button"
-            onClick={() => {
-              setSpaces(null)
-              setSelectedSpace(null)
-              setFoundNotes(null)
-              setChoosing(true)
-            }}
-            className={`${linkClass} text-small`}
-          >
+          <button type="button" onClick={chooseAgain} className={`${linkClass} text-small`}>
             Anderen Space oder Notiz wählen
           </button>
           <button type="button" onClick={() => void forget()} disabled={busy} className={`${linkClass} text-small`}>
@@ -1488,17 +1505,17 @@ function AnytypeDialog({ link, onClose }: { link: AnytypeLink; onClose: () => vo
   }
 
   return (
-    <Dialog open onClose={onClose} title="Merkliste in Anytype" size="lg">
+    <Dialog open onClose={onClose} title="Merkliste in Anytype" size="md">
       <div className="flex flex-col gap-[18px]">
-        <p className="max-w-[62ch] text-small leading-[1.55] text-prose">
-          Sondra legt die Merkliste in Anytype als Seite „Sondra · Merkliste“ ab und gleicht sie bei jeder Änderung ab. Anytype
-          bringt sie verschlüsselt auf Ihre anderen Geräte, auch aufs Handy; Sondra auf einem anderen Rechner holt sie dort
-          wieder ab. Covers aus Dateien bleiben auf diesem Rechner, Covers mit Bildadresse reisen mit.
+        <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
+          Sondra legt die Merkliste als Seite in Anytype ab und gleicht sie bei jeder Änderung ab — so haben Sie sie auf allen
+          Geräten, auch auf dem Handy. Covers aus Dateien bleiben auf diesem Rechner.
         </p>
         <div className="border-t border-line pt-[16px]">{body}</div>
         {problem ? (
           <Notice tone="error" title="Hat nicht geklappt">
-            {problem}
+            {problem.text}
+            {problem.detail ? <span className="mt-[4px] block break-words text-micro text-muted">{problem.detail}</span> : null}
           </Notice>
         ) : null}
       </div>
@@ -1887,7 +1904,7 @@ function SeriesTile({
   item: SavedLinkItem
   onOpen: () => void
   isFocused?: boolean
-  onFocus?: () => void
+  onFocus?: (event: React.FocusEvent<HTMLDivElement>) => void
 }) {
   const progress = itemProgress(item)
   const cover = seriesCover(item)
@@ -1912,19 +1929,27 @@ function SeriesTile({
           markSeen(item)
         }
       }}
-      className={`group flex min-w-0 flex-col gap-[10px] rounded-card text-left outline-none transition-shadow ${
-        isFocused ? 'ring-2 ring-ink ring-offset-2 ring-offset-panel' : 'focus-visible:ring-2 focus-visible:ring-ink'
-      }`}
+      className="group flex min-w-0 flex-col gap-[10px] rounded-card text-left outline-none"
     >
       <button
         type="button"
         tabIndex={-1}
         onClick={onOpen}
         aria-label={`${item.title}: ${stand}, ${progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}`}
-        className="press relative block w-full overflow-hidden rounded-card text-left cursor-pointer"
+        // The keyboard's place is a ring round the poster, as on the season
+        // tiles — not round the whole column, and never after a click.
+        className={`press relative block w-full overflow-hidden rounded-card text-left ${poster ? 'bg-stage' : 'bg-panel-mid'} ${
+          isFocused ? 'ring-2 ring-ink ring-offset-2 ring-offset-canvas' : 'group-focus-visible:ring-2 group-focus-visible:ring-ink group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-canvas'
+        }`}
         style={{ aspectRatio: ratioOf(item.tileFormat) }}
       >
-        {poster ? <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} /> : <NamePoster title={item.title} />}
+        {poster ? (
+          <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} />
+        ) : (
+          <span className="absolute inset-0 transition-opacity duration-[var(--dur-base)] group-hover:opacity-0 group-focus-visible:opacity-0">
+            <NamePoster title={item.title} />
+          </span>
+        )}
         
         {/* Rating badge top-right */}
         {item.rating ? (
@@ -1938,7 +1963,7 @@ function SeriesTile({
         <span
           aria-hidden
           className={`absolute inset-x-0 bottom-0 flex translate-y-[6px] flex-col gap-[4px] px-[12px] pb-[12px] pt-[52px] opacity-0 transition-[opacity,translate] duration-[var(--dur-base)] ease-[var(--ease-settle)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 ${
-            poster ? 'bg-gradient-to-t from-stage/85 via-stage/50 to-transparent text-stage-ink' : 'bg-gradient-to-t from-panel-strong via-panel-strong/80 to-transparent text-ink'
+            poster ? 'bg-gradient-to-t from-stage/80 via-stage/45 to-transparent text-stage-ink' : 'text-ink'
           }`}
         >
           <span className="text-subheading leading-none">
@@ -1955,7 +1980,7 @@ function SeriesTile({
           type="button"
           tabIndex={-1}
           onClick={onOpen}
-          className="press truncate text-left text-body font-semibold leading-snug text-ink hover:underline cursor-pointer"
+          className="press truncate text-left text-body font-semibold leading-snug text-ink decoration-rule underline-offset-[3px] hover:underline"
           title={item.title}
         >
           {item.title}
@@ -1974,7 +1999,7 @@ function SeriesTile({
                 markSeen(item)
               }}
               title={`${hereLabel(item)} als gesehen markieren (+ oder Leertaste)`}
-              className="press shrink-0 rounded-nav bg-panel-soft px-[6px] py-[1px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-mid transition-colors cursor-pointer"
+              className="press shrink-0 rounded-pill bg-panel-soft px-[8px] py-[1px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-ink hover:text-on-ink hover:ring-ink"
             >
               +1
             </button>

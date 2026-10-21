@@ -63,7 +63,10 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   ausgegrauten Knöpfe für Fälle, die gerade nicht bestehen; sie erscheinen mit
   ihrer Voraussetzung. Auf kleinen Breiten kürzt sich der Text, nicht die
   Aussage (der Download-Knopf sagt „App"). Ausblenden über einen Wrapper, nicht mit
-  `hidden` auf einem `Button`: dessen eigenes `inline-flex` gewinnt.
+  `hidden` auf einem `Button`: dessen eigenes `inline-flex` gewinnt. **Reiter,
+  die nicht in die Zeile passen, stehen hinter „Mehr“** (`PanelTabs`,
+  gemessen, der gewählte immer sichtbar) — nie abgeschnitten, nie seitlich
+  zu wischen; vorher endete die Zeile auf jedem Laptop in „Miki…“.
 - **Nichts steht vor der Seite.** FFmpeg lädt im Hintergrund, nie hinter einem
   Ladebildschirm. Ein Werkzeug, das wartet, zeigt das Warten bei sich. Jedes
   Werkzeug ist ein eigener Chunk (`React.lazy` in `Dashboard.tsx`) und wird
@@ -89,10 +92,10 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
   „App herunterladen" mit einem breiten Auswahlfenster „Sondra Studio"
   (bis 1120 px, Setup-Kachel in Tinte): zwei grosse Kacheln nebeneinander, Setup (.exe) und Microsoft
-  Store — die Hauptwege —, darunter eine schmale, volle Breite für „Website
+  Store — die Hauptwege —, darunter zwei schmale: „Website
   als App" (Edge/Chrome-Installation über `lib/install.ts`, der einzige Weg,
   den die intelligente App-Steuerung nicht blockiert, solange das Setup
-  unsigniert ist). Die Store-Kachel ist ein Link auf den Eintrag
+  unsigniert ist) und „Portabel“ (die .exe ohne Installation). Die Store-Kachel ist ein Link auf den Eintrag
   (`MICROSOFT_STORE` in `lib/desktop.ts`, Store-ID 9P0JXR5GNSMG, live seit
   1.10.2026); ohne ihn trüge sie „Bald verfügbar" sichtbar auf der Fläche. In der App selbst entfällt der Knopf. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
   Prämisse der Warnung nicht:** dort startet `desktop/downloader.mjs` einen
@@ -366,7 +369,19 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   die eine spätere Änderung überholt hat, fällt aus der Liste. Anytypes
   Export lässt die Sprache am Codeblock weg; gelesen wird deshalb ab
   „## Sondra-Daten“. Steht dort ein Block, den Sondra nicht lesen kann, wird
-  die Seite nie überschrieben (`unreadable`). Die Liste gehört allein
+  die Seite nie überschrieben (`unreadable`). **Verbinden lädt die Liste aus
+  Anytype** (`loadFromAnytype`, Wunsch vom 21.10.2026: „soll die Daten von
+  Anytype laden, ausser man sagt spezifisch nicht“): sie ersetzt die Liste
+  dieses Geräts, Covers aus Dateien bleiben, die bisherige lässt sich danach
+  mit einem Klick dazunehmen (`importMerkliste`); „Nicht laden — beide
+  Listen zusammenführen“ ist die ausdrückliche Ausnahme. Hält die Seite noch
+  keine Liste, schreibt der erste Abgleich diese hin. **Antworten von
+  Anytype:** nur 401 heisst „Schlüssel zurückgezogen“ und löscht ihn; 403
+  ist ein Space mit Leserechten (`forbidden`, der Schlüssel bleibt — vorher
+  warf das die Kopplung weg und der Space-Schritt fragte wieder nach dem
+  Code); 404 und 410 heissen „Seite fehlt“, die nächste Runde legt sie neu
+  an. Jeder Fehler steht mit Anytypes Grund (`detail`) in `sondra.log` und
+  klein im Fenster, mit „Erneut“ daneben. Die Liste gehört allein
   `lib/merkliste.ts`; das Herunterladen hält keine eigene Kopie im Projekt.
   `npm run verify:anytype` spielt das gegen eine nachgebaute Anytype-API durch.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde

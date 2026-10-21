@@ -25,6 +25,7 @@ import {
   merkRemovals,
   mergeShared,
   seasonName,
+  takeShared,
   seasonProgress,
   seasonsOf,
   setMerkItems,
@@ -40,9 +41,11 @@ export type AnytypeError =
   | 'missing'
   | 'busy'
   | 'rejected'
+  | 'forbidden'
   | 'unreadable'
   | 'failed'
-type Answer<T> = ({ ok: true } & T) | { ok: false; error: AnytypeError }
+/** A failure carries Anytype's own reason in `detail`, for the log and the dialog. */
+type Answer<T> = ({ ok: true } & T) | { ok: false; error: AnytypeError; detail?: string }
 
 export interface FoundNote {
   id: string
@@ -95,6 +98,7 @@ export const ANYTYPE_PROBLEM: Record<AnytypeError, string> = {
   missing: 'Die Seite in Anytype ist nicht mehr da; beim nächsten Abgleich legt Sondra sie neu an.',
   busy: 'Anytype ist gerade beschäftigt. Gleich noch einmal.',
   rejected: 'Anytype hat die Anfrage abgelehnt.',
+  forbidden: 'In diesem Space darf Sondra nichts anlegen oder ändern — vermutlich haben Sie dort nur Leserechte. Wählen Sie einen anderen Space.',
   unreadable:
     'Der Datenblock auf der Seite in Anytype lässt sich nicht lesen. Sondra schreibt nicht darüber, damit dort nichts verloren geht. Wählen Sie unter „Anytype“ eine andere Notiz oder legen Sie eine neue an.',
   failed: 'Der Abgleich mit Anytype ist gescheitert. Die Einzelheiten stehen in sondra.log.',
@@ -229,6 +233,28 @@ let inAnytype = ''
 /** Resets the cached remote state, e.g. when connecting a new space or note. */
 export function resetAnytypeCache(): void {
   inAnytype = ''
+}
+
+/**
+ * „Aus Anytype laden“, the default when connecting to a page that already
+ * holds a list: the page's list becomes this device's, with pictures from
+ * files kept where the same series had one. A page without a list yet
+ * (`empty`) changes nothing here; the next round writes this list there.
+ */
+export async function loadFromAnytype(): Promise<Answer<{ loaded: number; before: SavedLinkItem[]; empty: boolean }>> {
+  await running?.catch(() => undefined)
+  const read = await ask<{ markdown: string | null }>('read')
+  if (!read.ok) return read
+  const before = merkItems()
+  const remote = read.markdown ? merklisteFromMarkdown(read.markdown) : null
+  if (!remote) {
+    if (read.markdown?.includes(DATA_HEADING)) return { ok: false, error: 'unreadable' }
+    return { ok: true, loaded: 0, before, empty: true }
+  }
+  setMerkItems(takeShared(before, remote))
+  adoptRemovals({ ...merkRemovals(), ...remote.removed })
+  inAnytype = dataOf(merkItems(), merkRemovals())
+  return { ok: true, loaded: remote.items.length, before, empty: false }
 }
 
 /** True when this list is what the last round left in Anytype — nothing to send. */

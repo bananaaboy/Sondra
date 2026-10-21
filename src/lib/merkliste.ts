@@ -1125,6 +1125,15 @@ export function mergeShared(
   return { items, removed }
 }
 
+/**
+ * The copy kept elsewhere taken as this device's list — what „Aus Anytype
+ * laden“ does: its entries replace these, with this device's pictures from
+ * files put back where the same entry had one.
+ */
+export function takeShared(current: SavedLinkItem[], remote: { items: SavedLinkItem[] }): SavedLinkItem[] {
+  return remote.items.map((item) => withLocalPictures(item, current.find((entry) => entry.id === item.id)))
+}
+
 /** Takes the merged removals as this device's own. */
 export function adoptRemovals(next: Record<string, number>): void {
   removals = next
