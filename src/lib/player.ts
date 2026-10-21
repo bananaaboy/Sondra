@@ -177,6 +177,10 @@ export interface PlayerSettings {
   skip: number
   /** A file named like an episode on the Merkliste is ticked off at 90 %. */
   merkliste: boolean
+  /** „Vorspann überspringen“ and „Nächste Folge“ offered over an episode. */
+  skipOpening: boolean
+  /** How far „Vorspann überspringen“ jumps, for files no series on the Merkliste names. */
+  opening: number
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -210,11 +214,52 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   repeat: 'aus',
   skip: 10,
   merkliste: true,
+  skipOpening: true,
+  opening: 90,
 }
 
 export const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3]
 export const SKIPS = [5, 10, 15, 30]
 export const BOOSTS = [1, 1.5, 2, 3]
+/** Opening lengths to choose from, in seconds: most anime openings run 1:25 to 1:30. */
+export const OPENINGS = [60, 80, 85, 90, 100, 120, 150]
+/** Sleep timer lengths, in minutes. */
+export const SLEEPS = [15, 30, 60]
+
+/** Shorter than this is a clip, not an episode: no opening, no next episode offered. */
+const EPISODE_MIN = 240
+/** An opening comes within the first minutes, after a cold open at most. */
+const OPENING_WINDOW = 360
+
+/**
+ * Whether „Vorspann überspringen“ is on offer: in the first six minutes of
+ * an episode (a third of a short one), while the jump still lands before
+ * the last minute.
+ */
+export function openingOffered(time: number, duration: number, opening: number): boolean {
+  if (!(duration >= EPISODE_MIN) || !(time >= 0)) return false
+  return time < Math.min(OPENING_WINDOW, duration / 3) && time + opening < duration - 60
+}
+
+/** Whether „Nächste Folge“ is on offer: in the credits — the last 2:30, an eighth of a short episode. */
+export function nextOffered(time: number, duration: number): boolean {
+  if (!(duration >= EPISODE_MIN)) return false
+  const left = duration - time
+  return left > 0.5 && left <= Math.min(150, duration / 8)
+}
+
+/** A sleep timer: a moment on the clock, or the end of the title that plays. */
+export type SleepTimer = { until: number; minutes: number } | { atEnd: true }
+
+/** The volume a running-out sleep timer leaves: all of it, then down over the last ten seconds. */
+export function sleepFade(leftMs: number): number {
+  return Math.max(0, Math.min(1, leftMs / 10_000))
+}
+
+/** „1:30“ for 90 seconds. */
+export function minutesSeconds(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`
+}
 
 const oneOf = <T,>(value: unknown, options: readonly T[], fallback: T): T => (options.includes(value as T) ? (value as T) : fallback)
 const within = (value: unknown, low: number, high: number, fallback: number) =>
@@ -256,6 +301,8 @@ export function rememberedSettings(): PlayerSettings {
       repeat: oneOf(saved.repeat, ['aus', 'titel', 'liste'] as const, d.repeat),
       skip: oneOf(saved.skip, SKIPS, d.skip),
       merkliste: saved.merkliste !== false,
+      skipOpening: saved.skipOpening !== false,
+      opening: oneOf(saved.opening, OPENINGS, d.opening),
     }
   } catch {
     return DEFAULT_SETTINGS

@@ -34,21 +34,27 @@ import {
   claimDrops,
   clock,
   isSubtitleFile,
+  minutesSeconds,
+  nextOffered,
+  openingOffered,
   playerKind,
   rateLabel,
   rememberPlace,
   rememberSettings,
   rememberedPlace,
   rememberedSettings,
+  sleepFade,
   stemOf,
   subtitleUrl,
   type PlayerItem,
   type PlayerSettings,
+  type SleepTimer,
 } from '../../lib/player'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { useSession, type Asset } from '../../state/store'
 import { APP_BRIDGE, updateDiscordPresence } from '../../lib/desktop'
-import { merkItems, updateMerkItem } from '../../lib/merkliste'
+import { matchEpisode } from '../../lib/episodeMatch'
+import { merkItems, updateMerkItem, useMerkliste } from '../../lib/merkliste'
 import { EqualizerDrawer } from '../player/EqualizerDrawer'
 import { SettingsMenu, type Quality, type QualityState, type TrackState } from '../player/SettingsMenu'
 import { MerklisteTick } from '../player/MerklisteTick'
@@ -446,6 +452,16 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const current = items.find((item) => item.id === currentId) ?? null
 
   const [settings, setSettings] = useState<PlayerSettings>(rememberedSettings)
+  // The series the file is on the Merkliste, if any: its opening is its own.
+  const merk = useMerkliste()
+  const series = useMemo(() => (current ? matchEpisode(current.name, merk) : null), [current?.name, merk])
+  const opening = series?.item.opening ?? settings.opening
+  /** „Vorspann überspringen“ used on this file: not offered again. */
+  const [openingDone, setOpeningDone] = useState<string | null>(null)
+  const [sleep, setSleep] = useState<SleepTimer | null>(null)
+  /** What the sleep timer did, until playing starts again. */
+  const [sleepNote, setSleepNote] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -893,6 +909,30 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     [],
   )
 
+  /* -- sleep timer -------------------------------------------------------------------- */
+
+  // Down over the last ten seconds, then paused; the volume set stays as it was.
+  useEffect(() => {
+    if (!sleep || !('until' in sleep)) return
+    const tick = () => {
+      const left = sleep.until - Date.now()
+      setNow(Date.now())
+      const node = videoRef.current
+      if (node) node.volume = settings.volume * sleepFade(left)
+      if (left > 0) return
+      node?.pause()
+      if (node) node.volume = settings.volume
+      setSleep(null)
+      setSleepNote(`Nach ${sleep.minutes} Minuten angehalten.`)
+    }
+    tick()
+    const timer = window.setInterval(tick, 500)
+    return () => {
+      window.clearInterval(timer)
+      if (videoRef.current) videoRef.current.volume = settings.volume
+    }
+  }, [sleep, settings.volume])
+
   /* -- settings on the element ------------------------------------------------------ */
 
   useEffect(() => {
@@ -1187,6 +1227,16 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     const next = items[index + offset]
     if (next) setCurrentId(next.id)
   }
+  const skipOpening = () => {
+    if (!current) return
+    skip(opening)
+    setOpeningDone(current.id)
+  }
+  const chooseOpening = (seconds: number) => {
+    // A series on the Merkliste keeps its own; anything else sets the default.
+    if (series) updateMerkItem(series.item.id, { opening: seconds })
+    else updateSettings({ opening: seconds })
+  }
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined)
     else void frameRef.current?.requestFullscreen?.().catch(() => undefined)
@@ -1279,6 +1329,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     else if ((key === 't' || key === 'T') && isVideo) setTheater((value) => !value)
     else if ((key === 'c' || key === 'C') && current.subtitles.length > 0) setCaptions((value) => (value >= 0 ? -1 : 0))
     else if (key === 'n' || key === 'N') goTo(1)
+    else if (key === 's' || key === 'S') skipOpening()
     else if (key === 'p' || key === 'P') goTo(-1)
     else if ((key === ',' || key === '.') && video()?.paused) seek((video()?.currentTime ?? 0) + (key === ',' ? -1 / 30 : 1 / 30))
     else if (key === '<' || key === '>') {
@@ -1741,6 +1792,14 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
       onLoadCaptions={() => subtitlePickRef.current?.click()}
       audio={trackState}
       onAudio={(at) => void chooseAudio(at)}
+      opening={{ seconds: opening, series: series?.item.title ?? null }}
+      onOpening={chooseOpening}
+      sleep={sleep}
+      now={now}
+      onSleep={(choice) => {
+        setSleepNote(null)
+        setSleep(choice === null ? null : choice === 'end' ? { atEnd: true } : { until: Date.now() + choice * 60_000, minutes: choice })
+      }}
       onClose={() => setMenuOpen(false)}
     />
   )
@@ -1958,6 +2017,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 }}
                 onPlay={() => {
                   setPlaying(true)
+                  setSleepNote(null)
                   void resumeAudioContext()
                   wake()
                 }}
@@ -1986,7 +2046,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 onEnded={() => {
                   rememberPlace(current, null)
                   setPlaying(false)
-                  if (settings.repeat === 'titel') {
+                  if (sleep && 'atEnd' in sleep) {
+                    setSleep(null)
+                    setSleepNote('Am Ende des Titels angehalten.')
+                  } else if (settings.repeat === 'titel') {
                     seek(0)
                     void video()?.play().catch(() => undefined)
                   } else if (index < items.length - 1 && (settings.autoNext || settings.repeat === 'liste')) {
@@ -2167,6 +2230,33 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   Abbrechen
                 </button>
               </div>
+            ) : null}
+
+            {/* Over an episode: past the opening at its start, on to the next in
+                the credits. Above the controls while they show, low otherwise. */}
+            {settings.skipOpening && isVideo && !menuOpen && openingDone !== current.id && openingOffered(time, duration, opening) ? (
+              <button
+                type="button"
+                onClick={skipOpening}
+                className={`pop absolute right-[12px] z-30 flex items-baseline gap-[8px] rounded-nav bg-stage/90 px-[14px] py-[9px] text-small font-semibold text-stage-ink ring-1 ring-inset ring-white/15 hover:bg-stage sm:right-[16px] ${
+                  controlsShown ? 'bottom-[92px]' : 'bottom-[20px]'
+                }`}
+              >
+                Vorspann überspringen
+                <span className="value font-normal text-stage-muted">{minutesSeconds(opening)}</span>
+              </button>
+            ) : settings.skipOpening && isVideo && !menuOpen && index < items.length - 1 && nextOffered(time, duration) ? (
+              <button
+                type="button"
+                onClick={() => goTo(1)}
+                title={items[index + 1]?.name}
+                className={`pop absolute right-[12px] z-30 flex items-center gap-[6px] rounded-nav bg-stage/90 px-[14px] py-[9px] text-small font-semibold text-stage-ink ring-1 ring-inset ring-white/15 hover:bg-stage sm:right-[16px] ${
+                  controlsShown ? 'bottom-[92px]' : 'bottom-[20px]'
+                }`}
+              >
+                Nächste Folge
+                <NextIcon />
+              </button>
             ) : null}
 
             {/* The controls, over a scrim that keeps them legible on any picture. */}
@@ -2368,6 +2458,31 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
             </Button>
           </div>
           <MerklisteTick name={current.name} time={time} duration={duration} enabled={settings.merkliste} />
+          {sleep || sleepNote ? (
+            <p role="status" className="flex flex-wrap items-baseline gap-x-[10px] gap-y-[4px] text-small text-prose">
+              <span className="font-semibold text-ink">Schlaf-Timer</span>
+              {sleep ? (
+                <>
+                  <span>
+                    {'atEnd' in sleep ? '— hält am Ende dieses Titels an.' : (
+                      <>
+                        — hält in <span className="value">{clock(Math.max(0, (sleep.until - now) / 1000))}</span> an.
+                      </>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSleep(null)}
+                    className="font-semibold text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                  >
+                    Aus
+                  </button>
+                </>
+              ) : (
+                <span>— {sleepNote}</span>
+              )}
+            </p>
+          ) : null}
           {current.size > 1.5e9 ? (
             <p className="text-small text-muted">
               Der Editor nimmt die Datei in die Sitzung und damit in den Speicher — bei{' '}

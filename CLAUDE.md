@@ -252,6 +252,16 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   niedriger als 400 px ist. WAV (PCM 8/16/24 bit, 32 bit Float) spielt der
   Browser selbst — `browserPlaysAudio` kannte PCM nicht, und jede WAV ging
   erst durch FFmpeg.
+  **Vorspann überspringen** (1.1.10): über einer Folge (Video, ab 4 Min.) in
+  den ersten sechs Minuten — einem Drittel einer kurzen — ein Knopf, der um
+  die Länge des Vorspanns springt (S); im Abspann, den letzten 2:30 oder
+  einem Achtel, „Nächste Folge“ (N). Die Regeln stehen als reine Funktionen
+  in `lib/player.ts` (`openingOffered`, `nextOffered`). Die Länge gehört der
+  Serie auf der Merkliste (`opening`, reist mit nach Anytype), sonst
+  `settings.opening`, 1:30. **Schlaf-Timer**: 15, 30, 60 Minuten oder Ende
+  des Titels, nicht gespeichert; die letzten zehn Sekunden wird es leiser
+  (`sleepFade`), dann angehalten und die eingestellte Lautstärke zurück.
+  „Ende des Titels“ hält an, statt „Automatisch weiter“ zu folgen.
 - **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
   Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
   über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,
