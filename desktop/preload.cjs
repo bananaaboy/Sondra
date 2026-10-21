@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld('sondraApp', {
   captureSources: () => ipcRenderer.invoke('sondra:capture-sources'),
   pickCaptureSource: (id, audio) => ipcRenderer.invoke('sondra:capture-pick', id, audio),
   anytype: (action, ...args) => ipcRenderer.invoke('sondra:anytype', action, ...args),
+  setDiscordPresence: (activity) => ipcRenderer.invoke('sondra:discord-presence', activity),
+  setDiscordEnabled: (enabled) => ipcRenderer.invoke('sondra:discord-enabled', enabled),
+  setAlwaysOnTop: (flag) => ipcRenderer.invoke('sondra:always-on-top', flag),
+  isAlwaysOnTop: () => ipcRenderer.invoke('sondra:is-always-on-top'),
   onOpenedFiles: (callback) => {
     const listener = (_event, files) => callback(files)
     ipcRenderer.on('sondra:files', listener)

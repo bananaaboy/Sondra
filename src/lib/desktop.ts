@@ -75,6 +75,21 @@ export interface CaptureSource {
   thumbnail: string | null
 }
 
+export interface DiscordActivity {
+  details?: string
+  state?: string
+  timestamps?: {
+    start?: number
+    end?: number
+  }
+  assets?: {
+    large_image?: string
+    large_text?: string
+    small_image?: string
+    small_text?: string
+  }
+}
+
 /** What the app's preload hands the page (desktop/preload.cjs); absent elsewhere. */
 export interface AppBridge {
   /** Missing in apps older than 1.0.12. */
@@ -86,6 +101,12 @@ export interface AppBridge {
   pickCaptureSource?: (id: string, audio: boolean) => Promise<boolean>
   /** The Merkliste's link to Anytype (desktop/anytype.mjs); missing in apps older than 1.1.4. */
   anytype?: (action: string, ...args: unknown[]) => Promise<unknown>
+  /** Discord Rich Presence controls (optional, user toggleable). */
+  setDiscordPresence?: (activity: DiscordActivity | null) => Promise<boolean>
+  setDiscordEnabled?: (enabled: boolean) => Promise<boolean>
+  /** Always on top / floating mini-player mode. */
+  setAlwaysOnTop?: (flag: boolean) => Promise<boolean>
+  isAlwaysOnTop?: () => Promise<boolean>
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   installUpdate: () => Promise<boolean>
@@ -99,3 +120,30 @@ declare global {
 }
 
 export const APP_BRIDGE: AppBridge | null = typeof window !== 'undefined' ? (window.sondraApp ?? null) : null
+
+const DISCORD_KEY = 'sondra:discord_rpc_enabled'
+
+export function isDiscordRpcEnabled(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  return localStorage.getItem(DISCORD_KEY) === 'true'
+}
+
+export function setDiscordRpcEnabled(enabled: boolean): void {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(DISCORD_KEY, enabled ? 'true' : 'false')
+  if (APP_BRIDGE?.setDiscordEnabled) {
+    void APP_BRIDGE.setDiscordEnabled(enabled)
+  }
+}
+
+export function updateDiscordPresence(activity: DiscordActivity | null): void {
+  if (!isDiscordRpcEnabled()) return
+  if (APP_BRIDGE?.setDiscordPresence) {
+    void APP_BRIDGE.setDiscordPresence(activity)
+  }
+}
+
+// Initialize Discord setting at boot
+if (typeof window !== 'undefined' && APP_BRIDGE?.setDiscordEnabled) {
+  void APP_BRIDGE.setDiscordEnabled(isDiscordRpcEnabled())
+}

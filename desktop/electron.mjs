@@ -24,6 +24,7 @@ import path from 'node:path'
 import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, safeStorage, session, shell } from 'electron'
 
 import { createAnytype } from './anytype.mjs'
+import { discordRpc } from './discord.mjs'
 import { startDownloader } from './downloader.mjs'
 import { offerFile, startServer } from './server.mjs'
 import { setupUpdates } from './updater.mjs'
@@ -176,6 +177,28 @@ ipcMain.handle('sondra:take-files', () => {
   waitingFiles = []
   if (files.length > 0) log(`Geöffnet mit Sondra: ${files.map((file) => path.basename(file)).join(', ')}`)
   return describeFiles(files)
+})
+
+ipcMain.handle('sondra:discord-presence', (_event, activity) => {
+  discordRpc.setActivity(activity)
+  return true
+})
+
+ipcMain.handle('sondra:discord-enabled', (_event, enabled) => {
+  discordRpc.setEnabled(enabled)
+  return true
+})
+
+ipcMain.handle('sondra:always-on-top', (_event, flag) => {
+  if (window) {
+    window.setAlwaysOnTop(Boolean(flag), 'floating')
+    return window.isAlwaysOnTop()
+  }
+  return false
+})
+
+ipcMain.handle('sondra:is-always-on-top', () => {
+  return window ? window.isAlwaysOnTop() : false
 })
 
 app.on('second-instance', (_event, argv, workingDirectory) => {

@@ -16,6 +16,7 @@ import {
 } from './_shared.js'
 import {
   DEFAULT_USER_AGENT,
+  checkAniworldOnlineUpdates,
   extractDirectMedia,
   isAniworldUrl,
   isBilibiliUrl,
@@ -254,6 +255,26 @@ export default async function handler(request, response) {
    * AniWorld, SerienStream (s.to) & Direkt-Hoster (VOE, Filemoon, Vidmoly, etc.)
    */
   const targetStr = target.toString()
+
+  if (request.body?.checkUpdates || request.query?.checkUpdates) {
+    if (isAniworldUrl(targetStr)) {
+      try {
+        const updates = await checkAniworldOnlineUpdates(targetStr, {
+          localAddress: request.body?.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
+        })
+        if (updates) {
+          response.status(200).json({
+            status: 'updates',
+            ...updates,
+          })
+          return
+        }
+      } catch (err) {
+        // Fall through to regular resolving if check failed
+      }
+    }
+  }
+
   if (isAniworldUrl(targetStr) || isHosterUrl(targetStr) || isBilibiliUrl(targetStr) || isSpotifyUrl(targetStr)) {
     try {
       const media = await extractDirectMedia(targetStr, {

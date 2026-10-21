@@ -47,9 +47,11 @@ import {
 } from '../../lib/player'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { useSession, type Asset } from '../../state/store'
+import { APP_BRIDGE, updateDiscordPresence } from '../../lib/desktop'
+import { merkItems, updateMerkItem } from '../../lib/merkliste'
 import { EqualizerDrawer } from '../player/EqualizerDrawer'
 import { SettingsMenu, type Quality, type QualityState, type TrackState } from '../player/SettingsMenu'
-import { ArrowRight, Button } from '../ui/primitives'
+import { ArrowRight, Button, Dialog, Select } from '../ui/primitives'
 
 /* -------------------------------------------------------------------------- */
 /* Icons — the project's own stroke set                                         */
@@ -124,6 +126,17 @@ const GearIcon = () => (
   <Glyph>
     <circle cx="10" cy="10" r="2.4" />
     <path d="M8.03 4.76L8.34 2.58A7.6 7.6 0 0 1 11.66 2.58L11.97 4.76A5.6 5.6 0 0 1 13.55 5.67L15.59 4.86A7.6 7.6 0 0 1 17.25 7.73L15.53 9.09A5.6 5.6 0 0 1 15.53 10.91L17.25 12.27A7.6 7.6 0 0 1 15.59 15.14L13.55 14.33A5.6 5.6 0 0 1 11.97 15.24L11.66 17.42A7.6 7.6 0 0 1 8.34 17.42L8.03 15.24A5.6 5.6 0 0 1 6.45 14.33L4.41 15.14A7.6 7.6 0 0 1 2.75 12.27L4.47 10.91A5.6 5.6 0 0 1 4.47 9.09L2.75 7.73A7.6 7.6 0 0 1 4.41 4.86L6.45 5.67A5.6 5.6 0 0 1 8.03 4.76Z" />
+  </Glyph>
+)
+const PinIcon = ({ on = false }: { on?: boolean }) => (
+  <Glyph filled={on}>
+    <path d="M14 4l-4 4-2-2L6 8l2 2-4 4 1 1 4-4 2 2 2-2-2-2 4-4-1-1z" />
+  </Glyph>
+)
+const CameraIcon = () => (
+  <Glyph>
+    <path d="M3.5 7h3l1.5-2h4l1.5 2h3a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 16.5 17h-13A1.5 1.5 0 0 1 2 15.5v-7A1.5 1.5 0 0 1 3.5 7z" />
+    <circle cx="10" cy="12" r="2.8" />
   </Glyph>
 )
 const PipIcon = () => (
@@ -369,6 +382,57 @@ const newId = () => `p${Date.now().toString(36)}${(nextId++).toString(36)}`
 /* The panel                                                                   */
 /* -------------------------------------------------------------------------- */
 
+function CoverPickerModal({ image, onClose }: { image: string; onClose: () => void }) {
+  const list = merkItems()
+  const [selectedId, setSelectedId] = useState<string>(() => list[0]?.id ?? '')
+  const [saved, setSaved] = useState(false)
+
+  const handleSave = () => {
+    if (!selectedId) return
+    updateMerkItem(selectedId, { cover: image, coverFrame: undefined })
+    setSaved(true)
+    setTimeout(() => {
+      onClose()
+    }, 1000)
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="Standbild als Merkliste-Cover übernehmen" size="md">
+      <div className="flex flex-col gap-[14px]">
+        <div className="flex justify-center overflow-hidden rounded-card bg-panel-mid p-[4px]">
+          <img src={image} alt="Vorschau" className="max-h-[180px] w-auto rounded object-contain" />
+        </div>
+        {list.length === 0 ? (
+          <p className="py-[8px] text-center text-small text-muted">
+            Ihre Merkliste enthält noch keine Einträge.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-[6px]">
+            <label className="text-small font-semibold text-ink">Serie auswählen:</label>
+            <Select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="w-full font-sans">
+              {list.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+        <div className="mt-[12px] flex items-center justify-between">
+          <Button type="button" size="sm" variant="quiet" onClick={onClose}>
+            Abbrechen
+          </Button>
+          {list.length > 0 ? (
+            <Button type="button" size="sm" onClick={handleSave} disabled={saved}>
+              {saved ? 'Gespeichert!' : 'Als Cover festlegen'}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
 export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const sessionAssets = useSession((state) => state.assets)
   const setActiveAsset = useSession((state) => state.setActiveAsset)
@@ -401,6 +465,48 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [remaining, setRemaining] = useState(false)
   const [loopA, setLoopA] = useState<number | null>(null)
   const [loopB, setLoopB] = useState<number | null>(null)
+  const [coverPickerImage, setCoverPickerImage] = useState<string | null>(null)
+  const [pinned, setPinned] = useState(false)
+
+  const toggleAlwaysOnTop = async () => {
+    if (APP_BRIDGE?.setAlwaysOnTop) {
+      const next = !pinned
+      const res = await APP_BRIDGE.setAlwaysOnTop(next)
+      setPinned(res)
+    }
+  }
+
+  const captureCurrentFrame = () => {
+    const node = video()
+    if (!node || node.videoWidth === 0 || node.videoHeight === 0) return
+    const canvas = document.createElement('canvas')
+    const scale = Math.min(1, 720 / Math.max(node.videoWidth, node.videoHeight))
+    canvas.width = Math.round(node.videoWidth * scale)
+    canvas.height = Math.round(node.videoHeight * scale)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(node, 0, 0, canvas.width, canvas.height)
+    const dataUrl = canvas.toDataURL('image/webp', 0.9)
+    setCoverPickerImage(dataUrl.startsWith('data:image/webp') ? dataUrl : canvas.toDataURL('image/jpeg', 0.9))
+  }
+
+  useEffect(() => {
+    if (!current) return
+    updateDiscordPresence({
+      details: 'Wiedergabe',
+      state: current.name,
+      assets: {
+        large_image: 'sondra',
+        large_text: 'Sondra Player',
+      },
+      timestamps: {
+        start: Math.floor(Date.now() / 1000),
+      },
+    })
+    return () => {
+      updateDiscordPresence(null)
+    }
+  }, [current?.name])
 
   useEffect(() => {
     setLoopA(null)
@@ -2198,9 +2304,24 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     <GearIcon />
                   </span>
                 </Control>
+                {isVideo ? (
+                  <Control label="Standbild als Cover" onClick={captureCurrentFrame} wideOnly>
+                    <CameraIcon />
+                  </Control>
+                ) : null}
                 {isVideo && canPip ? (
                   <Control label="Bild im Bild" onClick={togglePip} wideOnly>
                     <PipIcon />
+                  </Control>
+                ) : null}
+                {APP_BRIDGE?.setAlwaysOnTop ? (
+                  <Control
+                    label={pinned ? 'Immer im Vordergrund beenden' : 'Immer im Vordergrund'}
+                    active={pinned}
+                    onClick={() => void toggleAlwaysOnTop()}
+                    wideOnly
+                  >
+                    <PinIcon on={pinned} />
                   </Control>
                 ) : null}
                 {isVideo && !immersive ? (
@@ -2259,6 +2380,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
       {!sideBySide ? playlist : null}
       {sessionRow}
+      {coverPickerImage ? <CoverPickerModal image={coverPickerImage} onClose={() => setCoverPickerImage(null)} /> : null}
     </div>
     </>
   )

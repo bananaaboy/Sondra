@@ -14,7 +14,7 @@
 
 import { useSyncExternalStore } from 'react'
 
-import { deriveLinkTitle, parseLinkEpisodeInfo } from './download'
+import { deriveLinkTitle, isAniworldUrl, parseLinkEpisodeInfo } from './download'
 import { getProjectToolState, setProjectToolState } from './project'
 import type {
   AniworldLanguagePref,
@@ -110,6 +110,26 @@ export interface SavedLinkItem {
   filmDuration?: number
   /** Episode-specific duration exceptions in minutes, keyed as `${season}:${episode}`, e.g. { '1:1': 48 } */
   durations?: Record<string, number>
+  /** User-defined tags, e.g. ['Anime', 'Liebling', 'Comedy']. */
+  tags?: string[]
+  /** Log of watched episodes with timestamps. */
+  history?: WatchHistoryEntry[]
+  /** Online release info from AniWorld to detect new seasons or episodes. */
+  onlineAvailable?: OnlineAvailableInfo
+}
+
+export interface WatchHistoryEntry {
+  id: string
+  season: number
+  episode: number
+  at: number
+}
+
+export interface OnlineAvailableInfo {
+  maxSeason: number
+  maxEpisode: number
+  checkedAt: number
+  hasNew?: boolean
 }
 
 const KEY = 'sondra:saved_links'
@@ -179,6 +199,39 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(typeof raw.episodeDuration === 'number' && raw.episodeDuration > 0 ? { episodeDuration: Math.round(raw.episodeDuration) } : {}),
     ...(typeof raw.filmDuration === 'number' && raw.filmDuration > 0 ? { filmDuration: Math.round(raw.filmDuration) } : {}),
     ...(raw.durations && typeof raw.durations === 'object' ? { durations: raw.durations } : {}),
+    ...(Array.isArray(raw.tags)
+      ? {
+          tags: Array.from(
+            new Set(
+              raw.tags
+                .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+                .map((t) => t.trim().replace(/^#+/, '')),
+            ),
+          ),
+        }
+      : {}),
+    ...(Array.isArray(raw.history)
+      ? {
+          history: raw.history
+            .filter((h): h is WatchHistoryEntry => Boolean(h) && typeof h.season === 'number' && typeof h.episode === 'number')
+            .map((h) => ({
+              id: h.id || `wh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              season: Math.max(0, Math.floor(h.season)),
+              episode: Math.max(1, Math.floor(h.episode)),
+              at: typeof h.at === 'number' ? h.at : Date.now(),
+            })),
+        }
+      : {}),
+    ...(raw.onlineAvailable && typeof raw.onlineAvailable === 'object'
+      ? {
+          onlineAvailable: {
+            maxSeason: Math.max(0, Math.floor(Number(raw.onlineAvailable.maxSeason) || 1)),
+            maxEpisode: Math.max(1, Math.floor(Number(raw.onlineAvailable.maxEpisode) || 1)),
+            checkedAt: typeof raw.onlineAvailable.checkedAt === 'number' ? raw.onlineAvailable.checkedAt : Date.now(),
+            hasNew: Boolean(raw.onlineAvailable.hasNew),
+          },
+        }
+      : {}),
   }
   // A position past the end of its season — saved by „Alle gesehen" before
   // it knew better, or left there by a count made smaller — moves to the
@@ -211,11 +264,15 @@ const listeners = new Set<() => void>()
 let lastSaveOk = true
 
 function persist(): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(items))
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(items))
+      lastSaveOk = true
+    } catch {
+      lastSaveOk = false
+    }
+  } else {
     lastSaveOk = true
-  } catch {
-    lastSaveOk = false
   }
   setProjectToolState(PROJECT_KEY, items)
 }
@@ -512,9 +569,25 @@ export function settle(
  * and the entry moves on to the first one not seen — into the next season
  * when this one is over, and to „Fertig" when nothing is left.
  */
-export function advance(item: SavedLinkItem): Pick<SavedLinkItem, 'seasons' | 'season' | 'episode' | 'status'> {
+export function advance(
+  item: SavedLinkItem,
+): Pick<SavedLinkItem, 'seasons' | 'season' | 'episode' | 'status' | 'history'> {
   const seasons = item.episode ? watchedUpTo(item, item.season, item.episode) : seasonsOf(item)
-  return settle(item, seasons, item.season)
+  const settled = settle(item, seasons, item.season)
+  const nextHistory: WatchHistoryEntry[] = [
+    ...(item.history || []),
+    ...(item.episode
+      ? [
+          {
+            id: `wh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            season: item.season,
+            episode: item.episode,
+            at: Date.now(),
+          },
+        ]
+      : []),
+  ]
+  return { ...settled, history: nextHistory }
 }
 
 /** „Staffel 2", „Filme", or the season's own name. */
@@ -524,10 +597,19 @@ export function seasonName(season: MerkSeason): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Handing an entry to the downloader                                          */
+/* Handing entries to the downloader                                           */
 /* -------------------------------------------------------------------------- */
 
 let pendingLookup: SavedLinkItem | null = null
+
+export interface BatchLookupItem {
+  url: string
+  title: string
+  season: number
+  episode: number | null
+}
+
+let pendingBatchLookup: BatchLookupItem[] | null = null
 
 /**
  * Asks the downloader to look an entry up where it stands. The downloader is
@@ -542,6 +624,17 @@ export function takePendingLookup(): SavedLinkItem | null {
   const item = pendingLookup
   pendingLookup = null
   return item
+}
+
+/** Transfers multiple episode URLs to the downloader as a batch/queue. */
+export function requestBatchLookup(batch: BatchLookupItem[]): void {
+  pendingBatchLookup = batch
+}
+
+export function takePendingBatchLookup(): BatchLookupItem[] | null {
+  const batch = pendingBatchLookup
+  pendingBatchLookup = null
+  return batch
 }
 
 /* -------------------------------------------------------------------------- */
@@ -627,13 +720,159 @@ export function exportMerkliste(list: SavedLinkItem[] = items): string {
   return JSON.stringify({ kind: EXPORT_KIND, version: 1, exportedAt: new Date().toISOString(), items: list }, null, 2)
 }
 
-/** Reads a file `exportMerkliste` wrote (or a bare list of entries). */
+/**
+ * Imports anime list from MyAnimeList XML export format.
+ */
+export function importMalXml(xmlText: string): SavedLinkItem[] {
+  const items: SavedLinkItem[] = []
+  const animeBlocks = xmlText.match(/<anime>([\s\S]*?)<\/anime>/gi) || []
+  for (const block of animeBlocks) {
+    const titleMatch = block.match(/<series_title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/series_title>/i)
+    if (!titleMatch) continue
+    const title = titleMatch[1].replace(/&#039;/g, "'").replace(/&amp;/g, '&').trim()
+    if (!title) continue
+
+    const epCountMatch = block.match(/<series_episodes>(\d+)<\/series_episodes>/i)
+    const episodes = epCountMatch && Number(epCountMatch[1]) > 0 ? Number(epCountMatch[1]) : null
+
+    const watchedMatch = block.match(/<my_watched_episodes>(\d+)<\/my_watched_episodes>/i)
+    const watchedCount = watchedMatch ? Number(watchedMatch[1]) : 0
+
+    const scoreMatch = block.match(/<my_score>(\d+)<\/my_score>/i)
+    const rawScore = scoreMatch ? Number(scoreMatch[1]) : 0
+    const rating = rawScore > 0 ? Math.max(1, Math.min(5, Math.round(rawScore / 2))) : undefined
+
+    const statusMatch = block.match(/<my_status>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/my_status>/i)
+    const statusStr = (statusMatch ? statusMatch[1].trim().toLowerCase() : '')
+    let status: SavedLinkStatus = 'watching'
+    if (statusStr.includes('completed') || statusStr.includes('fertig')) status = 'done'
+    else if (statusStr.includes('plan to watch') || statusStr.includes('on-hold') || statusStr.includes('später')) status = 'later'
+
+    const watched = watchedCount > 0 ? Array.from({ length: watchedCount }, (_, i) => i + 1) : []
+    const season: MerkSeason = {
+      number: 1,
+      episodes,
+      watched: episodes !== null ? watched.filter((n) => n <= episodes) : watched,
+    }
+
+    const nextEp = episodes !== null && watchedCount >= episodes ? episodes : watchedCount + 1
+
+    items.push(
+      normalize({
+        title,
+        status,
+        rating,
+        season: 1,
+        episode: nextEp,
+        tags: ['MAL'],
+        seasons: [season],
+      }),
+    )
+  }
+  return items
+}
+
+/**
+ * Imports anime list from AniList JSON export format.
+ */
+export function importAniListJson(jsonText: string): SavedLinkItem[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(jsonText)
+  } catch {
+    return []
+  }
+  const entries: Record<string, unknown>[] = []
+  if (Array.isArray(parsed)) {
+    entries.push(...parsed.filter((p): p is Record<string, unknown> => Boolean(p) && typeof p === 'object'))
+  } else if (parsed && typeof parsed === 'object') {
+    const obj = parsed as Record<string, unknown>
+    if (Array.isArray(obj.entries)) {
+      entries.push(...obj.entries.filter((p): p is Record<string, unknown> => Boolean(p) && typeof p === 'object'))
+    } else if (Array.isArray(obj.lists)) {
+      for (const rawList of obj.lists) {
+        if (rawList && typeof rawList === 'object') {
+          const listObj = rawList as Record<string, unknown>
+          if (Array.isArray(listObj.entries)) {
+            entries.push(
+              ...listObj.entries.filter((p: unknown): p is Record<string, unknown> => Boolean(p) && typeof p === 'object'),
+            )
+          }
+        }
+      }
+    }
+  }
+
+  const items: SavedLinkItem[] = []
+  for (const entry of entries) {
+    const media = (entry.media && typeof entry.media === 'object' ? entry.media : entry) as Record<string, unknown>
+    const titleObj = media.title as Record<string, unknown> | string | undefined
+    const title =
+      (typeof titleObj === 'object' && titleObj !== null
+        ? String(titleObj.userPreferred || titleObj.english || titleObj.romaji || titleObj.native || '')
+        : typeof media.title === 'string'
+          ? media.title
+          : '') || String(entry.title || '')
+    if (!title.trim()) continue
+
+    const episodes = typeof media.episodes === 'number' && media.episodes > 0 ? media.episodes : null
+    const progress = typeof entry.progress === 'number' && entry.progress >= 0 ? entry.progress : 0
+
+    const rawScore = typeof entry.score === 'number' ? entry.score : typeof entry.scoreRaw === 'number' ? (entry.scoreRaw as number) / 10 : 0
+    const rating = rawScore > 0 ? Math.max(1, Math.min(5, Math.round(rawScore <= 5 ? rawScore : rawScore / 2))) : undefined
+
+    const rawStatus = String(entry.status || '').toUpperCase()
+    let status: SavedLinkStatus = 'watching'
+    if (rawStatus === 'COMPLETED') status = 'done'
+    else if (rawStatus === 'PLANNING' || rawStatus === 'PAUSED' || rawStatus === 'DROPPED') status = 'later'
+
+    const coverImg = media.coverImage as Record<string, string> | undefined
+    const cover = coverImg?.large || coverImg?.medium || undefined
+
+    const watched = progress > 0 ? Array.from({ length: progress }, (_, i) => i + 1) : []
+    const season: MerkSeason = {
+      number: 1,
+      episodes,
+      watched: episodes !== null ? watched.filter((n) => n <= episodes) : watched,
+    }
+    const nextEp = episodes !== null && progress >= episodes ? episodes : progress + 1
+
+    items.push(
+      normalize({
+        title: title.trim(),
+        status,
+        rating,
+        cover,
+        season: 1,
+        episode: nextEp,
+        tags: ['AniList'],
+        seasons: [season],
+      }),
+    )
+  }
+  return items
+}
+
+/** Reads a file `exportMerkliste` wrote, or a MyAnimeList XML / AniList JSON file. */
 export function readMerklisteFile(text: string): SavedLinkItem[] {
+  const trimmed = text.trim()
+  if (trimmed.startsWith('<') && (trimmed.includes('<myanimelist') || trimmed.includes('<anime>'))) {
+    const mal = importMalXml(trimmed)
+    if (mal.length === 0) throw new Error('Die MyAnimeList-Exportdatei enthält keine Anime-Einträge.')
+    return mal
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
     throw new Error('Die Datei ist keine Merkliste — sie lässt sich nicht als JSON lesen.')
+  }
+  if (parsed && typeof parsed === 'object') {
+    const obj = parsed as Record<string, unknown>
+    if (Array.isArray(obj.lists) || (Array.isArray(obj.entries) && !Array.isArray(obj.items))) {
+      const anilist = importAniListJson(text)
+      if (anilist.length > 0) return anilist
+    }
   }
   const list = Array.isArray(parsed)
     ? parsed
@@ -644,6 +883,93 @@ export function readMerklisteFile(text: string): SavedLinkItem[] {
   const entries = list.filter((entry): entry is Partial<SavedLinkItem> => Boolean(entry) && typeof entry === 'object')
   if (entries.length === 0) throw new Error('Die Merkliste in der Datei ist leer.')
   return entries.map((entry) => normalize(entry))
+}
+
+/** Collects all distinct tags across items in alphabetical order. */
+export function allTags(list: SavedLinkItem[]): string[] {
+  const set = new Set<string>()
+  for (const item of list) {
+    if (Array.isArray(item.tags)) {
+      for (const t of item.tags) {
+        if (t.trim()) set.add(t.trim())
+      }
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }))
+}
+
+/** Returns all watch history entries across items sorted chronologically (newest first). */
+export function allHistory(list: SavedLinkItem[]): { item: SavedLinkItem; entry: WatchHistoryEntry }[] {
+  const result: { item: SavedLinkItem; entry: WatchHistoryEntry }[] = []
+  for (const item of list) {
+    if (Array.isArray(item.history)) {
+      for (const entry of item.history) {
+        result.push({ item, entry })
+      }
+    }
+  }
+  return result.sort((a, b) => b.entry.at - a.entry.at)
+}
+
+/** Reverts a previously watched episode recorded in the history. */
+export function undoWatchHistory(itemId: string, historyEntryId: string): boolean {
+  return setMerkItems((current) =>
+    current.map((item) => {
+      if (item.id !== itemId) return item
+      const entry = item.history?.find((h) => h.id === historyEntryId)
+      if (!entry) return item
+      const remainingHistory = item.history?.filter((h) => h.id !== historyEntryId)
+      const seasons = withSeason(item, entry.season, (season) => ({
+        ...season,
+        watched: season.watched.filter((n) => n !== entry.episode),
+      }))
+      const settled = settle(item, seasons, entry.season)
+      return {
+        ...item,
+        ...settled,
+        history: remainingHistory,
+        updatedAt: Date.now(),
+      }
+    }),
+  )
+}
+
+/**
+ * Queries the local/backend resolver to check if AniWorld has published newer
+ * seasons or episodes than currently tracked.
+ */
+export async function checkOnlineUpdates(item: SavedLinkItem): Promise<OnlineAvailableInfo | null> {
+  if (!item.url || !isAniworldUrl(item.url)) return null
+  try {
+    const res = await fetch('/api/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: item.url, checkUpdates: true }),
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as {
+      status?: string
+      maxSeason?: number
+      maxEpisode?: number
+      seriesTitle?: string
+    }
+    if (data.status === 'updates' && typeof data.maxSeason === 'number' && typeof data.maxEpisode === 'number') {
+      const hasNew =
+        data.maxSeason > item.season ||
+        (data.maxSeason === item.season && item.episode !== null && data.maxEpisode > item.episode)
+      const info: OnlineAvailableInfo = {
+        maxSeason: data.maxSeason,
+        maxEpisode: data.maxEpisode,
+        checkedAt: Date.now(),
+        hasNew,
+      }
+      updateMerkItem(item.id, { onlineAvailable: info })
+      return info
+    }
+  } catch {
+    // Offline or server not running
+  }
+  return null
 }
 
 export interface MerkImport {
