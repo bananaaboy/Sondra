@@ -932,3 +932,82 @@ export function calculateMerklisteStats(items: SavedLinkItem[]): MerklisteStats 
     recentItems,
   }
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Sorting, Shuffle & Binge Planning                                          */
+/* -------------------------------------------------------------------------- */
+
+export type MerklisteSortOption = 'recent' | 'title' | 'rating' | 'progress' | 'episodes'
+
+export const SORT_OPTIONS: { value: MerklisteSortOption; label: string }[] = [
+  { value: 'recent', label: 'Zuletzt aktiv' },
+  { value: 'title', label: 'Titel (A–Z)' },
+  { value: 'rating', label: 'Beste Bewertung (★)' },
+  { value: 'progress', label: 'Höchster Fortschritt (%)' },
+  { value: 'episodes', label: 'Meiste Folgen' },
+]
+
+export function sortMerkItems(items: SavedLinkItem[], sortBy: MerklisteSortOption): SavedLinkItem[] {
+  const copy = [...items]
+  switch (sortBy) {
+    case 'title':
+      return copy.sort((a, b) => a.title.localeCompare(b.title, 'de', { sensitivity: 'base' }))
+    case 'rating':
+      return copy.sort(
+        (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt),
+      )
+    case 'progress':
+      return copy.sort((a, b) => {
+        const fracA = itemProgress(a).fraction ?? (itemProgress(a).watched > 0 ? 0.01 : 0)
+        const fracB = itemProgress(b).fraction ?? (itemProgress(b).watched > 0 ? 0.01 : 0)
+        return fracB - fracA || (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt)
+      })
+    case 'episodes':
+      return copy.sort((a, b) => {
+        const totA = itemProgress(a).total ?? itemProgress(a).watched
+        const totB = itemProgress(b).total ?? itemProgress(b).watched
+        return totB - totA
+      })
+    case 'recent':
+    default:
+      return copy.sort((a, b) => (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt))
+  }
+}
+
+export function pickRandomCandidate(items: SavedLinkItem[], excludeId?: string): SavedLinkItem | null {
+  const unfinished = items.filter((item) => {
+    const seasons = seasonsOf(item)
+    return !caughtUp(seasons)
+  })
+  const pool = unfinished.length > 0 ? unfinished : items
+  if (pool.length === 0) return null
+  const candidates = excludeId && pool.length > 1 ? pool.filter((item) => item.id !== excludeId) : pool
+  const index = Math.floor(Math.random() * candidates.length)
+  return candidates[index] ?? null
+}
+
+export interface BingePlan {
+  episodesRemaining: number
+  watchTime: { short: string; long: string }
+  finishAt1PerDay: string
+  finishAt2PerDay: string
+  finishAt3PerDay: string
+}
+
+export function calculateBingePlan(episodesRemaining: number, minutesPerEpisode: number = 24): BingePlan {
+  const count = Math.max(0, episodesRemaining)
+  const watchTime = formatWatchMinutes(count * minutesPerEpisode)
+  const formatDate = (daysAhead: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + daysAhead)
+    return d.toLocaleDateString('de-CH', { weekday: 'short', day: 'numeric', month: 'short' })
+  }
+  return {
+    episodesRemaining: count,
+    watchTime,
+    finishAt1PerDay: formatDate(count),
+    finishAt2PerDay: formatDate(Math.ceil(count / 2)),
+    finishAt3PerDay: formatDate(Math.ceil(count / 3)),
+  }
+}

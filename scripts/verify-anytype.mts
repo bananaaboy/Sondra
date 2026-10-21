@@ -257,6 +257,26 @@ check('Statistiken: Staffeln abgeschlossen', stats.completedSeasons, 1)
 check('Statistiken: Durchschnittsbewertung', stats.avgRating, '4.5')
 check('Statistiken: Formatierung Sehzeit 222 Folgen', merk.formatWatchMinutes(222 * 24).long, '3 Tage, 16 Std., 48 Min.')
 check('Statistiken: Formatierung 0 Min.', merk.formatWatchMinutes(0).short, '0 Std.')
+// Sorting checks
+const sortedByRating = merk.sortMerkItems(testItems, 'rating')
+check('Sortierung nach Bewertung: Erstes Element hat 5 Sterne', sortedByRating[0].rating, 5)
+const sortedByTitle = merk.sortMerkItems(testItems, 'title')
+check('Sortierung nach Titel: Series 1 zuerst', sortedByTitle[0].title, 'Series 1')
+const sortedByProgress = merk.sortMerkItems(testItems, 'progress')
+check('Sortierung nach Fortschritt: Fertige Serie zuerst', sortedByProgress[0].id, 's3')
+
+// Shuffle / Random Pick check
+const picked = merk.pickRandomCandidate(testItems)
+check('Zufallsauswahl liefert einen Kandidaten', Boolean(picked), true)
+const pickedExclude = merk.pickRandomCandidate(testItems, 's1')
+check('Zufallsauswahl respektiert Ausschluss', pickedExclude?.id !== 's1' || testItems.length <= 1, true)
+
+// Binge Plan check
+const plan = merk.calculateBingePlan(12)
+check('Binge-Plan verbleibende Folgen', plan.episodesRemaining, 12)
+check('Binge-Plan Sehzeit', plan.watchTime.short, '4.8 Std.')
+check('Binge-Plan Projektion 1/Tag vorhanden', typeof plan.finishAt1PerDay, 'string')
+
 
 
 server.close()
