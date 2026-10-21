@@ -51,6 +51,7 @@ import { APP_BRIDGE, updateDiscordPresence } from '../../lib/desktop'
 import { merkItems, updateMerkItem } from '../../lib/merkliste'
 import { EqualizerDrawer } from '../player/EqualizerDrawer'
 import { SettingsMenu, type Quality, type QualityState, type TrackState } from '../player/SettingsMenu'
+import { MerklisteTick } from '../player/MerklisteTick'
 import { ArrowRight, Button, Dialog, Select } from '../ui/primitives'
 
 /* -------------------------------------------------------------------------- */
@@ -2366,6 +2367,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               {current.kind === 'audio' ? 'Im Ton-Editor öffnen' : 'Im Video-Editor öffnen'}
             </Button>
           </div>
+          <MerklisteTick name={current.name} time={time} duration={duration} enabled={settings.merkliste} />
           {current.size > 1.5e9 ? (
             <p className="text-small text-muted">
               Der Editor nimmt die Datei in die Sitzung und damit in den Speicher — bei{' '}

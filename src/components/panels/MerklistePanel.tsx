@@ -56,6 +56,7 @@ import {
   readMerklisteFile,
   requestBatchLookup,
   requestLookup,
+  OPEN_SERIES_EVENT,
   restoreMerkItem,
   revertImport,
   seasonName,
@@ -65,6 +66,7 @@ import {
   settle,
   sortMerkItems,
   SORT_OPTIONS,
+  takePendingOpen,
   splitSeason,
   storedParts,
   toggleWatched,
@@ -86,6 +88,7 @@ import {
   type SavedLinkStatus,
 } from '../../lib/merkliste'
 import { APP_BRIDGE, isDiscordRpcEnabled, setDiscordRpcEnabled, updateDiscordPresence } from '../../lib/desktop'
+import { newEpisodesAvailable, newEpisodesOn, setNewEpisodesOn } from '../../lib/newEpisodes'
 import { isAniworldUrl } from '../../lib/download'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
@@ -587,6 +590,7 @@ export function MerklistePanel() {
   const [onlyOpen, setOnlyOpen] = useState(false)
   const [focusedId, setFocusedId] = useState<string | null>(null)
   const [discordRpcOn, setDiscordRpcOn] = useState(() => isDiscordRpcEnabled())
+  const [newEpisodesWatch, setNewEpisodesWatch] = useState(() => newEpisodesOn())
   const anytypeLink = useAnytype(items)
 
   // The series that is open, if one is. It has a history entry of its own,
@@ -615,6 +619,18 @@ export function MerklistePanel() {
     if (openFromHistory(window.history.state)) window.history.back()
     else setOpenId(null)
   }
+  // A series asked for from elsewhere — the player, a notice of a new episode.
+  const openSeriesRef = useRef(openSeries)
+  openSeriesRef.current = openSeries
+  useEffect(() => {
+    const take = () => {
+      const id = takePendingOpen()
+      if (id) openSeriesRef.current(id)
+    }
+    take()
+    window.addEventListener(OPEN_SERIES_EVENT, take)
+    return () => window.removeEventListener(OPEN_SERIES_EVENT, take)
+  }, [])
 
   const stats = useMemo(() => calculateMerklisteStats(items), [items])
   const availableTags = useMemo(() => allTags(items), [items])
@@ -952,6 +968,24 @@ export function MerklistePanel() {
                 <span>Nur offene Folgen</span>
               </button>
 
+              {/* Only in the app, where the check runs in the background and
+                  Windows shows the notice (lib/newEpisodes.ts). */}
+              {newEpisodesAvailable ? (
+                <button
+                  type="button"
+                  aria-pressed={newEpisodesWatch}
+                  onClick={() => {
+                    const next = !newEpisodesWatch
+                    setNewEpisodesWatch(next)
+                    setNewEpisodesOn(next)
+                  }}
+                  className="press flex items-center gap-[6px] rounded-pill px-[10px] py-[5px] text-small text-prose hover:bg-panel-soft hover:text-ink"
+                  title="Alle drei Stunden prüft Sondra die Serien „Am Schauen“ mit AniWorld-Adresse und meldet eine neue Folge über Windows."
+                >
+                  <span aria-hidden className={`size-[7px] rounded-pill ${newEpisodesWatch ? 'bg-accent-strong' : 'ring-1 ring-inset ring-rule'}`} />
+                  <span>Neue Folgen melden {newEpisodesWatch ? 'an' : 'aus'}</span>
+                </button>
+              ) : null}
               {/* Only in the app: a web page cannot reach Discord on this computer. */}
               {APP_BRIDGE?.setDiscordPresence ? (
                 <button

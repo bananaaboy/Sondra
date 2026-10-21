@@ -116,6 +116,8 @@ export interface AppBridge {
   /** Always on top / floating mini-player mode. */
   setAlwaysOnTop?: (flag: boolean) => Promise<boolean>
   isAlwaysOnTop?: () => Promise<boolean>
+  /** Brings the window forward — after a click on a notice; missing before 1.1.9. */
+  focusWindow?: () => Promise<boolean>
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   installUpdate: () => Promise<boolean>

@@ -626,6 +626,26 @@ export function takePendingLookup(): SavedLinkItem | null {
   return item
 }
 
+let pendingOpen: string | null = null
+
+/** Said when a series should open while the Merkliste is already showing. */
+export const OPEN_SERIES_EVENT = 'sondra:merkliste-serie'
+
+/**
+ * Asks the Merkliste to open one series — from the player, from a notice of
+ * a new episode. Taken when the tab next renders, or at once when it shows.
+ */
+export function requestOpenSeries(id: string): void {
+  pendingOpen = id
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(OPEN_SERIES_EVENT))
+}
+
+export function takePendingOpen(): string | null {
+  const id = pendingOpen
+  pendingOpen = null
+  return id
+}
+
 /** Transfers multiple episode URLs to the downloader as a batch/queue. */
 export function requestBatchLookup(batch: BatchLookupItem[]): void {
   pendingBatchLookup = batch
@@ -963,7 +983,10 @@ export async function checkOnlineUpdates(item: SavedLinkItem): Promise<OnlineAva
         checkedAt: Date.now(),
         hasNew,
       }
-      updateMerkItem(item.id, { onlineAvailable: info })
+      // Noted without counting as a change: a check is not something the
+      // person did, and a newer time here would let this device's older
+      // progress win over the copy in Anytype.
+      setMerkItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, onlineAvailable: info } : entry)))
       return info
     }
   } catch {

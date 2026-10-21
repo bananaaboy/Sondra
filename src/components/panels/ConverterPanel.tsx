@@ -17,7 +17,18 @@ import {
   rateFor,
   sampleRatesFor,
   VIDEO_PRESETS,
+  type ConvertSettings,
 } from '../../lib/convert'
+import {
+  BUILT_IN_PRESETS,
+  ownPresets,
+  presetFor,
+  presetMatches,
+  removeOwnPreset,
+  saveOwnPreset,
+  type ConvertPreset,
+  type PresetSettings,
+} from '../../lib/convertPresets'
 import { saveBytes } from '../../lib/download'
 import { ConversionError, runConversion } from '../../lib/convertRun'
 import { onFfmpegProgress, sanitize } from '../../lib/ffmpegClient'
@@ -45,6 +56,7 @@ import {
   Slider,
   Stat,
   Toggle,
+  TextInput,
   RowMark,
 } from '../ui/primitives'
 import { ZipSave } from '../ZipSave'
@@ -420,6 +432,123 @@ function Conversion({
   )
 }
 
+/**
+ * Vorlagen: one click instead of five settings. The one the settings match
+ * is in ink; under the row, what it does. Own ones are the settings as they
+ * stand, under a name.
+ */
+function Presets({
+  sourceKind,
+  settings,
+  onApply,
+}: {
+  sourceKind: 'audio' | 'video'
+  settings: ConvertSettings
+  onApply: (patch: PresetSettings) => void
+}) {
+  const [own, setOwn] = useState<ConvertPreset[]>(ownPresets)
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
+  const [failed, setFailed] = useState(false)
+  const all = [...BUILT_IN_PRESETS, ...own].filter((preset) => presetFor(preset, sourceKind))
+  const active = all.find((preset) => presetMatches(preset, sourceKind, settings)) ?? null
+
+  const save = () => {
+    const saved = saveOwnPreset(name, settings)
+    setFailed(!saved)
+    if (!saved) return
+    setOwn(ownPresets())
+    setNaming(false)
+  }
+
+  return (
+    <div className="mt-[20px] flex max-w-[860px] flex-col gap-[8px]">
+      <span className="text-small text-prose">Vorlage</span>
+      <div role="radiogroup" aria-label="Vorlage" className="flex flex-wrap items-center gap-[6px]">
+        {all.map((preset) => {
+          const on = active?.id === preset.id
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              title={preset.hint}
+              onClick={() => {
+                const patch = presetFor(preset, sourceKind)
+                if (patch) onApply(patch)
+              }}
+              className={`press rounded-pill px-[12px] py-[6px] text-small font-medium ${
+                on ? 'bg-ink font-semibold text-on-ink' : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
+              }`}
+            >
+              {preset.label}
+            </button>
+          )
+        })}
+        {naming ? null : (
+          <button
+            type="button"
+            onClick={() => {
+              setName('')
+              setFailed(false)
+              setNaming(true)
+            }}
+            className="press rounded-pill px-[10px] py-[6px] text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+          >
+            Als Vorlage speichern …
+          </button>
+        )}
+      </div>
+      {naming ? (
+        <form
+          className="flex flex-wrap items-center gap-[10px]"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (name.trim()) save()
+          }}
+        >
+          <TextInput
+            autoFocus
+            value={name}
+            maxLength={40}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Name der Vorlage"
+            aria-label="Name der Vorlage"
+            className="w-[240px]! max-w-full"
+          />
+          <Button type="submit" size="sm" disabled={!name.trim()}>
+            Speichern
+          </Button>
+          <button type="button" onClick={() => setNaming(false)} className="text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink">
+            Abbrechen
+          </button>
+        </form>
+      ) : null}
+      <p className="flex flex-wrap items-baseline gap-x-[12px] text-small text-prose">
+        <span>{active ? active.hint : 'Keine Vorlage — es gilt, was unten eingestellt ist.'}</span>
+        {active?.own ? (
+          <button
+            type="button"
+            onClick={() => {
+              removeOwnPreset(active.id)
+              setOwn(ownPresets())
+            }}
+            className="text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+          >
+            Vorlage löschen
+          </button>
+        ) : null}
+      </p>
+      {failed ? (
+        <Notice tone="error" title="Nicht gespeichert">
+          Dieser Browser lässt hier nichts ablegen — etwa im privaten Fenster.
+        </Notice>
+      ) : null}
+    </div>
+  )
+}
+
 interface Outcome {
   name: string
   bytes: Uint8Array
@@ -764,6 +893,8 @@ export function ConverterPanel() {
                 />
               </div>
 
+              <Presets sourceKind={asset.kind === 'audio' ? 'audio' : 'video'} settings={settings} onApply={(patch) => setConvert(patch)} />
+
               {/* Capped: on a wide monitor these stretched to 550px each, so a
                   menu reading „Wie Quelle" was half a metre across. The
                   conversion blocks above may use the full width — they are the
@@ -886,6 +1017,18 @@ export function ConverterPanel() {
                       </Select>
                     </Field>
                     ) : null}
+                    {format.kind === 'video' ? (
+                      <Field label="Bildformat">
+                        <Select
+                          value={settings.videoFrame ?? 'source'}
+                          onChange={(event) => setConvert({ videoFrame: event.target.value === 'vertical' ? 'vertical' : 'source' })}
+                        >
+                          <option value="source">Wie Quelle</option>
+                          <option value="vertical">Hochformat 9:16 (Reels, Stories)</option>
+                        </Select>
+                      </Field>
+                    ) : null}
+                    {format.kind === 'video' && settings.videoFrame === 'vertical' ? null : (
                     <Field label="Höhe">
                       <Select
                         value={String(settings.videoHeight)}
@@ -906,30 +1049,38 @@ export function ConverterPanel() {
                         ))}
                       </Select>
                     </Field>
+                    )}
 
                     {/* A GIF's size is decided by its frame rate as much as by
                         its height, and twelve frames is what it falls back to.
                         Hidden, that was a number nobody could reach. */}
-                    {format.id === 'gif' ? (
-                      <Field label="Bildrate" hint="Weniger Bilder heißt deutlich kleinere Datei.">
-                        <Select
-                          value={String(settings.frameRate)}
-                          onChange={(event) =>
-                            setConvert({
-                              frameRate:
-                                event.target.value === 'source' ? 'source' : Number(event.target.value),
-                            })
-                          }
-                        >
-                          <option value="source">Wie Quelle (12 fps)</option>
-                          {[24, 20, 15, 12, 10, 8].map((fps) => (
-                            <option key={fps} value={fps}>
-                              {fps} fps
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
-                    ) : null}
+                    {/* For a video too since the templates set it (WhatsApp 30,
+                        E-Mail 24): a value nobody could see stayed set. */}
+                    <Field label="Bildrate" hint="Weniger Bilder heißt deutlich kleinere Datei.">
+                      <Select
+                        value={String(settings.frameRate)}
+                        onChange={(event) =>
+                          setConvert({
+                            frameRate: event.target.value === 'source' ? 'source' : Number(event.target.value),
+                          })
+                        }
+                      >
+                        <option value="source">{format.id === 'gif' ? 'Wie Quelle (12 fps)' : 'Wie Quelle'}</option>
+                        {[
+                          ...new Set([
+                            ...(format.id === 'gif' ? [24, 20, 15, 12, 10, 8] : [60, 50, 30, 25, 24]),
+                            // A rate set for the other kind stays visible rather than blank.
+                            ...(typeof settings.frameRate === 'number' ? [settings.frameRate] : []),
+                          ]),
+                        ]
+                          .sort((a, b) => b - a)
+                          .map((fps) => (
+                          <option key={fps} value={fps}>
+                            {fps} fps
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
 
                     {format.kind === 'video' ? (
                     <div className="sm:col-span-2">

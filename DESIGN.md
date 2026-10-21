@@ -871,6 +871,12 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
     beim Überfahren in Tinte. „Nur offene Folgen“ ist eine Pille mit
     gezeichnetem Haken statt ☑/☐, der Discord-Schalter erscheint nur in der
     App, wo er wirkt.
+  - **Aus dem Player** (21.10.2026): unter dem Bild eine Zeile „Merkliste
+    Frieren · Staffel 1, Folge 13 — wird ab 90 % abgehakt“, danach „—
+    abgehakt. Rückgängig“; der Titel ist ein Link zur Serie. Nichts, wenn
+    der Dateiname keine Serie der Liste nennt. In der App daneben im
+    Filterbereich die Pille „Neue Folgen melden an/aus“ mit Punkt, wie
+    Discord.
   - Unter der Liste eine Zeile: „Nur auf diesem Gerät gespeichert.“ mit
     „Exportieren“ und „Aus Datei einlesen“ als Links; nach dem Einlesen ein
     Satz, was neu, neuer, gleich oder hier neuer war, und „Rückgängig“.

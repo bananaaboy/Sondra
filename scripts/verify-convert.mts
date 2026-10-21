@@ -23,6 +23,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { DEFAULT_CONVERT, OUTPUT_FORMATS, buildConvertArgs, type ConvertSettings } from '../src/lib/convert'
+import { BUILT_IN_PRESETS, presetFor } from '../src/lib/convertPresets'
 
 const CORE = path.resolve('node_modules/@ffmpeg/core/dist/umd')
 
@@ -131,6 +132,23 @@ for (const input of INPUTS) {
       console.log(line)
       if (!result.ok) failures.push(line)
     }
+  }
+}
+
+// The templates („Für WhatsApp“, „Instagram Reel“ …) exactly as a click sets them.
+for (const input of INPUTS.filter((entry) => entry.name === 'film.mp4' || entry.name === 'lied.wav')) {
+  const kind = input.name.endsWith('.mp4') ? 'video' : 'audio'
+  for (const preset of BUILT_IN_PRESETS) {
+    const patch = presetFor(preset, kind)
+    if (!patch) continue
+    const settings = { ...DEFAULT_CONVERT, ...patch }
+    const format = OUTPUT_FORMATS.find((entry) => entry.id === settings.formatId)!
+    const output = `vorlage-${preset.id}-${count}.${format.extension}`
+    const result = run(input.name, buildConvertArgs(input.name, output, settings))
+    count += 1
+    const line = `${result.ok ? 'ok    ' : 'FEHLER'} ${input.name.padEnd(12)} → Vorlage ${preset.label.padEnd(17)} ${result.detail}`
+    console.log(line)
+    if (!result.ok) failures.push(line)
   }
 }
 

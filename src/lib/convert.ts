@@ -26,6 +26,11 @@ export interface ConvertSettings {
   videoPreset: string
   /** Target height in pixels; width follows the source aspect ratio. */
   videoHeight: number | 'source'
+  /**
+   * `vertical`: 1080 × 1920, the picture fitted in with black bars — what
+   * Reels, Stories and Shorts take. Overrides the height.
+   */
+  videoFrame?: 'source' | 'vertical'
   frameRate: number | 'source'
   trimStartSeconds: number | null
   trimEndSeconds: number | null
@@ -42,6 +47,7 @@ export const DEFAULT_CONVERT: ConvertSettings = {
   videoCrf: 23,
   videoPreset: 'medium',
   videoHeight: 'source',
+  videoFrame: 'source',
   frameRate: 'source',
   trimStartSeconds: null,
   trimEndSeconds: null,
@@ -266,7 +272,14 @@ export function buildConvertArgs(
 
     const videoFilters: string[] = []
     if (format.kind === 'video') {
-      if (settings.videoHeight !== 'source') {
+      if (settings.videoFrame === 'vertical') {
+        // Fitted, not cropped: a landscape film keeps its whole picture.
+        videoFilters.push(
+          'scale=1080:1920:force_original_aspect_ratio=decrease',
+          'pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black',
+          'setsar=1',
+        )
+      } else if (settings.videoHeight !== 'source') {
         // -2 keeps the aspect ratio and rounds to an even width, which both
         // H.264 and VP8 require.
         videoFilters.push(`scale=-2:${settings.videoHeight}`)
