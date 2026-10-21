@@ -358,11 +358,7 @@ export function MicPanel() {
         <div className="flex flex-col gap-[20px] rounded-card bg-panel-soft/40 p-[24px] ring-1 ring-line/60">
           <div className="flex flex-wrap items-center justify-between gap-[12px] border-b border-line/50 pb-[14px]">
             <div>
-              <div className="inline-flex items-center gap-[6px] rounded-pill bg-ink/5 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line/70">
-                <span className="size-[6px] rounded-full bg-emerald-500" />
-                Live-Analyse im Browser
-              </div>
-              <h2 className="display-md mt-[6px]">Mikrofon testen &amp; einstellen</h2>
+              <h2 className="display-md">Mikrofon testen &amp; einstellen</h2>
               <p className="mt-[2px] text-small text-muted">
                 Pegel prüfen, Raumakustik messen und Rauschen/Brummen automatisch herausfiltern.
               </p>
