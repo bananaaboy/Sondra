@@ -277,6 +277,41 @@ check('Binge-Plan verbleibende Folgen', plan.episodesRemaining, 12)
 check('Binge-Plan Sehzeit', plan.watchTime.short, '4.8 Std.')
 check('Binge-Plan Projektion 1/Tag vorhanden', typeof plan.finishAt1PerDay, 'string')
 
+// Duration & Episode-specific exceptions check
+const durationTestItem = merk.createMerkItem({
+  id: 'dur1',
+  title: 'Duration Test Series',
+  episodeDuration: 45,
+  filmDuration: 110,
+  durations: {
+    '1:1': 60, // S1E1 exception
+    '0:1': 130, // Film 1 exception
+  },
+  seasons: [
+    { number: 1, episodes: 10, watched: [1, 2] },
+    { number: 0, episodes: 2, watched: [1] },
+  ],
+})
+
+check('Dauer: S1E1 Ausnahme (60 Min.)', merk.durationOfEpisode(durationTestItem, 1, 1), 60)
+check('Dauer: S1E2 Standard (45 Min.)', merk.durationOfEpisode(durationTestItem, 1, 2), 45)
+check('Dauer: Film 1 Ausnahme (130 Min.)', merk.durationOfEpisode(durationTestItem, 0, 1), 130)
+check('Dauer: Film 2 Standard (110 Min.)', merk.durationOfEpisode(durationTestItem, 0, 2), 110)
+
+// Watched: S1E1 (60), S1E2 (45), Film 1 (130) -> 60 + 45 + 130 = 235 minutes
+check('Gesehene Minuten mit Ausnahmen', merk.itemWatchedMinutes(durationTestItem), 235)
+
+// Remaining unseen:
+// Season 1: episodes 3..10 = 8 episodes * 45 = 360 min
+// Season 0: film 2 = 110 min
+// Total remaining = 360 + 110 = 470 min, remainingCount = 9
+const rem = merk.itemRemainingMinutes(durationTestItem)
+check('Verbleibende Minuten mit Ausnahmen', rem.minutes, 470)
+check('Verbleibende Folgenanzahl', rem.remainingCount, 9)
+
+const planWithExact = merk.calculateBingePlan(rem.remainingCount, 24, rem.minutes)
+check('Binge-Plan mit exakter Dauer', planWithExact.watchTime.short, '7.8 Std.')
+
 
 
 server.close()

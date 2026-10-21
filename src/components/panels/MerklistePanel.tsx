@@ -33,7 +33,9 @@ import {
   caughtUp,
   coverFromFile,
   createMerkItem,
+  durationOfEpisode,
   exportMerkliste,
+  itemRemainingMinutes,
   itemProgress,
   halve,
   markRange,
@@ -1726,20 +1728,8 @@ function SeriesPage({
               <ProgressBar fraction={progress.fraction} label={`${item.title}: gesehen`} />
               {progress.total && progress.total > progress.watched ? (() => {
                 const rem = progress.total - progress.watched
-                const plan = calculateBingePlan(rem)
-                return (
-                  <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[2px] text-micro text-muted">
-                    <span className="font-medium text-prose">Noch {rem} {rem === 1 ? 'Folge' : 'Folgen'} ({plan.watchTime.short})</span>
-                    <span>·</span>
-                    <span>1/Tag: fertig {plan.finishAt1PerDay}</span>
-                    <span>·</span>
-                    <span>2/Tag: fertig {plan.finishAt2PerDay}</span>
-                  </div>
-                )
-              })() : null}
-              {progress.total && progress.total > progress.watched ? (() => {
-                const rem = progress.total - progress.watched
-                const plan = calculateBingePlan(rem)
+                const remMin = itemRemainingMinutes(item)
+                const plan = calculateBingePlan(rem, item.episodeDuration ?? 24, remMin.minutes)
                 return (
                   <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[2px] text-micro text-muted">
                     <span className="font-medium text-prose">Noch {rem} {rem === 1 ? 'Folge' : 'Folgen'} ({plan.watchTime.short})</span>
@@ -1942,6 +1932,115 @@ function SeasonTile({
 /* A season, opened                                                            */
 /* -------------------------------------------------------------------------- */
 
+
+function SeasonDurationExceptions({
+  item,
+  seasonNumber,
+  unit,
+  update,
+}: {
+  item: SavedLinkItem
+  seasonNumber: number
+  unit: string
+  update: (patch: Partial<SavedLinkItem>) => void
+}) {
+  const [episodeInput, setEpisodeInput] = useState('')
+  const [minutesInput, setMinutesInput] = useState('')
+  const standard = seasonNumber === 0 ? (item.filmDuration ?? 90) : (item.episodeDuration ?? 24)
+
+  const durations = item.durations || {}
+  const prefix = `${seasonNumber}:`
+  const seasonExceptions = Object.entries(durations)
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([key, min]) => ({
+      key,
+      episode: Number(key.slice(prefix.length)),
+      minutes: min,
+    }))
+    .sort((a, b) => a.episode - b.episode)
+
+  const addException = () => {
+    const ep = parseInt(episodeInput, 10)
+    const min = parseInt(minutesInput, 10)
+    if (isNaN(ep) || ep <= 0 || isNaN(min) || min <= 0) return
+    update({
+      durations: {
+        ...durations,
+        [`${seasonNumber}:${ep}`]: min,
+      },
+    })
+    setEpisodeInput('')
+    setMinutesInput('')
+  }
+
+  const removeException = (key: string) => {
+    const next = { ...durations }
+    delete next[key]
+    update({
+      durations: Object.keys(next).length > 0 ? next : undefined,
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-[8px]">
+      {seasonExceptions.length > 0 ? (
+        <div className="flex flex-wrap gap-[6px]">
+          {seasonExceptions.map((exc) => (
+            <span
+              key={exc.key}
+              className="inline-flex items-center gap-[6px] rounded-nav bg-panel-soft px-[8px] py-[3px] text-small ring-1 ring-inset ring-rule text-ink"
+            >
+              <span>{unit} {exc.episode}:</span>
+              <span className="value font-semibold">{exc.minutes} Min.</span>
+              <button
+                type="button"
+                onClick={() => removeException(exc.key)}
+                aria-label={`Ausnahme für ${unit} ${exc.episode} entfernen`}
+                className="press flex h-[16px] w-[16px] items-center justify-center rounded-nav text-muted hover:bg-panel-mid hover:text-ink"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-micro text-muted">
+          Alle {seasonNumber === 0 ? 'Filme' : 'Folgen'} dieser Staffel nutzen die Standarddauer ({standard} Min.).
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-[8px] pt-[2px]">
+        <div className="flex items-center gap-[4px]">
+          <span className="text-small text-muted">{unit}:</span>
+          <TextInput
+            type="number"
+            min={1}
+            value={episodeInput}
+            onChange={(e) => setEpisodeInput(e.target.value)}
+            className="w-[60px] font-sans"
+            placeholder="Nr."
+          />
+        </div>
+        <div className="flex items-center gap-[4px]">
+          <span className="text-small text-muted">Dauer:</span>
+          <TextInput
+            type="number"
+            min={1}
+            value={minutesInput}
+            onChange={(e) => setMinutesInput(e.target.value)}
+            className="w-[70px] font-sans"
+            placeholder="Min."
+          />
+          <span className="text-small text-muted">Min.</span>
+        </div>
+        <Button type="button" size="sm" variant="quiet" onClick={addException}>
+          + Ausnahme
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function SeasonDialog({
   item,
   number,
@@ -2041,16 +2140,15 @@ function SeasonDialog({
             </p>
             {progress.total && !progress.complete && progress.total > progress.watched ? (() => {
               const rem = progress.total - progress.watched
-              const plan = calculateBingePlan(rem)
-              return (
-                <p className="text-micro text-muted">
-                  Noch {rem} {rem === 1 ? unit : units} ({plan.watchTime.short}) · fertig bei 1/Tag: {plan.finishAt1PerDay}
-                </p>
-              )
-            })() : null}
-            {progress.total && !progress.complete && progress.total > progress.watched ? (() => {
-              const rem = progress.total - progress.watched
-              const plan = calculateBingePlan(rem)
+              let seasonRemainingMin = 0
+              if (season.episodes !== null) {
+                for (let ep = 1; ep <= season.episodes; ep++) {
+                  if (!season.watched.includes(ep)) {
+                    seasonRemainingMin += durationOfEpisode(item, season.number, ep)
+                  }
+                }
+              }
+              const plan = calculateBingePlan(rem, durationOfEpisode(item, season.number, 1), seasonRemainingMin)
               return (
                 <p className="text-micro text-muted">
                   Noch {rem} {rem === 1 ? unit : units} ({plan.watchTime.short}) · fertig bei 1/Tag: {plan.finishAt1PerDay}
@@ -2120,21 +2218,29 @@ function SeasonDialog({
             {Array.from({ length: shownCount }, (_, i) => part.from + i).map((episode) => {
               const seen = season.watched.includes(episode)
               const here = isHere && item.episode === episode
+              const epDuration = durationOfEpisode(item, number, episode)
+              const hasCustomDuration = Boolean(item.durations && typeof item.durations[`${number}:${episode}`] === 'number')
               return (
                 <button
                   key={episode}
                   type="button"
                   aria-pressed={seen}
-                  aria-label={`${unit} ${episode}${seen ? ', gesehen' : ''}${here ? ', hier sind Sie' : ''}`}
-                  title="Klicken: gesehen / nicht gesehen · Umschalt-Klick: alles bis hier"
+                  aria-label={`${unit} ${episode}${seen ? ', gesehen' : ''}${here ? ', hier sind Sie' : ''} (${epDuration} Min.)`}
+                  title={`${unit} ${episode} · ${epDuration} Min.${hasCustomDuration ? ' (eigene Dauer)' : ''} · Klicken: gesehen / nicht gesehen · Umschalt-Klick: alles bis hier`}
                   onClick={(event) => {
                     setSeasons(event.shiftKey ? watchedUpTo(item, number, episode) : toggleWatched(item, number, episode))
                   }}
-                  className={`press value flex h-[40px] items-center justify-center rounded-nav text-small transition-colors ${
+                  className={`press value relative flex h-[40px] items-center justify-center rounded-nav text-small transition-colors ${
                     seen ? 'bg-ink text-on-ink' : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid'
                   } ${here ? 'ring-2 ring-inset ring-ink' : ''}`}
                 >
                   {episode}
+                  {hasCustomDuration ? (
+                    <span
+                      className={`absolute top-[3px] right-[4px] h-[5px] w-[5px] rounded-full ${seen ? 'bg-raised' : 'bg-ink'}`}
+                      title={`${epDuration} Min.`}
+                    />
+                  ) : null}
                 </button>
               )
             })}
@@ -2253,6 +2359,24 @@ function SeasonDialog({
                   {seasonName(season)} entfernen
                 </button>
               ) : null}
+            </div>
+
+            {/* Episode Duration & Exceptions for this season */}
+            <div className="flex flex-col gap-[10px] border-t border-line pt-[14px]">
+              <div className="flex items-baseline justify-between">
+                <span className="text-small font-medium text-ink">
+                  Episodendauer ({number === 0 ? 'Filme' : `Staffel ${number}`})
+                </span>
+                <span className="text-micro text-muted">
+                  Standard: {number === 0 ? (item.filmDuration ?? 90) : (item.episodeDuration ?? 24)} Min.
+                </span>
+              </div>
+              <SeasonDurationExceptions
+                item={item}
+                seasonNumber={number}
+                unit={unit}
+                update={(patch) => updateMerkItem(item.id, patch)}
+              />
             </div>
           </div>
         </Reveal>
@@ -2772,6 +2896,228 @@ function CoverWithFormat({
  * stand, rating, seasons, note), how it looks (cover and tile shape), and —
  * folded away — how it is loaded.
  */
+
+function DurationSettings({
+  item,
+  update,
+}: {
+  item: SavedLinkItem
+  update: (patch: Partial<SavedLinkItem>) => void
+}) {
+  const seasons = seasonsOf(item)
+  const hasFilms = seasons.some((s) => s.number === 0)
+  const standardEp = item.episodeDuration ?? 24
+  const standardFilm = item.filmDuration ?? 90
+
+  const [excSeason, setExcSeason] = useState<number>(seasons[0]?.number ?? 1)
+  const [excEpisode, setExcEpisode] = useState<string>('1')
+  const [excMinutes, setExcMinutes] = useState<string>('48')
+
+  const durations = item.durations || {}
+  const exceptionEntries = Object.entries(durations)
+    .map(([key, min]) => {
+      const [s, e] = key.split(':').map(Number)
+      return { key, season: s, episode: e, minutes: min }
+    })
+    .sort((a, b) => (a.season === b.season ? a.episode - b.episode : a.season - b.season))
+
+  const handleAddException = () => {
+    const epNum = parseInt(excEpisode, 10)
+    const minNum = parseInt(excMinutes, 10)
+    if (isNaN(epNum) || epNum <= 0 || isNaN(minNum) || minNum <= 0) return
+
+    const key = `${excSeason}:${epNum}`
+    update({
+      durations: {
+        ...durations,
+        [key]: minNum,
+      },
+    })
+    setExcEpisode(String(epNum + 1))
+  }
+
+  const handleRemoveException = (key: string) => {
+    const next = { ...durations }
+    delete next[key]
+    update({
+      durations: Object.keys(next).length > 0 ? next : undefined,
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-[18px]">
+      <div className="grid gap-x-[28px] gap-y-[16px] sm:grid-cols-2">
+        <Group label="Standard-Episodendauer">
+          <div className="flex flex-col gap-[8px]">
+            <div className="flex items-center gap-[8px]">
+              <TextInput
+                type="number"
+                min={1}
+                max={600}
+                value={String(standardEp)}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10)
+                  if (!isNaN(val) && val > 0) {
+                    update({ episodeDuration: val })
+                  }
+                }}
+                className="w-[90px] font-sans"
+              />
+              <span className="text-small text-muted">Minuten pro Folge</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-[6px]">
+              <span className="text-micro text-muted">Vorschläge:</span>
+              {[20, 24, 45, 60].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => update({ episodeDuration: preset })}
+                  className={`press rounded-nav px-[8px] py-[2px] text-micro transition-colors ${
+                    standardEp === preset
+                      ? 'bg-ink text-on-ink font-medium'
+                      : 'bg-panel-soft text-prose hover:bg-panel-mid'
+                  }`}
+                >
+                  {preset} Min.
+                </button>
+              ))}
+            </div>
+          </div>
+        </Group>
+
+        {hasFilms ? (
+          <Group label="Standard-Filmdauer">
+            <div className="flex flex-col gap-[8px]">
+              <div className="flex items-center gap-[8px]">
+                <TextInput
+                  type="number"
+                  min={1}
+                  max={600}
+                  value={String(standardFilm)}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10)
+                    if (!isNaN(val) && val > 0) {
+                      update({ filmDuration: val })
+                    }
+                  }}
+                  className="w-[90px] font-sans"
+                />
+                <span className="text-small text-muted">Minuten pro Film</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-[6px]">
+                <span className="text-micro text-muted">Vorschläge:</span>
+                {[90, 105, 120].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => update({ filmDuration: preset })}
+                    className={`press rounded-nav px-[8px] py-[2px] text-micro transition-colors ${
+                      standardFilm === preset
+                        ? 'bg-ink text-on-ink font-medium'
+                        : 'bg-panel-soft text-prose hover:bg-panel-mid'
+                    }`}
+                  >
+                    {preset} Min.
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Group>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-[10px] border-t border-line pt-[14px]">
+        <div className="flex items-baseline justify-between">
+          <span className="text-small font-medium text-ink">Episodenspezifische Ausnahmen</span>
+          <span className="text-micro text-muted">
+            {exceptionEntries.length === 0
+              ? 'Keine Ausnahmen'
+              : `${exceptionEntries.length} ${exceptionEntries.length === 1 ? 'Ausnahme' : 'Ausnahmen'}`}
+          </span>
+        </div>
+        <p className="text-micro text-muted">
+          Für Pilotfolgen, Spezialfolgen, Doppelfolgen oder abweichende Episodenlängen.
+        </p>
+
+        {exceptionEntries.length > 0 ? (
+          <div className="flex flex-wrap gap-[6px]">
+            {exceptionEntries.map((exc) => (
+              <span
+                key={exc.key}
+                className="inline-flex items-center gap-[6px] rounded-nav bg-panel-soft px-[10px] py-[4px] text-small ring-1 ring-inset ring-rule text-ink"
+              >
+                <span className="font-medium">
+                  {exc.season === 0 ? `Film ${exc.episode}` : `S${exc.season}E${exc.episode}`}
+                </span>
+                <span className="text-muted">·</span>
+                <span className="value font-semibold">{exc.minutes} Min.</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveException(exc.key)}
+                  aria-label={`Ausnahme für ${exc.season === 0 ? `Film ${exc.episode}` : `S${exc.season}E${exc.episode}`} entfernen`}
+                  className="press ml-[2px] flex h-[18px] w-[18px] items-center justify-center rounded-nav text-muted hover:bg-panel-mid hover:text-ink"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-[8px] pt-[4px]">
+          {seasons.length > 1 ? (
+            <Select
+              aria-label="Staffel auswählen"
+              value={String(excSeason)}
+              onChange={(e) => setExcSeason(Number(e.target.value))}
+              className="w-auto! py-[6px]"
+            >
+              {seasons.map((s) => (
+                <option key={s.number} value={String(s.number)}>
+                  {s.number === 0 ? 'Filme' : `Staffel ${s.number}`}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <span className="text-small text-prose">
+              {seasons[0]?.number === 0 ? 'Film' : 'Staffel 1'}
+            </span>
+          )}
+
+          <div className="flex items-center gap-[4px]">
+            <span className="text-small text-muted">{excSeason === 0 ? 'Nr.:' : 'Folge:'}</span>
+            <TextInput
+              type="number"
+              min={1}
+              value={excEpisode}
+              onChange={(e) => setExcEpisode(e.target.value)}
+              className="w-[65px] font-sans"
+              placeholder="1"
+            />
+          </div>
+
+          <div className="flex items-center gap-[4px]">
+            <span className="text-small text-muted">Dauer:</span>
+            <TextInput
+              type="number"
+              min={1}
+              value={excMinutes}
+              onChange={(e) => setExcMinutes(e.target.value)}
+              className="w-[70px] font-sans"
+              placeholder="Min."
+            />
+            <span className="text-small text-muted">Min.</span>
+          </div>
+
+          <Button type="button" size="sm" variant="quiet" onClick={handleAddException}>
+            + Ausnahme speichern
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClose: () => void; onRemove: () => void }) {
   const update = (patch: Partial<SavedLinkItem>) => updateMerkItem(item.id, patch)
   const seasons = seasonsOf(item)
@@ -2835,6 +3181,16 @@ function SeriesDialog({ item, onClose, onRemove }: { item: SavedLinkItem; onClos
             onFormat={(format) => update({ tileFormat: format === 'manga' ? 'manga' : undefined })}
           />
         </div>
+
+        <Reveal
+          label={`Episodendauer · Standard ${item.episodeDuration ?? 24} Min.${item.durations && Object.keys(item.durations).length > 0 ? ` · ${Object.keys(item.durations).length} ${Object.keys(item.durations).length === 1 ? 'Ausnahme' : 'Ausnahmen'}` : ''}`}
+          defaultOpen={Boolean(item.episodeDuration || item.filmDuration || (item.durations && Object.keys(item.durations).length > 0))}
+          className="-mb-[8px]"
+        >
+          <div className="pt-[10px]">
+            <DurationSettings item={item} update={update} />
+          </div>
+        </Reveal>
 
         <Reveal label={host ? `Herunterladen · ${host}` : 'Herunterladen: Adresse und Einstellungen'} className="-mb-[8px]">
           <div className="grid gap-x-[28px] gap-y-[18px] pt-[10px] sm:grid-cols-2">
