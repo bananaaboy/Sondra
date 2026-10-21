@@ -24,6 +24,7 @@ import {
   takeOnlineNews,
 } from '../src/lib/merkliste'
 import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib/episodeMatch'
+import { nextOffered, openingOffered, sleepFade } from '../src/lib/player'
 
 console.log('--- Testing Merkliste Mega Features ---')
 
@@ -328,6 +329,24 @@ console.log('--- Testing Merkliste Mega Features ---')
   assert.strictEqual(onlineNews(open)?.countUnknown, true)
   assert.strictEqual(takeOnlineNews(open)?.seasons?.[0].episodes, 20, 'unbekannte Zahl wird übernommen')
   console.log('✓ Neu online: nur was die Liste nicht kennt, übernommen ohne Sprung über Ungesehenes')
+}
+
+// Abspielen: „Vorspann überspringen“, „Nächste Folge“, the sleep timer's fade.
+{
+  const episode = 24 * 60
+  assert.strictEqual(openingOffered(5, episode, 90), true, 'am Anfang einer Folge')
+  assert.strictEqual(openingOffered(5 * 60, episode, 90), true, 'nach einem langen Prolog')
+  assert.strictEqual(openingOffered(7 * 60, episode, 90), false, 'nach sechs Minuten nicht mehr')
+  assert.strictEqual(openingOffered(5, 3 * 60, 90), false, 'kein Clip unter vier Minuten')
+  assert.strictEqual(openingOffered(110, 5 * 60, 90), false, 'kurze Datei: nur im ersten Drittel')
+  assert.strictEqual(nextOffered(episode - 120, episode), true, 'im Abspann')
+  assert.strictEqual(nextOffered(episode - 200, episode), false, 'vor dem Abspann nicht')
+  assert.strictEqual(nextOffered(episode, episode), false, 'am Ende übernimmt „Automatisch weiter“')
+  assert.deepStrictEqual([sleepFade(60_000), sleepFade(5_000), sleepFade(0), sleepFade(-1)], [1, 0.5, 0, 0], 'leiser über die letzten zehn Sekunden')
+  const kept = createMerkItem({ id: 'op', title: 'Frieren', opening: 85 })
+  assert.strictEqual(kept.opening, 85, 'Vorspann-Länge der Serie bleibt')
+  assert.strictEqual(createMerkItem({ id: 'op', title: 'X', opening: 3 }).opening, undefined, 'unsinnige Länge fällt weg')
+  console.log('✓ Abspielen: Vorspann, nächste Folge und Schlaf-Timer zur rechten Zeit')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')

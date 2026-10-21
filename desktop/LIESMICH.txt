@@ -105,6 +105,11 @@ Merkliste
   es, mit „Rückgängig“. Neue Folgen: Ist „Neue Folgen melden“ an, prüft
   Sondra alle drei Stunden die Serien „Am Schauen“ mit AniWorld-Adresse und
   meldet eine neue Folge über Windows; ein Klick öffnet die Serie.
+  Vorspann überspringen: In den ersten Minuten einer Folge steht ein Knopf
+  auf dem Bild (Taste S), im Abspann „Nächste Folge“ (Taste N). Wie lang
+  der Vorspann ist, merkt sich Sondra je Serie der Merkliste (Zahnrad →
+  Wiedergabe). Schlaf-Timer: im Zahnrad unter Wiedergabe, 15, 30 oder 60
+  Minuten oder bis zum Ende des Titels; zum Schluss wird es leiser.
 
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →

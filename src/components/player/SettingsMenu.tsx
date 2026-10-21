@@ -14,13 +14,17 @@ import {
   BOOSTS,
   DEFAULT_SETTINGS,
   EQ_PRESETS,
+  OPENINGS,
   RATES,
   SKIPS,
+  SLEEPS,
+  minutesSeconds,
   rateLabel,
   type CaptionSize,
   type Fit,
   type PlayerSettings,
   type Repeat,
+  type SleepTimer,
 } from '../../lib/player'
 
 export type Quality = 'original' | number
@@ -172,6 +176,11 @@ export function SettingsMenu({
   onLoadCaptions,
   audio,
   onAudio,
+  opening,
+  onOpening,
+  sleep,
+  now,
+  onSleep,
   onClose,
 }: {
   kind: 'video' | 'audio'
@@ -188,6 +197,14 @@ export function SettingsMenu({
   onLoadCaptions: () => void
   audio: TrackState
   onAudio: (index: number) => void
+  /** What „Vorspann überspringen“ jumps, and the series it is kept for, if the file is on the Merkliste. */
+  opening: { seconds: number; series: string | null }
+  onOpening: (seconds: number) => void
+  sleep: SleepTimer | null
+  /** The clock the sleep timer counts down against. */
+  now: number
+  /** Minutes, the end of the title, or off. */
+  onSleep: (choice: number | 'end' | null) => void
   onClose: () => void
 }) {
   const [page, setPage] = useState<Page>('main')
@@ -247,7 +264,18 @@ export function SettingsMenu({
   ]
     .filter(Boolean)
     .join(' · ') || 'Normal'
-  const playbackValue = settings.repeat !== 'aus' ? (settings.repeat === 'titel' ? 'Titel wiederholen' : 'Liste wiederholen') : settings.autoNext ? 'Automatisch weiter' : 'Anhalten am Ende'
+  const sleepLeft = sleep && 'until' in sleep ? Math.max(1, Math.ceil((sleep.until - now) / 60_000)) : null
+  const playbackValue = sleep
+    ? 'atEnd' in sleep
+      ? 'Schlaf-Timer: Ende des Titels'
+      : `Schlaf-Timer: noch ${sleepLeft} Min.`
+    : settings.repeat !== 'aus'
+      ? settings.repeat === 'titel'
+        ? 'Titel wiederholen'
+        : 'Liste wiederholen'
+      : settings.autoNext
+        ? 'Automatisch weiter'
+        : 'Anhalten am Ende'
 
   return (
     <div
@@ -550,6 +578,41 @@ export function SettingsMenu({
                 <Option key={skip} label={`${skip} Sekunden`} selected={settings.skip === skip} onClick={() => update({ skip })} />
               ))}
             </Group>
+            <Group title="Schlaf-Timer">
+              <Option label="Aus" selected={!sleep} onClick={() => onSleep(null)} />
+              {SLEEPS.map((minutes) => {
+                const on = Boolean(sleep && 'until' in sleep && sleep.minutes === minutes)
+                return (
+                  <Option
+                    key={minutes}
+                    label={`${minutes} Minuten`}
+                    hint={on ? `noch ${sleepLeft} Min., zum Schluss leiser` : undefined}
+                    selected={on}
+                    onClick={() => onSleep(minutes)}
+                  />
+                )
+              })}
+              <Option label="Ende dieses Titels" selected={Boolean(sleep && 'atEnd' in sleep)} onClick={() => onSleep('end')} />
+            </Group>
+            {kind === 'video' ? (
+              <>
+                <Group>
+                  <Switch
+                    label="Vorspann überspringen anbieten"
+                    hint="Am Anfang einer Folge ein Knopf auf dem Bild (S), im Abspann „Nächste Folge“ (N)"
+                    on={settings.skipOpening}
+                    onChange={(skipOpening) => update({ skipOpening })}
+                  />
+                </Group>
+                {settings.skipOpening ? (
+                  <Group title={opening.series ? `Vorspann von „${opening.series}“ — gilt für diese Serie` : 'Länge des Vorspanns'}>
+                    {[...new Set([...OPENINGS, opening.seconds])].sort((a, b) => a - b).map((seconds) => (
+                      <Option key={seconds} label={minutesSeconds(seconds)} selected={opening.seconds === seconds} onClick={() => onOpening(seconds)} />
+                    ))}
+                  </Group>
+                ) : null}
+              </>
+            ) : null}
           </>
         ) : null}
       </div>

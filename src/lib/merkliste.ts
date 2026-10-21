@@ -116,6 +116,8 @@ export interface SavedLinkItem {
   history?: WatchHistoryEntry[]
   /** Online release info from AniWorld to detect new seasons or episodes. */
   onlineAvailable?: OnlineAvailableInfo
+  /** How long the opening runs, in seconds — what „Vorspann überspringen“ jumps. */
+  opening?: number
 }
 
 export interface WatchHistoryEntry {
@@ -131,6 +133,11 @@ export interface OnlineAvailableInfo {
   checkedAt: number
   hasNew?: boolean
 }
+
+/** „Vorspann überspringen“: 1:30 unless the series says otherwise — the usual anime opening. */
+export const OPENING_DEFAULT = 90
+export const OPENING_MIN = 10
+export const OPENING_MAX = 600
 
 const KEY = 'sondra:saved_links'
 const PROJECT_KEY = 'merkliste'
@@ -198,6 +205,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(typeof raw.rating === 'number' ? { rating: Math.max(0, Math.min(5, Math.round(raw.rating))) } : {}),
     ...(typeof raw.episodeDuration === 'number' && raw.episodeDuration > 0 ? { episodeDuration: Math.round(raw.episodeDuration) } : {}),
     ...(typeof raw.filmDuration === 'number' && raw.filmDuration > 0 ? { filmDuration: Math.round(raw.filmDuration) } : {}),
+    ...(typeof raw.opening === 'number' && raw.opening >= OPENING_MIN && raw.opening <= OPENING_MAX ? { opening: Math.round(raw.opening) } : {}),
     ...(raw.durations && typeof raw.durations === 'object' ? { durations: raw.durations } : {}),
     ...(Array.isArray(raw.tags)
       ? {

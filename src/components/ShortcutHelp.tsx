@@ -322,6 +322,15 @@ const SHORTCUT_ITEMS: ShortcutItem[] = [
     keywords: ['nächstes', 'vorheriges', 'next', 'previous', 'playlist'],
   },
   {
+    id: 'player-skip-opening',
+    category: 'player',
+    action: 'Vorspann überspringen',
+    description: 'Springt um die Länge des Vorspanns vor — bei einer Serie der Merkliste um deren eigene',
+    keys: [['S']],
+    badge: 'Video',
+    keywords: ['vorspann', 'intro', 'opening', 'überspringen', 'skip'],
+  },
+  {
     id: 'player-loop-ab',
     category: 'player',
     action: 'A-B Loop setzen',
