@@ -72,7 +72,8 @@ export const anytype = {
   listNotes: (spaceId?: string) => ask<{ notes: FoundNote[] }>('listNotes', spaceId),
   useSpace: (id: string, name: string, objectId?: string, objectName?: string) =>
     ask<object>('useSpace', id, name, objectId, objectName),
-  createNote: (spaceId: string, name: string) => ask<{ id: string; name: string }>('createNote', spaceId, name),
+  createNote: (spaceId: string, name: string, spaceName?: string) =>
+    ask<{ id: string; name: string }>('createNote', spaceId, name, spaceName),
   forget: () => ask<object>('forget'),
 }
 
@@ -166,10 +167,22 @@ function dataOf(items: SavedLinkItem[], removed: Record<string, number>): string
 export function merklisteFromMarkdown(
   markdown: string,
 ): { items: SavedLinkItem[]; removed: Record<string, number>; data: string } | null {
+  let block: string | null = null
   const start = markdown.indexOf('```' + DATA_FENCE)
-  if (start === -1) return null
-  const end = markdown.indexOf('```', start + 3 + DATA_FENCE.length)
-  const block = markdown.slice(start + 3 + DATA_FENCE.length, end === -1 ? undefined : end)
+  if (start !== -1) {
+    const end = markdown.indexOf('```', start + 3 + DATA_FENCE.length)
+    block = markdown.slice(start + 3 + DATA_FENCE.length, end === -1 ? undefined : end)
+  } else {
+    // Anytype drops code fence language identifiers when converting (```sondra-merkliste -> ```)
+    const headingIndex = markdown.indexOf(DATA_HEADING)
+    const searchFrom = headingIndex !== -1 ? headingIndex : 0
+    const fenceStart = markdown.indexOf('```', searchFrom)
+    if (fenceStart !== -1) {
+      const fenceEnd = markdown.indexOf('```', fenceStart + 3)
+      block = markdown.slice(fenceStart + 3, fenceEnd === -1 ? undefined : fenceEnd)
+    }
+  }
+  if (block === null) return null
   // Whatever Anytype did to the lines, only base64 characters count.
   const data = block.replace(/[^A-Za-z0-9+/=]/g, '')
   try {
@@ -201,6 +214,11 @@ export interface SyncResult {
 let running: Promise<Answer<SyncResult>> | null = null
 /** The list as Anytype holds it after the last round. */
 let inAnytype = ''
+
+/** Resets the cached remote state, e.g. when connecting a new space or note. */
+export function resetAnytypeCache(): void {
+  inAnytype = ''
+}
 
 /** True when this list is what the last round left in Anytype — nothing to send. */
 export function inStepWithAnytype(items: SavedLinkItem[]): boolean {

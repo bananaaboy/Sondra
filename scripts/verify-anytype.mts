@@ -162,6 +162,9 @@ const page = [...objects.values()][0]
 check('Seite lesbar: Stand in Worten', page.markdown.includes('**JoJo** — Staffel 2, Folge 3 · 28 von 65 gesehen'), true)
 const back = lib.merklisteFromMarkdown(page.markdown)
 check('Datenblock übersteht das Umbrechen', back?.items.map((item) => [item.id, item.title, item.episode]), [['jojo', 'JoJo', 3], ['dark', 'Dark', 1]])
+const strippedMd = page.markdown.replace('```sondra-merkliste', '```')
+const backStripped = lib.merklisteFromMarkdown(strippedMd)
+check('Datenblock ohne Sprachkennung lesbar (Anytype-Standard)', backStripped?.items.map((item) => [item.id, item.title]), [['jojo', 'JoJo'], ['dark', 'Dark']])
 check('Bild aus Datei reist nicht mit', back?.items[0].cover, merk.LOCAL_PICTURE)
 check('Bildadresse reist mit', back?.items[1].cover, 'https://bild.example/dark.jpg')
 
