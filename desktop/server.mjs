@@ -242,7 +242,8 @@ export async function startServer({ root, port, dataDir, onError }) {
   const { default: streamFn } = await import('../api/stream.js')
 
   const server = http.createServer(async (request, response) => {
-    const url = new URL(request.url ?? '/', 'http://localhost')
+    const safeUrl = (request.url ?? '/').replace(/^\/{2,}/, '/')
+    const url = new URL(safeUrl, 'http://localhost')
     // The same two headers vercel.json sets: SharedArrayBuffer, and with it
     // the multi-threaded FFmpeg core, depends on them.
     response.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
