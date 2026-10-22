@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Made by scripts/android-icons.mjs from the mark's bars; edit there. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="24"
+        android:translateY="24"
+        android:scaleX="1.875"
+        android:scaleY="1.875">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M10.65,5.35 H21.34 A1.65,1.65 0 0 1 21.34,8.65 H10.65 A1.65,1.65 0 0 1 10.65,5.35 Z M9.38,9.85 H27.03 A1.65,1.65 0 0 1 27.03,13.15 H9.38 A1.65,1.65 0 0 1 9.38,9.85 Z M6.25,14.35 H25.75 A1.65,1.65 0 0 1 25.75,17.65 H6.25 A1.65,1.65 0 0 1 6.25,14.35 Z M4.98,18.85 H22.63 A1.65,1.65 0 0 1 22.63,22.15 H4.98 A1.65,1.65 0 0 1 4.98,18.85 Z M10.65,23.35 H21.34 A1.65,1.65 0 0 1 21.34,26.65 H10.65 A1.65,1.65 0 0 1 10.65,23.35 Z" />
+    </group>
+</vector>

@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react'
 
 import { useFilePicker } from '../hooks/useIngest'
-import { IN_DESKTOP_APP } from '../lib/desktop'
+import { IN_ANDROID_APP, IN_DESKTOP_APP } from '../lib/desktop'
 import { driveLinked, openDriveDialog, useDrive } from '../lib/googleDrive'
 import { onFfmpegStatus, type FfmpegStatus } from '../lib/ffmpegClient'
 import { APP_VERSION } from '../lib/version'
@@ -221,7 +221,7 @@ export function Footer() {
         </p>
       </div>
       <p className="flex flex-wrap gap-x-[16px] gap-y-[4px]">
-        {IN_DESKTOP_APP ? null : (
+        {IN_DESKTOP_APP || IN_ANDROID_APP ? null : (
           <button type="button" className={footerLink} onClick={openGetAppDialog}>
             Sondra für Windows herunterladen
           </button>

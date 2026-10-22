@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import {
+  IN_ANDROID_APP,
   IN_DESKTOP_APP,
   MICROSOFT_STORE,
   WINDOWS_PORTABLE,
@@ -282,7 +283,7 @@ export function GetAppButton() {
     if (!open && dialog.open) dialog.close()
   }, [open])
 
-  if (IN_DESKTOP_APP) return null
+  if (IN_DESKTOP_APP || IN_ANDROID_APP) return null
 
   const close = () => {
     setOpen(false)

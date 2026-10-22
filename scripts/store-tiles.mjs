@@ -25,7 +25,7 @@ import zlib from 'node:zlib'
 
 const SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
 
-function readPng(file) {
+export function readPng(file) {
   const data = fs.readFileSync(file)
   if (!data.subarray(0, 8).equals(SIGNATURE)) throw new Error(`${file} ist kein PNG.`)
   let offset = 8
@@ -91,7 +91,7 @@ function chunk(type, body) {
   return Buffer.concat([head, body, tail])
 }
 
-function writePng(file, { width, height, pixels }) {
+export function writePng(file, { width, height, pixels }) {
   const header = Buffer.alloc(13)
   header.writeUInt32BE(width, 0)
   header.writeUInt32BE(height, 4)
@@ -102,7 +102,7 @@ function writePng(file, { width, height, pixels }) {
 }
 
 /** Area average, premultiplied, so transparent edges do not go dark. */
-function scale(source, size) {
+export function scale(source, size) {
   const out = Buffer.alloc(size * size * 4)
   const ratio = source.width / size
   for (let y = 0; y < size; y += 1) {
@@ -132,10 +132,10 @@ function scale(source, size) {
 }
 
 /** Sondra's green: `ink` in the light theme. */
-const INK = [0x0f, 0x3e, 0x1c]
+export const INK = [0x0f, 0x3e, 0x1c]
 
 /** The five bars of the mark, in its 32-unit viewBox: x, y, width; all 3.3 high. */
-const BARS = [
+export const BARS = [
   [9, 5.35, 13.99],
   [7.73, 9.85, 20.95],
   [4.6, 14.35, 22.8],
@@ -147,7 +147,7 @@ const BARS = [
  * The mark in white on full-bleed green, `share` of the shorter side high,
  * centred. Each bar is a capsule; coverage is sampled 4 × 4 per pixel.
  */
-function drawMark(width, height, share) {
+export function drawMark(width, height, share) {
   const pixels = Buffer.alloc(width * height * 4)
   const unit = (Math.min(width, height) * share) / 32
   const left = (width - 32 * unit) / 2

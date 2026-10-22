@@ -642,5 +642,27 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   wird, hakt `MerklisteTick` ab wie sonst, und die Runde trägt es nach
   Drive. Getestet mit `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1`, sonst
   erreichen die Anfragen des Workers in Playwright die Nachbildung nicht.
+- **Android-App** (`android/`, Wunsch vom 22.10.2026: „eine Android-App,
+  die über Google Drive läuft statt Anytype“): die Website als Trusted Web
+  Activity (androidbrowserhelper 2.7.4, Paket `ch.lizge.sondra`, startet auf
+  `#merkliste`, Kurzbefehle Merkliste/Ordner/Abspielen, Teilen von Video und
+  Ton an `/share-target`). Bewusst keine WebView: Google lässt seine
+  Anmeldung dort nicht zu, und Drive ist auf dem Telefon der Weg für
+  Merkliste und Ordner. Kein Chrome, der TWA kann: Custom Tab, nie WebView.
+  Version und versionCode (`a·10000 + b·100 + c`) aus der `package.json`
+  der Website. AGP 8.13, SDK 36 (min 24), R8 an (592 KB). Ohne Adressleiste
+  erst, wenn `/.well-known/assetlinks.json` den Schlüssel nennt: die Seite
+  schreibt sie beim Build aus `ANDROID_CERT_SHA256` (Vercel; Komma-Liste),
+  sonst gar nicht. Workflow „Android“: baut APK und AAB, lint, prüft Paket,
+  Version, Startaktivität und Signatur, nennt den Fingerabdruck in der
+  Zusammenfassung; Schlüssel aus `ANDROID_KEYSTORE_BASE64`/
+  `ANDROID_KEYSTORE_PASSWORD`, sonst Debug-Schlüssel (dann kein Release,
+  Updates gingen nicht); „new_key“ erzeugt einmal einen (Artefakt, ein Tag);
+  „release“ hängt `Sondra-Android[-<Version>].apk` ans Release. Die Seite
+  erkennt die App am Referrer `android-app://ch.lizge.sondra` (`IN_ANDROID_APP`,
+  für den Tab gemerkt) und bietet dort die Windows-App nicht an. Icons:
+  `npm run android:icons` (Vektor-Vordergrund aus den Balken des Zeichens,
+  PNGs mit den Helfern aus `store-tiles.mjs`). Lokal bauen: Android SDK mit
+  `platforms;android-36`, dann `cd android && ./gradlew assembleRelease`.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
