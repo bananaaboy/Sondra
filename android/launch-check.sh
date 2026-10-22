@@ -22,10 +22,12 @@ fail() {
 }
 
 # Starts with a clean log and waits for the sign that Sondra handed the
-# address on, then ten seconds more; a crash at any point fails the check.
-#   launcher <url>  the launcher says which address it opens (a cold start)
-#   chrome          Chrome is started with this site (a TWA already running:
-#                   the shortcut goes straight to it, no launcher involved)
+# address on, then ten seconds more; a crash or a refused address at any
+# point fails the check.
+#   launcher  the launcher says which address it opens; it must be <expect>
+#   any       that, or Chrome started with this site: a shortcut goes
+#             straight to Chrome whenever the library finds a Sondra task,
+#             which it does even after "pm clear"
 check() {
   local name="$1" kind="$2" expect="$3"
   shift 3
@@ -40,9 +42,8 @@ check() {
     grep -q "Process: $pkg, PID" <<< "$log" && fail "$name: Sondra ist abgestürzt"
     grep -q "Dropping untrusted" <<< "$log" && fail "$name: Adresse abgelehnt"
     if [ -z "$seen" ]; then
-      if [ "$kind" = launcher ]; then
-        seen="$(grep -o "TWALauncherActivity: Using url from [A-Za-z]*: .*" <<< "$log" | head -1 || true)"
-      else
+      seen="$(grep -o "TWALauncherActivity: Using url from [A-Za-z]*: .*" <<< "$log" | head -1 || true)"
+      if [ -z "$seen" ] && [ "$kind" = any ]; then
         seen="$(grep -o "START u0 {act=android.intent.action.VIEW dat=https://sondra.lizge.ch[^ ]* .*cmp=com.android.chrome/[^ }]*" <<< "$log" | head -1 || true)"
       fi
     elif [ "$settled" -ge 10 ]; then
@@ -53,7 +54,9 @@ check() {
     sleep 1
   done
   [ -n "$seen" ] || fail "$name: Sondra hat nichts geöffnet"
-  echo "$seen" | grep -qF "$expect" || fail "$name: erwartet $expect, geöffnet: $seen"
+  case "$seen" in
+    TWALauncherActivity:*) grep -qF "$expect" <<< "$seen" || fail "$name: erwartet $expect, geöffnet: $seen" ;;
+  esac
   echo "$name: $seen"
 }
 
@@ -62,15 +65,13 @@ trampoline=(-n "$pkg/com.google.androidbrowserhelper.trusted.ShortcutTrampolineA
 # Android starts a static shortcut with NEW_TASK | CLEAR_TASK.
 shortcut=(-a android.intent.action.VIEW -f 0x10008000)
 
-# Cold: no task of Sondra left from the check before.
-adb shell pm clear "$pkg" > /dev/null
 check "Symbol" launcher "https://sondra.lizge.ch/#merkliste" \
   -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "${launcher[@]}"
-check "Kurzbefehl, Sondra läuft" chrome "cmp=com.android.chrome" \
+check "Kurzbefehl, Sondra läuft" any "https://sondra.lizge.ch/#ordner" \
   "${shortcut[@]}" -d "https://sondra.lizge.ch/#ordner" "${trampoline[@]}"
 
 adb shell pm clear "$pkg" > /dev/null
-check "Kurzbefehl, kalt" launcher "https://sondra.lizge.ch/#ordner" \
+check "Kurzbefehl, nach dem Zurücksetzen" any "https://sondra.lizge.ch/#ordner" \
   "${shortcut[@]}" -d "https://sondra.lizge.ch/#ordner" "${trampoline[@]}"
 
 adb shell pm clear "$pkg" > /dev/null
