@@ -186,8 +186,12 @@ export async function setKeepSession(keep: boolean): Promise<void> {
   if (!keep) await clearAllSessions().catch(() => undefined)
 }
 
-/** Which bytes each asset had when it was last written, to skip unchanged ones. */
-const written = new Map<string, Uint8Array>()
+/**
+ * What each asset had when it was last written — its bytes, name and place
+ * — to skip unchanged ones. A new name or place alone rewrites only the
+ * record around the stored file; before, both were lost on a restart.
+ */
+const written = new Map<string, { bytes: Uint8Array; name: string; order: number }>()
 
 /**
  * Brings this session's stored copy in line with `assets`: new or changed
@@ -207,7 +211,18 @@ export async function saveSession(assets: readonly Asset[], activeAssetId: strin
     }
   }
   assets.forEach((asset, order) => {
-    if (written.get(asset.id) === asset.bytes) return
+    const before = written.get(asset.id)
+    if (before?.bytes === asset.bytes) {
+      if (before.name === asset.name && before.order === order) return
+      const key = `${SESSION_ID}:${asset.id}`
+      const read = store.get(key)
+      read.onsuccess = () => {
+        const stored = read.result as StoredAsset | undefined
+        if (stored) store.put({ ...stored, name: asset.name, order })
+      }
+      written.set(asset.id, { bytes: asset.bytes, name: asset.name, order })
+      return
+    }
     const record: StoredAsset = {
       key: `${SESSION_ID}:${asset.id}`,
       session: SESSION_ID,
@@ -225,7 +240,7 @@ export async function saveSession(assets: readonly Asset[], activeAssetId: strin
       }),
     }
     store.put(record)
-    written.set(asset.id, asset.bytes)
+    written.set(asset.id, { bytes: asset.bytes, name: asset.name, order })
   })
   const session: StoredSession = {
     id: SESSION_ID,

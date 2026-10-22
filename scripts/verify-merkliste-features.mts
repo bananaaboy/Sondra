@@ -24,7 +24,8 @@ import {
   takeOnlineNews,
 } from '../src/lib/merkliste'
 import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib/episodeMatch'
-import { nextOffered, openingOffered, sleepFade } from '../src/lib/player'
+import { chaptersText, cleanMarks, markName, neighbourMark, nextOffered, openingOffered, sleepFade, withMark } from '../src/lib/player'
+import { renamedFile, splitName } from '../src/lib/format'
 
 console.log('--- Testing Merkliste Mega Features ---')
 
@@ -347,6 +348,49 @@ console.log('--- Testing Merkliste Mega Features ---')
   assert.strictEqual(kept.opening, 85, 'Vorspann-Länge der Serie bleibt')
   assert.strictEqual(createMerkItem({ id: 'op', title: 'X', opening: 3 }).opening, undefined, 'unsinnige Länge fällt weg')
   console.log('✓ Abspielen: Vorspann, nächste Folge und Schlaf-Timer zur rechten Zeit')
+}
+
+// Abspielen: Lesezeichen.
+{
+  let marks = withMark([], 125.04).marks
+  marks = withMark(marks, 10).marks
+  assert.deepStrictEqual(marks.map((mark) => mark.at), [10, 125], 'nach Zeit geordnet, auf Zehntel gerundet')
+  assert.strictEqual(withMark(marks, 125.6).added, null, 'gleiche Stelle (unter einer Sekunde) nur einmal')
+  assert.strictEqual(markName(marks, marks[1]), 'Lesezeichen 2', 'ohne Namen nummeriert')
+  assert.strictEqual(neighbourMark(marks, 50, 1)?.at, 125, 'nächstes')
+  assert.strictEqual(neighbourMark(marks, 130, -1)?.at, 125, 'voriges')
+  assert.strictEqual(neighbourMark(marks, 126, -1)?.at, 10, 'kurz nach einem: das davor, nicht das gerade passierte')
+  assert.strictEqual(neighbourMark(marks, 200, 1), null, 'danach keins')
+  marks[1] = { ...marks[1], label: 'Kampf' }
+  assert.strictEqual(chaptersText(marks), '0:00 Anfang\n0:10 Kapitel 1\n2:05 Kampf', 'Kapitel ab 0:00')
+  assert.strictEqual(chaptersText([{ id: 'x', at: 0, label: '' }, { id: 'y', at: 3725, label: 'Ende' }]), '0:00 Kapitel 1\n1:02:05 Ende', 'erstes bei 0 bleibt, Stunden')
+  assert.deepStrictEqual(cleanMarks([{ id: 'a', at: -1 }, null, { at: 'x' }, { id: 'b', at: 5, label: 7 }]), [{ id: 'b', at: 5, label: '' }], 'kaputte fallen weg')
+  console.log('✓ Lesezeichen: geordnet, ohne Doppelte, Sprünge, Kapitel')
+}
+
+// Sitzung: Umbenennen.
+{
+  assert.deepStrictEqual(splitName('Aufnahme 3.wav'), { stem: 'Aufnahme 3', extension: '.wav' })
+  assert.deepStrictEqual(splitName('ohne-endung'), { stem: 'ohne-endung', extension: '' })
+  assert.deepStrictEqual(splitName('Mein Film v1.2 final.mkv'), { stem: 'Mein Film v1.2 final', extension: '.mkv' })
+  assert.deepStrictEqual(renamedFile('  Interview   Lea ', 'take1.wav'), { name: 'Interview Lea.wav' }, 'Endung bleibt, Leerraum aufgeräumt')
+  assert.deepStrictEqual(renamedFile('Folge. ', 'a.mp4'), { name: 'Folge.mp4' }, 'Punkt am Ende fällt weg')
+  assert.ok('error' in renamedFile('   ', 'a.wav'), 'leer abgelehnt')
+  assert.ok('error' in renamedFile('a/b', 'a.wav'), 'Schrägstrich abgelehnt')
+  assert.ok('error' in renamedFile('CON', 'a.wav'), 'reservierter Name abgelehnt')
+  assert.ok('error' in renamedFile('x'.repeat(300), 'a.wav'), 'zu lang abgelehnt')
+  console.log('✓ Umbenennen: Endung bleibt, was Windows ablehnt, wird gesagt')
+}
+
+// Merkliste: erkannte Vorspänne der Serie.
+{
+  const intro = (n: number) => ({ print: btoa(String.fromCharCode(n, 0, 0, 0, 0)), seconds: 89.04, learnedAt: n })
+  const item = createMerkItem({ id: 'v', title: 'Frieren', intros: [1, 2, 3, 4, 5].map(intro) })
+  assert.deepStrictEqual(item.intros?.map((entry) => entry.learnedAt), [2, 3, 4, 5], 'höchstens vier, die neuesten')
+  assert.strictEqual(item.intros?.[0].seconds, 89, 'Länge auf Zehntel')
+  const broken = createMerkItem({ id: 'w', title: 'X', intros: [{ print: '', seconds: 5, learnedAt: 1 }, { print: 'x'.repeat(20000), seconds: 9, learnedAt: 1 }] as never })
+  assert.strictEqual(broken.intros, undefined, 'leere oder zu grosse fallen weg')
+  console.log('✓ Vorspänne der Serie: höchstens vier, nur gültige')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')

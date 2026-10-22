@@ -18,10 +18,13 @@ import {
   RATES,
   SKIPS,
   SLEEPS,
+  chaptersText,
+  clock,
   minutesSeconds,
   rateLabel,
   type CaptionSize,
   type Fit,
+  type PlayerMark,
   type PlayerSettings,
   type Repeat,
   type SleepTimer,
@@ -40,6 +43,22 @@ export interface QualityState {
   note: string | null
 }
 
+/** The opening of the series this file belongs to, as the player knows it. */
+export interface IntroState {
+  /** The series' name, when the file is on the Merkliste. */
+  series: string | null
+  /** Openings learned for it by ear. */
+  learned: number
+  /** In this file: not looked for (none learned), being looked for, not there, or where. */
+  here: 'off' | 'finding' | 'none' | { start: number; end: number }
+  /** Another episode of the series in the list, to learn from. */
+  partner: string | null
+  /** What learning is doing right now. */
+  step: string | null
+  /** What came of the last try. */
+  note: string | null
+}
+
 export interface TrackState {
   status: 'unknown' | 'pending' | 'ready'
   tracks: string[]
@@ -47,7 +66,7 @@ export interface TrackState {
   making: boolean
 }
 
-type Page = 'main' | 'quality' | 'rate' | 'captions' | 'audio' | 'picture' | 'sound' | 'playback'
+type Page = 'main' | 'quality' | 'rate' | 'captions' | 'audio' | 'picture' | 'sound' | 'playback' | 'opening' | 'marks'
 
 const TITLES: Record<Exclude<Page, 'main'>, string> = {
   quality: 'Qualität',
@@ -57,6 +76,8 @@ const TITLES: Record<Exclude<Page, 'main'>, string> = {
   picture: 'Bild',
   sound: 'Ton',
   playback: 'Wiedergabe',
+  opening: 'Vorspann',
+  marks: 'Lesezeichen',
 }
 
 const FITS: { id: Fit; label: string; hint: string }[] = [
@@ -163,6 +184,103 @@ function Group({ title, children }: { title?: string; children: ReactNode }) {
   )
 }
 
+/**
+ * The bookmarks of the file: a click on the time jumps there, the name is
+ * typed in place, the cross takes one away. „Als Kapitel kopieren“ puts them
+ * on the clipboard the way a YouTube description lists chapters.
+ */
+function MarksPage({
+  marks,
+  time,
+  onAdd,
+  onSeek,
+  onChange,
+}: {
+  marks: PlayerMark[]
+  time: number
+  onAdd: () => void
+  onSeek: (mark: PlayerMark) => void
+  onChange: (marks: PlayerMark[]) => void
+}) {
+  const [copied, setCopied] = useState<'ja' | 'nein' | null>(null)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(chaptersText(marks))
+      setCopied('ja')
+    } catch {
+      setCopied('nein')
+    }
+  }
+  return (
+    <>
+      <button type="button" className={ROW} onClick={onAdd}>
+        <span className="flex-1 text-stage-ink">Hier ein Lesezeichen setzen</span>
+        <span className="value text-stage-muted">{clock(time)} · B</span>
+      </button>
+      {marks.length === 0 ? (
+        <p className="px-[16px] py-[10px] text-small leading-[1.5] text-stage-muted">
+          Noch keine. Lesezeichen bleiben bei dieser Datei auf diesem Gerät; Umschalt + ← und → springen von einem zum
+          nächsten.
+        </p>
+      ) : (
+        <Group>
+          <ul>
+            {marks.map((mark, index) => (
+              <li key={mark.id} className="flex items-center gap-[6px] px-[10px] py-[4px]">
+                <button
+                  type="button"
+                  onClick={() => onSeek(mark)}
+                  title={`Zu ${clock(mark.at)} springen`}
+                  className="press value shrink-0 rounded-nav px-[6px] py-[5px] text-small text-stage-accent outline-none hover:bg-stage-line/60 focus-visible:bg-stage-line/60"
+                >
+                  {clock(mark.at)}
+                </button>
+                <input
+                  value={mark.label}
+                  placeholder={`Lesezeichen ${index + 1}`}
+                  aria-label={`Name für das Lesezeichen bei ${clock(mark.at)}`}
+                  maxLength={120}
+                  onChange={(event) =>
+                    onChange(marks.map((entry) => (entry.id === mark.id ? { ...entry, label: event.target.value } : entry)))
+                  }
+                  className="min-w-0 flex-1 rounded-nav bg-transparent px-[6px] py-[5px] text-small text-stage-ink placeholder:text-stage-muted outline-none ring-1 ring-inset ring-transparent hover:ring-stage-line focus-visible:ring-stage-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => onChange(marks.filter((entry) => entry.id !== mark.id))}
+                  aria-label={`Lesezeichen bei ${clock(mark.at)} entfernen`}
+                  title="Entfernen"
+                  className="press grid h-[28px] w-[28px] shrink-0 place-items-center rounded-pill text-stage-muted outline-none hover:bg-stage-line/60 hover:text-stage-ink focus-visible:bg-stage-line/60"
+                >
+                  <svg viewBox="0 0 16 16" className="h-[12px] w-[12px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+                    <path d="M4 4l8 8M12 4l-8 8" />
+                  </svg>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Group>
+      )}
+      {marks.length > 0 ? (
+        <Group>
+          <button type="button" className={ROW} onClick={() => void copy()}>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-stage-ink">Als Kapitel kopieren</span>
+              <span className="text-micro leading-[1.4] text-stage-muted">
+                {copied === 'ja'
+                  ? 'Kopiert — passt so in eine YouTube-Beschreibung.'
+                  : copied === 'nein'
+                    ? 'Der Browser lässt das Kopieren hier nicht zu.'
+                    : 'Eine Zeile je Lesezeichen, beginnend bei 0:00'}
+              </span>
+            </span>
+          </button>
+        </Group>
+      ) : null}
+    </>
+  )
+}
+
 export function SettingsMenu({
   kind,
   placement = 'over',
@@ -181,6 +299,14 @@ export function SettingsMenu({
   sleep,
   now,
   onSleep,
+  marks,
+  time,
+  onAddMark,
+  onSeekMark,
+  onMarks,
+  intro,
+  onLearnIntro,
+  onForgetIntros,
   onClose,
 }: {
   kind: 'video' | 'audio'
@@ -205,6 +331,15 @@ export function SettingsMenu({
   now: number
   /** Minutes, the end of the title, or off. */
   onSleep: (choice: number | 'end' | null) => void
+  /** This file's bookmarks, where it is now, and what can be done with them. */
+  marks: PlayerMark[]
+  time: number
+  onAddMark: () => void
+  onSeekMark: (mark: PlayerMark) => void
+  onMarks: (marks: PlayerMark[]) => void
+  intro: IntroState
+  onLearnIntro: () => void
+  onForgetIntros: () => void
   onClose: () => void
 }) {
   const [page, setPage] = useState<Page>('main')
@@ -264,7 +399,15 @@ export function SettingsMenu({
   ]
     .filter(Boolean)
     .join(' · ') || 'Normal'
-  const sleepLeft = sleep && 'until' in sleep ? Math.max(1, Math.ceil((sleep.until - now) / 60_000)) : null
+  const openingValue = !settings.skipOpening
+    ? 'Aus'
+    : typeof intro.here === 'object'
+      ? `${clock(intro.here.start)}–${clock(intro.here.end)}`
+      : intro.here === 'finding'
+        ? 'wird gesucht …'
+        : minutesSeconds(opening.seconds)
+  // Never more than was chosen: `now` ticks every few seconds and lags a fresh choice.
+  const sleepLeft = sleep && 'until' in sleep ? Math.min(sleep.minutes, Math.max(1, Math.ceil((sleep.until - now) / 60_000))) : null
   const playbackValue = sleep
     ? 'atEnd' in sleep
       ? 'Schlaf-Timer: Ende des Titels'
@@ -309,8 +452,12 @@ export function SettingsMenu({
             <MainRow label="Bild" value={pictureTouched ? 'Angepasst' : 'Original'} onClick={() => open('picture')} hidden={kind !== 'video'} />
             <MainRow label="Ton" value={soundValue} onClick={() => open('sound')} />
             <MainRow label="Wiedergabe" value={playbackValue} onClick={() => open('playback')} />
+            <MainRow label="Vorspann" value={openingValue} onClick={() => open('opening')} hidden={kind !== 'video'} />
+            <MainRow label="Lesezeichen" value={marks.length ? String(marks.length) : 'Keine'} onClick={() => open('marks')} />
           </>
         ) : null}
+
+        {page === 'marks' ? <MarksPage marks={marks} time={time} onAdd={onAddMark} onSeek={onSeekMark} onChange={onMarks} /> : null}
 
         {page === 'quality' ? (
           <>
@@ -594,23 +741,61 @@ export function SettingsMenu({
               })}
               <Option label="Ende dieses Titels" selected={Boolean(sleep && 'atEnd' in sleep)} onClick={() => onSleep('end')} />
             </Group>
-            {kind === 'video' ? (
+          </>
+        ) : null}
+
+        {page === 'opening' ? (
+          <>
+            <Group>
+              <Switch
+                label="Vorspann überspringen anbieten"
+                hint="Während des Vorspanns ein Knopf auf dem Bild (S), im Abspann „Nächste Folge“ (N)"
+                on={settings.skipOpening}
+                onChange={(skipOpening) => update({ skipOpening })}
+              />
+            </Group>
+            {settings.skipOpening ? (
               <>
-                <Group>
-                  <Switch
-                    label="Vorspann überspringen anbieten"
-                    hint="Am Anfang einer Folge ein Knopf auf dem Bild (S), im Abspann „Nächste Folge“ (N)"
-                    on={settings.skipOpening}
-                    onChange={(skipOpening) => update({ skipOpening })}
-                  />
+                <Group title={intro.series ? `Am Ton erkennen — „${intro.series}“` : 'Am Ton erkennen'}>
+                  <p className="px-[16px] pb-[6px] pt-[2px] text-small leading-[1.5] text-stage-muted" role="status">
+                    {!intro.series
+                      ? 'Geht für Serien auf der Merkliste: Sondra vergleicht zwei Folgen und findet den Vorspann danach in jeder weiteren, auch nach einem Cold Open.'
+                      : intro.step
+                        ? intro.step
+                        : typeof intro.here === 'object'
+                          ? `In dieser Folge von ${clock(intro.here.start)} bis ${clock(intro.here.end)}.`
+                          : intro.here === 'finding'
+                            ? 'Sucht den Vorspann in dieser Folge …'
+                            : intro.here === 'none'
+                              ? 'In dieser Folge nicht gefunden — es gilt die feste Länge unten.'
+                              : 'Noch nicht erkannt. Sondra vergleicht dafür zwei Folgen und findet den Vorspann danach in jeder weiteren, auch nach einem Cold Open.'}
+                  </p>
+                  {intro.note && !intro.step ? <p className="px-[16px] pb-[6px] text-small leading-[1.5] text-stage-ink">{intro.note}</p> : null}
+                  {intro.series && !intro.step ? (
+                    intro.partner ? (
+                      <button type="button" className={ROW} onClick={onLearnIntro}>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="text-stage-ink">{intro.learned > 0 ? 'Neuen Vorspann erkennen' : 'Vorspann erkennen'}</span>
+                          <span className="truncate text-micro leading-[1.4] text-stage-muted">Vergleicht mit „{intro.partner}“</span>
+                        </span>
+                      </button>
+                    ) : (
+                      <p className="px-[16px] pb-[8px] text-micro leading-[1.4] text-stage-muted">
+                        {intro.learned > 0 ? 'Für einen neuen Vorspann' : 'Dafür'} eine zweite Folge von „{intro.series}“ in die Liste nehmen.
+                      </p>
+                    )
+                  ) : null}
+                  {intro.learned > 0 && !intro.step ? (
+                    <button type="button" className={ROW} onClick={onForgetIntros}>
+                      <span className="flex-1 text-stage-ink">{intro.learned === 1 ? 'Erkannten Vorspann vergessen' : `${intro.learned} erkannte Vorspänne vergessen`}</span>
+                    </button>
+                  ) : null}
                 </Group>
-                {settings.skipOpening ? (
-                  <Group title={opening.series ? `Vorspann von „${opening.series}“ — gilt für diese Serie` : 'Länge des Vorspanns'}>
-                    {[...new Set([...OPENINGS, opening.seconds])].sort((a, b) => a - b).map((seconds) => (
-                      <Option key={seconds} label={minutesSeconds(seconds)} selected={opening.seconds === seconds} onClick={() => onOpening(seconds)} />
-                    ))}
-                  </Group>
-                ) : null}
+                <Group title={opening.series ? `Feste Länge für „${opening.series}“ — wenn nichts erkannt ist` : 'Feste Länge des Vorspanns'}>
+                  {[...new Set([...OPENINGS, opening.seconds])].sort((a, b) => a - b).map((seconds) => (
+                    <Option key={seconds} label={minutesSeconds(seconds)} selected={opening.seconds === seconds} onClick={() => onOpening(seconds)} />
+                  ))}
+                </Group>
               </>
             ) : null}
           </>
