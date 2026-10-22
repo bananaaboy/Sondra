@@ -54,10 +54,20 @@ export { DriveError, folderPath, type DriveErrorCode, type DriveFile, type Drive
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke'
 const DEFAULT_CLIENT_ID = '736809827454-0mtp3prv4tvrrm7p7v8pfmv25brccdpe.apps.googleusercontent.com'
-/** The website's OAuth client („Webanwendung"); defaults to the project's client ID. */
-const WEB_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID
+/** The website's OAuth client („Webanwendung"); from Vercel/build env or project default. */
+const WEB_CLIENT_ID: string = (
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  import.meta.env.GOOGLE_CLIENT_ID ||
+  DEFAULT_CLIENT_ID
+).trim()
+const WEB_CLIENT_SECRET: string = (
+  import.meta.env.VITE_GOOGLE_CLIENT_SECRET ||
+  import.meta.env.GOOGLE_CLIENT_SECRET ||
+  ''
+).trim()
 /** The channel `public/google-drive.html` answers on. */
 const CHANNEL = 'sondra-google-drive'
 const SETTINGS_KEY = 'sondra:drive'
@@ -116,6 +126,10 @@ export interface DriveSettings {
   folders: Record<string, Partial<Record<DriveFolder, string>>>
   /** Custom Web OAuth client ID, if entered in settings. */
   clientId?: string
+  /** Custom Web OAuth client secret, if entered in settings. */
+  clientSecret?: string
+  /** Web OAuth refresh token, if received via code exchange. */
+  refreshToken?: string
 }
 
 const DEFAULT_SETTINGS: DriveSettings = {
@@ -127,6 +141,8 @@ const DEFAULT_SETTINGS: DriveSettings = {
   merklisteAt: 0,
   folders: {},
   clientId: '',
+  clientSecret: '',
+  refreshToken: '',
 }
 
 function readSettings(): DriveSettings {
@@ -184,6 +200,11 @@ export const useDrive = create<DriveState>(() => ({
 export function getWebClientId(): string {
   const custom = state().settings.clientId?.trim()
   return custom || WEB_CLIENT_ID
+}
+
+export function getWebClientSecret(): string {
+  const custom = state().settings.clientSecret?.trim()
+  return custom || WEB_CLIENT_SECRET
 }
 
 const set = (patch: Partial<DriveState> | ((state: DriveState) => Partial<DriveState>)) => useDrive.setState(patch)
@@ -247,6 +268,41 @@ async function accessToken(refused: boolean): Promise<string> {
     throw new DriveError(asCode(answer.error), answer.detail)
   }
   if (!refused && webTokenUsable()) return webToken!.token
+
+  const refreshToken = state().settings.refreshToken
+  const clientId = getWebClientId()
+  const clientSecret = getWebClientSecret()
+  if (refreshToken && clientId) {
+    try {
+      const res = await fetch(TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: clientId,
+          ...(clientSecret ? { client_secret: clientSecret } : {}),
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }),
+      })
+      const body = (await res.json()) as {
+        access_token?: string
+        expires_in?: number
+        error?: string
+        error_description?: string
+      }
+      if (res.ok && body.access_token) {
+        holdWebToken(body.access_token, Number(body.expires_in) || 3600)
+        set({ connected: true })
+        return body.access_token
+      }
+      if (body.error === 'invalid_grant') {
+        saveSettings({ refreshToken: '' })
+      }
+    } catch {
+      // offline or network error
+    }
+  }
+
   webToken = null
   set({ connected: false })
   throw new DriveError('expired')
@@ -283,18 +339,26 @@ let cancelWeb: (() => void) | null = null
  */
 function signInWeb(): Promise<void> {
   const clientId = getWebClientId()
+  const clientSecret = getWebClientSecret()
   if (!clientId) return Promise.reject(new DriveError('not-configured'))
   const stateId = crypto.getRandomValues(new Uint32Array(4)).join('-')
   const url = new URL(AUTH_URL)
   const hint = state().settings.email
+  const redirectUri = new URL('google-drive.html', document.baseURI).toString()
+  const useCode = Boolean(clientSecret)
+
   url.search = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: new URL('google-drive.html', document.baseURI).toString(),
-    response_type: 'token',
+    redirect_uri: redirectUri,
+    response_type: useCode ? 'code' : 'token',
     scope: DRIVE_SCOPE,
     state: stateId,
     include_granted_scopes: 'true',
-    ...(hint ? { login_hint: hint } : { prompt: 'select_account' }),
+    ...(useCode
+      ? { access_type: 'offline', prompt: hint ? 'none' : 'consent' }
+      : hint
+        ? { login_hint: hint }
+        : { prompt: 'select_account' }),
   }).toString()
   const channel = new BroadcastChannel(CHANNEL)
   const popup = window.open(url.toString(), 'sondra-google', 'popup,width=520,height=680')
@@ -312,12 +376,55 @@ function signInWeb(): Promise<void> {
     }
     const timer = window.setTimeout(() => done(new DriveError('timeout')), 5 * 60_000)
     cancelWeb = () => done(new DriveError('cancelled'))
-    channel.onmessage = (event: MessageEvent) => {
-      const data = event.data as { state?: string; access_token?: string; expires_in?: string; scope?: string; error?: string } | null
+    channel.onmessage = async (event: MessageEvent) => {
+      const data = event.data as {
+        state?: string
+        access_token?: string
+        code?: string
+        expires_in?: string
+        scope?: string
+        error?: string
+      } | null
       if (!data || data.state !== stateId) return
       if (data.error) return done(new DriveError(data.error === 'access_denied' ? 'denied' : 'failed', data.error))
-      if (!data.access_token) return done(new DriveError('failed', 'kein Token'))
       if (typeof data.scope === 'string' && !data.scope.split(/\s+/).includes(DRIVE_SCOPE)) return done(new DriveError('scope'))
+
+      if (data.code) {
+        try {
+          const res = await fetch(TOKEN_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: clientId,
+              client_secret: clientSecret,
+              code: data.code,
+              grant_type: 'authorization_code',
+              redirect_uri: redirectUri,
+            }),
+          })
+          const body = (await res.json()) as {
+            access_token?: string
+            refresh_token?: string
+            expires_in?: number
+            error?: string
+            error_description?: string
+          }
+          if (!res.ok || body.error) {
+            return done(new DriveError('failed', body.error_description || body.error))
+          }
+          if (!body.access_token) return done(new DriveError('failed', 'kein Token erhalten'))
+          if (body.refresh_token) {
+            saveSettings({ refreshToken: body.refresh_token })
+          }
+          holdWebToken(body.access_token, Number(body.expires_in) || 3600)
+          done(null)
+        } catch (err) {
+          done(new DriveError('offline', String((err as Error)?.message ?? err)))
+        }
+        return
+      }
+
+      if (!data.access_token) return done(new DriveError('failed', 'kein Token'))
       holdWebToken(data.access_token, Number(data.expires_in) || 3600)
       done(null)
     }
@@ -367,10 +474,13 @@ export function cancelDriveSignIn() {
 
 export async function disconnectDrive(): Promise<void> {
   if (IN_APP) await ask('disconnect')
-  else if (webToken) {
-    // Withdrawn at Google as well; the answer cannot be read across origins,
-    // and does not need to be.
-    void fetch(`${REVOKE_URL}?${new URLSearchParams({ token: webToken.token })}`, { method: 'POST', mode: 'no-cors' }).catch(() => {})
+  else {
+    const tokenToRevoke = webToken?.token || state().settings.refreshToken
+    if (tokenToRevoke) {
+      // Withdrawn at Google as well; the answer cannot be read across origins,
+      // and does not need to be.
+      void fetch(`${REVOKE_URL}?${new URLSearchParams({ token: tokenToRevoke })}`, { method: 'POST', mode: 'no-cors' }).catch(() => {})
+    }
   }
   webToken = null
   // An upload still running belongs to the account just left: it ends there.
@@ -383,7 +493,7 @@ export async function disconnectDrive(): Promise<void> {
     problem: null,
     jobs: current.jobs.filter((job) => job.status !== 'waiting'),
   }))
-  saveSettings({ linked: false, email: '', name: '', folders: {}, merklisteAt: 0 })
+  saveSettings({ linked: false, email: '', name: '', folders: {}, merklisteAt: 0, refreshToken: '' })
   inDrive = ''
   set({ merkSync: { running: false, at: 0, received: 0, problem: null } })
   log('Google Drive getrennt')
@@ -400,7 +510,22 @@ export function initDrive(): void {
   window.addEventListener('focus', () => {
     if (Date.now() - lastRound > FOCUS_GAP) void syncMerklisteWithDrive({ quiet: true })
   })
-  if (!IN_APP) return
+  if (!IN_APP) {
+    if (state().settings.linked && state().settings.refreshToken) {
+      void accessToken(false)
+        .then(async () => {
+          const account = await client.account().catch(() => null)
+          if (account) {
+            saveSettings({ email: account.email, name: account.name })
+            set({ connected: true, account })
+          }
+          void pump()
+          if (state().settings.merkliste) void syncMerklisteWithDrive()
+        })
+        .catch(() => {})
+    }
+    return
+  }
   void ask<{ configured: boolean; connected: boolean; lasting: boolean }>('status').then(async (answer) => {
     if (!answer.ok) {
       set({ ready: true, configured: false })
@@ -737,7 +862,9 @@ function scheduleMerkliste() {
   }, MERKLISTE_DELAY)
 }
 
-export function setDriveSetting(patch: Partial<Pick<DriveSettings, 'autoDownloads' | 'merkliste' | 'clientId'>>): void {
+export function setDriveSetting(
+  patch: Partial<Pick<DriveSettings, 'autoDownloads' | 'merkliste' | 'clientId' | 'clientSecret' | 'refreshToken'>>,
+): void {
   saveSettings(patch)
   if (patch.merkliste) void syncMerklisteWithDrive()
   if (patch.merkliste === false) setSync({ running: false, problem: null })

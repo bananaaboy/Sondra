@@ -46,6 +46,7 @@
         var answer = {
           state: fragment.get('state') || query.get('state'),
           access_token: fragment.get('access_token'),
+          code: query.get('code') || fragment.get('code'),
           expires_in: fragment.get('expires_in'),
           scope: fragment.get('scope'),
           error: fragment.get('error') || query.get('error'),
