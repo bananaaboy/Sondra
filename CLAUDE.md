@@ -72,6 +72,27 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Werkzeug ist ein eigener Chunk (`React.lazy` in `Dashboard.tsx`) und wird
   erst beim Öffnen geholt, der Rest im Leerlauf; ein neues Panel gehört in
   `TOOLS` dort, nicht als statischer Import.
+- **Ordner** (`#ordner`, `FolderPanel.tsx`, `lib/folder.ts`, 1.1.12): die
+  Dateien eines Ordners auf diesem Gerät als Kacheln (Vorschaubild aus dem
+  Video bei ~15 %, Bild verkleinert beim Dekodieren, Dauer; `lib/thumbnails.ts`,
+  zwei gleichzeitig, nur für Kacheln auf dem Schirm) oder als Liste; Art,
+  Suche (auch in Unterordnern, ohne Akzente), Sortierung natürlich („2“ vor
+  „10“), Unterordner zum Hineingehen oder alles darunter. Auswählen wie im
+  Dateimanager (`clickSelect`: Klick, Strg/⌘, Umschalt; Pfeile, Leertaste,
+  Strg+A, Escape), dann Abspielen (`sendToPlayer`, die Liste wird ersetzt),
+  In die Sitzung, Als ZIP, In Drive, Löschen nach Rückfrage. Edge, Chrome und
+  die App bekommen den Ordner selbst (File System Access): gemerkt in
+  IndexedDB (`sondra-ordner`), beim nächsten Mal nur angeboten („„Anime“
+  wieder öffnen“), nie still gelesen; Löschen fragt einmal nach Schreibrecht
+  und sagt „nicht in den Papierkorb“. Firefox/Safari: `webkitdirectory`, einmal
+  eingelesen, ohne Löschen — die Seite sagt das. Die Kachel bekommt den Fokus
+  nur, wenn er schon in der Liste ist; vorher nahm die erste ihn beim
+  Ankommen und scrollte dorthin. **Weiterschauen:** Folgen von Serien der
+  Merkliste im Ordner (`folderSeries`) — gesehen markiert, die nächste (der
+  Stand, sonst die nach der zuletzt gesehenen) mit dem Rest dahinter in den
+  Player. **Doppelte finden** (`lib/duplicates.ts`): nur gleich grosse Dateien
+  werden gelesen, bis 32 MB ganz (SHA-256), darüber an 32 Stellen; behalten
+  wird die ohne „(1)“/„Kopie“, sonst die älteste. `npm run verify:folder`.
 - **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
   Dateimenü oder Doppelklick auf den Namen; die Endung bleibt neben dem
   Feld stehen, was Windows ablehnt (`\ / : * ? " < > |`, CON …), wird

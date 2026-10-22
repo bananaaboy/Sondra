@@ -539,6 +539,17 @@ export function saveAssetsToDrive(assets: Asset[]): void {
   go()
 }
 
+/** Files from a folder on this computer, each into the folder of its kind; read where they lie. */
+export function saveFilesToDrive(files: { file: File; kind: AssetKind }[]): void {
+  for (const { file, kind } of files) {
+    enqueue(
+      { kind: 'file', name: file.name, folder: folderForKind(kind), total: file.size },
+      { data: () => file, mode: 'skip-same', mime: file.type || undefined },
+    )
+  }
+  go()
+}
+
 /** A finished download, into „Heruntergeladen“ — only with the switch on and Drive connected before. */
 export function offerDownloadToDrive(file: { name: string; bytes: Uint8Array; mime: string }): void {
   const current = state()

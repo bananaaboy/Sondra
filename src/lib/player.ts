@@ -82,6 +82,31 @@ export function playerInbox(): ((files: File[]) => void) | null {
   return inbox
 }
 
+/**
+ * Files for the player from elsewhere — the folder page's „Abspielen“ and
+ * „Weiterschauen“. `replace` makes them the whole list (an episode and the
+ * ones after it), else they join it. Kept until the player takes them, in
+ * case its chunk is still on the way.
+ */
+type PlayerDelivery = { files: File[]; replace: boolean }
+let delivery: PlayerDelivery | null = null
+let deliver: ((delivery: PlayerDelivery) => void) | null = null
+
+export function sendToPlayer(files: File[], replace = false): void {
+  if (deliver) deliver({ files, replace })
+  else delivery = { files, replace }
+}
+
+/** The player's side: takes what waits, and what comes later. */
+export function receivePlayerFiles(handler: ((delivery: PlayerDelivery) => void) | null): void {
+  deliver = handler
+  if (handler && delivery) {
+    const waiting = delivery
+    delivery = null
+    handler(waiting)
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Remembered on this device — conveniences, never needed                      */
 /* -------------------------------------------------------------------------- */

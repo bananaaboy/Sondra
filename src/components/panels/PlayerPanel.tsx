@@ -32,6 +32,7 @@ import {
   QUALITY_STEPS,
   RATES,
   claimDrops,
+  receivePlayerFiles,
   clock,
   isSubtitleFile,
   markName,
@@ -737,6 +738,18 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     },
     [log],
   )
+
+  // Files sent from elsewhere (the folder page): the whole list, or added to it.
+  useEffect(() => {
+    receivePlayerFiles(({ files, replace }) => {
+      if (replace) {
+        itemsRef.current = []
+        currentIdRef.current = null
+      }
+      void addFiles(files, true)
+    })
+    return () => receivePlayerFiles(null)
+  }, [addFiles])
 
   // While this tool is open, a drop anywhere on the window is the player's.
   useEffect(() => {
