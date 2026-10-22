@@ -56,7 +56,6 @@ export { DriveError, folderPath, type DriveErrorCode, type DriveFile, type Drive
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
-const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke'
 const DEFAULT_CLIENT_ID = '736809827454-0mtp3prv4tvrrm7p7v8pfmv25brccdpe.apps.googleusercontent.com'
 /** The website's OAuth client („Webanwendung"); from Vercel/build env or project default. */
@@ -65,11 +64,8 @@ const WEB_CLIENT_ID: string = (
   import.meta.env.GOOGLE_CLIENT_ID ||
   DEFAULT_CLIENT_ID
 ).trim()
-const WEB_CLIENT_SECRET: string = (
-  import.meta.env.VITE_GOOGLE_CLIENT_SECRET ||
-  import.meta.env.GOOGLE_CLIENT_SECRET ||
-  ''
-).trim()
+/** Exchanges codes and keeps the website's lasting sign-in; the client secret lives only there. */
+const TOKEN_API = '/api/google-token'
 /** The channel `public/google-drive.html` answers on. */
 const CHANNEL = 'sondra-google-drive'
 const SETTINGS_KEY = 'sondra:drive'
@@ -128,10 +124,6 @@ export interface DriveSettings {
   folders: Record<string, Partial<Record<DriveFolder, string>>>
   /** Custom Web OAuth client ID, if entered in settings. */
   clientId?: string
-  /** Custom Web OAuth client secret, if entered in settings. */
-  clientSecret?: string
-  /** Web OAuth refresh token, if received via code exchange. */
-  refreshToken?: string
 }
 
 const DEFAULT_SETTINGS: DriveSettings = {
@@ -143,14 +135,21 @@ const DEFAULT_SETTINGS: DriveSettings = {
   merklisteAt: 0,
   folders: {},
   clientId: '',
-  clientSecret: '',
-  refreshToken: '',
 }
+
+/** Kept here by an earlier version: a client secret and a refresh token, neither of which belongs in the page. */
+const RETIRED_SETTINGS = ['clientSecret', 'refreshToken']
 
 function readSettings(): DriveSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    return raw ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<DriveSettings>) } : { ...DEFAULT_SETTINGS }
+    if (!raw) return { ...DEFAULT_SETTINGS }
+    const stored = JSON.parse(raw) as Record<string, unknown>
+    if (RETIRED_SETTINGS.some((key) => key in stored)) {
+      for (const key of RETIRED_SETTINGS) delete stored[key]
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(stored))
+    }
+    return { ...DEFAULT_SETTINGS, ...(stored as Partial<DriveSettings>) }
   } catch {
     return { ...DEFAULT_SETTINGS }
   }
@@ -204,9 +203,69 @@ export function getWebClientId(): string {
   return custom || WEB_CLIENT_ID
 }
 
-export function getWebClientSecret(): string {
-  const custom = state().settings.clientSecret?.trim()
-  return custom || WEB_CLIENT_SECRET
+/**
+ * Whether `api/google-token.js` holds a secret, and for which client: then a
+ * sign-in on the website lasts. Asked once a visit; until it answers, and
+ * where there is no such function (a static copy, `vite dev`), the sign-in
+ * is for the hour.
+ */
+let lastingClient: string | null = null
+let lastingAsked: Promise<void> | null = null
+function askLasting(): Promise<void> {
+  lastingAsked ??= fetch(TOKEN_API, { cache: 'no-store' })
+    .then((res) => (res.ok ? (res.json() as Promise<{ lasting?: boolean; clientId?: string }>) : null))
+    .then((body) => {
+      lastingClient = body?.lasting && body.clientId ? body.clientId : null
+    })
+    .catch(() => {})
+  return lastingAsked
+}
+/** A client id entered in the dialog is not the one the secret belongs to. */
+const lastingHere = () => lastingClient !== null && lastingClient === getWebClientId()
+
+interface TokenAnswer {
+  access_token?: string
+  expires_in?: number
+  scope?: string
+  error?: string
+  detail?: string
+}
+
+async function tokenApi(body: Record<string, string>): Promise<{ status: number; body: TokenAnswer }> {
+  const res = await fetch(TOKEN_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return { status: res.status, body: ((await res.json().catch(() => ({}))) as TokenAnswer) ?? {} }
+}
+
+/** The cookie answered 401 once: no use asking again before the next sign-in. */
+let cookieGone = false
+let refreshing: Promise<string | null> | null = null
+
+/** A new hour from the lasting sign-in, or null when there is none. One request at a time. */
+function refreshWeb(): Promise<string | null> {
+  refreshing ??= (async () => {
+    // Disconnected meanwhile: the answer belongs to the sign-in just ended.
+    const at = connection
+    try {
+      const answer = await tokenApi({ action: 'refresh' })
+      if (at !== connection) return null
+      if (answer.status === 200 && answer.body.access_token) {
+        holdWebToken(answer.body.access_token, Number(answer.body.expires_in) || 3600)
+        set({ connected: true })
+        return answer.body.access_token
+      }
+      if (answer.status === 401) cookieGone = true
+    } catch {
+      // Offline: the next request tries again.
+    }
+    return null
+  })().finally(() => {
+    refreshing = null
+  })
+  return refreshing
 }
 
 const set = (patch: Partial<DriveState> | ((state: DriveState) => Partial<DriveState>)) => useDrive.setState(patch)
@@ -258,7 +317,13 @@ function holdWebToken(token: string, seconds: number) {
   if (expiryTimer) clearTimeout(expiryTimer)
   expiryTimer = setTimeout(() => {
     expiryTimer = null
-    if (!webTokenUsable()) set({ connected: false })
+    if (webTokenUsable()) return
+    // A lasting sign-in renews itself; only without one does the header ask again.
+    if (state().settings.linked && lastingHere() && !cookieGone) {
+      void refreshWeb().then((next) => {
+        if (!next) set({ connected: false })
+      })
+    } else set({ connected: false })
   }, Math.max(0, seconds * 1000 - 60_000))
 }
 
@@ -271,37 +336,11 @@ async function accessToken(refused: boolean): Promise<string> {
   }
   if (!refused && webTokenUsable()) return webToken!.token
 
-  const refreshToken = state().settings.refreshToken
-  const clientId = getWebClientId()
-  const clientSecret = getWebClientSecret()
-  if (refreshToken && clientId) {
-    try {
-      const res = await fetch(TOKEN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId,
-          ...(clientSecret ? { client_secret: clientSecret } : {}),
-          refresh_token: refreshToken,
-          grant_type: 'refresh_token',
-        }),
-      })
-      const body = (await res.json()) as {
-        access_token?: string
-        expires_in?: number
-        error?: string
-        error_description?: string
-      }
-      if (res.ok && body.access_token) {
-        holdWebToken(body.access_token, Number(body.expires_in) || 3600)
-        set({ connected: true })
-        return body.access_token
-      }
-      if (body.error === 'invalid_grant') {
-        saveSettings({ refreshToken: '' })
-      }
-    } catch {
-      // offline or network error
+  if (state().settings.linked && !cookieGone) {
+    await askLasting()
+    if (lastingHere()) {
+      const token = await refreshWeb()
+      if (token) return token
     }
   }
 
@@ -338,16 +377,19 @@ let cancelWeb: (() => void) | null = null
 /**
  * The popup. Opened before anything is awaited, so the click that asked for
  * it still counts and the browser lets it through.
+ *
+ * With a secret in `api/google-token.js` Google sends a code, the function
+ * exchanges it and keeps the refresh token in a cookie the page never sees;
+ * without, Google sends the hour-long token straight back.
  */
 function signInWeb(): Promise<void> {
   const clientId = getWebClientId()
-  const clientSecret = getWebClientSecret()
   if (!clientId) return Promise.reject(new DriveError('not-configured'))
   const stateId = crypto.getRandomValues(new Uint32Array(4)).join('-')
   const url = new URL(AUTH_URL)
   const hint = state().settings.email
   const redirectUri = new URL('google-drive.html', document.baseURI).toString()
-  const useCode = Boolean(clientSecret)
+  const useCode = lastingHere()
 
   url.search = new URLSearchParams({
     client_id: clientId,
@@ -356,11 +398,9 @@ function signInWeb(): Promise<void> {
     scope: DRIVE_SCOPE,
     state: stateId,
     include_granted_scopes: 'true',
-    ...(useCode
-      ? { access_type: 'offline', prompt: hint ? 'none' : 'consent' }
-      : hint
-        ? { login_hint: hint }
-        : { prompt: 'select_account' }),
+    // A refresh token comes only with the consent screen, so it is asked for.
+    ...(useCode ? { access_type: 'offline', prompt: 'consent' } : hint ? {} : { prompt: 'select_account' }),
+    ...(hint ? { login_hint: hint } : {}),
   }).toString()
   const channel = new BroadcastChannel(CHANNEL)
   const popup = window.open(url.toString(), 'sondra-google', 'popup,width=520,height=680')
@@ -393,32 +433,13 @@ function signInWeb(): Promise<void> {
 
       if (data.code) {
         try {
-          const res = await fetch(TOKEN_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              client_id: clientId,
-              client_secret: clientSecret,
-              code: data.code,
-              grant_type: 'authorization_code',
-              redirect_uri: redirectUri,
-            }),
-          })
-          const body = (await res.json()) as {
-            access_token?: string
-            refresh_token?: string
-            expires_in?: number
-            error?: string
-            error_description?: string
+          const answer = await tokenApi({ action: 'code', code: data.code, redirectUri })
+          if (answer.status !== 200 || !answer.body.access_token) {
+            return done(new DriveError('failed', answer.body.detail || answer.body.error || `HTTP ${answer.status}`))
           }
-          if (!res.ok || body.error) {
-            return done(new DriveError('failed', body.error_description || body.error))
-          }
-          if (!body.access_token) return done(new DriveError('failed', 'kein Token erhalten'))
-          if (body.refresh_token) {
-            saveSettings({ refreshToken: body.refresh_token })
-          }
-          holdWebToken(body.access_token, Number(body.expires_in) || 3600)
+          if (typeof answer.body.scope === 'string' && !answer.body.scope.split(/\s+/).includes(DRIVE_SCOPE)) return done(new DriveError('scope'))
+          cookieGone = false
+          holdWebToken(answer.body.access_token, Number(answer.body.expires_in) || 3600)
           done(null)
         } catch (err) {
           done(new DriveError('offline', String((err as Error)?.message ?? err)))
@@ -477,12 +498,14 @@ export function cancelDriveSignIn() {
 export async function disconnectDrive(): Promise<void> {
   if (IN_APP) await ask('disconnect')
   else {
-    const tokenToRevoke = webToken?.token || state().settings.refreshToken
-    if (tokenToRevoke) {
+    if (webToken) {
       // Withdrawn at Google as well; the answer cannot be read across origins,
       // and does not need to be.
-      void fetch(`${REVOKE_URL}?${new URLSearchParams({ token: tokenToRevoke })}`, { method: 'POST', mode: 'no-cors' }).catch(() => {})
+      void fetch(`${REVOKE_URL}?${new URLSearchParams({ token: webToken.token })}`, { method: 'POST', mode: 'no-cors' }).catch(() => {})
     }
+    // The lasting sign-in: the function withdraws it and drops the cookie.
+    if (lastingClient !== null) void tokenApi({ action: 'signout' }).catch(() => {})
+    cookieGone = true
   }
   webToken = null
   // An upload still running belongs to the account just left: it ends there.
@@ -495,7 +518,7 @@ export async function disconnectDrive(): Promise<void> {
     problem: null,
     jobs: current.jobs.filter((job) => job.status !== 'waiting'),
   }))
-  saveSettings({ linked: false, email: '', name: '', folders: {}, merklisteAt: 0, refreshToken: '' })
+  saveSettings({ linked: false, email: '', name: '', folders: {}, merklisteAt: 0 })
   inDrive = ''
   set({ merkSync: { running: false, at: 0, received: 0, problem: null } })
   log('Google Drive getrennt')
@@ -513,8 +536,10 @@ export function initDrive(): void {
     if (Date.now() - lastRound > FOCUS_GAP) void syncMerklisteWithDrive({ quiet: true })
   })
   if (!IN_APP) {
-    if (state().settings.linked && state().settings.refreshToken) {
-      void accessToken(false)
+    // Signed in to stay: connected again without a click.
+    void askLasting().then(() => {
+      if (!state().settings.linked || !lastingHere()) return
+      return accessToken(false)
         .then(async () => {
           const account = await client.account().catch(() => null)
           if (account) {
@@ -525,7 +550,7 @@ export function initDrive(): void {
           if (state().settings.merkliste) void syncMerklisteWithDrive()
         })
         .catch(() => {})
-    }
+    })
     return
   }
   void ask<{ configured: boolean; connected: boolean; lasting: boolean }>('status').then(async (answer) => {
@@ -865,7 +890,7 @@ function scheduleMerkliste() {
 }
 
 export function setDriveSetting(
-  patch: Partial<Pick<DriveSettings, 'autoDownloads' | 'merkliste' | 'clientId' | 'clientSecret' | 'refreshToken'>>,
+  patch: Partial<Pick<DriveSettings, 'autoDownloads' | 'merkliste' | 'clientId'>>,
 ): void {
   saveSettings(patch)
   if (patch.merkliste) void syncMerklisteWithDrive()

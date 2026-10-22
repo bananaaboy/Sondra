@@ -82,7 +82,7 @@
 
       <p class="kurz">
         Sondra bearbeitet Ihre Dateien auf Ihrem Gerät. Nichts davon wird zu uns hochgeladen. Es gibt keine
-        Konten, keine Cookies, kein Tracking und keine Werbung.
+        Konten, kein Tracking und keine Werbung, und ein Cookie nur, wenn Sie Google Drive verbinden.
       </p>
       <p>
         Daten verlassen Ihr Gerät nur in drei Fällen: beim Aufruf der Website, wie bei jeder Website, wenn
@@ -229,9 +229,13 @@
             die es selbst dort abgelegt hat, und sonst nichts. Zum Anmelden öffnet sich die Seite von Google.
           </li>
           <li>
-            Auf der Website bleibt die Anmeldung nur im Arbeitsspeicher des Tabs, für höchstens eine Stunde; sie
-            wird nicht gespeichert. In der App speichert Sondra den Schlüssel, den Google für die Verbindung
-            ausgibt, mit der Verschlüsselung von Windows in <code>%APPDATA%\Sondra</code>.
+            Auf der Website gibt Google beim Anmelden einen einmaligen Code aus. Der Server von Sondra tauscht ihn bei
+            Google gegen den Zugang und legt den Schlüssel für die Verbindung in ein Cookie
+            <code>sondra_drive</code>, das nur diese Website lesen kann und kein Programm auf der Seite (180 Tage, bis
+            Sie trennen). Der Server speichert dabei nichts; ohne seinen eigenen Zugang zu Google ist der Schlüssel
+            wertlos. Die Seite selbst hält nur den Zugang für die laufende Stunde im Arbeitsspeicher. Ist der Server
+            dafür nicht eingerichtet, gibt es kein Cookie, und die Anmeldung gilt eine Stunde. In der App speichert
+            Sondra den Schlüssel mit der Verschlüsselung von Windows in <code>%APPDATA%\Sondra</code>.
           </li>
           <li>
             Mit „Merkliste über Drive abgleichen“ liegt die Merkliste als <code>Sondra-Merkliste.json</code> im
@@ -248,7 +252,8 @@
             Apps unsichtbar —, welche Folge sie ist.
           </li>
           <li>
-            „Trennen“ im Fenster „Google Drive“ zieht die Verbindung bei Google zurück und löscht den Schlüssel.
+            „Trennen“ im Fenster „Google Drive“ zieht die Verbindung bei Google zurück und löscht den Schlüssel
+            und das Cookie.
             Ihre Dateien in Drive bleiben, bis Sie sie dort löschen. Den Zugriff können Sie auch in Ihrem
             Google-Konto unter „Sicherheit → Drittanbieter-Apps“ entfernen.
           </li>
