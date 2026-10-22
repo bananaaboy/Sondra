@@ -34,7 +34,10 @@ import {
   claimDrops,
   clock,
   isSubtitleFile,
+  markName,
+  marksFor,
   minutesSeconds,
+  neighbourMark,
   nextOffered,
   openingOffered,
   playerKind,
@@ -43,10 +46,13 @@ import {
   rememberSettings,
   rememberedPlace,
   rememberedSettings,
+  saveMarks,
   sleepFade,
   stemOf,
   subtitleUrl,
+  withMark,
   type PlayerItem,
+  type PlayerMark,
   type PlayerSettings,
   type SleepTimer,
 } from '../../lib/player'
@@ -54,7 +60,8 @@ import { holdScreenAwake } from '../../lib/wakeLock'
 import { useSession, type Asset } from '../../state/store'
 import { APP_BRIDGE, updateDiscordPresence } from '../../lib/desktop'
 import { matchEpisode } from '../../lib/episodeMatch'
-import { merkItems, updateMerkItem, useMerkliste } from '../../lib/merkliste'
+import { INTROS_KEPT, OPENING_MAX, OPENING_MIN, merkItems, updateMerkItem, useMerkliste } from '../../lib/merkliste'
+import { decodeHead, findIntro, keepIntro, keptIntro, learnIntro, printTag, type FoundIntro } from '../../lib/introDetect'
 import { EqualizerDrawer } from '../player/EqualizerDrawer'
 import { SettingsMenu, type Quality, type QualityState, type TrackState } from '../player/SettingsMenu'
 import { MerklisteTick } from '../player/MerklisteTick'
@@ -138,6 +145,12 @@ const GearIcon = () => (
 const PinIcon = ({ on = false }: { on?: boolean }) => (
   <Glyph filled={on}>
     <path d="M14 4l-4 4-2-2L6 8l2 2-4 4 1 1 4-4 2 2 2-2-2-2 4-4-1-1z" />
+  </Glyph>
+)
+const BookmarkIcon = () => (
+  <Glyph>
+    <path d="M6 3.5h8a.8.8 0 01.8.8v12.2l-4.8-3.4-4.8 3.4V4.3a.8.8 0 01.8-.8z" />
+    <path d="M10 6.5v4M8 8.5h4" />
   </Glyph>
 )
 const CameraIcon = () => (
@@ -234,6 +247,7 @@ function SeekBar({
   buffered,
   loopA,
   loopB,
+  marks = [],
   onSeek,
 }: {
   time: number
@@ -241,6 +255,8 @@ function SeekBar({
   buffered: number
   loopA?: number | null
   loopB?: number | null
+  /** Bookmarks, as ticks over the bar; the hover time names one that is near. */
+  marks?: PlayerMark[]
   onSeek: (seconds: number) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -311,6 +327,16 @@ function SeekBar({
         {hover ? <div className="absolute inset-y-0 left-0 bg-white/30" style={{ width: hover.x }} /> : null}
         <div className="absolute inset-y-0 left-0 bg-stage-accent" style={{ width: share(time) }} />
       </div>
+      {known
+        ? marks.map((mark) => (
+            <span
+              key={mark.id}
+              className="pointer-events-none absolute top-1/2 h-[12px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-pill bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.45)]"
+              style={{ left: share(mark.at) }}
+              aria-hidden
+            />
+          ))
+        : null}
       {known ? (
         <div
           className={`pointer-events-none absolute top-1/2 h-[15px] w-[15px] -translate-x-1/2 -translate-y-1/2 rounded-pill bg-white shadow-[0_1px_6px_rgb(0_0_0/0.5)] transition-transform duration-[var(--dur-fast)] ${
@@ -327,6 +353,11 @@ function SeekBar({
           aria-hidden
         >
           {clock(hover.seconds)}
+          {(() => {
+            // Within a few pixels of a mark, its name.
+            const near = marks.find((mark) => Math.abs((mark.at / duration) * hover.width - hover.x) <= 6)
+            return near ? <span className="font-sans text-white/80"> · {markName(marks, near)}</span> : null
+          })()}
         </span>
       ) : null}
     </div>
@@ -456,9 +487,23 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const merk = useMerkliste()
   const series = useMemo(() => (current ? matchEpisode(current.name, merk) : null), [current?.name, merk])
   const opening = series?.item.opening ?? settings.opening
+  /** The openings learned for the series by ear, and a mark that changes when one is added. */
+  const prints = useMemo(() => (series?.item.intros ?? []).map((entry) => entry.print), [series?.item.intros])
+  const introTag = prints.length ? printTag(prints) : ''
+  /** Where the series' opening sits in this file, once looked for. */
+  const [introHere, setIntroHere] = useState<{ id: string; state: 'finding' | 'none' | FoundIntro } | null>(null)
+  /** Learning an opening from two episodes: what it is doing, and what came of it. */
+  const [introStep, setIntroStep] = useState<string | null>(null)
+  const [introNote, setIntroNote] = useState<string | null>(null)
+  const introSpan = introHere && introHere.id === currentId && typeof introHere.state === 'object' ? introHere.state : null
+  const introFinding = introHere?.id === currentId && introHere.state === 'finding'
   /** „Vorspann überspringen“ used on this file: not offered again. */
   const [openingDone, setOpeningDone] = useState<string | null>(null)
   const [sleep, setSleep] = useState<SleepTimer | null>(null)
+  /** This file's bookmarks, kept on this device by name and size. */
+  const [marks, setMarks] = useState<PlayerMark[]>([])
+  /** „Lesezeichen bei 12:34“, briefly, over the picture. */
+  const [markNote, setMarkNote] = useState<{ key: number; text: string } | null>(null)
   /** What the sleep timer did, until playing starts again. */
   const [sleepNote, setSleepNote] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -529,6 +574,38 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     setLoopA(null)
     setLoopB(null)
   }, [currentId])
+
+  // Each file brings its own bookmarks.
+  useEffect(() => {
+    setMarks(current ? marksFor(current) : [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.name, current?.size])
+
+  useEffect(() => {
+    if (!markNote) return
+    const timer = window.setTimeout(() => setMarkNote(null), 1800)
+    return () => window.clearTimeout(timer)
+  }, [markNote])
+
+  const changeMarks = (next: PlayerMark[]) => {
+    setMarks(next)
+    if (current) saveMarks(current, next)
+  }
+  const addMark = () => {
+    const at = videoRef.current?.currentTime ?? time
+    const { marks: next, added } = withMark(marks, at)
+    if (!added) {
+      setMarkNote({ key: Date.now(), text: `Bei ${clock(at)} liegt schon ein Lesezeichen` })
+      return
+    }
+    changeMarks(next)
+    setMarkNote({ key: Date.now(), text: `Lesezeichen bei ${clock(added.at)}` })
+  }
+  const jumpMark = (direction: 1 | -1) => {
+    const mark = neighbourMark(marks, videoRef.current?.currentTime ?? time, direction)
+    if (mark) seek(mark.at)
+    else setMarkNote({ key: Date.now(), text: marks.length ? (direction > 0 ? 'Kein Lesezeichen mehr danach' : 'Kein Lesezeichen davor') : 'Noch keine Lesezeichen — B setzt eins' })
+  }
 
   const toggleLoopAB = () => {
     if (loopA === null) {
@@ -1229,9 +1306,96 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   }
   const skipOpening = () => {
     if (!current) return
-    skip(opening)
+    // Heard where it is: to its end. Else by the length set for the series.
+    if (introSpan && time < introSpan.end) seek(introSpan.end)
+    else skip(opening)
     setOpeningDone(current.id)
   }
+
+  /** Another episode of the same series in the list, to learn the opening from: the next one first. */
+  const introPartner = useMemo(() => {
+    if (!current || !series) return null
+    const at = items.findIndex((item) => item.id === current.id)
+    const others = items.filter(
+      (item) => item.id !== current.id && item.kind === 'video' && item.source.size > 0 && matchEpisode(item.name, merk)?.item.id === series.item.id,
+    )
+    return others.find((item) => items.indexOf(item) > at) ?? others.at(-1) ?? null
+  }, [items, current, series, merk])
+
+  const learnOpening = async () => {
+    if (!current || !series || !introPartner || introStep) return
+    const item = current
+    const other = introPartner
+    const seriesId = series.item.id
+    setIntroNote(null)
+    try {
+      setIntroStep(`Hört „${item.name}“ an …`)
+      const a = await decodeHead(item.source, item.name)
+      setIntroStep(`Hört „${other.name}“ an …`)
+      const b = await decodeHead(other.source, other.name)
+      setIntroStep('Vergleicht die beiden …')
+      const found = await learnIntro(a, b)
+      if (!found) {
+        setIntroNote('Die beiden Folgen haben in den ersten acht Minuten keinen gemeinsamen Vorspann.')
+        return
+      }
+      let kept: string[] = []
+      updateMerkItem(seriesId, (entry) => {
+        const intros = [...(entry.intros ?? []), { print: found.print, seconds: found.seconds, learnedAt: Date.now() }].slice(-INTROS_KEPT)
+        kept = intros.map((intro) => intro.print)
+        // The fixed length follows, for episodes where it is not heard.
+        return { intros, opening: Math.min(OPENING_MAX, Math.max(OPENING_MIN, Math.round(found.seconds))) }
+      })
+      keepIntro(item, kept, { start: found.a, end: found.a + found.seconds })
+      keepIntro(other, kept, { start: found.b, end: found.b + found.seconds })
+      setIntroNote(`Erkannt: ${minutesSeconds(found.seconds)} lang, in dieser Folge ab ${clock(found.a)}.`)
+      log('abspielen', `Vorspann von „${series.item.title}“ erkannt (${minutesSeconds(found.seconds)}, aus ${item.name} und ${other.name})`)
+    } catch (error) {
+      setIntroNote(`Nicht erkannt: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`)
+    } finally {
+      setIntroStep(null)
+    }
+  }
+  const forgetOpenings = () => {
+    if (!series) return
+    updateMerkItem(series.item.id, { intros: undefined })
+    setIntroNote('Vergessen. Es gilt wieder die feste Länge.')
+  }
+
+  // Where the series' opening is in this file: heard once, then kept per file.
+  useEffect(() => {
+    if (!current || current.kind !== 'video' || !settings.skipOpening || prints.length === 0 || current.source.size === 0) {
+      setIntroHere(null)
+      return
+    }
+    const kept = keptIntro(current, prints)
+    if (kept) {
+      setIntroHere({ id: current.id, state: kept })
+      return
+    }
+    let cancelled = false
+    const item = current
+    const wanted = prints
+    setIntroHere({ id: item.id, state: 'finding' })
+    // A moment for the film to start before FFmpeg takes its turn. Not
+    // aborted when the file changes: what it finds is kept for next time.
+    const timer = window.setTimeout(() => {
+      void decodeHead(item.source, item.name)
+        .then((pcm) => findIntro(wanted, pcm))
+        .then((found) => {
+          keepIntro(item, wanted, found)
+          if (!cancelled) setIntroHere({ id: item.id, state: found ?? 'none' })
+        })
+        .catch(() => {
+          if (!cancelled) setIntroHere({ id: item.id, state: 'none' })
+        })
+    }, 1500)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id, introTag, settings.skipOpening])
   const chooseOpening = (seconds: number) => {
     // A series on the Merkliste keeps its own; anything else sets the default.
     if (series) updateMerkItem(series.item.id, { opening: seconds })
@@ -1317,7 +1481,9 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     if (key === ' ' || key === 'k' || key === 'K') {
       if (key === ' ' && target?.tagName === 'BUTTON') return
       toggle()
-    } else if (key === 'ArrowLeft') skip(-settings.skip)
+    } else if (event.shiftKey && (key === 'ArrowLeft' || key === 'ArrowRight')) jumpMark(key === 'ArrowRight' ? 1 : -1)
+    else if (key === 'b' || key === 'B') addMark()
+    else if (key === 'ArrowLeft') skip(-settings.skip)
     else if (key === 'ArrowRight') skip(settings.skip)
     else if (key === 'j' || key === 'J') skip(-10)
     else if (key === 'l' || key === 'L') skip(10)
@@ -1794,6 +1960,24 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
       onAudio={(at) => void chooseAudio(at)}
       opening={{ seconds: opening, series: series?.item.title ?? null }}
       onOpening={chooseOpening}
+      marks={marks}
+      time={time}
+      onAddMark={addMark}
+      onSeekMark={(mark) => {
+        seek(mark.at)
+        setMenuOpen(false)
+      }}
+      onMarks={changeMarks}
+      intro={{
+        series: series?.item.title ?? null,
+        learned: prints.length,
+        here: prints.length === 0 ? 'off' : (introSpan ?? (introFinding ? 'finding' : 'none')),
+        partner: introPartner?.name ?? null,
+        step: introStep,
+        note: introNote,
+      }}
+      onLearnIntro={() => void learnOpening()}
+      onForgetIntros={forgetOpenings}
       sleep={sleep}
       now={now}
       onSleep={(choice) => {
@@ -2108,6 +2292,21 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 </span>
               ) : null}
 
+              {/* A bookmark set or not found, for a moment, top left. */}
+              <span role="status" className="sr-only">
+                {markNote?.text ?? ''}
+              </span>
+              {markNote ? (
+                <span
+                  key={markNote.key}
+                  className="pop pointer-events-none absolute left-[12px] top-[12px] z-30 flex items-center gap-[8px] rounded-nav bg-stage/90 px-[12px] py-[7px] text-small text-stage-ink ring-1 ring-inset ring-white/15"
+                  aria-hidden
+                >
+                  <BookmarkIcon />
+                  {markNote.text}
+                </span>
+              ) : null}
+
               {/* Paused: one large way back in. A phone's bar already has its
                   play button right below, and the frame is too low for both. */}
               {!playing && !waiting && isVideo && sourceUrl && !failed && duration > 0 && !flash ? (
@@ -2234,7 +2433,14 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
             {/* Over an episode: past the opening at its start, on to the next in
                 the credits. Above the controls while they show, low otherwise. */}
-            {settings.skipOpening && isVideo && !menuOpen && openingDone !== current.id && openingOffered(time, duration, opening) ? (
+            {settings.skipOpening &&
+            isVideo &&
+            !menuOpen &&
+            // Heard: exactly while it plays, as often as it is reached. Not
+            // heard: the first minutes, once, by the length set.
+            (introSpan
+              ? time >= introSpan.start - 1 && time < introSpan.end - 2
+              : !introFinding && openingDone !== current.id && openingOffered(time, duration, opening)) ? (
               <button
                 type="button"
                 onClick={skipOpening}
@@ -2243,7 +2449,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 }`}
               >
                 Vorspann überspringen
-                <span className="value font-normal text-stage-muted">{minutesSeconds(opening)}</span>
+                <span className="value font-normal text-stage-muted">{minutesSeconds(introSpan ? Math.max(0, introSpan.end - time) : opening)}</span>
               </button>
             ) : settings.skipOpening && isVideo && !menuOpen && index < items.length - 1 && nextOffered(time, duration) ? (
               <button
@@ -2266,7 +2472,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               }`}
               style={{ background: 'linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0.38) 55%, transparent)' }}
             >
-              <SeekBar time={time} duration={duration} buffered={buffered} loopA={loopA} loopB={loopB} onSeek={seek} />
+              <SeekBar time={time} duration={duration} buffered={buffered} loopA={loopA} loopB={loopB} marks={marks} onSeek={seek} />
               <div className="flex items-center gap-[2px]">
                 <Control label="Vorheriges (P)" onClick={() => goTo(-1)} disabled={index <= 0} wideOnly>
                   <PrevIcon />
@@ -2344,6 +2550,9 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     />
                   ) : null}
                 </button>
+                <Control label="Lesezeichen setzen (B)" onClick={addMark} wideOnly>
+                  <BookmarkIcon />
+                </Control>
 
                 <span className="flex-1" />
 

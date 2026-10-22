@@ -61,3 +61,34 @@ export function withExtension(name: string, extension: string): string {
 export function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]+/g, '_').slice(0, 180) || 'sondra-output'
 }
+
+/** A file name's two halves: what the rename field edits, and the type that stays. */
+export function splitName(name: string): { stem: string; extension: string } {
+  const match = /^(.+?)(\.[^./\\\s]{1,8})$/.exec(name)
+  return match ? { stem: match[1], extension: match[2] } : { stem: name, extension: '' }
+}
+
+const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
+
+/**
+ * A new name for a file in the session: the stem as typed, the old type
+ * kept. Refused rather than quietly changed when Windows would refuse it —
+ * the person sees why and what to type instead.
+ */
+export function renamedFile(stem: string, previous: string): { name: string } | { error: string } {
+  const clean = stem.replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '')
+  if (!clean) return { error: 'Der Name darf nicht leer sein.' }
+  const bad = clean.match(/[\\/:*?"<>|\u0000-\u001f]/)
+  if (bad) {
+    return {
+      error: /[\u0000-\u001f]/.test(bad[0])
+        ? 'Steuerzeichen gehen nicht in einem Dateinamen.'
+        : `„${bad[0]}“ geht nicht — Windows erlaubt \\ / : * ? " < > | nicht in Dateinamen.`,
+    }
+  }
+  if (RESERVED.test(clean)) return { error: `„${clean}“ ist unter Windows ein reservierter Name.` }
+  const { extension } = splitName(previous)
+  const name = `${clean}${extension}`
+  if (name.length > 200) return { error: 'Höchstens 200 Zeichen.' }
+  return { name }
+}

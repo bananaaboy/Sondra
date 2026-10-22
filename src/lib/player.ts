@@ -317,6 +317,87 @@ export function rememberSettings(settings: PlayerSettings): void {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Bookmarks                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** A place in a file worth finding again, with a name of one's own. */
+export interface PlayerMark {
+  id: string
+  /** Seconds into the file. */
+  at: number
+  /** Empty until named; shown as „Lesezeichen n“ until then. */
+  label: string
+}
+
+const MARKS_KEY = 'sondra:abspielen:marken'
+/** Two marks closer than this are one place. */
+const MARK_GAP = 1
+
+function readAllMarks(): Record<string, PlayerMark[]> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MARKS_KEY) ?? '{}')
+    return saved && typeof saved === 'object' ? saved : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Marks as they are kept: valid ones only, in order of time. */
+export function cleanMarks(raw: unknown): PlayerMark[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((mark): mark is PlayerMark => Boolean(mark) && typeof mark.at === 'number' && Number.isFinite(mark.at) && mark.at >= 0)
+    .map((mark) => ({ id: String(mark.id || `m${Math.round(mark.at * 1000)}`), at: mark.at, label: typeof mark.label === 'string' ? mark.label.slice(0, 120) : '' }))
+    .sort((a, b) => a.at - b.at)
+}
+
+/** The bookmarks of a file, by its name and size like „Weiter bei“. */
+export function marksFor(item: { name: string; size: number }): PlayerMark[] {
+  return cleanMarks(readAllMarks()[placeKey(item)])
+}
+
+/** Keeps a file's bookmarks; an empty list forgets the file. The newest hundred files stay. */
+export function saveMarks(item: { name: string; size: number }, marks: PlayerMark[]): void {
+  try {
+    const all = readAllMarks()
+    delete all[placeKey(item)]
+    if (marks.length > 0) all[placeKey(item)] = cleanMarks(marks)
+    localStorage.setItem(MARKS_KEY, JSON.stringify(Object.fromEntries(Object.entries(all).slice(-100))))
+  } catch {
+    /* only a convenience */
+  }
+}
+
+/** A mark at `at`, unless one is already there; the list stays in order. */
+export function withMark(marks: PlayerMark[], at: number): { marks: PlayerMark[]; added: PlayerMark | null } {
+  const rounded = Math.max(0, Math.round(at * 10) / 10)
+  if (marks.some((mark) => Math.abs(mark.at - rounded) < MARK_GAP)) return { marks, added: null }
+  const added: PlayerMark = { id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, at: rounded, label: '' }
+  return { marks: cleanMarks([...marks, added]), added }
+}
+
+/** The mark before or after `time` — a step back lands on the previous one, not the one just passed by a second. */
+export function neighbourMark(marks: PlayerMark[], time: number, direction: 1 | -1): PlayerMark | null {
+  if (direction > 0) return marks.find((mark) => mark.at > time + 0.5) ?? null
+  return [...marks].reverse().find((mark) => mark.at < time - 2) ?? null
+}
+
+export const markName = (marks: PlayerMark[], mark: PlayerMark) => mark.label.trim() || `Lesezeichen ${marks.indexOf(mark) + 1}`
+
+/**
+ * The marks as chapters, the way YouTube reads them from a description:
+ * one line each, the first at 0:00 — a beginning is added when no mark is
+ * there.
+ */
+export function chaptersText(marks: PlayerMark[]): string {
+  const sorted = cleanMarks(marks)
+  const lines = sorted.map((mark, index) => `${clock(mark.at)} ${mark.label.trim() || `Kapitel ${index + 1}`}`)
+  if (sorted.length === 0 || sorted[0].at >= 1) lines.unshift('0:00 Anfang')
+  else lines[0] = `0:00 ${sorted[0].label.trim() || 'Kapitel 1'}`
+  return lines.join('\n')
+}
+
 /** Heights a film can be watched at below its own. */
 export const QUALITY_STEPS = [2160, 1440, 1080, 720, 480, 360]
 

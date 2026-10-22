@@ -110,6 +110,13 @@ Merkliste
   der Vorspann ist, merkt sich Sondra je Serie der Merkliste (Zahnrad →
   Wiedergabe). Schlaf-Timer: im Zahnrad unter Wiedergabe, 15, 30 oder 60
   Minuten oder bis zum Ende des Titels; zum Schluss wird es leiser.
+  Vorspann am Ton erkennen: Zwei Folgen einer Serie der Merkliste in die
+  Liste nehmen, Zahnrad → Vorspann → „Vorspann erkennen“. Danach findet
+  Sondra den Vorspann in jeder Folge dieser Serie selbst — auch nach einem
+  Cold Open — und der Knopf steht genau dann da, wenn er läuft.
+  Lesezeichen: Taste B setzt eins an der Stelle, die gerade läuft;
+  Umschalt + ← und → springen. Im Zahnrad unter „Lesezeichen“ lassen sie
+  sich benennen und als Kapitel für YouTube kopieren.
 
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →
@@ -129,7 +136,8 @@ Sitzung
   Ebendort speichert „Alle als ZIP speichern“ die ganze Sitzung in ein
   Archiv. Wo Sondra ein ZIP anbietet — Sitzung, mehrere Downloads, Pads,
   Bilder, Spuren —, steht davor das Feld „Name des ZIP“; leer gelassen
-  gilt der Vorschlag.
+  gilt der Vorschlag. Umbenennen: der Stift neben einer Datei (oder ein
+  Doppelklick auf ihren Namen); die Endung bleibt.
 
 Google Drive
   Unten auf der Seite „Google Drive“ → „Mit Google verbinden“: die

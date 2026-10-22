@@ -118,6 +118,37 @@ export interface SavedLinkItem {
   onlineAvailable?: OnlineAvailableInfo
   /** How long the opening runs, in seconds — what „Vorspann überspringen“ jumps. */
   opening?: number
+  /**
+   * The openings by ear (`lib/introPrint.ts`): fingerprint as text, length,
+   * when learned. Up to four — a new season often brings a new opening, and
+   * an episode is looked through for each.
+   */
+  intros?: SeriesIntro[]
+}
+
+export interface SeriesIntro {
+  print: string
+  seconds: number
+  learnedAt: number
+}
+
+/** Room for a fingerprint of 200 seconds (five bytes a frame, as base64), and no more. */
+const INTRO_TEXT_MAX = 200 * 10 * 8
+export const INTROS_KEPT = 4
+
+function normalizeIntros(raw: unknown[]): SeriesIntro[] {
+  return raw
+    .filter(
+      (entry): entry is SeriesIntro =>
+        Boolean(entry) &&
+        typeof (entry as SeriesIntro).print === 'string' &&
+        (entry as SeriesIntro).print.length > 0 &&
+        (entry as SeriesIntro).print.length <= INTRO_TEXT_MAX &&
+        typeof (entry as SeriesIntro).seconds === 'number' &&
+        (entry as SeriesIntro).seconds > 0,
+    )
+    .map((entry) => ({ print: entry.print, seconds: Math.round(entry.seconds * 10) / 10, learnedAt: Number(entry.learnedAt) || 0 }))
+    .slice(-INTROS_KEPT)
 }
 
 export interface WatchHistoryEntry {
@@ -206,6 +237,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(typeof raw.episodeDuration === 'number' && raw.episodeDuration > 0 ? { episodeDuration: Math.round(raw.episodeDuration) } : {}),
     ...(typeof raw.filmDuration === 'number' && raw.filmDuration > 0 ? { filmDuration: Math.round(raw.filmDuration) } : {}),
     ...(typeof raw.opening === 'number' && raw.opening >= OPENING_MIN && raw.opening <= OPENING_MAX ? { opening: Math.round(raw.opening) } : {}),
+    ...(Array.isArray(raw.intros) && normalizeIntros(raw.intros).length > 0 ? { intros: normalizeIntros(raw.intros) } : {}),
     ...(raw.durations && typeof raw.durations === 'object' ? { durations: raw.durations } : {}),
     ...(Array.isArray(raw.tags)
       ? {

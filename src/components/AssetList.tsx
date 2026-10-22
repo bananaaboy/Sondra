@@ -14,11 +14,11 @@
  * is gone; it is just not all standing on the page at once.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import { saveBytes } from '../lib/download'
 import { startFileDragOut } from '../lib/dragOut'
-import { formatBytes, formatDuration } from '../lib/format'
+import { formatBytes, formatDuration, renamedFile, splitName } from '../lib/format'
 import { saveProjectFile } from '../lib/project'
 import { useDecodedAudio } from '../hooks/useDecodedAudio'
 import { useFilePicker, useProjectPicker } from '../hooks/useIngest'
@@ -94,6 +94,85 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
 }
 
 /**
+ * The name of a file in the session, editable in its row: the type stays
+ * beside the field, Enter keeps the new name, Escape the old one. The name
+ * is what every save, ZIP, project and Drive upload uses from then on.
+ */
+function RenameField({ name, onDone }: { name: string; onDone: (next: string | null) => void }) {
+  const { stem, extension } = splitName(name)
+  const [value, setValue] = useState(stem)
+  const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const errorId = useId()
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
+
+  const save = () => {
+    const result = renamedFile(value, name)
+    if ('error' in result) {
+      setError(result.error)
+      inputRef.current?.focus()
+      return
+    }
+    onDone(result.name === name ? null : result.name)
+  }
+
+  return (
+    <form
+      className="flex min-w-0 flex-1 flex-col gap-[4px] py-[6px]"
+      onSubmit={(event) => {
+        event.preventDefault()
+        save()
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-[4px]">
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value)
+            setError(null)
+          }}
+          onKeyDown={(event) => {
+            // Escape takes back the name, not the whole menu.
+            if (event.key === 'Escape') {
+              event.stopPropagation()
+              onDone(null)
+            }
+          }}
+          aria-label={`Neuer Name für ${name}`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          spellCheck={false}
+          className={`min-w-0 flex-1 rounded-nav bg-canvas px-[8px] py-[5px] text-small text-ink ring-1 ring-inset outline-none focus-visible:ring-2 ${
+            error ? 'ring-ink' : 'ring-rule focus-visible:ring-ink'
+          }`}
+        />
+        {extension ? <span className="value shrink-0 text-small text-muted">{extension}</span> : null}
+        <IconButton label="Name übernehmen" onClick={save}>
+          <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden>
+            <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </IconButton>
+        <IconButton label="Umbenennen abbrechen" onClick={() => onDone(null)}>
+          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+        </IconButton>
+      </div>
+      {error ? (
+        <span id={errorId} role="alert" className="text-micro font-semibold text-ink">
+          ! {error}
+        </span>
+      ) : null}
+    </form>
+  )
+}
+
+/**
  * A file's cloud: sends it to Drive, and says how far it got — the newest
  * upload of this file wins.
  */
@@ -137,6 +216,9 @@ export function SessionMenu() {
   const setActive = useSession((state) => state.setActiveAsset)
   const removeAsset = useSession((state) => state.removeAsset)
   const reorderAssets = useSession((state) => state.reorderAssets)
+  const updateAsset = useSession((state) => state.updateAsset)
+  const log = useSession((state) => state.log)
+  const [renaming, setRenaming] = useState<string | null>(null)
   const clearAssets = useSession((state) => state.clearAssets)
   const active = useActiveAsset()
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -279,7 +361,8 @@ export function SessionMenu() {
               return (
                 <li
                   key={asset.id}
-                  draggable
+                  // Not while its name is being typed: selecting text would drag the row.
+                  draggable={renaming !== asset.id}
                   onDragStart={(e) => {
                     setDraggedIndex(index)
                     e.dataTransfer.setData('text/plain', String(index))
@@ -325,36 +408,61 @@ export function SessionMenu() {
                       <circle cx="11" cy="12" r="1.2" />
                     </svg>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setActive(asset.id)}
-                    aria-current={current ? 'true' : undefined}
-                    className="flex min-w-0 flex-1 items-center gap-[8px] py-[8px] text-left"
-                  >
-                    {/* The chosen file carries the ink mark, not a filled row. */}
-                    <span aria-hidden className={`h-[6px] w-[6px] shrink-0 rounded-pill ${current ? 'bg-ink' : 'bg-transparent'}`} />
-                    <span className="flex min-w-0 flex-col">
-                      <span className={`truncate text-small ${current ? 'font-semibold text-ink' : 'text-prose'}`}>
-                        {asset.name}
+                  {renaming === asset.id ? (
+                    <RenameField
+                      name={asset.name}
+                      onDone={(next) => {
+                        setRenaming(null)
+                        if (!next) return
+                        updateAsset(asset.id, { name: next })
+                        log('sitzung', `${asset.name} heisst jetzt ${next}`)
+                      }}
+                    />
+                  ) : (
+                    <>
+                    <button
+                      type="button"
+                      onClick={() => setActive(asset.id)}
+                      onDoubleClick={() => setRenaming(asset.id)}
+                      aria-current={current ? 'true' : undefined}
+                      className="flex min-w-0 flex-1 items-center gap-[8px] py-[8px] text-left"
+                    >
+                      {/* The chosen file carries the ink mark, not a filled row. */}
+                      <span aria-hidden className={`h-[6px] w-[6px] shrink-0 rounded-pill ${current ? 'bg-ink' : 'bg-transparent'}`} />
+                      <span className="flex min-w-0 flex-col">
+                        <span className={`truncate text-small ${current ? 'font-semibold text-ink' : 'text-prose'}`}>
+                          {asset.name}
+                        </span>
+                        <span className="value text-micro text-muted">
+                          {formatBytes(asset.sizeBytes)}
+                          {asset.durationSeconds ? ` · ${formatDuration(asset.durationSeconds)}` : ''}
+                        </span>
                       </span>
-                      <span className="value text-micro text-muted">
-                        {formatBytes(asset.sizeBytes)}
-                        {asset.durationSeconds ? ` · ${formatDuration(asset.durationSeconds)}` : ''}
-                      </span>
-                    </span>
-                  </button>
-                  {asset.origin === 'derived' ? <Badge>abgeleitet</Badge> : null}
-                  {drive ? <DriveFileButton asset={asset} /> : null}
-                  <IconButton label={`${asset.name} speichern`} onClick={() => saveBytes(asset.bytes, asset.name, asset.mime)}>
-                    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden>
-                      <path d="M8 2.5v7.5M5 7.5L8 10.5l3-3M3 12.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </IconButton>
-                  <IconButton label={`${asset.name} entfernen`} onClick={() => removeAsset(asset.id)}>
-                    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
-                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                    </svg>
-                  </IconButton>
+                    </button>
+                    {asset.origin === 'derived' ? <Badge>abgeleitet</Badge> : null}
+                    <IconButton label={`${asset.name} umbenennen`} onClick={() => setRenaming(asset.id)}>
+                      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+                        <path
+                          d="M10.6 2.9l2.5 2.5-7.4 7.4-3 .5.5-3z M9.3 4.2l2.5 2.5"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </IconButton>
+                    {drive ? <DriveFileButton asset={asset} /> : null}
+                    <IconButton label={`${asset.name} speichern`} onClick={() => saveBytes(asset.bytes, asset.name, asset.mime)}>
+                      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden>
+                        <path d="M8 2.5v7.5M5 7.5L8 10.5l3-3M3 12.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </IconButton>
+                    <IconButton label={`${asset.name} entfernen`} onClick={() => removeAsset(asset.id)}>
+                      <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+                        <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      </svg>
+                    </IconButton>
+                    </>
+                  )}
                 </li>
               )
             })}

@@ -72,6 +72,13 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Werkzeug ist ein eigener Chunk (`React.lazy` in `Dashboard.tsx`) und wird
   erst beim Öffnen geholt, der Rest im Leerlauf; ein neues Panel gehört in
   `TOOLS` dort, nicht als statischer Import.
+- **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
+  Dateimenü oder Doppelklick auf den Namen; die Endung bleibt neben dem
+  Feld stehen, was Windows ablehnt (`\ / : * ? " < > |`, CON …), wird
+  gesagt statt still ersetzt (`renamedFile` in `lib/format.ts`). Die
+  behaltene Sitzung schreibt dafür nur den Datensatz um die gespeicherte
+  Datei neu — vorher gingen ein neuer Name und eine neue Reihenfolge bei
+  einem Neustart verloren, weil nur geänderte Bytes geschrieben wurden.
 - **Die Sitzung bleibt auf dem Gerät,** auf ausdrücklichen Wunsch vom
   24.9.2026 (`lib/sessionStore.ts`, IndexedDB). Beim Start wird die letzte
   angeboten („Letzte Sitzung: Wiederherstellen / Verwerfen“), nie still
@@ -264,6 +271,27 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   des Titels, nicht gespeichert; die letzten zehn Sekunden wird es leiser
   (`sleepFade`), dann angehalten und die eingestellte Lautstärke zurück.
   „Ende des Titels“ hält an, statt „Automatisch weiter“ zu folgen.
+  **Vorspann am Ton** (1.1.11, `lib/introPrint.ts`, `lib/introDetect.ts`,
+  `workers/intro.worker.ts`): zwei Folgen einer Serie der Merkliste werden
+  verglichen — die ersten acht Minuten per FFmpeg (WORKERFS) als 8 kHz mono,
+  daraus ein Fingerabdruck nach Haitsma/Kalker (10 Frames/s, 33 Bänder
+  300–2000 Hz, Fenster 2048 — mit 1024 stimmten versetzte Folgen nur zu
+  gut der Hälfte überein), und das längste Stück, das beide teilen, ist der
+  Vorspann. Gereiht nach übereinstimmenden Frames, nicht nach Länge; leise
+  Frames zählen nie (zwei Folgen, die mit Stille beginnen, teilen keinen
+  Vorspann); die Enden werden nachgeschnitten, bis drei Sekunden und dann
+  eine Sekunde daneben dicht übereinstimmen — sonst hing Musik, die danach
+  unter anderem Dialog wiederkommt, eine Sekunde dran. Bis zu vier Abdrücke
+  je Serie (`intros`, eine neue Staffel bringt oft einen neuen Vorspann),
+  reisen mit der Merkliste. In jeder Folge wird der Vorspann im Hintergrund
+  gesucht und je Datei behalten (`sondra:abspielen:vorspann`); dann steht
+  „Vorspann überspringen“ genau während er läuft und springt an sein Ende,
+  auch nach einem Cold Open. Solange gesucht wird, kein Knopf; nicht
+  gefunden: die feste Länge wie bisher. Zahnrad → Vorspann.
+  **Lesezeichen** (1.1.11): B setzt eins, Umschalt + ←/→ springen,
+  Striche auf der Zeitleiste, Liste im Zahnrad mit Namen und „Als Kapitel
+  kopieren“ (YouTube-Format, beginnt bei 0:00). Je Datei nach Name und
+  Grösse in `sondra:abspielen:marken`, wie „Weiter bei“.
 - **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
   Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
   über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,
