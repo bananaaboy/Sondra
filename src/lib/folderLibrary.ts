@@ -21,6 +21,7 @@ import { create } from 'zustand'
 import {
   allowed,
   folderEpisodes,
+  matchFile,
   playQueue,
   rememberFolder,
   rememberedFolder,
@@ -33,7 +34,7 @@ import {
   type FolderScan,
 } from './folder'
 import { driveReadable, readDriveFile, readDriveTree } from './googleDrive'
-import { useMerkliste, type SavedLinkItem } from './merkliste'
+import { merkItems, useMerkliste, type SavedLinkItem } from './merkliste'
 import { sendToPlayer, type RemoteMedia } from './player'
 import { clearThumbnails } from './thumbnails'
 import { useSession } from '../state/store'
@@ -179,7 +180,12 @@ export async function includeRemembered(ask: boolean): Promise<'read' | 'needs-c
 /** What the player gets for an entry: the file here, or where it lies in Drive. */
 function forPlayer(file: FolderFile): File | RemoteMedia | null {
   if (file.file) return file.file
-  if (file.drive) return { kind: 'drive', id: file.drive.id, name: file.name, size: file.size, type: file.drive.mime }
+  if (file.drive) {
+    // Filed in Drive or lying in a season's folder: the player knows which episode, whatever the name.
+    const match = matchFile(file, merkItems())
+    const hint = match ? { series: match.item.id, season: match.season, episode: match.episode } : undefined
+    return { kind: 'drive', id: file.drive.id, name: file.name, size: file.size, type: file.drive.mime, hint }
+  }
   return null
 }
 

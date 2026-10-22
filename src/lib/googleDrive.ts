@@ -47,6 +47,8 @@ import {
   sharedKey,
   type SavedLinkItem,
 } from './merkliste'
+import type { EpisodeHint } from './episodeMatch'
+import { hintProperties, seasonPath } from './folder'
 import { buildProjectFile, loadProjectBytes } from './project'
 import { useSession, type Asset, type AssetKind } from '../state/store'
 
@@ -905,6 +907,30 @@ export const driveReadable = (): boolean => driveLinked() && canRun()
 export async function readDriveFile(id: string, signal?: AbortSignal, onProgress?: (loaded: number) => void): Promise<Uint8Array> {
   await ready()
   return client.read(id, signal, onProgress)
+}
+
+/**
+ * Episodes in Drive filed into a series' season: the folder
+ * „Sondra/Serien/<Titel>/Staffel n“ made where missing, each file moved
+ * there, and noted on it which episode it is — private to Sondra, so the
+ * Merkliste knows it whatever the file is called. Returns where they went.
+ */
+export async function fileIntoSeason(
+  files: { id: string; parent?: string; hint: EpisodeHint }[],
+  { title, season, onProgress }: { title: string; season: number; onProgress?: (done: number) => void },
+): Promise<string> {
+  await ready()
+  const path = seasonPath(title, season)
+  const target = await client.folderAt(path)
+  let done = 0
+  for (const file of files) {
+    await client.move(file.id, { to: target, from: file.parent, appProperties: hintProperties(file.hint) })
+    done += 1
+    onProgress?.(done)
+  }
+  const where = `Sondra/${path.join('/')}`
+  log(`${files.length} ${files.length === 1 ? 'Folge' : 'Folgen'} nach ${where} eingeordnet`)
+  return where
 }
 
 /* -------------------------------------------------------------------------- */

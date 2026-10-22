@@ -9,7 +9,22 @@
  */
 
 import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy, WHOLE_LIMIT } from '../src/lib/duplicates'
-import { clickSelect, crumbs, folderEpisodes, folderSeries, listing, playQueue, scanFileList, sortFiles, type FolderFile } from '../src/lib/folder'
+import {
+  clickSelect,
+  crumbs,
+  folderEpisodes,
+  folderSeries,
+  hintOf,
+  hintProperties,
+  listing,
+  matchFile,
+  playQueue,
+  scanDrive,
+  scanFileList,
+  seasonPath,
+  sortFiles,
+  type FolderFile,
+} from '../src/lib/folder'
 import { createMerkItem } from '../src/lib/merkliste'
 
 let failures = 0
@@ -125,6 +140,36 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
   const [a, b, c] = await Promise.all([contentKey(new Blob([big])), contentKey(new Blob([twin])), contentKey(new Blob([other]))])
   check('Grosse Datei: gleiche an 32 Stellen gleich', [a === b, a.startsWith('s:')], [true, true])
   check('Grosse Datei: Unterschied am Ende erkannt', a === c, false)
+}
+
+{
+  // Episodes filed in Drive: by the note on the file, by the season's folder, else by the name.
+  const list = [
+    createMerkItem({ id: 'fr', title: 'Frieren', season: 1, episode: 1, seasons: [{ number: 1, episodes: 28, watched: [1] }] }),
+    createMerkItem({ id: 'k8', title: 'Kaiju Nr. 8', season: 1, episode: 1, seasons: [{ number: 1, episodes: 12, watched: [] }] }),
+  ]
+  check('Ordnerpfad einer Staffel', [seasonPath('Frieren', 2), seasonPath('AC/DC', 0)], [['Serien', 'Frieren', 'Staffel 2'], ['Serien', 'AC-DC', 'Filme']])
+  check('Notiz hin und zurück', hintOf(hintProperties({ series: 'fr', season: 1, episode: 7 })), { series: 'fr', season: 1, episode: 7 })
+  check('Unvollständige Notiz gilt nicht', [hintOf({ sondraSerie: 'fr', sondraStaffel: '1' }), hintOf({ sondraSerie: 'fr', sondraStaffel: 'x', sondraFolge: '2' })], [undefined, undefined])
+  const scan = scanDrive({
+    files: [
+      { id: 'a', name: 'Episode 01.mkv', size: 10, modifiedTime: null, mimeType: 'video/x-matroska', path: 'Serien/Frieren/Staffel 1/Episode 01.mkv', parents: ['p1'], appProperties: hintProperties({ series: 'fr', season: 1, episode: 1 }) },
+      { id: 'b', name: 'Folge 2.mkv', size: 10, modifiedTime: null, mimeType: 'video/x-matroska', path: 'Serien/Frieren/Staffel 1/Folge 2.mkv', parents: ['p1'] },
+      { id: 'c', name: '03.mkv', size: 10, modifiedTime: null, mimeType: 'video/x-matroska', path: 'Serien/Kaiju Nr. 8/Staffel 1/03.mkv', parents: ['p2'] },
+      { id: 'd', name: 'Frieren S01E04.mkv', size: 10, modifiedTime: null, mimeType: 'video/x-matroska', path: 'Heruntergeladen/Frieren S01E04.mkv', parents: ['p3'] },
+      { id: 'e', name: 'Urlaub.mkv', size: 10, modifiedTime: null, mimeType: 'video/x-matroska', path: 'Serien/Unbekannt/Staffel 1/Urlaub.mkv', parents: ['p4'] },
+    ],
+    dirs: [''],
+    truncated: false,
+  })
+  const found = scan.files.map((file) => {
+    const match = matchFile(file, list)
+    return match ? `${match.item.id} ${match.season}/${match.episode}` : null
+  })
+  check('Notiz, Staffel-Ordner, Name, nichts', found, ['fr 1/1', 'fr 1/2', 'k8 1/3', 'fr 1/4', null])
+  check('Eltern-Ordner gemerkt (zum Verschieben)', scan.files[0].drive?.parent, 'p1')
+  const fr = folderEpisodes(scan.files, list).get('fr')!.map((entry) => [entry.episode, entry.seen])
+  check('Im Ordner gesehen markiert, über alle Wege', fr, [[1, true], [2, false], [4, false]])
 }
 
 console.log(failures === 0 ? '\nAlles in Ordnung.' : `\n${failures} Prüfung(en) fehlgeschlagen.`)

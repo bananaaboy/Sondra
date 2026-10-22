@@ -125,6 +125,24 @@ export function matchEpisode(fileName: string, items: SavedLinkItem[]): EpisodeM
   return { item: best, season: place.season, episode: place.episode }
 }
 
+/**
+ * What a file was filed as — in Google Drive, in a season's folder of a
+ * series (`fileIntoSeason`): the entry by its id, season and episode. Sure
+ * where a name is only a guess, so it comes first.
+ */
+export interface EpisodeHint {
+  series: string
+  season: number
+  episode: number
+}
+
+/** The entry and episode a filed file is, while the entry is still on the list. */
+export function matchHint(hint: EpisodeHint | undefined, items: SavedLinkItem[]): EpisodeMatch | null {
+  if (!hint) return null
+  const item = items.find((entry) => entry.id === hint.series)
+  return item ? { item, season: hint.season, episode: hint.episode } : null
+}
+
 /** True when this episode is already ticked off. */
 export function alreadySeen(match: EpisodeMatch): boolean {
   return seasonsOf(match.item).some((season) => season.number === match.season && season.watched.includes(match.episode))

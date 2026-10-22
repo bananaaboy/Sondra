@@ -49,6 +49,7 @@ import { formatBytes, formatDuration } from '../../lib/format'
 import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
 import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, useDrive } from '../../lib/googleDrive'
 import { DriveIcon } from '../GoogleDrive'
+import { SeasonFilingDialog } from '../SeasonFiling'
 import { requestOpenSeries, useMerkliste } from '../../lib/merkliste'
 import { thumbnailFor, type Thumbnail } from '../../lib/thumbnails'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
@@ -563,6 +564,8 @@ export function FolderPanel() {
   const [zipping, setZipping] = useState(false)
   /** Files on their way from Drive for the session or a ZIP. */
   const [fetchingFiles, setFetchingFiles] = useState<string | null>(null)
+  /** Episodes in Drive being filed into a series' season. */
+  const [filing, setFiling] = useState<FolderFile[] | null>(null)
   const pickerRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -680,7 +683,23 @@ export function FolderPanel() {
   const items = view.dirs.length + shownFiles.length
 
   const select = (next: Set<string>, nextAnchor: string | null) => useFolder.setState({ selected: next, anchor: nextAnchor })
+  /**
+   * A folder opens on one click, a file on two — so a double click on a
+   * folder, out of habit, landed its second click on whatever took the
+   * folder's place, and a film started playing. The rest of the double click
+   * that changed the view is not counted; any click of its own is — a first
+   * click ends the wait.
+   */
+  const movedAt = useRef(0)
+  const settled = (event?: { detail?: number }) => {
+    if ((event?.detail ?? 1) < 2) {
+      movedAt.current = 0
+      return true
+    }
+    return performance.now() - movedAt.current > 600
+  }
   const goTo = (path: string) => {
+    movedAt.current = performance.now()
     useFolder.setState({ dir: path })
     setQuery('')
   }
@@ -1138,7 +1157,9 @@ export function FolderPanel() {
               list={prefs.view === 'liste'}
               focused={focusIndex === index}
               onFocus={() => setFocusIndex(index)}
-              onOpen={() => goTo(entry.path)}
+              onOpen={(event?: ReactMouseEvent) => {
+                if (settled(event)) goTo(entry.path)
+              }}
             />
           ))}
           {shownFiles.map((file, at) => {
@@ -1153,11 +1174,14 @@ export function FolderPanel() {
                 focused={focusIndex === index}
                 onFocus={() => setFocusIndex(index)}
                 onClick={(event) => {
+                  if (!settled(event)) return
                   const next = clickSelect(selected, order, anchor, file.path, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })
                   select(next.selected, next.anchor)
                 }}
                 onToggle={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
-                onOpen={() => void open(file)}
+                onOpen={(event?: ReactMouseEvent) => {
+                  if (settled(event)) void open(file)
+                }}
               />
             )
           })}
@@ -1190,6 +1214,11 @@ export function FolderPanel() {
               Abspielen{selectedMedia.length < chosen.length ? ` (${selectedMedia.length})` : ''}
             </Button>
           ) : null}
+          {fromDrive && selectedMedia.length > 0 ? (
+            <Button type="button" size="sm" variant="quiet" onClick={() => setFiling(selectedMedia)}>
+              In Staffel einordnen{selectedMedia.length < chosen.length ? ` (${selectedMedia.length})` : ''}
+            </Button>
+          ) : null}
           {fetchingFiles ? (
             <span role="status" className="value text-small text-prose">
               {fetchingFiles}
@@ -1220,6 +1249,22 @@ export function FolderPanel() {
             Auswahl aufheben
           </button>
         </div>
+      ) : null}
+
+      {filing ? (
+        <SeasonFilingDialog
+          files={filing}
+          onClose={() => setFiling(null)}
+          onFiled={(where, count, path) => {
+            setFiling(null)
+            setNote(`${count} ${count === 1 ? 'Folge' : 'Folgen'} in ${where}.`)
+            // Read again, and show the season's folder with what went there.
+            void readDriveFolder().then(() => {
+              useFolder.setState({ dir: path, selected: new Set(), anchor: null })
+              setNote(`${count} ${count === 1 ? 'Folge' : 'Folgen'} in ${where}.`)
+            }, () => undefined)
+          }}
+        />
       ) : null}
 
       {confirmDelete ? (

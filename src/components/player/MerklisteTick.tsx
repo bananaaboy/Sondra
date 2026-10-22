@@ -9,16 +9,29 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { alreadySeen, matchEpisode, seenEpisode, SEEN_AT } from '../../lib/episodeMatch'
+import { alreadySeen, matchEpisode, matchHint, seenEpisode, SEEN_AT, type EpisodeHint } from '../../lib/episodeMatch'
 import { requestOpenSeries, setMerkItems, updateMerkItem, useMerkliste, type SavedLinkItem } from '../../lib/merkliste'
 import { useSession } from '../../state/store'
 
 const linkClass = 'text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink'
 
-export function MerklisteTick({ name, time, duration, enabled }: { name: string; time: number; duration: number; enabled: boolean }) {
+export function MerklisteTick({
+  name,
+  hint,
+  time,
+  duration,
+  enabled,
+}: {
+  name: string
+  /** What the file was filed as in Drive; the name is only asked without it. */
+  hint?: EpisodeHint
+  time: number
+  duration: number
+  enabled: boolean
+}) {
   const items = useMerkliste()
   const setPanel = useSession((state) => state.setPanel)
-  const match = useMemo(() => (enabled ? matchEpisode(name, items) : null), [enabled, name, items])
+  const match = useMemo(() => (enabled ? (matchHint(hint, items) ?? matchEpisode(name, items)) : null), [enabled, hint, name, items])
   const key = match ? `${name}|${match.item.id}|${match.season}|${match.episode}` : null
   /** What this file ticked off, and the entry as it was before. */
   const [ticked, setTicked] = useState<{ key: string; before: SavedLinkItem; undone: boolean } | null>(null)
