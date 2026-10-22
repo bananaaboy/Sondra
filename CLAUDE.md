@@ -602,6 +602,29 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Sitzung“ und ZIP holen die Dateien zuerst (`fileHere`). Gemerkt wird die
   Quelle (`sondra:ordner:quelle`), und die Merkliste liest Drive von selbst
   wieder ein, sobald angemeldet, sonst „Google Drive einbeziehen“.
+  **In Staffel einordnen** (Wunsch vom 22.10.2026: Folgen auswählen, einer
+  Serie und Staffel zuweisen, „dann wird ein Ordner erstellt vom Anime und
+  die ausgewählten Episoden sind im Ordner in einem anderen Ordner mit der
+  ausgewählten Staffel“; `SeasonFiling.tsx`): in der Auswahlleiste eines
+  Drive-Ordners. Serie aus der Merkliste (Pillen, vorgeschlagen nach dem,
+  was die Dateien schon sind oder heissen — „Episode 01“ schlägt nichts
+  vor) oder ein neuer Name, der dann auf die Merkliste kommt; Staffel als
+  Zahl (0 = Filme); je Datei die Folge, vorbelegt aus dem Namen, sonst
+  weitergezählt. `fileIntoSeason` legt `Sondra/Serien/<Titel>/Staffel n`
+  an (`folderAt`, vorhandene Ordner werden benutzt) und verschiebt jede
+  Datei dorthin (`move`: `addParents`/`removeParents`), mit
+  `appProperties` `sondraSerie`/`sondraStaffel`/`sondraFolge` — für andere
+  Apps unsichtbar, für Website und App im selben Google-Projekt dieselben.
+  Umbenannt wird nichts. Erkannt wird eine Datei deshalb zuerst an dieser
+  Notiz (`matchHint`), dann am Ordner (`Serien/<Titel>/Staffel n`, auch
+  von Hand dorthin gelegt), zuletzt am Namen (`matchFile`). Der Player
+  bekommt die Notiz mit (`RemoteMedia.hint`), damit `MerklisteTick` auch
+  „Episode 01.mkv“ abhakt. Danach liest die Seite Drive neu und zeigt den
+  Staffel-Ordner. **Ein Ordner öffnet mit einem Klick, eine Datei mit
+  zweien:** der zweite Klick eines Doppelklicks auf einen Ordner traf, was
+  an seine Stelle rückte, und ein Film lief los. Klicks mit `detail ≥ 2`
+  bis 600 ms nach dem Wechsel zählen nicht; ein eigener erster Klick hebt
+  das auf.
   **Abspielen aus Drive**: der Player bekommt `RemoteMedia` statt eines
   Files (`sendToPlayer`), `source` bleibt leer. Gestreamt über den Service
   Worker: `drive-media/<id>?size=…&type=…` auf dieser Herkunft, der Worker

@@ -75,6 +75,10 @@ export interface DriveFile {
   size: number | null
   modifiedTime: string | null
   mimeType: string | null
+  /** The folder it is in, where Drive said (the tree asks for it). */
+  parents?: string[]
+  /** Sondra's own notes on the file, private to it: which episode it was filed as. */
+  appProperties?: Record<string, string>
 }
 
 export interface PutOptions {
@@ -120,6 +124,8 @@ function asFile(raw: Record<string, unknown>): DriveFile {
     size: Number.isFinite(size) ? size : null,
     modifiedTime: typeof raw.modifiedTime === 'string' ? raw.modifiedTime : null,
     mimeType: typeof raw.mimeType === 'string' ? raw.mimeType : null,
+    ...(Array.isArray(raw.parents) ? { parents: raw.parents.map(String) } : {}),
+    ...(raw.appProperties && typeof raw.appProperties === 'object' ? { appProperties: raw.appProperties as Record<string, string> } : {}),
   }
 }
 
@@ -423,7 +429,7 @@ export function createDriveClient({
           const page = await json<{ files?: Record<string, unknown>[]; nextPageToken?: string }>(
             `${endpoints.api}/files?${query({
               q: `${quote(id)} in parents and trashed = false`,
-              fields: `nextPageToken,files(${FILE_FIELDS})`,
+              fields: `nextPageToken,files(${FILE_FIELDS},parents,appProperties)`,
               spaces: 'drive',
               pageSize: '1000',
               ...(pageToken ? { pageToken } : {}),
@@ -447,6 +453,48 @@ export function createDriveClient({
         } while (pageToken && !truncated)
       }
       return { files, dirs: dirs.sort(), truncated }
+    },
+
+    /**
+     * A folder by its path below „Sondra“, made where it is missing:
+     * [„Serien“, „Frieren“, „Staffel 1“]. One that is there is used, also
+     * when another device made it.
+     */
+    async folderAt(path: string[]): Promise<string> {
+      let parentId = await folder('root')
+      for (const name of path) {
+        const found = await json<{ files?: Record<string, unknown>[] }>(
+          `${endpoints.api}/files?${query({
+            q: `name = ${quote(name)} and mimeType = '${FOLDER_TYPE}' and ${quote(parentId)} in parents and trashed = false`,
+            fields: 'files(id,name)',
+            spaces: 'drive',
+            pageSize: '10',
+          })}`,
+        )
+        parentId = found.files?.[0]?.id
+          ? String(found.files[0].id)
+          : (
+              await json<{ id: string }>(`${endpoints.api}/files?fields=id`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+                body: JSON.stringify({ name, mimeType: FOLDER_TYPE, parents: [parentId] }),
+              })
+            ).id
+      }
+      return parentId
+    },
+
+    /** Moves a file into another folder, with Sondra's notes on it. */
+    async move(id: string, { to, from, appProperties }: { to: string; from?: string; appProperties?: Record<string, string> }): Promise<DriveFile> {
+      const params: Record<string, string> = { addParents: to, fields: `${FILE_FIELDS},parents,appProperties` }
+      if (from && from !== to) params.removeParents = from
+      return asFile(
+        await json(`${endpoints.api}/files/${encodeURIComponent(id)}?${query(params)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+          body: JSON.stringify(appProperties ? { appProperties } : {}),
+        }),
+      )
     },
 
     /** One file of this name in the folder, if there is one. */

@@ -39,6 +39,7 @@ interface StoredFile {
   name: string
   mimeType: string
   parents: string[]
+  appProperties?: Record<string, string>
   trashed: boolean
   content: Uint8Array
   modifiedTime: string
@@ -78,6 +79,8 @@ function meta(file: StoredFile) {
     mimeType: file.mimeType,
     modifiedTime: file.modifiedTime,
     trashed: binned(file),
+    parents: file.parents,
+    ...(file.appProperties ? { appProperties: file.appProperties } : {}),
     ...(file.mimeType === FOLDER ? {} : { size: String(file.content.byteLength) }),
   }
 }
@@ -216,6 +219,19 @@ const standIn: typeof fetch = async (input, init = {}) => {
   if (route === '/files' && method === 'POST') {
     const fields = JSON.parse(new TextDecoder().decode(await bodyBytes(init.body)))
     return json(meta(create(fields)))
+  }
+  if (id && !route.startsWith('upload') && method === 'PATCH') {
+    // Moving between folders, and Sondra's notes on the file.
+    const file = files.get(decodeURIComponent(id))
+    if (!file) return failure(404, 'notFound')
+    const remove = url.searchParams.get('removeParents')
+    const add = url.searchParams.get('addParents')
+    if (remove && !file.parents.includes(remove)) return failure(400, 'invalidParent', `${remove} ist kein Elternordner`)
+    file.parents = [...file.parents.filter((parent) => parent !== remove), ...(add ? [add] : [])]
+    const fields = JSON.parse(new TextDecoder().decode(await bodyBytes(init.body)) || '{}')
+    if (fields.appProperties) file.appProperties = { ...(file.appProperties ?? {}), ...fields.appProperties }
+    file.modifiedTime = now()
+    return json(meta(file))
   }
   if (id && !route.startsWith('upload') && method === 'GET') {
     const file = files.get(decodeURIComponent(id))
@@ -421,6 +437,16 @@ const blob = (data: Uint8Array, type = 'application/octet-stream') => new Blob([
   let last = 0
   const bytes = await client.read(made[2].id, undefined, (loaded) => (last = loaded))
   check('Lesen mit Fortschritt: alle Bytes, zuletzt gemeldet', [bytes.byteLength, last], [12, 12])
+
+  // Filing into a season: the path made once, used again, the file moved with its note.
+  const creates = seen.folderCreates
+  const target = await client.folderAt(['Serien', 'Frieren', 'Staffel 1'])
+  const again = await client.folderAt(['Serien', 'Frieren', 'Staffel 1'])
+  check('Staffel-Ordner: angelegt, beim zweiten Mal derselbe', [pathOf(target), again === target, seen.folderCreates - creates], ['Sondra/Serien/Frieren/Staffel 1', true, 3])
+  const moved = await client.move(made[0].id, { to: target, from: season.id, appProperties: { sondraSerie: 'fr', sondraStaffel: '1', sondraFolge: '1' } })
+  check('Verschoben, mit Notiz', [pathOf(made[0].id), moved.parents, moved.appProperties?.sondraFolge], ['Sondra/Serien/Frieren/Staffel 1/Frieren S01E01.mkv', [target], '1'])
+  const after = await client.tree()
+  check('Baum danach: Datei im Staffel-Ordner, Notiz mitgeliefert', after.files.find((file) => file.id === made[0].id)?.appProperties?.sondraSerie, 'fr')
 }
 
 /* -- The app's sign-in ---------------------------------------------------------- */

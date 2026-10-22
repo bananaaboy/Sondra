@@ -63,7 +63,7 @@ import { holdScreenAwake } from '../../lib/wakeLock'
 import { connectDrive, DRIVE_PROBLEM, DriveError, driveMediaUrl, driveReadable, readDriveFile } from '../../lib/googleDrive'
 import { useSession, type Asset } from '../../state/store'
 import { APP_BRIDGE, updateDiscordPresence } from '../../lib/desktop'
-import { matchEpisode } from '../../lib/episodeMatch'
+import { matchEpisode, matchHint } from '../../lib/episodeMatch'
 import { INTROS_KEPT, OPENING_MAX, OPENING_MIN, merkItems, updateMerkItem, useMerkliste } from '../../lib/merkliste'
 import { decodeHead, findIntro, keepIntro, keptIntro, learnIntro, printTag, type FoundIntro } from '../../lib/introDetect'
 import { EqualizerDrawer } from '../player/EqualizerDrawer'
@@ -489,7 +489,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [settings, setSettings] = useState<PlayerSettings>(rememberedSettings)
   // The series the file is on the Merkliste, if any: its opening is its own.
   const merk = useMerkliste()
-  const series = useMemo(() => (current ? matchEpisode(current.name, merk) : null), [current?.name, merk])
+  const series = useMemo(
+    () => (current ? (matchHint(current.remote?.hint, merk) ?? matchEpisode(current.name, merk)) : null),
+    [current?.name, current?.remote?.hint, merk],
+  )
   const opening = series?.item.opening ?? settings.opening
   /** The openings learned for the series by ear, and a mark that changes when one is added. */
   const prints = useMemo(() => (series?.item.intros ?? []).map((entry) => entry.print), [series?.item.intros])
@@ -2781,7 +2784,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               {toEditor ? 'Lädt aus Drive …' : current.kind === 'audio' ? 'Im Ton-Editor öffnen' : 'Im Video-Editor öffnen'}
             </Button>
           </div>
-          <MerklisteTick name={current.name} time={time} duration={duration} enabled={settings.merkliste} />
+          <MerklisteTick name={current.name} hint={current.remote?.hint} time={time} duration={duration} enabled={settings.merkliste} />
           {sleep || sleepNote ? (
             <p role="status" className="flex flex-wrap items-baseline gap-x-[10px] gap-y-[4px] text-small text-prose">
               <span className="font-semibold text-ink">Schlaf-Timer</span>

@@ -14,7 +14,7 @@
  */
 
 import { kindFromMime, type AssetKind } from '../state/store'
-import { alreadySeen, matchEpisode } from './episodeMatch'
+import { alreadySeen, guessEpisode, matchEpisode, matchHint, normalTitle, type EpisodeHint, type EpisodeMatch } from './episodeMatch'
 import { seasonsOf, type SavedLinkItem } from './merkliste'
 
 /* -------------------------------------------------------------------------- */
@@ -56,8 +56,8 @@ export interface FolderFile {
   kind: AssetKind
   /** The file on this device; absent for one in Google Drive. */
   file?: File
-  /** In Google Drive: its id there, and its media type. */
-  drive?: { id: string; mime: string }
+  /** In Google Drive: its id there, its media type, the folder it is in, and what it was filed as. */
+  drive?: { id: string; mime: string; parent?: string; hint?: EpisodeHint }
   /** The folder holding it, where it can be deleted from; only with the folder API. */
   parent?: DirectoryHandle
 }
@@ -157,7 +157,20 @@ export function scanFileList(list: ArrayLike<File>): FolderScan {
  * inside „Sondra“. Nothing of the files themselves is fetched for it.
  */
 export function scanDrive(
-  listed: { files: { id: string; name: string; size: number | null; modifiedTime: string | null; mimeType: string | null; path: string }[]; dirs: string[]; truncated: boolean },
+  listed: {
+    files: {
+      id: string
+      name: string
+      size: number | null
+      modifiedTime: string | null
+      mimeType: string | null
+      path: string
+      parents?: string[]
+      appProperties?: Record<string, string>
+    }[]
+    dirs: string[]
+    truncated: boolean
+  },
   name = 'Google Drive',
 ): FolderScan {
   const files: FolderFile[] = []
@@ -172,10 +185,56 @@ export function scanDrive(
       size: entry.size ?? 0,
       modified: entry.modifiedTime ? Date.parse(entry.modifiedTime) || 0 : 0,
       kind: kindFromMime(mime, entry.name),
-      drive: { id: entry.id, mime },
+      drive: { id: entry.id, mime, parent: entry.parents?.[0], hint: hintOf(entry.appProperties) },
     })
   }
   return { name, files, dirs: listed.dirs, truncated: listed.truncated, source: 'drive' }
+}
+
+/** The notes `fileIntoSeason` leaves on a file in Drive. */
+export const HINT_KEYS = { series: 'sondraSerie', season: 'sondraStaffel', episode: 'sondraFolge' } as const
+
+export function hintOf(properties: Record<string, string> | undefined): EpisodeHint | undefined {
+  if (!properties) return undefined
+  const series = properties[HINT_KEYS.series]
+  const season = Number(properties[HINT_KEYS.season])
+  const episode = Number(properties[HINT_KEYS.episode])
+  if (!series || !Number.isInteger(season) || season < 0 || !Number.isInteger(episode) || episode < 1) return undefined
+  return { series, season, episode }
+}
+
+export function hintProperties(hint: EpisodeHint): Record<string, string> {
+  return { [HINT_KEYS.series]: hint.series, [HINT_KEYS.season]: String(hint.season), [HINT_KEYS.episode]: String(hint.episode) }
+}
+
+/** A season's folder as `fileIntoSeason` names it: „Staffel 2“, films „Filme“. */
+export const seasonFolderName = (season: number) => (season === 0 ? 'Filme' : `Staffel ${season}`)
+
+/** A series' name as a folder: no slashes, which would read as folders of their own. */
+export const seriesFolderName = (title: string) => title.replace(/[/\\]+/g, '-').replace(/\s+/g, ' ').trim() || 'Ohne Namen'
+
+/** Where a series' season lies below „Sondra“. */
+export const seasonPath = (title: string, season: number) => ['Serien', seriesFolderName(title), seasonFolderName(season)]
+
+/**
+ * A file in „Serien/<Titel>/Staffel n“ without notes (moved there by hand in
+ * Drive): the entry by its title, the season by its folder, the episode by
+ * the number in its name.
+ */
+function fromPath(file: FolderFile, items: SavedLinkItem[]): EpisodeMatch | null {
+  const found = /(?:^|\/)Serien\/([^/]+)\/(?:Staffel (\d+)|(Filme))$/.exec(file.dir)
+  if (!found) return null
+  const title = normalTitle(found[1])
+  const item = items.find((entry) => normalTitle(seriesFolderName(entry.title)) === title)
+  if (!item) return null
+  const episode = guessEpisode(file.name)?.episode ?? Number(/(\d{1,4})(?!.*\d)/.exec(file.name.replace(/\.[a-z0-9]{2,5}$/i, ''))?.[1] ?? NaN)
+  if (!Number.isInteger(episode) || episode < 1) return null
+  return { item, season: found[3] ? 0 : Number(found[2]), episode }
+}
+
+/** Which episode a file is: as filed, by its folder, else by its name. */
+export function matchFile(file: FolderFile, items: SavedLinkItem[]): EpisodeMatch | null {
+  return matchHint(file.drive?.hint, items) ?? fromPath(file, items) ?? matchEpisode(file.name, items)
 }
 
 /** The scan without some files — after they were deleted. */
@@ -345,7 +404,7 @@ export interface FolderSeries {
 /** The file each episode belongs to, for the badges on the tiles. */
 export function episodeOf(file: FolderFile, items: SavedLinkItem[]): FolderEpisode | null {
   if (file.kind !== 'video' && file.kind !== 'audio') return null
-  const match = matchEpisode(file.name, items)
+  const match = matchFile(file, items)
   return match ? { file, season: match.season, episode: match.episode, seen: alreadySeen(match) } : null
 }
 
@@ -358,7 +417,7 @@ export function folderEpisodes(files: FolderFile[], items: SavedLinkItem[]): Map
   const bySeries = new Map<string, Map<string, FolderEpisode>>()
   for (const file of files) {
     if (file.kind !== 'video' && file.kind !== 'audio') continue
-    const match = matchEpisode(file.name, items)
+    const match = matchFile(file, items)
     if (!match) continue
     const found: FolderEpisode = { file, season: match.season, episode: match.episode, seen: alreadySeen(match) }
     const group = bySeries.get(match.item.id) ?? new Map<string, FolderEpisode>()

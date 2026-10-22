@@ -11,6 +11,8 @@
  * stand-in the video editor makes, only larger: here the picture is the point.
  */
 
+import type { EpisodeHint } from './episodeMatch'
+
 export type PlayerKind = 'video' | 'audio'
 
 export interface PlayerItem {
@@ -98,6 +100,8 @@ export interface RemoteMedia {
   size: number
   /** Its media type, as Drive names it. */
   type: string
+  /** The Merkliste episode it was filed as, sure where its name is only a guess. */
+  hint?: EpisodeHint
 }
 
 export const isRemote = (entry: File | RemoteMedia): entry is RemoteMedia => !(entry instanceof Blob)
