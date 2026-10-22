@@ -316,7 +316,12 @@ export function SessionMenu() {
         ) : (
           <span className="value text-muted sm:hidden">1</span>
         )}
-        <svg viewBox="0 0 16 16" className={`h-3 w-3 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`} fill="none" aria-hidden>
+        <svg
+          viewBox="0 0 16 16"
+          className={`h-3 w-3 shrink-0 text-muted transition-transform max-[359px]:hidden ${open ? 'rotate-180' : ''}`}
+          fill="none"
+          aria-hidden
+        >
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
