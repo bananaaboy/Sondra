@@ -53,6 +53,16 @@ export const ACTIONS: ToolAction[] = [
   },
 
   {
+    id: 'folder',
+    panel: 'folder',
+    group: 'holen',
+    label: 'Ordner durchsehen',
+    hint: 'Die Dateien eines Ordners mit Vorschau, auswählen, Doppelte finden',
+    kinds: [],
+    keywords: ['ordner', 'dateien', 'explorer', 'durchsuchen', 'galerie', 'auswählen', 'folder', 'doppelt', 'duplikate', 'weiterschauen', 'bibliothek'],
+  },
+
+  {
     id: 'merkliste',
     panel: 'merkliste',
     group: 'holen',

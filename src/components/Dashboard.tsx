@@ -18,6 +18,7 @@ import { useSession } from '../state/store'
  * background, so opening a tool later does not wait on the network either.
  */
 const TOOLS = {
+  folder: () => import('./panels/FolderPanel').then((m) => ({ default: m.FolderPanel })),
   downloader: () => import('./panels/DownloaderPanel').then((m) => ({ default: m.DownloaderPanel })),
   merkliste: () => import('./panels/MerklistePanel').then((m) => ({ default: m.MerklistePanel })),
   converter: () => import('./panels/ConverterPanel').then((m) => ({ default: m.ConverterPanel })),
@@ -35,6 +36,7 @@ const TOOLS = {
   player: () => import('./panels/PlayerPanel').then((m) => ({ default: m.PlayerPanel })),
 } satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType<{ hidden?: boolean }> | ComponentType }>>
 
+const FolderPanel = lazy(TOOLS.folder)
 const DownloaderPanel = lazy(TOOLS.downloader)
 const MerklistePanel = lazy(TOOLS.merkliste)
 const ConverterPanel = lazy(TOOLS.converter)
@@ -327,6 +329,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
   const ready =
     hasAssets ||
     panel === 'start' ||
+    panel === 'folder' ||
     panel === 'downloader' ||
     panel === 'merkliste' ||
     panel === 'video' ||
@@ -351,6 +354,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
             <ErrorBoundary panel={panel}>
               <Suspense fallback={<ToolLoading />}>
                 {panel === 'start' ? <Home /> : null}
+                {panel === 'folder' ? <FolderPanel /> : null}
                 {panel === 'downloader' ? <DownloaderPanel /> : null}
                 {panel === 'merkliste' ? <MerklistePanel /> : null}
                 {panel === 'converter' ? <ConverterPanel /> : null}

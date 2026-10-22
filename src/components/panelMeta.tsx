@@ -43,6 +43,13 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M2.6 7.2L8 2.6l5.4 4.6v5.6a.9.9 0 01-.9.9H3.5a.9.9 0 01-.9-.9z" />,
   },
   {
+    id: 'folder',
+    slug: 'ordner',
+    label: 'Ordner',
+    summary: 'Die Dateien eines Ordners sehen, auswählen und weiterschauen',
+    icon: <path d="M2 4.6c0-.6.5-1.1 1.1-1.1h3l1.4 1.5h5.4c.6 0 1.1.5 1.1 1.1v5.8c0 .6-.5 1.1-1.1 1.1H3.1c-.6 0-1.1-.5-1.1-1.1z" />,
+  },
+  {
     id: 'downloader',
     slug: 'herunterladen',
     label: 'Herunterladen',

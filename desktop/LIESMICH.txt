@@ -139,6 +139,18 @@ Sitzung
   gilt der Vorschlag. Umbenennen: der Stift neben einer Datei (oder ein
   Doppelklick auf ihren Namen); die Endung bleibt.
 
+Ordner
+  Im Reiter „Ordner“ einen Ordner wählen: Sondra zeigt die Dateien als
+  Kacheln mit Vorschaubild oder als Liste, nach Art, Name, Datum oder
+  Grösse, auf Wunsch mit allen Unterordnern. Auswählen mit Klick, Strg und
+  Umschalt oder den Pfeiltasten; die Auswahl lässt sich abspielen, in die
+  Sitzung nehmen, als ZIP speichern, nach Google Drive schicken oder nach
+  einer Rückfrage löschen (endgültig, nicht in den Papierkorb). Folgen
+  Ihrer Merkliste erkennt Sondra am Namen: „Weiterschauen“ spielt die
+  nächste ungesehene und die folgenden. „Doppelte finden“ sucht gleiche
+  Dateien und wählt die Kopien aus. Den Ordner bietet Sondra beim nächsten
+  Mal wieder an.
+
 Google Drive
   Unten auf der Seite „Google Drive“ → „Mit Google verbinden“: die
   Anmeldung öffnet sich in Ihrem Browser, danach geht es in Sondra weiter.
