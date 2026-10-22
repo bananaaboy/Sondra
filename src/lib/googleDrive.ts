@@ -55,8 +55,9 @@ export { DriveError, folderPath, type DriveErrorCode, type DriveFile, type Drive
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke'
-/** The website's OAuth client („Webanwendung"); without it Drive is not offered there. */
-const WEB_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
+const DEFAULT_CLIENT_ID = '736809827454-0mtp3prv4tvrrm7p7v8pfmv25brccdpe.apps.googleusercontent.com'
+/** The website's OAuth client („Webanwendung"); defaults to the project's client ID. */
+const WEB_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID
 /** The channel `public/google-drive.html` answers on. */
 const CHANNEL = 'sondra-google-drive'
 const SETTINGS_KEY = 'sondra:drive'
@@ -113,6 +114,8 @@ export interface DriveSettings {
   merklisteAt: number
   /** Folder ids per account, checked once a visit before they are used. */
   folders: Record<string, Partial<Record<DriveFolder, string>>>
+  /** Custom Web OAuth client ID, if entered in settings. */
+  clientId?: string
 }
 
 const DEFAULT_SETTINGS: DriveSettings = {
@@ -123,6 +126,7 @@ const DEFAULT_SETTINGS: DriveSettings = {
   name: '',
   merklisteAt: 0,
   folders: {},
+  clientId: '',
 }
 
 function readSettings(): DriveSettings {
@@ -165,7 +169,7 @@ export interface MerkSync {
 }
 
 export const useDrive = create<DriveState>(() => ({
-  configured: !IN_APP && Boolean(WEB_CLIENT_ID),
+  configured: !IN_APP || Boolean(APP_BRIDGE?.drive),
   ready: !IN_APP,
   connected: false,
   signingIn: false,
@@ -176,6 +180,11 @@ export const useDrive = create<DriveState>(() => ({
   problem: null,
   merkSync: { running: false, at: 0, received: 0, problem: null },
 }))
+
+export function getWebClientId(): string {
+  const custom = state().settings.clientId?.trim()
+  return custom || WEB_CLIENT_ID
+}
 
 const set = (patch: Partial<DriveState> | ((state: DriveState) => Partial<DriveState>)) => useDrive.setState(patch)
 const state = () => useDrive.getState()
@@ -273,12 +282,13 @@ let cancelWeb: (() => void) | null = null
  * it still counts and the browser lets it through.
  */
 function signInWeb(): Promise<void> {
-  if (!WEB_CLIENT_ID) return Promise.reject(new DriveError('not-configured'))
+  const clientId = getWebClientId()
+  if (!clientId) return Promise.reject(new DriveError('not-configured'))
   const stateId = crypto.getRandomValues(new Uint32Array(4)).join('-')
   const url = new URL(AUTH_URL)
   const hint = state().settings.email
   url.search = new URLSearchParams({
-    client_id: WEB_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: new URL('google-drive.html', document.baseURI).toString(),
     response_type: 'token',
     scope: DRIVE_SCOPE,
@@ -727,7 +737,7 @@ function scheduleMerkliste() {
   }, MERKLISTE_DELAY)
 }
 
-export function setDriveSetting(patch: Partial<Pick<DriveSettings, 'autoDownloads' | 'merkliste'>>): void {
+export function setDriveSetting(patch: Partial<Pick<DriveSettings, 'autoDownloads' | 'merkliste' | 'clientId'>>): void {
   saveSettings(patch)
   if (patch.merkliste) void syncMerklisteWithDrive()
   if (patch.merkliste === false) setSync({ running: false, problem: null })

@@ -343,6 +343,9 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
     })
 
   const syncList = () => act('merkliste', syncMerklisteNow)
+  const [showConfig, setShowConfig] = useState(false)
+  const [clientIdInput, setClientIdInput] = useState(drive.settings.clientId ?? '')
+  const [savedClient, setSavedClient] = useState(false)
 
   const jobs = drive.jobs
   const finished = jobs.some((job) => job.status === 'done' || job.status === 'skipped' || job.status === 'failed')
@@ -396,6 +399,53 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
           <DriveIcon />
           Mit Google verbinden
         </Button>
+        {!DRIVE_IN_APP ? (
+          <div className="w-full border-t border-line/60 pt-[10px]">
+            <button
+              type="button"
+              onClick={() => setShowConfig((open) => !open)}
+              className={`${linkClass} text-micro text-muted`}
+            >
+              {showConfig ? 'Google Client-ID verbergen' : 'Eigene Google Client-ID verwenden'}
+            </button>
+            {showConfig ? (
+              <div className="mt-[8px] flex flex-col gap-[8px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-rule/40">
+                <label className="text-small font-medium text-ink">
+                  OAuth Client-ID (Webanwendung):
+                  <input
+                    type="text"
+                    value={clientIdInput}
+                    onChange={(e) => setClientIdInput(e.target.value)}
+                    placeholder="...apps.googleusercontent.com"
+                    className="mt-[4px] w-full rounded-nav bg-panel px-[10px] py-[6px] text-small font-mono text-ink ring-1 ring-inset ring-line focus:ring-ink"
+                  />
+                </label>
+                <p className="text-micro text-muted leading-relaxed">
+                  Aus der Google Cloud Console für Webanwendungen mit JavaScript-Ursprung{' '}
+                  <span className="font-mono text-ink">{typeof window !== 'undefined' ? window.location.origin : 'https://sondra.lizge.ch'}</span>{' '}
+                  und Weiterleitungs-URI{' '}
+                  <span className="font-mono text-ink">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/google-drive.html` : 'https://sondra.lizge.ch/google-drive.html'}
+                  </span>.
+                </p>
+                <div className="flex items-center gap-[10px]">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setDriveSetting({ clientId: clientIdInput.trim() })
+                      setSavedClient(true)
+                      setTimeout(() => setSavedClient(false), 2500)
+                    }}
+                  >
+                    Speichern
+                  </Button>
+                  {savedClient ? <span className="text-micro text-ink font-medium">Gespeichert</span> : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     )
   } else {
@@ -449,6 +499,15 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
           <Notice tone="error" title="Anmeldung hat nicht geklappt">
             {DRIVE_PROBLEM[drive.problem.code]}
             {drive.problem.detail ? <span className="mt-[4px] block break-words text-micro text-muted">{drive.problem.detail}</span> : null}
+            {!DRIVE_IN_APP && drive.problem.detail === 'redirect_uri_mismatch' ? (
+              <span className="mt-[6px] block text-micro text-ink">
+                In der Google Cloud Console muss für diesen Client als Weiterleitungs-URI{' '}
+                <code className="rounded bg-panel-mid px-[4px] py-[1px] font-mono">
+                  {typeof window !== 'undefined' ? `${window.location.origin}/google-drive.html` : 'https://sondra.lizge.ch/google-drive.html'}
+                </code>{' '}
+                eingetragen sein.
+              </span>
+            ) : null}
           </Notice>
         ) : null}
 
@@ -568,7 +627,7 @@ export function DriveButton() {
     return () => window.clearTimeout(timer)
   }, [active.length])
 
-  if (!configured) return null
+  if (!configured && DRIVE_IN_APP) return null
 
   const signIn = !connected && !signingIn
   const openDialog = () => {
@@ -639,7 +698,7 @@ export function DriveButton() {
 export function ProjectToDriveButton({ className, onDone }: { className: string; onDone?: () => void }) {
   const configured = useDrive((state) => state.configured)
   const linked = useDrive((state) => driveLinked(state))
-  if (!configured) return null
+  if (!configured && DRIVE_IN_APP) return null
   return (
     <button
       type="button"
