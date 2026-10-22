@@ -681,7 +681,17 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Updates gingen nicht); „new_key“ erzeugt einmal einen (Artefakt, ein Tag);
   „release“ hängt `Sondra-Android[-<Version>].apk` ans Release. Die Seite
   erkennt die App am Referrer `android-app://ch.lizge.sondra` (`IN_ANDROID_APP`,
-  für den Tab gemerkt) und bietet dort die Windows-App nicht an. Icons:
+  für den Tab gemerkt) und bietet dort die Windows-App nicht an.
+  **`ManageDataLauncherActivity` gehört ins Manifest:** `LauncherActivity`
+  schaltet sie bei jedem Start ein oder aus (`setComponentEnabledSetting`),
+  und fehlt sie, stürzt die App beim ersten Antippen ab — Build und lint
+  merkten es nicht, 1.1.14 lief so aus. Sie ist zugleich „Speicher
+  verwalten“ (`manageSpaceActivity`). Kurzbefehle gehen über
+  `ShortcutTrampolineActivity` der Bibliothek, nicht direkt auf den
+  Launcher (Android startet sie mit `CLEAR_TASK`). Der Workflow startet die
+  APK deshalb auf einem Android-14-Emulator mit Chrome
+  (`android/launch-check.sh`: Symbol, Kurzbefehl, Link — kein Absturz, die
+  richtige Adresse). Icons:
   `npm run android:icons` (Vektor-Vordergrund aus den Balken des Zeichens,
   PNGs mit den Helfern aus `store-tiles.mjs`). Lokal bauen: Android SDK mit
   `platforms;android-36`, dann `cd android && ./gradlew assembleRelease`.

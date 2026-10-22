@@ -3,7 +3,8 @@
 # website's /.well-known/assetlinks.json names the signing key.
 #
 # Every run builds the APK (to install directly) and the AAB (for Google
-# Play), checks them, and keeps both as the artifact "Sondra-Android".
+# Play), checks them, starts the APK on an Android 14 emulator
+# (android/launch-check.sh), and keeps both as the artifact "Sondra-Android".
 #
 # The key: from the secrets ANDROID_KEYSTORE_BASE64 and
 # ANDROID_KEYSTORE_PASSWORD. Without them the debug key signs — the app
@@ -142,6 +143,25 @@ jobs:
           name: Sondra-Android-Schluessel
           path: ${{ runner.temp }}/key/
           retention-days: 1
+
+      # The app on Android 14 with Chrome: started from its icon, a shortcut
+      # and a link, without a crash. Builds and lint passed while every start
+      # crashed (android/launch-check.sh says why); this is what notices.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Start on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis_playstore
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash android/launch-check.sh out
 
       - name: Attach to the release
         if: inputs.release
