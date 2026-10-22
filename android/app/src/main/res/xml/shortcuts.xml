@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long press on the icon: straight to a tool. -->
+<!-- Only launchers from Android 7.1 on read this; below, it is simply unused. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:targetApi="25">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="merkliste"
+        android:shortcutLongLabel="@string/shortcutMerkliste"
+        android:shortcutShortLabel="@string/shortcutMerkliste">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:data="https://sondra.lizge.ch/#merkliste"
+            android:targetClass="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:targetPackage="ch.lizge.sondra" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="ordner"
+        android:shortcutLongLabel="@string/shortcutOrdner"
+        android:shortcutShortLabel="@string/shortcutOrdner">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:data="https://sondra.lizge.ch/#ordner"
+            android:targetClass="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:targetPackage="ch.lizge.sondra" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="abspielen"
+        android:shortcutLongLabel="@string/shortcutAbspielen"
+        android:shortcutShortLabel="@string/shortcutAbspielen">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:data="https://sondra.lizge.ch/#abspielen"
+            android:targetClass="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:targetPackage="ch.lizge.sondra" />
+    </shortcut>
+</shortcuts>

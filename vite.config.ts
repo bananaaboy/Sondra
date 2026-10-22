@@ -61,6 +61,40 @@ function offlineList(): Plugin {
   }
 }
 
+/**
+ * `/.well-known/assetlinks.json`: the website vouches for the Android app
+ * (`android/`), so Chrome shows it full screen instead of with an address
+ * bar. Written only when `ANDROID_CERT_SHA256` names the signing key's
+ * fingerprint(s) — the Android workflow prints it —, comma-separated.
+ */
+function assetLinks(fingerprints: string): Plugin {
+  const list = fingerprints
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim().toUpperCase())
+    .filter((entry) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(entry))
+  return {
+    name: 'sondra:asset-links',
+    apply: 'build',
+    generateBundle() {
+      if (list.length === 0) return
+      this.emitFile({
+        type: 'asset',
+        fileName: '.well-known/assetlinks.json',
+        source: JSON.stringify(
+          [
+            {
+              relation: ['delegate_permission/common.handle_all_urls'],
+              target: { namespace: 'android_app', package_name: 'ch.lizge.sondra', sha256_cert_fingerprints: list },
+            },
+          ],
+          null,
+          2,
+        ),
+      })
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const clientId =
@@ -95,7 +129,13 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_GOOGLE_CLIENT_SECRET': JSON.stringify(clientSecret),
       'import.meta.env.GOOGLE_CLIENT_SECRET': JSON.stringify(clientSecret),
     },
-    plugins: [react(), tailwindcss(), crossOriginIsolation(), offlineList()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      crossOriginIsolation(),
+      offlineList(),
+      assetLinks(env.ANDROID_CERT_SHA256 || process.env.ANDROID_CERT_SHA256 || ''),
+    ],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

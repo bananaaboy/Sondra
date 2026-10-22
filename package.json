@@ -10,6 +10,7 @@
     "build": "tsc -b --noEmit && vite build",
     "preview": "vite preview",
     "dev:service": "node scripts/dev-service.mjs",
+    "android:icons": "node scripts/android-icons.mjs",
     "typecheck": "tsc -b --noEmit",
     "verify:loudness": "esbuild scripts/verify-loudness.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-loudness.mjs && node node_modules/.verify-loudness.mjs",
     "verify:convert": "esbuild scripts/verify-convert.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-convert.mjs && node node_modules/.verify-convert.mjs",

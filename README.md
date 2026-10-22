@@ -180,6 +180,26 @@ die Website ausliefert, ohne Bereitstellungsdateien, Service Worker und
 
 Die App schreibt ein Protokoll nach `%APPDATA%\Sondra\sondra.log`.
 
+## Als Android-App
+
+`android/` ist Sondra für Android: die Website als Trusted Web Activity —
+Chrome öffnet `sondra.lizge.ch` als eigene App, ohne Adressleiste, mit
+eigenem Symbol, Kurzbefehlen (Merkliste, Ordner, Abspielen) und als Ziel
+für „Teilen“ von Videos und Ton. Sie startet auf der Merkliste. Statt
+Anytype (das nur die Windows-App erreicht) bringt Google Drive die Merkliste
+und den Ordner mit den anderen Geräten zusammen.
+
+- **GitHub Actions → „Android":** baut APK und AAB, prüft sie und legt sie
+  als Artefakt „Sondra-Android“ ab. Signiert wird mit den Secrets
+  `ANDROID_KEYSTORE_BASE64` und `ANDROID_KEYSTORE_PASSWORD`; einmal von Hand
+  mit `new_key` gestartet, erzeugt der Lauf einen Schlüssel und sagt, wohin
+  er gehört. Mit `release` hängt er `Sondra-Android.apk` an das Release.
+- **Ohne Adressleiste:** den SHA-256-Fingerabdruck aus dem Lauf in Vercel als
+  `ANDROID_CERT_SHA256` eintragen; der Build schreibt dann
+  `/.well-known/assetlinks.json`.
+- **Selbst bauen:** Android SDK mit `platforms;android-36`, dann
+  `cd android && ./gradlew assembleRelease`. Symbole neu: `npm run android:icons`.
+
 ## Projektdateien (.sondra)
 
 Über das Sitzungsmenü oder den Knopf „Projekt speichern“ lässt sich der gesamte

@@ -1,0 +1,161 @@
+# Builds the Android app (android/): Sondra's website as a Trusted Web
+# Activity — the app opens sondra.lizge.ch in Chrome, full screen once the
+# website's /.well-known/assetlinks.json names the signing key.
+#
+# Every run builds the APK (to install directly) and the AAB (for Google
+# Play), checks them, and keeps both as the artifact "Sondra-Android".
+#
+# The key: from the secrets ANDROID_KEYSTORE_BASE64 and
+# ANDROID_KEYSTORE_PASSWORD. Without them the debug key signs — the app
+# installs and runs, but a later build cannot update it, and no release is
+# made with it. A manual run with "new_key" makes a key once and keeps it as
+# the artifact "Sondra-Android-Schluessel" for a day, with what to do next.
+#
+# A manual run with "release" ticked attaches the APK to the GitHub release
+# v<version from package.json>, as Sondra-Android-<version>.apk and
+# Sondra-Android.apk.
+
+name: Android
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - android/**
+      - package.json
+      - .github/workflows/android.yml
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'APK an das GitHub Release v<Version aus package.json> hängen'
+        type: boolean
+        default: false
+      new_key:
+        description: 'Einmalig einen Signaturschlüssel erzeugen (Artefakt für einen Tag)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK 36
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" "build-tools;36.0.0" > /dev/null
+
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          NEW_KEY: ${{ inputs.new_key }}
+        run: |
+          set -euo pipefail
+          store="$RUNNER_TEMP/sondra.jks"
+          if [ "$NEW_KEY" = "true" ]; then
+            password="$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
+            echo "::add-mask::$password"
+            keytool -genkeypair -v -keystore "$store" -alias sondra -keyalg RSA -keysize 4096 -validity 36500 \
+              -storepass "$password" -keypass "$password" -dname "CN=Sondra, O=Lizge, C=CH" > /dev/null 2>&1
+            mkdir -p "$RUNNER_TEMP/key"
+            base64 -w0 "$store" > "$RUNNER_TEMP/key/ANDROID_KEYSTORE_BASE64.txt"
+            printf '%s' "$password" > "$RUNNER_TEMP/key/ANDROID_KEYSTORE_PASSWORD.txt"
+            {
+              echo "Der Signaturschlüssel der Android-App. Einmal erzeugt, für immer derselbe:"
+              echo "jedes Update muss mit ihm signiert sein."
+              echo
+              echo "1. GitHub → Settings → Secrets and variables → Actions → New repository secret:"
+              echo "   ANDROID_KEYSTORE_BASE64  = Inhalt von ANDROID_KEYSTORE_BASE64.txt"
+              echo "   ANDROID_KEYSTORE_PASSWORD = Inhalt von ANDROID_KEYSTORE_PASSWORD.txt"
+              echo "2. Diese Dateien danach sicher aufbewahren (z. B. Passwortmanager) und hier löschen."
+              echo "3. Den SHA-256-Fingerabdruck aus der Zusammenfassung dieses Laufs in Vercel als"
+              echo "   ANDROID_CERT_SHA256 eintragen: dann zeigt Chrome die App ohne Adressleiste."
+            } > "$RUNNER_TEMP/key/LIESMICH.txt"
+          elif [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$store"
+            password="$KEYSTORE_PASSWORD"
+          else
+            echo "::warning::Kein Signaturschlüssel (ANDROID_KEYSTORE_BASE64): der Debug-Schlüssel signiert. Die App läuft, lässt sich aber später nicht aktualisieren."
+            exit 0
+          fi
+          {
+            echo "SONDRA_ANDROID_KEYSTORE=$store"
+            echo "SONDRA_ANDROID_KEYSTORE_PASSWORD=$password"
+            echo "SONDRA_ANDROID_KEY_ALIAS=sondra"
+          } >> "$GITHUB_ENV"
+
+      - name: Build, lint
+        working-directory: android
+        run: ./gradlew --no-daemon --console=plain lintRelease assembleRelease bundleRelease
+
+      - name: Check the app
+        id: check
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          version="$(node -p "require('./package.json').version")"
+          badging="$("$tools/aapt2" dump badging "$apk")"
+          echo "$badging" | grep -q "package: name='ch.lizge.sondra'.*versionName='$version'" || { echo "::error::Paket oder Version stimmt nicht:"; echo "$badging" | head -3; exit 1; }
+          echo "$badging" | grep -q "launchable-activity: name='com.google.androidbrowserhelper.trusted.LauncherActivity'" || { echo "::error::Keine Startaktivität"; exit 1; }
+          certs="$("$tools/apksigner" verify --print-certs "$apk")"
+          digest="$(echo "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "debug=$(echo "$certs" | grep -q 'CN=Android Debug' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          mkdir -p out
+          cp "$apk" "out/Sondra-Android-$version.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "out/Sondra-Android-$version.aab"
+          {
+            echo "### Sondra für Android $version"
+            echo
+            echo "APK $(du -h "$apk" | cut -f1), signiert mit:"
+            echo
+            echo '```'
+            echo "$certs" | grep -E 'DN:|SHA-256'
+            echo '```'
+            echo
+            echo "Für \`ANDROID_CERT_SHA256\` in Vercel (dann ohne Adressleiste):"
+            echo
+            echo '```'
+            echo "$digest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Sondra-Android
+          path: out/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v5
+        if: inputs.new_key
+        with:
+          name: Sondra-Android-Schluessel
+          path: ${{ runner.temp }}/key/
+          retention-days: 1
+
+      - name: Attach to the release
+        if: inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.check.outputs.version }}
+          DEBUG_KEY: ${{ steps.check.outputs.debug }}
+        run: |
+          set -euo pipefail
+          if [ "$DEBUG_KEY" = "true" ]; then
+            echo "::error::Mit dem Debug-Schlüssel wird nichts veröffentlicht: installierte Apps liessen sich nicht aktualisieren."
+            exit 1
+          fi
+          tag="v$VERSION"
+          gh release view "$tag" > /dev/null 2>&1 || gh release create "$tag" --title "Sondra $VERSION" --notes "Sondra $VERSION."
+          cp "out/Sondra-Android-$VERSION.apk" out/Sondra-Android.apk
+          gh release upload "$tag" "out/Sondra-Android-$VERSION.apk" out/Sondra-Android.apk --clobber

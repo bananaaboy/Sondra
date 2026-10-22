@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appName">Sondra</string>
+    <string name="hostName">sondra.lizge.ch</string>
+    <!-- Starts on the Merkliste: on a phone, what is watched and what comes next. -->
+    <string name="launchUrl">https://sondra.lizge.ch/#merkliste</string>
+    <string name="providerAuthority">ch.lizge.sondra.fileprovider</string>
+    <string name="assetStatements" translatable="false">
+        [{ \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+           \"target\": { \"namespace\": \"web\", \"site\": \"https://sondra.lizge.ch\" } }]
+    </string>
+    <string name="shareTarget" translatable="false">
+        {\"action\": \"https://sondra.lizge.ch/share-target\", \"method\": \"POST\", \"enctype\": \"multipart/form-data\",
+         \"params\": { \"files\": [{ \"name\": \"media\", \"accept\": [\"audio/*\", \"video/*\"] }] }}
+    </string>
+    <string name="shortcutMerkliste">Merkliste</string>
+    <string name="shortcutOrdner">Ordner</string>
+    <string name="shortcutAbspielen">Abspielen</string>
+</resources>

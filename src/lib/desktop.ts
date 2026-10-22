@@ -50,6 +50,26 @@ export const MICROSOFT_STORE: string | null = 'https://apps.microsoft.com/detail
 /** True inside the desktop app, where offering the desktop app is circular. */
 export const IN_DESKTOP_APP = typeof navigator !== 'undefined' && /\bElectron\//.test(navigator.userAgent)
 
+/** The Android app's package (`android/`), as the browser names it. */
+export const ANDROID_PACKAGE = 'ch.lizge.sondra'
+
+/**
+ * True inside the Android app — the website in Chrome as a Trusted Web
+ * Activity, where offering the Windows app is beside the point. The browser
+ * names the app as the referrer of its first page only; kept for the tab, so
+ * a reload still knows.
+ */
+export const IN_ANDROID_APP = ((): boolean => {
+  if (typeof document === 'undefined') return false
+  const fromApp = document.referrer.startsWith(`android-app://${ANDROID_PACKAGE}`)
+  try {
+    if (fromApp) sessionStorage.setItem('sondra:android', '1')
+    return fromApp || sessionStorage.getItem('sondra:android') === '1'
+  } catch {
+    return fromApp
+  }
+})()
+
 /** Where the installed app's updater stands, as the app reports it. */
 export interface UpdateState {
   status: 'off' | 'idle' | 'checking' | 'current' | 'downloading' | 'ready' | 'available' | 'error'
