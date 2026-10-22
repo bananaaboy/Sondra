@@ -78,15 +78,16 @@
       <a class="back" href="./">Zurück zu Sondra</a>
 
       <h1>Datenschutz</h1>
-      <p class="stand">Stand: 21. Oktober 2026 · gilt für die Website und die Windows-App</p>
+      <p class="stand">Stand: 22. Oktober 2026 · gilt für die Website und die Windows-App</p>
 
       <p class="kurz">
         Sondra bearbeitet Ihre Dateien auf Ihrem Gerät. Nichts davon wird zu uns hochgeladen. Es gibt keine
         Konten, keine Cookies, kein Tracking und keine Werbung.
       </p>
       <p>
-        Daten verlassen Ihr Gerät nur in zwei Fällen: beim Aufruf der Website, wie bei jeder Website, und wenn
-        Sie Sondra selbst bitten, eine Datei von einer Adresse zu laden. Beides ist unten genau beschrieben.
+        Daten verlassen Ihr Gerät nur in drei Fällen: beim Aufruf der Website, wie bei jeder Website, wenn
+        Sie Sondra selbst bitten, eine Datei von einer Adresse zu laden, und wenn Sie Ihr Google Drive
+        verbinden und etwas dorthin schicken. Alles drei ist unten genau beschrieben.
       </p>
 
       <section>
@@ -129,6 +130,11 @@
             Serie entfernt haben, damit ein Abgleich mit Anytype sie nicht zurückbringt.
           </li>
           <li><code>sondra:sprache</code>, <code>sondra:sprachmodell</code>: Sprache und Genauigkeit, die Sie für Untertitel gewählt haben.</li>
+          <li>
+            <code>sondra:drive</code>: ob Google Drive verbunden ist, mit welchem Konto (Name und E-Mail-Adresse),
+            Ihre beiden Schalter dafür und die Kennungen der Sondra-Ordner in Ihrem Drive. Kein Zugangsschlüssel;
+            „Trennen“ löscht das Konto daraus.
+          </li>
         </ul>
         <p>
           Diese Einträge verlassen Ihr Gerät nicht. Sie löschen sie, indem Sie in Ihrem Browser die
@@ -187,6 +193,38 @@
           angeben, hält Sondra nur im Arbeitsspeicher. Solange ein Dienst verbunden ist, zeigt die Kopfzeile
           das an.
         </p>
+      </section>
+
+      <section>
+        <h2>Wenn Sie Google Drive verbinden</h2>
+        <p>
+          Auf Wunsch speichert Sondra in Ihrem eigenen Google Drive, in einem Ordner „Sondra“: Projekte,
+          Dateien der Sitzung, auf Wunsch jeden Download und eine Sicherung der Merkliste. Das ist die eine
+          Funktion, mit der Ihre Dateien Ihr Gerät verlassen, und sie tut es nur, nachdem Sie Google Drive
+          verbunden haben, und nur für das, was Sie schicken oder mit den beiden Schaltern „Heruntergeladenes in
+          Drive speichern“ und „Merkliste in Drive sichern“ erlauben.
+        </p>
+        <ul>
+          <li>
+            Die Dateien gehen von Ihrem Browser beziehungsweise der App direkt zu Google (Google LLC, USA, für
+            Nutzer in der EU und der Schweiz Google Ireland Limited), nicht über einen Server von Sondra. Für sie
+            gelten dort die Bedingungen und die Datenschutzerklärung von Google.
+          </li>
+          <li>
+            Sondra fragt nur nach dem Zugriff <code>drive.file</code>: es sieht in Ihrem Drive nur die Dateien,
+            die es selbst dort abgelegt hat, und sonst nichts. Zum Anmelden öffnet sich die Seite von Google.
+          </li>
+          <li>
+            Auf der Website bleibt die Anmeldung nur im Arbeitsspeicher des Tabs, für höchstens eine Stunde; sie
+            wird nicht gespeichert. In der App speichert Sondra den Schlüssel, den Google für die Verbindung
+            ausgibt, mit der Verschlüsselung von Windows in <code>%APPDATA%\Sondra</code>.
+          </li>
+          <li>
+            „Trennen“ im Fenster „Google Drive“ zieht die Verbindung bei Google zurück und löscht den Schlüssel.
+            Ihre Dateien in Drive bleiben, bis Sie sie dort löschen. Den Zugriff können Sie auch in Ihrem
+            Google-Konto unter „Sicherheit → Drittanbieter-Apps“ entfernen.
+          </li>
+        </ul>
       </section>
 
       <section>
@@ -298,7 +336,8 @@
           für die jeweilige Funktion nötig ist. Vercel und GitHub sitzen in den USA. Die Übermittlung dorthin
           stützt sich auf die Garantien, die beide in ihren Auftragsverarbeitungsverträgen bieten
           (Standardvertragsklauseln). Hugging Face (ebenfalls USA) erhält nur beim ersten Laden des
-          Untertitel-Modells Ihre IP-Adresse, wie jeder Server, von dem Ihr Browser eine Datei abruft.
+          Untertitel-Modells Ihre IP-Adresse, wie jeder Server, von dem Ihr Browser eine Datei abruft. Google
+          erhält nur, was Sie selbst in Ihr Google Drive schicken, und das in Ihr eigenes Konto.
         </p>
       </section>
 
@@ -308,7 +347,8 @@
           Sie können Auskunft über Ihre Daten verlangen, ihre Berichtigung oder Löschung, und der Bearbeitung
           widersprechen. Das gilt nach dem Schweizer Datenschutzgesetz (DSG) und, soweit anwendbar, nach der
           Datenschutz-Grundverordnung der EU (DSGVO). Weil Sondra selbst nichts über Sie speichert, betrifft
-          eine solche Anfrage in der Regel nur die Protokolle des Hostings.
+          eine solche Anfrage in der Regel nur die Protokolle des Hostings; was in Ihrem Google Drive liegt,
+          verwalten Sie dort selbst.
         </p>
         <p>
           Beschwerden können Sie beim Eidgenössischen Datenschutz- und Öffentlichkeitsbeauftragten (EDÖB)

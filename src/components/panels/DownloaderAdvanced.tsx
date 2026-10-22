@@ -63,6 +63,7 @@ import {
 } from '../../lib/service'
 import { loadFfmpeg, runFfmpeg } from '../../lib/ffmpegClient'
 import { formatBytes, sanitizeFilename } from '../../lib/format'
+import { offerDownloadToDrive } from '../../lib/googleDrive'
 import {
   DEFAULT_PORT,
   localSteps,
@@ -298,6 +299,7 @@ export function AdvancedDownloader({ url }: { url: string }) {
         origin: 'download',
       })
       setFetched({ name: media.filename, bytes: media.bytes, mime })
+      offerDownloadToDrive({ name: media.filename, bytes: media.bytes, mime })
       log('download', `${media.filename} geladen (${formatBytes(media.bytes.byteLength)})`)
     } catch (failure) {
       handleFailure(failure, 'download')
@@ -403,6 +405,7 @@ export function AdvancedDownloader({ url }: { url: string }) {
         origin: 'download',
       })
       setFetched({ name, bytes, mime: 'video/mp4' })
+      offerDownloadToDrive({ name, bytes, mime: 'video/mp4' })
       log('hls', `${name} erzeugt (${formatBytes(bytes.byteLength)})`)
     } catch (failure) {
       handleFailure(failure, 'hls')

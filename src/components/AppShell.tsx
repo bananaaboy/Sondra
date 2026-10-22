@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 
 import { useFilePicker } from '../hooks/useIngest'
 import { IN_DESKTOP_APP } from '../lib/desktop'
+import { driveLinked, openDriveDialog, useDrive } from '../lib/googleDrive'
 import { onFfmpegStatus, type FfmpegStatus } from '../lib/ffmpegClient'
 import { APP_VERSION } from '../lib/version'
 import type { ThemeChoice } from '../lib/theme'
@@ -19,6 +20,7 @@ import { useSession } from '../state/store'
 import { SessionMenu } from './AssetList'
 import { AppUpdateButton } from './AppUpdate'
 import { GetAppButton, openGetAppDialog } from './GetApp'
+import { DriveActivity } from './GoogleDrive'
 import { PanelTabs } from './PanelTabs'
 import { ThemeToggle } from './ThemeToggle'
 import { Button } from './ui/primitives'
@@ -143,6 +145,8 @@ export function Header({
         <Logo />
         <div className="flex min-w-0 items-center gap-[4px] sm:gap-[8px]">
           <SessionMenu />
+          {/* Right of the file menu: its arrival note opens to the left. */}
+          <DriveActivity />
           <GetAppButton />
           <AppUpdateButton />
           <ThemeToggle choice={themeChoice} onChange={onThemeChange} />
@@ -182,6 +186,8 @@ export function DropOverlay({ visible }: { visible: boolean }) {
 const footerLink = 'text-ink underline underline-offset-[3px] hover:no-underline'
 
 export function Footer() {
+  const driveConfigured = useDrive((state) => state.configured)
+  const drive = useDrive((state) => driveLinked(state))
   const [ffmpeg, setFfmpeg] = useState<FfmpegStatus>({ loaded: false, multiThreaded: false, threads: 1 })
   useEffect(() => onFfmpegStatus(setFfmpeg), [])
 
@@ -208,7 +214,10 @@ export function Footer() {
           Statisch ausgeliefert, lokal gerechnet. Quelloffene Bausteine: {ffmpegComponentLabel}, ONNX
           Runtime Web, Wavesurfer, Tone.js.
         </p>
-        <p>v{APP_VERSION} · {ffmpegStatusBadge} · Keine Uploads · keine Cookies · kein Tracking</p>
+        <p>
+          v{APP_VERSION} · {ffmpegStatusBadge} · {drive ? 'Uploads nur in Ihr Google Drive' : 'Keine Uploads'} · keine Cookies · kein
+          Tracking
+        </p>
       </div>
       <p className="flex flex-wrap gap-x-[16px] gap-y-[4px]">
         {IN_DESKTOP_APP ? null : (
@@ -216,6 +225,11 @@ export function Footer() {
             Sondra für Windows herunterladen
           </button>
         )}
+        {driveConfigured ? (
+          <button type="button" className={footerLink} onClick={openDriveDialog}>
+            Google Drive
+          </button>
+        ) : null}
         <a className={footerLink} href="./datenschutz.html">
           Datenschutz
         </a>

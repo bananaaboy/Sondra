@@ -1,8 +1,9 @@
 /**
  * The one door from Sondra's page into the app around it: the version, the
  * updater, files Windows opened with Sondra, the screens and windows there
- * are to record, and the Merkliste's link to Anytype (one action at a time,
- * never the key). Nothing else of Electron or Node reaches the page.
+ * are to record, the Merkliste's link to Anytype (one action at a time,
+ * never the key) and the sign-in to Google Drive (an access token when asked,
+ * never the refresh token). Nothing else of Electron or Node reaches the page.
  */
 
 const { contextBridge, ipcRenderer } = require('electron')
@@ -15,6 +16,7 @@ contextBridge.exposeInMainWorld('sondraApp', {
   captureSources: () => ipcRenderer.invoke('sondra:capture-sources'),
   pickCaptureSource: (id, audio) => ipcRenderer.invoke('sondra:capture-pick', id, audio),
   anytype: (action, ...args) => ipcRenderer.invoke('sondra:anytype', action, ...args),
+  drive: (action, ...args) => ipcRenderer.invoke('sondra:drive', action, ...args),
   setDiscordPresence: (activity) => ipcRenderer.invoke('sondra:discord-presence', activity),
   setDiscordEnabled: (enabled) => ipcRenderer.invoke('sondra:discord-enabled', enabled),
   setAlwaysOnTop: (flag) => ipcRenderer.invoke('sondra:always-on-top', flag),

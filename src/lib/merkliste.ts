@@ -319,6 +319,11 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
+/** Called after every change to the list; returns the way to stop. */
+export function onMerkliste(listener: () => void): () => void {
+  return subscribe(listener)
+}
+
 /** The list, kept current in whichever component reads it. */
 export function useMerkliste(): SavedLinkItem[] {
   return useSyncExternalStore(subscribe, merkItems, merkItems)

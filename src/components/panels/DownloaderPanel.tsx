@@ -32,6 +32,7 @@ import {
   saveBytes,
 } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
+import { offerDownloadToDrive } from '../../lib/googleDrive'
 import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { decodeWithBrowser } from '../../lib/audio'
 import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
@@ -1598,6 +1599,7 @@ export function DownloaderPanel() {
         saveBytes(done.bytes, done.name, done.mime)
       }
       log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
+      offerDownloadToDrive(done)
       setTaken({ name: done.name, bytes: done.bytes, mime: done.mime })
       recordDownload(url, result.title, result.author ?? '', done.ext, done.bytes.byteLength)
       if (autoTranscribeRef.current) {
@@ -1681,6 +1683,7 @@ export function DownloaderPanel() {
         saveBytes(done.bytes, done.name, done.mime)
       }
       log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
+      offerDownloadToDrive(done)
       if (autoTranscribeRef.current) {
         void triggerAutoTranscribe(done.name, done.bytes)
       }
