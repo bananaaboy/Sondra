@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -61,11 +61,41 @@ function offlineList(): Plugin {
   }
 }
 
-export default defineConfig({
-  // Relative base so the static build runs from any path, including
-  // project sub-paths such as https://user.github.io/sondra/.
-  base: './',
-  plugins: [react(), tailwindcss(), crossOriginIsolation(), offlineList()],
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const clientId =
+    env.VITE_GOOGLE_CLIENT_ID ||
+    env.GOOGLE_CLIENT_ID ||
+    env.VERCEL_GOOGLE_CLIENT_ID ||
+    env.GOOGLE_DRIVE_CLIENT_ID ||
+    process.env.VITE_GOOGLE_CLIENT_ID ||
+    process.env.GOOGLE_CLIENT_ID ||
+    process.env.VERCEL_GOOGLE_CLIENT_ID ||
+    process.env.GOOGLE_DRIVE_CLIENT_ID ||
+    ''
+  const clientSecret =
+    env.VITE_GOOGLE_CLIENT_SECRET ||
+    env.GOOGLE_CLIENT_SECRET ||
+    env.VERCEL_GOOGLE_CLIENT_SECRET ||
+    env.GOOGLE_DRIVE_CLIENT_SECRET ||
+    process.env.VITE_GOOGLE_CLIENT_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    process.env.VERCEL_GOOGLE_CLIENT_SECRET ||
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
+    ''
+
+  return {
+    // Relative base so the static build runs from any path, including
+    // project sub-paths such as https://user.github.io/sondra/.
+    base: './',
+    envPrefix: ['VITE_', 'GOOGLE_', 'VERCEL_'],
+    define: {
+      'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(clientId),
+      'import.meta.env.GOOGLE_CLIENT_ID': JSON.stringify(clientId),
+      'import.meta.env.VITE_GOOGLE_CLIENT_SECRET': JSON.stringify(clientSecret),
+      'import.meta.env.GOOGLE_CLIENT_SECRET': JSON.stringify(clientSecret),
+    },
+    plugins: [react(), tailwindcss(), crossOriginIsolation(), offlineList()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
@@ -92,4 +122,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })

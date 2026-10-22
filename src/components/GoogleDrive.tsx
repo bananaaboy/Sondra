@@ -345,6 +345,7 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
   const syncList = () => act('merkliste', syncMerklisteNow)
   const [showConfig, setShowConfig] = useState(false)
   const [clientIdInput, setClientIdInput] = useState(drive.settings.clientId ?? '')
+  const [clientSecretInput, setClientSecretInput] = useState(drive.settings.clientSecret ?? '')
   const [savedClient, setSavedClient] = useState(false)
 
   const jobs = drive.jobs
@@ -406,10 +407,10 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
               onClick={() => setShowConfig((open) => !open)}
               className={`${linkClass} text-micro text-muted`}
             >
-              {showConfig ? 'Google Client-ID verbergen' : 'Eigene Google Client-ID verwenden'}
+              {showConfig ? 'Google Zugangsdaten verbergen' : 'Google Zugangsdaten anpassen (Client-ID & Secret)'}
             </button>
             {showConfig ? (
-              <div className="mt-[8px] flex flex-col gap-[8px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-rule/40">
+              <div className="mt-[8px] flex flex-col gap-[10px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-rule/40">
                 <label className="text-small font-medium text-ink">
                   OAuth Client-ID (Webanwendung):
                   <input
@@ -420,10 +421,25 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
                     className="mt-[4px] w-full rounded-nav bg-panel px-[10px] py-[6px] text-small font-mono text-ink ring-1 ring-inset ring-line focus:ring-ink"
                   />
                 </label>
+                <label className="text-small font-medium text-ink">
+                  OAuth Client-Secret (optional):
+                  <input
+                    type="password"
+                    value={clientSecretInput}
+                    onChange={(e) => setClientSecretInput(e.target.value)}
+                    placeholder="GOCSPX-..."
+                    className="mt-[4px] w-full rounded-nav bg-panel px-[10px] py-[6px] text-small font-mono text-ink ring-1 ring-inset ring-line focus:ring-ink"
+                  />
+                </label>
                 <p className="text-micro text-muted leading-relaxed">
-                  Aus der Google Cloud Console für Webanwendungen mit JavaScript-Ursprung{' '}
+                  Kann in Vercel als Umgebungsvariablen <code className="font-mono text-ink">GOOGLE_CLIENT_ID</code> und{' '}
+                  <code className="font-mono text-ink">GOOGLE_CLIENT_SECRET</code> (oder mit <code className="font-mono text-ink">VITE_</code>) hinterlegt
+                  werden oder direkt hier im Browser. Mit Secret bleibt die Anmeldung dauerhaft bestehen.
+                </p>
+                <p className="text-micro text-muted leading-relaxed">
+                  Autorisierter JavaScript-Ursprung:{' '}
                   <span className="font-mono text-ink">{typeof window !== 'undefined' ? window.location.origin : 'https://sondra.lizge.ch'}</span>{' '}
-                  und Weiterleitungs-URI{' '}
+                  · Weiterleitungs-URI:{' '}
                   <span className="font-mono text-ink">
                     {typeof window !== 'undefined' ? `${window.location.origin}/google-drive.html` : 'https://sondra.lizge.ch/google-drive.html'}
                   </span>.
@@ -433,7 +449,7 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
                     type="button"
                     size="sm"
                     onClick={() => {
-                      setDriveSetting({ clientId: clientIdInput.trim() })
+                      setDriveSetting({ clientId: clientIdInput.trim(), clientSecret: clientSecretInput.trim() })
                       setSavedClient(true)
                       setTimeout(() => setSavedClient(false), 2500)
                     }}
