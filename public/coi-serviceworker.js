@@ -20,7 +20,7 @@
  * (see below), because a media element cannot send Drive a token itself.
  */
 
-const CACHE = 'sondra-v1.1.13'
+const CACHE = 'sondra-v1.1.14'
 
 /**
  * Files handed over by another app's share sheet.
