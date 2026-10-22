@@ -9,7 +9,7 @@
  */
 
 import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy, WHOLE_LIMIT } from '../src/lib/duplicates'
-import { clickSelect, crumbs, folderSeries, listing, scanFileList, sortFiles, type FolderFile } from '../src/lib/folder'
+import { clickSelect, crumbs, folderEpisodes, folderSeries, listing, playQueue, scanFileList, sortFiles, type FolderFile } from '../src/lib/folder'
 import { createMerkItem } from '../src/lib/merkliste'
 
 let failures = 0
@@ -99,6 +99,10 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
   check('Doppelte Folge (Kopie): eine davon', series[1].episodes.map((entry) => entry.episode), [1, 2])
   const caught = createMerkItem({ ...frieren, seasons: [{ number: 1, episodes: 28, watched: [1, 2, 3, 10] }] })
   check('Alles gesehen: keine Karte', folderSeries(scan.files, [caught]).length, 0)
+  const all = folderEpisodes(scan.files, [frieren, nana, done])
+  check('Für die Merkliste: alle Folgen je Serie, gesehene dabei', all.get('f')?.map((entry) => `${entry.episode}${entry.seen ? '✓' : ''}`), ['1✓', '2✓', '3', '10'])
+  check('Abspielen ab Folge 1: sie, dann nur Ungesehene', playQueue(all.get('f')!, 1, 1).map((entry) => entry.episode), [1, 3, 10])
+  check('Abspielen ab einer Folge, die nicht im Ordner ist: nichts', playQueue(all.get('f')!, 1, 7).length, 0)
   const ahead = createMerkItem({ ...frieren, season: 1, episode: 5, seasons: [{ number: 1, episodes: 28, watched: [1, 2, 3, 4] }] })
   check('Stand nicht im Ordner: die nächste nach der zuletzt gesehenen', folderSeries(scan.files, [ahead])[0]?.next?.episode, 10)
 }

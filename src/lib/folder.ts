@@ -319,27 +319,49 @@ export function episodeOf(file: FolderFile, items: SavedLinkItem[]): FolderEpiso
 }
 
 /**
+ * Every episode of every series of the Merkliste that lies in the folder,
+ * in order, seen ones included — per series id. The same episode twice
+ * (two qualities, a copy) counts once: the larger file.
+ */
+export function folderEpisodes(files: FolderFile[], items: SavedLinkItem[]): Map<string, FolderEpisode[]> {
+  const bySeries = new Map<string, Map<string, FolderEpisode>>()
+  for (const file of files) {
+    if (file.kind !== 'video' && file.kind !== 'audio') continue
+    const match = matchEpisode(file.name, items)
+    if (!match) continue
+    const found: FolderEpisode = { file, season: match.season, episode: match.episode, seen: alreadySeen(match) }
+    const group = bySeries.get(match.item.id) ?? new Map<string, FolderEpisode>()
+    const key = `${found.season}:${found.episode}`
+    const before = group.get(key)
+    if (!before || before.file.size < file.size) group.set(key, found)
+    bySeries.set(match.item.id, group)
+  }
+  const result = new Map<string, FolderEpisode[]>()
+  for (const [id, group] of bySeries) result.set(id, [...group.values()].sort((a, b) => a.season - b.season || a.episode - b.episode))
+  return result
+}
+
+/**
+ * What „abspielen“ hands the player from one episode on: that one, then the
+ * ones after it in the folder that are not seen yet.
+ */
+export function playQueue(episodes: FolderEpisode[], season: number, episode: number): FolderEpisode[] {
+  const at = episodes.findIndex((entry) => entry.season === season && entry.episode === episode)
+  if (at < 0) return []
+  return [episodes[at], ...episodes.slice(at + 1).filter((entry) => !entry.seen)]
+}
+
+/**
  * Series of the Merkliste that have episodes in the folder, with the next
  * one to watch: where the list stands, else the first unseen one after the
  * last seen, else the first unseen at all. Finished and unmatched files
  * play no part; a series with nothing left unseen here is left out.
  */
 export function folderSeries(files: FolderFile[], items: SavedLinkItem[]): FolderSeries[] {
-  const bySeries = new Map<string, { item: SavedLinkItem; episodes: Map<string, FolderEpisode> }>()
-  for (const file of files) {
-    const found = episodeOf(file, items)
-    if (!found) continue
-    const match = matchEpisode(file.name, items)!
-    const group = bySeries.get(match.item.id) ?? { item: match.item, episodes: new Map() }
-    // The same episode twice (two qualities): the larger file.
-    const key = `${found.season}:${found.episode}`
-    const before = group.episodes.get(key)
-    if (!before || before.file.size < file.size) group.episodes.set(key, found)
-    bySeries.set(match.item.id, group)
-  }
+  const byId = new Map(items.map((item) => [item.id, item]))
   const result: FolderSeries[] = []
-  for (const { item, episodes } of bySeries.values()) {
-    const list = [...episodes.values()].sort((a, b) => a.season - b.season || a.episode - b.episode)
+  for (const [id, list] of folderEpisodes(files, items)) {
+    const item = byId.get(id)!
     const unseen = list.filter((entry) => !entry.seen)
     if (unseen.length === 0) continue
     const stand = item.season !== null && item.episode !== null ? list.find((entry) => entry.season === item.season && entry.episode === item.episode && !entry.seen) : undefined
@@ -348,8 +370,7 @@ export function folderSeries(files: FolderFile[], items: SavedLinkItem[]): Folde
       stand ??
       (lastSeen ? unseen.find((entry) => entry.season > lastSeen.season || (entry.season === lastSeen.season && entry.episode > lastSeen.episode)) : undefined) ??
       unseen[0]
-    const at = list.indexOf(next)
-    result.push({ item, episodes: list, next, queue: list.slice(at).filter((entry) => !entry.seen) })
+    result.push({ item, episodes: list, next, queue: playQueue(list, next.season, next.episode) })
   }
   // The series being watched first, then by title.
   return result.sort((a, b) => Number(b.item.status === 'watching') - Number(a.item.status === 'watching') || collator.compare(a.item.title, b.item.title))

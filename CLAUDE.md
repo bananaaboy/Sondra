@@ -90,7 +90,16 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Ankommen und scrollte dorthin. **Weiterschauen:** Folgen von Serien der
   Merkliste im Ordner (`folderSeries`) — gesehen markiert, die nächste (der
   Stand, sonst die nach der zuletzt gesehenen) mit dem Rest dahinter in den
-  Player. **Doppelte finden** (`lib/duplicates.ts`): nur gleich grosse Dateien
+  Player. **Die Merkliste spielt aus dem Ordner** (`lib/folderLibrary.ts`:
+  ein Ordner für beide Seiten, `useFolder`, `folderEpisodes`, `playQueue`):
+  eine Pille über der Liste („„Anime“ · 3 Serien darin“, sonst „Ordner mit
+  Folgen wählen“), ▶ auf der Kachel, „Folge n abspielen“ vor „Folge n
+  laden“ auf der Serie samt „Im Ordner: Staffel 1: 1–3“, im Staffel-Fenster
+  ein Strich unter jeder Folge, die daliegt, und „Aus dem Ordner abspielen“.
+  Der gemerkte Ordner wird beim Öffnen der Merkliste nur dann von selbst
+  gelesen, wenn der Browser die Erlaubnis noch hält (nur Namen, Grössen,
+  Daten), sonst steht er als Pille zum Klicken da. Der Serienname auf der
+  Ordner-Karte öffnet die Serie in der Merkliste. **Doppelte finden** (`lib/duplicates.ts`): nur gleich grosse Dateien
   werden gelesen, bis 32 MB ganz (SHA-256), darüber an 32 Stellen; behalten
   wird die ohne „(1)“/„Kopie“, sonst die älteste. `npm run verify:folder`.
 - **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
@@ -182,7 +191,10 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   ist unfertig. Ein `popstate`, das beim selben Werkzeug bleibt (zurück von
   einer Serie zur Merkliste), setzt keine Marke „kommt aus der Adresse“ —
   sonst schrieb der nächste Reiterklick die Adresse nicht, und Neuladen
-  öffnete das falsche Werkzeug.
+  öffnete das falsche Werkzeug. Und wer die Marke setzt, findet die Adresse
+  meist schon richtig vor: dann wird sie dort auch gelöscht, sonst blieb
+  nach einer eingetippten Adresse oder einem Link der nächste Wechsel —
+  etwa „Folge abspielen“ aus der Merkliste — ohne Adresse.
 - **`muted` auf einer Tönung ist der Fallstrick dieser Welt.** Auf
   `panel-mid` mass er sich im dunklen Thema dreimal bei Lc 59.3, Boden ist 60.
   Auf getöntem Grund gehört Sekundärtext auf `prose` oder die Tönung auf
@@ -532,15 +544,24 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   einen BroadcastChannel an den Tab — nicht über `window.opener`, den COOP
   same-origin auf dem Weg über Google kappt. Das Token lebt nur im
   Arbeitsspeicher, eine Stunde; danach warten Uploads, und die Kopfzeile
-  sagt „Drive · Anmelden“ (ein Klick, das Popup muss im Klick aufgehen).
+  sagt wieder „Drive anmelden“ (ein Klick, das Popup muss im Klick aufgehen).
   **In der App** (`desktop/googleDrive.mjs`): Google lässt keinen
   eingebetteten Browser anmelden, also Systembrowser und Loopback mit PKCE
   auf einem freien Port, nur für die eine Antwort; der Refresh-Token liegt
   mit `safeStorage` in `userData`, die Seite bekommt über
   `sondraApp.drive('token')` je ein Access-Token. „Trennen“ zieht bei
   Google zurück. Die Knöpfe stehen erst da, wenn ein Client eingerichtet
-  ist; die Drive-Marke in der Kopfzeile steht rechts vom Dateimenü, weil
-  dessen Ankunftshinweis nach links aufgeht und sie sonst verdeckte.
+  ist. **Der Drive-Knopf in der Kopfzeile steht immer da** (`DriveButton`,
+  Wunsch vom 22.10.2026: „im Header kein Drive anmelden Button“ — vorher
+  erschien er nur während einer Übertragung): ohne Verbindung „Drive
+  anmelden“, und der Klick meldet an, während das Fenster daneben Ordner und
+  den Satz „verlässt dieses Gerät“ zeigt; verbunden ein ruhiges „Drive“, beim
+  Senden Prozent, „Fehler“, kurz „fertig“. Rechts vom Dateimenü, weil dessen
+  Ankunftshinweis nach links aufgeht. Platz dafür: „App herunterladen“ heisst
+  unter `lg` „App“, die Versionsmarke weicht unter 420 px (die Fusszeile
+  nennt sie), unter 360 px stehen Drive und App nur als Symbol mit Namen
+  für Screenreader, und Knöpfe schrumpfen nicht (`shrink-0`) — vorher wurde
+  der Theme-Knopf auf 14 px gequetscht.
   Einrichtung: ein Google-Cloud-Projekt mit der Drive API, Zustimmungs-
   bildschirm mit `drive.file`, darin zwei OAuth-Clients — „Webanwendung“
   (JavaScript-Ursprung der Website, Weiterleitung `…/google-drive.html`;

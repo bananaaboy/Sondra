@@ -20,7 +20,7 @@ import { useSession } from '../state/store'
 import { SessionMenu } from './AssetList'
 import { AppUpdateButton } from './AppUpdate'
 import { GetAppButton, openGetAppDialog } from './GetApp'
-import { DriveActivity } from './GoogleDrive'
+import { DriveButton } from './GoogleDrive'
 import { PanelTabs } from './PanelTabs'
 import { ThemeToggle } from './ThemeToggle'
 import { Button } from './ui/primitives'
@@ -59,8 +59,9 @@ export function Logo({ as = 'h1' }: { as?: 'h1' | 'span' }) {
     <Tag className="m-0 flex items-center gap-[8px] text-ink">
       <Mark />
       <span className="font-wordmark text-[25px] font-light tracking-[-0.01em]">Sondra</span>
+      {/* On a phone it gives way to the buttons; the footer still names the version. */}
       {IN_DESKTOP_APP ? null : (
-        <span className="value rounded-pill border border-line bg-panel-soft px-[7px] py-[1.5px] text-[11px] font-medium tracking-normal text-muted">
+        <span className="value rounded-pill border border-line bg-panel-soft px-[7px] py-[1.5px] text-[11px] font-medium tracking-normal text-muted max-[419px]:hidden">
           v{APP_VERSION}
         </span>
       )}
@@ -141,12 +142,12 @@ export function Header({
   const panel = useSession((state) => state.panel)
   return (
     <header className="sticky top-0 z-30 border-b-2 border-rule bg-canvas/95 backdrop-blur-md">
-      <div className="shell flex items-center justify-between gap-[12px] pt-[10px] sm:gap-[24px] sm:pt-[12px]">
+      <div className="shell flex items-center justify-between gap-[8px] pt-[10px] min-[360px]:gap-[12px] sm:gap-[24px] sm:pt-[12px]">
         <Logo />
-        <div className="flex min-w-0 items-center gap-[4px] sm:gap-[8px]">
+        <div className="flex min-w-0 items-center gap-[2px] min-[360px]:gap-[4px] sm:gap-[8px]">
           <SessionMenu />
           {/* Right of the file menu: its arrival note opens to the left. */}
-          <DriveActivity />
+          <DriveButton />
           <GetAppButton />
           <AppUpdateButton />
           <ThemeToggle choice={themeChoice} onChange={onThemeChange} />

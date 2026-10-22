@@ -83,6 +83,9 @@ export function usePanelRoute() {
     if (!slug) return
     const desired = panel === 'start' ? '' : `#${slug}`
     if (window.location.hash === desired) {
+      // An address typed or followed lands here too; its mark has done its
+      // work. Left standing, the next switch of tool kept the old address.
+      fromUrl.current = false
       first.current = false
       return
     }

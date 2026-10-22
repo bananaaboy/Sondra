@@ -92,6 +92,8 @@ import {
 } from '../../lib/merkliste'
 import { APP_BRIDGE, isDiscordRpcEnabled, setDiscordRpcEnabled, updateDiscordPresence } from '../../lib/desktop'
 import { newEpisodesAvailable, newEpisodesOn, setNewEpisodesOn } from '../../lib/newEpisodes'
+import { canPickFolder, pickFolder, type FolderEpisode } from '../../lib/folder'
+import { includeRemembered, playEpisode, readFolder, takeFileList, useEpisodesInFolder, useFolder, useSeriesInFolderCount } from '../../lib/folderLibrary'
 import { isAniworldUrl } from '../../lib/download'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
@@ -575,6 +577,120 @@ const hereLabel = (item: SavedLinkItem) => {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Episodes in the folder                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** The episode the entry stands at, when its file lies in the folder. */
+function hereInFolder(item: SavedLinkItem, episodes: FolderEpisode[]): FolderEpisode | null {
+  if (item.season === null || item.episode === null) return null
+  return episodes.find((entry) => entry.season === item.season && entry.episode === item.episode) ?? null
+}
+
+/** „Staffel 1: 1–3, 10 · Staffel 2: 1“ — what of a series lies in the folder. */
+function folderSummary(episodes: FolderEpisode[]): string {
+  const bySeason = new Map<number, number[]>()
+  for (const entry of episodes) bySeason.set(entry.season, [...(bySeason.get(entry.season) ?? []), entry.episode])
+  return [...bySeason]
+    .map(([season, numbers]) => {
+      const runs: string[] = []
+      let start = numbers[0]
+      for (let index = 1; index <= numbers.length; index += 1) {
+        if (numbers[index] === numbers[index - 1] + 1) continue
+        const end = numbers[index - 1]
+        runs.push(end === start ? String(start) : `${start}–${end}`)
+        start = numbers[index]
+      }
+      return `${season === 0 ? 'Filme' : `Staffel ${season}`}: ${runs.join(', ')}`
+    })
+    .join(' · ')
+}
+
+function FolderIcon({ className = 'size-[14px]' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={`shrink-0 ${className}`} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" aria-hidden>
+      <path d="M2 4.6c0-.6.5-1.1 1.1-1.1h3l1.4 1.5h5.4c.6 0 1.1.5 1.1 1.1v5.8c0 .6-.5 1.1-1.1 1.1H3.1c-.6 0-1.1-.5-1.1-1.1z" />
+    </svg>
+  )
+}
+
+function PlayGlyph({ className = 'size-[12px]' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={`shrink-0 ${className}`} fill="currentColor" aria-hidden>
+      <path d="M5 3.6c0-.6.7-1 1.2-.7l6.6 4.1c.5.3.5 1.1 0 1.4L6.2 12.5c-.5.3-1.2-.1-1.2-.7z" />
+    </svg>
+  )
+}
+
+/**
+ * The folder the episodes are in, as one pill in the toolbar: which folder
+ * and how many series it holds, or one click to bring it in — the one kept
+ * from last time, or a new one. Read by itself only when the browser still
+ * allows the kept one.
+ */
+function FolderPill() {
+  const scan = useFolder((state) => state.scan)
+  const scanning = useFolder((state) => state.scanning)
+  const remembered = useFolder((state) => state.remembered)
+  const series = useSeriesInFolderCount()
+  const setPanel = useSession((state) => state.setPanel)
+  const pickerRef = useRef<HTMLInputElement>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  const choose = async () => {
+    setProblem(null)
+    if (!canPickFolder) {
+      pickerRef.current?.click()
+      return
+    }
+    try {
+      const handle = await pickFolder()
+      if (handle) await readFolder(handle)
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'Der Ordner liess sich nicht öffnen.')
+    }
+  }
+  const include = async () => {
+    setProblem(null)
+    const result = await includeRemembered(true).catch(() => 'none' as const)
+    if (result === 'needs-click') setProblem('Der Browser hat den Zugriff nicht erlaubt.')
+  }
+
+  const pill = 'press flex items-center gap-[6px] rounded-pill px-[10px] py-[5px] text-small text-prose hover:bg-panel-soft hover:text-ink'
+  return (
+    <>
+      <input ref={pickerRef} type="file" multiple hidden {...{ webkitdirectory: '' }} onChange={(event) => {
+        if (event.target.files?.length) takeFileList(event.target.files)
+        event.target.value = ''
+      }} />
+      {scanning ? (
+        <span role="status" className="flex items-center gap-[6px] px-[10px] py-[5px] text-small text-prose">
+          <FolderIcon />
+          Liest den Ordner … <span className="value">{scanning.files}</span>
+        </span>
+      ) : scan ? (
+        <button type="button" onClick={() => setPanel('folder')} className={pill} title="Den Ordner im Reiter „Ordner“ ansehen">
+          <FolderIcon />
+          <span>
+            „{scan.name}“ · {series} {series === 1 ? 'Serie' : 'Serien'} darin
+          </span>
+        </button>
+      ) : remembered ? (
+        <button type="button" onClick={() => void include()} className={pill} title="Folgen daraus direkt aus der Merkliste abspielen">
+          <FolderIcon />
+          <span>„{remembered.name}“ einbeziehen</span>
+        </button>
+      ) : (
+        <button type="button" onClick={() => void choose()} className={pill} title="Folgen daraus direkt aus der Merkliste abspielen">
+          <FolderIcon />
+          <span>Ordner mit Folgen wählen</span>
+        </button>
+      )}
+      {problem ? <span className="text-small text-prose">! {problem}</span> : null}
+    </>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* The tab                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -598,6 +714,12 @@ export function MerklistePanel() {
   const [discordRpcOn, setDiscordRpcOn] = useState(() => isDiscordRpcEnabled())
   const [newEpisodesWatch, setNewEpisodesWatch] = useState(() => newEpisodesOn())
   const anytypeLink = useAnytype(items)
+
+  // The folder kept from last time, read by itself only while the browser
+  // still allows it; else the pill in the toolbar offers it.
+  useEffect(() => {
+    if (canPickFolder && !useFolder.getState().scan && !useFolder.getState().scanning) void includeRemembered(false).catch(() => undefined)
+  }, [])
 
   // The series that is open, if one is. It has a history entry of its own,
   // so back — the browser's, the mouse's, a swipe on a phone — returns to
@@ -955,6 +1077,7 @@ export function MerklistePanel() {
             </div>
 
             <div className="flex flex-wrap items-center gap-[12px]">
+              <FolderPill />
               <button
                 type="button"
                 aria-pressed={onlyOpen}
@@ -1966,6 +2089,8 @@ function SeriesTile({
   const stand = standLabel(item)
   const badge = item.url ? sourceBadgeForUrl(item.url) : null
   const canAdvance = !done && item.episode !== null
+  const inFolder = useEpisodesInFolder(item.id)
+  const playable = canAdvance ? hereInFolder(item, inFolder) : null
 
   return (
     <div
@@ -2041,6 +2166,22 @@ function SeriesTile({
             {done ? <RowMark state="done" /> : null}
             <span className="truncate">{stand}</span>
           </span>
+          <span className="flex shrink-0 items-center gap-[4px]">
+          {playable ? (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation()
+                playEpisode(inFolder, playable.season, playable.episode)
+              }}
+              aria-label={`${hereLabel(item)} aus dem Ordner abspielen`}
+              title={`${hereLabel(item)} aus dem Ordner abspielen — ${playable.file.name}`}
+              className="press grid h-[20px] w-[24px] place-items-center rounded-pill bg-ink text-on-ink hover:bg-ink-hover"
+            >
+              <PlayGlyph className="size-[10px]" />
+            </button>
+          ) : null}
           {canAdvance ? (
             <button
               type="button"
@@ -2055,6 +2196,7 @@ function SeriesTile({
               +1
             </button>
           ) : null}
+          </span>
         </div>
         <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${item.title}: gesehen`} />
         <div className="flex items-center justify-between gap-[4px] min-h-[1.25em] text-micro">
@@ -2148,6 +2290,10 @@ function SeriesPage({
   }
 
   const activeSeason = seasons.find((s) => s.number === item.season) ?? seasons[0]
+  const inFolder = useEpisodesInFolder(item.id)
+  const folderName = useFolder((state) => state.scan?.name ?? null)
+  const playable = next ? hereInFolder(item, inFolder) : null
+  const followers = playable ? inFolder.filter((entry) => !entry.seen && (entry.season > playable.season || (entry.season === playable.season && entry.episode > playable.episode))).length : 0
 
   return (
     <div className="flex flex-col gap-[32px]">
@@ -2246,8 +2392,19 @@ function SeriesPage({
             ) : null}
 
             <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
+              {playable ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => playEpisode(inFolder, playable.season, playable.episode)}
+                  title={`Aus „${folderName}“: ${playable.file.name}${followers ? ` — danach ${followers} weitere` : ''}`}
+                >
+                  <PlayGlyph />
+                  {hereLabel(item)} abspielen
+                </Button>
+              ) : null}
               {hasUrl && next ? (
-                <Button type="button" size="sm" onClick={() => openHere(item)}>
+                <Button type="button" size="sm" variant={playable ? 'quiet' : 'primary'} onClick={() => openHere(item)}>
                   {hereLabel(item)} laden
                 </Button>
               ) : null}
@@ -2263,7 +2420,7 @@ function SeriesPage({
                 </Button>
               ) : null}
               {next ? (
-                <Button type="button" size="sm" variant={hasUrl ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
+                <Button type="button" size="sm" variant={hasUrl || playable ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
                   {hereLabel(item)} gesehen
                 </Button>
               ) : null}
@@ -2291,6 +2448,15 @@ function SeriesPage({
             {checkNote ? (
               <p role="status" className="text-small text-prose">
                 {checkNote}
+              </p>
+            ) : null}
+            {inFolder.length > 0 ? (
+              <p className="flex flex-wrap items-center gap-x-[8px] gap-y-[2px] text-small text-prose">
+                <FolderIcon />
+                <span>
+                  Im Ordner „{folderName}“: <span className="value">{folderSummary(inFolder)}</span>
+                  {next && !playable ? ` — ${hereLabel(item)} liegt nicht darin.` : ''}
+                </span>
               </p>
             ) : null}
           </div>
@@ -2582,6 +2748,7 @@ function SeasonDialog({
   onClose: () => void
 }) {
   const openHere = useOpenHere()
+  const inFolder = useEpisodesInFolder(item.id)
   const season = seasonsOf(item).find((entry) => entry.number === number)
   if (!season) return null
   const parts = partsOf(season)
@@ -2684,10 +2851,24 @@ function SeasonDialog({
           </div>
           {isHere && item.episode !== null && !progress.complete ? (
             <span className="flex flex-wrap gap-[8px]">
+              {hereInFolder(item, inFolder) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    if (item.season !== null && item.episode !== null) playEpisode(inFolder, item.season, item.episode)
+                    onClose()
+                  }}
+                >
+                  <PlayGlyph />
+                  {hereLabel(item)} abspielen
+                </Button>
+              ) : null}
               {item.url.trim() ? (
                 <Button
                   type="button"
                   size="sm"
+                  variant={hereInFolder(item, inFolder) ? 'quiet' : 'primary'}
                   onClick={() => {
                     openHere(item)
                     onClose()
@@ -2744,6 +2925,7 @@ function SeasonDialog({
             {Array.from({ length: shownCount }, (_, i) => part.from + i).map((episode) => {
               const seen = season.watched.includes(episode)
               const here = isHere && item.episode === episode
+              const local = inFolder.some((entry) => entry.season === number && entry.episode === episode)
               const epDuration = durationOfEpisode(item, number, episode)
               const hasCustomDuration = Boolean(item.durations && typeof item.durations[`${number}:${episode}`] === 'number')
               return (
@@ -2751,7 +2933,7 @@ function SeasonDialog({
                   key={episode}
                   type="button"
                   aria-pressed={seen}
-                  aria-label={`${unit} ${episode}${seen ? ', gesehen' : ''}${here ? ', hier sind Sie' : ''} (${epDuration} Min.)`}
+                  aria-label={`${unit} ${episode}${seen ? ', gesehen' : ''}${here ? ', hier sind Sie' : ''}${local ? ', im Ordner' : ''} (${epDuration} Min.)`}
                   title={`${unit} ${episode} · ${epDuration} Min.${hasCustomDuration ? ' (eigene Dauer)' : ''} · Klicken: gesehen / nicht gesehen · Umschalt-Klick: alles bis hier`}
                   onClick={(event) => {
                     setSeasons(event.shiftKey ? watchedUpTo(item, number, episode) : toggleWatched(item, number, episode))
@@ -2767,10 +2949,41 @@ function SeasonDialog({
                       title={`${epDuration} Min.`}
                     />
                   ) : null}
+                  {/* In the folder: a short bar at the foot, like a file on a shelf. */}
+                  {local ? <span aria-hidden className={`absolute inset-x-[12px] bottom-[4px] h-[3px] rounded-pill ${seen ? 'bg-on-ink/70' : 'bg-ink'}`} /> : null}
                 </button>
               )
             })}
           </div>
+          {(() => {
+            const here = inFolder.filter((entry) => entry.season === number && entry.episode >= part.from && (part.to === null || entry.episode <= part.to))
+            if (here.length === 0) return null
+            return (
+              <div className="flex flex-wrap items-center gap-[6px] border-t border-line pt-[10px] text-small">
+                <span className="mr-[4px] flex items-center gap-[6px] text-prose">
+                  <FolderIcon />
+                  Aus dem Ordner abspielen
+                </span>
+                {here.map((entry) => (
+                  <button
+                    key={entry.episode}
+                    type="button"
+                    onClick={() => {
+                      playEpisode(inFolder, entry.season, entry.episode)
+                      onClose()
+                    }}
+                    title={`${entry.file.name}${entry.seen ? ' (gesehen)' : ''} — danach die ungesehenen, die folgen`}
+                    className={`press value inline-flex items-center gap-[4px] rounded-pill px-[9px] py-[3px] text-small ring-1 ring-inset ${
+                      entry.seen ? 'text-prose ring-line hover:bg-panel-soft' : 'bg-panel-soft text-ink ring-rule hover:bg-panel-mid'
+                    }`}
+                  >
+                    <PlayGlyph className="size-[9px]" />
+                    {entry.episode}
+                  </button>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Everything that changes the season rather than what is seen, folded

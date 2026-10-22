@@ -296,12 +296,13 @@ export function GetAppButton() {
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
-        className="press flex items-center gap-[8px] rounded-nav bg-panel-soft px-[12px] py-[8px] text-small text-ink hover:bg-panel-mid"
+        className="press flex shrink-0 items-center gap-[8px] rounded-nav bg-panel-soft px-[12px] py-[8px] text-small text-ink hover:bg-panel-mid"
       >
         <DownloadIcon />
-        {/* On a phone the label shortens, the button stays. */}
-        <span className="hidden sm:inline">App herunterladen</span>
-        <span className="sm:hidden">App</span>
+        {/* Below a desk the label shortens, the button stays; on the
+            narrowest phone only the arrow is seen, the name is still read out. */}
+        <span className="hidden lg:inline">App herunterladen</span>
+        <span className="lg:hidden max-[359px]:sr-only">App</span>
       </button>
 
       <dialog

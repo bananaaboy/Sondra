@@ -19,7 +19,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { create } from 'zustand'
 
 import { saveBytes } from '../../lib/download'
 import { copiesOf, findDuplicates, type DuplicateReport } from '../../lib/duplicates'
@@ -34,41 +33,22 @@ import {
   folderSeries,
   listing,
   pickFolder,
-  rememberFolder,
-  rememberedFolder,
-  scanFileList,
-  scanHandle,
   withoutFiles,
   type DirectoryHandle,
   type FolderEpisode,
   type FolderFile,
-  type FolderScan,
   type KindFilter,
   type SortKey,
 } from '../../lib/folder'
 import { formatBytes, formatDuration } from '../../lib/format'
+import { lookUpRemembered, playFiles, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
 import { driveLinked, saveFilesToDrive, useDrive } from '../../lib/googleDrive'
-import { useMerkliste } from '../../lib/merkliste'
-import { sendToPlayer } from '../../lib/player'
-import { clearThumbnails, thumbnailFor, type Thumbnail } from '../../lib/thumbnails'
+import { requestOpenSeries, useMerkliste } from '../../lib/merkliste'
+import { thumbnailFor, type Thumbnail } from '../../lib/thumbnails'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { useIngestFiles } from '../../hooks/useIngest'
 import { KIND_LABEL, useSession } from '../../state/store'
 import { Button, Dialog, Notice } from '../ui/primitives'
-
-/* -------------------------------------------------------------------------- */
-/* State that outlives a switch to another tool                                */
-/* -------------------------------------------------------------------------- */
-
-interface FolderState {
-  scan: FolderScan | null
-  dir: string
-  selected: Set<string>
-  anchor: string | null
-}
-
-/** The folder stays open while another tool is used; the panel itself is remounted. */
-const useFolder = create<FolderState>(() => ({ scan: null, dir: '', selected: new Set(), anchor: null }))
 
 type View = 'kacheln' | 'liste'
 interface Preferences {
@@ -400,6 +380,7 @@ function FileItem({
 
 function ContinueRow({ files, onPlay }: { files: FolderFile[]; onPlay: (queue: FolderEpisode[]) => void }) {
   const merk = useMerkliste()
+  const setPanel = useSession((state) => state.setPanel)
   const series = useMemo(() => folderSeries(files, merk), [files, merk])
   if (series.length === 0) return null
   return (
@@ -415,7 +396,17 @@ function ContinueRow({ files, onPlay }: { files: FolderFile[]; onPlay: (queue: F
           return (
             <div key={entry.item.id} className="flex flex-col gap-[10px] rounded-card bg-panel-mid p-[14px] ring-1 ring-inset ring-line">
               <div className="flex min-w-0 flex-col gap-[2px]">
-                <span className="truncate text-body font-semibold text-ink">{entry.item.title}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    requestOpenSeries(entry.item.id)
+                    setPanel('merkliste')
+                  }}
+                  title={`„${entry.item.title}“ in der Merkliste öffnen`}
+                  className="press truncate text-left text-body font-semibold text-ink decoration-rule underline-offset-[3px] hover:underline"
+                >
+                  {entry.item.title}
+                </button>
                 <span className="text-small text-prose">
                   Staffel <span className="value">{next.season}</span> · Folge <span className="value">{next.episode}</span>
                   {total ? (
@@ -552,10 +543,10 @@ export function FolderPanel() {
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(PAGE)
   const [focusIndex, setFocusIndex] = useState(0)
-  const [scanning, setScanning] = useState<{ files: number } | null>(null)
+  const scanning = useFolder((state) => state.scanning)
+  const remembered = useFolder((state) => state.remembered)
   const [problem, setProblem] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
-  const [remembered, setRemembered] = useState<DirectoryHandle | null>(null)
   const [dupes, setDupes] = useState<{ running: { done: number; total: number } | null; report: DuplicateReport | null; error: string | null } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<FolderFile[] | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -577,7 +568,7 @@ export function FolderPanel() {
 
   // The folder from last time is offered, never opened by itself.
   useEffect(() => {
-    if (canPickFolder && !scan) void rememberedFolder().then(setRemembered)
+    if (canPickFolder && !scan) void lookUpRemembered()
   }, [scan])
 
   useEffect(() => {
@@ -586,25 +577,13 @@ export function FolderPanel() {
   }, [dir, filter, query, prefs.deep, prefs.sort, prefs.descending])
 
   const read = async (handle: DirectoryHandle) => {
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
     setProblem(null)
     setNote(null)
     setDupes(null)
-    setScanning({ files: 0 })
     try {
-      const result = await scanHandle(handle, { signal: controller.signal, onProgress: (files) => setScanning({ files }) })
-      clearThumbnails()
-      useFolder.setState({ scan: result, dir: '', selected: new Set(), anchor: null })
-      void rememberFolder(handle)
-      log('ordner', `${result.name}: ${result.files.length} Dateien gelesen${result.truncated ? ' (gekürzt)' : ''}`)
+      await readFolder(handle)
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        setProblem(error instanceof Error ? error.message : 'Der Ordner liess sich nicht lesen.')
-      }
-    } finally {
-      setScanning(null)
+      setProblem(error instanceof Error ? error.message : 'Der Ordner liess sich nicht lesen.')
     }
   }
 
@@ -663,15 +642,7 @@ export function FolderPanel() {
 
   const media = (files: FolderFile[]) => files.filter((file) => file.kind === 'video' || file.kind === 'audio')
 
-  const play = (files: FolderFile[], replace: boolean) => {
-    const playable = media(files)
-    if (playable.length === 0) return
-    sendToPlayer(
-      playable.map((file) => file.file),
-      replace,
-    )
-    setPanel('player')
-  }
+  const play = (files: FolderFile[], replace: boolean) => playFiles(files, replace)
 
   const open = async (file: FolderFile) => {
     if (file.kind === 'video' || file.kind === 'audio') return play([file], false)
@@ -814,12 +785,7 @@ export function FolderPanel() {
       {...{ webkitdirectory: '' }}
       onChange={(event) => {
         const list = event.target.files
-        if (list && list.length > 0) {
-          clearThumbnails()
-          const result = scanFileList(list)
-          useFolder.setState({ scan: result, dir: '', selected: new Set(), anchor: null })
-          log('ordner', `${result.name}: ${result.files.length} Dateien gelesen`)
-        }
+        if (list && list.length > 0) takeFileList(list)
         event.target.value = ''
       }}
     />
@@ -841,7 +807,7 @@ export function FolderPanel() {
               <span>
                 Liest den Ordner … <span className="value">{scanning.files}</span> Dateien
               </span>
-              <button type="button" onClick={() => abortRef.current?.abort()} className={`${linkClass} text-small`}>
+              <button type="button" onClick={stopReading} className={`${linkClass} text-small`}>
                 Abbrechen
               </button>
             </div>

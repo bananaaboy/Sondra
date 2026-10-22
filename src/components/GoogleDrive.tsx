@@ -1,6 +1,6 @@
 /**
- * Google Drive on the page: one dialog for all of it, and a mark in the
- * header that appears only while something is going there.
+ * Google Drive on the page: one dialog for all of it, and a button in the
+ * header that signs in, opens the dialog and shows what is going there.
  *
  * The dialog is where Drive is connected, where the two switches live
  * (downloads, Merkliste), where a project comes back from Drive, and where
@@ -355,6 +355,16 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
         <button type="button" onClick={cancelDriveSignIn} className={`${linkClass} text-small`}>
           Abbrechen
         </button>
+        {/* Signed in from the header the first time: what Drive will hold. */}
+        {!linked ? (
+          <>
+            <p className="max-w-[60ch] text-body leading-[1.55] text-prose">Sondra legt in Ihrem Google Drive einen Ordner an und hält ihn geordnet:</p>
+            <div className="w-full">
+              <FolderTree />
+            </div>
+            <NotLocal />
+          </>
+        ) : null}
       </div>
     )
   } else if (!linked) {
@@ -531,15 +541,19 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The mark in the header, and the dialog's home. Nothing shows until
- * something goes to Drive: then the share sent so far, „Anmelden" when the
- * website's hour is up and uploads wait, „Fehler" when one failed, and a
- * short „fertig" when all arrived.
+ * Drive in the header, and the dialog's home. Before Drive is connected it
+ * says „Drive anmelden" and signs in with the click — the dialog opens
+ * beside it and says what happens; the website's hour runs out the same
+ * way. Connected, it is a quiet „Drive" that opens the dialog, and while
+ * something goes there the share sent so far, „Fehler" when one failed and
+ * a short „fertig" when all arrived. Without a Google client it is not
+ * there at all.
  */
-export function DriveActivity() {
+export function DriveButton() {
   const configured = useDrive((state) => state.configured)
   const jobs = useDrive((state) => state.jobs)
   const connected = useDrive((state) => state.connected)
+  const signingIn = useDrive((state) => state.signingIn)
   const [open, setOpen] = useState(false)
   const [settled, setSettled] = useState(false)
   const seenFailed = useRef(new Set<string>())
@@ -554,7 +568,6 @@ export function DriveActivity() {
 
   const active = jobs.filter((job) => job.status === 'waiting' || job.status === 'running')
   const failed = jobs.filter((job) => job.status === 'failed' && !seenFailed.current.has(job.id))
-  const waits = !DRIVE_IN_APP && !connected && active.length > 0
 
   // „fertig" stays a moment after the last upload, then goes.
   const lastActive = useRef(0)
@@ -571,17 +584,26 @@ export function DriveActivity() {
     return () => window.clearTimeout(timer)
   }, [active.length])
 
+  if (!configured) return null
+
+  const signIn = !connected && !signingIn
   const openDialog = () => {
     for (const job of failed) seenFailed.current.add(job.id)
     refresh((value) => value + 1)
     setOpen(true)
   }
 
-  let label: ReactNode = null
+  // Wide, then short for a phone — where an icon alone has to do.
+  let label: ReactNode = 'Drive'
   let short = ''
-  if (waits) {
-    label = 'Drive · Anmelden'
-    short = 'Anmelden'
+  let title = 'Google Drive'
+  if (signingIn) {
+    label = 'Anmeldung offen …'
+    title = 'Die Anmeldung bei Google ist offen'
+  } else if (!connected) {
+    label = 'Drive anmelden'
+    title =
+      active.length > 0 ? 'Bei Google anmelden, damit die Uploads weitergehen' : 'Bei Google anmelden, um in Ihrem Drive zu speichern'
   } else if (active.length > 0) {
     const total = active.reduce((sum, job) => sum + job.total, 0)
     const loaded = active.reduce((sum, job) => sum + (job.status === 'running' ? job.loaded : 0), 0)
@@ -600,27 +622,27 @@ export function DriveActivity() {
     short = '✓'
   }
 
-  if (!configured) return null
-
   return (
     <>
-      {label !== null ? (
-        <button
-          type="button"
-          onClick={() => {
-            // The website's sign-in has to open within this click.
-            if (waits) void connectDrive()
-            openDialog()
-          }}
-          aria-haspopup="dialog"
-          title={waits ? 'Bei Google anmelden, damit die Uploads weitergehen' : 'Google Drive'}
-          className="press rise flex items-center gap-[6px] rounded-pill px-[10px] py-[7px] text-small text-ink ring-1 ring-inset ring-rule hover:bg-panel-soft"
-        >
-          <DriveIcon />
-          <span className="hidden sm:inline">{label}</span>
-          <span className="value sm:hidden">{short}</span>
-        </button>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          // The website's sign-in has to open within this click.
+          if (signIn) void connectDrive()
+          openDialog()
+        }}
+        aria-haspopup="dialog"
+        title={title}
+        className="press flex shrink-0 items-center gap-[8px] rounded-nav px-[8px] py-[8px] text-small text-ink ring-1 ring-inset ring-rule hover:bg-panel-soft min-[360px]:px-[10px] sm:px-[12px]"
+      >
+        <DriveIcon />
+        <span className="sr-only sm:not-sr-only">{label}</span>
+        {short ? (
+          <span aria-hidden className="value sm:hidden">
+            {short}
+          </span>
+        ) : null}
+      </button>
       {open ? <DriveDialog onClose={() => setOpen(false)} /> : null}
     </>
   )
