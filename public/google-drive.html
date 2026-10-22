@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Sondra · Google Drive</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --canvas: #f8faf8;
+        --ink: #0b4a22;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --canvas: #0a110d;
+          --ink: #a6ecb9;
+        }
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: var(--canvas);
+        color: var(--ink);
+        font: 16px/1.55 'Public Sans', system-ui, sans-serif;
+      }
+      p {
+        max-width: 32em;
+        margin: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="text">Einen Moment …</p>
+    <script>
+      // Google's sign-in comes back here with the answer in the fragment.
+      // It goes to the Sondra tab over a BroadcastChannel — the popup has no
+      // opener any more, the trip through Google cut it off (COOP) — and
+      // leaves this window's history, so the token is not kept in it.
+      ;(function () {
+        var fragment = new URLSearchParams(location.hash.replace(/^#/, ''))
+        var query = new URLSearchParams(location.search)
+        var answer = {
+          state: fragment.get('state') || query.get('state'),
+          access_token: fragment.get('access_token'),
+          expires_in: fragment.get('expires_in'),
+          scope: fragment.get('scope'),
+          error: fragment.get('error') || query.get('error'),
+        }
+        history.replaceState(null, '', location.pathname)
+        var text = document.getElementById('text')
+        if (!answer.state || !('BroadcastChannel' in window)) {
+          text.textContent = 'Hier ist nichts zu tun. Sie können dieses Fenster schliessen.'
+          return
+        }
+        var channel = new BroadcastChannel('sondra-google-drive')
+        channel.postMessage(answer)
+        channel.close()
+        text.textContent = answer.error
+          ? 'Die Anmeldung bei Google hat nicht geklappt. Sie können dieses Fenster schliessen.'
+          : 'Verbunden. Dieses Fenster schliesst sich — sonst können Sie es selbst schliessen.'
+        setTimeout(function () {
+          window.close()
+        }, 300)
+      })()
+    </script>
+  </body>
+</html>

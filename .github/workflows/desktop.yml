@@ -71,7 +71,12 @@ jobs:
       - run: npm ci --prefix desktop
       - run: npm run typecheck
       - run: npm run verify
+      # The Google client for Drive (Google Cloud → „Desktop-App“). Without
+      # it the app is built and says Drive is not set up.
       - run: npm run build:desktop -- --${{ matrix.arch }}
+        env:
+          SONDRA_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+          SONDRA_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
       - name: Install silently and start the installed app
         shell: pwsh
@@ -209,6 +214,8 @@ jobs:
           SONDRA_STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER || secrets.STORE_PUBLISHER }}
           SONDRA_STORE_PUBLISHER_NAME: ${{ vars.STORE_PUBLISHER_NAME || secrets.STORE_PUBLISHER_NAME }}
           SONDRA_STORE_DISPLAY_NAME: ${{ vars.STORE_DISPLAY_NAME || secrets.STORE_DISPLAY_NAME }}
+          SONDRA_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+          SONDRA_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         run: |
           node scripts/build-desktop.mjs --store --${{ matrix.arch }}
           if ($LASTEXITCODE -ne 0) { throw 'Store-Paket nicht gebaut.' }

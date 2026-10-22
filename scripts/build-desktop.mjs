@@ -99,6 +99,15 @@ await build({
   format: 'cjs',
   target: 'node22',
   external: ['electron'],
+  // The Google client for Drive (a „Desktop app“ client, whose secret Google
+  // does not count as one in an installed program). Without it the app says
+  // Drive is not set up.
+  // Two strings, inlined where they are read; an object here would come
+  // wrapped in a lazy initialiser.
+  define: {
+    SONDRA_GOOGLE_CLIENT_ID_BUILT: JSON.stringify(process.env.SONDRA_GOOGLE_CLIENT_ID ?? ''),
+    SONDRA_GOOGLE_CLIENT_SECRET_BUILT: JSON.stringify(process.env.SONDRA_GOOGLE_CLIENT_SECRET ?? ''),
+  },
   outfile: path.join(STAGE, 'main.cjs'),
   logLevel: 'warning',
 })

@@ -25,6 +25,7 @@ import { saveProjectFile } from '../lib/project'
 import { KIND_LABEL, useActiveAsset, useSession, type PanelId } from '../state/store'
 import { SondraProjectIcon } from './AssetList'
 import { openGetAppDialog } from './GetApp'
+import { ProjectToDriveButton } from './GoogleDrive'
 import { PANELS, ToolIcon } from './panelMeta'
 import { ArrowRight, Button } from './ui/primitives'
 
@@ -482,6 +483,7 @@ function FileCard({ onOpen, onOpenProject }: { onOpen: () => void; onOpenProject
             <SondraProjectIcon />
             <span>Projekt speichern (.sondra)</span>
           </button>
+          <ProjectToDriveButton className="press inline-flex items-center gap-[6px] rounded-nav bg-raised px-[10px] py-[5px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink" />
         </div>
       </div>
     </div>

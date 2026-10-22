@@ -53,7 +53,9 @@ Zwei Dinge zusammen, die ein Nachbarprodukt nicht beide ehrlich behaupten kann:
 1. **Es rechnet im Tab.** FFmpeg als WebAssembly, ONNX Runtime im Browser. Die
    Dateien verlassen das Gerät nicht — kein Upload-Endpunkt, keine Datenbank.
    Ein Umwandel-Dienst, der Dateien entgegennimmt, kann das nicht kopieren,
-   weil er sie entgegennimmt.
+   weil er sie entgegennimmt. Die eine Tür nach draussen gehört dem Nutzer:
+   sein eigenes Google Drive, verbunden auf seinen Wunsch, beschickt nur mit
+   dem, was er schickt oder per Schalter erlaubt.
 2. **Die eine Ausnahme wird benannt, bevor jemand tippt.** „Herunterladen"
    geht über einen Dienst, und das steht als Erstes im Feld, nicht in einer
    Fussnote. Ein Werkzeug, das Lokalität behauptet und still eine Netzanfrage
@@ -88,7 +90,10 @@ Gesetzt, nicht verhandelbar, mehrere davon ausdrücklich so gewünscht:
 
 - **Es wird nichts hochgeladen.** Kein Upload-Endpunkt, keine Datenbank, kein
   `localStorage` für Medien. Die Sitzung liegt in IndexedDB auf dem Gerät und
-  nirgends sonst. Das einzige, was von aussen kommt, ohne dass jemand eine
+  nirgends sonst. Ausnahme auf ausdrücklichen Wunsch (22.10.2026): das eigene
+  Google Drive des Nutzers, nach seiner Anmeldung, Dateien direkt vom Gerät zu
+  Google, nie über einen Server von Sondra; Scope `drive.file`, sonst nichts.
+  Das einzige, was von aussen kommt, ohne dass jemand eine
   Adresse eintippt, ist das Whisper-Modell für Untertitel: beim ersten Gebrauch
   von Hugging Face, nur die Modelldateien, die Aufnahme bleibt hier.
 - **Nur rechtlich zulässige Downloads. Keine DRM-Umgehung.**

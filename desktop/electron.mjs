@@ -24,6 +24,7 @@ import path from 'node:path'
 import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, safeStorage, session, shell } from 'electron'
 
 import { createAnytype } from './anytype.mjs'
+import { createGoogleDrive } from './googleDrive.mjs'
 import { discordRpc } from './discord.mjs'
 import { startDownloader } from './downloader.mjs'
 import { offerFile, startServer } from './server.mjs'
@@ -205,6 +206,38 @@ ipcMain.handle('sondra:anytype', (_event, action, ...args) => {
     log,
   })
   return anytype.handle(String(action), args)
+})
+
+/**
+ * Google Drive (desktop/googleDrive.mjs): the sign-in runs in the system's
+ * browser, the refresh token stays here, the page gets an access token when
+ * it asks and sends the files itself. The client comes in with the build
+ * (scripts/build-desktop.mjs); without one the page says Drive is not set up.
+ */
+/* global SONDRA_GOOGLE_CLIENT_ID_BUILT, SONDRA_GOOGLE_CLIENT_SECRET_BUILT */
+const GOOGLE_BUILT = {
+  clientId: typeof SONDRA_GOOGLE_CLIENT_ID_BUILT === 'string' ? SONDRA_GOOGLE_CLIENT_ID_BUILT : '',
+  clientSecret: typeof SONDRA_GOOGLE_CLIENT_SECRET_BUILT === 'string' ? SONDRA_GOOGLE_CLIENT_SECRET_BUILT : '',
+}
+let googleDrive = null
+ipcMain.handle('sondra:drive', (_event, action, ...args) => {
+  googleDrive ??= createGoogleDrive({
+    dataDir: app.getPath('userData'),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+    canEncrypt: () => safeStorage.isEncryptionAvailable(),
+    openExternal: (url) => shell.openExternal(url),
+    clientId: process.env.SONDRA_GOOGLE_CLIENT_ID || GOOGLE_BUILT.clientId || '',
+    clientSecret: process.env.SONDRA_GOOGLE_CLIENT_SECRET || GOOGLE_BUILT.clientSecret || '',
+    focus: () => {
+      if (!window) return
+      if (window.isMinimized()) window.restore()
+      window.show()
+      window.focus()
+    },
+    log,
+  })
+  return googleDrive.handle(String(action), args)
 })
 
 ipcMain.handle('sondra:take-files', () => {

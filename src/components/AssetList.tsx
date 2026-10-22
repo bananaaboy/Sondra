@@ -28,6 +28,8 @@ import { AudioPreview } from './AudioPreview'
 import { Badge, Toggle } from './ui/primitives'
 import { createZip, uniqueEntryNames } from '../lib/zip'
 import { ZipSave } from './ZipSave'
+import { DriveIcon, ProjectToDriveButton } from './GoogleDrive'
+import { driveLinked, saveAssetsToDrive, useDrive, type DriveJob } from '../lib/googleDrive'
 
 /** Sondra's own 5-bar mark, rendered inside `.sondra` project actions. */
 export function SondraProjectIcon({ className = 'h-3.5 w-3.5 shrink-0' }: { className?: string }) {
@@ -91,6 +93,44 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
   )
 }
 
+/**
+ * A file's cloud: sends it to Drive, and says how far it got — the newest
+ * upload of this file wins.
+ */
+function DriveFileButton({ asset }: { asset: Parameters<typeof saveAssetsToDrive>[0][number] }) {
+  const job = useDrive((state) => {
+    let found: DriveJob | undefined
+    for (const entry of state.jobs) if (entry.assetId === asset.id) found = entry
+    return found
+  })
+  const state = job?.status
+  const label =
+    state === 'running'
+      ? `${asset.name} wird in Drive gespeichert (${job!.total > 0 ? Math.round((job!.loaded / job!.total) * 100) : 0} %)`
+      : state === 'waiting'
+        ? `${asset.name} wartet auf Drive`
+        : state === 'done' || state === 'skipped'
+          ? `${asset.name} liegt in Google Drive`
+          : state === 'failed'
+            ? `${asset.name} nicht in Drive gespeichert — erneut versuchen`
+            : `${asset.name} in Google Drive speichern`
+  return (
+    <IconButton label={label} onClick={() => saveAssetsToDrive([asset])}>
+      {state === 'done' || state === 'skipped' ? (
+        <svg viewBox="0 0 16 16" className="h-4 w-4 text-ink" fill="none" aria-hidden>
+          <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : state === 'failed' ? (
+        <span aria-hidden className="value text-small font-semibold text-ink">
+          !
+        </span>
+      ) : (
+        <DriveIcon className={`h-4 w-4 ${state === 'running' || state === 'waiting' ? 'animate-pulse text-ink' : ''}`} />
+      )}
+    </IconButton>
+  )
+}
+
 export function SessionMenu() {
   const assets = useSession((state) => state.assets)
   const activeId = useSession((state) => state.activeAssetId)
@@ -108,6 +148,7 @@ export function SessionMenu() {
   const setKeep = useKept((state) => state.setKeep)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const drive = useDrive((state) => driveLinked(state))
 
   /**
    * A file just arrived — from a download, an editor's „In die Sitzung", a
@@ -303,6 +344,7 @@ export function SessionMenu() {
                     </span>
                   </button>
                   {asset.origin === 'derived' ? <Badge>abgeleitet</Badge> : null}
+                  {drive ? <DriveFileButton asset={asset} /> : null}
                   <IconButton label={`${asset.name} speichern`} onClick={() => saveBytes(asset.bytes, asset.name, asset.mime)}>
                     <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden>
                       <path d="M8 2.5v7.5M5 7.5L8 10.5l3-3M3 12.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -353,6 +395,10 @@ export function SessionMenu() {
                 <SondraProjectIcon />
                 <span>Projekt speichern (.sondra)</span>
               </button>
+              <ProjectToDriveButton
+                onDone={() => setOpen(false)}
+                className="press inline-flex items-center gap-[6px] rounded-nav bg-panel-soft px-[10px] py-[5px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:ring-ink"
+              />
             </div>
           </div>
 
@@ -371,9 +417,9 @@ export function SessionMenu() {
 
           <div className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[4px] border-t border-line pt-[12px] text-small text-muted">
             <span>
-              <span className="value">{(totalBytes / 1024 / 1024).toFixed(1)} MB</span>{' '}
-              {keep ? (saving ? 'wird auf diesem Gerät gespeichert …' : 'auf diesem Gerät gespeichert') : 'nur im Arbeitsspeicher'}, nichts
-              davon gesendet
+              <span className="value">{formatBytes(totalBytes)}</span>{' '}
+              {keep ? (saving ? 'wird auf diesem Gerät gespeichert …' : 'auf diesem Gerät gespeichert') : 'nur im Arbeitsspeicher'}
+              {drive ? null : ', nichts davon gesendet'}
             </span>
             <button
               type="button"
@@ -382,6 +428,7 @@ export function SessionMenu() {
             >
               Alles verwerfen
             </button>
+            {drive ? <span className="basis-full">Nach Google Drive geht nur, was Sie dorthin schicken.</span> : null}
           </div>
 
           <Toggle

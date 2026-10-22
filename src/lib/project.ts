@@ -58,7 +58,8 @@ export function getProjectToolState<T = Record<string, unknown>>(
   return currentToolStates[key] as T | undefined
 }
 
-export function saveProjectFile(customName?: string): void {
+/** The project as one `.sondra` archive, and the name it is saved under. */
+export function buildProjectFile(customName?: string): { bytes: Uint8Array; fileName: string; assetCount: number } {
   const state = useSession.getState()
   const encoder = new TextEncoder()
   const entries: ZipEntry[] = []
@@ -109,9 +110,13 @@ export function saveProjectFile(customName?: string): void {
     activeAsset?.name.replace(/\.[^.]+$/, '') ||
     `sondra-projekt-${new Date().toISOString().slice(0, 10)}`
 
-  const fileName = `${baseName}.sondra`
-  saveBytes(archive, fileName, 'application/octet-stream')
-  state.log('projekt', `Projekt als ${fileName} gespeichert (${state.assets.length} ${state.assets.length === 1 ? 'Datei' : 'Dateien'})`)
+  return { bytes: archive, fileName: `${baseName}.sondra`, assetCount: state.assets.length }
+}
+
+export function saveProjectFile(customName?: string): void {
+  const { bytes, fileName, assetCount } = buildProjectFile(customName)
+  saveBytes(bytes, fileName, 'application/octet-stream')
+  useSession.getState().log('projekt', `Projekt als ${fileName} gespeichert (${assetCount} ${assetCount === 1 ? 'Datei' : 'Dateien'})`)
 }
 
 export function isProjectFile(file: { name: string }): boolean {

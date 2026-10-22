@@ -110,6 +110,8 @@ export interface AppBridge {
   pickCaptureSource?: (id: string, audio: boolean) => Promise<boolean>
   /** The Merkliste's link to Anytype (desktop/anytype.mjs); missing in apps older than 1.1.4. */
   anytype?: (action: string, ...args: unknown[]) => Promise<unknown>
+  /** Google Drive's sign-in (desktop/googleDrive.mjs); missing in apps older than 1.1.11. */
+  drive?: (action: string, ...args: unknown[]) => Promise<unknown>
   /** Discord Rich Presence controls (optional, user toggleable). */
   setDiscordPresence?: (activity: DiscordActivity | null) => Promise<boolean>
   setDiscordEnabled?: (enabled: boolean) => Promise<boolean>

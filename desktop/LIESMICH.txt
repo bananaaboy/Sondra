@@ -131,6 +131,18 @@ Sitzung
   Bilder, Spuren —, steht davor das Feld „Name des ZIP“; leer gelassen
   gilt der Vorschlag.
 
+Google Drive
+  Unten auf der Seite „Google Drive“ → „Mit Google verbinden“: die
+  Anmeldung öffnet sich in Ihrem Browser, danach geht es in Sondra weiter.
+  Sondra legt in Ihrem Drive den Ordner „Sondra“ an und darin „Projekte“,
+  „Dateien“ (Ton, Video, Bilder, Andere), „Heruntergeladen“ und
+  „Merkliste“. „In Drive“ neben „Projekt speichern“ legt das Projekt dort
+  ab, die Wolke neben einer Datei der Sitzung die Datei. Was Sie
+  herunterladen und die Merkliste kommen von selbst dazu, solange die
+  beiden Schalter im Fenster „Google Drive“ an sind. Sondra sieht in Ihrem
+  Drive nur, was es selbst dort abgelegt hat. „Trennen“ zieht den Zugang
+  bei Google zurück; die Dateien in Drive bleiben.
+
 Aktualisieren
   Sondra sucht kurz nach dem Start und dann alle sechs Stunden selbst nach
   einer neueren Fassung, lädt sie im Hintergrund und prüft sie. Oben rechts

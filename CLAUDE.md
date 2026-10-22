@@ -86,8 +86,10 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Dateinamen, Timecodes. Nie Mono als Kostüm für „technisch". Cormorant lebt
   für genau ein Wort weiter: die Wortmarke ist eine bindende Zusage.
 - **`panel-cool` ist für genau eine Aussage da:** hier läuft etwas nicht
-  lokal. Seit dem 23.9. trägt sie nur noch die fette Warnung im Downloader
-  („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte). Den Lokal-Chip
+  lokal. Seit dem 23.9. trägt sie die fette Warnung im Downloader
+  („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte), seit dem
+  22.10. dazu den einen Satz im Fenster „Google Drive“ („Was Sie in Drive
+  speichern, verlässt dieses Gerät …“) — dieselbe Aussage, sonst nichts. Den Lokal-Chip
   in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
   „App herunterladen" mit einem breiten Auswahlfenster „Sondra Studio"
@@ -318,6 +320,8 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
     Portale, für die es hier keinen Extraktor gibt. Ohne ihn bleibt YouTube auf
     der progressiven Spur (in der Regel 360p).
   - `SONDRA_PROVIDER_KEY` — dessen `Api-Key`, falls verlangt.
+  - `VITE_GOOGLE_CLIENT_ID` — der OAuth-Client „Webanwendung“ für Google
+    Drive, beim Build gelesen. Ohne ihn bietet die Website Drive nicht an.
 - **Herunterladen: Erkennen, Zusammensetzen, Laden** (16.10.2026). Adressen
   liest `extractAddresses` (`lib/download.ts`) aus jedem Text — Komma,
   Semikolon, Zeilen, Anführungszeichen, Punkt am Satzende; ins einzeilige
@@ -465,5 +469,37 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   klein im Fenster, mit „Erneut“ daneben. Die Liste gehört allein
   `lib/merkliste.ts`; das Herunterladen hält keine eigene Kopie im Projekt.
   `npm run verify:anytype` spielt das gegen eine nachgebaute Anytype-API durch.
+- **Google Drive** (22.10.2026, `lib/googleDrive.ts`, `lib/driveClient.ts`,
+  `GoogleDrive.tsx`): auf Wunsch alles geordnet in einen Ordner „Sondra“ im
+  eigenen Drive — `Projekte`, `Dateien/{Ton,Video,Bilder,Andere}`,
+  `Heruntergeladen`, `Merkliste`. Nur Scope `drive.file`: Sondra sieht nur,
+  was es selbst ablegte. Die Seite schickt die Dateien selbst zu Google (bis
+  5 MB multipart, darüber resumable in 8-MB-Stücken direkt vom File; ein
+  308 ohne sichtbares `Range` gilt als ganz angekommen), nie über `api/`.
+  Ein Upload nach dem anderen; Projekte und die Merkliste ersetzen
+  gleichnamige als neue Version, Dateien mit gleichem Namen und gleicher
+  Grösse werden nicht noch einmal geschickt. **Anmelden im Browser:** Popup
+  zu Google, zurück auf `public/google-drive.html`, das Token geht über
+  einen BroadcastChannel an den Tab — nicht über `window.opener`, den COOP
+  same-origin auf dem Weg über Google kappt. Das Token lebt nur im
+  Arbeitsspeicher, eine Stunde; danach warten Uploads, und die Kopfzeile
+  sagt „Drive · Anmelden“ (ein Klick, das Popup muss im Klick aufgehen).
+  **In der App** (`desktop/googleDrive.mjs`): Google lässt keinen
+  eingebetteten Browser anmelden, also Systembrowser und Loopback mit PKCE
+  auf einem freien Port, nur für die eine Antwort; der Refresh-Token liegt
+  mit `safeStorage` in `userData`, die Seite bekommt über
+  `sondraApp.drive('token')` je ein Access-Token. „Trennen“ zieht bei
+  Google zurück. Die Knöpfe stehen erst da, wenn ein Client eingerichtet
+  ist; die Drive-Marke in der Kopfzeile steht rechts vom Dateimenü, weil
+  dessen Ankunftshinweis nach links aufgeht und sie sonst verdeckte.
+  Einrichtung: ein Google-Cloud-Projekt mit der Drive API, Zustimmungs-
+  bildschirm mit `drive.file`, darin zwei OAuth-Clients — „Webanwendung“
+  (JavaScript-Ursprung der Website, Weiterleitung `…/google-drive.html`;
+  ID als `VITE_GOOGLE_CLIENT_ID` in Vercel) und „Desktop-App“ (ID und Secret
+  als Repository-Variable `GOOGLE_CLIENT_ID` und Secret
+  `GOOGLE_CLIENT_SECRET`; `build-desktop.mjs` backt sie in den
+  Hauptprozess). Beide im selben Projekt, sonst sieht die App nicht, was die
+  Website ablegte. `npm run verify:drive` spielt Client und App-Anmeldung
+  gegen nachgebaute Google-Endpunkte durch.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
