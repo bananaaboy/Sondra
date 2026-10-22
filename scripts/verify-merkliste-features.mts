@@ -22,6 +22,10 @@ import {
   merkItems,
   onlineNews,
   takeOnlineNews,
+  mergeShared,
+  readSharedFile,
+  sharedFileText,
+  sharedKey,
 } from '../src/lib/merkliste'
 import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib/episodeMatch'
 import { chaptersText, cleanMarks, markName, neighbourMark, nextOffered, openingOffered, sleepFade, withMark } from '../src/lib/player'
@@ -391,6 +395,29 @@ console.log('--- Testing Merkliste Mega Features ---')
   const broken = createMerkItem({ id: 'w', title: 'X', intros: [{ print: '', seconds: 5, learnedAt: 1 }, { print: 'x'.repeat(20000), seconds: 9, learnedAt: 1 }] as never })
   assert.strictEqual(broken.intros, undefined, 'leere oder zu grosse fallen weg')
   console.log('✓ Vorspänne der Serie: höchstens vier, nur gültige')
+}
+
+// The Merkliste as the file in Google Drive
+{
+  const mine = [createMerkItem({ id: 'a', title: 'Frieren', updatedAt: 10 }), createMerkItem({ id: 'b', title: 'Dark', updatedAt: 10, cover: 'data:image/webp;base64,AAAA' })]
+  const removed = { gone: 5 }
+  const text = sharedFileText(mine, removed)
+  const back = readSharedFile(text)
+  assert.ok(back, 'eigene Datei lesbar')
+  assert.strictEqual(back!.key, sharedKey(mine, removed), 'eigene Datei gilt als gleich — nichts zu schreiben')
+  assert.deepStrictEqual(back!.removed, removed, 'Entferntes reist mit')
+  assert.strictEqual(back!.items.find((item) => item.id === 'b')?.cover, 'sondra:lokal', 'Cover aus Dateien bleiben auf dem Gerät')
+  assert.ok(readMerklisteFile(text).length === 2, 'auch als gewöhnliche Datei einlesbar')
+  // An older Sondra's backup: no removals, covers inside.
+  const old = readSharedFile(JSON.stringify({ kind: 'sondra-merkliste', version: 1, items: [{ id: 'c', title: 'Nana', updatedAt: 3 }] }))
+  assert.deepStrictEqual([old?.items.length, old?.removed], [1, {}], 'alte Sicherung lesbar')
+  assert.strictEqual(readSharedFile('{"nope":1}'), null, 'keine Merkliste → null, nie überschrieben')
+  assert.strictEqual(readSharedFile('kaputt'), null, 'kein JSON → null')
+  // The other device changed Frieren later and removed Dark after its last change.
+  const remote = { items: [createMerkItem({ id: 'a', title: 'Frieren', updatedAt: 20, episode: 4 })], removed: { b: 15 } }
+  const merged = mergeShared(mine, remote)
+  assert.deepStrictEqual(merged.items.map((item) => [item.id, item.episode]), [['a', 4]], 'später geändert gewinnt, entfernt bleibt entfernt')
+  console.log('✓ Merkliste in Google Drive: Datei, Vergleich, Zusammenführen')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')

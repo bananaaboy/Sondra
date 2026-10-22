@@ -29,6 +29,18 @@ import {
 } from '../../lib/anytype'
 import { buildUrlWithEpisode, deriveLinkTitle, parseLinkEpisodeInfo, saveBytes, sourceBadgeForUrl } from '../../lib/download'
 import {
+  connectDrive,
+  DRIVE_PROBLEM,
+  DriveError,
+  driveLinked,
+  openDriveDialog,
+  setDriveSetting,
+  syncMerklisteNow,
+  syncMerklisteWithDrive,
+  useDrive,
+} from '../../lib/googleDrive'
+import { DriveIcon, merkSyncProblemText } from '../GoogleDrive'
+import {
   advance,
   calculateBingePlan,
   calculateMerklisteStats,
@@ -631,6 +643,7 @@ function FolderPill() {
   const scan = useFolder((state) => state.scan)
   const scanning = useFolder((state) => state.scanning)
   const remembered = useFolder((state) => state.remembered)
+  const source = useFolder((state) => state.source)
   const series = useSeriesInFolderCount()
   const setPanel = useSession((state) => state.setPanel)
   const pickerRef = useRef<HTMLInputElement>(null)
@@ -651,7 +664,10 @@ function FolderPill() {
   }
   const include = async () => {
     setProblem(null)
-    const result = await includeRemembered(true).catch(() => 'none' as const)
+    const result = await includeRemembered(true).catch((error: unknown) => {
+      if (error instanceof DriveError) setProblem(DRIVE_PROBLEM[error.code])
+      return 'none' as const
+    })
     if (result === 'needs-click') setProblem('Der Browser hat den Zugriff nicht erlaubt.')
   }
 
@@ -669,10 +685,15 @@ function FolderPill() {
         </span>
       ) : scan ? (
         <button type="button" onClick={() => setPanel('folder')} className={pill} title="Den Ordner im Reiter „Ordner“ ansehen">
-          <FolderIcon />
+          {scan.source === 'drive' ? <DriveIcon className="size-[14px]" /> : <FolderIcon />}
           <span>
             „{scan.name}“ · {series} {series === 1 ? 'Serie' : 'Serien'} darin
           </span>
+        </button>
+      ) : source === 'drive' ? (
+        <button type="button" onClick={() => void include()} className={pill} title="Folgen aus dem Ordner „Sondra“ in Google Drive direkt aus der Merkliste abspielen">
+          <DriveIcon className="size-[14px]" />
+          <span>Google Drive einbeziehen</span>
         </button>
       ) : remembered ? (
         <button type="button" onClick={() => void include()} className={pill} title="Folgen daraus direkt aus der Merkliste abspielen">
@@ -715,11 +736,20 @@ export function MerklistePanel() {
   const [newEpisodesWatch, setNewEpisodesWatch] = useState(() => newEpisodesOn())
   const anytypeLink = useAnytype(items)
 
+  // The file in Drive may hold what another device changed since: a round on arrival.
+  useEffect(() => {
+    void syncMerklisteWithDrive({ quiet: true })
+  }, [])
+
   // The folder kept from last time, read by itself only while the browser
   // still allows it; else the pill in the toolbar offers it.
+  // Google Drive last time: read as soon as the sign-in is there (in the app a moment after start).
+  const driveReady = useDrive((state) => state.connected)
   useEffect(() => {
-    if (canPickFolder && !useFolder.getState().scan && !useFolder.getState().scanning) void includeRemembered(false).catch(() => undefined)
-  }, [])
+    const { scan, scanning, source } = useFolder.getState()
+    if (scan || scanning) return
+    if (canPickFolder || (source === 'drive' && driveReady)) void includeRemembered(false).catch(() => undefined)
+  }, [driveReady])
 
   // The series that is open, if one is. It has a history entry of its own,
   // so back — the browser's, the mouse's, a swipe on a phone — returns to
@@ -1723,17 +1753,52 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
     }
   }
 
+  const driveConfigured = useDrive((state) => state.configured)
+  const driveOn = useDrive((state) => driveLinked(state) && state.settings.merkliste)
+  const driveConnected = useDrive((state) => state.connected)
+  const driveSync = useDrive((state) => state.merkSync)
+
   return (
     <div className="flex flex-col gap-[12px] border-t border-line pt-[14px]">
+      {driveOn ? (
+        <div className="flex flex-wrap items-baseline justify-between gap-x-[20px] gap-y-[6px] text-small">
+          <span role="status" className="text-prose">
+            {driveSync.running
+              ? 'Gleicht mit Google Drive ab …'
+              : !driveConnected
+                ? 'Über Google Drive abgeglichen — dafür bei Google anmelden.'
+                : driveSync.at
+                  ? `Über Google Drive abgeglichen · ${clock(driveSync.at)}${driveSync.received ? ` · ${driveSync.received} von dort` : ''}`
+                  : 'Über Google Drive abgeglichen.'}
+          </span>
+          <span className="flex flex-wrap gap-x-[18px] gap-y-[4px]">
+            <button type="button" onClick={() => void syncMerklisteNow()} disabled={driveSync.running} className={linkClass}>
+              {driveConnected ? 'Jetzt abgleichen' : 'Drive anmelden'}
+            </button>
+            <button type="button" onClick={openDriveDialog} className={linkClass}>
+              Google Drive
+            </button>
+          </span>
+        </div>
+      ) : null}
+      {driveOn && driveSync.problem && driveSync.problem.code !== 'expired' ? (
+        <Notice tone="warn" title="Abgleich mit Google Drive">
+          {merkSyncProblemText(driveSync.problem)}
+        </Notice>
+      ) : null}
       <div className="flex flex-wrap items-baseline justify-between gap-x-[20px] gap-y-[6px] text-small">
         <span className="text-prose">
           {link.connected
             ? link.sync.running
               ? 'Gleicht mit Anytype ab …'
               : `Mit Anytype abgeglichen · „${link.status?.space?.name || 'Ohne Namen'}“${link.sync.at && !link.sync.error ? ` · ${clock(link.sync.at)}` : ''}`
-            : link.available
-              ? 'Nur auf diesem Gerät gespeichert.'
-              : 'Nur auf diesem Gerät gespeichert. Mit Anytype abgleichen geht in der Sondra-App.'}
+            : driveOn
+              ? 'Auf diesem Gerät und in Google Drive.'
+              : link.available
+                ? 'Nur auf diesem Gerät gespeichert.'
+                : driveConfigured
+                  ? 'Nur auf diesem Gerät gespeichert. Über Google Drive teilen es alle Ihre Geräte.'
+                  : 'Nur auf diesem Gerät gespeichert. Mit Anytype abgleichen geht in der Sondra-App.'}
         </span>
         <span className="flex flex-wrap gap-x-[18px] gap-y-[4px]">
           {items.length > 0 ? (
@@ -1749,6 +1814,20 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
           >
             Aus Datei einlesen (JSON / MAL-XML)
           </button>
+          {driveConfigured && !driveOn ? (
+            <button
+              type="button"
+              onClick={() => {
+                // The switch on; not connected yet, the sign-in opens within this click, the dialog beside it.
+                setDriveSetting({ merkliste: true })
+                if (!driveConnected) void connectDrive()
+                openDriveDialog()
+              }}
+              className={linkClass}
+            >
+              Über Google Drive abgleichen
+            </button>
+          ) : null}
           {link.available ? (
             <button type="button" onClick={onAnytype} className={linkClass}>
               {link.connected ? 'Anytype' : 'Mit Anytype verbinden'}

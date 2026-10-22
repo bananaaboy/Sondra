@@ -571,5 +571,53 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Hauptprozess). Beide im selben Projekt, sonst sieht die App nicht, was die
   Website ablegte. `npm run verify:drive` spielt Client und App-Anmeldung
   gegen nachgebaute Google-Endpunkte durch.
+  **Merkliste über Drive** (Wunsch vom 22.10.2026: „eine json file auf
+  drive … als Alternative für Anytype“): der Schalter „Merkliste über Drive
+  abgleichen“ macht `Sondra/Merkliste/Sondra-Merkliste.json` zur Liste, die
+  alle Geräte desselben Kontos teilen, auch die Website. Eine Runde
+  (`syncMerklisteWithDrive`) wie bei Anytype: lesen, `mergeShared`,
+  zurückschreiben nur, wenn die Datei nicht schon genau das hält
+  (`sharedKey`, verglichen mit der Datei, nicht mit dem zuletzt
+  Geschriebenen); eine Datei, die keine Merkliste ist, wird nie
+  überschrieben (`unreadable`). Die Datei trägt Einträge wie sie reisen
+  (`travelling`, Covers aus Dateien bleiben auf dem Gerät) und die
+  Entfernungen; `readMerklisteFile` liest sie wie jeden Export, auch die
+  alte Sicherung ohne Entfernungen. Runden beim Verbinden, beim Start der
+  App, beim Öffnen der Merkliste, 2,5 s nach jeder Änderung und beim
+  Zurückkommen ans Fenster (höchstens jede Minute); nie zwei gleichzeitig.
+  Was eine Runde selbst einsetzt, startet keine neue (`applying`). Nichts
+  davon geht durch die Upload-Schlange: die Kopfzeile meldet keine
+  Merkliste. Auf der Website ohne Token wartet es still; die Merkliste sagt
+  „dafür bei Google anmelden“ mit Knopf. Ohne Anmeldung zuvor sagt die
+  Merkliste „Über Google Drive abgleichen“ — Schalter an, Anmeldung im
+  selben Klick. Erstes Verbinden führt zusammen statt zu ersetzen.
+  **Ordner aus Drive** (Wunsch: „ordner soll den vom drive laden, so dass
+  man von dort aus die Sachen schauen kann, dann soll es die Merkliste
+  aktualisieren“): auf der Seite „Ordner“ „Aus Google Drive“ — der Ordner
+  „Sondra“ (`tree` in `driveClient.ts`, Unterordner, Seiten mit
+  `nextPageToken`), als `FolderScan` mit `source: 'drive'`; ein Eintrag hat
+  dann `drive: { id, mime }` statt `file`. Mehr sieht Sondra in Drive mit
+  `drive.file` nicht, und die Seite sagt das. Keine Vorschaubilder (hiesse,
+  jeden Film zu holen), kein Löschen, kein „Doppelte finden“; „In die
+  Sitzung“ und ZIP holen die Dateien zuerst (`fileHere`). Gemerkt wird die
+  Quelle (`sondra:ordner:quelle`), und die Merkliste liest Drive von selbst
+  wieder ein, sobald angemeldet, sonst „Google Drive einbeziehen“.
+  **Abspielen aus Drive**: der Player bekommt `RemoteMedia` statt eines
+  Files (`sendToPlayer`), `source` bleibt leer. Gestreamt über den Service
+  Worker: `drive-media/<id>?size=…&type=…` auf dieser Herkunft, der Worker
+  holt die Bereiche mit `Range` und `Authorization` von Drive und setzt
+  `Content-Range` selbst zusammen (welche Kopfzeilen der Browser von Google
+  durchlässt, spielt so keine Rolle). Ein `<video>` kann Drive kein Token
+  schicken, und ein Token in der Adresse landete in Protokollen: der Worker
+  fragt die Seite per `MessageChannel` (`drive-token-wanted`) und hält es
+  nur im Speicher; nach einem 401 fragt er einmal neu. Ob der Worker das
+  kann, sagt ein `drive-ping` — ein Worker älterer Fassung nicht. Ohne
+  Worker wird die Datei ganz geholt (Fortschritt auf der Bühne) und als
+  Blob gespielt. FFmpeg (Vorschau, Qualität, Vorspann am Ton) gilt nur für
+  Dateien auf dem Gerät. Fehlt auf der Website die Anmeldung, sagt die
+  Bühne „Drive anmelden“ und versucht es danach erneut. Was zu Ende geschaut
+  wird, hakt `MerklisteTick` ab wie sonst, und die Runde trägt es nach
+  Drive. Getestet mit `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1`, sonst
+  erreichen die Anfragen des Workers in Playwright die Nachbildung nicht.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.

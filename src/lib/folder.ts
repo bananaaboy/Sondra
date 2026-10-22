@@ -54,7 +54,10 @@ export interface FolderFile {
   size: number
   modified: number
   kind: AssetKind
-  file: File
+  /** The file on this device; absent for one in Google Drive. */
+  file?: File
+  /** In Google Drive: its id there, and its media type. */
+  drive?: { id: string; mime: string }
   /** The folder holding it, where it can be deleted from; only with the folder API. */
   parent?: DirectoryHandle
 }
@@ -68,6 +71,8 @@ export interface FolderScan {
   handle?: DirectoryHandle
   /** Stopped at `SCAN_LIMIT` files. */
   truncated: boolean
+  /** Sondra's folder in Google Drive rather than one on this device. */
+  source?: 'drive'
 }
 
 /** More than this, and the folder is rather a drive: the scan stops and says so. */
@@ -145,6 +150,32 @@ export function scanFileList(list: ArrayLike<File>): FolderScan {
     }
   }
   return { name, files, dirs: [...dirs].sort(), truncated: all.length > SCAN_LIMIT }
+}
+
+/**
+ * Sondra's folder in Google Drive as a scan: what Drive listed, with paths
+ * inside „Sondra“. Nothing of the files themselves is fetched for it.
+ */
+export function scanDrive(
+  listed: { files: { id: string; name: string; size: number | null; modifiedTime: string | null; mimeType: string | null; path: string }[]; dirs: string[]; truncated: boolean },
+  name = 'Google Drive',
+): FolderScan {
+  const files: FolderFile[] = []
+  for (const entry of listed.files) {
+    if (entry.path.split('/').some((part) => SKIPPED.test(part))) continue
+    const at = entry.path.lastIndexOf('/')
+    const mime = entry.mimeType ?? ''
+    files.push({
+      path: entry.path,
+      name: entry.name,
+      dir: at >= 0 ? entry.path.slice(0, at) : '',
+      size: entry.size ?? 0,
+      modified: entry.modifiedTime ? Date.parse(entry.modifiedTime) || 0 : 0,
+      kind: kindFromMime(mime, entry.name),
+      drive: { id: entry.id, mime },
+    })
+  }
+  return { name, files, dirs: listed.dirs, truncated: listed.truncated, source: 'drive' }
 }
 
 /** The scan without some files — after they were deleted. */

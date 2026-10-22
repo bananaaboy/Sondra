@@ -16,6 +16,11 @@
  *
  * Nothing here is read beyond names, sizes and dates until a picture is
  * made for a tile on screen, and nothing leaves the device.
+ *
+ * The folder can also be Sondra's own in Google Drive: the same view,
+ * films played from there (streamed), and what is watched ticks the
+ * Merkliste off. Without pictures on the tiles — those would mean fetching
+ * every film — and without deleting.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
@@ -41,8 +46,9 @@ import {
   type SortKey,
 } from '../../lib/folder'
 import { formatBytes, formatDuration } from '../../lib/format'
-import { lookUpRemembered, playFiles, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
-import { driveLinked, saveFilesToDrive, useDrive } from '../../lib/googleDrive'
+import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
+import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, useDrive } from '../../lib/googleDrive'
+import { DriveIcon } from '../GoogleDrive'
 import { requestOpenSeries, useMerkliste } from '../../lib/merkliste'
 import { thumbnailFor, type Thumbnail } from '../../lib/thumbnails'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
@@ -143,14 +149,16 @@ function useThumbnail(file: FolderFile | null) {
   const [thumb, setThumb] = useState<Thumbnail | null>(null)
   useEffect(() => {
     const node = ref.current
-    if (!node || !file || (file.kind !== 'video' && file.kind !== 'audio' && file.kind !== 'image')) return
+    // A file in Drive gets no picture: it would mean fetching it.
+    if (!node || !file?.file || (file.kind !== 'video' && file.kind !== 'audio' && file.kind !== 'image')) return
     const kind = file.kind
+    const local = file.file
     let cancelled = false
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries.some((entry) => entry.isIntersecting)) return
         observer.disconnect()
-        void thumbnailFor(file.file, kind, keyOf(file)).then((made) => {
+        void thumbnailFor(local, kind, keyOf(file)).then((made) => {
           if (!cancelled) setThumb(made)
         })
       },
@@ -537,6 +545,8 @@ export function FolderPanel() {
   const { ingest } = useIngestFiles()
   const merk = useMerkliste()
   const drive = useDrive((state) => driveLinked(state))
+  const driveConfigured = useDrive((state) => state.configured)
+  const fromDrive = scan?.source === 'drive'
 
   const [prefs, setPrefs] = useState<Preferences>(readPrefs)
   const [filter, setFilter] = useState<KindFilter>('alle')
@@ -551,6 +561,8 @@ export function FolderPanel() {
   const [confirmDelete, setConfirmDelete] = useState<FolderFile[] | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [zipping, setZipping] = useState(false)
+  /** Files on their way from Drive for the session or a ZIP. */
+  const [fetchingFiles, setFetchingFiles] = useState<string | null>(null)
   const pickerRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -600,6 +612,41 @@ export function FolderPanel() {
     }
   }
 
+  /** Sondra's folder in Drive. On the website the click may sign in first. */
+  const chooseDrive = async () => {
+    setProblem(null)
+    setNote(null)
+    setDupes(null)
+    try {
+      await readDriveFolder()
+    } catch (error) {
+      setProblem(error instanceof DriveError ? DRIVE_PROBLEM[error.code] : error instanceof Error ? error.message : 'Google Drive liess sich nicht lesen.')
+    }
+  }
+
+  /** The files on this device, fetched from Drive first where they lie there. */
+  const filesHere = async (files: FolderFile[]): Promise<File[] | null> => {
+    if (files.every((file) => file.file)) return files.map((file) => file.file!)
+    const total = files.reduce((sum, file) => sum + file.size, 0)
+    let before = 0
+    const out: File[] = []
+    try {
+      for (const file of files) {
+        setFetchingFiles(`Lädt aus Drive … ${total ? Math.round((before / total) * 100) : 0} %`)
+        out.push(
+          await fileHere(file, (loaded) => setFetchingFiles(`Lädt aus Drive … ${total ? Math.round(((before + loaded) / total) * 100) : 0} %`)),
+        )
+        before += file.size
+      }
+      return out
+    } catch (error) {
+      setProblem(error instanceof DriveError ? DRIVE_PROBLEM[error.code] : error instanceof Error ? error.message : 'Aus Drive nicht geladen.')
+      return null
+    } finally {
+      setFetchingFiles(null)
+    }
+  }
+
   const reopen = async (handle: DirectoryHandle) => {
     if (!(await allowed(handle, 'read', true))) {
       setProblem(`Für „${handle.name}“ hat der Browser den Zugriff nicht erlaubt. Wählen Sie den Ordner neu.`)
@@ -646,23 +693,26 @@ export function FolderPanel() {
 
   const open = async (file: FolderFile) => {
     if (file.kind === 'video' || file.kind === 'audio') return play([file], false)
-    const count = await ingest([file.file], 'aus dem Ordner geöffnet')
+    const here = await filesHere([file])
+    if (!here) return
+    const count = await ingest(here, fromDrive ? 'aus Google Drive geöffnet' : 'aus dem Ordner geöffnet')
     if (count > 0 && file.kind === 'image') setPanel('images')
     else if (count > 0) setNote(`${file.name} ist jetzt in der Sitzung.`)
   }
 
   const intoSession = async (files: FolderFile[]) => {
-    const count = await ingest(
-      files.map((file) => file.file),
-      'aus dem Ordner geöffnet',
-    )
+    const here = await filesHere(files)
+    if (!here) return
+    const count = await ingest(here, fromDrive ? 'aus Google Drive geöffnet' : 'aus dem Ordner geöffnet')
     setNote(count > 0 ? `${count} ${count === 1 ? 'Datei' : 'Dateien'} in der Sitzung — oben rechts im Dateimenü.` : 'Keine davon lässt sich in der Sitzung bearbeiten.')
   }
 
   const saveZip = async (files: FolderFile[]) => {
     setZipping(true)
     try {
-      const entries = await Promise.all(files.map(async (file) => ({ name: file.path, data: new Uint8Array(await file.file.arrayBuffer()) })))
+      const here = await filesHere(files)
+      if (!here) return
+      const entries = await Promise.all(here.map(async (file, index) => ({ name: files[index].path, data: new Uint8Array(await file.arrayBuffer()) })))
       saveBytes(createZip(uniqueEntryNames(entries)), `${scan?.name ?? 'ordner'}-auswahl.zip`, 'application/zip')
     } catch (error) {
       setProblem(error instanceof Error ? `ZIP nicht erstellt: ${error.message}` : 'ZIP nicht erstellt.')
@@ -801,6 +851,9 @@ export function FolderPanel() {
             Wählen Sie einen Ordner auf diesem Gerät. Sondra zeigt, was darin liegt — Filme und Fotos mit Vorschaubild, Folgen Ihrer
             Merkliste mit Staffel und Folge — und Sie wählen aus, was abgespielt, bearbeitet oder gespeichert wird. Gelesen wird nur, was Sie
             ansehen; gesendet wird nichts.
+            {driveConfigured
+              ? ' Oder den Ordner „Sondra“ in Ihrem Google Drive: von dort abspielen, und was Sie schauen, hakt die Merkliste ab.'
+              : ''}
           </p>
           {scanning ? (
             <div role="status" className="flex flex-wrap items-center gap-x-[14px] gap-y-[6px] text-small text-prose">
@@ -820,6 +873,12 @@ export function FolderPanel() {
               {remembered ? (
                 <Button type="button" variant="quiet" onClick={() => void reopen(remembered)}>
                   „{remembered.name}“ wieder öffnen
+                </Button>
+              ) : null}
+              {driveConfigured ? (
+                <Button type="button" variant="quiet" onClick={() => void chooseDrive()}>
+                  <DriveIcon />
+                  Aus Google Drive
                 </Button>
               ) : null}
             </div>
@@ -862,12 +921,12 @@ export function FolderPanel() {
               ) : null}
               {index === steps.length - 1 ? (
                 <h2 aria-current="page" className="m-0 flex items-center gap-[8px] text-subheading font-semibold text-ink">
-                  {index === 0 ? <FolderGlyph className="h-[22px] w-[22px]" /> : null}
+                  {index === 0 ? fromDrive ? <DriveIcon className="h-[22px] w-[22px]" /> : <FolderGlyph className="h-[22px] w-[22px]" /> : null}
                   {step.label}
                 </h2>
               ) : (
                 <button type="button" onClick={() => goTo(step.path)} className={`${linkClass} text-body`}>
-                  {index === 0 ? <FolderGlyph className="h-[18px] w-[18px]" /> : null}
+                  {index === 0 ? fromDrive ? <DriveIcon className="h-[18px] w-[18px]" /> : <FolderGlyph className="h-[18px] w-[18px]" /> : null}
                   {step.label}
                 </button>
               )}
@@ -878,16 +937,33 @@ export function FolderPanel() {
           <span className="value text-prose">
             {scan.files.length} Dateien{scan.truncated ? ' (gekürzt)' : ''}
           </span>
-          {scan.handle ? (
-            <button type="button" onClick={() => void reopen(scan.handle!)} disabled={Boolean(scanning)} className={`${linkClass} text-small`}>
+          {scan.handle || fromDrive ? (
+            <button
+              type="button"
+              onClick={() => void (fromDrive ? chooseDrive() : reopen(scan.handle!))}
+              disabled={Boolean(scanning)}
+              className={`${linkClass} text-small`}
+            >
               {scanning ? `Liest … ${scanning.files}` : 'Neu einlesen'}
             </button>
           ) : null}
           <button type="button" onClick={() => void choose()} className={`${linkClass} text-small`}>
-            Anderer Ordner
+            {fromDrive ? 'Ordner auf diesem Gerät' : 'Anderer Ordner'}
           </button>
+          {driveConfigured && !fromDrive ? (
+            <button type="button" onClick={() => void chooseDrive()} className={`${linkClass} text-small`}>
+              Google Drive
+            </button>
+          ) : null}
         </span>
       </div>
+
+      {fromDrive ? (
+        <p className="max-w-[72ch] text-small leading-[1.5] text-prose">
+          Der Ordner „Sondra“ in Ihrem Google Drive. Sondra sieht dort nur, was es selbst abgelegt hat — Heruntergeladenes, Dateien,
+          Projekte. Filme spielen direkt aus Drive; was Sie zu Ende schauen, hakt die Merkliste ab.
+        </p>
+      ) : null}
 
       {scan.truncated ? (
         <Notice tone="warn" title="Sehr grosser Ordner">
@@ -982,7 +1058,7 @@ export function FolderPanel() {
             Mit Unterordnern
           </label>
           <span className="flex-1" />
-          {!dupes ? (
+          {!dupes && !fromDrive ? (
             <button type="button" onClick={() => void runDuplicates()} className={`${linkClass} text-small`}>
               Doppelte finden
             </button>
@@ -1114,14 +1190,24 @@ export function FolderPanel() {
               Abspielen{selectedMedia.length < chosen.length ? ` (${selectedMedia.length})` : ''}
             </Button>
           ) : null}
-          <Button type="button" size="sm" variant="quiet" onClick={() => void intoSession(chosen)}>
+          {fetchingFiles ? (
+            <span role="status" className="value text-small text-prose">
+              {fetchingFiles}
+            </span>
+          ) : null}
+          <Button type="button" size="sm" variant="quiet" disabled={Boolean(fetchingFiles)} onClick={() => void intoSession(chosen)}>
             In die Sitzung
           </Button>
-          <Button type="button" size="sm" variant="quiet" disabled={zipping} onClick={() => void saveZip(chosen)}>
+          <Button type="button" size="sm" variant="quiet" disabled={zipping || Boolean(fetchingFiles)} onClick={() => void saveZip(chosen)}>
             {zipping ? 'Packt …' : 'Als ZIP'}
           </Button>
-          {drive ? (
-            <Button type="button" size="sm" variant="quiet" onClick={() => saveFilesToDrive(chosen.map((file) => ({ file: file.file, kind: file.kind })))}>
+          {drive && !fromDrive ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="quiet"
+              onClick={() => saveFilesToDrive(chosen.flatMap((file) => (file.file ? [{ file: file.file, kind: file.kind }] : [])))}
+            >
               In Drive
             </Button>
           ) : null}

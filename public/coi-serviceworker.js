@@ -15,6 +15,9 @@
  * Neither job inspects, stores or forwards request bodies, and nothing
  * cross-origin is ever cached — the extraction service's traffic passes
  * straight through.
+ *
+ * And one errand: a film in Google Drive is streamed through `drive-media/`
+ * (see below), because a media element cannot send Drive a token itself.
  */
 
 const CACHE = 'sondra-v1'
@@ -112,6 +115,80 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+/* -------------------------------------------------------------------------- */
+/* Google Drive, streamed                                                      */
+/* -------------------------------------------------------------------------- */
+
+const DRIVE_API = 'https://www.googleapis.com/drive/v3/files/'
+
+/**
+ * The token for Drive, in memory only, as on the page. Gone when the browser
+ * stops this worker; then it is asked for again.
+ */
+let driveToken = null
+
+/** Asks the page that plays the film for a token; null when it has none. */
+async function tokenFromPage(clientId, refused) {
+  const client = (clientId && (await self.clients.get(clientId))) || (await self.clients.matchAll({ type: 'window' }))[0]
+  if (!client) return null
+  return new Promise((resolve) => {
+    const channel = new MessageChannel()
+    const timer = setTimeout(() => resolve(null), 8000)
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timer)
+      resolve((event.data && event.data.token) || null)
+    }
+    client.postMessage({ type: 'drive-token-wanted', refused }, [channel.port2])
+  })
+}
+
+/**
+ * `drive-media/<id>?size=…&type=…`: the bytes the player asks for, from
+ * Drive. A range goes on as a range; the answer is put together here, so
+ * it does not matter which of Drive's headers the browser lets through.
+ */
+async function driveMedia(request, url, clientId) {
+  const id = decodeURIComponent(url.pathname.slice(url.pathname.lastIndexOf('/drive-media/') + '/drive-media/'.length))
+  const size = Number(url.searchParams.get('size')) || 0
+  const type = url.searchParams.get('type') || 'application/octet-stream'
+  const asked = /^bytes=(\d+)-(\d*)$/.exec(request.headers.get('Range') || '')
+  const start = asked ? Number(asked[1]) : 0
+  const end = asked && asked[2] ? Math.min(Number(asked[2]), size ? size - 1 : Number(asked[2])) : size ? size - 1 : null
+  if (asked && size && start >= size) {
+    return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } })
+  }
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (!driveToken || attempt > 0) driveToken = await tokenFromPage(clientId, attempt > 0)
+    if (!driveToken) return new Response('Bei Google nicht angemeldet', { status: 401 })
+    const headers = { Authorization: `Bearer ${driveToken}` }
+    if (asked) headers.Range = `bytes=${start}-${end ?? ''}`
+    let upstream
+    try {
+      upstream = await fetch(`${DRIVE_API}${encodeURIComponent(id)}?alt=media`, { headers, signal: request.signal })
+    } catch {
+      return new Response('Google Drive nicht erreichbar', { status: 504 })
+    }
+    if (upstream.status === 401) continue
+    if (!upstream.ok) return new Response(null, { status: upstream.status })
+    const out = new Headers({ 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' })
+    const length = Number(upstream.headers.get('Content-Length')) || (end !== null ? end - start + 1 : 0)
+    if (length) out.set('Content-Length', String(length))
+    if (asked && upstream.status === 206) {
+      out.set('Content-Range', `bytes ${start}-${start + length - 1}/${size || '*'}`)
+      return new Response(upstream.body, { status: 206, headers: out })
+    }
+    return new Response(upstream.body, { status: 200, headers: out })
+  }
+  return new Response('Bei Google nicht angemeldet', { status: 401 })
+}
+
+/** The page asks whether this worker can stream from Drive — an older one cannot. */
+self.addEventListener('message', (event) => {
+  const data = event.data
+  if (!data || data.type !== 'drive-ping' || !event.ports[0]) return
+  event.ports[0].postMessage('drive-media')
+})
+
 /** Copies a response, adding the isolation headers. */
 function isolate(response) {
   if (response.status === 0) return response // opaque; nothing to rewrite
@@ -173,6 +250,10 @@ self.addEventListener('fetch', (event) => {
     return
   }
   const sameOrigin = url.origin === self.location.origin
+  if (sameOrigin && request.method === 'GET' && url.pathname.includes('/drive-media/')) {
+    event.respondWith(driveMedia(request, url, event.clientId).then(isolate))
+    return
+  }
   const cacheable = sameOrigin && request.method === 'GET'
 
   event.respondWith(

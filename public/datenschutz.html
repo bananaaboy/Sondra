@@ -137,10 +137,12 @@
             nicht als Ton.
           </li>
           <li>
-            <code>sondra:ordner</code>: wie die Seite „Ordner“ Dateien zeigt (Kacheln oder Liste, Sortierung). Den
+            <code>sondra:ordner</code>: wie die Seite „Ordner“ Dateien zeigt (Kacheln oder Liste, Sortierung);
+            <code>sondra:ordner:quelle</code>: ob der Ordner zuletzt auf diesem Gerät oder in Google Drive lag. Den
             zuletzt gewählten Ordner selbst — nur den Verweis darauf, nicht seine Dateien — legt Sondra in der Datenbank
-            Ihres Browsers ab (<code>sondra-ordner</code>), um ihn beim nächsten Mal anzubieten; gelesen wird er erst,
-            wenn Sie „wieder öffnen“ klicken und der Browser es erlaubt.
+            Ihres Browsers ab (<code>sondra-ordner</code>), um ihn beim nächsten Mal anzubieten. Gelesen werden daraus nur
+            Namen, Grössen und Daten, und nur, solange der Browser es erlaubt: beim Öffnen der Merkliste von selbst, sonst
+            erst auf Ihren Klick.
           </li>
           <li>
             <code>sondra:drive</code>: ob Google Drive verbunden ist, mit welchem Konto (Name und E-Mail-Adresse),
@@ -211,10 +213,10 @@
         <h2>Wenn Sie Google Drive verbinden</h2>
         <p>
           Auf Wunsch speichert Sondra in Ihrem eigenen Google Drive, in einem Ordner „Sondra“: Projekte,
-          Dateien der Sitzung, auf Wunsch jeden Download und eine Sicherung der Merkliste. Das ist die eine
+          Dateien der Sitzung, auf Wunsch jeden Download und die Merkliste. Das ist die eine
           Funktion, mit der Ihre Dateien Ihr Gerät verlassen, und sie tut es nur, nachdem Sie Google Drive
           verbunden haben, und nur für das, was Sie schicken oder mit den beiden Schaltern „Heruntergeladenes in
-          Drive speichern“ und „Merkliste in Drive sichern“ erlauben.
+          Drive speichern“ und „Merkliste über Drive abgleichen“ erlauben.
         </p>
         <ul>
           <li>
@@ -230,6 +232,18 @@
             Auf der Website bleibt die Anmeldung nur im Arbeitsspeicher des Tabs, für höchstens eine Stunde; sie
             wird nicht gespeichert. In der App speichert Sondra den Schlüssel, den Google für die Verbindung
             ausgibt, mit der Verschlüsselung von Windows in <code>%APPDATA%\Sondra</code>.
+          </li>
+          <li>
+            Mit „Merkliste über Drive abgleichen“ liegt die Merkliste als <code>Sondra-Merkliste.json</code> im
+            Ordner „Sondra/Merkliste“. Jedes Gerät, das mit demselben Google-Konto verbunden ist, liest die Datei,
+            führt sie mit seiner Liste zusammen und schreibt sie zurück, wenn sich etwas unterscheidet. Cover, die Sie
+            aus einer Datei gewählt haben, bleiben auf ihrem Gerät.
+          </li>
+          <li>
+            Auf der Seite „Ordner“ lässt sich der Ordner „Sondra“ in Ihrem Drive ansehen. Ein Film daraus spielt
+            direkt aus Drive: der Service Worker dieser Seite holt die Stücke, die der Player braucht, mit Ihrer
+            Anmeldung bei Google und hält diese, wie die Seite, nur im Arbeitsspeicher. Was Sie dort schauen, hakt die
+            Merkliste ab wie eine Datei auf Ihrem Gerät.
           </li>
           <li>
             „Trennen“ im Fenster „Google Drive“ zieht die Verbindung bei Google zurück und löscht den Schlüssel.

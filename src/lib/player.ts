@@ -26,6 +26,8 @@ export interface PlayerItem {
   assetId?: string
   /** Direct URL if available (e.g. streaming) */
   directUrl?: string
+  /** In Google Drive: streamed from there, `source` stays empty. */
+  remote?: RemoteMedia
   /** Pre-extracted resolution streams (e.g. from service/downloader) */
   streamVariants?: { height: number; url: string; label?: string }[]
 }
@@ -88,11 +90,23 @@ export function playerInbox(): ((files: File[]) => void) | null {
  * ones after it), else they join it. Kept until the player takes them, in
  * case its chunk is still on the way.
  */
-type PlayerDelivery = { files: File[]; replace: boolean }
+/** A file in Google Drive, played from there without being copied here first. */
+export interface RemoteMedia {
+  kind: 'drive'
+  id: string
+  name: string
+  size: number
+  /** Its media type, as Drive names it. */
+  type: string
+}
+
+export const isRemote = (entry: File | RemoteMedia): entry is RemoteMedia => !(entry instanceof Blob)
+
+type PlayerDelivery = { files: (File | RemoteMedia)[]; replace: boolean }
 let delivery: PlayerDelivery | null = null
 let deliver: ((delivery: PlayerDelivery) => void) | null = null
 
-export function sendToPlayer(files: File[], replace = false): void {
+export function sendToPlayer(files: (File | RemoteMedia)[], replace = false): void {
   if (deliver) deliver({ files, replace })
   else delivery = { files, replace }
 }
