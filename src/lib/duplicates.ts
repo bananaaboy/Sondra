@@ -67,7 +67,7 @@ export function keepFirst(files: FolderFile[]): FolderFile[] {
 
 export async function findDuplicates(
   files: FolderFile[],
-  { onProgress, signal, key = (file) => contentKey(file.file) }: { onProgress?: (done: number, total: number) => void; signal?: AbortSignal; key?: (file: FolderFile) => Promise<string> } = {},
+  { onProgress, signal, key = (file) => (file.file ? contentKey(file.file) : Promise.resolve(`fern:${file.path}`)) }: { onProgress?: (done: number, total: number) => void; signal?: AbortSignal; key?: (file: FolderFile) => Promise<string> } = {},
 ): Promise<DuplicateReport> {
   const bySize = new Map<number, FolderFile[]>()
   for (const file of files) {

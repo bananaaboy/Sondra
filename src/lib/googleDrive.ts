@@ -8,6 +8,11 @@
  * Merkliste only with their switch on. It is the one place where Sondra
  * sends a user's files anywhere, and the dialog says so in so many words.
  *
+ * The Merkliste is not only sent: with its switch on, the file in Drive is
+ * the list every device signed in to the same account shares — read,
+ * merged with this device's, written back when they differ, as with
+ * Anytype, and on the website as well.
+ *
  * Two ways to sign in, one way to upload:
  *
  * - On the website, Google's sign-in opens in a popup and comes back to
@@ -30,7 +35,18 @@ import { create } from 'zustand'
 
 import { APP_BRIDGE } from './desktop'
 import { createDriveClient, DriveError, folderPath, type DriveErrorCode, type DriveFile, type DriveFolder } from './driveClient'
-import { exportMerkliste, importMerkliste, merkItems, onMerkliste, readMerklisteFile, type MerkImport, type SavedLinkItem } from './merkliste'
+import {
+  adoptRemovals,
+  merkItems,
+  merkRemovals,
+  mergeShared,
+  onMerkliste,
+  readSharedFile,
+  setMerkItems,
+  sharedFileText,
+  sharedKey,
+  type SavedLinkItem,
+} from './merkliste'
 import { buildProjectFile, loadProjectBytes } from './project'
 import { useSession, type Asset, type AssetKind } from '../state/store'
 
@@ -45,8 +61,8 @@ const WEB_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''
 const CHANNEL = 'sondra-google-drive'
 const SETTINGS_KEY = 'sondra:drive'
 export const MERKLISTE_FILE = 'Sondra-Merkliste.json'
-/** The Merkliste goes to Drive this long after its last change. */
-const MERKLISTE_DELAY = 8000
+/** The Merkliste is brought in step this long after its last change. */
+const MERKLISTE_DELAY = 2500
 
 const IN_APP = Boolean(APP_BRIDGE?.drive)
 /** In the app, whose main process signs in; elsewhere the website's popup. */
@@ -67,7 +83,7 @@ export const DRIVE_PROBLEM: Record<DriveErrorCode, string> = {
   failed: 'Google Drive hat abgelehnt.',
 }
 
-export type DriveJobKind = 'project' | 'file' | 'download' | 'merkliste'
+export type DriveJobKind = 'project' | 'file' | 'download'
 
 export interface DriveJob {
   id: string
@@ -87,13 +103,13 @@ export interface DriveJob {
 export interface DriveSettings {
   /** Every finished download goes to „Heruntergeladen“ as well. */
   autoDownloads: boolean
-  /** The Merkliste goes to „Merkliste“ after every change. */
+  /** The Merkliste is kept in step with the file in „Merkliste“. */
   merkliste: boolean
   /** Connected before (the website keeps no token, only the fact). */
   linked: boolean
   email: string
   name: string
-  merklisteHash: string
+  /** The last round that went through. */
   merklisteAt: number
   /** Folder ids per account, checked once a visit before they are used. */
   folders: Record<string, Partial<Record<DriveFolder, string>>>
@@ -105,7 +121,6 @@ const DEFAULT_SETTINGS: DriveSettings = {
   linked: false,
   email: '',
   name: '',
-  merklisteHash: '',
   merklisteAt: 0,
   folders: {},
 }
@@ -134,6 +149,19 @@ export interface DriveState {
   jobs: DriveJob[]
   settings: DriveSettings
   problem: { code: DriveErrorCode; detail?: string } | null
+  /** The Merkliste's rounds with the file in Drive. */
+  merkSync: MerkSync
+}
+
+export type MerkSyncProblem = DriveErrorCode | 'unreadable'
+
+export interface MerkSync {
+  running: boolean
+  /** When the last round went through; 0 before one did on this visit. */
+  at: number
+  /** Series that came from Drive or changed through it in the last round. */
+  received: number
+  problem: { code: MerkSyncProblem; detail?: string } | null
 }
 
 export const useDrive = create<DriveState>(() => ({
@@ -146,6 +174,7 @@ export const useDrive = create<DriveState>(() => ({
   jobs: [],
   settings: readSettings(),
   problem: null,
+  merkSync: { running: false, at: 0, received: 0, problem: null },
 }))
 
 const set = (patch: Partial<DriveState> | ((state: DriveState) => Partial<DriveState>)) => useDrive.setState(patch)
@@ -308,8 +337,8 @@ export function connectDrive(): Promise<boolean> {
       set({ connected: true, signingIn: false, account: account ?? state().account })
       log(`Mit Google Drive verbunden${account?.email ? ` (${account.email})` : ''}`)
       void pump()
-      // The list's first backup once the switch is on.
-      if (state().settings.merkliste) backupMerkliste(false)
+      // The list in step once the switch is on — first of all, before anything else changes it.
+      if (state().settings.merkliste) void syncMerklisteWithDrive()
       return true
     },
     (error: unknown) => {
@@ -344,7 +373,9 @@ export async function disconnectDrive(): Promise<void> {
     problem: null,
     jobs: current.jobs.filter((job) => job.status !== 'waiting'),
   }))
-  saveSettings({ linked: false, email: '', name: '', folders: {}, merklisteHash: '' })
+  saveSettings({ linked: false, email: '', name: '', folders: {}, merklisteAt: 0 })
+  inDrive = ''
+  set({ merkSync: { running: false, at: 0, received: 0, problem: null } })
   log('Google Drive getrennt')
 }
 
@@ -354,6 +385,11 @@ export function initDrive(): void {
   if (started) return
   started = true
   onMerkliste(() => scheduleMerkliste())
+  answerStreamTokens()
+  // Back at the window after a while: another device may have changed the list.
+  window.addEventListener('focus', () => {
+    if (Date.now() - lastRound > FOCUS_GAP) void syncMerklisteWithDrive({ quiet: true })
+  })
   if (!IN_APP) return
   void ask<{ configured: boolean; connected: boolean; lasting: boolean }>('status').then(async (answer) => {
     if (!answer.ok) {
@@ -368,6 +404,7 @@ export function initDrive(): void {
       set({ account })
     }
     void pump()
+    if (state().settings.merkliste) void syncMerklisteWithDrive()
   })
 }
 
@@ -399,8 +436,7 @@ function patchJob(id: string, patch: Partial<DriveJob>) {
 function enqueue(job: Pick<DriveJob, 'kind' | 'name' | 'folder' | 'assetId'> & { total: number }, payload: Payload): string {
   const id = `drive-${Date.now()}-${(jobCounter += 1)}`
   set((current) => {
-    // A newer Merkliste replaces one still waiting.
-    let jobs = job.kind === 'merkliste' ? current.jobs.filter((entry) => !(entry.kind === 'merkliste' && entry.status === 'waiting')) : current.jobs
+    let jobs = current.jobs
     const finished = jobs.filter((entry) => entry.status === 'done' || entry.status === 'skipped' || entry.status === 'failed')
     if (finished.length >= KEEP_FINISHED) {
       const drop = new Set(finished.slice(0, finished.length - KEEP_FINISHED + 1).map((entry) => entry.id))
@@ -409,7 +445,7 @@ function enqueue(job: Pick<DriveJob, 'kind' | 'name' | 'folder' | 'assetId'> & {
     return { jobs: [...jobs, { ...job, id, status: 'waiting', loaded: 0, at: Date.now() }] }
   })
   payloads.set(id, payload)
-  // Merkliste jobs that were replaced leave their payload behind.
+  // Jobs dropped from the list leave their payload behind.
   for (const key of payloads.keys()) if (!state().jobs.some((entry) => entry.id === key)) payloads.delete(key)
   void pump()
   return id
@@ -560,51 +596,141 @@ export function offerDownloadToDrive(file: { name: string; bytes: Uint8Array; mi
   )
 }
 
-/** A short fingerprint of the list, to send it only when it changed. */
-function fingerprint(text: string): string {
-  let hash = 0x811c9dc5
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return `${(hash >>> 0).toString(16)}-${text.length}`
+/* -------------------------------------------------------------------------- */
+/* The Merkliste, shared through Drive                                         */
+/* -------------------------------------------------------------------------- */
+
+/** What the file in Drive held after the last round, as `sharedKey`. */
+let inDrive = ''
+let round: Promise<void> | null = null
+let roundAgain = false
+/** Set while a round puts the merged list in place, so that is not taken for a change. */
+let applying = false
+let lastRound = 0
+/** Coming back to the window starts a round only after this long. */
+const FOCUS_GAP = 60_000
+
+const setSync = (patch: Partial<MerkSync>) => set((current) => ({ merkSync: { ...current.merkSync, ...patch } }))
+
+/** True when this list is what the last round left in Drive — nothing to send. */
+export function inStepWithDrive(items: SavedLinkItem[]): boolean {
+  return inDrive !== '' && inDrive === sharedKey(items, merkRemovals())
 }
 
-/** The Merkliste as one file, „Sondra-Merkliste.json“; Drive keeps the earlier versions. */
-export function backupMerkliste(force: boolean): void {
+/**
+ * One round: read „Sondra-Merkliste.json“, merge it into this device's
+ * list (`mergeShared`: per series the side changed last wins, removals
+ * stay removed, pictures from files stay on their device), write the
+ * merged list back unless the file already holds exactly that. Compared
+ * with the file, not with what this device wrote last: another one may
+ * have written since. A file Sondra cannot read is never written over.
+ */
+async function merkRound(quiet: boolean): Promise<void> {
   const current = state()
   if (!driveLinked(current)) return
-  const items = merkItems()
-  if (items.length === 0 && !force) return
-  const hash = fingerprint(JSON.stringify(items))
-  if (!force && hash === current.settings.merklisteHash) return
-  const text = exportMerkliste(items)
-  enqueue(
-    { kind: 'merkliste', name: MERKLISTE_FILE, folder: 'merkliste', total: text.length },
-    {
-      data: () => new Blob([text], { type: 'application/json' }),
-      mode: 'replace',
-      mime: 'application/json',
-      onDone: () => saveSettings({ merklisteHash: hash, merklisteAt: Date.now() }),
-    },
-  )
-  if (force) go()
+  if (!canRun()) {
+    // The website's hour is up: said where the list is shown, asked for by a click.
+    if (!quiet) setSync({ running: false, problem: { code: 'expired' } })
+    return
+  }
+  const started = connection
+  setSync({ running: true })
+  try {
+    const file = await client.find('merkliste', MERKLISTE_FILE)
+    const remote = file ? readSharedFile(new TextDecoder().decode(await client.read(file.id))) : null
+    if (file && !remote) {
+      setSync({ running: false, problem: { code: 'unreadable' } })
+      log(`${MERKLISTE_FILE} in Google Drive ist keine Merkliste — nicht überschrieben`, 'warn')
+      return
+    }
+    if (started !== connection) return
+    let received = 0
+    if (remote) {
+      const before = merkItems()
+      const merged = mergeShared(before, remote)
+      const known = new Map(before.map((item) => [item.id, item.updatedAt]))
+      received = merged.items.filter((item) => known.get(item.id) !== item.updatedAt).length
+      applying = true
+      try {
+        if (received > 0 || merged.items.length !== before.length) setMerkItems(merged.items)
+        adoptRemovals(merged.removed)
+      } finally {
+        applying = false
+      }
+    }
+    const key = sharedKey(merkItems(), merkRemovals())
+    if (!remote || remote.key !== key) {
+      const text = sharedFileText(merkItems(), merkRemovals())
+      await client.put('merkliste', MERKLISTE_FILE, new Blob([text], { type: 'application/json' }), { mode: 'replace', mime: 'application/json' })
+      if (started !== connection) return
+      log(`Merkliste in Google Drive abgeglichen (${merkItems().length} Einträge${received ? `, ${received} von dort` : ''})`)
+    } else if (received > 0) {
+      log(`Merkliste aus Google Drive: ${received} ${received === 1 ? 'Serie' : 'Serien'} neu oder geändert`)
+    }
+    inDrive = key
+    const at = Date.now()
+    setSync({ running: false, at, received, problem: null })
+    saveSettings({ merklisteAt: at })
+  } catch (error) {
+    if (started !== connection) return
+    const code = error instanceof DriveError ? error.code : 'failed'
+    const detail = error instanceof DriveError ? error.detail : String((error as Error)?.message ?? error)
+    setSync({ running: false, problem: { code, detail } })
+    if (code !== 'expired') log(`Merkliste nicht mit Google Drive abgeglichen: ${DRIVE_PROBLEM[code]}${detail ? ` (${detail})` : ''}`, 'warn')
+  } finally {
+    lastRound = Date.now()
+  }
+}
+
+/**
+ * Brings the Merkliste in step with Drive. Rounds never overlap: a call
+ * during one asks for another right after it. `quiet`: a round nobody
+ * asked for says nothing when the website's sign-in is missing.
+ */
+export function syncMerklisteWithDrive({ quiet = false }: { quiet?: boolean } = {}): Promise<void> {
+  const current = state()
+  if (!current.settings.merkliste || !driveLinked(current)) return Promise.resolve()
+  if (round) {
+    roundAgain = true
+    return round
+  }
+  round = (async () => {
+    do {
+      roundAgain = false
+      await merkRound(quiet)
+    } while (roundAgain)
+  })().finally(() => {
+    round = null
+  })
+  return round
+}
+
+/** A round now, from a click — on the website signing in first when its hour is up. */
+export async function syncMerklisteNow(): Promise<void> {
+  if (!canRun() && !IN_APP) {
+    if (!(await connectDrive())) return
+    // Signing in starts a round of its own.
+    return round ?? syncMerklisteWithDrive()
+  }
+  return syncMerklisteWithDrive()
 }
 
 let merklisteTimer: ReturnType<typeof setTimeout> | null = null
 function scheduleMerkliste() {
+  if (applying) return
   const current = state()
-  if (!current.settings.merkliste || !driveLinked(current)) return
+  if (!current.settings.merkliste || !driveLinked(current) || inStepWithDrive(merkItems())) return
   if (merklisteTimer) clearTimeout(merklisteTimer)
   merklisteTimer = setTimeout(() => {
     merklisteTimer = null
-    backupMerkliste(false)
+    void syncMerklisteWithDrive({ quiet: true })
   }, MERKLISTE_DELAY)
 }
 
 export function setDriveSetting(patch: Partial<Pick<DriveSettings, 'autoDownloads' | 'merkliste'>>): void {
   saveSettings(patch)
-  if (patch.merkliste) backupMerkliste(false)
+  if (patch.merkliste) void syncMerklisteWithDrive()
+  if (patch.merkliste === false) setSync({ running: false, problem: null })
 }
 
 /* -------------------------------------------------------------------------- */
@@ -629,13 +755,72 @@ export async function openDriveProject(file: DriveFile): Promise<number> {
   return loadProjectBytes(bytes, file.name).assetCount
 }
 
-/** The backup in Drive read in; joins the list like a file read in (`importMerkliste`). */
-export async function readMerklisteFromDrive(): Promise<{ result: MerkImport; before: SavedLinkItem[]; saved: boolean } | null> {
+/** Everything in Sondra's folder in Drive, its subfolders walked through. On the website a click may sign in first. */
+export async function readDriveTree(options: { signal?: AbortSignal; onProgress?: (files: number) => void; limit?: number } = {}) {
   await ready()
-  const file = await client.find('merkliste', MERKLISTE_FILE)
-  if (!file) return null
-  const text = new TextDecoder().decode(await client.read(file.id))
-  return importMerkliste(readMerklisteFile(text))
+  return client.tree(options)
+}
+
+/** Whether Drive can be read right now, without a click to sign in. */
+export const driveReadable = (): boolean => driveLinked() && canRun()
+
+/** One file's bytes, from Drive. */
+export async function readDriveFile(id: string, signal?: AbortSignal, onProgress?: (loaded: number) => void): Promise<Uint8Array> {
+  await ready()
+  return client.read(id, signal, onProgress)
+}
+
+/* -------------------------------------------------------------------------- */
+/* Streaming                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A film in Drive is played from there, piece by piece as the player asks
+ * for it: the service worker answers `drive-media/<id>` on this origin
+ * with ranges it fetches from Drive. A media element cannot send Drive the
+ * token itself, and putting it into an address would hand it to whatever
+ * logs addresses. The worker asks this page for a token when it needs one
+ * and keeps it only in memory, as the page does.
+ */
+function answerStreamTokens(): void {
+  navigator.serviceWorker?.addEventListener('message', (event: MessageEvent) => {
+    const data = event.data as { type?: string; refused?: boolean } | null
+    const port = event.ports[0]
+    if (!data || data.type !== 'drive-token-wanted' || !port) return
+    accessToken(Boolean(data.refused)).then(
+      (token) => port.postMessage({ token }),
+      () => port.postMessage({ token: null }),
+    )
+  })
+}
+
+let streaming: Promise<boolean> | null = null
+
+/** Whether a worker that knows `drive-media/` is in charge of this page. */
+function canStream(): Promise<boolean> {
+  const worker = typeof navigator !== 'undefined' ? navigator.serviceWorker?.controller : null
+  if (!worker) return Promise.resolve(false)
+  streaming ??= new Promise<boolean>((resolve) => {
+    const channel = new MessageChannel()
+    const timer = window.setTimeout(() => resolve(false), 1500)
+    channel.port1.onmessage = (event) => {
+      window.clearTimeout(timer)
+      resolve(event.data === 'drive-media')
+    }
+    worker.postMessage({ type: 'drive-ping' }, [channel.port2])
+  }).then((answer) => {
+    // A worker from an older build may be replaced by one that can; ask again next time.
+    if (!answer) streaming = null
+    return answer
+  })
+  return streaming
+}
+
+/** The address to play a file in Drive from, or null when it has to be fetched whole. */
+export async function driveMediaUrl(file: { id: string; size: number; type: string }): Promise<string | null> {
+  if (!(await canStream())) return null
+  const query = new URLSearchParams({ size: String(file.size), type: file.type || 'application/octet-stream' })
+  return new URL(`drive-media/${encodeURIComponent(file.id)}?${query}`, document.baseURI).toString()
 }
 
 /** The folder in Drive's own page, made if it is not there yet. */

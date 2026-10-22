@@ -52,7 +52,7 @@ let clock = Date.parse('2026-10-22T10:00:00Z')
 const seen = { requests: 0, creates: 0, folderCreates: 0, multipart: 0, media: 0, resumable: 0, pieces: 0, statusQueries: 0, refused401: 0, tooMany: 0 }
 const tokens = { valid: new Set(['tok-1']), issued: 1 }
 /** Knobs for the next requests. */
-const knobs = { hideRange: false, dropPiece: false, quotaFull: false, tooManyOnce: false }
+const knobs = { hideRange: false, dropPiece: false, quotaFull: false, tooManyOnce: false, pageSize: 0 }
 
 const ROOT = 'root-id'
 const now = () => new Date((clock += 1000)).toISOString()
@@ -64,13 +64,20 @@ function failure(status: number, reason: string, message = reason) {
   return json({ error: { code: status, message, errors: [{ reason, message }] } }, status)
 }
 
+/** In the bin itself or inside a folder that is — Drive says `trashed` for both. */
+function binned(file: StoredFile): boolean {
+  if (file.trashed) return true
+  const parent = files.get(file.parents[0])
+  return parent ? binned(parent) : false
+}
+
 function meta(file: StoredFile) {
   return {
     id: file.id,
     name: file.name,
     mimeType: file.mimeType,
     modifiedTime: file.modifiedTime,
-    trashed: file.trashed,
+    trashed: binned(file),
     ...(file.mimeType === FOLDER ? {} : { size: String(file.content.byteLength) }),
   }
 }
@@ -89,7 +96,7 @@ function matches(file: StoredFile, q: string): boolean {
       const parent = unquote(m[1])
       return file.parents.includes(parent === 'root' ? ROOT : parent)
     }
-    if (clause === 'trashed = false') return !file.trashed
+    if (clause === 'trashed = false') return !binned(file)
     throw new Error(`Abfrage nicht verstanden: ${clause}`)
   })
 }
@@ -198,6 +205,12 @@ const standIn: typeof fetch = async (input, init = {}) => {
     const q = url.searchParams.get('q') ?? ''
     const found = [...files.values()].filter((file) => matches(file, q))
     if (url.searchParams.get('orderBy') === 'modifiedTime desc') found.sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime))
+    if (knobs.pageSize > 0) {
+      // Small pages, as Drive gives them for a large folder.
+      const start = Number(url.searchParams.get('pageToken') || 0)
+      const next = start + knobs.pageSize
+      return json({ files: found.slice(start, next).map(meta), ...(next < found.length ? { nextPageToken: String(next) } : {}) })
+    }
     return json({ files: found.map(meta) })
   }
   if (route === '/files' && method === 'POST') {
@@ -385,6 +398,29 @@ const blob = (data: Uint8Array, type = 'application/octet-stream') => new Blob([
   const fresh = makeClient()
   const merkliste = await fresh.folder('merkliste')
   check('Sondra im Papierkorb: neu angelegt, Merkliste darin', [pathOf(merkliste), files.get(files.get(merkliste)!.parents[0])!.trashed], ['Sondra/Merkliste', false])
+}
+
+{
+  // The folder page's view of Drive: everything below „Sondra“, page after page.
+  const client = makeClient()
+  const down = await client.folder('downloads')
+  const season = create({ name: 'Staffel 1', parents: [down], mimeType: FOLDER })
+  const made = ['Frieren S01E01.mkv', 'Frieren S01E02.mkv', 'Frieren S01E03.mkv'].map((name, index) =>
+    create({ name, parents: [season.id], mimeType: 'video/x-matroska' }, new Uint8Array(10 + index)),
+  )
+  knobs.pageSize = 2
+  const tree = await client.tree()
+  knobs.pageSize = 0
+  check(
+    'Baum: Folgen im Unterordner, Pfad ab „Sondra“',
+    tree.files.filter((file) => file.path.startsWith('Heruntergeladen/Staffel 1/')).map((file) => [file.path, file.size]),
+    made.map((file, index) => [`Heruntergeladen/Staffel 1/${file.name}`, 10 + index]),
+  )
+  check('Baum: Unterordner genannt, kein Ordner als Datei', [tree.dirs.includes('Heruntergeladen/Staffel 1'), tree.files.some((file) => file.mimeType === FOLDER)], [true, false])
+  check('Baum: hört an der Grenze auf und sagt es', [(await client.tree({ limit: 2 })).files.length, (await client.tree({ limit: 2 })).truncated], [2, true])
+  let last = 0
+  const bytes = await client.read(made[2].id, undefined, (loaded) => (last = loaded))
+  check('Lesen mit Fortschritt: alle Bytes, zuletzt gemeldet', [bytes.byteLength, last], [12, 12])
 }
 
 /* -- The app's sign-in ---------------------------------------------------------- */

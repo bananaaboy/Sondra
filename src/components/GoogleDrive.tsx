@@ -16,7 +16,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { formatBytes } from '../lib/format'
 import {
-  backupMerkliste,
   cancelDriveSignIn,
   clearDriveJobs,
   connectDrive,
@@ -33,16 +32,17 @@ import {
   openDriveDialog,
   openDriveProject,
   OPEN_DRIVE_EVENT,
-  readMerklisteFromDrive,
   retryDriveJob,
   saveAssetsToDrive,
   saveProjectToDrive,
   setDriveSetting,
+  syncMerklisteNow,
   useDrive,
   type DriveFile,
   type DriveJob,
+  type MerkSync,
 } from '../lib/googleDrive'
-import { revertImport, useMerkliste, type SavedLinkItem } from '../lib/merkliste'
+import { useMerkliste } from '../lib/merkliste'
 import { useSession } from '../state/store'
 import { Button, Dialog, Notice, Toggle } from './ui/primitives'
 
@@ -267,6 +267,42 @@ function DriveProjects({ onOpened }: { onOpened: () => void }) {
   )
 }
 
+const MERK_SYNC_PROBLEM: Record<'unreadable', string> = {
+  unreadable: 'In Drive liegt unter diesem Namen eine Datei, die Sondra nicht als Merkliste lesen kann. Sie wird nicht überschrieben.',
+}
+
+/** What a round with Drive said, in words. */
+export function merkSyncProblemText(problem: NonNullable<MerkSync['problem']>): string {
+  return problem.code === 'unreadable' ? MERK_SYNC_PROBLEM.unreadable : DRIVE_PROBLEM[problem.code]
+}
+
+/** Where the Merkliste stands with Drive: the last round, one running, or what stopped it. */
+function MerkSyncLine({ sync, count, busy, onSync }: { sync: MerkSync; count: number; busy: boolean; onSync: () => void }) {
+  return (
+    // Under the switch's words, not under the switch.
+    <div className="flex flex-col gap-[8px] pl-[40px]">
+      <p role="status" className="flex flex-wrap items-baseline gap-x-[14px] gap-y-[4px] text-small text-prose">
+        <span>
+          {sync.running || busy
+            ? 'Gleicht ab …'
+            : sync.at
+              ? `Abgeglichen um ${clock(sync.at)} · ${count} ${count === 1 ? 'Serie' : 'Serien'}${sync.received ? ` · ${sync.received} aus Drive` : ''}`
+              : 'Noch nicht abgeglichen.'}
+        </span>
+        <button type="button" onClick={onSync} disabled={busy || sync.running} className={`${linkClass} text-small`}>
+          Jetzt abgleichen
+        </button>
+      </p>
+      {sync.problem && sync.problem.code !== 'expired' ? (
+        <Notice tone="warn" title="Abgleich mit Drive">
+          {merkSyncProblemText(sync.problem)}
+          {sync.problem.detail ? <span className="mt-[4px] block break-words text-micro text-muted">{sync.problem.detail}</span> : null}
+        </Notice>
+      ) : null}
+    </div>
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 /* The dialog                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -277,13 +313,11 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
   const items = useMerkliste()
   const linked = driveLinked(drive)
   const [busy, setBusy] = useState<string | null>(null)
-  const [note, setNote] = useState<{ text: string; before?: SavedLinkItem[] } | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
 
   const act = async (key: string, work: () => Promise<void>) => {
     setBusy(key)
     setProblem(null)
-    setNote(null)
     try {
       await work()
     } catch (error) {
@@ -308,26 +342,7 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
       }
     })
 
-  const readList = () =>
-    act('merkliste', async () => {
-      const answer = await readMerklisteFromDrive()
-      if (!answer) {
-        setNote({ text: 'In Drive liegt noch keine Merkliste.' })
-        return
-      }
-      if (!answer.saved) {
-        setProblem('Für die eingelesene Liste reicht der Speicher auf diesem Gerät nicht — meist sind es zu grosse Cover.')
-        return
-      }
-      const { result } = answer
-      const parts = [
-        result.added ? `${result.added} neu` : null,
-        result.updated ? `${result.updated} auf neuerem Stand` : null,
-        result.same ? `${result.same} schon gleich` : null,
-        result.kept ? `${result.kept} hier neuer, behalten` : null,
-      ].filter(Boolean)
-      setNote({ text: `Aus Drive eingelesen: ${parts.join(' · ') || 'nichts Neues'}.`, before: answer.before })
-    })
+  const syncList = () => act('merkliste', syncMerklisteNow)
 
   const jobs = drive.jobs
   const finished = jobs.some((job) => job.status === 'done' || job.status === 'skipped' || job.status === 'failed')
@@ -448,60 +463,29 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
                   hint="Jeder fertige Download kommt auch nach Sondra/Heruntergeladen."
                 />
                 <Toggle
-                  label="Merkliste in Drive sichern"
+                  label="Merkliste über Drive abgleichen"
                   checked={drive.settings.merkliste}
                   onChange={(next) => setDriveSetting({ merkliste: next })}
-                  hint={
-                    drive.settings.merklisteAt
-                      ? `Nach jeder Änderung als Sondra-Merkliste.json, zuletzt um ${clock(drive.settings.merklisteAt)}. Drive behält die älteren Fassungen.`
-                      : 'Nach jeder Änderung als Sondra-Merkliste.json. Drive behält die älteren Fassungen.'
-                  }
+                  hint="Jedes Gerät mit diesem Google-Konto hat dieselbe Liste, auch die Website — statt Anytype oder daneben. Sie liegt als Sondra-Merkliste.json im Ordner Merkliste; Drive behält die älteren Fassungen."
                 />
+                {drive.settings.merkliste ? (
+                  <MerkSyncLine sync={drive.merkSync} count={items.length} busy={busy === 'merkliste'} onSync={() => void syncList()} />
+                ) : null}
               </div>
             </Section>
 
-            <Section title="Jetzt speichern">
-              <div className="flex flex-wrap items-center gap-[8px]">
-                {assets.length > 0 ? (
-                  <>
-                    <Button type="button" size="sm" variant="quiet" onClick={() => saveProjectToDrive()}>
-                      Projekt in Drive
-                    </Button>
-                    <Button type="button" size="sm" variant="quiet" onClick={() => saveAssetsToDrive(assets)}>
-                      {assets.length === 1 ? 'Datei der Sitzung' : `Alle ${assets.length} Dateien der Sitzung`}
-                    </Button>
-                  </>
-                ) : null}
-                {items.length > 0 ? (
-                  <Button type="button" size="sm" variant="quiet" onClick={() => backupMerkliste(true)}>
-                    Merkliste sichern
+            {assets.length > 0 ? (
+              <Section title="Jetzt speichern">
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  <Button type="button" size="sm" variant="quiet" onClick={() => saveProjectToDrive()}>
+                    Projekt in Drive
                   </Button>
-                ) : null}
-                <button type="button" onClick={() => void readList()} disabled={busy !== null} className={`${linkClass} text-small`}>
-                  {busy === 'merkliste' ? 'Liest …' : 'Merkliste aus Drive einlesen'}
-                </button>
-              </div>
-              {assets.length === 0 ? (
-                <p className="text-small text-prose">Ohne geöffnete Datei gibt es kein Projekt zu speichern.</p>
-              ) : null}
-              {note ? (
-                <p role="status" className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-small text-prose">
-                  <span>{note.text}</span>
-                  {note.before ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        revertImport(note.before!)
-                        setNote({ text: 'Zurückgenommen.' })
-                      }}
-                      className={`${linkClass} font-semibold`}
-                    >
-                      Rückgängig
-                    </button>
-                  ) : null}
-                </p>
-              ) : null}
-            </Section>
+                  <Button type="button" size="sm" variant="quiet" onClick={() => saveAssetsToDrive(assets)}>
+                    {assets.length === 1 ? 'Datei der Sitzung' : `Alle ${assets.length} Dateien der Sitzung`}
+                  </Button>
+                </div>
+              </Section>
+            ) : null}
 
             <DriveProjects onOpened={onClose} />
 

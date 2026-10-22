@@ -405,14 +405,76 @@ export function createDriveClient({
       return (found.files ?? []).map(asFile)
     },
 
+    /**
+     * Everything below „Sondra“, its subfolders walked through: each file
+     * with its path inside, „Heruntergeladen/Frieren S01E01.mp4“. Only what
+     * Sondra put there — `drive.file` shows nothing else.
+     */
+    async tree({ limit = 20_000, signal, onProgress }: { limit?: number; signal?: AbortSignal; onProgress?: (files: number) => void } = {}) {
+      const files: (DriveFile & { path: string })[] = []
+      const dirs: string[] = ['']
+      let truncated = false
+      const queue: { id: string; path: string }[] = [{ id: await folder('root'), path: '' }]
+      while (queue.length > 0) {
+        const { id, path } = queue.shift()!
+        let pageToken = ''
+        do {
+          if (aborted(signal)) throw new DOMException('Abgebrochen', 'AbortError')
+          const page = await json<{ files?: Record<string, unknown>[]; nextPageToken?: string }>(
+            `${endpoints.api}/files?${query({
+              q: `${quote(id)} in parents and trashed = false`,
+              fields: `nextPageToken,files(${FILE_FIELDS})`,
+              spaces: 'drive',
+              pageSize: '1000',
+              ...(pageToken ? { pageToken } : {}),
+            })}`,
+            { signal },
+          )
+          for (const raw of page.files ?? []) {
+            const entry = asFile(raw)
+            const inside = path ? `${path}/${entry.name}` : entry.name
+            if (entry.mimeType === FOLDER_TYPE) {
+              dirs.push(inside)
+              queue.push({ id: entry.id, path: inside })
+            } else if (files.length >= limit) {
+              truncated = true
+            } else {
+              files.push({ ...entry, path: inside })
+            }
+          }
+          onProgress?.(files.length)
+          pageToken = page.nextPageToken ?? ''
+        } while (pageToken && !truncated)
+      }
+      return { files, dirs: dirs.sort(), truncated }
+    },
+
     /** One file of this name in the folder, if there is one. */
     async find(key: DriveFolder, name: string): Promise<DriveFile | null> {
       return find(await folder(key), name)
     },
 
-    async read(id: string, signal?: AbortSignal): Promise<Uint8Array> {
+    async read(id: string, signal?: AbortSignal, onProgress?: (loaded: number) => void): Promise<Uint8Array> {
       const response = await call(`${endpoints.api}/files/${encodeURIComponent(id)}?alt=media`, { signal })
-      return new Uint8Array(await response.arrayBuffer())
+      if (!onProgress || !response.body) return new Uint8Array(await response.arrayBuffer())
+      // Piece by piece, so a long film can say how far it got.
+      const reader = response.body.getReader()
+      const parts: Uint8Array[] = []
+      let loaded = 0
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+        loaded += value.byteLength
+        onProgress(loaded)
+      }
+      const whole = new Uint8Array(loaded)
+      let at = 0
+      for (const part of parts) {
+        whole.set(part, at)
+        at += part.byteLength
+      }
+      return whole
     },
 
     async account(): Promise<{ name: string; email: string }> {

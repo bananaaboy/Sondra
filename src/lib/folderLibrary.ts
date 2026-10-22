@@ -8,14 +8,33 @@
  * and the browser still allows the folder kept from last time (the app, or
  * Chrome's „bei jedem Besuch erlauben“). Only names, sizes and dates are
  * read for that; the files themselves when one is played.
+ *
+ * Or Sondra's folder in Google Drive: listed the same way, played from
+ * there (streamed, see `googleDrive.ts`), and what is watched ticks the
+ * Merkliste off like a file on this device — which Drive then carries to
+ * the other devices.
  */
 
 import { useMemo } from 'react'
 import { create } from 'zustand'
 
-import { allowed, folderEpisodes, playQueue, rememberFolder, rememberedFolder, scanFileList, scanHandle, type DirectoryHandle, type FolderEpisode, type FolderFile, type FolderScan } from './folder'
+import {
+  allowed,
+  folderEpisodes,
+  playQueue,
+  rememberFolder,
+  rememberedFolder,
+  scanDrive,
+  scanFileList,
+  scanHandle,
+  type DirectoryHandle,
+  type FolderEpisode,
+  type FolderFile,
+  type FolderScan,
+} from './folder'
+import { driveReadable, readDriveFile, readDriveTree } from './googleDrive'
 import { useMerkliste, type SavedLinkItem } from './merkliste'
-import { sendToPlayer } from './player'
+import { sendToPlayer, type RemoteMedia } from './player'
 import { clearThumbnails } from './thumbnails'
 import { useSession } from '../state/store'
 
@@ -29,9 +48,39 @@ export interface FolderState {
   scanning: { files: number } | null
   /** The folder kept from last time, once looked up. */
   remembered: DirectoryHandle | null
+  /** Where the folder came from last time: this device, or Google Drive. */
+  source: 'device' | 'drive' | null
 }
 
-export const useFolder = create<FolderState>(() => ({ scan: null, dir: '', selected: new Set(), anchor: null, scanning: null, remembered: null }))
+const SOURCE_KEY = 'sondra:ordner:quelle'
+
+function readSource(): FolderState['source'] {
+  try {
+    const value = localStorage.getItem(SOURCE_KEY)
+    return value === 'drive' || value === 'device' ? value : null
+  } catch {
+    return null
+  }
+}
+
+function keepSource(source: 'device' | 'drive') {
+  useFolder.setState({ source })
+  try {
+    localStorage.setItem(SOURCE_KEY, source)
+  } catch {
+    // Only a convenience for next time.
+  }
+}
+
+export const useFolder = create<FolderState>(() => ({
+  scan: null,
+  dir: '',
+  selected: new Set(),
+  anchor: null,
+  scanning: null,
+  remembered: null,
+  source: readSource(),
+}))
 
 let abort: AbortController | null = null
 
@@ -45,6 +94,7 @@ export async function readFolder(handle: DirectoryHandle): Promise<FolderScan | 
     const scan = await scanHandle(handle, { signal: controller.signal, onProgress: (files) => useFolder.setState({ scanning: { files } }) })
     clearThumbnails()
     useFolder.setState({ scan, dir: '', selected: new Set(), anchor: null, remembered: handle })
+    keepSource('device')
     void rememberFolder(handle)
     useSession.getState().log('ordner', `${scan.name}: ${scan.files.length} Dateien gelesen${scan.truncated ? ' (gekürzt)' : ''}`)
     return scan
@@ -68,8 +118,37 @@ export function takeFileList(list: ArrayLike<File>): FolderScan {
   const scan = scanFileList(list)
   clearThumbnails()
   useFolder.setState({ scan, dir: '', selected: new Set(), anchor: null })
+  keepSource('device')
   useSession.getState().log('ordner', `${scan.name}: ${scan.files.length} Dateien gelesen`)
   return scan
+}
+
+/**
+ * Sondra's folder in Google Drive, listed. From a click on the website,
+ * which may have to sign in first: the popup opens within that click.
+ */
+export async function readDriveFolder(): Promise<FolderScan | null> {
+  abort?.abort()
+  const controller = new AbortController()
+  abort = controller
+  useFolder.setState({ scanning: { files: 0 } })
+  try {
+    const listed = await readDriveTree({ signal: controller.signal, onProgress: (files) => useFolder.setState({ scanning: { files } }) })
+    const scan = scanDrive(listed)
+    clearThumbnails()
+    useFolder.setState({ scan, dir: '', selected: new Set(), anchor: null })
+    keepSource('drive')
+    useSession.getState().log('ordner', `Google Drive: ${scan.files.length} Dateien im Ordner „Sondra“`)
+    return scan
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return null
+    throw error
+  } finally {
+    if (abort === controller) {
+      abort = null
+      useFolder.setState({ scanning: null })
+    }
+  }
 }
 
 /** Looks up the folder kept from last time, once. */
@@ -86,21 +165,41 @@ export async function lookUpRemembered(): Promise<DirectoryHandle | null> {
  * browser may ask for leave; without it, only when leave is still there.
  */
 export async function includeRemembered(ask: boolean): Promise<'read' | 'needs-click' | 'none'> {
+  // Google Drive last time: read now if signed in, else only from a click (which may sign in).
+  if (useFolder.getState().source === 'drive') {
+    if (!ask && !driveReadable()) return 'needs-click'
+    return (await readDriveFolder()) ? 'read' : 'none'
+  }
   const handle = await lookUpRemembered()
   if (!handle) return 'none'
   if (!(await allowed(handle, 'read', ask))) return 'needs-click'
   return (await readFolder(handle)) ? 'read' : 'none'
 }
 
+/** What the player gets for an entry: the file here, or where it lies in Drive. */
+function forPlayer(file: FolderFile): File | RemoteMedia | null {
+  if (file.file) return file.file
+  if (file.drive) return { kind: 'drive', id: file.drive.id, name: file.name, size: file.size, type: file.drive.mime }
+  return null
+}
+
 /** Episodes into the player — the first plays, the rest wait behind it. */
 export function playFiles(files: FolderFile[], replace = true): void {
-  const playable = files.filter((file) => file.kind === 'video' || file.kind === 'audio')
+  const playable = files
+    .filter((file) => file.kind === 'video' || file.kind === 'audio')
+    .map(forPlayer)
+    .filter((entry): entry is File | RemoteMedia => entry !== null)
   if (playable.length === 0) return
-  sendToPlayer(
-    playable.map((file) => file.file),
-    replace,
-  )
+  sendToPlayer(playable, replace)
   useSession.getState().setPanel('player')
+}
+
+/** The entry as a file on this device — one in Drive fetched first. */
+export async function fileHere(file: FolderFile, onProgress?: (loaded: number) => void): Promise<File> {
+  if (file.file) return file.file
+  if (!file.drive) throw new Error(`${file.name} ist nicht mehr da.`)
+  const bytes = await readDriveFile(file.drive.id, undefined, onProgress)
+  return new File([bytes as BlobPart], file.name, { type: file.drive.mime, lastModified: file.modified })
 }
 
 /** Plays an episode of a series from the folder, with its unseen followers. */

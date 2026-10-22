@@ -32,6 +32,7 @@ import {
   QUALITY_STEPS,
   RATES,
   claimDrops,
+  isRemote,
   receivePlayerFiles,
   clock,
   isSubtitleFile,
@@ -54,10 +55,12 @@ import {
   withMark,
   type PlayerItem,
   type PlayerMark,
+  type RemoteMedia,
   type PlayerSettings,
   type SleepTimer,
 } from '../../lib/player'
 import { holdScreenAwake } from '../../lib/wakeLock'
+import { connectDrive, DRIVE_PROBLEM, DriveError, driveMediaUrl, driveReadable, readDriveFile } from '../../lib/googleDrive'
 import { useSession, type Asset } from '../../state/store'
 import { APP_BRIDGE, updateDiscordPresence } from '../../lib/desktop'
 import { matchEpisode } from '../../lib/episodeMatch'
@@ -517,6 +520,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const masterDimensionsRef = useRef<Record<string, { width: number; height: number }>>({})
   const qualityCache = useRef<Map<string, Map<number, string>>>(new Map())
   const [failed, setFailed] = useState(false)
+  /** A file from Drive that has to come whole first: how far, or why not. */
+  const [fetching, setFetching] = useState<{ id: string; fraction: number | null; problem?: string; signIn?: boolean } | null>(null)
+  /** Asks the effect below to try a file from Drive again, after signing in. */
+  const [remoteTry, setRemoteTry] = useState(0)
   const [captions, setCaptions] = useState(-1)
   const [resume, setResume] = useState<number | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
@@ -707,16 +714,18 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   /* -- adding files ------------------------------------------------------------ */
 
   const addFiles = useCallback(
-    async (list: File[], play: boolean) => {
+    async (list: (File | RemoteMedia)[], play: boolean) => {
       const media = list.filter((file) => playerKind(file))
-      const subs = list.filter(isSubtitleFile)
+      const subs = list.filter((file): file is File => !isRemote(file) && isSubtitleFile(file))
       const added: PlayerItem[] = media.map((file) => ({
         id: newId(),
         name: file.name || 'Datei',
         size: file.size,
         kind: playerKind(file)!,
-        source: file,
+        // From Drive: nothing here, it is streamed from there.
+        source: isRemote(file) ? new Blob([]) : file,
         subtitles: [],
+        ...(isRemote(file) ? { remote: file } : {}),
       }))
       const pool = [...itemsRef.current.map((item) => ({ ...item })), ...added]
       // A subtitle file goes with the film of the same name (also „Film.de.srt“);
@@ -940,6 +949,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
   /** When the browser cannot play a file, or plays it without sound. */
   const look = async (item: PlayerItem, browserFailed: boolean) => {
+    // FFmpeg reads files on this device; one in Drive plays as the browser can.
+    if (item.remote) return
     const found = await probe(item)
     if (!found) return
     if (browserFailed) {
@@ -967,10 +978,43 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [originalUrl, setOriginalUrl] = useState<string | null>(null)
   useEffect(() => {
     if (!current) return setOriginalUrl(null)
+    const remote = current.remote
+    if (remote) {
+      // Streamed where the service worker can; else fetched whole first, with its share shown.
+      const id = current.id
+      const controller = new AbortController()
+      let made: string | null = null
+      setOriginalUrl(null)
+      setFetching(null)
+      void (async () => {
+        try {
+          const stream = await driveMediaUrl(remote)
+          if (controller.signal.aborted) return
+          if (stream) return setOriginalUrl(stream)
+          setFetching({ id, fraction: 0 })
+          const bytes = await readDriveFile(remote.id, controller.signal, (loaded) =>
+            setFetching({ id, fraction: remote.size > 0 ? Math.min(1, loaded / remote.size) : null }),
+          )
+          if (controller.signal.aborted) return
+          made = URL.createObjectURL(new Blob([bytes as BlobPart], { type: remote.type }))
+          setOriginalUrl(made)
+          setFetching(null)
+        } catch (error) {
+          if (controller.signal.aborted) return
+          const code = error instanceof DriveError ? error.code : 'failed'
+          setFetching({ id, fraction: null, problem: DRIVE_PROBLEM[code], signIn: code === 'expired' || code === 'unauthorized' })
+        }
+      })()
+      return () => {
+        controller.abort()
+        if (made) URL.revokeObjectURL(made)
+      }
+    }
+    setFetching(null)
     const url = URL.createObjectURL(current.source)
     setOriginalUrl(url)
     return () => URL.revokeObjectURL(url)
-  }, [current?.id, current?.source])
+  }, [current?.id, current?.source, remoteTry])
   const sourceUrl = version?.url ?? originalUrl
 
   // A new item starts clean.
@@ -1753,10 +1797,24 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     [sessionAssets, items],
   )
 
+  const [toEditor, setToEditor] = useState(false)
   const openInEditor = async () => {
     if (!current) return
     if (current.assetId) setActiveAsset(current.assetId)
     else if (current.source instanceof File) await ingest([current.source], 'aus dem Player übernommen')
+    else if (current.remote) {
+      // Editing needs the file here: fetched from Drive once.
+      setToEditor(true)
+      try {
+        const bytes = await readDriveFile(current.remote.id)
+        await ingest([new File([bytes as BlobPart], current.name, { type: current.remote.type })], 'aus Google Drive übernommen')
+      } catch (error) {
+        log('abspielen', `${current.name} nicht aus Google Drive geladen: ${error instanceof DriveError ? DRIVE_PROBLEM[error.code] : String(error)}`, 'warn')
+        return
+      } finally {
+        setToEditor(false)
+      }
+    }
     setPanel(current.kind === 'audio' ? 'audio' : 'video')
   }
 
@@ -2205,6 +2263,17 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   if (place && place > 15 && place < length - 15) setResume(place)
                 }}
                 onError={() => {
+                  if (current.remote) {
+                    // From Drive: a missing sign-in looks the same to the element as a file it cannot play.
+                    const signIn = !driveReadable()
+                    setFetching({
+                      id: current.id,
+                      fraction: null,
+                      problem: signIn ? DRIVE_PROBLEM.expired : 'Diese Datei spielt der Browser nicht ab. Aus Drive spielt Sondra nur, was der Browser selbst kann — zum Umwandeln die Datei auf dieses Gerät laden.',
+                      signIn,
+                    })
+                    return
+                  }
                   if (version?.url) {
                     setVersions((value) => ({ ...value, [current.id]: { ...version, url: null, error: 'Auch die umgewandelte Fassung spielt dieser Browser nicht ab' } }))
                     return
@@ -2335,7 +2404,40 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 </button>
               ) : null}
 
-              {waiting ? (
+              {fetching && fetching.id === current.id ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-[14px] bg-stage p-[24px] text-center" role="status">
+                  {fetching.problem ? (
+                    <>
+                      <p className="text-body font-semibold">Aus Google Drive nicht geladen</p>
+                      <p className="max-w-[46ch] text-small leading-[1.5] text-stage-muted">{fetching.problem}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // The website's sign-in opens within this click; then the file again.
+                          if (fetching.signIn) void connectDrive().then((ok) => ok && setRemoteTry((value) => value + 1))
+                          else setRemoteTry((value) => value + 1)
+                        }}
+                        className="press rounded-nav bg-stage-ink px-[16px] py-[10px] text-small font-semibold text-stage hover:bg-stage-accent"
+                      >
+                        {fetching.signIn ? 'Drive anmelden' : 'Erneut versuchen'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-body font-semibold">
+                        Lädt aus Google Drive
+                        {fetching.fraction !== null ? <span className="value ml-[10px] text-stage-muted">{Math.round(fetching.fraction * 100)} %</span> : null}
+                      </p>
+                      <div className="h-[4px] w-full max-w-[300px] overflow-hidden rounded-pill bg-stage-line" aria-hidden>
+                        <div className="h-full rounded-pill bg-stage-accent transition-[width] duration-[var(--dur-fast)]" style={{ width: `${(fetching.fraction ?? 0) * 100}%` }} />
+                      </div>
+                      <p className="max-w-[46ch] text-small leading-[1.5] text-stage-muted">
+                        Dieser Browser kann nicht direkt aus Drive streamen; die Datei kommt deshalb ganz, bevor sie spielt.
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : waiting ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-[14px] bg-stage p-[24px] text-center" role="status">
                   {version.error ? (
                     <>
@@ -2675,8 +2777,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 <p className="value text-small text-muted">{meta.join(' · ')}</p>
               </div>
             ) : null}
-            <Button size="sm" variant="quiet" onClick={() => void openInEditor()}>
-              {current.kind === 'audio' ? 'Im Ton-Editor öffnen' : 'Im Video-Editor öffnen'}
+            <Button size="sm" variant="quiet" disabled={toEditor} onClick={() => void openInEditor()}>
+              {toEditor ? 'Lädt aus Drive …' : current.kind === 'audio' ? 'Im Ton-Editor öffnen' : 'Im Video-Editor öffnen'}
             </Button>
           </div>
           <MerklisteTick name={current.name} time={time} duration={duration} enabled={settings.merkliste} />

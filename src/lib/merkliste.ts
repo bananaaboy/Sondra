@@ -1265,6 +1265,43 @@ export function takeShared(current: SavedLinkItem[], remote: { items: SavedLinkI
   return remote.items.map((item) => withLocalPictures(item, current.find((entry) => entry.id === item.id)))
 }
 
+/**
+ * The list as the file in Google Drive holds it: entries as they travel,
+ * and what was removed. Read by `readMerklisteFile` like any export.
+ */
+export function sharedFileText(list: SavedLinkItem[], removed: Record<string, number>): string {
+  return JSON.stringify({ kind: EXPORT_KIND, version: 2, exportedAt: new Date().toISOString(), items: list.map(travelling), removed }, null, 2)
+}
+
+/** What decides whether the file has to be written again: list and removals, never the date. */
+export function sharedKey(list: SavedLinkItem[], removed: Record<string, number>): string {
+  return JSON.stringify({ items: list.map(travelling), removed })
+}
+
+/**
+ * The file in Drive read back — also one an older Sondra wrote as a plain
+ * backup (no removals). Null when it is no Merkliste at all.
+ */
+export function readSharedFile(text: string): { items: SavedLinkItem[]; removed: Record<string, number>; key: string } | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { items?: unknown }).items)) return null
+  const raw = parsed as { items: unknown[]; removed?: unknown }
+  const removed: Record<string, number> = {}
+  if (raw.removed && typeof raw.removed === 'object') {
+    for (const [id, at] of Object.entries(raw.removed as Record<string, unknown>)) if (typeof at === 'number') removed[id] = at
+  }
+  const items = raw.items
+    .filter((item): item is Partial<SavedLinkItem> => Boolean(item) && typeof item === 'object')
+    .map((item) => createMerkItem(item))
+  // As written, so a file this device wrote compares equal to its own list.
+  return { items, removed, key: JSON.stringify({ items: raw.items, removed: raw.removed ?? {} }) }
+}
+
 /** Takes the merged removals as this device's own. */
 export function adoptRemovals(next: Record<string, number>): void {
   removals = next
