@@ -95,6 +95,38 @@ function assetLinks(fingerprints: string): Plugin {
   }
 }
 
+/**
+ * The deployment's server-side secrets never reach the page. Whatever the
+ * page's code holds is in the JavaScript every visitor loads — a value marked
+ * secret in Vercel or GitHub included — so the build stops if one turns up in
+ * any file it writes, rather than publishing it.
+ */
+const SERVER_SECRETS = [
+  'GOOGLE_CLIENT_SECRET',
+  'VITE_GOOGLE_CLIENT_SECRET',
+  'VERCEL_GOOGLE_CLIENT_SECRET',
+  'GOOGLE_DRIVE_CLIENT_SECRET',
+  'SONDRA_SECRET',
+  'SONDRA_PROVIDER_KEY',
+]
+
+function noServerSecrets(env: Record<string, string>): Plugin {
+  const secrets = SERVER_SECRETS.map((name) => [name, (env[name] || process.env[name] || '').trim()] as const).filter(
+    ([, value]) => value.length >= 8,
+  )
+  return {
+    name: 'sondra:no-server-secrets',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      for (const file of Object.values(bundle)) {
+        const text = file.type === 'chunk' ? file.code : typeof file.source === 'string' ? file.source : Buffer.from(file.source).toString('latin1')
+        const found = secrets.find(([, value]) => text.includes(value))
+        if (found) this.error(`${found[0]} stünde in ${file.fileName} und damit öffentlich auf der Website. Nur der Server darf es lesen.`)
+      }
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const clientId =
@@ -107,27 +139,16 @@ export default defineConfig(({ mode }) => {
     process.env.VERCEL_GOOGLE_CLIENT_ID ||
     process.env.GOOGLE_DRIVE_CLIENT_ID ||
     ''
-  const clientSecret =
-    env.VITE_GOOGLE_CLIENT_SECRET ||
-    env.GOOGLE_CLIENT_SECRET ||
-    env.VERCEL_GOOGLE_CLIENT_SECRET ||
-    env.GOOGLE_DRIVE_CLIENT_SECRET ||
-    process.env.VITE_GOOGLE_CLIENT_SECRET ||
-    process.env.GOOGLE_CLIENT_SECRET ||
-    process.env.VERCEL_GOOGLE_CLIENT_SECRET ||
-    process.env.GOOGLE_DRIVE_CLIENT_SECRET ||
-    ''
 
   return {
     // Relative base so the static build runs from any path, including
     // project sub-paths such as https://user.github.io/sondra/.
     base: './',
-    envPrefix: ['VITE_', 'GOOGLE_', 'VERCEL_'],
+    // The client id is public, and the only Google value the page gets. The
+    // secret stays with `api/google-token.js`.
     define: {
       'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(clientId),
       'import.meta.env.GOOGLE_CLIENT_ID': JSON.stringify(clientId),
-      'import.meta.env.VITE_GOOGLE_CLIENT_SECRET': JSON.stringify(clientSecret),
-      'import.meta.env.GOOGLE_CLIENT_SECRET': JSON.stringify(clientSecret),
     },
     plugins: [
       react(),
@@ -135,6 +156,7 @@ export default defineConfig(({ mode }) => {
       crossOriginIsolation(),
       offlineList(),
       assetLinks(env.ANDROID_CERT_SHA256 || process.env.ANDROID_CERT_SHA256 || ''),
+      noServerSecrets(env),
     ],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

@@ -383,6 +383,16 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   - `SONDRA_PROVIDER_KEY` — dessen `Api-Key`, falls verlangt.
   - `VITE_GOOGLE_CLIENT_ID` — der OAuth-Client „Webanwendung“ für Google
     Drive, beim Build gelesen. Ohne ihn bietet die Website Drive nicht an.
+  - `GOOGLE_CLIENT_SECRET` — dessen Secret, **nur für `api/google-token.js`**.
+    Damit bleibt die Anmeldung auf der Website; ohne es gilt sie eine Stunde.
+    Rotieren: bei Google ein zweites Secret anlegen, hier eintragen, neu
+    bereitstellen, das alte löschen — niemand muss sich neu anmelden.
+  - **Kein Server-Secret gelangt in die Seite.** Was der Browser-Code hält,
+    steht im JavaScript jedes Besuchers, „Secret“ in Vercel hin oder her: so
+    lag das Google-Secret am 22.10.2026 offen im Bundle (`define` und
+    `envPrefix: ['VITE_', 'GOOGLE_', 'VERCEL_']`). Der Build bricht jetzt ab,
+    wenn eines dieser Secrets in einer Datei stünde (`noServerSecrets` in
+    `vite.config.ts`).
 - **Herunterladen: Erkennen, Zusammensetzen, Laden** (16.10.2026). Adressen
   liest `extractAddresses` (`lib/download.ts`) aus jedem Text — Komma,
   Semikolon, Zeilen, Anführungszeichen, Punkt am Satzende; ins einzeilige
@@ -545,6 +555,17 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   same-origin auf dem Weg über Google kappt. Das Token lebt nur im
   Arbeitsspeicher, eine Stunde; danach warten Uploads, und die Kopfzeile
   sagt wieder „Drive anmelden“ (ein Klick, das Popup muss im Klick aufgehen).
+  **Anmeldung, die bleibt** (`api/google-token.js`, wenn dort
+  `GOOGLE_CLIENT_SECRET` steht und die Client-ID die der Seite ist — die
+  Seite fragt beim Laden per GET): Google schickt einen Code statt des
+  Tokens (`access_type=offline`, `prompt=consent`), die Funktion tauscht ihn
+  mit dem Secret und legt den Refresh-Token in ein Cookie `sondra_drive`
+  (HttpOnly, Secure, SameSite=Strict, Pfad nur die Funktion, 180 Tage);
+  die Seite bekommt nur das Token für die Stunde und holt das nächste mit
+  `refresh`, beim Laden ohne Klick. Ohne das Secret ist das Cookie wertlos.
+  „Trennen“ ruft `signout` (bei Google zurückgezogen, Cookie weg). Secret
+  und Refresh-Token einer früheren Fassung im `localStorage` löscht
+  `readSettings` beim Laden. `npm run verify:google-token`.
   **In der App** (`desktop/googleDrive.mjs`): Google lässt keinen
   eingebetteten Browser anmelden, also Systembrowser und Loopback mit PKCE
   auf einem freien Port, nur für die eine Antwort; der Refresh-Token liegt

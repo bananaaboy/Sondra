@@ -1,5 +1,5 @@
 /**
- * The built site plus the two API functions, on one port.
+ * The built site plus the API functions, on one port.
  *
  * `vite preview` serves the static build but knows nothing about `api/`, and
  * the functions only exist once deployed — so there is no way to try the
@@ -14,6 +14,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 
+import googleTokenFn from '../api/google-token.js'
 import resolveFn from '../api/resolve.js'
 import streamFn from '../api/stream.js'
 
@@ -32,7 +33,7 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json',
 }
 
-/** Just enough of Vercel's request and response shape for the two handlers. */
+/** Just enough of Vercel's request and response shape for the handlers. */
 function adapt(request, response, url) {
   request.query = Object.fromEntries(url.searchParams)
   response.status = (code) => {
@@ -63,6 +64,7 @@ http
       try {
         if (url.pathname === '/api/resolve') await resolveFn(request, response)
         else if (url.pathname === '/api/stream') await streamFn(request, response)
+        else if (url.pathname === '/api/google-token') await googleTokenFn(request, response)
         else response.status(404).json({ error: 'route' })
       } catch (failure) {
         response.status(500).json({ error: 'crash', message: String(failure?.stack ?? failure) })

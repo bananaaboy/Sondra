@@ -345,7 +345,6 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
   const syncList = () => act('merkliste', syncMerklisteNow)
   const [showConfig, setShowConfig] = useState(false)
   const [clientIdInput, setClientIdInput] = useState(drive.settings.clientId ?? '')
-  const [clientSecretInput, setClientSecretInput] = useState(drive.settings.clientSecret ?? '')
   const [savedClient, setSavedClient] = useState(false)
 
   const jobs = drive.jobs
@@ -407,7 +406,7 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
               onClick={() => setShowConfig((open) => !open)}
               className={`${linkClass} text-micro text-muted`}
             >
-              {showConfig ? 'Google Zugangsdaten verbergen' : 'Google Zugangsdaten anpassen (Client-ID & Secret)'}
+              {showConfig ? 'Google Zugangsdaten verbergen' : 'Google Zugangsdaten anpassen (Client-ID)'}
             </button>
             {showConfig ? (
               <div className="mt-[8px] flex flex-col gap-[10px] rounded-card bg-panel-soft/60 p-[12px] ring-1 ring-rule/40">
@@ -421,20 +420,11 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
                     className="mt-[4px] w-full rounded-nav bg-panel px-[10px] py-[6px] text-small font-mono text-ink ring-1 ring-inset ring-line focus:ring-ink"
                   />
                 </label>
-                <label className="text-small font-medium text-ink">
-                  OAuth Client-Secret (optional):
-                  <input
-                    type="password"
-                    value={clientSecretInput}
-                    onChange={(e) => setClientSecretInput(e.target.value)}
-                    placeholder="GOCSPX-..."
-                    className="mt-[4px] w-full rounded-nav bg-panel px-[10px] py-[6px] text-small font-mono text-ink ring-1 ring-inset ring-line focus:ring-ink"
-                  />
-                </label>
                 <p className="text-micro text-muted leading-relaxed">
-                  Kann in Vercel als Umgebungsvariablen <code className="font-mono text-ink">GOOGLE_CLIENT_ID</code> und{' '}
-                  <code className="font-mono text-ink">GOOGLE_CLIENT_SECRET</code> (oder mit <code className="font-mono text-ink">VITE_</code>) hinterlegt
-                  werden oder direkt hier im Browser. Mit Secret bleibt die Anmeldung dauerhaft bestehen.
+                  Kann in Vercel als Umgebungsvariable <code className="font-mono text-ink">GOOGLE_CLIENT_ID</code> hinterlegt werden oder
+                  direkt hier im Browser. Damit die Anmeldung bleibt, gehört das Secret als{' '}
+                  <code className="font-mono text-ink">GOOGLE_CLIENT_SECRET</code> nach Vercel — nie hierher: nur der Server liest es, und es
+                  gilt nur für die Client-ID aus Vercel.
                 </p>
                 <p className="text-micro text-muted leading-relaxed">
                   Autorisierter JavaScript-Ursprung:{' '}
@@ -449,7 +439,7 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
                     type="button"
                     size="sm"
                     onClick={() => {
-                      setDriveSetting({ clientId: clientIdInput.trim(), clientSecret: clientSecretInput.trim() })
+                      setDriveSetting({ clientId: clientIdInput.trim() })
                       setSavedClient(true)
                       setTimeout(() => setSavedClient(false), 2500)
                     }}
