@@ -193,12 +193,28 @@ auf der Merkliste. Statt Anytype (das nur die Windows-App erreicht) bringt
 Google Drive die Merkliste und den Ordner mit den anderen Geräten zusammen.
 
 - **GitHub Actions → „Android":** baut APK und AAB, prüft sie und legt sie
-  als Artefakt „Sondra-Android“ ab. Signiert wird mit den Secrets
-  `ANDROID_KEYSTORE_BASE64` und `ANDROID_KEYSTORE_PASSWORD`; einmal von Hand
-  mit `new_key` gestartet, erzeugt der Lauf einen Schlüssel und sagt, wohin
-  er gehört. Mit `release` hängt er `Sondra-Android.apk` an das Release. Jeder
-  Lauf startet die App auf einem Android-14-Emulator (Symbol, Kurzbefehl,
-  Link, Teilen, Rückkehr von der Google-Anmeldung) und legt Bildschirmfotos als „Sondra-Android-Bilder“ ab.
+  als Artefakt „Sondra-Android“ ab. Jeder Lauf startet die App auf einem
+  Android-14-Emulator (Symbol, Kurzbefehl, Link, Teilen, Rückkehr von der
+  Google-Anmeldung) und legt Bildschirmfotos als „Sondra-Android-Bilder“ ab.
+- **Im Release:** das offizielle Release (Workflow „Desktop“ mit `release`)
+  baut die Android-App mit und legt `Sondra-Android.apk` neben die Setups;
+  die Website verlinkt sie unter „App herunterladen“.
+- **Android-Schlüssel:** jede Fassung muss mit demselben Schlüssel signiert
+  sein, sonst installiert Android sie nicht über die alte. Einmal auf dem
+  eigenen Rechner erzeugen — nie in einem Lauf, dessen Artefakte in diesem
+  öffentlichen Repository jeder laden könnte:
+
+  ```bash
+  keytool -genkeypair -keystore sondra-android.jks -alias sondra -keyalg RSA \
+    -keysize 4096 -validity 36500 -dname "CN=Sondra, O=Lizge, C=CH"
+  base64 -w0 sondra-android.jks > ANDROID_KEYSTORE_BASE64.txt
+  ```
+
+  Dann in GitHub → Settings → Secrets and variables → Actions zwei Secrets:
+  `ANDROID_KEYSTORE_BASE64` (Inhalt der Datei) und
+  `ANDROID_KEYSTORE_PASSWORD` (das Passwort). Die `.jks` sicher aufbewahren;
+  ohne sie lässt sich die App nie mehr aktualisieren. Fehlen die Secrets,
+  signiert der Debug-Schlüssel, und das Release bricht ab.
 - **Google Drive in der App:** nichts weiter einzurichten — es ist die
   Anmeldung der Website (Client „Webanwendung“ und Secret in Vercel). Sie
   öffnet sich im Browser und kehrt danach von selbst in die App zurück.

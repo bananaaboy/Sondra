@@ -740,9 +740,21 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Kurzbefehl, Link, Teilen, der Weg zurück von Google, Neustart —
   kein Absturz, die richtige Adresse; Bildschirmfotos als Artefakt
   „Sondra-Android-Bilder“); Schlüssel aus `ANDROID_KEYSTORE_BASE64`/
-  `ANDROID_KEYSTORE_PASSWORD`, sonst Debug-Schlüssel (dann kein Release,
-  Updates und Drive gingen nicht); „new_key“ erzeugt einmal einen (Artefakt,
-  ein Tag); „release“ hängt `Sondra-Android[-<Version>].apk` ans Release.
+  `ANDROID_KEYSTORE_PASSWORD`, sonst Debug-Schlüssel (dann kein Release:
+  keine spätere Fassung liesse sich darüber installieren). **Der Schlüssel
+  entsteht nie in einem Lauf:** das Repository ist öffentlich, seine
+  Artefakte lädt jeder mit einem GitHub-Konto — „new_key“, das ihn einen Tag
+  als Artefakt hielt, ist deshalb weg (README, „Android-Schlüssel“).
+  **Teil des offiziellen Release** (Wunsch vom 23.10.2026): der Workflow
+  „Desktop“ ruft „Android“ als `workflow_call` auf (eigene Prüfungen samt
+  Emulator) und legt `Sondra-Android[-<Version>].apk` mit den Setups ins
+  Release; signiert der Debug-Schlüssel oder passt die Version nicht, bricht
+  das Release ab. „release“ in „Android“ allein hängt die APK an ein
+  bestehendes Release. Die Website verlinkt sie (`ANDROID_APK`,
+  `releases/latest/download/Sondra-Android.apk`): in „App herunterladen“
+  eine eigene Zeile unter „Website als App“ und „Portabel“, auf einem
+  Android-Telefon (`ON_ANDROID`) die grosse Kachel in Tinte oben — das Setup
+  tritt dort auf die getönte Fläche zurück.
   Icons: `npm run android:icons` (Vektor-Vordergrund aus den Balken des
   Zeichens, auch für das Startbild; PNGs mit den Helfern aus
   `store-tiles.mjs`). Lokal bauen: Android SDK mit `platforms;android-36`,

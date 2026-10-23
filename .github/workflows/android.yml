@@ -10,11 +10,14 @@
 # The key: from the secrets ANDROID_KEYSTORE_BASE64 and
 # ANDROID_KEYSTORE_PASSWORD. Without them the debug key signs — the app
 # installs and runs, but a later build cannot update it, and no release is
-# made with it. A manual run with "new_key" makes a key once and keeps it as
-# the artifact "Sondra-Android-Schluessel" for a day, with what to do next.
+# made with it. The key is made once on a computer of one's own (README,
+# „Android-Schlüssel“), never in a run: the artifacts of this public
+# repository can be downloaded by anyone with a GitHub account.
 #
-# A manual run with "release" ticked attaches the APK to the GitHub release
-# v<version from package.json>, as Sondra-Android-<version>.apk and
+# The official release (Desktop workflow, „release“ or a tag) calls this
+# workflow and publishes the APK together with the setups. A manual run
+# with "release" ticked attaches the APK to the GitHub release v<version
+# from package.json> on its own, as Sondra-Android-<version>.apk and
 # Sondra-Android.apk.
 
 name: Android
@@ -32,10 +35,14 @@ on:
         description: 'APK an das GitHub Release v<Version aus package.json> hängen'
         type: boolean
         default: false
-      new_key:
-        description: 'Einmalig einen Signaturschlüssel erzeugen (Artefakt für einen Tag)'
-        type: boolean
-        default: false
+  # The official release builds the app here as well.
+  workflow_call:
+    outputs:
+      version:
+        value: ${{ jobs.android.outputs.version }}
+      debug:
+        description: 'true when the debug key signed: nothing is published then'
+        value: ${{ jobs.android.outputs.debug }}
 
 permissions:
   contents: write
@@ -44,6 +51,9 @@ jobs:
   android:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      debug: ${{ steps.check.outputs.debug }}
     steps:
       - uses: actions/checkout@v5
 
@@ -59,30 +69,10 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          NEW_KEY: ${{ inputs.new_key }}
         run: |
           set -euo pipefail
           store="$RUNNER_TEMP/sondra.jks"
-          if [ "$NEW_KEY" = "true" ]; then
-            password="$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
-            echo "::add-mask::$password"
-            keytool -genkeypair -v -keystore "$store" -alias sondra -keyalg RSA -keysize 4096 -validity 36500 \
-              -storepass "$password" -keypass "$password" -dname "CN=Sondra, O=Lizge, C=CH" > /dev/null 2>&1
-            mkdir -p "$RUNNER_TEMP/key"
-            base64 -w0 "$store" > "$RUNNER_TEMP/key/ANDROID_KEYSTORE_BASE64.txt"
-            printf '%s' "$password" > "$RUNNER_TEMP/key/ANDROID_KEYSTORE_PASSWORD.txt"
-            {
-              echo "Der Signaturschlüssel der Android-App. Einmal erzeugt, für immer derselbe:"
-              echo "jedes Update muss mit ihm signiert sein."
-              echo
-              echo "1. GitHub → Settings → Secrets and variables → Actions → New repository secret:"
-              echo "   ANDROID_KEYSTORE_BASE64  = Inhalt von ANDROID_KEYSTORE_BASE64.txt"
-              echo "   ANDROID_KEYSTORE_PASSWORD = Inhalt von ANDROID_KEYSTORE_PASSWORD.txt"
-              echo "2. Diese Dateien danach sicher aufbewahren (z. B. Passwortmanager) und hier löschen."
-              echo "3. Den SHA-256-Fingerabdruck aus der Zusammenfassung in Vercel als"
-              echo "   ANDROID_CERT_SHA256 eintragen: Links auf sondra.lizge.ch öffnen dann in der App."
-            } > "$RUNNER_TEMP/key/LIESMICH.txt"
-          elif [ -n "$KEYSTORE_BASE64" ]; then
+          if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$store"
             password="$KEYSTORE_PASSWORD"
           else
@@ -142,13 +132,6 @@ jobs:
           name: Sondra-Android
           path: out/
           if-no-files-found: error
-
-      - uses: actions/upload-artifact@v5
-        if: inputs.new_key
-        with:
-          name: Sondra-Android-Schluessel
-          path: ${{ runner.temp }}/key/
-          retention-days: 1
 
       # The app on Android 14: started from its icon, a shortcut, a link and
       # a share, without a crash. Builds and lint passed while every start
