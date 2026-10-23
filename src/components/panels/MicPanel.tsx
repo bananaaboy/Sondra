@@ -33,6 +33,7 @@ import { encodeWav, type AudioData } from '../../lib/wav'
 import { useAssetsOfKind, useSession } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
 import { ArrowRight, Button, Field, Notice, Progress, Select, Stat, Toggle } from '../ui/primitives'
+import { DriveSaveButton } from '../GoogleDrive'
 
 const NOISE_SECONDS = 3
 const SPEECH_SECONDS = 8
@@ -688,6 +689,13 @@ export function MicPanel() {
               >
                 Mit Filtern als WAV
               </Button>
+              <DriveSaveButton
+                name={`mikrofon-${purpose}-gefiltert.wav`}
+                bytes={() => encodeWav(result.processed, 24)}
+                source={result.processed}
+                mime="audio/wav"
+                folder="audio"
+              />
               <Button
                 size="sm"
                 variant="quiet"

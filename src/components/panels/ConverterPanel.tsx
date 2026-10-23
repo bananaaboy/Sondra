@@ -39,6 +39,8 @@ import { formatTimecode } from '../../lib/format'
 import { decodeWithBrowser, getAudioContext, resumeAudioContext, toAudioBuffer } from '../../lib/audio'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
 import { kindFromMime, useActiveAsset, useSession } from '../../state/store'
+import { folderForKind } from '../../lib/googleDrive'
+import { DriveSaveButton } from '../GoogleDrive'
 import type { AssetKind } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
 import { BatchFiles, useBatchSelection } from '../BatchFiles'
@@ -1527,6 +1529,12 @@ export function ConverterPanel() {
               >
                 In die Sitzung übernehmen
               </Button>
+              <DriveSaveButton
+                name={outcome.name}
+                bytes={outcome.bytes}
+                mime={outcome.mime}
+                folder={folderForKind(kindFromMime(outcome.mime, outcome.name))}
+              />
             </div>
           </Card>
         ) : null}

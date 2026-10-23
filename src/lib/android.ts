@@ -7,9 +7,9 @@
  * with an `id` and a `type`; the answer comes back with the same `id`. What
  * goes through it:
  *
- *   drive    Google's sign-in for Drive through Android's own account sheet,
- *            the same actions as the Windows app's (`lib/googleDrive.ts`
- *            takes either) — Google refuses its web sign-in in a WebView
+ *   drive    Google's sign-in for Drive in the browser, the same actions as
+ *            the Windows app's (`lib/googleDrive.ts` takes either) — Google
+ *            refuses its sign-in in a WebView
  *   opened   films and songs shared with Sondra or opened with it, as
  *            addresses on this site the app serves once
  *   save     a file into Downloads/Sondra, in pieces (a WebView cannot save

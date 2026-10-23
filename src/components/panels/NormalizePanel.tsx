@@ -36,6 +36,7 @@ import {
 } from '../ui/primitives'
 import { ChoiceRow } from '../editor/EditorShell'
 import { ZipSave } from '../ZipSave'
+import { DriveSaveButton } from '../GoogleDrive'
 
 /** Horizontal LUFS gauge: measured value against the target. */
 const BATCH_KINDS = ['audio', 'video'] as const
@@ -521,6 +522,13 @@ export function NormalizePanel() {
                   Als WAV speichern
                   <ArrowRight />
                 </Button>
+                <DriveSaveButton
+                  size="md"
+                  name={withExtension(asset?.name ?? 'audio', 'wav')}
+                  bytes={result}
+                  mime="audio/wav"
+                  folder="audio"
+                />
                 <Button
                   variant="quiet"
                   onClick={() => {

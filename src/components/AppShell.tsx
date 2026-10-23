@@ -16,7 +16,6 @@ import { driveLinked, openDriveDialog, useDrive } from '../lib/googleDrive'
 import { onFfmpegStatus, type FfmpegStatus } from '../lib/ffmpegClient'
 import { APP_VERSION } from '../lib/version'
 import type { ThemeChoice } from '../lib/theme'
-import { useSession } from '../state/store'
 import { SessionMenu } from './AssetList'
 import { AppUpdateButton } from './AppUpdate'
 import { GetAppButton, openGetAppDialog } from './GetApp'
@@ -139,7 +138,6 @@ export function Header({
   themeChoice: ThemeChoice
   onThemeChange: (choice: ThemeChoice) => void
 }) {
-  const panel = useSession((state) => state.panel)
   return (
     <header className="sticky top-0 z-30 border-b-2 border-rule bg-canvas/95 backdrop-blur-md">
       <div className="shell flex items-center justify-between gap-[8px] pt-[10px] min-[360px]:gap-[12px] sm:gap-[24px] sm:pt-[12px]">
@@ -153,14 +151,13 @@ export function Header({
           <ThemeToggle choice={themeChoice} onChange={onThemeChange} />
         </div>
       </div>
-      <nav
-        aria-label="Werkzeuge"
-        className={`shell mt-[8px] sm:mt-[12px] ${panel === 'start' ? 'hidden sm:block' : ''}`}
-      >
+      {/* On every page, the start included: on a phone it was hidden there
+          (the tiles say the same), and the way to the tools was missing —
+          „im Startmenü kann man die Navbar nicht sehen“. What does not fit
+          stands behind „Mehr“. */}
+      <nav aria-label="Werkzeuge" className="shell mt-[8px] sm:mt-[12px]">
         <PanelTabs />
       </nav>
-      {/* Without the tabs the row still needs its bottom air on a phone. */}
-      <div className={panel === 'start' ? 'h-[10px] sm:hidden' : 'hidden'} aria-hidden />
     </header>
   )
 }

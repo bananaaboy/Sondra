@@ -64,6 +64,8 @@ import {
   IconTrim,
 } from '../editor/icons'
 import { Button, Card, Notice, Progress, Select, Slider, Toggle, RotateIcon } from '../ui/primitives'
+import { DriveSaveButton } from '../GoogleDrive'
+import { folderForKind } from '../../lib/googleDrive'
 
 type ToolId = 'trim' | 'crop' | 'transform' | 'look' | 'fade' | 'size' | 'speed' | 'audio' | 'harvest' | 'export'
 
@@ -1057,6 +1059,7 @@ export function VideoPanel() {
             <Button size="sm" variant="quiet" onClick={keep}>
               In die Sitzung
             </Button>
+            <DriveSaveButton name={outcome.name} bytes={outcome.bytes} mime={outcome.mime} folder={folderForKind(outcome.kind)} />
           </div>
         </div>
       ) : null}

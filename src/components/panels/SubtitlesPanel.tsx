@@ -31,6 +31,7 @@ import { UndoRedoBar, useUndoHistory } from '../../hooks/useUndoHistory'
 import { useActiveAsset, useSession, type Asset } from '../../state/store'
 import { FileDrop } from '../FileDrop'
 import { ArrowRight, Badge, Button, Card, Field, Notice, Progress, SectionHead, Select } from '../ui/primitives'
+import { DriveSaveButton } from '../GoogleDrive'
 
 const MODEL_KEY = 'sondra:sprachmodell'
 const LANGUAGE_KEY = 'sondra:sprache'
@@ -451,6 +452,14 @@ export function SubtitlesPanel() {
               <Button variant="quiet" onClick={() => saveBytes(encoder.encode(toText(cleaned)), withExtension(asset?.name ?? 'text', 'txt'), 'text/plain')}>
                 Als Text
               </Button>
+              <DriveSaveButton
+                size="md"
+                name={`${stem}.srt`}
+                bytes={() => encoder.encode(toSrt(cleaned))}
+                source={cleaned}
+                mime="application/x-subrip"
+                folder="other"
+              />
               <Button variant="ghost" onClick={() => void navigator.clipboard?.writeText(toText(cleaned))}>
                 Text kopieren
               </Button>

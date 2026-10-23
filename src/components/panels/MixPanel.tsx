@@ -24,6 +24,7 @@ import { useSession, type Asset } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
 import { ArrowRight, Button, Card, Field, Notice, Progress, Select, Slider, Toggle } from '../ui/primitives'
 import { ZipSave } from '../ZipSave'
+import { DriveSaveButton } from '../GoogleDrive'
 
 const SETTINGS_KEY = 'sondra:mischen'
 
@@ -489,6 +490,15 @@ export function MixPanel() {
             <Button variant="quiet" disabled={Boolean(writing)} onClick={() => saveBytes(encodeWav(result.mix.audio, 24), `${stem} (gemischt).wav`, 'audio/wav')}>
               Als WAV speichern
             </Button>
+            <DriveSaveButton
+              size="md"
+              disabled={Boolean(writing)}
+              name={`${stem} (gemischt).wav`}
+              bytes={() => encodeWav(result.mix.audio, 24)}
+              source={result.mix.audio}
+              mime="audio/wav"
+              folder="audio"
+            />
             {voice?.kind === 'video' ? (
               <Button variant="quiet" disabled={Boolean(writing)} onClick={() => void intoVideo()}>
                 Unter das Video legen

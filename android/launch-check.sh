@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Sondra for Android on a real Android: installed, started from its icon, a
-# shortcut, a link and a share — none of it may crash, each must reach the
-# right address. A missing manifest entry once crashed every start, and
+# shortcut, a link, a share and the way back from the Google sign-in — none
+# of it may crash, each must reach the right address. A missing manifest entry once crashed every start, and
 # neither lint nor the build noticed.
 #
 # The Android workflow runs it on an emulator, with the internet the page
@@ -73,6 +73,10 @@ check "Link auf die Seite" "Adresse: https://sondra.lizge.ch/#abspielen" \
 # A share of a file the app cannot read: taken without a crash, the page gets told.
 check "Teilen" "Geteilt oder geöffnet: 1 Datei(en)" \
   -a android.intent.action.SEND -t video/mp4 --eu android.intent.extra.STREAM "content://media/external/video/media/999999" "${main[@]}"
+
+# The browser's way back after the Google sign-in: Sondra comes to the front, nothing else.
+check "Zurück von Google" "Zurück von der Anmeldung bei Google" \
+  -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "ch.lizge.sondra://angemeldet"
 
 # Cold again, with the page's state gone: the start must still hold.
 adb shell am force-stop "$pkg"
