@@ -356,11 +356,18 @@ jobs:
           # published, and a rerun must not fail on it. A draft is what an
           # earlier attempt left when an upload broke off; it is finished here.
           $existing = $null
-          $view = gh release view $tag --json isDraft 2>$null
+          $view = gh release view $tag --json isDraft,assets 2>$null
           if ($LASTEXITCODE -eq 0) { $existing = $view | ConvertFrom-Json }
           if ($existing -and -not $existing.isDraft) {
-            Write-Host "Release $tag gibt es schon, bleibt unverändert."
-            exit 0
+            if (@($existing.assets.name) -contains 'latest.yml') {
+              Write-Host "Release $tag gibt es schon, bleibt unverändert."
+              exit 0
+            }
+            # Published without the setups (v1.1.15 went out with only the
+            # APK): a draft again, finished below and published anew. Until
+            # then „latest“ is the release before, whose files are all there.
+            gh release edit $tag --draft=true
+            if ($LASTEXITCODE -ne 0) { throw "$tag liess sich nicht zum Entwurf machen." }
           }
           # The Android app: signed with the app's own key, of this version.
           if ($env:ANDROID_DEBUG_KEY -ne 'false') {
@@ -432,6 +439,6 @@ jobs:
             }
             if (-not $done) { throw "$(Split-Path $file -Leaf) liess sich nicht hochladen; der Entwurf $tag bleibt, ein neuer Lauf macht ihn fertig." }
           }
-          gh release edit $tag --draft=false
+          gh release edit $tag --draft=false --title "Sondra $version" --notes $notes
           if ($LASTEXITCODE -ne 0) { throw "$tag liess sich nicht veröffentlichen." }
           Write-Host "Release $tag mit $($files.Count) Dateien veröffentlicht."
