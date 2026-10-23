@@ -56,6 +56,7 @@ import {
 } from '../editor/icons'
 import { Button, Card, Notice, Progress, Slider, TextInput, Toggle, RotateIcon } from '../ui/primitives'
 import { ZipSave } from '../ZipSave'
+import { DriveSaveButton } from '../GoogleDrive'
 
 type ToolId = 'crop' | 'transform' | 'size' | 'color' | 'sharpen' | 'export' | 'batch'
 
@@ -515,6 +516,9 @@ export function ImagePanel() {
             <Button size="sm" onClick={save} disabled={!result} className="ml-[8px]">
               Speichern
             </Button>
+            {result && asset ? (
+              <DriveSaveButton name={outputName(asset.name, result.mime)} bytes={result.bytes} mime={result.mime} folder="images" />
+            ) : null}
           </>
         }
         tools={tools}

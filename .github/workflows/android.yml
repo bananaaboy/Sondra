@@ -1,6 +1,7 @@
 # Builds the Android app (android/): an app of its own around the website —
-# its own WebView, no browser bar, and the Google sign-in for Drive through
-# Android's account sheet.
+# its own WebView, no browser bar, and the Google sign-in for Drive in the
+# browser, with the same "Desktop app" client as the Windows app (variable
+# GOOGLE_CLIENT_ID, secret GOOGLE_CLIENT_SECRET); without them no Drive.
 #
 # Every run builds the APK (to install directly) and the AAB (for Google
 # Play), checks them, starts the APK on an Android 14 emulator
@@ -79,10 +80,7 @@ jobs:
               echo "   ANDROID_KEYSTORE_BASE64  = Inhalt von ANDROID_KEYSTORE_BASE64.txt"
               echo "   ANDROID_KEYSTORE_PASSWORD = Inhalt von ANDROID_KEYSTORE_PASSWORD.txt"
               echo "2. Diese Dateien danach sicher aufbewahren (z. B. Passwortmanager) und hier löschen."
-              echo "3. In Google Cloud (Projekt der Website) einen OAuth-Client „Android“ anlegen:"
-              echo "   Paketname ch.lizge.sondra, SHA-1 aus der Zusammenfassung dieses Laufs."
-              echo "   Erst dann meldet die App sich bei Google Drive an."
-              echo "4. Den SHA-256-Fingerabdruck aus der Zusammenfassung in Vercel als"
+              echo "3. Den SHA-256-Fingerabdruck aus der Zusammenfassung in Vercel als"
               echo "   ANDROID_CERT_SHA256 eintragen: Links auf sondra.lizge.ch öffnen dann in der App."
             } > "$RUNNER_TEMP/key/LIESMICH.txt"
           elif [ -n "$KEYSTORE_BASE64" ]; then
@@ -100,10 +98,15 @@ jobs:
 
       - name: Build, lint
         working-directory: android
+        env:
+          SONDRA_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+          SONDRA_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         run: ./gradlew --no-daemon --console=plain lintRelease assembleRelease bundleRelease
 
       - name: Check the app
         id: check
+        env:
+          HAS_GOOGLE: ${{ (vars.GOOGLE_CLIENT_ID != '' || secrets.GOOGLE_CLIENT_ID != '') && secrets.GOOGLE_CLIENT_SECRET != '' }}
         run: |
           set -euo pipefail
           tools="$ANDROID_HOME/build-tools/36.0.0"
@@ -115,7 +118,10 @@ jobs:
           certs="$("$tools/apksigner" verify --print-certs "$apk")"
           colons() { tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//'; }
           digest="$(echo "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | colons)"
-          sha1="$(echo "$certs" | sed -n 's/^Signer #1 certificate SHA-1 digest: //p' | colons)"
+          # The Drive client baked in by the build, when the repository has one.
+          drive=false
+          if unzip -p "$apk" 'classes*.dex' | grep -aq 'apps.googleusercontent.com'; then drive=true; fi
+          if [ "$HAS_GOOGLE" = true ] && [ "$drive" != true ]; then echo "::error::Google-Client fehlt in der App"; exit 1; fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "debug=$(echo "$certs" | grep -q 'CN=Android Debug' && echo true || echo false)" >> "$GITHUB_OUTPUT"
           mkdir -p out
@@ -130,12 +136,11 @@ jobs:
             echo "$certs" | grep -E 'DN:|SHA-256|SHA-1'
             echo '```'
             echo
-            echo "Für die Anmeldung bei Google Drive: in Google Cloud (Projekt der Website) einen OAuth-Client"
-            echo "„Android“ anlegen, Paketname \`ch.lizge.sondra\`, SHA-1:"
-            echo
-            echo '```'
-            echo "$sha1"
-            echo '```'
+            if [ "$drive" = true ]; then
+              echo "Google Drive: eingerichtet (Client „Desktop-App“ aus \`GOOGLE_CLIENT_ID\`, Anmeldung im Browser)."
+            else
+              echo "Google Drive: nicht eingerichtet — es fehlen \`GOOGLE_CLIENT_ID\` und \`GOOGLE_CLIENT_SECRET\` (dieselben wie für die Windows-App)."
+            fi
             echo
             echo "Für \`ANDROID_CERT_SHA256\` in Vercel (Links auf sondra.lizge.ch öffnen dann ohne Rückfrage in der App):"
             echo

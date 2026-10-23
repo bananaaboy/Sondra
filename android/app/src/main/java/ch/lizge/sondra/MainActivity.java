@@ -154,6 +154,7 @@ public class MainActivity extends ComponentActivity {
         });
 
         bridge.received(getIntent());
+        if (fromSignIn(getIntent())) Log.i(TAG, "Zurück von der Anmeldung bei Google");
         String url = addressFrom(getIntent());
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             Log.i(TAG, "Adresse: " + url);
@@ -188,6 +189,11 @@ public class MainActivity extends ComponentActivity {
         webView.setDownloadListener((url, userAgent, disposition, mime, length) -> openOutside(Uri.parse(url)));
     }
 
+    private static boolean fromSignIn(Intent intent) {
+        Uri data = intent != null ? intent.getData() : null;
+        return data != null && DriveAuth.RETURN_SCHEME.equals(data.getScheme());
+    }
+
     /** The page's address for an intent: a link, a shortcut, else the Merkliste. */
     private String addressFrom(Intent intent) {
         Uri data = intent != null ? intent.getData() : null;
@@ -201,6 +207,11 @@ public class MainActivity extends ComponentActivity {
         setIntent(intent);
         bridge.received(intent);
         Uri data = intent.getData();
+        if (fromSignIn(intent)) {
+            // Back from the Google sign-in in the browser; the page hears from DriveAuth.
+            Log.i(TAG, "Zurück von der Anmeldung bei Google");
+            return;
+        }
         if (data == null || !"https".equals(data.getScheme()) || !isOwn(data) || webView == null) return;
         String url = data.toString();
         Log.i(TAG, "Adresse: " + url);
@@ -212,6 +223,12 @@ public class MainActivity extends ComponentActivity {
         } else {
             webView.loadUrl(url);
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (bridge != null) bridge.resumed();
     }
 
     @Override

@@ -24,6 +24,7 @@ import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { useSession, type Asset } from '../../state/store'
 import { ArrowRight, Button, Card, Field, Notice, Progress, Select, Toggle } from '../ui/primitives'
+import { DriveSaveButton } from '../GoogleDrive'
 
 const SETTINGS_KEY = 'sondra:bildschirm'
 
@@ -350,6 +351,13 @@ export function ScreenPanel() {
             <Button variant="quiet" onClick={() => saveBytes(result.asset.bytes, result.asset.name, 'video/webm')}>
               Als WebM speichern
             </Button>
+            <DriveSaveButton
+              size="md"
+              name={result.asset.name}
+              bytes={result.asset.bytes}
+              mime="video/webm"
+              folder="video"
+            />
           </div>
         </Card>
       ) : null}

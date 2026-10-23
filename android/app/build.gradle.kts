@@ -9,9 +9,16 @@ val sondraVersion = (JsonSlurper().parse(rootProject.file("../package.json")) as
 val versionParts = sondraVersion.split(".").map { it.toInt() }
 
 // The key the app is signed with. Without one (a first run, a fork) the debug
-// key signs it: the app installs and runs, but the next build cannot update it,
-// and the Google sign-in knows no such app.
+// key signs it: the app installs and runs, but the next build cannot update it.
 val keystore: String? = System.getenv("SONDRA_ANDROID_KEYSTORE")
+
+// Google's „Desktop app“ client, the one the Windows app signs in with
+// (loopback, see DriveAuth). Like there, its secret is no secret in an
+// installed program, as Google says. Without it the app offers no Drive.
+fun googleClient(name: String): String {
+    val value = System.getenv(name)?.trim() ?: ""
+    return if (Regex("[A-Za-z0-9._-]*").matches(value)) value else ""
+}
 
 android {
     namespace = "ch.lizge.sondra"
@@ -23,6 +30,12 @@ android {
         targetSdk = 36
         versionName = sondraVersion
         versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${googleClient("SONDRA_GOOGLE_CLIENT_ID")}\"")
+        buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${googleClient("SONDRA_GOOGLE_CLIENT_SECRET")}\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     signingConfigs {
@@ -55,7 +68,6 @@ dependencies {
     implementation("androidx.activity:activity:1.13.0")
     implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("androidx.webkit:webkit:1.18.0")
-    // Google's sign-in for Drive, as the phone's own account sheet: Google
-    // refuses its web sign-in inside a WebView.
-    implementation("com.google.android.gms:play-services-auth:22.0.0")
+    // The Google sign-in for Drive opens in a Custom Tab: Google refuses it in a WebView.
+    implementation("androidx.browser:browser:1.10.0")
 }

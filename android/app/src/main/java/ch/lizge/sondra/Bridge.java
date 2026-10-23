@@ -113,6 +113,11 @@ final class Bridge {
         }
     }
 
+    /** Sondra is in front again, after the browser, a picker or another app. */
+    void resumed() {
+        drive.resumed();
+    }
+
     /** Answers on the main thread, as the reply proxy wants. */
     @SuppressLint("RequiresFeature")
     private void answer(JavaScriptReplyProxy reply, String id, Object result) {

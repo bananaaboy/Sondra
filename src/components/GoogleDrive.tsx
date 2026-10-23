@@ -14,7 +14,6 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
-import { IN_ANDROID_APP } from '../lib/desktop'
 import { formatBytes } from '../lib/format'
 import {
   cancelDriveSignIn,
@@ -36,10 +35,12 @@ import {
   retryDriveJob,
   saveAssetsToDrive,
   saveProjectToDrive,
+  saveResultToDrive,
   setDriveSetting,
   syncMerklisteNow,
   useDrive,
   type DriveFile,
+  type DriveFolder,
   type DriveJob,
   type MerkSync,
 } from '../lib/googleDrive'
@@ -49,6 +50,72 @@ import { Button, Dialog, Notice, Toggle } from './ui/primitives'
 
 const linkClass =
   'press inline-flex items-center gap-[6px] rounded-nav text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink disabled:cursor-not-allowed disabled:opacity-40'
+
+/**
+ * „In Drive“ beside „Speichern“: a result straight into Google Drive, never
+ * through the session. The button then says how far it is — waiting for the
+ * sign-in, the share sent, done, or already there — and a failure tries again.
+ */
+export function DriveSaveButton({
+  name,
+  bytes,
+  mime,
+  folder,
+  source = bytes,
+  size = 'sm',
+  disabled = false,
+}: {
+  name: string
+  /** The file, or how to make it when the click comes (a WAV from the decoded sound). */
+  bytes: Uint8Array | Blob | (() => Uint8Array | Blob)
+  mime: string
+  folder: DriveFolder
+  /** What the result is made from; a new one resets the button. */
+  source?: unknown
+  size?: 'sm' | 'md'
+  disabled?: boolean
+}) {
+  const configured = useDrive((state) => state.configured)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const job = useDrive((state) => (jobId ? state.jobs.find((entry) => entry.id === jobId) : undefined))
+  // A new result is a new file: what the button said about the last one goes.
+  useEffect(() => setJobId(null), [source])
+  if (!configured) return null
+
+  let label = 'In Drive'
+  let busy = false
+  if (job?.status === 'waiting') {
+    label = 'Wartet auf Drive …'
+    busy = true
+  } else if (job?.status === 'running') {
+    label = `In Drive … ${job.total > 0 ? Math.min(99, Math.round((job.loaded / job.total) * 100)) : 0} %`
+    busy = true
+  } else if (job?.status === 'done') {
+    label = 'In Drive gespeichert'
+    busy = true
+  } else if (job?.status === 'skipped') {
+    label = 'Schon in Drive'
+    busy = true
+  } else if (job?.status === 'failed') {
+    label = 'Drive: erneut versuchen'
+  }
+  return (
+    <Button
+      type="button"
+      size={size}
+      variant="quiet"
+      disabled={busy || disabled}
+      title={job?.status === 'failed' && job.error ? DRIVE_PROBLEM[job.error] : `${name} in Google Drive speichern, ohne Sitzung`}
+      onClick={() => {
+        if (job?.status === 'failed') retryDriveJob(job.id)
+        else setJobId(saveResultToDrive({ name, bytes: typeof bytes === 'function' ? bytes() : bytes, mime, folder }))
+      }}
+    >
+      <DriveIcon />
+      <span aria-live="polite">{label}</span>
+    </Button>
+  )
+}
 
 /** Drive's own shape would be its brand; this is a cloud with an arrow, which is what happens. */
 export function DriveIcon({ className = 'h-4 w-4' }: { className?: string }) {
@@ -367,11 +434,9 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
     head = (
       <div className="flex flex-col items-start gap-[12px]">
         <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
-          {IN_ANDROID_APP
-            ? 'Wählen Sie Ihr Google-Konto und erlauben Sie den Zugriff auf Drive. Danach geht es hier von selbst weiter.'
-            : DRIVE_IN_APP
-              ? 'Die Anmeldung bei Google ist in Ihrem Browser offen. Danach geht es hier von selbst weiter.'
-              : 'Die Anmeldung bei Google ist in einem eigenen Fenster offen. Danach geht es hier von selbst weiter.'}
+          {DRIVE_IN_APP
+            ? 'Die Anmeldung bei Google ist in Ihrem Browser offen. Danach geht es hier von selbst weiter.'
+            : 'Die Anmeldung bei Google ist in einem eigenen Fenster offen. Danach geht es hier von selbst weiter.'}
         </p>
         <button type="button" onClick={cancelDriveSignIn} className={`${linkClass} text-small`}>
           Abbrechen

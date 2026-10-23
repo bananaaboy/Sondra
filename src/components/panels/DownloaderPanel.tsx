@@ -32,7 +32,7 @@ import {
   saveBytes,
 } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
-import { offerDownloadToDrive } from '../../lib/googleDrive'
+import { offerDownloadToDrive, saveResultToDrive, useDrive } from '../../lib/googleDrive'
 import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { decodeWithBrowser } from '../../lib/audio'
 import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
@@ -56,6 +56,7 @@ import { AdvancedDownloader } from './DownloaderAdvanced'
 import { openGetAppDialog } from '../GetApp'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { ZipSave } from '../ZipSave'
+import { DriveSaveButton } from '../GoogleDrive'
 import { setMerkItems, takePendingBatchLookup, takePendingLookup, useMerkliste, type SavedLinkItem } from '../../lib/merkliste'
 import { AUDIO_QUALITY_OPTIONS, LANGUAGE_OPTIONS, VIDEO_QUALITY_OPTIONS, episodeKindOf } from './merklisteShared'
 import { EpisodePicker } from './EpisodePicker'
@@ -66,7 +67,7 @@ export type VideoFilePref = 'untouched' | 'best' | '1080p' | '720p' | '480p' | '
 export type VideoAdaptMode = 'stream_only' | 'reencode_lower'
 export type AudioFilePref = 'untouched' | 'high' | 'medium' | 'low' | 'lossless'
 export type DirectFilePref = 'untouched' | 'apply_media_prefs'
-export type DownloadDeliveryMode = 'session_only' | 'session_and_save' | 'save_only'
+export type DownloadDeliveryMode = 'session_only' | 'session_and_save' | 'save_only' | 'drive_only'
 export type AniworldLanguagePref = 'auto' | 'ger_sub' | 'ger_dub' | 'eng_sub'
 
 export interface DownloadFilePreferences {
@@ -98,6 +99,11 @@ function loadDownloadPrefs(): DownloadFilePreferences {
   } catch {
     return DEFAULT_DOWNLOAD_PREFS
   }
+}
+
+/** „Direkt in Drive“ only where Drive is set up; elsewhere the session, as before. */
+function deliveryOf(mode: DownloadDeliveryMode, driveConfigured: boolean): DownloadDeliveryMode {
+  return mode === 'drive_only' && !driveConfigured ? 'session_only' : mode
 }
 
 function saveDownloadPrefs(prefs: DownloadFilePreferences): void {
@@ -878,9 +884,11 @@ export function DownloaderPanel() {
   const targetAudioFormatRef = useRef<AudioOutputFormat>('mp3')
   targetAudioFormatRef.current = targetAudioFormat
 
+  const driveConfigured = useDrive((state) => state.configured)
   const [filePrefs, setFilePrefs] = useState<DownloadFilePreferences>(loadDownloadPrefs)
   const filePrefsRef = useRef<DownloadFilePreferences>(filePrefs)
   filePrefsRef.current = filePrefs
+  const deliveryMode = deliveryOf(filePrefs.deliveryMode, driveConfigured)
 
   const updateFilePrefs = useCallback((patch: Partial<DownloadFilePreferences>) => {
     setFilePrefs((prev) => {
@@ -1581,9 +1589,11 @@ export function DownloaderPanel() {
         onProgress: setProgress,
       })
       const done = await finishDownload(bytes, stream, result, controller.signal, (status) => setBusy(status))
-      const delivery = filePrefsRef.current.deliveryMode
+      const delivery = deliveryOf(filePrefsRef.current.deliveryMode, useDrive.getState().configured)
 
-      if (delivery !== 'save_only') {
+      if (delivery === 'drive_only') {
+        saveResultToDrive({ name: done.name, bytes: done.bytes, mime: done.mime, folder: 'downloads' })
+      } else if (delivery !== 'save_only') {
         addAsset({
           name: done.name,
           bytes: done.bytes,
@@ -1599,7 +1609,7 @@ export function DownloaderPanel() {
         saveBytes(done.bytes, done.name, done.mime)
       }
       log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
-      offerDownloadToDrive(done)
+      if (delivery !== 'drive_only') offerDownloadToDrive(done)
       setTaken({ name: done.name, bytes: done.bytes, mime: done.mime })
       recordDownload(url, result.title, result.author ?? '', done.ext, done.bytes.byteLength)
       if (autoTranscribeRef.current) {
@@ -1665,9 +1675,11 @@ export function DownloaderPanel() {
         patchEntry(id, { progress: { loaded: bytes.byteLength, total: bytes.byteLength } })
       }
       const done = await finishDownload(bytes, stream, res, signal)
-      const delivery = filePrefsRef.current.deliveryMode
+      const delivery = deliveryOf(filePrefsRef.current.deliveryMode, useDrive.getState().configured)
 
-      if (delivery !== 'save_only') {
+      if (delivery === 'drive_only') {
+        saveResultToDrive({ name: done.name, bytes: done.bytes, mime: done.mime, folder: 'downloads' })
+      } else if (delivery !== 'save_only') {
         addAsset({
           name: done.name,
           bytes: done.bytes,
@@ -1683,7 +1695,7 @@ export function DownloaderPanel() {
         saveBytes(done.bytes, done.name, done.mime)
       }
       log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
-      offerDownloadToDrive(done)
+      if (delivery !== 'drive_only') offerDownloadToDrive(done)
       if (autoTranscribeRef.current) {
         void triggerAutoTranscribe(done.name, done.bytes)
       }
@@ -2206,17 +2218,22 @@ export function DownloaderPanel() {
                 </label>
                 <Select
                   id="delivery-mode-select"
-                  value={filePrefs.deliveryMode}
+                  value={deliveryMode}
                   onChange={(e) => updateFilePrefs({ deliveryMode: e.target.value as DownloadDeliveryMode })}
                 >
                   <option value="session_only">In die Sondra-Sitzung legen (zum Weiterbearbeiten oder Speichern)</option>
                   <option value="session_and_save">Sofort als Datei speichern & zusätzlich in die Sitzung legen</option>
                   <option value="save_only">Einfach direkt als Datei herunterladen (ohne Sitzung)</option>
+                  {driveConfigured ? (
+                    <option value="drive_only">Direkt in Google Drive speichern (ohne Sitzung)</option>
+                  ) : null}
                 </Select>
                 <span className="text-small leading-[1.45] text-muted">
-                  {filePrefs.deliveryMode === 'save_only'
+                  {deliveryMode === 'drive_only'
+                    ? 'Schickt die Datei nach Google Drive, in „Sondra/Heruntergeladen“, ohne sie in die Sitzung zu laden.'
+                    : deliveryMode === 'save_only'
                     ? 'Speichert die Datei sofort im Download-Ordner, ohne sie in die Sitzung zu laden.'
-                    : filePrefs.deliveryMode === 'session_and_save'
+                    : deliveryMode === 'session_and_save'
                       ? 'Lädt die Datei gleichzeitig in Ihren Download-Ordner und in die aktuelle Sitzung.'
                       : 'Legt die geladene Datei bereit für alle Werkzeuge in Sondra.'}
                 </span>
@@ -2499,18 +2516,25 @@ export function DownloaderPanel() {
               <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-pill bg-ink" />
               <p className="min-w-0 flex-1 text-small text-ink">
                 <span className="value">{taken.name}</span>{' '}
-                {filePrefs.deliveryMode === 'save_only'
+                {deliveryMode === 'drive_only'
+                  ? 'geht nach Google Drive, in „Sondra/Heruntergeladen“.'
+                  : deliveryMode === 'save_only'
                   ? 'wurde direkt als Datei heruntergeladen.'
-                  : filePrefs.deliveryMode === 'session_and_save'
+                  : deliveryMode === 'session_and_save'
                     ? 'wurde gespeichert und ist in der Sitzung bereit.'
                     : 'ist in der Sitzung — '}
-                {filePrefs.deliveryMode === 'session_only' ? (
+                {deliveryMode === 'session_only' ? (
                   <span className="text-muted">oben im Dateimenü, bereit für jedes Werkzeug.</span>
                 ) : null}
               </p>
               <Button size="sm" variant="quiet" onClick={() => saveBytes(taken.bytes, taken.name, taken.mime)}>
-                {filePrefs.deliveryMode === 'session_only' ? 'Auch speichern' : 'Nochmals speichern'}
+                {deliveryMode === 'session_only' || deliveryMode === 'drive_only'
+                  ? 'Auch speichern'
+                  : 'Nochmals speichern'}
               </Button>
+              {deliveryMode !== 'drive_only' ? (
+                <DriveSaveButton name={taken.name} bytes={taken.bytes} mime={taken.mime} folder="downloads" />
+              ) : null}
             </div>
           ) : null}
 
@@ -2842,8 +2866,14 @@ export function DownloaderPanel() {
                                     ) : null}
 
                                     {entry.status === 'done' && entry.taken ? (
-                                      <div className="flex items-center gap-[8px]">
-                                        <span className="value text-small font-medium text-ink">In der Sitzung</span>
+                                      <div className="flex flex-wrap items-center gap-[8px]">
+                                        <span className="value text-small font-medium text-ink">
+                                          {deliveryMode === 'drive_only'
+                                            ? 'Nach Google Drive'
+                                            : deliveryMode === 'save_only'
+                                              ? 'Gespeichert'
+                                              : 'In der Sitzung'}
+                                        </span>
                                         <Button
                                           size="sm"
                                           variant="quiet"
@@ -2853,6 +2883,14 @@ export function DownloaderPanel() {
                                         >
                                           Speichern
                                         </Button>
+                                        {deliveryMode !== 'drive_only' ? (
+                                          <DriveSaveButton
+                                            name={entry.taken.name}
+                                            bytes={entry.taken.bytes}
+                                            mime={entry.taken.mime}
+                                            folder="downloads"
+                                          />
+                                        ) : null}
                                       </div>
                                     ) : null}
 

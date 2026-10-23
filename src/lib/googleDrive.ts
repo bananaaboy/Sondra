@@ -74,7 +74,7 @@ export const MERKLISTE_FILE = 'Sondra-Merkliste.json'
 /** The Merkliste is brought in step this long after its last change. */
 const MERKLISTE_DELAY = 2500
 
-/** The app's sign-in — the Windows app's (Systembrowser, PKCE) or Android's (its account sheet), the same actions. */
+/** The app's sign-in — the Windows app's or Android's, both in the browser with PKCE, the same actions. */
 const APP_DRIVE = APP_BRIDGE?.drive ?? ANDROID_BRIDGE?.drive ?? null
 const IN_APP = Boolean(APP_DRIVE)
 /** In the app, whose main process signs in; elsewhere the website's popup. */
@@ -759,6 +759,24 @@ export function offerDownloadToDrive(file: { name: string; bytes: Uint8Array; mi
     { kind: 'download', name: file.name, folder: 'downloads', total: file.bytes.byteLength },
     { data: () => new Blob([file.bytes as Uint8Array<ArrayBuffer>], { type: file.mime }), mode: 'skip-same', mime: file.mime },
   )
+}
+
+/**
+ * A result straight into Drive, without the session (Wunsch vom 23.10.2026:
+ * „Sachen direkt auf die Drive speichern, ohne sie in die Sitzung zu
+ * bringen“): a download into „Heruntergeladen“, anything else into the
+ * folder of its kind. Not signed in yet, the click signs in. Returns the
+ * job's id, so the button can show how far it is.
+ */
+export function saveResultToDrive(file: { name: string; bytes: Uint8Array | Blob; mime: string; folder: DriveFolder }): string {
+  const blob =
+    file.bytes instanceof Blob ? file.bytes : new Blob([file.bytes as Uint8Array<ArrayBuffer>], { type: file.mime })
+  const id = enqueue(
+    { kind: file.folder === 'downloads' ? 'download' : 'file', name: file.name, folder: file.folder, total: blob.size },
+    { data: () => blob, mode: 'skip-same', mime: file.mime || undefined },
+  )
+  if (!canRun() && !state().signingIn) void connectDrive()
+  return id
 }
 
 /* -------------------------------------------------------------------------- */

@@ -3,7 +3,7 @@
   Sondra on Android: an app of its own around the website — no browser bar,
   no browser screens, and no Chrome needed. The page runs in the app's own
   WebView; what a page cannot do there is done by the app: the Google sign-in
-  for Drive (Google refuses its web sign-in in a WebView), saving to
+  for Drive (in a Custom Tab: Google refuses its sign-in in a WebView), saving to
   Downloads, files shared with Sondra or opened with it, the file picker,
   full-screen video and the microphone.
 -->
@@ -52,6 +52,19 @@
                 <data
                     android:host="@string/hostName"
                     android:scheme="https" />
+            </intent-filter>
+
+            <!--
+              The way back from the Google sign-in in the browser. It carries
+              nothing: Google's answer reaches the app on a port of the phone.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="angemeldet"
+                    android:scheme="ch.lizge.sondra" />
             </intent-filter>
 
             <!-- „Teilen“ from the gallery or a file manager. -->

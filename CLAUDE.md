@@ -47,9 +47,11 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
 - **Werkzeuge sind Kacheln.** Die rund vierzig Werkzeuge stehen als Kachelfeld,
   nach Gruppen geordnet und über ein Feld filterbar — ausdrücklich so
   gewünscht. Eine getönte Fläche gibt der Kachel ihre Kante, kein Rahmen und
-  kein Schatten. Zweispaltig ab der kleinsten Breite; die Reiterleiste ist auf
-  der Startseite unterhalb `sm` ausgeblendet, weil sie dort dasselbe doppelt
-  sagt und dabei abgeschnitten wird.
+  kein Schatten. Zweispaltig ab der kleinsten Breite. Die Reiterleiste steht
+  auch auf der Startseite, auf jeder Breite (Wunsch vom 23.10.2026: „im
+  Startmenü kann man die Navbar nicht sehen“); unterhalb `sm` war sie dort
+  ausgeblendet, weil sie abgeschnitten wurde — seit „Mehr“ wird nichts mehr
+  abgeschnitten.
 - **Die Spalte wächst mit dem Schreibtisch, aber nicht endlos.** `shell` geht
   in Stufen von 1280 auf 1840 px; das Kachelraster von 2 über 3 und 4 auf 5
   Spalten. Mehr Fläche heisst mehr sichtbare Kacheln, nicht breitere — und ein
@@ -583,6 +585,16 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   nennt sie), unter 360 px stehen Drive und App nur als Symbol mit Namen
   für Screenreader, und Knöpfe schrumpfen nicht (`shrink-0`) — vorher wurde
   der Theme-Knopf auf 14 px gequetscht.
+  **Direkt in Drive, ohne Sitzung** (Wunsch vom 23.10.2026: „sachen direkt
+  auf die drive speichern … ohne auf die sitzung zu bringen“): „In Drive“
+  (`DriveSaveButton`, `saveResultToDrive`) neben „Speichern“ bei jedem
+  Ergebnis — Umwandeln, Video, Bilder, Lautstärke, Untertitel (SRT),
+  Mikrofon, Mischen, Bildschirm, Herunterladen —, in den Ordner nach Art;
+  meldet Warten, Prozent, „In Drive gespeichert“, „Schon in Drive“ und
+  „erneut versuchen“ am Knopf selbst, meldet ohne Verbindung an. Eine WAV
+  aus dekodiertem Ton wird erst beim Klick gerechnet. Herunterladen kennt
+  dazu „Direkt in Google Drive speichern (ohne Sitzung)“ als Verhalten; ohne
+  eingerichtetes Drive gilt dort wieder die Sitzung.
   Einrichtung: ein Google-Cloud-Projekt mit der Drive API, Zustimmungs-
   bildschirm mit `drive.file`, darin zwei OAuth-Clients — „Webanwendung“
   (JavaScript-Ursprung der Website, Weiterleitung `…/google-drive.html`;
@@ -680,16 +692,25 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   eigene Herkunft und den Hauptframe), JSON mit `id` und `type`, die Antwort
   mit derselben `id`; die Seite spricht es über `lib/android.ts`
   (`ANDROID_BRIDGE`, `IN_ANDROID_APP`; dazu `SondraAndroid/<Version>` im
-  User-Agent). `drive`: die Anmeldung bei Google Drive über das Konto-Fenster
-  von Android (`DriveAuth.java`, play-services-auth `AuthorizationClient`,
-  Scope `drive.file`) — Google lässt seine Web-Anmeldung im WebView nicht zu.
-  Dieselben Aktionen wie die Windows-App (`status`, `connect`, `cancel`,
-  `token`, `disconnect`), `lib/googleDrive.ts` nimmt die eine oder die
-  andere Brücke (`APP_DRIVE`); kein Refresh-Token, kein Secret in der App,
-  Android hält die Freigabe und gibt stündlich still ein Token. Google kennt
-  die App an Paket und SHA-1 des Schlüssels: ein OAuth-Client „Android“ im
-  Projekt der Website (sonst sähe die App den Ordner „Sondra“ nicht), ohne
-  ihn `not-configured`. `save-*`: `saveBytes` gibt in der App die Datei in
+  User-Agent). `drive`: die Anmeldung bei Google Drive (`DriveAuth.java`,
+  Scope `drive.file`) — wie die Windows-App: im Browser (Custom Tab über
+  Sondra, androidx.browser), Googles Antwort an einen Port des Telefons
+  (Loopback mit PKCE), mit demselben Client „Desktop-App“
+  (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, beim Build als BuildConfig
+  eingebacken; ohne sie `configured: false`). **Nicht über die Google
+  Play-Dienste** (`AuthorizationClient`, erste Fassung): die verlangen einen
+  OAuth-Client „Android“ mit dem SHA-1 des Schlüssels, und der fehlte — mit
+  dem Debug-Schlüssel ändert er sich sogar bei jedem Lauf; die Anmeldung
+  ging so nie. Die Antwortseite schickt den Browser über
+  `ch.lizge.sondra://angemeldet` zurück (trägt nichts, der Code kam über
+  den Port; Knopf „Zurück zu Sondra“, falls der Browser einen Tipp will);
+  kommt Sondra ohne Antwort nach vorn, ist der Tab geschlossen worden
+  (`cancelled` nach 1,5 s). Der Refresh-Token liegt AES-GCM-verschlüsselt
+  mit einem Schlüssel im Android Keystore in den Einstellungen der App; eine
+  Sicherung auf einem neuen Telefon lässt sich nicht entschlüsseln und heisst
+  „neu anmelden“. Dieselben Aktionen wie die Windows-App (`status`,
+  `connect`, `cancel`, `token`, `disconnect`), `lib/googleDrive.ts` nimmt
+  die eine oder die andere Brücke (`APP_DRIVE`). `save-*`: `saveBytes` gibt in der App die Datei in
   Stücken (1 MB, Base64) an `Saver.java`, nach `Downloads/Sondra` (ab
   Android 10 MediaStore, davor mit Speicher-Erlaubnis) — ein WebView kann
   `blob:` nicht speichern; alle Downloads gehen über `saveBytes`.
@@ -707,13 +728,14 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Android startet sie mit `CLEAR_TASK`, direkt auf `MainActivity` schlossen
   sie eine laufende Sondra; so wechselt nur der Hash. Version und versionCode
   (`a·10000 + b·100 + c`) aus der `package.json` der Website. AGP 8.13, SDK
-  36 (min 24), R8 an (452 KB). `/.well-known/assetlinks.json` schreibt die
+  36 (min 24), R8 an (rund 210 KB). `/.well-known/assetlinks.json` schreibt die
   Seite beim Build aus `ANDROID_CERT_SHA256` (Vercel; Komma-Liste): dann
   öffnen Links auf sondra.lizge.ch ohne Rückfrage in der App. Workflow
   „Android“: baut APK und AAB, lint, prüft Paket, Version, Startaktivität und
-  Signatur, nennt SHA-1 (für Google Cloud) und SHA-256 (für Vercel) in der
-  Zusammenfassung, **startet die APK auf einem Android-14-Emulator**
-  (`android/launch-check.sh`: Symbol, Kurzbefehl, Link, Teilen, Neustart —
+  Signatur und ob der Drive-Client drin ist, nennt SHA-256 (für Vercel) in
+  der Zusammenfassung, **startet die APK auf einem Android-14-Emulator**
+  (`android/launch-check.sh`: Symbol, Kurzbefehl, Link, Teilen, der Weg
+  zurück von Google, Neustart —
   kein Absturz, die richtige Adresse; Bildschirmfotos als Artefakt
   „Sondra-Android-Bilder“); Schlüssel aus `ANDROID_KEYSTORE_BASE64`/
   `ANDROID_KEYSTORE_PASSWORD`, sonst Debug-Schlüssel (dann kein Release,
