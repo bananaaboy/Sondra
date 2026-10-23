@@ -160,7 +160,10 @@ jobs:
           if-no-files-found: ignore
 
       - name: Attach to the release
-        if: inputs.release
+        # Only when run on its own. Called by the Desktop release, `inputs`
+        # carried that run's „release“ too, and this step published v1.1.15
+        # with nothing but the APK before the setups were there.
+        if: inputs.release && github.workflow == 'Android'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.check.outputs.version }}
