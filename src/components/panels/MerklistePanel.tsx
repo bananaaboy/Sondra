@@ -3607,13 +3607,7 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
     ctx.fillText('Erstellt mit Sondra · https://sondra.lizge.ch', 40, 430)
 
     canvas.toBlob((blob) => {
-      if (!blob) return
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Sondra-Merkliste-Statistik-${new Date().toISOString().slice(0, 10)}.png`
-      a.click()
-      URL.revokeObjectURL(url)
+      if (blob) saveBytes(blob, `Sondra-Merkliste-Statistik-${new Date().toISOString().slice(0, 10)}.png`, 'image/png')
     }, 'image/png')
   }
 

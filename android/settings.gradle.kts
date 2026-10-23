@@ -1,4 +1,4 @@
-// The Android app: Sondra's website as an app (Trusted Web Activity).
+// The Android app: Sondra as an app of its own around the website.
 pluginManagement {
     repositories {
         google()

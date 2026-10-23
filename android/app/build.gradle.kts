@@ -9,7 +9,8 @@ val sondraVersion = (JsonSlurper().parse(rootProject.file("../package.json")) as
 val versionParts = sondraVersion.split(".").map { it.toInt() }
 
 // The key the app is signed with. Without one (a first run, a fork) the debug
-// key signs it: the app installs and runs, but the next build cannot update it.
+// key signs it: the app installs and runs, but the next build cannot update it,
+// and the Google sign-in knows no such app.
 val keystore: String? = System.getenv("SONDRA_ANDROID_KEYSTORE")
 
 android {
@@ -37,10 +38,9 @@ android {
 
     buildTypes {
         release {
-            // What the app does not use of androidbrowserhelper and its libraries goes.
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName(if (keystore != null) "release" else "debug")
         }
     }
@@ -52,5 +52,10 @@ android {
 }
 
 dependencies {
-    implementation("com.google.androidbrowserhelper:androidbrowserhelper:2.7.4")
+    implementation("androidx.activity:activity:1.13.0")
+    implementation("androidx.core:core-splashscreen:1.2.0")
+    implementation("androidx.webkit:webkit:1.18.0")
+    // Google's sign-in for Drive, as the phone's own account sheet: Google
+    // refuses its web sign-in inside a WebView.
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
 }

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<lint>
-    <!-- The splash is the icon at 96 dp, so on some densities the same picture as the 48 dp launcher one. -->
-    <issue id="IconDuplicates" severity="ignore" />
-</lint>

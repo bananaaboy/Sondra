@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Sondra" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/canvasDark</item>
+        <item name="android:colorBackground">@color/canvasDark</item>
+        <item name="android:colorAccent">@color/ic_launcher_background</item>
+    </style>
+
+    <style name="Theme.Sondra.Starting" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/canvasDark</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.Sondra</item>
+    </style>
+</resources>

@@ -63,8 +63,8 @@ function offlineList(): Plugin {
 
 /**
  * `/.well-known/assetlinks.json`: the website vouches for the Android app
- * (`android/`), so Chrome shows it full screen instead of with an address
- * bar. Written only when `ANDROID_CERT_SHA256` names the signing key's
+ * (`android/`), so Android opens links to sondra.lizge.ch in it without
+ * asking. Written only when `ANDROID_CERT_SHA256` names the signing key's
  * fingerprint(s) — the Android workflow prints it —, comma-separated.
  */
 function assetLinks(fingerprints: string): Plugin {

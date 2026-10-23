@@ -13,6 +13,7 @@
  * an honest error rather than a silent failure.
  */
 
+import { ANDROID_BRIDGE } from './android'
 import { sanitizeFilename } from './format'
 import { explain, fetchLocalAware } from './service'
 
@@ -647,13 +648,24 @@ export async function fetchHlsSegments(
 /* Saving                                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** Hands bytes to the browser's download machinery. */
-export function saveBytes(bytes: Uint8Array, filename: string, mime = 'application/octet-stream'): void {
+/**
+ * Hands bytes to the browser's download machinery — in the Android app, to
+ * the app, which writes them into Downloads/Sondra (a WebView cannot save a
+ * `blob:` address).
+ */
+export function saveBytes(bytes: Uint8Array | Blob, filename: string, mime = 'application/octet-stream'): void {
   // A Blob copies what it is given anyway; copying first as well cost a
   // second full file for nothing. Only memory shared with a worker has to be
   // copied out, because a Blob will not take it.
-  const view = bytes.buffer instanceof ArrayBuffer ? (bytes as Uint8Array<ArrayBuffer>) : bytes.slice()
-  const blob = new Blob([view], { type: mime })
+  const blob =
+    bytes instanceof Blob
+      ? bytes
+      : new Blob([bytes.buffer instanceof ArrayBuffer ? (bytes as Uint8Array<ArrayBuffer>) : bytes.slice()], { type: mime })
+  if (ANDROID_BRIDGE) {
+    // The app says where it went, or why not; nothing waits on it here.
+    void ANDROID_BRIDGE.save(blob, sanitizeFilename(filename), blob.type || mime).catch(() => {})
+    return
+  }
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

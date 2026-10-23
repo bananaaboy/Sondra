@@ -664,36 +664,64 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Drive. Getestet mit `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1`, sonst
   erreichen die Anfragen des Workers in Playwright die Nachbildung nicht.
 - **Android-App** (`android/`, Wunsch vom 22.10.2026: „eine Android-App,
-  die über Google Drive läuft statt Anytype“): die Website als Trusted Web
-  Activity (androidbrowserhelper 2.7.4, Paket `ch.lizge.sondra`, startet auf
-  `#merkliste`, Kurzbefehle Merkliste/Ordner/Abspielen, Teilen von Video und
-  Ton an `/share-target`). Bewusst keine WebView: Google lässt seine
-  Anmeldung dort nicht zu, und Drive ist auf dem Telefon der Weg für
-  Merkliste und Ordner. Kein Chrome, der TWA kann: Custom Tab, nie WebView.
-  Version und versionCode (`a·10000 + b·100 + c`) aus der `package.json`
-  der Website. AGP 8.13, SDK 36 (min 24), R8 an (592 KB). Ohne Adressleiste
-  erst, wenn `/.well-known/assetlinks.json` den Schlüssel nennt: die Seite
-  schreibt sie beim Build aus `ANDROID_CERT_SHA256` (Vercel; Komma-Liste),
-  sonst gar nicht. Workflow „Android“: baut APK und AAB, lint, prüft Paket,
-  Version, Startaktivität und Signatur, nennt den Fingerabdruck in der
-  Zusammenfassung; Schlüssel aus `ANDROID_KEYSTORE_BASE64`/
+  die über Google Drive läuft statt Anytype“; am 23.10.: „es soll wirklich
+  wie eine App sein, nicht Webapp“): eine eigene App um die Website, Paket
+  `ch.lizge.sondra`, Java, keine Bibliothek für Web-Apps. `MainActivity`
+  hält ein WebView auf `https://sondra.lizge.ch` (Start `#merkliste`),
+  zwischen den Systemleisten (Insets als Abstand, Tastatur eingeschlossen),
+  Startbild über die SplashScreen-API, bis die Seite gezeichnet hat; nur die
+  eigene Adresse bleibt drin, alles andere und neue Fenster gehen an den
+  Browser. Zurück-Taste geht in der Seite zurück. **Die erste Fassung (TWA,
+  Chrome mit Adressleiste bis zur Schlüssel-Freigabe) war dem Nutzer zu sehr
+  Website**; dazu stürzte sie ab, weil `ManageDataLauncherActivity` im
+  Manifest fehlte — Build und lint merkten es nicht.
+  **Was die Seite nicht kann, macht die App** (`Bridge.java`): ein Objekt
+  `SondraNative` (androidx.webkit `addWebMessageListener`, nur für die
+  eigene Herkunft und den Hauptframe), JSON mit `id` und `type`, die Antwort
+  mit derselben `id`; die Seite spricht es über `lib/android.ts`
+  (`ANDROID_BRIDGE`, `IN_ANDROID_APP`; dazu `SondraAndroid/<Version>` im
+  User-Agent). `drive`: die Anmeldung bei Google Drive über das Konto-Fenster
+  von Android (`DriveAuth.java`, play-services-auth `AuthorizationClient`,
+  Scope `drive.file`) — Google lässt seine Web-Anmeldung im WebView nicht zu.
+  Dieselben Aktionen wie die Windows-App (`status`, `connect`, `cancel`,
+  `token`, `disconnect`), `lib/googleDrive.ts` nimmt die eine oder die
+  andere Brücke (`APP_DRIVE`); kein Refresh-Token, kein Secret in der App,
+  Android hält die Freigabe und gibt stündlich still ein Token. Google kennt
+  die App an Paket und SHA-1 des Schlüssels: ein OAuth-Client „Android“ im
+  Projekt der Website (sonst sähe die App den Ordner „Sondra“ nicht), ohne
+  ihn `not-configured`. `save-*`: `saveBytes` gibt in der App die Datei in
+  Stücken (1 MB, Base64) an `Saver.java`, nach `Downloads/Sondra` (ab
+  Android 10 MediaStore, davor mit Speicher-Erlaubnis) — ein WebView kann
+  `blob:` nicht speichern; alle Downloads gehen über `saveBytes`.
+  `opened`: Teilen und „Öffnen mit“ (Video, Ton) — die App bedient jede
+  Datei einmal unter `/__app/opened/<token>` (`shouldInterceptRequest`,
+  auch für die Anfragen des Service Workers, der diesen Pfad durchlässt),
+  die Seite holt sie, Filme und Ton gehen in den Player (`sendToPlayer`,
+  `#abspielen`), anderes in die Sitzung. `theme`: die Seite meldet hell
+  oder dunkel, die Systemleisten folgen. Dateiauswahl über Androids
+  Auswahl (auch `webkitdirectory`: ein ganzer Ordner, rekursiv), Mikrofon
+  mit Laufzeit-Erlaubnis, Vollbild-Video (`onShowCustomView`), offline beim
+  ersten Start eine eigene Seite mit „Erneut versuchen“, ein beendeter
+  WebView-Prozess baut das WebView neu statt die App zu beenden.
+  Kurzbefehle (Merkliste/Ordner/Abspielen) gehen über `ShortcutActivity`:
+  Android startet sie mit `CLEAR_TASK`, direkt auf `MainActivity` schlossen
+  sie eine laufende Sondra; so wechselt nur der Hash. Version und versionCode
+  (`a·10000 + b·100 + c`) aus der `package.json` der Website. AGP 8.13, SDK
+  36 (min 24), R8 an (452 KB). `/.well-known/assetlinks.json` schreibt die
+  Seite beim Build aus `ANDROID_CERT_SHA256` (Vercel; Komma-Liste): dann
+  öffnen Links auf sondra.lizge.ch ohne Rückfrage in der App. Workflow
+  „Android“: baut APK und AAB, lint, prüft Paket, Version, Startaktivität und
+  Signatur, nennt SHA-1 (für Google Cloud) und SHA-256 (für Vercel) in der
+  Zusammenfassung, **startet die APK auf einem Android-14-Emulator**
+  (`android/launch-check.sh`: Symbol, Kurzbefehl, Link, Teilen, Neustart —
+  kein Absturz, die richtige Adresse; Bildschirmfotos als Artefakt
+  „Sondra-Android-Bilder“); Schlüssel aus `ANDROID_KEYSTORE_BASE64`/
   `ANDROID_KEYSTORE_PASSWORD`, sonst Debug-Schlüssel (dann kein Release,
-  Updates gingen nicht); „new_key“ erzeugt einmal einen (Artefakt, ein Tag);
-  „release“ hängt `Sondra-Android[-<Version>].apk` ans Release. Die Seite
-  erkennt die App am Referrer `android-app://ch.lizge.sondra` (`IN_ANDROID_APP`,
-  für den Tab gemerkt) und bietet dort die Windows-App nicht an.
-  **`ManageDataLauncherActivity` gehört ins Manifest:** `LauncherActivity`
-  schaltet sie bei jedem Start ein oder aus (`setComponentEnabledSetting`),
-  und fehlt sie, stürzt die App beim ersten Antippen ab — Build und lint
-  merkten es nicht, 1.1.14 lief so aus. Sie ist zugleich „Speicher
-  verwalten“ (`manageSpaceActivity`). Kurzbefehle gehen über
-  `ShortcutTrampolineActivity` der Bibliothek, nicht direkt auf den
-  Launcher (Android startet sie mit `CLEAR_TASK`). Der Workflow startet die
-  APK deshalb auf einem Android-14-Emulator mit Chrome
-  (`android/launch-check.sh`: Symbol, Kurzbefehl, Link — kein Absturz, die
-  richtige Adresse). Icons:
-  `npm run android:icons` (Vektor-Vordergrund aus den Balken des Zeichens,
-  PNGs mit den Helfern aus `store-tiles.mjs`). Lokal bauen: Android SDK mit
-  `platforms;android-36`, dann `cd android && ./gradlew assembleRelease`.
+  Updates und Drive gingen nicht); „new_key“ erzeugt einmal einen (Artefakt,
+  ein Tag); „release“ hängt `Sondra-Android[-<Version>].apk` ans Release.
+  Icons: `npm run android:icons` (Vektor-Vordergrund aus den Balken des
+  Zeichens, auch für das Startbild; PNGs mit den Helfern aus
+  `store-tiles.mjs`). Lokal bauen: Android SDK mit `platforms;android-36`,
+  dann `cd android && ./gradlew assembleRelease`.
 - **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
   jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
