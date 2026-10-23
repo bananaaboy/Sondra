@@ -55,8 +55,9 @@
             </intent-filter>
 
             <!--
-              The way back from the Google sign-in in the browser. It carries
-              nothing: Google's answer reaches the app on a port of the phone.
+              The way back from the Google sign-in in the browser, with
+              Google's answer for the page; the website's google-drive.html
+              sends it as an intent naming this package.
             -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

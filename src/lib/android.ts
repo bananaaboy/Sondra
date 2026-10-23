@@ -7,9 +7,10 @@
  * with an `id` and a `type`; the answer comes back with the same `id`. What
  * goes through it:
  *
- *   drive    Google's sign-in for Drive in the browser, the same actions as
- *            the Windows app's (`lib/googleDrive.ts` takes either) — Google
- *            refuses its sign-in in a WebView
+ *   sign-in  Google's sign-in for Drive, the website's own (`lib/googleDrive.ts`),
+ *            opened by the app in the browser — Google refuses it in a
+ *            WebView — and its answer handed back here; the code is
+ *            exchanged by the website's function, as on the website
  *   opened   films and songs shared with Sondra or opened with it, as
  *            addresses on this site the app serves once
  *   save     a file into Downloads/Sondra, in pieces (a WebView cannot save
@@ -35,6 +36,7 @@ type Answer = Record<string, unknown>
 const port: NativePort | null = typeof window !== 'undefined' ? (window.SondraNative ?? null) : null
 const waiting = new Map<string, (answer: unknown) => void>()
 const openedListeners = new Set<() => void>()
+const signInListeners = new Set<(closed: boolean) => void>()
 let ids = 0
 
 if (port) {
@@ -47,6 +49,10 @@ if (port) {
     }
     if (message.event === 'opened') {
       for (const listener of openedListeners) listener()
+      return
+    }
+    if (message.event === 'sign-in' || message.event === 'sign-in-closed') {
+      for (const listener of signInListeners) listener(message.event === 'sign-in-closed')
       return
     }
     const done = message.id ? waiting.get(message.id) : undefined
@@ -77,7 +83,12 @@ function base64(bytes: Uint8Array): string {
 }
 
 export interface AndroidBridge {
-  drive: (action: string, ...args: unknown[]) => Promise<unknown>
+  /** Opens Google's sign-in in the browser; `rejected` from an app too old for it. */
+  openSignIn: (url: string) => Promise<{ ok: boolean; error?: string }>
+  /** Google's answer, once it is back in the app: the query of the address it came back with. */
+  takeSignIn: () => Promise<string | null>
+  /** The answer is there (false), or the browser was closed without one (true). */
+  onSignIn: (callback: (closed: boolean) => void) => () => void
   takeOpenedFiles: () => Promise<OpenedFile[]>
   onOpenedFiles: (callback: () => void) => () => void
   /** Into Downloads/Sondra; resolves with where it went. */
@@ -87,7 +98,12 @@ export interface AndroidBridge {
 /** The app's side of the page, or null on the website and in the Windows app. */
 export const ANDROID_BRIDGE: AndroidBridge | null = port
   ? {
-      drive: (action, ...args) => ask('drive', { action, args }),
+      openSignIn: (url) => ask<{ ok: boolean; error?: string }>('sign-in', { url }),
+      takeSignIn: () => ask<string | null>('sign-in-result'),
+      onSignIn: (callback) => {
+        signInListeners.add(callback)
+        return () => signInListeners.delete(callback)
+      },
       takeOpenedFiles: () => ask<OpenedFile[]>('opened'),
       onOpenedFiles: (callback) => {
         openedListeners.add(callback)

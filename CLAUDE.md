@@ -692,25 +692,27 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   eigene Herkunft und den Hauptframe), JSON mit `id` und `type`, die Antwort
   mit derselben `id`; die Seite spricht es über `lib/android.ts`
   (`ANDROID_BRIDGE`, `IN_ANDROID_APP`; dazu `SondraAndroid/<Version>` im
-  User-Agent). `drive`: die Anmeldung bei Google Drive (`DriveAuth.java`,
-  Scope `drive.file`) — wie die Windows-App: im Browser (Custom Tab über
-  Sondra, androidx.browser), Googles Antwort an einen Port des Telefons
-  (Loopback mit PKCE), mit demselben Client „Desktop-App“
-  (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, beim Build als BuildConfig
-  eingebacken; ohne sie `configured: false`). **Nicht über die Google
-  Play-Dienste** (`AuthorizationClient`, erste Fassung): die verlangen einen
-  OAuth-Client „Android“ mit dem SHA-1 des Schlüssels, und der fehlte — mit
-  dem Debug-Schlüssel ändert er sich sogar bei jedem Lauf; die Anmeldung
-  ging so nie. Die Antwortseite schickt den Browser über
-  `ch.lizge.sondra://angemeldet` zurück (trägt nichts, der Code kam über
-  den Port; Knopf „Zurück zu Sondra“, falls der Browser einen Tipp will);
-  kommt Sondra ohne Antwort nach vorn, ist der Tab geschlossen worden
-  (`cancelled` nach 1,5 s). Der Refresh-Token liegt AES-GCM-verschlüsselt
-  mit einem Schlüssel im Android Keystore in den Einstellungen der App; eine
-  Sicherung auf einem neuen Telefon lässt sich nicht entschlüsseln und heisst
-  „neu anmelden“. Dieselben Aktionen wie die Windows-App (`status`,
-  `connect`, `cancel`, `token`, `disconnect`), `lib/googleDrive.ts` nimmt
-  die eine oder die andere Brücke (`APP_DRIVE`). `save-*`: `saveBytes` gibt in der App die Datei in
+  User-Agent). `sign-in`: die Anmeldung bei Google Drive ist **die der
+  Website** (`signInWeb`, Client „Webanwendung“, Code an
+  `api/google-token`, Cookie im WebView, `CookieManager.flush()` beim
+  Pausieren), nur öffnet die App sie im Browser (Custom Tab, androidx.browser)
+  statt im Popup — Google lässt sie im WebView nicht zu. Der `state` trägt
+  die Marke `app.`; daran erkennt `google-drive.html`, dass die Antwort der
+  App gehört, und schickt sie als `intent://angemeldet?…#Intent;scheme=
+  ch.lizge.sondra;package=ch.lizge.sondra;end` (nur dieses Paket; Knopf
+  „Zurück zu Sondra“, falls der Browser einen Tipp will). Die App hält die
+  Antwort, sagt der Seite `sign-in`, die holt sie mit `sign-in-result`; kommt
+  Sondra ohne Antwort nach vorn, `sign-in-closed` (nach 1,5 s). Wurde die App
+  unterwegs beendet, nimmt die neue Seite die Antwort (`resumeAppSignIn`, der
+  `state` liegt dafür kurz in `sondra:drive:anmeldung`). Eine App, die
+  `sign-in` nicht kennt, heisst `app-outdated`. **Zwei Fassungen davor gingen
+  nicht:** die Google Play-Dienste (`AuthorizationClient`) verlangten einen
+  OAuth-Client „Android“ mit dem SHA-1 des Schlüssels, der fehlte und sich mit
+  dem Debug-Schlüssel bei jedem Lauf änderte; danach Loopback wie in der
+  Windows-App — dort wartet die App im Hintergrund auf Googles Antwort, und
+  Android hält Apps im Hintergrund an. Jetzt steckt nichts von Google in der
+  App (der Workflow bricht ab, stünde ein `GOCSPX-` darin), und die Seite ist
+  dieselbe wie im Browser. `save-*`: `saveBytes` gibt in der App die Datei in
   Stücken (1 MB, Base64) an `Saver.java`, nach `Downloads/Sondra` (ab
   Android 10 MediaStore, davor mit Speicher-Erlaubnis) — ein WebView kann
   `blob:` nicht speichern; alle Downloads gehen über `saveBytes`.
@@ -732,10 +734,10 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Seite beim Build aus `ANDROID_CERT_SHA256` (Vercel; Komma-Liste): dann
   öffnen Links auf sondra.lizge.ch ohne Rückfrage in der App. Workflow
   „Android“: baut APK und AAB, lint, prüft Paket, Version, Startaktivität und
-  Signatur und ob der Drive-Client drin ist, nennt SHA-256 (für Vercel) in
-  der Zusammenfassung, **startet die APK auf einem Android-14-Emulator**
-  (`android/launch-check.sh`: Symbol, Kurzbefehl, Link, Teilen, der Weg
-  zurück von Google, Neustart —
+  Signatur und dass kein Google-Secret drin ist, nennt SHA-256 (für Vercel)
+  in der Zusammenfassung, **startet die APK auf einem Android-14-Emulator**
+  (`android/launch-check.sh`: Symbol, die Seite spricht mit der App,
+  Kurzbefehl, Link, Teilen, der Weg zurück von Google, Neustart —
   kein Absturz, die richtige Adresse; Bildschirmfotos als Artefakt
   „Sondra-Android-Bilder“); Schlüssel aus `ANDROID_KEYSTORE_BASE64`/
   `ANDROID_KEYSTORE_PASSWORD`, sonst Debug-Schlüssel (dann kein Release,

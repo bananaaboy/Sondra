@@ -12,14 +12,6 @@ val versionParts = sondraVersion.split(".").map { it.toInt() }
 // key signs it: the app installs and runs, but the next build cannot update it.
 val keystore: String? = System.getenv("SONDRA_ANDROID_KEYSTORE")
 
-// Google's „Desktop app“ client, the one the Windows app signs in with
-// (loopback, see DriveAuth). Like there, its secret is no secret in an
-// installed program, as Google says. Without it the app offers no Drive.
-fun googleClient(name: String): String {
-    val value = System.getenv(name)?.trim() ?: ""
-    return if (Regex("[A-Za-z0-9._-]*").matches(value)) value else ""
-}
-
 android {
     namespace = "ch.lizge.sondra"
     compileSdk = 36
@@ -30,12 +22,6 @@ android {
         targetSdk = 36
         versionName = sondraVersion
         versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
-        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${googleClient("SONDRA_GOOGLE_CLIENT_ID")}\"")
-        buildConfigField("String", "GOOGLE_CLIENT_SECRET", "\"${googleClient("SONDRA_GOOGLE_CLIENT_SECRET")}\"")
-    }
-
-    buildFeatures {
-        buildConfig = true
     }
 
     signingConfigs {

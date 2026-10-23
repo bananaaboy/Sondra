@@ -24,6 +24,7 @@ export type DriveErrorCode =
   | 'quota'
   | 'offline'
   | 'missing'
+  | 'app-outdated'
   | 'failed'
 
 export class DriveError extends Error {

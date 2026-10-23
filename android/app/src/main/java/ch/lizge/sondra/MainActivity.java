@@ -154,7 +154,8 @@ public class MainActivity extends ComponentActivity {
         });
 
         bridge.received(getIntent());
-        if (fromSignIn(getIntent())) Log.i(TAG, "Zurück von der Anmeldung bei Google");
+        // Back from Google after Android ended Sondra meanwhile: the new page takes the answer.
+        if (fromSignIn(getIntent())) bridge.signInReturned(getIntent().getData());
         String url = addressFrom(getIntent());
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             Log.i(TAG, "Adresse: " + url);
@@ -190,14 +191,13 @@ public class MainActivity extends ComponentActivity {
     }
 
     private static boolean fromSignIn(Intent intent) {
-        Uri data = intent != null ? intent.getData() : null;
-        return data != null && DriveAuth.RETURN_SCHEME.equals(data.getScheme());
+        return intent != null && Bridge.isSignInReturn(intent.getData());
     }
 
     /** The page's address for an intent: a link, a shortcut, else the Merkliste. */
     private String addressFrom(Intent intent) {
         Uri data = intent != null ? intent.getData() : null;
-        if (data != null && "https".equals(data.getScheme()) && isOwn(data)) return data.toString();
+        if (data != null && "https".equals(data.getScheme()) && isOwn(data) && !fromSignIn(intent)) return data.toString();
         return getString(R.string.launchUrl);
     }
 
@@ -208,8 +208,8 @@ public class MainActivity extends ComponentActivity {
         bridge.received(intent);
         Uri data = intent.getData();
         if (fromSignIn(intent)) {
-            // Back from the Google sign-in in the browser; the page hears from DriveAuth.
-            Log.i(TAG, "Zurück von der Anmeldung bei Google");
+            // Back from the Google sign-in in the browser; the page takes the answer.
+            bridge.signInReturned(data);
             return;
         }
         if (data == null || !"https".equals(data.getScheme()) || !isOwn(data) || webView == null) return;
@@ -229,6 +229,14 @@ public class MainActivity extends ComponentActivity {
     protected void onResume() {
         super.onResume();
         if (bridge != null) bridge.resumed();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // The Drive sign-in lives in a cookie of the website's function: kept
+        // on disk now, not only when the WebView gets round to it.
+        CookieManager.getInstance().flush();
     }
 
     @Override

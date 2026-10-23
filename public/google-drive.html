@@ -27,14 +27,29 @@
         color: var(--ink);
         font: 16px/1.55 'Public Sans', system-ui, sans-serif;
       }
-      p {
+      main {
         max-width: 32em;
         margin: 24px;
+      }
+      p {
+        margin: 0;
+      }
+      .back {
+        display: inline-block;
+        margin-top: 16px;
+        padding: 12px 20px;
+        border-radius: 10px;
+        background: var(--ink);
+        color: var(--canvas);
+        font-weight: 600;
+        text-decoration: none;
       }
     </style>
   </head>
   <body>
-    <p id="text">Einen Moment …</p>
+    <main>
+      <p id="text">Einen Moment …</p>
+    </main>
     <script>
       // Google's sign-in comes back here with the answer in the fragment.
       // It goes to the Sondra tab over a BroadcastChannel — the popup has no
@@ -53,6 +68,26 @@
         }
         history.replaceState(null, '', location.pathname)
         var text = document.getElementById('text')
+        // A sign-in the Android app opened in the browser: the answer goes
+        // to that app, and only to it (the intent names its package).
+        if (answer.state && answer.state.indexOf('app.') === 0) {
+          var params = new URLSearchParams()
+          Object.keys(answer).forEach(function (key) {
+            if (answer[key]) params.set(key, answer[key])
+          })
+          var back =
+            'intent://angemeldet?' + params.toString() + '#Intent;scheme=ch.lizge.sondra;package=ch.lizge.sondra;end'
+          text.textContent = answer.error
+            ? 'Die Anmeldung bei Google hat nicht geklappt.'
+            : 'Angemeldet. Es geht zurück zu Sondra …'
+          var link = document.createElement('a')
+          link.href = back
+          link.textContent = 'Zurück zu Sondra'
+          link.className = 'back'
+          document.body.querySelector('main').appendChild(link)
+          location.replace(back)
+          return
+        }
         if (!answer.state || !('BroadcastChannel' in window)) {
           text.textContent = 'Hier ist nichts zu tun. Sie können dieses Fenster schliessen.'
           return
