@@ -22,6 +22,12 @@ export const WINDOWS_SETUP_ARM64 = 'https://github.com/bananaaboy/Sondra/release
 export const WINDOWS_PORTABLE = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Portable.exe'
 export const WINDOWS_PORTABLE_ARM64 = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Portable-arm64.exe'
 
+/** The Android app (from 1.1.15 on in the release, signed with the app's own key). */
+export const ANDROID_APK = 'https://github.com/bananaaboy/Sondra/releases/latest/download/Sondra-Android.apk'
+
+/** A phone or tablet with Android, in its browser: the app it can install is that one. */
+export const ON_ANDROID = typeof navigator !== 'undefined' && /\bAndroid\b/.test(navigator.userAgent)
+
 type ArchNavigator = Navigator & {
   userAgentData?: { platform?: string; getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }> }
 }

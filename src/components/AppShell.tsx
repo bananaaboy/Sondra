@@ -220,7 +220,7 @@ export function Footer() {
       <p className="flex flex-wrap gap-x-[16px] gap-y-[4px]">
         {IN_DESKTOP_APP || IN_ANDROID_APP ? null : (
           <button type="button" className={footerLink} onClick={openGetAppDialog}>
-            Sondra für Windows herunterladen
+            Sondra für Windows und Android
           </button>
         )}
         {driveConfigured ? (

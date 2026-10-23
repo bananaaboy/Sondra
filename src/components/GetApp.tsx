@@ -11,13 +11,19 @@
  * build are the two narrow ones underneath. The store tile links to the listing; without one it stays in
  * place and says „Bald verfügbar" on its face — on a tile this size a
  * hover-only hint reads as broken.
+ *
+ * And Android: a narrow row of its own under the two, and on an Android
+ * phone the large ink tile at the top — there the setup is the one that
+ * does not fit the device, so it steps back to the tinted tile.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import {
+  ANDROID_APK,
   IN_ANDROID_APP,
   IN_DESKTOP_APP,
+  ON_ANDROID,
   MICROSOFT_STORE,
   WINDOWS_PORTABLE,
   WINDOWS_PORTABLE_ARM64,
@@ -68,6 +74,16 @@ function StickIcon({ className = 'h-5 w-5' }: { className?: string }) {
       <rect x="5.5" y="7.5" width="9" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
       <path d="M7.5 7.5v-5h5v5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
       <path d="M9 4.6h.01M11 4.6h.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** A phone: the Android robot would be Google's mark, not what the tile is about. */
+function PhoneIcon({ className = 'h-5 w-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={`${className} shrink-0`} fill="none" aria-hidden>
+      <rect x="5.5" y="2.5" width="9" height="15" rx="2" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M8.8 15h2.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   )
 }
@@ -325,7 +341,9 @@ export function GetAppButton() {
                 <span className="text-[28px] font-light leading-none tracking-[-0.03em] sm:text-[60px]">Studio</span>
               </h2>
               <p className="text-body text-prose sm:text-subheading">
-                Die ganze Werkstatt im eigenen Fenster — für Windows 10 und 11.
+                {ON_ANDROID
+                  ? 'Die ganze Werkstatt als eigene App — für Android, Windows 10 und 11.'
+                  : 'Die ganze Werkstatt im eigenen Fenster — für Windows 10 und 11 und als App für Android.'}
               </p>
             </div>
             <button
@@ -341,6 +359,25 @@ export function GetAppButton() {
           </div>
 
           <div className="flex flex-col gap-[14px]">
+            {ON_ANDROID ? (
+              <a href={ANDROID_APK} rel="noopener" onClick={() => setTimeout(close, 100)} className={`${MAIN} press bg-ink text-on-ink`}>
+                <Bars />
+                <MainTile
+                  icon={<PhoneIcon className="h-[52px] w-[52px]" />}
+                  title="Android"
+                  facts=".apk · ab Android 7"
+                  action={
+                    <span className={`${ACTION} bg-on-ink text-ink transition-transform duration-[130ms] group-hover:translate-x-[4px]`}>
+                      <DownloadIcon className="h-[18px] w-[18px]" />
+                      Herunterladen
+                    </span>
+                  }
+                >
+                  Sondra als eigene App: Merkliste, Ordner und Player, über Google Drive mit den anderen Geräten gleich. Android
+                  fragt beim ersten Mal, ob der Browser Apps installieren darf.
+                </MainTile>
+              </a>
+            ) : null}
             <div className="grid grid-cols-1 gap-[14px] md:grid-cols-2">
               <a
                 href={arm ? WINDOWS_SETUP_ARM64 : WINDOWS_SETUP}
@@ -349,15 +386,17 @@ export function GetAppButton() {
                   e.preventDefault()
                   setDefender({ url: arm ? WINDOWS_SETUP_ARM64 : WINDOWS_SETUP, portable: false })
                 }}
-                className={`${MAIN} press bg-ink text-on-ink`}
+                className={`${MAIN} press ${ON_ANDROID ? 'bg-panel-strong text-ink hover:bg-panel-mid' : 'bg-ink text-on-ink'}`}
               >
-                <Bars />
+                {ON_ANDROID ? null : <Bars />}
                 <MainTile
                   icon={<SetupIcon className="h-[52px] w-[52px]" />}
-                  title="Setup"
+                  title={ON_ANDROID ? 'Setup für Windows' : 'Setup'}
                   facts={arm ? '.exe · Arm64' : '.exe · 130 MB'}
                   action={
-                    <span className={`${ACTION} bg-on-ink text-ink transition-transform duration-[130ms] group-hover:translate-x-[4px]`}>
+                    <span
+                      className={`${ACTION} ${ON_ANDROID ? 'bg-ink text-on-ink group-hover:bg-ink-hover' : 'bg-on-ink text-ink transition-transform duration-[130ms] group-hover:translate-x-[4px]'}`}
+                    >
                       <DownloadIcon className="h-[18px] w-[18px]" />
                       Herunterladen
                     </span>
@@ -457,6 +496,29 @@ export function GetAppButton() {
                   Herunterladen
                 </a>
               </div>
+
+              {/* Android, as a row of its own; on a phone it is the large tile above. */}
+              {ON_ANDROID ? null : (
+                <div className="flex flex-col gap-[12px] rounded-card bg-panel-soft px-[20px] py-[16px] text-ink sm:flex-row sm:items-center sm:gap-[18px] sm:px-[28px] md:col-span-2">
+                  <span className="flex min-w-0 flex-1 items-center gap-[16px]">
+                    <PhoneIcon className="h-[28px] w-[28px]" />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-body font-semibold">Android</span>
+                      <span className="text-small text-prose">
+                        Die App fürs Telefon und Tablet, ab Android 7. Merkliste und Ordner kommen über Google Drive mit.
+                        Auf dem Telefon öffnen und installieren — Android fragt einmal, ob der Browser Apps installieren darf.
+                      </span>
+                    </span>
+                  </span>
+                  <a
+                    href={ANDROID_APK}
+                    rel="noopener"
+                    className="press shrink-0 self-start rounded-nav px-[16px] py-[9px] text-small font-semibold text-ink ring-1 ring-inset ring-rule hover:bg-panel-mid sm:self-auto"
+                  >
+                    APK laden
+                  </a>
+                </div>
+              )}
             </div>
           </div>
 

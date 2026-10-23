@@ -9,6 +9,11 @@
 # Built and checked twice, x64 on windows-latest and arm64 on windows-11-arm;
 # the release then carries both setups and one latest.yml for both.
 #
+# The release builds the Android app as well (android.yml, with its own
+# checks on an emulator) and carries Sondra-Android.apk beside the setups.
+# Signed with the debug key it would publish an app no later version can
+# update, so then the release stops and says which secrets are missing.
+#
 # Everything runs on Windows: an NSIS installer needs Windows to build,
 # and "the installed app opens and shows Sondra" is only worth something when
 # it was checked on Windows. The installer is kept as the artifact
@@ -302,10 +307,20 @@ jobs:
             release/latest.yml
           retention-days: 30
 
-  # Both builds passed: one release with both setups, and one latest.yml
-  # that lists both (x64 first; the updater picks its own architecture).
+  # The Android app, for the release only: built, checked and kept as the
+  # artifact „Sondra-Android“ by its own workflow.
+  android:
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
+    permissions:
+      contents: write
+
+  # All builds passed: one release with both setups, one latest.yml that
+  # lists both (x64 first; the updater picks its own architecture), and the
+  # Android app.
   release:
-    needs: windows
+    needs: [windows, android]
     if: startsWith(github.ref, 'refs/tags/v') || inputs.release
     runs-on: ubuntu-latest
     permissions:
@@ -321,10 +336,16 @@ jobs:
         with:
           name: Sondra-Setup-arm64
           path: release-arm64
+      - uses: actions/download-artifact@v5
+        with:
+          name: Sondra-Android
+          path: release-android
       - name: Publish the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          ANDROID_DEBUG_KEY: ${{ needs.android.outputs.debug }}
+          ANDROID_VERSION: ${{ needs.android.outputs.version }}
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $tag = "v$version"
@@ -341,6 +362,15 @@ jobs:
             Write-Host "Release $tag gibt es schon, bleibt unverändert."
             exit 0
           }
+          # The Android app: signed with the app's own key, of this version.
+          if ($env:ANDROID_DEBUG_KEY -ne 'false') {
+            throw 'Die Android-App ist nicht mit dem eigenen Schlüssel signiert: in GitHub (Settings → Secrets and variables → Actions) fehlen ANDROID_KEYSTORE_BASE64 und ANDROID_KEYSTORE_PASSWORD. Mit dem Debug-Schlüssel liesse sich keine spätere Fassung über diese installieren.'
+          }
+          if ($env:ANDROID_VERSION -ne $version) { throw "Android-App $env:ANDROID_VERSION passt nicht zu $version." }
+          $apk = Get-ChildItem release-android -Filter "Sondra-Android-$version.apk" | Select-Object -First 1
+          if (-not $apk) { throw 'Die Android-App fehlt.' }
+          Copy-Item $apk.FullName release-android/Sondra-Android.apk
+
           $setup = Get-ChildItem release -Filter "Sondra-Setup-$version.exe" | Select-Object -First 1
           $armSetup = Get-ChildItem release-arm64 -Filter "Sondra-Setup-arm64-$version.exe" | Select-Object -First 1
           if (-not $setup -or -not $armSetup) { throw 'Ein Setup fehlt (x64 oder arm64).' }
@@ -356,7 +386,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'latest.yml nicht zusammengefuehrt.' }
 
           $notes = @"
-          Sondra für Windows, Version $version.
+          Sondra $version — für Windows und Android.
 
           **Installieren:** Sondra-Setup.exe herunterladen und ausführen — auf Windows-Rechnern mit Arm-Prozessor (z. B. Snapdragon) Sondra-Setup-arm64.exe. Sondra installiert sich für alle Benutzer unter „Programme“ (eine Windows-Abfrage) und legt einen Eintrag im Startmenü und eine Verknüpfung auf dem Desktop an.
 
@@ -365,6 +395,8 @@ jobs:
           **Ohne Installation:** Sondra-Portable.exe (Arm: Sondra-Portable-arm64.exe) startet ohne Setup und ohne Windows-Abfrage, auch vom USB-Stick. Die Daten liegen daneben im Ordner „Sondra-Daten“; nichts kommt ins Startmenü oder in die Registrierung. Die portable Fassung ersetzt sich nicht selbst — Sondra zeigt oben an, wenn eine neue erschienen ist.
 
           **Aktualisieren:** Ab 1.0.7 sucht Sondra selbst nach neuen Fassungen, lädt sie im Hintergrund und fragt, ob sie jetzt neu starten soll.
+
+          **Android:** Sondra-Android.apk auf dem Telefon öffnen und installieren (ab Android 7). Android fragt beim ersten Mal, ob der Browser Apps installieren darf. Eine neue Fassung installiert sich über die alte; Merkliste und Ordner kommen über Google Drive mit.
 
           Setup und portable Fassung sind nicht signiert. Windows SmartScreen kann beim ersten Start warnen („Weitere Informationen“ → „Trotzdem ausführen“), und die intelligente App-Steuerung blockiert unsignierte Programme ganz.
 
@@ -388,7 +420,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Entwurf für $tag nicht angelegt." }
           }
           $files = @($setup.FullName, 'release/Sondra-Setup.exe', $armSetup.FullName, 'release/Sondra-Setup-arm64.exe',
-            $portable.FullName, 'release/Sondra-Portable.exe', $armPortable.FullName, 'release/Sondra-Portable-arm64.exe') + $extra + @('release/latest.yml')
+            $portable.FullName, 'release/Sondra-Portable.exe', $armPortable.FullName, 'release/Sondra-Portable-arm64.exe',
+            $apk.FullName, 'release-android/Sondra-Android.apk') + $extra + @('release/latest.yml')
           foreach ($file in $files) {
             $done = $false
             foreach ($try in 1..4) {
