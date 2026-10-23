@@ -184,8 +184,8 @@ Die App schreibt ein Protokoll nach `%APPDATA%\Sondra\sondra.log`.
 
 `android/` ist Sondra für Android: eine eigene App um die Website —
 ihr eigenes WebView, keine Adressleiste, kein Chrome nötig. Was eine Seite
-dort nicht kann, macht die App: die Anmeldung bei Google Drive (im Browser,
-wie die Windows-App), Speichern nach Downloads/Sondra, „Teilen“ und
+dort nicht kann, macht die App: die Anmeldung bei Google Drive (die der
+Website, im Browser geöffnet), Speichern nach Downloads/Sondra, „Teilen“ und
 „Öffnen mit“ für Videos und Ton (sie laufen dann im Player), die
 Dateiauswahl (auch ganze Ordner), Vollbild-Video und das Mikrofon. Eigenes
 Symbol, Startbild, Kurzbefehle (Merkliste, Ordner, Abspielen); sie startet
@@ -199,10 +199,9 @@ Google Drive die Merkliste und den Ordner mit den anderen Geräten zusammen.
   er gehört. Mit `release` hängt er `Sondra-Android.apk` an das Release. Jeder
   Lauf startet die App auf einem Android-14-Emulator (Symbol, Kurzbefehl,
   Link, Teilen, Rückkehr von der Google-Anmeldung) und legt Bildschirmfotos als „Sondra-Android-Bilder“ ab.
-- **Google Drive in der App:** nichts weiter einzurichten — der Lauf backt
-  denselben Client „Desktop-App“ ein wie für die Windows-App (Variable
-  `GOOGLE_CLIENT_ID`, Secret `GOOGLE_CLIENT_SECRET`). Die Anmeldung öffnet
-  sich im Browser und kehrt danach von selbst in die App zurück.
+- **Google Drive in der App:** nichts weiter einzurichten — es ist die
+  Anmeldung der Website (Client „Webanwendung“ und Secret in Vercel). Sie
+  öffnet sich im Browser und kehrt danach von selbst in die App zurück.
 - **Links öffnen in der App:** den SHA-256-Fingerabdruck aus dem Lauf in
   Vercel als `ANDROID_CERT_SHA256` eintragen; der Build schreibt dann
   `/.well-known/assetlinks.json`.

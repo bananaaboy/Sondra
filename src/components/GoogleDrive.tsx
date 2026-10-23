@@ -44,6 +44,7 @@ import {
   type DriveJob,
   type MerkSync,
 } from '../lib/googleDrive'
+import { IN_ANDROID_APP } from '../lib/desktop'
 import { useMerkliste } from '../lib/merkliste'
 import { useSession } from '../state/store'
 import { Button, Dialog, Notice, Toggle } from './ui/primitives'
@@ -434,7 +435,7 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
     head = (
       <div className="flex flex-col items-start gap-[12px]">
         <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
-          {DRIVE_IN_APP
+          {DRIVE_IN_APP || IN_ANDROID_APP
             ? 'Die Anmeldung bei Google ist in Ihrem Browser offen. Danach geht es hier von selbst weiter.'
             : 'Die Anmeldung bei Google ist in einem eigenen Fenster offen. Danach geht es hier von selbst weiter.'}
         </p>

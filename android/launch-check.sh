@@ -53,6 +53,10 @@ main=(-n "$pkg/.MainActivity")
 
 check "Symbol" "Seite geladen: https://sondra.lizge.ch/#merkliste" \
   -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "${main[@]}"
+# The page found the app's bridge (it reports its theme on load).
+log="$(adb logcat -d)"
+grep -q "SondraApp: Seite verbunden" <<< "$log" || fail "Symbol: die Seite spricht nicht mit der App"
+echo "Symbol: die Seite spricht mit der App"
 if [ -n "$shots" ]; then
   mkdir -p "$shots"
   adb exec-out screencap -p > "$shots/start.png"
@@ -76,7 +80,7 @@ check "Teilen" "Geteilt oder geöffnet: 1 Datei(en)" \
 
 # The browser's way back after the Google sign-in: Sondra comes to the front, nothing else.
 check "Zurück von Google" "Zurück von der Anmeldung bei Google" \
-  -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "ch.lizge.sondra://angemeldet"
+  -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "ch.lizge.sondra://angemeldet?state=app.probe\&code=probe"
 
 # Cold again, with the page's state gone: the start must still hold.
 adb shell am force-stop "$pkg"

@@ -74,11 +74,19 @@ export const MERKLISTE_FILE = 'Sondra-Merkliste.json'
 /** The Merkliste is brought in step this long after its last change. */
 const MERKLISTE_DELAY = 2500
 
-/** The app's sign-in — the Windows app's or Android's, both in the browser with PKCE, the same actions. */
-const APP_DRIVE = APP_BRIDGE?.drive ?? ANDROID_BRIDGE?.drive ?? null
+/** The Windows app's sign-in: its main process, in the browser with PKCE. */
+const APP_DRIVE = APP_BRIDGE?.drive ?? null
 const IN_APP = Boolean(APP_DRIVE)
-/** In the app, whose main process signs in; elsewhere the website's popup. */
+/** In the Windows app, whose main process signs in; elsewhere the website's sign-in. */
 export const DRIVE_IN_APP = IN_APP
+/**
+ * The Android app signs in the website's way, with the browser in place of
+ * the popup: a state with this mark tells `google-drive.html` to hand the
+ * answer to the app, which hands it to this page.
+ */
+const APP_STATE = 'app.'
+/** A sign-in the Android app opened, for a page that is new when the answer comes. */
+const PENDING_KEY = 'sondra:drive:anmeldung'
 
 export const DRIVE_PROBLEM: Record<DriveErrorCode, string> = {
   'not-configured': 'Google Drive ist in dieser Fassung von Sondra nicht eingerichtet.',
@@ -92,6 +100,7 @@ export const DRIVE_PROBLEM: Record<DriveErrorCode, string> = {
   quota: 'Ihr Google-Speicher ist voll. In Drive Platz schaffen, dann erneut versuchen.',
   offline: 'Google Drive ist gerade nicht erreichbar. Besteht eine Internetverbindung?',
   missing: 'Die Datei gibt es in Google Drive nicht mehr.',
+  'app-outdated': 'Diese Fassung der Android-App kann sich nicht bei Google anmelden. Bitte die neue App installieren.',
   failed: 'Google Drive hat abgelehnt.',
 }
 
@@ -385,10 +394,57 @@ let cancelWeb: (() => void) | null = null
  * exchanges it and keeps the refresh token in a cookie the page never sees;
  * without, Google sends the hour-long token straight back.
  */
+/** What Google sends back to `google-drive.html`, from the query or the fragment. */
+interface SignInAnswer {
+  state?: string | null
+  access_token?: string | null
+  code?: string | null
+  expires_in?: string | null
+  scope?: string | null
+  error?: string | null
+}
+
+function answerFrom(params: URLSearchParams): SignInAnswer {
+  return {
+    state: params.get('state'),
+    access_token: params.get('access_token'),
+    code: params.get('code'),
+    expires_in: params.get('expires_in'),
+    scope: params.get('scope'),
+    error: params.get('error'),
+  }
+}
+
+/** Google's answer turned into a token: a code through the function, a token as it is. */
+async function takeSignInAnswer(data: SignInAnswer, redirectUri: string): Promise<void> {
+  if (data.error) throw new DriveError(data.error === 'access_denied' ? 'denied' : 'failed', data.error)
+  if (typeof data.scope === 'string' && !data.scope.split(/\s+/).includes(DRIVE_SCOPE)) throw new DriveError('scope')
+
+  if (data.code) {
+    let answer: Awaited<ReturnType<typeof tokenApi>>
+    try {
+      answer = await tokenApi({ action: 'code', code: data.code, redirectUri })
+    } catch (err) {
+      throw new DriveError('offline', String((err as Error)?.message ?? err))
+    }
+    if (answer.status !== 200 || !answer.body.access_token) {
+      throw new DriveError('failed', answer.body.detail || answer.body.error || `HTTP ${answer.status}`)
+    }
+    if (typeof answer.body.scope === 'string' && !answer.body.scope.split(/\s+/).includes(DRIVE_SCOPE)) throw new DriveError('scope')
+    cookieGone = false
+    holdWebToken(answer.body.access_token, Number(answer.body.expires_in) || 3600)
+    return
+  }
+
+  if (!data.access_token) throw new DriveError('failed', 'kein Token')
+  holdWebToken(data.access_token, Number(data.expires_in) || 3600)
+}
+
 function signInWeb(): Promise<void> {
   const clientId = getWebClientId()
   if (!clientId) return Promise.reject(new DriveError('not-configured'))
-  const stateId = crypto.getRandomValues(new Uint32Array(4)).join('-')
+  const android = ANDROID_BRIDGE
+  const stateId = (android ? APP_STATE : '') + crypto.getRandomValues(new Uint32Array(4)).join('-')
   const url = new URL(AUTH_URL)
   const hint = state().settings.email
   const redirectUri = new URL('google-drive.html', document.baseURI).toString()
@@ -405,56 +461,93 @@ function signInWeb(): Promise<void> {
     ...(useCode ? { access_type: 'offline', prompt: 'consent' } : hint ? {} : { prompt: 'select_account' }),
     ...(hint ? { login_hint: hint } : {}),
   }).toString()
-  const channel = new BroadcastChannel(CHANNEL)
-  const popup = window.open(url.toString(), 'sondra-google', 'popup,width=520,height=680')
-  if (!popup) {
-    channel.close()
-    return Promise.reject(new DriveError('popup-blocked'))
-  }
+
   return new Promise((resolve, reject) => {
+    let finished = false
+    const cleanups: Array<() => void> = []
     const done = (error: DriveError | null) => {
+      if (finished) return
+      finished = true
       window.clearTimeout(timer)
-      channel.close()
+      for (const cleanup of cleanups) cleanup()
       cancelWeb = null
       if (error) reject(error)
       else resolve()
     }
     const timer = window.setTimeout(() => done(new DriveError('timeout')), 5 * 60_000)
     cancelWeb = () => done(new DriveError('cancelled'))
-    channel.onmessage = async (event: MessageEvent) => {
-      const data = event.data as {
-        state?: string
-        access_token?: string
-        code?: string
-        expires_in?: string
-        scope?: string
-        error?: string
-      } | null
-      if (!data || data.state !== stateId) return
-      if (data.error) return done(new DriveError(data.error === 'access_denied' ? 'denied' : 'failed', data.error))
-      if (typeof data.scope === 'string' && !data.scope.split(/\s+/).includes(DRIVE_SCOPE)) return done(new DriveError('scope'))
-
-      if (data.code) {
-        try {
-          const answer = await tokenApi({ action: 'code', code: data.code, redirectUri })
-          if (answer.status !== 200 || !answer.body.access_token) {
-            return done(new DriveError('failed', answer.body.detail || answer.body.error || `HTTP ${answer.status}`))
-          }
-          if (typeof answer.body.scope === 'string' && !answer.body.scope.split(/\s+/).includes(DRIVE_SCOPE)) return done(new DriveError('scope'))
-          cookieGone = false
-          holdWebToken(answer.body.access_token, Number(answer.body.expires_in) || 3600)
-          done(null)
-        } catch (err) {
-          done(new DriveError('offline', String((err as Error)?.message ?? err)))
-        }
-        return
-      }
-
-      if (!data.access_token) return done(new DriveError('failed', 'kein Token'))
-      holdWebToken(data.access_token, Number(data.expires_in) || 3600)
-      done(null)
+    const take = (data: SignInAnswer | null) => {
+      if (finished || !data || data.state !== stateId) return
+      takeSignInAnswer(data, redirectUri).then(
+        () => done(null),
+        (error: unknown) => done(error instanceof DriveError ? error : new DriveError('failed', String(error))),
+      )
     }
+
+    if (android) {
+      // The app opens the sign-in in the browser and comes back with the answer.
+      remember({ state: stateId, redirectUri, at: Date.now() })
+      cleanups.push(() => remember(null))
+      const look = async (closed: boolean) => {
+        const query = await android.takeSignIn().catch(() => null)
+        if (query) take(answerFrom(new URLSearchParams(query)))
+        else if (closed) done(new DriveError('cancelled'))
+      }
+      cleanups.push(android.onSignIn((closed) => void look(closed)))
+      android.openSignIn(url.toString()).then(
+        (answer) => {
+          if (!answer?.ok) done(new DriveError(answer?.error === 'rejected' ? 'app-outdated' : 'failed', answer?.error))
+        },
+        () => done(new DriveError('app-outdated')),
+      )
+      return
+    }
+
+    // The popup opens within the click: the executor runs right away.
+    const channel = new BroadcastChannel(CHANNEL)
+    cleanups.push(() => channel.close())
+    channel.onmessage = (event: MessageEvent) => take(event.data as SignInAnswer | null)
+    const popup = window.open(url.toString(), 'sondra-google', 'popup,width=520,height=680')
+    if (!popup) done(new DriveError('popup-blocked'))
   })
+}
+
+interface PendingSignIn {
+  state: string
+  redirectUri: string
+  at: number
+}
+
+function remember(pending: PendingSignIn | null) {
+  try {
+    if (pending) localStorage.setItem(PENDING_KEY, JSON.stringify(pending))
+    else localStorage.removeItem(PENDING_KEY)
+  } catch {
+    // Without storage only a page that stays can finish the sign-in.
+  }
+}
+
+/**
+ * A sign-in the Android app opened, whose page was made anew meanwhile
+ * (Android ended the app while the browser was in front): the answer
+ * waits in the app, the state here.
+ */
+async function resumeAppSignIn(): Promise<void> {
+  const android = ANDROID_BRIDGE
+  if (!android) return
+  let pending: PendingSignIn | null = null
+  try {
+    pending = JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null') as PendingSignIn | null
+  } catch {
+    pending = null
+  }
+  const query = await android.takeSignIn().catch(() => null)
+  if (!pending || !query) return
+  remember(null)
+  const data = answerFrom(new URLSearchParams(query))
+  if (data.state !== pending.state || Date.now() - pending.at > 10 * 60_000) return
+  set({ signingIn: true, problem: null })
+  await settleSignIn(takeSignInAnswer(data, pending.redirectUri))
 }
 
 async function signInApp(): Promise<void> {
@@ -470,7 +563,11 @@ async function signInApp(): Promise<void> {
 export function connectDrive(): Promise<boolean> {
   if (!state().configured) return Promise.resolve(false)
   set({ signingIn: true, problem: null })
-  const signedIn = IN_APP ? signInApp() : signInWeb()
+  return settleSignIn(IN_APP ? signInApp() : signInWeb())
+}
+
+/** After a sign-in: the account, the queue, the Merkliste — or what went wrong. */
+function settleSignIn(signedIn: Promise<void>): Promise<boolean> {
   return signedIn.then(
     async () => {
       const before = state().settings.email
@@ -539,6 +636,7 @@ export function initDrive(): void {
     if (Date.now() - lastRound > FOCUS_GAP) void syncMerklisteWithDrive({ quiet: true })
   })
   if (!IN_APP) {
+    void resumeAppSignIn()
     // Signed in to stay: connected again without a click.
     void askLasting().then(() => {
       if (!state().settings.linked || !lastingHere()) return
