@@ -15,8 +15,9 @@
 
 import { useEffect, useState } from 'react'
 
+import { ANDROID_BRIDGE } from '../lib/android'
 import { APP_BRIDGE, type OpenedFile } from '../lib/desktop'
-import { playerInbox } from '../lib/player'
+import { playerInbox, sendToPlayer } from '../lib/player'
 import { useIngestFiles } from './useIngest'
 
 /** The slice of the File Handling API this app uses. */
@@ -103,6 +104,38 @@ export function useGlobalIngest(): { dragging: boolean } {
     }
     void bridge.takeOpenedFiles().then(take)
     return bridge.onOpenedFiles?.((opened) => void take(opened))
+  }, [ingest])
+
+  // The same from the Android app: a film or a song shared with Sondra or
+  // opened with it. Those go to the player — on a phone that is what they
+  // are for — anything else into the session.
+  useEffect(() => {
+    const bridge = ANDROID_BRIDGE
+    if (!bridge) return
+    const take = async () => {
+      const opened = await bridge.takeOpenedFiles().catch(() => [])
+      const files: File[] = []
+      for (const entry of opened) {
+        try {
+          const response = await fetch(entry.url, { cache: 'no-store' })
+          if (!response.ok) continue
+          const blob = await response.blob()
+          files.push(new File([blob], entry.name, { type: blob.type }))
+        } catch {
+          // Gone between the share and now; the rest still come.
+        }
+      }
+      if (files.length === 0) return
+      const media = files.filter((file) => /^(video|audio)\//.test(file.type))
+      if (media.length > 0) {
+        sendToPlayer(media, true)
+        if (window.location.hash !== '#abspielen') window.location.hash = '#abspielen'
+      }
+      const rest = files.filter((file) => !media.includes(file))
+      if (rest.length > 0) await ingest(rest, 'aus einer anderen App geteilt')
+    }
+    void take()
+    return bridge.onOpenedFiles(() => void take())
   }, [ingest])
 
   // Files a share sheet handed to the service worker, which parked them and

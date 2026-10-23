@@ -182,20 +182,28 @@ Die App schreibt ein Protokoll nach `%APPDATA%\Sondra\sondra.log`.
 
 ## Als Android-App
 
-`android/` ist Sondra für Android: die Website als Trusted Web Activity —
-Chrome öffnet `sondra.lizge.ch` als eigene App, ohne Adressleiste, mit
-eigenem Symbol, Kurzbefehlen (Merkliste, Ordner, Abspielen) und als Ziel
-für „Teilen“ von Videos und Ton. Sie startet auf der Merkliste. Statt
-Anytype (das nur die Windows-App erreicht) bringt Google Drive die Merkliste
-und den Ordner mit den anderen Geräten zusammen.
+`android/` ist Sondra für Android: eine eigene App um die Website —
+ihr eigenes WebView, keine Adressleiste, kein Chrome nötig. Was eine Seite
+dort nicht kann, macht die App: die Anmeldung bei Google Drive über das
+Konto-Fenster von Android, Speichern nach Downloads/Sondra, „Teilen“ und
+„Öffnen mit“ für Videos und Ton (sie laufen dann im Player), die
+Dateiauswahl (auch ganze Ordner), Vollbild-Video und das Mikrofon. Eigenes
+Symbol, Startbild, Kurzbefehle (Merkliste, Ordner, Abspielen); sie startet
+auf der Merkliste. Statt Anytype (das nur die Windows-App erreicht) bringt
+Google Drive die Merkliste und den Ordner mit den anderen Geräten zusammen.
 
 - **GitHub Actions → „Android":** baut APK und AAB, prüft sie und legt sie
   als Artefakt „Sondra-Android“ ab. Signiert wird mit den Secrets
   `ANDROID_KEYSTORE_BASE64` und `ANDROID_KEYSTORE_PASSWORD`; einmal von Hand
   mit `new_key` gestartet, erzeugt der Lauf einen Schlüssel und sagt, wohin
-  er gehört. Mit `release` hängt er `Sondra-Android.apk` an das Release.
-- **Ohne Adressleiste:** den SHA-256-Fingerabdruck aus dem Lauf in Vercel als
-  `ANDROID_CERT_SHA256` eintragen; der Build schreibt dann
+  er gehört. Mit `release` hängt er `Sondra-Android.apk` an das Release. Jeder
+  Lauf startet die App auf einem Android-14-Emulator (Symbol, Kurzbefehl,
+  Link, Teilen) und legt Bildschirmfotos als „Sondra-Android-Bilder“ ab.
+- **Google Drive in der App:** in Google Cloud, im Projekt der Website, einen
+  OAuth-Client „Android“ mit Paketname `ch.lizge.sondra` und dem SHA-1 aus
+  dem Lauf anlegen — ohne ihn sagt die App „nicht eingerichtet“.
+- **Links öffnen in der App:** den SHA-256-Fingerabdruck aus dem Lauf in
+  Vercel als `ANDROID_CERT_SHA256` eintragen; der Build schreibt dann
   `/.well-known/assetlinks.json`.
 - **Selbst bauen:** Android SDK mit `platforms;android-36`, dann
   `cd android && ./gradlew assembleRelease`. Symbole neu: `npm run android:icons`.

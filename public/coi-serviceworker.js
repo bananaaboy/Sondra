@@ -250,6 +250,9 @@ self.addEventListener('fetch', (event) => {
     return
   }
   const sameOrigin = url.origin === self.location.origin
+  // Files the Android app hands the page (`android/…/Bridge.java`): served by
+  // the app once, never kept here.
+  if (sameOrigin && url.pathname.startsWith('/__app/')) return
   if (sameOrigin && request.method === 'GET' && url.pathname.includes('/drive-media/')) {
     event.respondWith(driveMedia(request, url, event.clientId).then(isolate))
     return

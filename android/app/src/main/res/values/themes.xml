@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app on Sondra's canvas, light; values-night holds the dark one.
+         Its light-ness also tells the WebView which prefers-color-scheme to report. -->
+    <style name="Theme.Sondra" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/canvas</item>
+        <item name="android:colorBackground">@color/canvas</item>
+        <item name="android:colorAccent">@color/ic_launcher_background</item>
+    </style>
+
+    <!-- The start: the icon on the canvas until the page has drawn itself. -->
+    <style name="Theme.Sondra.Starting" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/canvas</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.Sondra</item>
+    </style>
+</resources>

@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Long press on the icon: straight to a tool. -->
 <!-- Only launchers from Android 7.1 on read this; below, it is simply unused. -->
-<!-- Through androidbrowserhelper's trampoline: Android starts a shortcut with
-     NEW_TASK | CLEAR_TASK, which aimed at the launcher would close a running
-     Sondra; the trampoline checks the address and hands it on. -->
+<!-- Through ShortcutActivity: Android starts a shortcut with NEW_TASK |
+     CLEAR_TASK, which aimed at MainActivity would close a running Sondra. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     tools:targetApi="25">
@@ -16,7 +15,7 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:data="https://sondra.lizge.ch/#merkliste"
-            android:targetClass="com.google.androidbrowserhelper.trusted.ShortcutTrampolineActivity"
+            android:targetClass="ch.lizge.sondra.ShortcutActivity"
             android:targetPackage="ch.lizge.sondra" />
     </shortcut>
     <shortcut
@@ -28,7 +27,7 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:data="https://sondra.lizge.ch/#ordner"
-            android:targetClass="com.google.androidbrowserhelper.trusted.ShortcutTrampolineActivity"
+            android:targetClass="ch.lizge.sondra.ShortcutActivity"
             android:targetPackage="ch.lizge.sondra" />
     </shortcut>
     <shortcut
@@ -40,7 +39,7 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:data="https://sondra.lizge.ch/#abspielen"
-            android:targetClass="com.google.androidbrowserhelper.trusted.ShortcutTrampolineActivity"
+            android:targetClass="ch.lizge.sondra.ShortcutActivity"
             android:targetPackage="ch.lizge.sondra" />
     </shortcut>
 </shortcuts>

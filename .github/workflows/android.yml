@@ -1,10 +1,11 @@
-# Builds the Android app (android/): Sondra's website as a Trusted Web
-# Activity — the app opens sondra.lizge.ch in Chrome, full screen once the
-# website's /.well-known/assetlinks.json names the signing key.
+# Builds the Android app (android/): an app of its own around the website —
+# its own WebView, no browser bar, and the Google sign-in for Drive through
+# Android's account sheet.
 #
 # Every run builds the APK (to install directly) and the AAB (for Google
 # Play), checks them, starts the APK on an Android 14 emulator
-# (android/launch-check.sh), and keeps both as the artifact "Sondra-Android".
+# (android/launch-check.sh, pictures as the artifact "Sondra-Android-Bilder"),
+# and keeps both as the artifact "Sondra-Android".
 #
 # The key: from the secrets ANDROID_KEYSTORE_BASE64 and
 # ANDROID_KEYSTORE_PASSWORD. Without them the debug key signs — the app
@@ -78,8 +79,11 @@ jobs:
               echo "   ANDROID_KEYSTORE_BASE64  = Inhalt von ANDROID_KEYSTORE_BASE64.txt"
               echo "   ANDROID_KEYSTORE_PASSWORD = Inhalt von ANDROID_KEYSTORE_PASSWORD.txt"
               echo "2. Diese Dateien danach sicher aufbewahren (z. B. Passwortmanager) und hier löschen."
-              echo "3. Den SHA-256-Fingerabdruck aus der Zusammenfassung dieses Laufs in Vercel als"
-              echo "   ANDROID_CERT_SHA256 eintragen: dann zeigt Chrome die App ohne Adressleiste."
+              echo "3. In Google Cloud (Projekt der Website) einen OAuth-Client „Android“ anlegen:"
+              echo "   Paketname ch.lizge.sondra, SHA-1 aus der Zusammenfassung dieses Laufs."
+              echo "   Erst dann meldet die App sich bei Google Drive an."
+              echo "4. Den SHA-256-Fingerabdruck aus der Zusammenfassung in Vercel als"
+              echo "   ANDROID_CERT_SHA256 eintragen: Links auf sondra.lizge.ch öffnen dann in der App."
             } > "$RUNNER_TEMP/key/LIESMICH.txt"
           elif [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$store"
@@ -107,9 +111,11 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           badging="$("$tools/aapt2" dump badging "$apk")"
           echo "$badging" | grep -q "package: name='ch.lizge.sondra'.*versionName='$version'" || { echo "::error::Paket oder Version stimmt nicht:"; echo "$badging" | head -3; exit 1; }
-          echo "$badging" | grep -q "launchable-activity: name='com.google.androidbrowserhelper.trusted.LauncherActivity'" || { echo "::error::Keine Startaktivität"; exit 1; }
+          echo "$badging" | grep -q "launchable-activity: name='ch.lizge.sondra.MainActivity'" || { echo "::error::Keine Startaktivität"; exit 1; }
           certs="$("$tools/apksigner" verify --print-certs "$apk")"
-          digest="$(echo "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')"
+          colons() { tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//'; }
+          digest="$(echo "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | colons)"
+          sha1="$(echo "$certs" | sed -n 's/^Signer #1 certificate SHA-1 digest: //p' | colons)"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "debug=$(echo "$certs" | grep -q 'CN=Android Debug' && echo true || echo false)" >> "$GITHUB_OUTPUT"
           mkdir -p out
@@ -121,10 +127,17 @@ jobs:
             echo "APK $(du -h "$apk" | cut -f1), signiert mit:"
             echo
             echo '```'
-            echo "$certs" | grep -E 'DN:|SHA-256'
+            echo "$certs" | grep -E 'DN:|SHA-256|SHA-1'
             echo '```'
             echo
-            echo "Für \`ANDROID_CERT_SHA256\` in Vercel (dann ohne Adressleiste):"
+            echo "Für die Anmeldung bei Google Drive: in Google Cloud (Projekt der Website) einen OAuth-Client"
+            echo "„Android“ anlegen, Paketname \`ch.lizge.sondra\`, SHA-1:"
+            echo
+            echo '```'
+            echo "$sha1"
+            echo '```'
+            echo
+            echo "Für \`ANDROID_CERT_SHA256\` in Vercel (Links auf sondra.lizge.ch öffnen dann ohne Rückfrage in der App):"
             echo
             echo '```'
             echo "$digest"
@@ -144,8 +157,8 @@ jobs:
           path: ${{ runner.temp }}/key/
           retention-days: 1
 
-      # The app on Android 14 with Chrome: started from its icon, a shortcut
-      # and a link, without a crash. Builds and lint passed while every start
+      # The app on Android 14: started from its icon, a shortcut, a link and
+      # a share, without a crash. Builds and lint passed while every start
       # crashed (android/launch-check.sh says why); this is what notices.
       - name: Enable KVM
         run: |
@@ -161,7 +174,14 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: bash android/launch-check.sh out
+          script: bash android/launch-check.sh out out-bilder
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: Sondra-Android-Bilder
+          path: out-bilder/
+          if-no-files-found: ignore
 
       - name: Attach to the release
         if: inputs.release

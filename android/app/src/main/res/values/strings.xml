@@ -4,16 +4,15 @@
     <string name="hostName">sondra.lizge.ch</string>
     <!-- Starts on the Merkliste: on a phone, what is watched and what comes next. -->
     <string name="launchUrl">https://sondra.lizge.ch/#merkliste</string>
-    <string name="providerAuthority">ch.lizge.sondra.fileprovider</string>
-    <string name="assetStatements" translatable="false">
-        [{ \"relation\": [\"delegate_permission/common.handle_all_urls\"],
-           \"target\": { \"namespace\": \"web\", \"site\": \"https://sondra.lizge.ch\" } }]
-    </string>
-    <string name="shareTarget" translatable="false">
-        {\"action\": \"https://sondra.lizge.ch/share-target\", \"method\": \"POST\", \"enctype\": \"multipart/form-data\",
-         \"params\": { \"files\": [{ \"name\": \"media\", \"accept\": [\"audio/*\", \"video/*\"] }] }}
-    </string>
     <string name="shortcutMerkliste">Merkliste</string>
     <string name="shortcutOrdner">Ordner</string>
     <string name="shortcutAbspielen">Abspielen</string>
+    <string name="offlineTitle">Sondra ist nicht erreichbar</string>
+    <string name="offlineText">Beim ersten Start braucht Sondra eine Internetverbindung; danach geht vieles auch ohne.</string>
+    <string name="offlineRetry">Erneut versuchen</string>
+    <string name="savedTo">In Downloads/Sondra gespeichert: %1$s</string>
+    <string name="saveFailed">Nicht gespeichert: %1$s</string>
+    <string name="noBrowser">Keine App, die diese Adresse öffnet.</string>
+    <string name="micDenied">Ohne Mikrofon-Erlaubnis kann Sondra nicht aufnehmen.</string>
+    <string name="storageDenied">Ohne Speicher-Erlaubnis kann Sondra nicht in Downloads speichern.</string>
 </resources>

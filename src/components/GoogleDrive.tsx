@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
+import { IN_ANDROID_APP } from '../lib/desktop'
 import { formatBytes } from '../lib/format'
 import {
   cancelDriveSignIn,
@@ -366,9 +367,11 @@ function DriveDialog({ onClose }: { onClose: () => void }) {
     head = (
       <div className="flex flex-col items-start gap-[12px]">
         <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
-          {DRIVE_IN_APP
-            ? 'Die Anmeldung bei Google ist in Ihrem Browser offen. Danach geht es hier von selbst weiter.'
-            : 'Die Anmeldung bei Google ist in einem eigenen Fenster offen. Danach geht es hier von selbst weiter.'}
+          {IN_ANDROID_APP
+            ? 'Wählen Sie Ihr Google-Konto und erlauben Sie den Zugriff auf Drive. Danach geht es hier von selbst weiter.'
+            : DRIVE_IN_APP
+              ? 'Die Anmeldung bei Google ist in Ihrem Browser offen. Danach geht es hier von selbst weiter.'
+              : 'Die Anmeldung bei Google ist in einem eigenen Fenster offen. Danach geht es hier von selbst weiter.'}
         </p>
         <button type="button" onClick={cancelDriveSignIn} className={`${linkClass} text-small`}>
           Abbrechen

@@ -1,19 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Sondra on Android: the website, opened by Chrome (or another browser that
-  can) as a Trusted Web Activity — full screen, no address bar once
-  https://sondra.lizge.ch/.well-known/assetlinks.json names this app's key.
-  Not a WebView: Google refuses its sign-in inside one, and the Merkliste
-  and the Ordner live in Google Drive here.
+  Sondra on Android: an app of its own around the website — no browser bar,
+  no browser screens, and no Chrome needed. The page runs in the app's own
+  WebView; what a page cannot do there is done by the app: the Google sign-in
+  for Drive (Google refuses its web sign-in in a WebView), saving to
+  Downloads, files shared with Sondra or opened with it, the file picker,
+  full-screen video and the microphone.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <queries>
-        <intent>
-            <action android:name="android.support.customtabs.action.CustomTabsService" />
-        </intent>
-    </queries>
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- The microphone tool, asked for when it is opened. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Saving to Downloads before Android 10; from 10 on that needs no permission. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:allowBackup="true"
@@ -21,52 +25,16 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/appName"
         android:supportsRtl="true"
-        android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
-        android:theme="@android:style/Theme.Translucent.NoTitleBar">
-
-        <meta-data
-            android:name="asset_statements"
-            android:resource="@string/assetStatements" />
+        android:theme="@style/Theme.Sondra">
 
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
-            android:exported="true">
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Sondra.Starting"
+            android:windowSoftInputMode="adjustResize">
 
-            <meta-data
-                android:name="android.support.customtabs.trusted.DEFAULT_URL"
-                android:value="@string/launchUrl" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
-                android:resource="@color/canvas" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR_DARK"
-                android:resource="@color/canvasDark" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR"
-                android:resource="@color/canvas" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR_DARK"
-                android:resource="@color/canvasDark" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.SPLASH_IMAGE_DRAWABLE"
-                android:resource="@drawable/splash" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.SPLASH_SCREEN_BACKGROUND_COLOR"
-                android:resource="@color/canvas" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.SPLASH_SCREEN_FADE_OUT_DURATION"
-                android:value="300" />
-            <meta-data
-                android:name="android.support.customtabs.trusted.FILE_PROVIDER_AUTHORITY"
-                android:value="@string/providerAuthority" />
-            <!-- No browser that can do a Trusted Web Activity: a Custom Tab, never a bare WebView. -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.FALLBACK_STRATEGY"
-                android:value="customtabs" />
-            <!-- A film, a song shared from the gallery: to the website's share target. -->
-            <meta-data
-                android:name="android.support.customtabs.trusted.METADATA_SHARE_TARGET"
-                android:resource="@string/shareTarget" />
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
@@ -86,6 +54,7 @@
                     android:scheme="https" />
             </intent-filter>
 
+            <!-- „Teilen“ from the gallery or a file manager. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
@@ -93,47 +62,28 @@
                 <data android:mimeType="video/*" />
                 <data android:mimeType="audio/*" />
             </intent-filter>
+
+            <!-- „Öffnen mit“ for a film or a song. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
         </activity>
 
         <!--
-          LauncherActivity switches this one on or off at every start
-          (setComponentEnabledSetting): without it declared here, Android knows
-          no such component and the app crashed on the first tap. It is also
-          „Speicher verwalten“ in the app's settings, which opens the site's
-          data in the browser.
+          Static shortcuts start with NEW_TASK | CLEAR_TASK, which aimed at
+          MainActivity would close a running Sondra and lose the page; this
+          one hands the address on to the Sondra already there.
         -->
-        <activity android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity">
-            <meta-data
-                android:name="android.support.customtabs.trusted.MANAGE_SPACE_URL"
-                android:value="@string/launchUrl" />
-        </activity>
-
-        <activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />
-
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.WebViewFallbackActivity"
-            android:configChanges="orientation|screenSize" />
-
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="@string/providerAuthority"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/filepaths" />
-        </provider>
-
-        <!-- The browser binds to it; androidbrowserhelper checks which one. -->
-        <service
-            android:name="com.google.androidbrowserhelper.trusted.DelegationService"
-            android:enabled="true"
+            android:name=".ShortcutActivity"
+            android:excludeFromRecents="true"
             android:exported="true"
-            tools:ignore="ExportedService">
-            <intent-filter>
-                <action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </service>
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
     </application>
 </manifest>

@@ -6,10 +6,10 @@
  * Android 8 and later draw the launcher icon from two layers — Sondra's
  * green behind, the white bars in front — and cut it to the phone's shape;
  * those layers are a vector (`ic_launcher_foreground.xml`, also the
- * monochrome layer for themed icons), written here from the bars of the
- * mark. Older phones take a picture per screen density: the rounded icon
- * as it is, and a round one cut from the full-bleed mark. The splash
- * screen gets the icon once more, at 96 dp.
+ * monochrome layer for themed icons and the start screen's icon), written
+ * here from the bars of the mark. Older phones take a picture per screen
+ * density: the rounded icon as it is, and a round one cut from the
+ * full-bleed mark.
  *
  * The PNG reading, writing and scaling is `store-tiles.mjs`' plain Node.
  */
@@ -52,12 +52,6 @@ for (const [name, factor] of Object.entries(DENSITIES)) {
   fs.mkdirSync(folder, { recursive: true })
   writePng(path.join(folder, 'ic_launcher.png'), scale(icon, Math.round(48 * factor)))
   writePng(path.join(folder, 'ic_launcher_round.png'), round(Math.round(48 * factor)))
-}
-
-// The splash: 96 dp at every density, so no screen gets a scaled-up picture.
-for (const [name, factor] of Object.entries(DENSITIES)) {
-  fs.mkdirSync(path.join(res, `drawable-${name}`), { recursive: true })
-  writePng(path.join(res, `drawable-${name}`, 'splash.png'), scale(icon, Math.round(96 * factor)))
 }
 
 // The front layer: the five bars in white, the 32-unit mark 60 dp wide in

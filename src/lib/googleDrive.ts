@@ -33,6 +33,7 @@
 
 import { create } from 'zustand'
 
+import { ANDROID_BRIDGE } from './android'
 import { APP_BRIDGE } from './desktop'
 import { createDriveClient, DriveError, folderPath, type DriveErrorCode, type DriveFile, type DriveFolder } from './driveClient'
 import {
@@ -73,7 +74,9 @@ export const MERKLISTE_FILE = 'Sondra-Merkliste.json'
 /** The Merkliste is brought in step this long after its last change. */
 const MERKLISTE_DELAY = 2500
 
-const IN_APP = Boolean(APP_BRIDGE?.drive)
+/** The app's sign-in — the Windows app's (Systembrowser, PKCE) or Android's (its account sheet), the same actions. */
+const APP_DRIVE = APP_BRIDGE?.drive ?? ANDROID_BRIDGE?.drive ?? null
+const IN_APP = Boolean(APP_DRIVE)
 /** In the app, whose main process signs in; elsewhere the website's popup. */
 export const DRIVE_IN_APP = IN_APP
 
@@ -186,7 +189,7 @@ export interface MerkSync {
 }
 
 export const useDrive = create<DriveState>(() => ({
-  configured: !IN_APP || Boolean(APP_BRIDGE?.drive),
+  configured: !IN_APP || Boolean(APP_DRIVE),
   ready: !IN_APP,
   connected: false,
   signingIn: false,
@@ -295,7 +298,7 @@ export function driveLinked(current: DriveState = state()): boolean {
 type Answer<T> = ({ ok: true } & T) | { ok: false; error: string; detail?: string }
 
 function ask<T>(action: string, ...args: unknown[]): Promise<Answer<T>> {
-  const send = APP_BRIDGE?.drive
+  const send = APP_DRIVE
   if (!send) return Promise.resolve({ ok: false, error: 'not-configured' })
   return send(action, ...args).then(
     (answer) => answer as Answer<T>,
