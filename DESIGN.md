@@ -871,6 +871,22 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
     beim Überfahren in Tinte. „Nur offene Folgen“ ist eine Pille mit
     gezeichnetem Haken statt ☑/☐, der Discord-Schalter erscheint nur in der
     App, wo er wirkt.
+  - **„Bis wohin?“** (25.10.2026): ein getönter Block (`panel-soft`, wie
+    ein eingesetzter Block) neben der Serie, nicht ein Fenster — die Frage
+    gehört zur Serie, nicht vor sie. Das Ergebnis gross, die Zahlen in der
+    Wertschrift und die Wörter in der Grotesk (`Figures`), ganze Sätze in
+    Courier lasen sich wie Schreibmaschine. Darunter die Serie als eine
+    Linie, je Staffel ein Stück so lang wie ihre Folgen: Gesehenes in
+    `ink/30`, was bis zum Ziel zu schauen ist in Tinte, der Rest in
+    `panel-strong`, ein Strich am Ziel; eine Staffel ohne Folgenzahl kurz
+    und gestrichelt umrandet. Unter dem Ergebnis die Rechnung in einem
+    Satz. Pillen im Block stehen auf `raised`, nicht auf der Tönung, auf
+    der sie lagen; Sekundärtext dort `prose` (Fallstrick `muted`).
+  - **Liste statt Poster**: ein Segment-Schalter mit zwei gezeichneten
+    Symbolen neben der Sortierung. Zeilen mit Haarlinie, beim Zeigen
+    `panel-soft`, Spalten fest (Poster 44 px, Balken, Rest, Aktionen 76 px),
+    damit +1 und ▶ untereinander stehen. Die doppelte Schaltfläche
+    „Statistiken“ neben dem Link in der Unterzeile ist weg.
   - **Aus dem Player** (21.10.2026): unter dem Bild eine Zeile „Merkliste
     Frieren · Staffel 1, Folge 13 — wird ab 90 % abgehakt“, danach „—
     abgehakt. Rückgängig“; der Titel ist ein Link zur Serie. Nichts, wenn

@@ -507,7 +507,7 @@ export function Dialog({
             type="button"
             onClick={onClose}
             aria-label="Schließen"
-            className="press p-[4px] text-muted transition-colors hover:text-ink"
+            className="press rounded-nav p-[4px] text-muted transition-colors hover:text-ink"
           >
             <svg viewBox="0 0 16 16" className="h-[16px] w-[16px]" fill="none" aria-hidden>
               <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

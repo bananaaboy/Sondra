@@ -13,7 +13,7 @@
  * address is followed all the same, only without the loading.
  */
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import {
   ANYTYPE_PROBLEM,
@@ -49,7 +49,6 @@ import {
   createMerkItem,
   durationOfEpisode,
   exportMerkliste,
-  itemRemainingMinutes,
   allHistory,
   allTags,
   checkOnlineUpdates,
@@ -57,16 +56,15 @@ import {
   takeOnlineNews,
   type OnlineNews,
   itemProgress,
-  halve,
   markRange,
   importMerkliste,
+  itemRemainingMinutes,
   merkSaveFailed,
   noteRemoved,
   partName,
   partOfEpisode,
   partProgress,
   partsOf,
-  pictureSize,
   pickRandomCandidate,
   readMerklisteFile,
   requestBatchLookup,
@@ -96,7 +94,6 @@ import {
   type MerklisteSortOption,
   type MerkPart,
   type MerkSeason,
-  type Picture,
   type SeasonPart,
   type TileFormat,
   type SavedLinkItem,
@@ -110,6 +107,9 @@ import { isAniworldUrl } from '../../lib/download'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
 import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
+import { goalState, lengthLabel, parseDay } from '../../lib/watchPlan'
+import { CoverImage, MIDDLE } from '../CoverImage'
+import { goalSentence, WatchPlanner } from './WatchPlanner'
 import type { AudioFilePref, AudioOutputFormat, VideoFilePref } from './DownloaderPanel'
 import {
   AUDIO_QUALITY_OPTIONS,
@@ -732,6 +732,15 @@ export function MerklistePanel() {
   const [filterTag, setFilterTag] = useState<string | null>(null)
   const [onlyOpen, setOnlyOpen] = useState(false)
   const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [view, setView] = useState<MerkView>(readView)
+  const chooseView = (next: MerkView) => {
+    setView(next)
+    try {
+      localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // Only a convenience: posters again next time.
+    }
+  }
   const [discordRpcOn, setDiscordRpcOn] = useState(() => isDiscordRpcEnabled())
   const [newEpisodesWatch, setNewEpisodesWatch] = useState(() => newEpisodesOn())
   const anytypeLink = useAnytype(items)
@@ -979,6 +988,7 @@ export function MerklistePanel() {
               >
                 <span className="font-semibold text-ink">{stats.watchingCount} am Schauen</span>
                 {stats.laterCount > 0 ? <span className="text-muted">· {stats.laterCount} später</span> : null}
+                {stats.pausedCount > 0 ? <span className="text-muted">· {stats.pausedCount} pausiert</span> : null}
                 {stats.doneCount > 0 ? <span className="text-muted">· {stats.doneCount} fertig</span> : null}
                 <span>· {stats.seenTotal} {stats.seenTotal === 1 ? 'Folge' : 'Folgen'} gesehen</span>
                 <span className="text-muted">· ca. {stats.watchTime.short}</span>
@@ -1012,17 +1022,9 @@ export function MerklistePanel() {
                   <DiceIcon />
                   <span>Würfeln</span>
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="quiet"
-                  onClick={() => setStatsOpen(true)}
-                  title="Statistiken zur Merkliste öffnen"
-                >
-                  Statistiken
-                </Button>
               </>
             ) : null}
+            {items.length > 1 ? <ViewChoice value={view} onChange={chooseView} /> : null}
             {items.length > 1 ? (
               <Select
                 value={sortBy}
@@ -1075,17 +1077,12 @@ export function MerklistePanel() {
           {/* Status filter tabs & controls */}
           <div className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[8px] border-b border-line pb-[10px] text-small">
             <div role="radiogroup" aria-label="Stand" className="flex flex-wrap items-center gap-[6px]">
-              {(
-                [
-                  { value: 'all', label: 'Alle' },
-                  { value: 'watching', label: 'Am Schauen' },
-                  { value: 'later', label: 'Für später' },
-                  { value: 'done', label: 'Fertig' },
-                ] as const
-              ).map((tab) => {
+              {[{ value: 'all' as const, label: 'Alle' }, ...STATUS_OPTIONS].map((tab) => {
                 const active = filterStatus === tab.value
                 const count =
                   tab.value === 'all' ? items.length : items.filter((i) => statusOf(i) === tab.value).length
+                // A state nobody is in is no filter worth a pill.
+                if (!count && !active) return null
                 return (
                   <button
                     key={tab.value}
@@ -1211,8 +1208,15 @@ export function MerklistePanel() {
               {group.label}
               <span className="value text-small text-muted">{group.entries.length}</span>
             </h3>
-            {/* Posters stand on one line at their foot, like books on a shelf,
-                whatever their shape. */}
+            {view === 'liste' ? (
+              <ul className="flex flex-col" onPointerDown={() => setFocusedId(null)}>
+                {group.entries.map((item) => (
+                  <SeriesRow key={item.id} item={item} onOpen={() => openSeries(item.id)} isFocused={focusedId === item.id} />
+                ))}
+              </ul>
+            ) : (
+            /* Posters stand on one line at their foot, like books on a shelf,
+               whatever their shape. */
             <div
               onPointerDown={() => setFocusedId(null)}
               className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] items-end gap-x-[14px] gap-y-[24px] sm:grid-cols-[repeat(auto-fill,minmax(156px,1fr))] sm:gap-x-[18px]"
@@ -1230,6 +1234,7 @@ export function MerklistePanel() {
                 />
               ))}
             </div>
+            )}
           </section>
         ))
       )}
@@ -1909,169 +1914,6 @@ function EmptyState({ onAdd, onDownload }: { onAdd: () => void; onDownload: () =
 }
 
 /* -------------------------------------------------------------------------- */
-/* Covers in a tile                                                            */
-/* -------------------------------------------------------------------------- */
-
-const MIDDLE: CoverFrame = { x: 50, y: 50, zoom: 1 }
-
-/**
- * A loaded cover and the same picture at half, a quarter, an eighth … of its
- * size, made once and shared by every tile that shows it. Each drawing picks
- * the step just larger than it needs and makes only one short last step from
- * there.
- */
-interface CoverSource {
-  width: number
-  height: number
-  levels: Picture[]
-}
-
-const coverSources = new Map<string, Promise<CoverSource>>()
-
-function loadCover(src: string): Promise<CoverSource> {
-  const known = coverSources.get(src)
-  if (known) return known
-  const loading = new Promise<CoverSource>((resolve, reject) => {
-    const image = new Image()
-    image.decoding = 'async'
-    image.onload = () =>
-      image.naturalWidth && image.naturalHeight
-        ? resolve({ width: image.naturalWidth, height: image.naturalHeight, levels: [image] })
-        : reject(new Error('empty'))
-    image.onerror = () => reject(new Error('unreadable'))
-    image.src = src
-  })
-  // A cover that failed may answer later; it is not remembered as broken.
-  loading.catch(() => coverSources.delete(src))
-  coverSources.set(src, loading)
-  return loading
-}
-
-function coverLevel(source: CoverSource, step: number): Picture {
-  while (source.levels.length <= step) {
-    const next = halve(source.levels[source.levels.length - 1])
-    if (!next) break
-    source.levels.push(next)
-  }
-  return source.levels[Math.min(step, source.levels.length - 1)]
-}
-
-/**
- * Draws the part of a cover a frame chooses onto a canvas of w × h device
- * pixels — the same part `object-fit: cover`, `object-position` and a
- * scale around that point would show, worked out here instead of left to the
- * browser's own downscaling.
- */
-function drawCover(canvas: HTMLCanvasElement, source: CoverSource, frame: CoverFrame | undefined, w: number, h: number) {
-  const { x, y, zoom } = frame ?? MIDDLE
-  if (canvas.width !== w) canvas.width = w
-  if (canvas.height !== h) canvas.height = h
-  const context = canvas.getContext('2d')
-  if (!context) return
-  const fit = Math.max(w / source.width, h / source.height)
-  const left = (w - source.width * fit) * (x / 100)
-  const top = (h - source.height * fit) * (y / 100)
-  const originX = w * (x / 100)
-  const originY = h * (y / 100)
-  const sw = w / zoom / fit
-  const sh = h / zoom / fit
-  const sx = Math.min(source.width - sw, Math.max(0, (originX * (1 - 1 / zoom) - left) / fit))
-  const sy = Math.min(source.height - sh, Math.max(0, (originY * (1 - 1 / zoom) - top) / fit))
-  // The half-size step whose part is still at least as large as the canvas.
-  const step = sw > w ? Math.floor(Math.log2(sw / w)) : 0
-  const level = coverLevel(source, step)
-  const scale = pictureSize(level).width / source.width
-  context.clearRect(0, 0, w, h)
-  context.imageSmoothingEnabled = true
-  context.imageSmoothingQuality = 'high'
-  context.drawImage(level, sx * scale, sy * scale, sw * scale, sh * scale, 0, 0, w, h)
-}
-
-/**
- * A cover filling its box, showing the part someone chose (`CoverFrame`),
- * drawn at exactly the box's device pixels (`drawCover`). As an `<img>` the
- * browser squeezed a large poster into a tile in one step, and it looked
- * over-sharpened; and a frame chosen in the editor looks the same on every
- * tile.
- */
-function CoverImage({
-  src,
-  frame,
-  onError,
-  onLoad,
-}: {
-  src: string
-  frame?: CoverFrame
-  onError?: () => void
-  /** With the picture's own size, once it is there. */
-  onLoad?: (size: { width: number; height: number }) => void
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [loaded, setLoaded] = useState<{ src: string; source: CoverSource } | null>(null)
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
-  const callbacks = useRef({ onError, onLoad })
-  callbacks.current = { onError, onLoad }
-
-  useEffect(() => {
-    let alive = true
-    loadCover(src).then(
-      (source) => {
-        if (!alive) return
-        setLoaded({ src, source })
-        callbacks.current.onLoad?.({ width: source.width, height: source.height })
-      },
-      () => {
-        if (alive) callbacks.current.onError?.()
-      },
-    )
-    return () => {
-      alive = false
-    }
-  }, [src])
-
-  // The box in device pixels, so one pixel drawn is one pixel shown — also
-  // after the page is zoomed or the window moves to another screen.
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const observer = new ResizeObserver(([entry]) => {
-      // The exact device box where it is right; where it disagrees with the
-      // CSS box times the pixel ratio by more than rounding (an emulated
-      // ratio, an older engine), the product.
-      const device = entry.devicePixelContentBoxSize?.[0]
-      const pick = (exact: number | undefined, css: number) => {
-        const scaled = css * devicePixelRatio
-        return Math.max(1, Math.round(exact !== undefined && Math.abs(exact - scaled) <= 1 ? exact : scaled))
-      }
-      const w = pick(device?.inlineSize, entry.contentRect.width)
-      const h = pick(device?.blockSize, entry.contentRect.height)
-      setSize((old) => (old && old.w === w && old.h === h ? old : { w, h }))
-    })
-    try {
-      observer.observe(canvas, { box: 'device-pixel-content-box' })
-    } catch {
-      observer.observe(canvas)
-    }
-    return () => observer.disconnect()
-  }, [])
-
-  const source = loaded && loaded.src === src ? loaded.source : null
-  const { x, y, zoom } = frame ?? MIDDLE
-  useLayoutEffect(() => {
-    const canvas = canvasRef.current
-    if (canvas && source && size) drawCover(canvas, source, { x, y, zoom }, size.w, size.h)
-  }, [source, size, x, y, zoom])
-
-  return (
-    <canvas
-      ref={canvasRef}
-      aria-hidden
-      className={`absolute inset-0 h-full w-full transition-opacity duration-[var(--dur-base)] ${source && size ? 'opacity-100' : 'opacity-0'}`}
-    />
-  )
-}
-
-/* -------------------------------------------------------------------------- */
 /* One series                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -2147,6 +1989,172 @@ function newsLabel(news: OnlineNews): string {
   return `Staffel ${news.season}, ${news.from === news.to ? `Folge ${news.from}` : `Folgen ${news.from}–${news.to}`}`
 }
 
+/** How the overview shows the series: posters on a shelf, or a list of lines. */
+type MerkView = 'poster' | 'liste'
+const VIEW_KEY = 'sondra:merkliste:ansicht'
+
+function readView(): MerkView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'liste' ? 'liste' : 'poster'
+  } catch {
+    return 'poster'
+  }
+}
+
+function ViewChoice({ value, onChange }: { value: MerkView; onChange: (view: MerkView) => void }) {
+  return (
+    <span role="radiogroup" aria-label="Ansicht" className="inline-flex shrink-0 rounded-nav bg-raised p-[3px] ring-1 ring-inset ring-line">
+      {(['poster', 'liste'] as const).map((option) => {
+        const on = value === option
+        return (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={option === 'poster' ? 'Als Poster' : 'Als Liste'}
+            title={option === 'poster' ? 'Als Poster' : 'Als Liste'}
+            onClick={() => onChange(option)}
+            className={`press grid h-[28px] w-[34px] place-items-center rounded-[7px] ${on ? 'bg-ink text-on-ink' : 'text-prose hover:bg-panel-soft hover:text-ink'}`}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden className="size-[15px]" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              {option === 'poster' ? (
+                <>
+                  <rect x="2.5" y="2.5" width="4.5" height="6.5" rx="1" />
+                  <rect x="9" y="2.5" width="4.5" height="6.5" rx="1" />
+                  <path d="M2.5 12h4.5M9 12h4.5" />
+                </>
+              ) : (
+                <>
+                  <rect x="2.5" y="2.75" width="2.5" height="3.5" rx="0.6" />
+                  <rect x="2.5" y="9.75" width="2.5" height="3.5" rx="0.6" />
+                  <path d="M7.5 3.75h6M7.5 6h3.5M7.5 10.75h6M7.5 13h3.5" />
+                </>
+              )}
+            </svg>
+          </button>
+        )
+      })}
+    </span>
+  )
+}
+
+/** „noch 6 · 2 Std. 15 Min.“: what is left of a series, in episodes and time. */
+function leftLabel(item: SavedLinkItem): string | null {
+  const left = itemRemainingMinutes(item)
+  if (!left.remainingCount) return null
+  return `noch ${left.remainingCount} · ${lengthLabel(left.minutes)}${left.known ? '' : ' +'}`
+}
+
+/**
+ * One series as a line of the list: a small poster, the name and where it
+ * stands, the bar with its count, what is left, and the step forward. For a
+ * long list, where the shelf of posters asks for a lot of scrolling.
+ */
+function SeriesRow({ item, onOpen, isFocused }: { item: SavedLinkItem; onOpen: () => void; isFocused?: boolean }) {
+  const progress = itemProgress(item)
+  const cover = seriesCover(item)
+  const [broken, setBroken] = useState<string | null>(null)
+  const poster = cover && cover.src !== broken ? cover : null
+  const done = caughtUp(seasonsOf(item))
+  const stand = standLabel(item)
+  const canAdvance = !done && item.episode !== null
+  const inFolder = useEpisodesInFolder(item.id)
+  const playable = canAdvance ? hereInFolder(item, inFolder) : null
+  const news = onlineNews(item)
+  const left = leftLabel(item)
+  const goal = item.goal ? goalState(item, item.goal) : null
+
+  return (
+    <li
+      onClick={onOpen}
+      className={`group grid max-w-none cursor-pointer grid-cols-[40px_minmax(0,1fr)_76px] items-center gap-x-[14px] rounded-nav border-t border-line px-[8px] py-[8px] first:border-t-0 hover:bg-panel-soft sm:grid-cols-[44px_minmax(0,1fr)_150px_76px] lg:grid-cols-[44px_minmax(0,1fr)_170px_190px_76px] ${
+        isFocused ? 'ring-2 ring-ink' : ''
+      }`}
+    >
+      <span
+        aria-hidden
+        className={`relative block w-full overflow-hidden rounded-[6px] ${poster ? 'bg-stage' : 'bg-panel-mid'}`}
+        style={{ aspectRatio: ratioOf(item.tileFormat) }}
+      >
+        {poster ? <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} /> : null}
+      </span>
+
+      <div className="flex min-w-0 flex-col gap-[2px]">
+        <span className="flex min-w-0 items-center gap-[8px]">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpen()
+            }}
+            className="press truncate text-left text-body font-semibold text-ink decoration-rule underline-offset-[3px] hover:underline"
+            title={item.title}
+          >
+            {item.title}
+          </button>
+          <Stars value={item.rating} size="size-[11px]" />
+        </span>
+        <span className="flex min-w-0 items-center gap-[6px] text-small text-prose">
+          {done ? <RowMark state="done" /> : null}
+          <span className="truncate">{stand}</span>
+          {news ? (
+            <span className="flex shrink-0 items-center gap-[4px] font-medium text-accent-strong" title={`Neu auf AniWorld: ${newsLabel(news)}`}>
+              <span aria-hidden className="size-[5px] rounded-pill bg-accent-strong" />
+              Neu
+            </span>
+          ) : null}
+        </span>
+        {/* Below sm the bar stands here, under the name. */}
+        <span className="mt-[4px] block sm:hidden">
+          <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${item.title}: gesehen`} />
+        </span>
+      </div>
+
+      <span className="hidden flex-col gap-[5px] sm:flex">
+        <ProgressBar fraction={progress.fraction ?? (progress.watched > 0 ? null : 0)} label={`${item.title}: gesehen`} />
+        <span className="value text-micro text-prose">{progress.total ? `${progress.watched}/${progress.total}` : `${progress.watched} gesehen`}</span>
+      </span>
+
+      <span className="hidden flex-col text-small text-prose lg:flex">
+        <span>{left ?? (done ? 'Alles gesehen' : '—')}</span>
+        {goal && !goal.reached ? <span className="text-ink">Ziel: noch {goal.left}</span> : null}
+      </span>
+
+      <span className="flex shrink-0 items-center justify-end gap-[6px]">
+        {playable ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              playEpisode(inFolder, playable.season, playable.episode)
+            }}
+            aria-label={`${hereLabel(item)} aus dem Ordner abspielen`}
+            title={`${hereLabel(item)} aus dem Ordner abspielen — ${playable.file.name}`}
+            className="press grid h-[26px] w-[30px] place-items-center rounded-pill bg-ink text-on-ink hover:bg-ink-hover"
+          >
+            <PlayGlyph className="size-[11px]" />
+          </button>
+        ) : null}
+        {canAdvance ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              markSeen(item)
+            }}
+            aria-label={`${hereLabel(item)} von ${item.title} als gesehen markieren`}
+            title={`${hereLabel(item)} als gesehen markieren`}
+            className="press rounded-pill bg-raised px-[10px] py-[3px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:bg-ink hover:text-on-ink hover:ring-ink"
+          >
+            +1
+          </button>
+        ) : null}
+      </span>
+    </li>
+  )
+}
+
 function SeriesTile({
   item,
   onOpen,
@@ -2170,6 +2178,7 @@ function SeriesTile({
   const canAdvance = !done && item.episode !== null
   const inFolder = useEpisodesInFolder(item.id)
   const playable = canAdvance ? hereInFolder(item, inFolder) : null
+  const goal = item.goal ? goalState(item, item.goal) : null
 
   return (
     <div
@@ -2288,6 +2297,10 @@ function SeriesTile({
               <span className="size-[4px] rounded-full bg-accent-strong" />
               <span>Neu</span>
             </span>
+          ) : goal && !goal.reached ? (
+            <span className="shrink-0 font-sans font-medium text-ink" title={goalSentence(goal, item.goal!, parseDay(item.goal!.by))}>
+              Ziel · noch {goal.left}
+            </span>
           ) : item.tags && item.tags.length > 0 ? (
             <span className="text-muted/70 font-sans truncate">#{item.tags[0]}</span>
           ) : null}
@@ -2375,7 +2388,7 @@ function SeriesPage({
   const followers = playable ? inFolder.filter((entry) => !entry.seen && (entry.season > playable.season || (entry.season === playable.season && entry.episode > playable.episode))).length : 0
 
   return (
-    <div className="flex flex-col gap-[32px]">
+    <div className="grid grid-cols-1 gap-[32px] xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-x-[40px]">
       {batchModalOpen && activeSeason ? (
         <BatchDownloadModal
           item={item}
@@ -2389,186 +2402,188 @@ function SeriesPage({
         />
       ) : null}
 
-      <Card tone="cream">
-        <button type="button" onClick={onBack} className="press mt-[8px] inline-flex items-center gap-[6px] rounded-nav text-small text-ink hover:underline">
-          <svg viewBox="0 0 16 16" aria-hidden className="size-[14px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10 3.5L5.5 8l4.5 4.5" />
-          </svg>
-          Merkliste
-        </button>
-        <div className="mt-[18px] flex flex-col gap-[20px] sm:flex-row sm:items-end sm:gap-[28px]">
-          <span
-            className={`relative block w-[132px] shrink-0 overflow-hidden rounded-card sm:w-[168px] ${poster ? 'bg-stage' : 'bg-panel-mid'}`}
-            style={{ aspectRatio: ratioOf(item.tileFormat) }}
-          >
-            {poster ? <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} /> : <NamePoster title={item.title} large />}
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-[10px]">
-            <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[4px]">
-              <h2 className="display-md min-w-0 break-words">{item.title}</h2>
-              <Stars value={item.rating} size="size-[16px]" />
-            </div>
-            <div className="flex max-w-[520px] flex-col gap-[6px]">
-              <p className="text-body text-prose">
-                {standLabel(item)}
-                <span className="text-muted">
-                  {' · '}
-                  {progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}
-                </span>
-              </p>
-              <ProgressBar fraction={progress.fraction} label={`${item.title}: gesehen`} />
-              {progress.total && progress.total > progress.watched ? (() => {
-                const rem = progress.total - progress.watched
-                const remMin = itemRemainingMinutes(item)
-                const plan = calculateBingePlan(rem, item.episodeDuration ?? 24, remMin.minutes)
-                return (
-                  <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[2px] text-micro text-muted">
-                    <span className="font-medium text-prose">Noch {rem} {rem === 1 ? 'Folge' : 'Folgen'} ({plan.watchTime.short})</span>
-                    <span>·</span>
-                    <span>1/Tag: fertig {plan.finishAt1PerDay}</span>
-                    <span>·</span>
-                    <span>2/Tag: fertig {plan.finishAt2PerDay}</span>
-                  </div>
-                )
-              })() : null}
-              <p className="text-small text-muted">
-                {[hasUrl ? sourceBadgeForUrl(item.url) : null, last ? `zuletzt ${last}` : null, STATUS_OPTIONS.find((option) => option.value === status)?.label]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-            </div>
-            {item.notes ? <p className="max-w-[72ch] text-small leading-[1.55] text-prose">{item.notes}</p> : null}
-            {item.tags && item.tags.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-[8px]">
-                {item.tags.map((tag) => (
-                  <span key={tag} className="text-micro font-sans font-medium text-muted">
-                    #{tag}
-                  </span>
-                ))}
+      <div className="flex min-w-0 flex-col gap-[32px]">
+        <Card tone="cream">
+          <button type="button" onClick={onBack} className="press mt-[8px] inline-flex items-center gap-[6px] rounded-nav text-small text-ink hover:underline">
+            <svg viewBox="0 0 16 16" aria-hidden className="size-[14px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 3.5L5.5 8l4.5 4.5" />
+            </svg>
+            Merkliste
+          </button>
+          <div className="mt-[18px] flex flex-col gap-[20px] sm:flex-row sm:items-end sm:gap-[28px]">
+            <span
+              className={`relative block w-[132px] shrink-0 overflow-hidden rounded-card sm:w-[168px] ${poster ? 'bg-stage' : 'bg-panel-mid'}`}
+              style={{ aspectRatio: ratioOf(item.tileFormat) }}
+            >
+              {poster ? <CoverImage src={poster.src} frame={poster.frame} onError={() => setBroken(poster.src)} /> : <NamePoster title={item.title} large />}
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-[10px]">
+              <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[4px]">
+                <h2 className="display-md min-w-0 break-words">{item.title}</h2>
+                <Stars value={item.rating} size="size-[16px]" />
               </div>
-            ) : null}
-
-            {news ? (
-              <div className="mt-[2px] flex flex-wrap items-center justify-between gap-[10px] rounded-card border border-line bg-panel-soft/60 px-[12px] py-[8px]">
-                <div className="flex items-center gap-[8px] text-small text-ink">
-                  <span className="size-[6px] shrink-0 rounded-full bg-accent-strong" />
-                  <span>
-                    Neu auf AniWorld: <strong>{newsLabel(news)}</strong>
+              <div className="flex max-w-[520px] flex-col gap-[6px]">
+                <p className="text-body text-prose">
+                  {standLabel(item)}
+                  <span className="text-muted">
+                    {' · '}
+                    {progress.total ? `${progress.watched} von ${progress.total} gesehen` : `${progress.watched} gesehen`}
                   </span>
+                </p>
+                <ProgressBar fraction={progress.fraction} label={`${item.title}: gesehen`} />
+                {item.goal ? (
+                  <p className="text-small text-ink">
+                    {goalSentence(goalState(item, item.goal), item.goal, parseDay(item.goal.by))}
+                  </p>
+                ) : null}
+                <p className="text-small text-muted">
+                  {[hasUrl ? sourceBadgeForUrl(item.url) : null, last ? `zuletzt ${last}` : null, STATUS_OPTIONS.find((option) => option.value === status)?.label]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              </div>
+              {item.notes ? <p className="max-w-[72ch] text-small leading-[1.55] text-prose">{item.notes}</p> : null}
+              {item.tags && item.tags.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  {item.tags.map((tag) => (
+                    <span key={tag} className="text-micro font-sans font-medium text-muted">
+                      #{tag}
+                    </span>
+                  ))}
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="quiet"
-                  onClick={() => {
-                    const taken = takeOnlineNews(item)
-                    if (taken) updateMerkItem(item.id, taken)
-                  }}
-                >
-                  Auf die Merkliste nehmen
+              ) : null}
+
+              {news ? (
+                <div className="mt-[2px] flex flex-wrap items-center justify-between gap-[10px] rounded-card border border-line bg-panel-soft/60 px-[12px] py-[8px]">
+                  <div className="flex items-center gap-[8px] text-small text-ink">
+                    <span className="size-[6px] shrink-0 rounded-full bg-accent-strong" />
+                    <span>
+                      Neu auf AniWorld: <strong>{newsLabel(news)}</strong>
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="quiet"
+                    onClick={() => {
+                      const taken = takeOnlineNews(item)
+                      if (taken) updateMerkItem(item.id, taken)
+                    }}
+                  >
+                    Auf die Merkliste nehmen
+                  </Button>
+                </div>
+              ) : null}
+
+              <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
+                {playable ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => playEpisode(inFolder, playable.season, playable.episode)}
+                    title={`Aus „${folderName}“: ${playable.file.name}${followers ? ` — danach ${followers} weitere` : ''}`}
+                  >
+                    <PlayGlyph />
+                    {hereLabel(item)} abspielen
+                  </Button>
+                ) : null}
+                {hasUrl && next ? (
+                  <Button type="button" size="sm" variant={playable ? 'quiet' : 'primary'} onClick={() => openHere(item)}>
+                    {hereLabel(item)} laden
+                  </Button>
+                ) : null}
+                {hasUrl ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="quiet"
+                    onClick={() => setBatchModalOpen(true)}
+                    title="Nächste Folgen in den Downloader übertragen"
+                  >
+                    Nächste Folgen laden …
+                  </Button>
+                ) : null}
+                {next ? (
+                  <Button type="button" size="sm" variant={hasUrl || playable ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
+                    {hereLabel(item)} gesehen
+                  </Button>
+                ) : null}
+                {hasUrl && !next ? (
+                  <Button type="button" size="sm" variant="quiet" onClick={() => openHere(item)}>
+                    Nachsehen
+                  </Button>
+                ) : null}
+                {hasUrl && isAniworldUrl(item.url) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="quiet"
+                    disabled={checkingUpdates}
+                    onClick={() => void handleCheckUpdates()}
+                    title="Auf AniWorld nach neuen Staffeln oder Folgen suchen"
+                  >
+                    {checkingUpdates ? 'Prüft…' : 'Online prüfen'}
+                  </Button>
+                ) : null}
+                <Button type="button" size="sm" variant="quiet" onClick={onEdit}>
+                  Bearbeiten
                 </Button>
               </div>
-            ) : null}
-
-            <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
-              {playable ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => playEpisode(inFolder, playable.season, playable.episode)}
-                  title={`Aus „${folderName}“: ${playable.file.name}${followers ? ` — danach ${followers} weitere` : ''}`}
-                >
-                  <PlayGlyph />
-                  {hereLabel(item)} abspielen
-                </Button>
+              {checkNote ? (
+                <p role="status" className="text-small text-prose">
+                  {checkNote}
+                </p>
               ) : null}
-              {hasUrl && next ? (
-                <Button type="button" size="sm" variant={playable ? 'quiet' : 'primary'} onClick={() => openHere(item)}>
-                  {hereLabel(item)} laden
-                </Button>
+              {inFolder.length > 0 ? (
+                <p className="flex flex-wrap items-center gap-x-[8px] gap-y-[2px] text-small text-prose">
+                  <FolderIcon />
+                  <span>
+                    Im Ordner „{folderName}“: <span className="value">{folderSummary(inFolder)}</span>
+                    {next && !playable ? ` — ${hereLabel(item)} liegt nicht darin.` : ''}
+                  </span>
+                </p>
               ) : null}
-              {hasUrl ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="quiet"
-                  onClick={() => setBatchModalOpen(true)}
-                  title="Nächste Folgen in den Downloader übertragen"
-                >
-                  Nächste Folgen laden …
-                </Button>
-              ) : null}
-              {next ? (
-                <Button type="button" size="sm" variant={hasUrl || playable ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
-                  {hereLabel(item)} gesehen
-                </Button>
-              ) : null}
-              {hasUrl && !next ? (
-                <Button type="button" size="sm" variant="quiet" onClick={() => openHere(item)}>
-                  Nachsehen
-                </Button>
-              ) : null}
-              {hasUrl && isAniworldUrl(item.url) ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="quiet"
-                  disabled={checkingUpdates}
-                  onClick={() => void handleCheckUpdates()}
-                  title="Auf AniWorld nach neuen Staffeln oder Folgen suchen"
-                >
-                  {checkingUpdates ? 'Prüft…' : 'Online prüfen'}
-                </Button>
-              ) : null}
-              <Button type="button" size="sm" variant="quiet" onClick={onEdit}>
-                Bearbeiten
-              </Button>
             </div>
-            {checkNote ? (
-              <p role="status" className="text-small text-prose">
-                {checkNote}
-              </p>
-            ) : null}
-            {inFolder.length > 0 ? (
-              <p className="flex flex-wrap items-center gap-x-[8px] gap-y-[2px] text-small text-prose">
-                <FolderIcon />
-                <span>
-                  Im Ordner „{folderName}“: <span className="value">{folderSummary(inFolder)}</span>
-                  {next && !playable ? ` — ${hereLabel(item)} liegt nicht darin.` : ''}
-                </span>
-              </p>
+          </div>
+        </Card>
+
+        <section aria-label="Staffeln" className="flex min-w-0 flex-col gap-[14px]">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-[20px] gap-y-[6px] border-b border-line pb-[10px]">
+            <h3 className="flex items-baseline gap-[10px] text-subheading text-ink">
+              {kind === 'list' ? 'Liste' : 'Staffeln'}
+              <span className="value text-small text-muted">{seasonCount}</span>
+            </h3>
+            {kind === 'series' ? (
+              <span className="flex flex-wrap gap-x-[18px] gap-y-[4px] text-small">
+                <button type="button" onClick={() => addSeasonTo(item)} className={linkClass}>
+                  <PlusIcon />
+                  Staffel hinzufügen
+                </button>
+                {!hasFilms ? (
+                  <button
+                    type="button"
+                    onClick={() => updateMerkItem(item.id, { seasons: [...seasons, { number: 0, episodes: null, watched: [] }] })}
+                    className={linkClass}
+                  >
+                    <PlusIcon />
+                    Filme hinzufügen
+                  </button>
+                ) : null}
+              </span>
             ) : null}
           </div>
-        </div>
-      </Card>
+          <SeasonTiles item={item} onSeason={onSeason} large />
+        </section>
+      </div>
 
-      <section aria-label="Staffeln" className="flex flex-col gap-[14px]">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-[20px] gap-y-[6px] border-b border-line pb-[10px]">
-          <h3 className="flex items-baseline gap-[10px] text-subheading text-ink">
-            {kind === 'list' ? 'Liste' : 'Staffeln'}
-            <span className="value text-small text-muted">{seasonCount}</span>
-          </h3>
-          {kind === 'series' ? (
-            <span className="flex flex-wrap gap-x-[18px] gap-y-[4px] text-small">
-              <button type="button" onClick={() => addSeasonTo(item)} className={linkClass}>
-                <PlusIcon />
-                Staffel hinzufügen
-              </button>
-              {!hasFilms ? (
-                <button
-                  type="button"
-                  onClick={() => updateMerkItem(item.id, { seasons: [...seasons, { number: 0, episodes: null, watched: [] }] })}
-                  className={linkClass}
-                >
-                  <PlusIcon />
-                  Filme hinzufügen
-                </button>
-              ) : null}
-            </span>
-          ) : null}
+      {/* Beside the series from xl on, under its seasons below that. */}
+      {kind !== 'list' ? (
+        <div className="xl:pt-[50px]">
+          <div className="xl:sticky xl:top-[24px]">
+            <WatchPlanner item={item} onSeason={onSeason} />
+          </div>
         </div>
-        <SeasonTiles item={item} onSeason={onSeason} large />
-      </section>
+      ) : null}
     </div>
   )
 }
@@ -3496,6 +3511,19 @@ function BatchDownloadModal({
 function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () => void }) {
   const stats = useMemo(() => calculateMerklisteStats(items), [items])
   const [copied, setCopied] = useState(false)
+  // Each state with its share and its green — ink for watching, lighter for
+  // later and finished, the palest for given up.
+  const shares = STATUS_OPTIONS.map((option) => {
+    const count = items.filter((item) => statusOf(item) === option.value).length
+    const look = {
+      watching: { tone: 'bg-ink', hex: '#0b4a22' },
+      later: { tone: 'bg-faint', hex: '#799081' },
+      paused: { tone: 'bg-muted', hex: '#4e6355' },
+      done: { tone: 'bg-rule', hex: '#a7bca9' },
+      dropped: { tone: 'bg-panel-strong', hex: '#c8e1cf' },
+    }[option.value]
+    return { ...option, ...look, count, percent: stats.totalSeries ? Math.round((count / stats.totalSeries) * 100) : 0 }
+  })
 
   const exportImage = () => {
     const canvas = document.createElement('canvas')
@@ -3575,17 +3603,14 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
     ctx.fillRect(barX, barY, barW, barH)
 
     if (stats.totalSeries > 0) {
-      const wW = (stats.watchingCount / stats.totalSeries) * barW
-      const lW = (stats.laterCount / stats.totalSeries) * barW
-      const dW = (stats.doneCount / stats.totalSeries) * barW
-
-      // The palette's greens, as in the window: ink, faint, rule.
-      ctx.fillStyle = '#0b4a22'
-      ctx.fillRect(barX, barY, wW, barH)
-      ctx.fillStyle = '#799081'
-      ctx.fillRect(barX + wW, barY, lW, barH)
-      ctx.fillStyle = '#a7bca9'
-      ctx.fillRect(barX + wW + lW, barY, dW, barH)
+      // The palette's greens, as in the window.
+      let x = barX
+      for (const share of shares) {
+        const w = (share.count / stats.totalSeries) * barW
+        ctx.fillStyle = share.hex
+        ctx.fillRect(x, barY, w, barH)
+        x += w
+      }
     }
 
     // Legend: the colour in the dot, the words in prose — light green text
@@ -3597,9 +3622,12 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
       ctx.fillStyle = '#111a14'
       ctx.fillText(text, x + 18, 345)
     }
-    legend(40, '#0b4a22', `Am Schauen: ${stats.watchingCount} (${stats.watchingPercent}%)`)
-    legend(280, '#799081', `Später: ${stats.laterCount} (${stats.laterPercent}%)`)
-    legend(460, '#a7bca9', `Fertig: ${stats.doneCount} (${stats.donePercent}%)`)
+    let legendX = 40
+    for (const share of shares.filter((entry) => entry.count > 0)) {
+      const text = `${share.label}: ${share.count} (${share.percent}%)`
+      legend(legendX, share.hex, text)
+      legendX += 18 + ctx.measureText(text).width + 28
+    }
 
     // Footer brand
     ctx.fillStyle = '#799081'
@@ -3614,7 +3642,10 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
   const copySummary = () => {
     const text = [
       `**Meine Sondra Merkliste**:`,
-      `• ${stats.watchingCount} am Schauen · ${stats.laterCount} später · ${stats.doneCount} fertig (${stats.totalSeries} Serien)`,
+      `• ${shares
+        .filter((share) => share.count > 0)
+        .map((share) => `${share.count} ${share.label.toLowerCase()}`)
+        .join(' · ')} (${stats.totalSeries} Serien)`,
       `• ${stats.seenTotal} Folgen gesehen (ca. ${stats.watchTime.short} / ${stats.watchTime.long} Sehzeit)`,
       stats.avgRating ? `• ⭐️ Durchschnittsbewertung: ★ ${stats.avgRating}` : null,
       stats.completedSeasons > 0 ? `• ${stats.completedSeasons} Staffeln komplett gesehen` : null,
@@ -3712,56 +3743,33 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
               {/* Segmented Progress Bar */}
               {stats.totalSeries > 0 ? (
                 <div className="flex h-[12px] w-full overflow-hidden rounded-full bg-rule/30 p-[1px]">
-                  {stats.watchingCount > 0 ? (
-                    <div
-                      style={{ width: `${stats.watchingPercent}%` }}
-                      className="h-full rounded-l-full bg-ink transition-all"
-                      title={`${stats.watchingCount} am Schauen (${stats.watchingPercent}%)`}
-                    />
-                  ) : null}
-                  {stats.laterCount > 0 ? (
-                    <div
-                      style={{ width: `${stats.laterPercent}%` }}
-                      className="h-full bg-faint transition-all"
-                      title={`${stats.laterCount} später (${stats.laterPercent}%)`}
-                    />
-                  ) : null}
-                  {stats.doneCount > 0 ? (
-                    <div
-                      style={{ width: `${stats.donePercent}%` }}
-                      className="h-full rounded-r-full bg-rule transition-all"
-                      title={`${stats.doneCount} fertig (${stats.donePercent}%)`}
-                    />
-                  ) : null}
+                  {shares
+                    .filter((share) => share.count > 0)
+                    .map((share) => (
+                      <div
+                        key={share.value}
+                        style={{ width: `${share.percent}%` }}
+                        className={`h-full first:rounded-l-full last:rounded-r-full transition-all ${share.tone}`}
+                        title={`${share.count} ${share.label.toLowerCase()} (${share.percent}%)`}
+                      />
+                    ))}
                 </div>
               ) : null}
 
-              {/* 3 Visual Metric Badges */}
+              {/* One badge per state someone is in */}
               <div className="grid grid-cols-3 gap-[8px] pt-[2px]">
-                <div className="flex flex-col rounded-nav bg-panel-soft/60 p-[8px] ring-1 ring-inset ring-rule/30 text-center">
-                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-ink">
-                    <span className="size-[6px] rounded-full bg-ink inline-block" />
-                    Am Schauen
-                  </span>
-                  <span className="value font-bold text-ink mt-[2px]">{stats.watchingCount}</span>
-                  <span className="text-micro text-muted">{stats.watchingPercent}%</span>
-                </div>
-                <div className="flex flex-col rounded-nav bg-panel-soft/60 p-[8px] ring-1 ring-inset ring-rule/30 text-center">
-                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-ink">
-                    <span className="size-[6px] rounded-full bg-faint inline-block" />
-                    Später
-                  </span>
-                  <span className="value font-bold text-ink mt-[2px]">{stats.laterCount}</span>
-                  <span className="text-micro text-muted">{stats.laterPercent}%</span>
-                </div>
-                <div className="flex flex-col rounded-nav bg-panel-soft/60 p-[8px] ring-1 ring-inset ring-rule/30 text-center">
-                  <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-ink">
-                    <span className="size-[6px] rounded-full bg-rule inline-block" />
-                    Fertig
-                  </span>
-                  <span className="value font-bold text-ink mt-[2px]">{stats.doneCount}</span>
-                  <span className="text-micro text-muted">{stats.donePercent}%</span>
-                </div>
+                {shares
+                  .filter((share) => share.count > 0 || share.value === 'watching')
+                  .map((share) => (
+                    <div key={share.value} className="flex flex-col rounded-nav bg-panel-soft/60 p-[8px] ring-1 ring-inset ring-rule/30 text-center">
+                      <span className="flex items-center justify-center gap-[4px] text-micro font-medium text-ink">
+                        <span className={`size-[6px] rounded-full inline-block ${share.tone}`} />
+                        {share.label}
+                      </span>
+                      <span className="value font-bold text-ink mt-[2px]">{share.count}</span>
+                      <span className="text-micro text-prose">{share.percent}%</span>
+                    </div>
+                  ))}
               </div>
             </div>
 

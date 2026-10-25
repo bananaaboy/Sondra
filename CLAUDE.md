@@ -492,6 +492,39 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   (`exportMerkliste`), Einlesen führt zusammen (`mergeMerkliste`: dieselbe
   Serie per `id` oder Name, die zuletzt geänderte Seite gewinnt) und lässt
   sich zurücknehmen.
+  **„Bis wohin?“** (25.10.2026, Wunsch: „wie viel man schauen muss, um an
+  einen selbst gewählten Punkt zu kommen“; `lib/watchPlan.ts`,
+  `WatchPlanner.tsx`): auf der Seite einer Serie, ab `xl` rechts neben
+  Kopf und Staffeln (eigene Spalte — als Rasterzeile gestreckt, schob
+  „Genauer rechnen“ die Staffeln nach unten), darunter sonst. Ziel ist
+  Staffel + Folge oder „Ende Staffel n“ / „Ganze Serie“; gezählt wird ab
+  dem Stand, Gesehenes nicht (Lücken davor auch nicht), mit den Längen der
+  Serie samt Ausnahmen, Filme nach den Staffeln. Eine Staffel ohne
+  Folgenzahl auf dem Weg wird genannt („mind.“), nie geraten. Darunter die
+  Rechnung in Worten („21 Folgen à 24 Min., ohne Vorspann (1:30) — statt
+  …“), dann „Bei [2] [am Tag | pro Woche] → Tag“ (heute zählt als erster
+  Tag) und „Bis zum [Datum] → so viel am Tag“. Das eigene Tempo kommt aus
+  dem Verlauf (`recentPace`: vier Wochen, mindestens eine Woche geteilt,
+  damit ein Abend keine Gewohnheit wird) und ist die Vorgabe. „Genauer
+  rechnen“: von vorn, Vorspann überspringen (am Ton erkannt, an der Serie
+  oder wie im Player), Tempo 1–2× (Vorgabe aus dem Player). Tempo und
+  Optionen bleiben im `localStorage` (`sondra:merkliste:rechner`). **Ziel
+  merken** legt `goal` an die Serie (`{season, episode, by?, setAt,
+  count}`, reist mit der Liste): die Serie sagt dann „Ziel: … — noch 6
+  Folgen, 2 am Tag reichen · 1 vor dem Plan“ (gegen ein gleichmässiges
+  Tempo seit dem Setzen), das Poster „Ziel · noch 6“. Die alte Zeile
+  „1/Tag: fertig … · 2/Tag: …“ ist darin aufgegangen.
+  **Stände** sind fünf: Am Schauen, Später, Pausiert, Fertig, Abgebrochen
+  (Filterpillen nur für Stände mit Einträgen). Etwas neu Gesehenes nimmt
+  eine pausierte oder abgebrochene Serie wieder auf (`settle` vergleicht
+  die Zahl des Gesehenen), eine geänderte Folgenzahl nicht. MAL „On-Hold“/
+  „Dropped“ und AniList „PAUSED“/„DROPPED“ kommen so an statt als „Später“.
+  **Als Liste** neben „Als Poster“ (`sondra:merkliste:ansicht`): je Serie
+  eine Zeile mit kleinem Poster, Stand, Balken mit Zähler, „noch 6 · 2 Std.
+  24 Min.“ und +1 — `li` bekommt `max-w-none`, sonst greift die 34em-Regel.
+  Sortierung „Am wenigsten übrig“ (Restzeit, Unbekanntes zuletzt).
+  `CoverImage` liegt in `components/CoverImage.tsx`, damit „In Staffel
+  einordnen“ Poster zeichnet, ohne die Merkliste zu laden.
 - **Merkliste in Anytype** (nur in der App): `desktop/anytype.mjs` spricht im
   Hauptprozess mit Anytypes lokaler API (`127.0.0.1:31009`, `Anytype-Version:
   2025-11-08`), koppelt über den vierstelligen Code (`/v1/auth/challenges`,
@@ -643,7 +676,16 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   was die Dateien schon sind oder heissen — „Episode 01“ schlägt nichts
   vor) oder ein neuer Name, der dann auf die Merkliste kommt; Staffel als
   Zahl (0 = Filme); je Datei die Folge, vorbelegt aus dem Namen, sonst
-  weitergezählt. `fileIntoSeason` legt `Sondra/Serien/<Titel>/Staffel n`
+  weitergezählt. **Neu gestaltet am 25.10.2026** („design das Menü
+  besser“): links, was herauskommt — Poster, Staffel, der Zielordner als
+  kleiner Baum mit „+ 5 Folgen“ —, rechts Serie (Poster-Pillen), Staffel
+  (Pillen der bekannten, „Neu: Staffel 3“, Zähler) mit einem Streifen der
+  Folgen (gefüllt: kommt dazu, getönt: gesehen) und die Dateien: Häkchen
+  zum Auslassen, Nummer als Zähler, darunter woher sie kommt („schon
+  eingeordnet“, „Nummer aus dem Namen“, „weitergezählt — bitte prüfen“).
+  Doppelte Nummern und Folgen über das Ende der Staffel stehen an der
+  Zeile; „Der Reihe nach nummerieren“ und „Wie erkannt“. Vorher bekam ein
+  Bonus-Clip still „Folge 1“ neben S02E01. `fileIntoSeason` legt `Sondra/Serien/<Titel>/Staffel n`
   an (`folderAt`, vorhandene Ordner werden benutzt) und verschiebt jede
   Datei dorthin (`move`: `addParents`/`removeParents`), mit
   `appProperties` `sondraSerie`/`sondraStaffel`/`sondraFolge` — für andere
