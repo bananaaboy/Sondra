@@ -23,8 +23,37 @@ import type {
   VideoFilePref,
 } from '../components/panels/DownloaderPanel'
 
-/** Where an entry stands: being watched, for later, finished. */
-export type SavedLinkStatus = 'watching' | 'later' | 'done'
+/** Where an entry stands: being watched, for later, paused, finished, given up. */
+export type SavedLinkStatus = 'watching' | 'later' | 'paused' | 'done' | 'dropped'
+
+const STATUSES: SavedLinkStatus[] = ['watching', 'later', 'paused', 'done', 'dropped']
+
+/**
+ * A point someone wants to reach in a series, kept with it: „bis Staffel 3,
+ * Folge 12“, by a day if they said one. `count` is how many episodes there
+ * were to it when it was set — what an even pace is measured against.
+ */
+export interface MerkGoal {
+  season: number
+  episode: number
+  /** The day, as „2026-11-14“. */
+  by?: string
+  setAt: number
+  count?: number
+}
+
+function normalizeGoal(raw: unknown): MerkGoal | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const { season, episode, by, setAt, count } = raw as Partial<MerkGoal>
+  if (typeof season !== 'number' || typeof episode !== 'number' || season < 0 || episode < 1) return undefined
+  return {
+    season: Math.floor(season),
+    episode: Math.floor(episode),
+    ...(typeof by === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(by) ? { by } : {}),
+    setAt: typeof setAt === 'number' ? setAt : Date.now(),
+    ...(typeof count === 'number' && count > 0 ? { count: Math.round(count) } : {}),
+  }
+}
 
 /** The shape of an entry's tiles: a film poster (2:3) or a manga volume (5:7). */
 export type TileFormat = 'poster' | 'manga'
@@ -124,6 +153,8 @@ export interface SavedLinkItem {
    * an episode is looked through for each.
    */
   intros?: SeriesIntro[]
+  /** „Bis wohin?“ kept: the point to reach, by a day if one was set. */
+  goal?: MerkGoal
 }
 
 export interface SeriesIntro {
@@ -226,7 +257,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     audioPref: raw.audioPref || 'high',
     autoTranscribe: Boolean(raw.autoTranscribe),
     updatedAt: raw.updatedAt || Date.now(),
-    status: raw.status === 'later' || raw.status === 'done' ? raw.status : 'watching',
+    status: raw.status && STATUSES.includes(raw.status) ? raw.status : 'watching',
     lastOpenedAt: typeof raw.lastOpenedAt === 'number' ? raw.lastOpenedAt : undefined,
     ...(seasons ? { seasons } : {}),
     ...(raw.cover ? { cover: raw.cover } : {}),
@@ -239,6 +270,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(typeof raw.opening === 'number' && raw.opening >= OPENING_MIN && raw.opening <= OPENING_MAX ? { opening: Math.round(raw.opening) } : {}),
     ...(Array.isArray(raw.intros) && normalizeIntros(raw.intros).length > 0 ? { intros: normalizeIntros(raw.intros) } : {}),
     ...(raw.durations && typeof raw.durations === 'object' ? { durations: raw.durations } : {}),
+    ...(normalizeGoal(raw.goal) ? { goal: normalizeGoal(raw.goal) } : {}),
     ...(Array.isArray(raw.tags)
       ? {
           tags: Array.from(
@@ -602,7 +634,11 @@ export function settle(
   for (const season of [...ordered.slice(start), ...ordered.slice(0, start)]) {
     const progress = seasonProgress(season)
     if (progress.complete) continue
-    const status = !item.status || item.status === 'done' ? 'watching' : item.status
+    // Something newly seen takes a paused or given-up series up again; a
+    // changed season length or an undo does not.
+    const seen = (list: MerkSeason[]) => list.reduce((sum, entry) => sum + entry.watched.length, 0)
+    const resumed = (item.status === 'paused' || item.status === 'dropped') && seen(seasons) > seen(seasonsOf(item))
+    const status = !item.status || item.status === 'done' || resumed ? 'watching' : item.status
     return { seasons, season: season.number, episode: progress.next, status }
   }
   const last = ordered.find((season) => season.number === from) ?? ordered[ordered.length - 1]
@@ -811,7 +847,9 @@ export function importMalXml(xmlText: string): SavedLinkItem[] {
     const statusStr = (statusMatch ? statusMatch[1].trim().toLowerCase() : '')
     let status: SavedLinkStatus = 'watching'
     if (statusStr.includes('completed') || statusStr.includes('fertig')) status = 'done'
-    else if (statusStr.includes('plan to watch') || statusStr.includes('on-hold') || statusStr.includes('später')) status = 'later'
+    else if (statusStr.includes('on-hold') || statusStr.includes('pausiert')) status = 'paused'
+    else if (statusStr.includes('dropped') || statusStr.includes('abgebrochen')) status = 'dropped'
+    else if (statusStr.includes('plan to watch') || statusStr.includes('später')) status = 'later'
 
     const watched = watchedCount > 0 ? Array.from({ length: watchedCount }, (_, i) => i + 1) : []
     const season: MerkSeason = {
@@ -889,7 +927,9 @@ export function importAniListJson(jsonText: string): SavedLinkItem[] {
     const rawStatus = String(entry.status || '').toUpperCase()
     let status: SavedLinkStatus = 'watching'
     if (rawStatus === 'COMPLETED') status = 'done'
-    else if (rawStatus === 'PLANNING' || rawStatus === 'PAUSED' || rawStatus === 'DROPPED') status = 'later'
+    else if (rawStatus === 'PAUSED') status = 'paused'
+    else if (rawStatus === 'DROPPED') status = 'dropped'
+    else if (rawStatus === 'PLANNING') status = 'later'
 
     const coverImg = media.coverImage as Record<string, string> | undefined
     const cover = coverImg?.large || coverImg?.medium || undefined
@@ -1375,7 +1415,9 @@ export interface MerklisteStats {
   totalSeries: number
   watchingCount: number
   laterCount: number
+  pausedCount: number
   doneCount: number
+  droppedCount: number
   watchingPercent: number
   laterPercent: number
   donePercent: number
@@ -1464,6 +1506,8 @@ export function calculateMerklisteStats(items: SavedLinkItem[]): MerklisteStats 
   const watchingCount = items.filter((i) => (i.status ?? 'watching') === 'watching').length
   const laterCount = items.filter((i) => i.status === 'later').length
   const doneCount = items.filter((i) => i.status === 'done').length
+  const pausedCount = items.filter((i) => i.status === 'paused').length
+  const droppedCount = items.filter((i) => i.status === 'dropped').length
 
   const watchingPercent = totalSeries > 0 ? Math.round((watchingCount / totalSeries) * 100) : 0
   const laterPercent = totalSeries > 0 ? Math.round((laterCount / totalSeries) * 100) : 0
@@ -1530,7 +1574,9 @@ export function calculateMerklisteStats(items: SavedLinkItem[]): MerklisteStats 
     totalSeries,
     watchingCount,
     laterCount,
+    pausedCount,
     doneCount,
+    droppedCount,
     watchingPercent,
     laterPercent,
     donePercent,
@@ -1557,13 +1603,14 @@ export function calculateMerklisteStats(items: SavedLinkItem[]): MerklisteStats 
 /* Sorting, Shuffle & Binge Planning                                          */
 /* -------------------------------------------------------------------------- */
 
-export type MerklisteSortOption = 'recent' | 'title' | 'rating' | 'progress' | 'episodes'
+export type MerklisteSortOption = 'recent' | 'title' | 'rating' | 'progress' | 'remaining' | 'episodes'
 
 export const SORT_OPTIONS: { value: MerklisteSortOption; label: string }[] = [
   { value: 'recent', label: 'Zuletzt aktiv' },
   { value: 'title', label: 'Titel (A–Z)' },
   { value: 'rating', label: 'Beste Bewertung (★)' },
   { value: 'progress', label: 'Höchster Fortschritt (%)' },
+  { value: 'remaining', label: 'Am wenigsten übrig' },
   { value: 'episodes', label: 'Meiste Folgen' },
 ]
 
@@ -1582,6 +1629,14 @@ export function sortMerkItems(items: SavedLinkItem[], sortBy: MerklisteSortOptio
         const fracB = itemProgress(b).fraction ?? (itemProgress(b).watched > 0 ? 0.01 : 0)
         return fracB - fracA || (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt)
       })
+    case 'remaining': {
+      // What is left to watch, in time; an entry without known lengths goes last.
+      const left = (item: SavedLinkItem) => {
+        const rest = itemRemainingMinutes(item)
+        return rest.known ? rest.minutes : rest.minutes || Number.MAX_SAFE_INTEGER
+      }
+      return copy.sort((a, b) => left(a) - left(b) || a.title.localeCompare(b.title, 'de', { sensitivity: 'base' }))
+    }
     case 'episodes':
       return copy.sort((a, b) => {
         const totA = itemProgress(a).total ?? itemProgress(a).watched

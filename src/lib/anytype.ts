@@ -149,7 +149,9 @@ export function merklisteToMarkdown(items: SavedLinkItem[], removed: Record<stri
   const groups: [string, string][] = [
     ['watching', 'Am Schauen'],
     ['later', 'Später'],
+    ['paused', 'Pausiert'],
     ['done', 'Fertig'],
+    ['dropped', 'Abgebrochen'],
   ]
   for (const [status, heading] of groups) {
     const entries = items.filter((item) => (item.status ?? 'watching') === status)

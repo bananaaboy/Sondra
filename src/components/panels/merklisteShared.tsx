@@ -113,10 +113,12 @@ export const AUDIO_QUALITY_OPTIONS: { value: AudioFilePref; label: string }[] = 
   { value: 'lossless', label: 'Verlustfrei' },
 ]
 
-export const STATUS_OPTIONS: { value: SavedLinkStatus; label: string }[] = [
+export const STATUS_OPTIONS: { value: SavedLinkStatus; label: string; title?: string }[] = [
   { value: 'watching', label: 'Am Schauen' },
   { value: 'later', label: 'Später' },
+  { value: 'paused', label: 'Pausiert', title: 'Angefangen, gerade nicht weiter' },
   { value: 'done', label: 'Fertig' },
+  { value: 'dropped', label: 'Abgebrochen', title: 'Nicht mehr weiter — bleibt auf der Liste' },
 ]
 
 /** „heute", „gestern", „vor 3 Tagen", then the date. */

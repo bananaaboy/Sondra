@@ -26,7 +26,11 @@ import {
   readSharedFile,
   sharedFileText,
   sharedKey,
+  settle,
+  sortMerkItems,
+  watchedUpTo,
 } from '../src/lib/merkliste'
+import { daysBetween, finishAt, goalState, paceFor, paceSetting, recentPace, watchPlan } from '../src/lib/watchPlan'
 import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib/episodeMatch'
 import { chaptersText, cleanMarks, markName, neighbourMark, nextOffered, openingOffered, sleepFade, withMark } from '../src/lib/player'
 import { renamedFile, splitName } from '../src/lib/format'
@@ -418,6 +422,131 @@ console.log('--- Testing Merkliste Mega Features ---')
   const merged = mergeShared(mine, remote)
   assert.deepStrictEqual(merged.items.map((item) => [item.id, item.episode]), [['a', 4]], 'später geändert gewinnt, entfernt bleibt entfernt')
   console.log('✓ Merkliste in Google Drive: Datei, Vergleich, Zusammenführen')
+}
+
+// „Bis wohin?“: episodes and time to a chosen point
+{
+  const series = createMerkItem({
+    id: 'plan',
+    title: 'Nordlicht',
+    season: 1,
+    episode: 4,
+    seasons: [
+      { number: 1, episodes: 12, watched: [1, 2, 3] },
+      { number: 2, episodes: 12, watched: [] },
+    ],
+  })
+  const plain = watchPlan(series, { season: 2, episode: 12 })
+  assert.deepStrictEqual([plain.episodes, plain.rawMinutes, plain.minutes, plain.first], [21, 504, 504, { season: 1, episode: 4 }], '21 Folgen à 24 Min. ab dem Stand')
+  const skipped = watchPlan(series, { season: 2, episode: 12 }, { from: 'stand', speed: 1, skipOpening: 90 })
+  assert.strictEqual(skipped.minutes, 473, 'ohne Vorspann: 21 × 22,5 Min.')
+  const fast = watchPlan(series, { season: 2, episode: 12 }, { from: 'stand', speed: 1.5, skipOpening: 90 })
+  assert.strictEqual(fast.minutes, 315, 'bei 1,5× ein Drittel weniger')
+  const behind = watchPlan(series, { season: 1, episode: 2 })
+  assert.deepStrictEqual([behind.episodes, behind.behind], [0, true], 'ein Punkt hinter dem Stand ist schon gesehen')
+  const again = watchPlan(series, { season: 1, episode: 12 }, { from: 'start', speed: 1, skipOpening: 0 })
+  assert.strictEqual(again.episodes, 12, 'von vorn zählt Gesehenes mit')
+  const bar = plain.bar.find((season) => season.number === 1)!
+  assert.deepStrictEqual(bar.runs.map((run) => [run.kind, run.from, run.to]), [['seen', 1, 3], ['planned', 4, 12]], 'die Linie: gesehen, dann geplant')
+
+  const gaps = createMerkItem({
+    id: 'gaps',
+    title: 'Sternfall',
+    season: 1,
+    episode: 4,
+    durations: { '3:2': 48 },
+    seasons: [
+      { number: 1, episodes: 12, watched: [1, 2, 3] },
+      { number: 2, episodes: null, watched: [] },
+      { number: 3, episodes: 10, watched: [] },
+      { number: 0, episodes: 2, watched: [] },
+    ],
+  })
+  const unknown = watchPlan(gaps, { season: 3, episode: 5 })
+  assert.deepStrictEqual([unknown.episodes, unknown.unknown, unknown.exceptions], [14, [2], 1], 'Staffel ohne Folgenzahl wird genannt, nicht geraten')
+  assert.strictEqual(unknown.rawMinutes, 13 * 24 + 48, 'eigene Länge einer Folge zählt')
+  const films = watchPlan(gaps, { season: 0, episode: 2 }, { from: 'start', speed: 1, skipOpening: 90 })
+  assert.strictEqual(films.films, 2, 'Filme kommen nach den Staffeln')
+  assert.ok(films.bar.some((season) => season.number === 0), 'Filme stehen auf der Linie, wenn sie das Ziel sind')
+  console.log('✓ Bis wohin: Folgen, Zeit, Vorspann, Tempo, unbekannte Staffeln, Filme')
+}
+
+// Pace and dates
+{
+  const today = new Date(2026, 9, 25)
+  const daily = finishAt(21, 3, 'day', today)
+  assert.deepStrictEqual([daily.days, daysBetween(today, daily.date)], [7, 6], '3 am Tag: am siebten Tag, heute mitgezählt')
+  const weekly = finishAt(21, 3, 'week', today)
+  assert.strictEqual(weekly.days, 49, '3 pro Woche: sieben Wochen')
+  assert.strictEqual(finishAt(0, 3, 'day', today).days, 0, 'nichts zu schauen, kein Tag')
+  const needed = paceFor(21, 504, new Date(2026, 9, 31), today)
+  assert.deepStrictEqual([needed?.days, needed?.perDay, needed?.minutesPerDay], [7, 3, 72], 'bis zum 31.: 3 am Tag, 72 Min.')
+  assert.strictEqual(paceFor(5, 100, new Date(2026, 9, 20), today), null, 'ein vergangener Tag hat kein Tempo')
+  assert.deepStrictEqual(paceSetting(0.4), { rate: 3, unit: 'week' }, 'unter einer am Tag: pro Woche')
+  assert.deepStrictEqual(paceSetting(2.4), { rate: 2, unit: 'day' }, 'sonst am Tag')
+  const now = today.getTime()
+  const watched = createMerkItem({
+    id: 'pace',
+    title: 'X',
+    history: [1, 2, 4, 6, 8, 10].map((daysAgo, i) => ({ id: `h${i}`, season: 1, episode: i + 1, at: now - daysAgo * 86_400_000 })),
+  })
+  const pace = recentPace(watched, now)
+  assert.deepStrictEqual([pace?.count, pace?.days], [6, 10], 'sechs Folgen in zehn Tagen')
+  const binge = createMerkItem({ id: 'binge', title: 'Y', history: [1, 2, 3].map((n) => ({ id: `b${n}`, season: 1, episode: n, at: now - n * 60_000 })) })
+  assert.strictEqual(recentPace(binge, now)?.days, 7, 'ein Abend zählt als Woche, nicht als Gewohnheit')
+  console.log('✓ Tempo und Tage: am Tag, pro Woche, bis zu einem Datum, aus dem Verlauf')
+}
+
+// A goal kept on the series
+{
+  const setAt = new Date(2026, 9, 1).getTime()
+  const item = createMerkItem({
+    id: 'goal',
+    title: 'Abendlicht',
+    season: 1,
+    episode: 12,
+    seasons: [
+      { number: 1, episodes: 21, watched: Array.from({ length: 11 }, (_, i) => i + 1) },
+    ],
+    goal: { season: 1, episode: 21, by: '2026-10-31', setAt, count: 21 },
+  })
+  assert.deepStrictEqual(item.goal, { season: 1, episode: 21, by: '2026-10-31', setAt, count: 21 }, 'Ziel bleibt beim Speichern')
+  const state = goalState(item, item.goal!, undefined, new Date(2026, 9, 16))
+  // 31 days, 15 gone: an even pace would leave 21 × 16/31 ≈ 10.8; 10 are left.
+  assert.deepStrictEqual([state.left, state.days, state.ahead, state.reached], [10, 16, 1, false], 'eine Folge vor dem Plan')
+  const late = goalState(item, item.goal!, undefined, new Date(2026, 10, 2))
+  assert.strictEqual(late.overdue, true, 'Tag vorbei')
+  const done = createMerkItem({ ...item, seasons: [{ number: 1, episodes: 21, watched: Array.from({ length: 21 }, (_, i) => i + 1) }] })
+  assert.strictEqual(goalState(done, item.goal!).reached, true, 'alles bis zum Ziel gesehen')
+  assert.strictEqual(createMerkItem({ id: 'g2', title: 'Z', goal: { season: 1, episode: 0, setAt: 1 } as never }).goal, undefined, 'kaputtes Ziel fällt weg')
+  assert.strictEqual(createMerkItem({ id: 'g3', title: 'Z', goal: { season: 1, episode: 3, by: 'morgen', setAt: 1 } }).goal?.by, undefined, 'kein Datum, das keines ist')
+  console.log('✓ Ziel: gespeichert, vor/hinter dem Plan, vorbei, erreicht')
+}
+
+// Paused and given up
+{
+  assert.strictEqual(createMerkItem({ id: 'p', title: 'P', status: 'paused' }).status, 'paused', 'Pausiert bleibt')
+  assert.strictEqual(createMerkItem({ id: 'd', title: 'D', status: 'dropped' }).status, 'dropped', 'Abgebrochen bleibt')
+  assert.strictEqual(createMerkItem({ id: 'b', title: 'B', status: 'bogus' as never }).status, 'watching', 'Unbekanntes wird Am Schauen')
+  const paused = createMerkItem({ id: 'pp', title: 'Q', status: 'paused', season: 1, episode: 3, seasons: [{ number: 1, episodes: 12, watched: [1, 2] }] })
+  assert.strictEqual(advance(paused).status, 'watching', 'eine gesehene Folge nimmt die Serie wieder auf')
+  const longer = [{ number: 1, episodes: 24, watched: [1, 2] }]
+  assert.strictEqual(settle(paused, longer, 1).status, 'paused', 'eine geänderte Folgenzahl nicht')
+  assert.strictEqual(settle(paused, watchedUpTo(paused, 1, 5), 1).status, 'watching', 'Abhaken bis Folge 5 schon')
+  const mal = importMalXml(`<myanimelist><anime><series_title>A</series_title><series_episodes>12</series_episodes><my_watched_episodes>4</my_watched_episodes><my_status>On-Hold</my_status></anime><anime><series_title>B</series_title><series_episodes>12</series_episodes><my_watched_episodes>2</my_watched_episodes><my_status>Dropped</my_status></anime></myanimelist>`)
+  assert.deepStrictEqual(mal.map((item) => item.status), ['paused', 'dropped'], 'MAL: On-Hold und Dropped')
+  const anilist = importAniListJson(JSON.stringify({ lists: [{ entries: [{ status: 'PAUSED', media: { title: { romaji: 'C' }, episodes: 12 } }, { status: 'DROPPED', media: { title: { romaji: 'D' }, episodes: 12 } }] }] }))
+  assert.deepStrictEqual(anilist.map((item) => item.status), ['paused', 'dropped'], 'AniList: PAUSED und DROPPED')
+  console.log('✓ Pausiert und Abgebrochen: gespeichert, wieder aufgenommen, eingelesen')
+}
+
+// Sorted by what is left
+{
+  const make = (id: string, watched: number) => createMerkItem({ id, title: id, seasons: [{ number: 1, episodes: 12, watched: Array.from({ length: watched }, (_, i) => i + 1) }] })
+  const open = createMerkItem({ id: 'open', title: 'open', seasons: [{ number: 1, episodes: null, watched: [] }] })
+  const sorted = sortMerkItems([make('a', 2), open, make('b', 10), make('c', 6)], 'remaining')
+  assert.deepStrictEqual(sorted.map((item) => item.id), ['b', 'c', 'a', 'open'], 'am wenigsten übrig zuerst, Unbekanntes zuletzt')
+  console.log('✓ Sortierung: am wenigsten übrig')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')
