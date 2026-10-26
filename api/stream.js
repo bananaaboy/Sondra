@@ -79,7 +79,7 @@ export function rewritePlaylist(text, base, extra = {}) {
 }
 
 export default async function handler(request, response) {
-  const token = String(request.query?.t ?? '')
+  const token = String(request.query?.t ?? request.query?.token ?? '')
   const claim = verify(token)
   if (!claim) {
     response.status(403).json({ error: 'token', message: 'Der Link ist abgelaufen. Bitte neu suchen.' })

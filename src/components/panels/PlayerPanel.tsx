@@ -72,8 +72,9 @@ import {
   type PlayerSettings,
   type SleepTimer,
 } from '../../lib/player'
-import { buildUrlWithEpisode, fetchHlsStream } from '../../lib/download'
-import { resolveViaService } from '../../lib/studio'
+import Hls from 'hls.js'
+import { buildUrlWithEpisode } from '../../lib/download'
+import { isHlsStream, resolveViaService } from '../../lib/studio'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { connectDrive, DRIVE_PROBLEM, DriveError, driveMediaUrl, driveReadable, readDriveFile } from '../../lib/googleDrive'
 import { useSession, type Asset } from '../../state/store'
@@ -1200,57 +1201,11 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   /* -- the source ------------------------------------------------------------------- */
 
   const [originalUrl, setOriginalUrl] = useState<string | null>(null)
+  const [hlsOverrideId, setHlsOverrideId] = useState<string | null>(null)
   useEffect(() => {
     if (!current) return setOriginalUrl(null)
     if (current.directUrl) {
-      const id = current.id
-      const controller = new AbortController()
-      let made: string | null = null
       setFetching(null)
-
-      if (current.isHls && current.streamToken) {
-        const probeVid = typeof document !== 'undefined' ? document.createElement('video') : null
-        const supportsNativeHls = Boolean(
-          probeVid &&
-            (probeVid.canPlayType('application/vnd.apple.mpegurl') ||
-              probeVid.canPlayType('application/x-mpegURL')),
-        )
-        if (supportsNativeHls) {
-          setOriginalUrl(current.directUrl)
-          return
-        }
-        setOriginalUrl(null)
-        setFetching({ id, fraction: 0 })
-        void (async () => {
-          try {
-            const res = await fetchHlsStream(
-              current.streamToken!,
-              (loaded) =>
-                setFetching({
-                  id,
-                  fraction: current.size > 0 ? Math.min(1, loaded / current.size) : null,
-                }),
-              controller.signal,
-            )
-            if (controller.signal.aborted) return
-            made = URL.createObjectURL(new Blob([res.video as BlobPart], { type: 'video/mp4' }))
-            setOriginalUrl(made)
-            setFetching(null)
-          } catch (err) {
-            if (controller.signal.aborted) return
-            setFetching({
-              id,
-              fraction: null,
-              problem: err instanceof Error ? err.message : 'Stream konnte nicht geladen werden.',
-            })
-          }
-        })()
-        return () => {
-          controller.abort()
-          if (made) URL.revokeObjectURL(made)
-        }
-      }
-
       setOriginalUrl(current.directUrl)
       return
     }
@@ -1292,6 +1247,48 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     return () => URL.revokeObjectURL(url)
   }, [current?.id, current?.source, remoteTry])
   const sourceUrl = version?.url ?? originalUrl
+  const useHlsJs = Boolean(
+    current?.directUrl &&
+      !version?.url &&
+      (current.isHls || hlsOverrideId === current.id || /\.m3u8(?:$|\?)/i.test(current.directUrl)) &&
+      Hls.isSupported(),
+  )
+
+  useEffect(() => {
+    if (!useHlsJs || !sourceUrl) return
+    const node = videoRef.current
+    if (!node) return
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: false,
+      backBufferLength: 60,
+    })
+    let networkRetried = false
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      setFailed(false)
+      if (wasPlaying.current) {
+        void node.play().catch(() => undefined)
+      }
+    })
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (!data.fatal) return
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && !networkRetried) {
+        networkRetried = true
+        hls.startLoad()
+        return
+      }
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        hls.recoverMediaError()
+        return
+      }
+      setFailed(true)
+    })
+    hls.loadSource(sourceUrl)
+    hls.attachMedia(node)
+    return () => {
+      hls.destroy()
+    }
+  }, [useHlsJs, sourceUrl, current?.id])
 
   // A new item starts clean.
   useEffect(() => {
@@ -1845,12 +1842,12 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         })
         if (controller.signal.aborted || res.isPlaylist || !res.streams?.length) return
         const best =
-          res.streams.find((s) => s.hasVideo && !s.isHls) ??
-          res.streams.find((s) => s.hasVideo) ??
+          res.streams.find((s) => s.hasVideo && !isHlsStream(s) && (s.directUrl || s.token)) ??
+          res.streams.find((s) => s.hasVideo && (s.directUrl || s.token)) ??
           res.streams[0]
         if (!best) return
         const streamUrl =
-          best.directUrl || (best.token ? `/api/stream?token=${encodeURIComponent(best.token)}` : null)
+          best.directUrl || (best.token ? `/api/stream?t=${encodeURIComponent(best.token)}` : null)
         if (!streamUrl) return
         setPrefetchedNext({
           key,
@@ -1860,7 +1857,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
             directUrl: streamUrl,
             kind: best.hasVideo ? 'video' : 'audio',
             size: best.bytes ?? 0,
-            isHls: Boolean(best.isHls && !best.directUrl),
+            isHls: isHlsStream(best),
             token: best.token || undefined,
             hint: { series: series.item.id, season: series.season, episode: nextEp },
           },
@@ -2599,9 +2596,9 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               }}
             >
               <video
-                key={sourceUrl ?? 'leer'}
+                key={useHlsJs ? `hls:${current?.id ?? 'leer'}` : (sourceUrl ?? 'leer')}
                 ref={videoRef}
-                src={sourceUrl ?? undefined}
+                src={useHlsJs ? undefined : (sourceUrl ?? undefined)}
                 preload="auto"
                 playsInline
                 autoPlay={wasPlaying.current}
@@ -2624,12 +2621,12 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   }
                   // Sound without a picture: the container is known, the picture's codec is not.
                   const noPicture = isVideo && node.videoWidth === 0
-                  if ((noPicture || length === 0) && !version?.url) {
+                  if (!current.directUrl && (noPicture || length === 0) && !version?.url) {
                     setFailed(true)
                     void look(current, true)
                     return
                   }
-                  if (!version && !NATIVE_CONTAINER.test(current.name)) void look(current, false)
+                  if (!current.directUrl && !version && !NATIVE_CONTAINER.test(current.name)) void look(current, false)
                   if (version?.windowDuration && wasPlaying.current) {
                     void node.play().catch(() => undefined)
                     return
@@ -2644,6 +2641,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   if (place && place > 15 && place < length - 15) setResume(place)
                 }}
                 onError={() => {
+                  if (current.directUrl && !useHlsJs && Hls.isSupported() && hlsOverrideId !== current.id) {
+                    setHlsOverrideId(current.id)
+                    return
+                  }
                   if (current.remote) {
                     // From Drive: a missing sign-in looks the same to the element as a file it cannot play.
                     const signIn = !driveReadable()

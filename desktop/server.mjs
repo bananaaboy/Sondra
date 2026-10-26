@@ -535,7 +535,7 @@ export async function startServer({ root, port, dataDir, onError }) {
           const directUrl = payload.directUrl
             ? String(payload.directUrl)
             : payload.token
-              ? `http://${HOST}:${server.address().port}/api/stream?token=${encodeURIComponent(String(payload.token))}`
+              ? `http://${HOST}:${server.address().port}/api/stream?t=${encodeURIComponent(String(payload.token))}`
               : null
           if (!directUrl) {
             response.status(400).json({ ok: false, error: 'missing-source' })

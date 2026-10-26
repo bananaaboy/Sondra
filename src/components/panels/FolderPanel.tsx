@@ -228,7 +228,7 @@ function DirTile({
         tabIndex={focused ? 0 : -1}
         onFocus={onFocus}
         onClick={onOpen}
-        className="press grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[8px] py-[8px] outline-none first:border-t-0 hover:bg-panel-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_80px_70px]"
+        className="press grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[10px] py-[8px] outline-none first:border-t-0 hover:bg-panel-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px]"
       >
         <span className="text-ink">
           <FolderGlyph className="h-[20px] w-[20px]" />
@@ -236,7 +236,9 @@ function DirTile({
         <span className="truncate text-small font-medium text-ink">{name}</span>
         <span className="hidden text-small text-prose sm:inline">Ordner</span>
         <span className="value hidden text-small text-prose sm:inline">{formatBytes(size)}</span>
-        <span className="value text-small text-prose sm:col-span-2">{count}</span>
+        <span className="value text-right text-small text-prose sm:col-span-2">
+          {count} {count === 1 ? 'Datei' : 'Dateien'}
+        </span>
       </div>
     )
   }
@@ -249,18 +251,29 @@ function DirTile({
       onFocus={onFocus}
       onClick={onOpen}
       title={`${name} öffnen`}
-      className="press group flex cursor-pointer flex-col overflow-hidden rounded-card bg-panel-mid text-left ring-1 ring-inset ring-line outline-none transition-colors duration-[var(--dur-fast)] hover:bg-panel-strong focus-visible:ring-2 focus-visible:ring-ink"
+      className="press group flex cursor-pointer items-center gap-[12px] rounded-card bg-panel-mid px-[14px] py-[12px] text-left ring-1 ring-inset ring-line outline-none transition-colors duration-[var(--dur-fast)] hover:bg-panel-strong focus-visible:ring-2 focus-visible:ring-ink"
     >
-      <span className="relative grid aspect-[16/10] place-items-center bg-gradient-to-b from-panel-soft to-panel-mid text-ink">
-        <FolderGlyph className="h-[44px] w-[44px] transition-transform duration-[var(--dur-fast)] group-hover:scale-110" />
-        <span className="value absolute bottom-[8px] right-[8px] rounded-pill bg-raised/90 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line">
-          {count} {count === 1 ? 'Datei' : 'Dateien'}
+      <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-nav bg-panel-strong text-ink transition-transform duration-[var(--dur-fast)] group-hover:scale-105">
+        <FolderGlyph className="h-[22px] w-[22px]" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-body font-semibold leading-[1.25] text-ink">{name}</span>
+        <span className="value block truncate text-micro text-prose">
+          {count} {count === 1 ? 'Datei' : 'Dateien'} · {formatBytes(size)}
         </span>
       </span>
-      <span className="flex flex-col gap-[3px] px-[12px] pb-[12px] pt-[8px]">
-        <span className="line-clamp-2 text-small font-semibold leading-[1.3] text-ink [overflow-wrap:anywhere]">{name}</span>
-        <span className="value text-micro text-prose">Ordner · {formatBytes(size)}</span>
-      </span>
+      <svg
+        viewBox="0 0 16 16"
+        aria-hidden
+        className="h-4 w-4 shrink-0 text-prose transition-transform duration-[var(--dur-fast)] group-hover:translate-x-[2px] group-hover:text-ink"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M6 3.5L10.5 8 6 12.5" />
+      </svg>
     </div>
   )
 }
@@ -273,7 +286,6 @@ function FileItem({
   onClick,
   onToggle,
   onOpen,
-  onPreview,
   episode,
   list,
 }: ItemProps & {
@@ -282,7 +294,6 @@ function FileItem({
   onClick: (event: ReactMouseEvent) => void
   onToggle: () => void
   onOpen: () => void
-  onPreview: () => void
   episode: FolderEpisode | null
   list: boolean
 }) {
@@ -296,7 +307,8 @@ function FileItem({
     seen.current = element
   }
   const duration = thumb?.duration ? formatDuration(thumb.duration) : null
-  const canPreview = file.kind === 'video' || file.kind === 'audio' || file.kind === 'image'
+  const ext = extensionOf(file.name)
+  const previewSrc = thumb?.url || null
   const common = {
     ref: setRef,
     role: 'option',
@@ -326,7 +338,7 @@ function FileItem({
     return (
       <div
         {...common}
-        className={`grid cursor-default grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[8px] py-[7px] outline-none first:border-t-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_80px_110px] ${
+        className={`grid cursor-default grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[10px] py-[7px] outline-none first:border-t-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px] ${
           selected ? 'bg-panel-mid' : 'hover:bg-panel-soft'
         }`}
       >
@@ -341,23 +353,7 @@ function FileItem({
         <span className="hidden text-small text-prose sm:inline">{KIND_LABEL[file.kind]}</span>
         <span className="value hidden text-small text-prose sm:inline">{formatBytes(file.size)}</span>
         <span className="value hidden text-small text-prose sm:inline">{dateOf(file.modified)}</span>
-        <span className="flex items-center justify-end gap-[6px]">
-          {duration ? <span className="value text-small text-prose">{duration}</span> : null}
-          {canPreview ? (
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={(event) => {
-                event.stopPropagation()
-                onPreview()
-              }}
-              className="press rounded-pill bg-raised px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-strong"
-              title={`Vorschau für ${file.name}`}
-            >
-              Vorschau
-            </button>
-          ) : null}
-        </span>
+        <span className="value text-right text-small text-prose">{duration ?? '—'}</span>
       </div>
     )
   }
@@ -370,14 +366,12 @@ function FileItem({
       }`}
     >
       <span className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-panel-strong text-ink">
-        {thumb?.url ? (
-          <img src={thumb.url} alt="" draggable={false} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
+        {previewSrc ? (
+          <img src={previewSrc} alt="" draggable={false} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
         ) : (
-          <span className="flex flex-col items-center gap-[5px] text-ink">
-            <KindGlyph kind={file.kind} />
-            <span className="value rounded-pill bg-raised/80 px-[7px] py-[1px] text-micro font-medium text-prose ring-1 ring-inset ring-line">
-              {KIND_LABEL[file.kind]} · {extensionOf(file.name)}
-            </span>
+          <span className="flex flex-col items-center gap-[4px] text-ink">
+            <KindGlyph kind={file.kind} className="h-[34px] w-[34px]" />
+            <span className="value text-micro uppercase tracking-wider text-prose">{ext || KIND_LABEL[file.kind]}</span>
           </span>
         )}
         {episode ? (
@@ -385,22 +379,8 @@ function FileItem({
             <EpisodeMark episode={episode} />
           </span>
         ) : null}
-        {canPreview ? (
-          <button
-            type="button"
-            tabIndex={-1}
-            onClick={(event) => {
-              event.stopPropagation()
-              onPreview()
-            }}
-            className="press absolute bottom-[8px] left-[8px] rounded-pill bg-ink/85 px-[8px] py-[2px] text-micro font-medium text-on-ink opacity-0 transition-opacity duration-[var(--dur-fast)] group-hover:opacity-100 group-focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
-            title={`Vorschau: ${file.name}`}
-          >
-            Vorschau
-          </button>
-        ) : null}
         {duration ? (
-          <span className="value absolute bottom-[8px] right-[8px] rounded-pill bg-ink/85 px-[7px] py-[2px] text-micro text-on-ink">{duration}</span>
+          <span className="value absolute bottom-[8px] right-[8px] rounded-nav bg-ink/85 px-[6px] py-[2px] text-micro text-on-ink">{duration}</span>
         ) : null}
         <span
           className={`absolute right-[8px] top-[8px] transition-opacity duration-[var(--dur-fast)] ${
@@ -410,8 +390,8 @@ function FileItem({
           {checkbox}
         </span>
       </span>
-      <span className="flex flex-col gap-[2px] px-[12px] pb-[12px] pt-[8px]">
-        <span className="line-clamp-2 text-small font-medium leading-[1.3] text-ink [overflow-wrap:anywhere]">{file.name}</span>
+      <span className="flex flex-col gap-[3px] px-[12px] pb-[12px] pt-[9px]">
+        <span className="line-clamp-2 text-small font-semibold leading-[1.3] text-ink [overflow-wrap:anywhere]">{file.name}</span>
         <span className="value text-micro text-prose">
           {KIND_LABEL[file.kind]} · {formatBytes(file.size)} · {dateOf(file.modified)}
         </span>
@@ -1162,34 +1142,22 @@ export function FolderPanel() {
         </Notice>
       ) : null}
 
-      {/* Subfolder quick-navigation tree when folders exist */}
-      {view.dirs.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-[6px] rounded-card bg-panel-soft px-[12px] py-[8px] ring-1 ring-inset ring-line">
-          <span className="text-micro font-semibold uppercase tracking-wider text-prose">Unterordner:</span>
-          {dir !== '' ? (
-            <button
-              type="button"
-              onClick={() => {
-                const parentDir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : ''
-                goTo(parentDir)
-              }}
-              className="press flex items-center gap-[4px] rounded-pill bg-raised px-[10px] py-[3px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
-            >
-              ↑ Übergeordneter Ordner
-            </button>
-          ) : null}
-          {view.dirs.slice(0, 16).map((d) => (
-            <button
-              key={d.path}
-              type="button"
-              onClick={() => goTo(d.path)}
-              className="press flex items-center gap-[5px] rounded-pill bg-raised px-[10px] py-[3px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-strong"
-            >
-              <FolderGlyph className="h-[13px] w-[13px]" />
-              <span className="max-w-[160px] truncate">{d.name}</span>
-              <span className="value text-prose">({d.count})</span>
-            </button>
-          ))}
+      {dir !== '' ? (
+        <div className="flex flex-wrap items-center justify-between gap-[8px] border-b border-line pb-[8px]">
+          <button
+            type="button"
+            onClick={() => {
+              const parentDir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : ''
+              goTo(parentDir)
+            }}
+            className={`${linkClass} inline-flex items-center gap-[6px] text-small font-medium`}
+          >
+            ← Zurück zu {steps.at(-2)?.label ?? scan.name}
+          </button>
+          <span className="value text-micro text-prose">
+            {view.dirs.length > 0 ? `${view.dirs.length} Ordner · ` : ''}
+            {view.files.length} {view.files.length === 1 ? 'Datei' : 'Dateien'}
+          </span>
         </div>
       ) : null}
 
@@ -1218,55 +1186,164 @@ export function FolderPanel() {
         </div>
       ) : (
         <div
-          ref={listRef}
-          role="listbox"
-          aria-multiselectable
-          aria-label={`Dateien in ${steps.at(-1)?.label ?? scan.name}`}
-          onKeyDown={onKey}
           className={
-            prefs.view === 'kacheln'
-              ? 'grid grid-cols-2 gap-[10px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-              : 'flex flex-col rounded-card ring-1 ring-inset ring-line'
+            chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path)
+              ? 'grid grid-cols-1 items-start gap-[16px] xl:grid-cols-[minmax(0,1fr)_340px]'
+              : 'flex flex-col'
           }
         >
-          {view.dirs.map((entry, index) => (
-            <DirTile
-              key={entry.path}
-              name={entry.name}
-              count={entry.count}
-              size={entry.size}
-              list={prefs.view === 'liste'}
-              focused={focusIndex === index}
-              onFocus={() => setFocusIndex(index)}
-              onOpen={(event?: ReactMouseEvent) => {
-                if (settled(event)) goTo(entry.path)
-              }}
+          <div
+            ref={listRef}
+            role="listbox"
+            aria-multiselectable
+            aria-label={`Dateien in ${steps.at(-1)?.label ?? scan.name}`}
+            onKeyDown={onKey}
+            className={
+              prefs.view === 'kacheln'
+                ? 'flex flex-col gap-[18px]'
+                : 'flex flex-col overflow-hidden rounded-card ring-1 ring-inset ring-line'
+            }
+          >
+            {prefs.view === 'kacheln' ? (
+              <>
+                {view.dirs.length > 0 ? (
+                  <div className="flex flex-col gap-[8px]">
+                    {shownFiles.length > 0 ? (
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-small font-semibold text-ink">Ordner</span>
+                        <span className="value text-micro text-prose">{view.dirs.length}</span>
+                      </div>
+                    ) : null}
+                    <div
+                      className={
+                        chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path)
+                          ? 'grid grid-cols-1 gap-[10px] sm:grid-cols-2 lg:grid-cols-3'
+                          : 'grid grid-cols-1 gap-[10px] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                      }
+                    >
+                      {view.dirs.map((entry, index) => (
+                        <DirTile
+                          key={entry.path}
+                          name={entry.name}
+                          count={entry.count}
+                          size={entry.size}
+                          list={false}
+                          focused={focusIndex === index}
+                          onFocus={() => setFocusIndex(index)}
+                          onOpen={(event?: ReactMouseEvent) => {
+                            if (settled(event)) goTo(entry.path)
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {shownFiles.length > 0 ? (
+                  <div className="flex flex-col gap-[8px]">
+                    {view.dirs.length > 0 ? (
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-small font-semibold text-ink">Dateien</span>
+                        <span className="value text-micro text-prose">{view.files.length}</span>
+                      </div>
+                    ) : null}
+                    <div
+                      className={
+                        chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path)
+                          ? 'grid grid-cols-2 gap-[12px] sm:grid-cols-3 lg:grid-cols-4'
+                          : 'grid grid-cols-2 gap-[12px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+                      }
+                    >
+                      {shownFiles.map((file, at) => {
+                        const index = view.dirs.length + at
+                        return (
+                          <FileItem
+                            key={file.path}
+                            file={file}
+                            list={false}
+                            selected={selected.has(file.path)}
+                            episode={episodes.get(file.path) ?? null}
+                            focused={focusIndex === index}
+                            onFocus={() => setFocusIndex(index)}
+                            onClick={(event) => {
+                              if (!settled(event)) return
+                              const next = clickSelect(selected, order, anchor, file.path, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })
+                              select(next.selected, next.anchor)
+                            }}
+                            onToggle={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
+                            onOpen={(event?: ReactMouseEvent) => {
+                              if (settled(event)) void open(file)
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div
+                  aria-hidden
+                  className="hidden grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px] items-center gap-[10px] bg-panel-soft px-[10px] py-[7px] text-micro font-semibold text-prose sm:grid"
+                >
+                  <span />
+                  <span>Name</span>
+                  <span>Art</span>
+                  <span>Grösse</span>
+                  <span>Geändert</span>
+                  <span className="text-right">Dauer</span>
+                </div>
+                {view.dirs.map((entry, index) => (
+                  <DirTile
+                    key={entry.path}
+                    name={entry.name}
+                    count={entry.count}
+                    size={entry.size}
+                    list
+                    focused={focusIndex === index}
+                    onFocus={() => setFocusIndex(index)}
+                    onOpen={(event?: ReactMouseEvent) => {
+                      if (settled(event)) goTo(entry.path)
+                    }}
+                  />
+                ))}
+                {shownFiles.map((file, at) => {
+                  const index = view.dirs.length + at
+                  return (
+                    <FileItem
+                      key={file.path}
+                      file={file}
+                      list
+                      selected={selected.has(file.path)}
+                      episode={episodes.get(file.path) ?? null}
+                      focused={focusIndex === index}
+                      onFocus={() => setFocusIndex(index)}
+                      onClick={(event) => {
+                        if (!settled(event)) return
+                        const next = clickSelect(selected, order, anchor, file.path, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })
+                        select(next.selected, next.anchor)
+                      }}
+                      onToggle={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
+                      onOpen={(event?: ReactMouseEvent) => {
+                        if (settled(event)) void open(file)
+                      }}
+                    />
+                  )
+                })}
+              </>
+            )}
+          </div>
+
+          {chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path) ? (
+            <FolderInlinePreview
+              file={chosen[0]}
+              episode={episodes.get(chosen[0].path) ?? null}
+              onExpand={() => setPreviewFile(chosen[0])}
+              onPlay={() => play([chosen[0]], true)}
+              onTakeIntoSession={() => void intoSession([chosen[0]])}
             />
-          ))}
-          {shownFiles.map((file, at) => {
-            const index = view.dirs.length + at
-            return (
-              <FileItem
-                key={file.path}
-                file={file}
-                list={prefs.view === 'liste'}
-                selected={selected.has(file.path)}
-                episode={episodes.get(file.path) ?? null}
-                focused={focusIndex === index}
-                onFocus={() => setFocusIndex(index)}
-                onClick={(event) => {
-                  if (!settled(event)) return
-                  const next = clickSelect(selected, order, anchor, file.path, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })
-                  select(next.selected, next.anchor)
-                }}
-                onToggle={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
-                onOpen={(event?: ReactMouseEvent) => {
-                  if (settled(event)) void open(file)
-                }}
-                onPreview={() => setPreviewFile(file)}
-              />
-            )
-          })}
+          ) : null}
         </div>
       )}
       {view.files.length > limit ? (
@@ -1376,6 +1453,159 @@ export function FolderPanel() {
         />
       ) : null}
     </div>
+  )
+}
+
+function FolderInlinePreview({
+  file,
+  episode,
+  onExpand,
+  onPlay,
+  onTakeIntoSession,
+}: {
+  file: FolderFile
+  episode: FolderEpisode | null
+  onExpand: () => void
+  onPlay: () => void
+  onTakeIntoSession: () => void
+}): ReactNode {
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    let revoked: string | null = null
+    let cancelled = false
+    setMediaUrl(null)
+
+    if (file.file) {
+      const u = URL.createObjectURL(file.file)
+      revoked = u
+      setMediaUrl(u)
+      setLoading(false)
+      return () => {
+        if (revoked) URL.revokeObjectURL(revoked)
+      }
+    }
+
+    if (file.drive && (file.kind === 'video' || file.kind === 'audio' || file.kind === 'image')) {
+      setLoading(true)
+      void (async () => {
+        try {
+          if (file.kind === 'video' || file.kind === 'audio') {
+            const streamUrl = await driveMediaUrl({
+              id: file.drive!.id,
+              size: file.size,
+              type: file.drive!.mime,
+            })
+            if (cancelled) return
+            if (streamUrl) {
+              setMediaUrl(streamUrl)
+              setLoading(false)
+              return
+            }
+          }
+          const fetched = await fileHere(file)
+          if (cancelled) return
+          const u = URL.createObjectURL(fetched)
+          revoked = u
+          setMediaUrl(u)
+        } catch {
+          // Fallback to cover or icon if inline preview cannot be loaded
+        } finally {
+          if (!cancelled) setLoading(false)
+        }
+      })()
+    }
+
+    return () => {
+      cancelled = true
+      if (revoked) URL.revokeObjectURL(revoked)
+    }
+  }, [file])
+
+  const canPreviewModal = file.kind === 'video' || file.kind === 'audio' || file.kind === 'image'
+
+  return (
+    <aside
+      aria-label="Dateivorschau"
+      className="sticky top-[16px] flex flex-col gap-[12px] rounded-card bg-panel-mid p-[14px] ring-1 ring-inset ring-line"
+    >
+      <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-nav bg-stage ring-1 ring-inset ring-line">
+        {loading ? (
+          <span className="text-small text-prose">Lädt Vorschau …</span>
+        ) : mediaUrl && file.kind === 'video' ? (
+          <video
+            key={mediaUrl}
+            src={mediaUrl}
+            controls
+            playsInline
+            preload="metadata"
+            className="h-full w-full bg-black object-contain"
+          />
+        ) : mediaUrl && file.kind === 'image' ? (
+          <img src={mediaUrl} alt={file.name} className="h-full w-full object-contain" />
+        ) : mediaUrl && file.kind === 'audio' ? (
+          <div className="flex w-full flex-col items-center gap-[10px] px-[12px]">
+            <KindGlyph kind="audio" className="h-[36px] w-[36px] text-ink" />
+            <audio key={mediaUrl} src={mediaUrl} controls preload="metadata" className="w-full" />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-[6px] text-ink">
+            <KindGlyph kind={file.kind} className="h-[36px] w-[36px]" />
+            <span className="value text-micro uppercase tracking-wider text-prose">
+              {extensionOf(file.name) || KIND_LABEL[file.kind]}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-[4px]">
+        <p className="m-0 break-words text-body font-semibold leading-[1.3] text-ink">{file.name}</p>
+        <p className="value m-0 truncate text-micro text-prose" title={file.path}>
+          {file.path}
+        </p>
+      </div>
+
+      <dl className="grid grid-cols-2 gap-x-[10px] gap-y-[6px] border-t border-line pt-[10px] text-small">
+        <div>
+          <dt className="text-micro text-prose">Art</dt>
+          <dd className="m-0 font-medium text-ink">
+            {KIND_LABEL[file.kind]} ({extensionOf(file.name)})
+          </dd>
+        </div>
+        <div>
+          <dt className="text-micro text-prose">Grösse</dt>
+          <dd className="value m-0 font-medium text-ink">{formatBytes(file.size)}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-micro text-prose">Geändert</dt>
+          <dd className="value m-0 text-ink">{dateOf(file.modified)}</dd>
+        </div>
+      </dl>
+
+      {episode ? (
+        <div className="flex items-center justify-between border-t border-line pt-[10px] text-small">
+          <span className="text-prose">Merkliste</span>
+          <EpisodeMark episode={episode} />
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap gap-[8px] border-t border-line pt-[10px]">
+        {file.kind === 'video' || file.kind === 'audio' ? (
+          <Button type="button" size="sm" onClick={onPlay}>
+            Abspielen
+          </Button>
+        ) : null}
+        {canPreviewModal ? (
+          <Button type="button" size="sm" variant="quiet" onClick={onExpand}>
+            Große Vorschau
+          </Button>
+        ) : null}
+        <Button type="button" size="sm" variant="quiet" onClick={onTakeIntoSession}>
+          In die Sitzung
+        </Button>
+      </div>
+    </aside>
   )
 }
 
