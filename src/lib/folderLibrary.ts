@@ -33,7 +33,7 @@ import {
   type FolderFile,
   type FolderScan,
 } from './folder'
-import { driveReadable, readDriveFile, readDriveTree } from './googleDrive'
+import { driveReadable, onDriveAutoLoad, readDriveFile, readDriveTree } from './googleDrive'
 import { merkItems, useMerkliste, type SavedLinkItem } from './merkliste'
 import { sendToPlayer, type RemoteMedia } from './player'
 import { clearThumbnails } from './thumbnails'
@@ -164,18 +164,33 @@ export async function lookUpRemembered(): Promise<DirectoryHandle | null> {
 /**
  * The folder kept from last time, read again. With `ask` (a click) the
  * browser may ask for leave; without it, only when leave is still there.
+ * When a Google account is connected (`driveReadable()`), Drive is loaded
+ * automatically unless a local device folder is already allowed.
  */
 export async function includeRemembered(ask: boolean): Promise<'read' | 'needs-click' | 'none'> {
-  // Google Drive last time: read now if signed in, else only from a click (which may sign in).
-  if (useFolder.getState().source === 'drive') {
+  if (useFolder.getState().source === 'drive' || (driveReadable() && useFolder.getState().source !== 'device')) {
     if (!ask && !driveReadable()) return 'needs-click'
     return (await readDriveFolder()) ? 'read' : 'none'
   }
   const handle = await lookUpRemembered()
-  if (!handle) return 'none'
-  if (!(await allowed(handle, 'read', ask))) return 'needs-click'
+  if (!handle) {
+    if (driveReadable()) return (await readDriveFolder()) ? 'read' : 'none'
+    return 'none'
+  }
+  if (!(await allowed(handle, 'read', ask))) {
+    if (!ask && driveReadable()) return (await readDriveFolder()) ? 'read' : 'none'
+    return 'needs-click'
+  }
   return (await readFolder(handle)) ? 'read' : 'none'
 }
+
+// Automatically load Sondra's Google Drive folder whenever a Google account connects
+onDriveAutoLoad(() => {
+  const { scan, scanning } = useFolder.getState()
+  if (!scanning && (!scan || scan.source === 'drive')) {
+    void readDriveFolder().catch(() => {})
+  }
+})
 
 /** What the player gets for an entry: the file here, or where it lies in Drive. */
 function forPlayer(file: FolderFile): File | RemoteMedia | null {

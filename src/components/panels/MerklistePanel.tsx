@@ -48,7 +48,7 @@ import {
   coverFromFile,
   createMerkItem,
   durationOfEpisode,
-  exportMerkliste,
+  exportMerklisteSqlite,
   allHistory,
   allTags,
   checkOnlineUpdates,
@@ -1734,14 +1734,15 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
 
   const exportFile = () => {
     const day = new Date().toISOString().slice(0, 10)
-    saveBytes(new TextEncoder().encode(exportMerkliste(items)), `Sondra-Merkliste-${day}.json`, 'application/json')
+    saveBytes(exportMerklisteSqlite(items), `Sondra-Merkliste-${day}.sqlite`, 'application/vnd.sqlite3')
   }
 
   const importFile = async (file: File) => {
     setProblem(null)
     setDone(null)
     try {
-      const { result, before, saved } = importMerkliste(readMerklisteFile(await file.text()))
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const { result, before, saved } = importMerkliste(readMerklisteFile(bytes))
       if (!saved) {
         setProblem('Für die eingelesene Liste reicht der Speicher auf diesem Gerät nicht — meist sind es zu grosse Cover.')
         return
@@ -1808,16 +1809,16 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
         <span className="flex flex-wrap gap-x-[18px] gap-y-[4px]">
           {items.length > 0 ? (
             <button type="button" onClick={exportFile} className={linkClass}>
-              Exportieren
+              Exportieren (SQLite)
             </button>
           ) : null}
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             className={linkClass}
-            title="Sondra JSON, MyAnimeList XML oder AniList JSON einlesen"
+            title="Sondra SQLite / JSON, MyAnimeList XML oder AniList JSON einlesen"
           >
-            Aus Datei einlesen (JSON / MAL-XML)
+            Aus Datei einlesen (SQLite / JSON / MAL-XML)
           </button>
           {driveConfigured && !driveOn ? (
             <button
@@ -1868,7 +1869,7 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
       <input
         ref={fileRef}
         type="file"
-        accept=".json,.xml,application/json,text/xml,application/xml"
+        accept=".sqlite,.db,.sqlite3,.json,.xml,application/vnd.sqlite3,application/x-sqlite3,application/json,text/xml,application/xml"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0]

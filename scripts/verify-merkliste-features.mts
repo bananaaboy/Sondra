@@ -9,14 +9,21 @@
  */
 
 import assert from 'node:assert'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import {
   advance,
   allHistory,
   allTags,
   createMerkItem,
+  exportMerklisteSqlite,
+  getSqliteAppState,
   importAniListJson,
   importMalXml,
   readMerklisteFile,
+  setSqliteAppState,
   undoWatchHistory,
   setMerkItems,
   merkItems,
@@ -26,10 +33,13 @@ import {
   readSharedFile,
   sharedFileText,
   sharedKey,
+  sharedSqliteBytes,
   settle,
   sortMerkItems,
   watchedUpTo,
 } from '../src/lib/merkliste'
+import { isSqliteBytes } from '../src/lib/sqlite'
+import { NATIVE_CONTAINER, standJob } from '../src/lib/playable'
 import { daysBetween, finishAt, goalState, paceFor, paceSetting, recentPace, watchPlan } from '../src/lib/watchPlan'
 import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib/episodeMatch'
 import { chaptersText, cleanMarks, markName, neighbourMark, nextOffered, openingOffered, sleepFade, withMark } from '../src/lib/player'
@@ -547,6 +557,94 @@ console.log('--- Testing Merkliste Mega Features ---')
   const sorted = sortMerkItems([make('a', 2), open, make('b', 10), make('c', 6)], 'remaining')
   assert.deepStrictEqual(sorted.map((item) => item.id), ['b', 'c', 'a', 'open'], 'am wenigsten übrig zuerst, Unbekanntes zuletzt')
   console.log('✓ Sortierung: am wenigsten übrig')
+}
+
+// SQLite 3 database storage & Google Drive SQLite sync + Direct Player Streaming
+{
+  setSqliteAppState('player:mode', { direct: true, maxChunkSec: 120 })
+  assert.deepStrictEqual(getSqliteAppState('player:mode'), { direct: true, maxChunkSec: 120 }, 'App-State in SQLite gespeichert')
+
+  const mine = [
+    createMerkItem({
+      id: 'sql-1',
+      title: 'Frieren SQLite',
+      updatedAt: 100,
+      season: 1,
+      episode: 5,
+      rating: 5,
+      tags: ['Anime', 'SQLite'],
+      seasons: [{ number: 1, episodes: 28, watched: [1, 2, 3, 4] }],
+      history: [{ id: 'h-sql-1', season: 1, episode: 4, at: 99 }],
+    }),
+    createMerkItem({
+      id: 'sql-2',
+      title: 'Dark SQLite',
+      updatedAt: 200,
+      cover: 'data:image/webp;base64,' + 'B'.repeat(12000),
+    }),
+  ]
+  const removed = { 'gone-sql': 55 }
+  const sqliteBytes = sharedSqliteBytes(mine, removed)
+  assert.strictEqual(isSqliteBytes(sqliteBytes), true, 'echtes SQLite-3-Binärformat (SQLite format 3\\0)')
+
+  // Validate generated SQLite file with Node's built-in C SQLite engine (node:sqlite)
+  const tmpSqlite = path.join(os.tmpdir(), `sondra-verify-${Date.now()}.sqlite`)
+  fs.writeFileSync(tmpSqlite, sqliteBytes)
+  const db = new DatabaseSync(tmpSqlite)
+  const integrity = db.prepare('PRAGMA integrity_check').get() as { integrity_check: string }
+  assert.strictEqual(integrity.integrity_check, 'ok', 'PRAGMA integrity_check === ok')
+  const dbItems = db.prepare('SELECT id, title, rating FROM merkliste_items ORDER BY sort_order').all() as { id: string; title: string; rating: number }[]
+  assert.strictEqual(dbItems.length, 2)
+  assert.strictEqual(dbItems[0].title, 'Frieren SQLite')
+  assert.strictEqual(dbItems[0].rating, 5)
+  const dbSeasons = db.prepare('SELECT item_id, season_number, episodes, watched_json FROM merkliste_seasons').all() as { item_id: string; episodes: number; watched_json: string }[]
+  assert.strictEqual(dbSeasons.length, 1)
+  assert.strictEqual(dbSeasons[0].episodes, 28)
+  assert.strictEqual(dbSeasons[0].watched_json, '[1,2,3,4]')
+  const dbRemovals = db.prepare('SELECT item_id, removed_at FROM merkliste_removals').all() as { item_id: string; removed_at: number }[]
+  assert.strictEqual(dbRemovals.length, 1)
+  assert.strictEqual(dbRemovals[0].item_id, 'gone-sql')
+  db.close()
+  fs.unlinkSync(tmpSqlite)
+
+  // Round-trip via readSharedFile & readMerklisteFile
+  const backFromSqlite = readSharedFile(sqliteBytes)
+  assert.ok(backFromSqlite, 'SQLite-Datei aus Google Drive lesbar')
+  assert.strictEqual(backFromSqlite!.key, sharedKey(mine, removed), 'SQLite-Datei stimmt mit sharedKey überein')
+  assert.deepStrictEqual(backFromSqlite!.removed, removed, 'Entferntes in SQLite-Tabelle merkliste_removals erhalten')
+  assert.strictEqual(backFromSqlite!.items.find((i) => i.id === 'sql-2')?.cover, 'sondra:lokal')
+
+  const exportedBytes = exportMerklisteSqlite(mine, removed)
+  const importedFromSqlite = readMerklisteFile(exportedBytes)
+  assert.strictEqual(importedFromSqlite.length, 2, 'SQLite-Export über readMerklisteFile einlesbar')
+  assert.ok(importedFromSqlite.find((i) => i.id === 'sql-2')?.cover?.startsWith('data:image/webp;base64,'), 'Voll-Export behält lokale Cover in SQLite-Overflow-Pages')
+
+  // Verify direct playback of .mkv and windowed streaming job for huge files
+  assert.strictEqual(NATIVE_CONTAINER.test('Frieren S01E01.mkv'), true, 'MKV wird direkt abgespielt ohne Vorab-Hüllentausch')
+  const streamJob = standJob(
+    'repack',
+    {
+      durationSeconds: 7200,
+      width: 1920,
+      height: 1080,
+      frameRate: 24,
+      videoCodec: 'h264',
+      audioCodec: 'aac',
+      sampleRate: 48000,
+      channels: 'stereo',
+      streams: [
+        { index: 0, type: 'video', codec: 'h264', language: null, title: null, isDefault: true },
+        { index: 0, type: 'audio', codec: 'aac', language: 'deu', title: null, isDefault: true },
+      ],
+    },
+    '/disk/quelle.mkv',
+    { startTime: 600, durationSeconds: 120 },
+  )
+  const ssIndex = streamJob.args.indexOf('-ss')
+  const inputIndex = streamJob.args.indexOf('-i')
+  assert.ok(ssIndex !== -1 && ssIndex < inputIndex, '-ss steht vor -i für sofortiges Disk-Seeking bei riesigen Dateien')
+  assert.ok(streamJob.args.includes('frag_keyframe+empty_moov+default_base_moof'), 'nutzt fragmentiertes MP4 für schnellen Direkt-Stream')
+  console.log('✓ SQLite-3-Datenbank & Direkt-Wiedergabe für riesige Videodateien verifiziert')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')
