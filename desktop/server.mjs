@@ -17,12 +17,15 @@ import { spawn, spawnSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
+import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 
 const HOST = '127.0.0.1'
+const driveHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 16, timeout: 30_000 })
 
 let cachedFfmpegBin = undefined
+let cachedGpuEncoder = undefined
 
 function findNativeFfmpeg(dataDir) {
   if (cachedFfmpegBin !== undefined) return cachedFfmpegBin
@@ -47,6 +50,66 @@ function findNativeFfmpeg(dataDir) {
   return null
 }
 
+function detectGpuEncoder(bin) {
+  if (!bin) return null
+  if (cachedGpuEncoder !== undefined) return cachedGpuEncoder
+  try {
+    const encOut = spawnSync(bin, ['-hide_banner', '-encoders'], {
+      encoding: 'utf8',
+      timeout: 4000,
+      windowsHide: true,
+    })
+    const text = String(encOut.stdout || '')
+    const candidates = ['h264_nvenc', 'h264_amf', 'h264_qsv'].filter((enc) => text.includes(enc))
+    for (const enc of candidates) {
+      const probe = spawnSync(
+        bin,
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-f',
+          'lavfi',
+          '-i',
+          'color=c=black:s=128x128:d=0.04',
+          '-frames:v',
+          '1',
+          '-c:v',
+          enc,
+          '-f',
+          'null',
+          '-',
+        ],
+        { stdio: 'ignore', timeout: 3500, windowsHide: true },
+      )
+      if (probe.status === 0) {
+        cachedGpuEncoder = enc
+        return enc
+      }
+    }
+  } catch {}
+  cachedGpuEncoder = null
+  return null
+}
+
+function rewriteArgsForGpu(rawArgs, gpuEncoder) {
+  if (!gpuEncoder) return null
+  const idx = rawArgs.findIndex((a, i) => (a === '-c:v' || a === '-vcodec') && /^(?:libx264|h264)$/i.test(rawArgs[i + 1] || ''))
+  if (idx === -1) return null
+  const next = [...rawArgs]
+  next[idx + 1] = gpuEncoder
+  // Strip x264-specific -crf / -preset flags that some hardware encoders reject
+  const cleaned = []
+  for (let i = 0; i < next.length; i++) {
+    if (next[i] === '-crf' || next[i] === '-preset') {
+      i += 1
+      continue
+    }
+    cleaned.push(next[i])
+  }
+  return cleaned
+}
+
 async function runNativeFfmpeg(bin, payload) {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sondra-ff-'))
   try {
@@ -63,23 +126,42 @@ async function runNativeFfmpeg(bin, payload) {
       fs.writeFileSync(safePath, Buffer.from(String(b64), 'base64'))
     }
     const rawArgs = Array.isArray(payload.args) ? payload.args.map(String) : []
-    const logs = []
-    const exitCode = await new Promise((resolve, reject) => {
-      const child = spawn(bin, ['-y', ...rawArgs], {
-        cwd: workDir,
-        windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
+    const gpuEncoder = payload.useGpu !== false ? detectGpuEncoder(bin) : null
+    const gpuArgs = gpuEncoder ? rewriteArgsForGpu(rawArgs, gpuEncoder) : null
+
+    const executeSpawn = (argsToRun, targetLogs) =>
+      new Promise((resolve, reject) => {
+        const child = spawn(bin, ['-y', ...argsToRun], {
+          cwd: workDir,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        const onChunk = (chunk) => {
+          const lines = chunk.toString('utf8').split(/\r?\n/).filter(Boolean)
+          targetLogs.push(...lines)
+          if (targetLogs.length > 500) targetLogs.splice(0, targetLogs.length - 500)
+        }
+        child.stdout.on('data', onChunk)
+        child.stderr.on('data', onChunk)
+        child.on('error', reject)
+        child.on('close', (code) => resolve(code ?? 1))
       })
-      const onChunk = (chunk) => {
-        const lines = chunk.toString('utf8').split(/\r?\n/).filter(Boolean)
-        logs.push(...lines)
-        if (logs.length > 500) logs.splice(0, logs.length - 500)
+
+    const logs = []
+    let usedGpu = null
+    let exitCode = 1
+
+    if (gpuArgs) {
+      exitCode = await executeSpawn(gpuArgs, logs)
+      if (exitCode === 0) {
+        usedGpu = gpuEncoder
+      } else {
+        logs.length = 0
+        exitCode = await executeSpawn(rawArgs, logs)
       }
-      child.stdout.on('data', onChunk)
-      child.stderr.on('data', onChunk)
-      child.on('error', reject)
-      child.on('close', (code) => resolve(code ?? 1))
-    })
+    } else {
+      exitCode = await executeSpawn(rawArgs, logs)
+    }
 
     if (exitCode !== 0) {
       return { ok: false, code: exitCode, logs }
@@ -93,7 +175,7 @@ async function runNativeFfmpeg(bin, payload) {
         files[outName] = fs.readFileSync(safeOut).toString('base64')
       }
     }
-    return { ok: true, files, logs }
+    return { ok: true, files, logs, gpuEncoder: usedGpu }
   } finally {
     try {
       fs.rmSync(workDir, { recursive: true, force: true })
@@ -180,14 +262,18 @@ export function offerFile(file) {
   return `/geoeffnet/${token}`
 }
 
-function serveOffered(token, response, onError) {
+function serveOffered(token, request, response, onError) {
+  const now = Date.now()
+  for (const [k, v] of offered) {
+    if (v.until < now) offered.delete(k)
+  }
   const entry = offered.get(token)
-  offered.delete(token)
-  if (!entry || entry.until < Date.now()) {
+  if (!entry || entry.until < now) {
     response.statusCode = 404
     response.end()
     return
   }
+  entry.until = now + OFFER_FOR_MS
   let size
   try {
     size = fs.statSync(entry.file).size
@@ -198,14 +284,121 @@ function serveOffered(token, response, onError) {
     return
   }
   response.setHeader('content-type', MEDIA[path.extname(entry.file).toLowerCase()] ?? 'application/octet-stream')
-  response.setHeader('content-length', String(size))
+  response.setHeader('accept-ranges', 'bytes')
   response.setHeader('cache-control', 'no-store')
+
+  const rangeHeader = request.headers.range
+  if (rangeHeader && size > 0) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(String(rangeHeader).trim())
+    if (match) {
+      let start = match[1] ? Number(match[1]) : 0
+      let end = match[2] ? Number(match[2]) : size - 1
+      if (!match[1] && match[2]) {
+        const suffix = Number(match[2])
+        start = Math.max(0, size - suffix)
+        end = size - 1
+      }
+      if (Number.isNaN(start) || Number.isNaN(end) || start >= size || start > end) {
+        response.statusCode = 416
+        response.setHeader('content-range', `bytes */${size}`)
+        response.end()
+        return
+      }
+      end = Math.min(end, size - 1)
+      response.statusCode = 206
+      response.setHeader('content-range', `bytes ${start}-${end}/${size}`)
+      response.setHeader('content-length', String(end - start + 1))
+      if (request.method === 'HEAD') {
+        response.end()
+        return
+      }
+      const stream = fs.createReadStream(entry.file, { start, end })
+      stream.on('error', (failure) => {
+        onError?.(`Geöffnete Datei: ${entry.file}: ${failure.message}`)
+        response.destroy()
+      })
+      request.on('close', () => stream.destroy())
+      stream.pipe(response)
+      return
+    }
+  }
+
+  response.statusCode = 200
+  response.setHeader('content-length', String(size))
+  if (request.method === 'HEAD') {
+    response.end()
+    return
+  }
   const stream = fs.createReadStream(entry.file)
   stream.on('error', (failure) => {
     onError?.(`Geöffnete Datei: ${entry.file}: ${failure.message}`)
     response.destroy()
   })
+  request.on('close', () => stream.destroy())
   stream.pipe(response)
+}
+
+function serveDriveMedia(fileId, url, request, response, onError) {
+  const token = url.searchParams.get('token') || (request.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
+  if (!token) {
+    response.statusCode = 401
+    response.end('Unauthorized')
+    return
+  }
+  const mimeType = url.searchParams.get('type') || 'application/octet-stream'
+  const knownSize = Number(url.searchParams.get('size')) || 0
+  const range = request.headers.range || 'bytes=0-'
+  const upstreamUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`)
+
+  const upReq = https.request(
+    upstreamUrl,
+    {
+      method: request.method === 'HEAD' ? 'HEAD' : 'GET',
+      agent: driveHttpsAgent,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(request.headers.range ? { Range: range } : {}),
+      },
+      timeout: 30_000,
+    },
+    (upRes) => {
+      response.statusCode = upRes.statusCode || 200
+      response.setHeader('content-type', mimeType)
+      response.setHeader('accept-ranges', 'bytes')
+      response.setHeader('cache-control', 'private, no-store')
+      if (upRes.headers['content-range']) {
+        response.setHeader('content-range', upRes.headers['content-range'])
+      }
+      if (upRes.headers['content-length']) {
+        response.setHeader('content-length', upRes.headers['content-length'])
+      } else if (knownSize > 0 && response.statusCode === 200) {
+        response.setHeader('content-length', String(knownSize))
+      }
+      if (request.method === 'HEAD') {
+        upRes.resume()
+        response.end()
+        return
+      }
+      upRes.pipe(response)
+    },
+  )
+
+  upReq.on('timeout', () => {
+    upReq.destroy(new Error('Google Drive stream timeout'))
+  })
+  upReq.on('error', (err) => {
+    onError?.(`Drive-Stream ${fileId}: ${err.message}`)
+    if (!response.headersSent) {
+      response.statusCode = 502
+      response.end()
+    } else {
+      response.destroy()
+    }
+  })
+  request.on('close', () => {
+    upReq.destroy()
+  })
+  upReq.end()
 }
 
 export async function startServer({ root, port, dataDir, onError }) {
@@ -307,7 +500,11 @@ export async function startServer({ root, port, dataDir, onError }) {
           }
         } else if (url.pathname === '/api/ffmpeg/status') {
           const bin = findNativeFfmpeg(dataDir)
-          response.status(200).json({ available: Boolean(bin), bin: bin ? path.basename(bin) : null })
+          response.status(200).json({
+            available: Boolean(bin),
+            bin: bin ? path.basename(bin) : null,
+            gpuEncoder: bin ? detectGpuEncoder(bin) : null,
+          })
         } else if (url.pathname === '/api/ffmpeg/run' && request.method === 'POST') {
           const bin = findNativeFfmpeg(dataDir)
           if (!bin) {
@@ -316,6 +513,61 @@ export async function startServer({ root, port, dataDir, onError }) {
             const payload = request.body ? JSON.parse(request.body) : {}
             const result = await runNativeFfmpeg(bin, payload)
             response.status(result.ok ? 200 : 422).json(result)
+          }
+        } else if (url.pathname === '/api/direct-save' && request.method === 'POST') {
+          const payload = request.body ? JSON.parse(request.body) : {}
+          const rawName = String(payload.filename || 'download.mp4').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || 'download.mp4'
+          const baseDir =
+            payload.targetDir ||
+            readSettings().downloadDir ||
+            path.join(os.homedir(), 'Downloads', 'Sondra')
+          const subFolder = payload.subFolder
+            ? String(payload.subFolder)
+                .split(/[\\/]/)
+                .map((s) => s.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim())
+                .filter(Boolean)
+                .join(path.sep)
+            : ''
+          const finalDir = subFolder ? path.join(baseDir, subFolder) : baseDir
+          fs.mkdirSync(finalDir, { recursive: true })
+          const destPath = path.join(finalDir, rawName)
+
+          const directUrl = payload.directUrl
+            ? String(payload.directUrl)
+            : payload.token
+              ? `http://${HOST}:${server.address().port}/api/stream?token=${encodeURIComponent(String(payload.token))}`
+              : null
+          if (!directUrl) {
+            response.status(400).json({ ok: false, error: 'missing-source' })
+          } else {
+            const upRes = await fetch(directUrl)
+            if (!upRes.ok || !upRes.body) {
+              response.status(502).json({ ok: false, error: `status-${upRes.status}` })
+            } else {
+              const fileOut = fs.createWriteStream(destPath)
+              let written = 0
+              try {
+                for await (const chunk of upRes.body) {
+                  written += chunk.byteLength
+                  if (!fileOut.write(chunk)) {
+                    await new Promise((r) => fileOut.once('drain', r))
+                  }
+                }
+                await new Promise((r, rej) => fileOut.end((err) => (err ? rej(err) : r())))
+                response.status(200).json({
+                  ok: true,
+                  path: destPath,
+                  size: written,
+                  offeredUrl: offerFile(destPath),
+                })
+              } catch (err) {
+                fileOut.destroy()
+                try {
+                  fs.rmSync(destPath, { force: true })
+                } catch {}
+                throw err
+              }
+            }
           }
         }
         else response.status(404).json({ error: 'route' })
@@ -329,7 +581,13 @@ export async function startServer({ root, port, dataDir, onError }) {
 
     const handed = url.pathname.match(/^\/geoeffnet\/([\w-]+)$/)
     if (handed) {
-      serveOffered(handed[1], response, onError)
+      serveOffered(handed[1], request, response, onError)
+      return
+    }
+
+    const driveMatch = url.pathname.match(/^\/drive-media\/([^/]+)$/)
+    if (driveMatch) {
+      serveDriveMedia(decodeURIComponent(driveMatch[1]), url, request, response, onError)
       return
     }
 

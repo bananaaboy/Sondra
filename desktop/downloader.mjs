@@ -33,7 +33,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, isSpotifyUrl, boundedFetch, DEFAULT_USER_AGENT } from '../api/extractors.js'
+import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, isSpotifyUrl, boundedFetch, DEFAULT_USER_AGENT, detectPrimaryIpv4, isVirtualAdapterName } from '../api/extractors.js'
 
 export function getNetworkAdapters() {
   const nets = os.networkInterfaces()
@@ -41,7 +41,7 @@ export function getNetworkAdapters() {
   for (const [name, addrs] of Object.entries(nets)) {
     if (!addrs) continue
     for (const a of addrs) {
-      if (a.family === 'IPv4' && !a.internal) {
+      if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.')) {
         list.push({
           name,
           address: a.address,
@@ -49,6 +49,7 @@ export function getNetworkAdapters() {
       }
     }
   }
+  list.sort((a, b) => Number(isVirtualAdapterName(a.name)) - Number(isVirtualAdapterName(b.name)))
   return list
 }
 
@@ -199,18 +200,18 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
   }
   const getBindAddress = (explicitAddr = null) => {
     const chosen = explicitAddr || readSettings().bindAddress
-    if (!chosen || chosen === 'default') return null
+    if (!chosen || chosen === 'default') return detectPrimaryIpv4()
     const isTest = Boolean(process.env.SONDRA_TEST_STUB)
     const active = getNetworkAdapters().some((a) => a.address === chosen)
     if (!active && !isTest) {
       log(`Netzwerkadapter ${chosen} ist nicht mehr aktiv; weiche auf Standard aus.`)
-      return null
+      return detectPrimaryIpv4()
     }
     return String(chosen)
   }
   const sourceArgs = (explicitAddr = null) => {
     const chosen = getBindAddress(explicitAddr)
-    return chosen ? ['--source-address', chosen, '--force-ipv4'] : []
+    return chosen ? ['--source-address', chosen, '--force-ipv4'] : ['--force-ipv4']
   }
   const commonYtdlpArgs = (explicitAddr = null) => [
     ...sourceArgs(explicitAddr),

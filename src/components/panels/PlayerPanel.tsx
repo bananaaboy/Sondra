@@ -45,6 +45,7 @@ import {
   claimDrops,
   isRemote,
   receivePlayerFiles,
+  receivePlayerStream,
   clock,
   isSubtitleFile,
   markName,
@@ -64,12 +65,15 @@ import {
   stemOf,
   subtitleUrl,
   withMark,
+  type DirectStreamPayload,
   type PlayerItem,
   type PlayerMark,
   type RemoteMedia,
   type PlayerSettings,
   type SleepTimer,
 } from '../../lib/player'
+import { buildUrlWithEpisode, fetchHlsStream } from '../../lib/download'
+import { resolveViaService } from '../../lib/studio'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { connectDrive, DRIVE_PROBLEM, DriveError, driveMediaUrl, driveReadable, readDriveFile } from '../../lib/googleDrive'
 import { useSession, type Asset } from '../../state/store'
@@ -256,6 +260,12 @@ function Control({
 /* The timeline over the picture                                               */
 /* -------------------------------------------------------------------------- */
 
+interface PlayerChapter {
+  start: number
+  end?: number
+  title: string
+}
+
 function SeekBar({
   time,
   duration,
@@ -263,6 +273,9 @@ function SeekBar({
   loopA,
   loopB,
   marks = [],
+  chapters = [],
+  sourceUrl,
+  isVideo = false,
   onSeek,
 }: {
   time: number
@@ -272,13 +285,107 @@ function SeekBar({
   loopB?: number | null
   /** Bookmarks, as ticks over the bar; the hover time names one that is near. */
   marks?: PlayerMark[]
+  /** Chapters (Intro, Hauptteil, Abspann, or container chapters). */
+  chapters?: PlayerChapter[]
+  sourceUrl?: string | null
+  isVideo?: boolean
   onSeek: (seconds: number) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<{ x: number; seconds: number; width: number } | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [hoverThumb, setHoverThumb] = useState<string | null>(null)
+  const thumbVideoRef = useRef<HTMLVideoElement | null>(null)
+  const thumbCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const thumbCacheRef = useRef<Map<number, string>>(new Map())
+  const thumbBusyRef = useRef(false)
   const known = duration > 0 && Number.isFinite(duration)
   const share = (value: number) => (known ? `${Math.min(100, (value / duration) * 100)}%` : '0%')
+
+  useEffect(() => {
+    thumbCacheRef.current.clear()
+    setHoverThumb(null)
+    if (thumbVideoRef.current) {
+      thumbVideoRef.current.removeAttribute('src')
+      thumbVideoRef.current.load()
+      thumbVideoRef.current = null
+    }
+  }, [sourceUrl])
+
+  const hoverBucket = hover && isVideo && sourceUrl && known ? Math.max(0, Math.floor(hover.seconds / 5) * 5) : null
+
+  useEffect(() => {
+    if (hoverBucket === null || !sourceUrl || !isVideo) {
+      setHoverThumb(null)
+      return
+    }
+    const cached = thumbCacheRef.current.get(hoverBucket)
+    if (cached) {
+      setHoverThumb(cached)
+      return
+    }
+    if (thumbBusyRef.current) return
+
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      if (cancelled || thumbBusyRef.current) return
+      try {
+        let vid = thumbVideoRef.current
+        if (!vid) {
+          vid = document.createElement('video')
+          vid.preload = 'metadata'
+          vid.muted = true
+          vid.playsInline = true
+          vid.crossOrigin = 'anonymous'
+          vid.src = sourceUrl
+          thumbVideoRef.current = vid
+        }
+        let canvas = thumbCanvasRef.current
+        if (!canvas) {
+          canvas = document.createElement('canvas')
+          canvas.width = 160
+          canvas.height = 90
+          thumbCanvasRef.current = canvas
+        }
+        thumbBusyRef.current = true
+        const cleanup = () => {
+          thumbBusyRef.current = false
+          vid?.removeEventListener('seeked', onSeeked)
+          vid?.removeEventListener('error', onError)
+        }
+        const onError = () => cleanup()
+        const onSeeked = () => {
+          cleanup()
+          if (cancelled || !vid || !canvas) return
+          try {
+            const ctx = canvas.getContext('2d')
+            if (ctx && vid.videoWidth > 0 && vid.videoHeight > 0) {
+              ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.65)
+              if (thumbCacheRef.current.size >= 60) {
+                const firstKey = thumbCacheRef.current.keys().next().value
+                if (firstKey !== undefined) thumbCacheRef.current.delete(firstKey)
+              }
+              thumbCacheRef.current.set(hoverBucket, dataUrl)
+              setHoverThumb(dataUrl)
+            }
+          } catch {
+            // cross-origin or decode error: silently skip thumbnail
+          }
+        }
+        vid.addEventListener('seeked', onSeeked, { once: true })
+        vid.addEventListener('error', onError, { once: true })
+        vid.currentTime = hoverBucket
+      } catch {
+        thumbBusyRef.current = false
+      }
+    }, 60)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [hoverBucket, isVideo, sourceUrl])
 
   const at = (event: ReactPointerEvent) => {
     const box = ref.current?.getBoundingClientRect()
@@ -286,6 +393,14 @@ function SeekBar({
     const x = Math.min(box.width, Math.max(0, event.clientX - box.left))
     return { x, seconds: (x / box.width) * duration, width: box.width }
   }
+
+  const activeChapter =
+    hover && chapters.length > 0
+      ? [...chapters]
+          .sort((a, b) => a.start - b.start)
+          .reverse()
+          .find((ch) => hover.seconds >= ch.start && (ch.end === undefined || hover.seconds <= ch.end))
+      : null
 
   return (
     <div
@@ -343,6 +458,18 @@ function SeekBar({
         <div className="absolute inset-y-0 left-0 bg-stage-accent" style={{ width: share(time) }} />
       </div>
       {known
+        ? chapters
+            .filter((ch) => ch.start > 0 && ch.start < duration)
+            .map((ch) => (
+              <span
+                key={`ch-${ch.start}-${ch.title}`}
+                className="pointer-events-none absolute top-1/2 h-[10px] w-[2px] -translate-x-1/2 -translate-y-1/2 bg-stage-accent/90"
+                style={{ left: share(ch.start) }}
+                aria-hidden
+              />
+            ))
+        : null}
+      {known
         ? marks.map((mark) => (
             <span
               key={mark.id}
@@ -362,18 +489,28 @@ function SeekBar({
         />
       ) : null}
       {hover ? (
-        <span
-          className="value pointer-events-none absolute bottom-[26px] -translate-x-1/2 rounded-nav bg-black/80 px-[8px] py-[4px] text-small text-white"
-          style={{ left: Math.min(Math.max(hover.x, 30), hover.width - 30) }}
+        <div
+          className="pointer-events-none absolute bottom-[26px] flex -translate-x-1/2 flex-col items-center gap-[4px]"
+          style={{ left: Math.min(Math.max(hover.x, 84), Math.max(84, hover.width - 84)) }}
           aria-hidden
         >
-          {clock(hover.seconds)}
-          {(() => {
-            // Within a few pixels of a mark, its name.
-            const near = marks.find((mark) => Math.abs((mark.at / duration) * hover.width - hover.x) <= 6)
-            return near ? <span className="font-sans text-white/80"> · {markName(marks, near)}</span> : null
-          })()}
-        </span>
+          {hoverThumb ? (
+            <img
+              src={hoverThumb}
+              alt=""
+              className="h-[72px] w-[128px] rounded-nav bg-black object-cover shadow-lg ring-1 ring-white/25"
+            />
+          ) : null}
+          <span className="value whitespace-nowrap rounded-nav bg-black/85 px-[8px] py-[4px] text-small text-white">
+            {clock(hover.seconds)}
+            {(() => {
+              const near = marks.find((mark) => Math.abs((mark.at / duration) * hover.width - hover.x) <= 6)
+              if (near) return <span className="font-sans text-white/80"> · {markName(marks, near)}</span>
+              if (activeChapter) return <span className="font-sans text-white/80"> · {activeChapter.title}</span>
+              return null
+            })()}
+          </span>
+        </div>
       ) : null}
     </div>
   )
@@ -507,8 +644,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   // The series the file is on the Merkliste, if any: its opening is its own.
   const merk = useMerkliste()
   const series = useMemo(
-    () => (current ? (matchHint(current.remote?.hint, merk) ?? matchEpisode(current.name, merk)) : null),
-    [current?.name, current?.remote?.hint, merk],
+    () => (current ? (matchHint(current.remote?.hint ?? current.hint, merk) ?? matchEpisode(current.name, merk)) : null),
+    [current?.name, current?.remote?.hint, current?.hint, merk],
   )
   const opening = series?.item.opening ?? settings.opening
   /** The openings learned for the series by ear, and a mark that changes when one is added. */
@@ -526,6 +663,13 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [sleep, setSleep] = useState<SleepTimer | null>(null)
   /** This file's bookmarks, kept on this device by name and size. */
   const [marks, setMarks] = useState<PlayerMark[]>([])
+  /** Smart-prefetched next episode from the Merkliste once playback reaches 75%. */
+  const [prefetchedNext, setPrefetchedNext] = useState<{
+    key: string
+    label: string
+    payload: DirectStreamPayload
+  } | null>(null)
+  const prefetchingKeyRef = useRef<string | null>(null)
   /** „Lesezeichen bei 12:34“, briefly, over the picture. */
   const [markNote, setMarkNote] = useState<{ key: number; text: string } | null>(null)
   /** What the sleep timer did, until playing starts again. */
@@ -780,6 +924,36 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     return () => receivePlayerFiles(null)
   }, [addFiles])
 
+  const addDirectStream = useCallback(
+    (payload: DirectStreamPayload) => {
+      const item: PlayerItem = {
+        id: newId(),
+        name: payload.name || 'Stream',
+        size: payload.size ?? 0,
+        kind: payload.kind ?? 'video',
+        source: new Blob([]),
+        subtitles: [],
+        directUrl: payload.directUrl,
+        isHls: payload.isHls,
+        streamToken: payload.token,
+        hint: payload.hint,
+        streamVariants: payload.streamVariants,
+      }
+      wasPlaying.current = true
+      setItems((prev) => [...prev, item])
+      setCurrentId(item.id)
+      log('abspielen', `Sofort-Stream gestartet: ${item.name}`)
+    },
+    [log],
+  )
+
+  useEffect(() => {
+    receivePlayerStream((payload) => {
+      addDirectStream(payload)
+    })
+    return () => receivePlayerStream(null)
+  }, [addDirectStream])
+
   // While this tool is open, a drop anywhere on the window is the player's.
   useEffect(() => {
     if (hidden) {
@@ -999,8 +1173,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
   /** When the browser cannot play a file, or plays it without sound. */
   const look = async (item: PlayerItem, browserFailed: boolean) => {
-    // FFmpeg reads files on this device; one in Drive plays as the browser can.
-    if (item.remote) return
+    // FFmpeg reads files on this device; one in Drive or a live stream plays as the browser can.
+    if (item.remote || item.directUrl) return
     const found = await probe(item)
     if (!found) return
     if (browserFailed) {
@@ -1028,6 +1202,58 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [originalUrl, setOriginalUrl] = useState<string | null>(null)
   useEffect(() => {
     if (!current) return setOriginalUrl(null)
+    if (current.directUrl) {
+      const id = current.id
+      const controller = new AbortController()
+      let made: string | null = null
+      setFetching(null)
+
+      if (current.isHls && current.streamToken) {
+        const probeVid = typeof document !== 'undefined' ? document.createElement('video') : null
+        const supportsNativeHls = Boolean(
+          probeVid &&
+            (probeVid.canPlayType('application/vnd.apple.mpegurl') ||
+              probeVid.canPlayType('application/x-mpegURL')),
+        )
+        if (supportsNativeHls) {
+          setOriginalUrl(current.directUrl)
+          return
+        }
+        setOriginalUrl(null)
+        setFetching({ id, fraction: 0 })
+        void (async () => {
+          try {
+            const res = await fetchHlsStream(
+              current.streamToken!,
+              (loaded) =>
+                setFetching({
+                  id,
+                  fraction: current.size > 0 ? Math.min(1, loaded / current.size) : null,
+                }),
+              controller.signal,
+            )
+            if (controller.signal.aborted) return
+            made = URL.createObjectURL(new Blob([res.video as BlobPart], { type: 'video/mp4' }))
+            setOriginalUrl(made)
+            setFetching(null)
+          } catch (err) {
+            if (controller.signal.aborted) return
+            setFetching({
+              id,
+              fraction: null,
+              problem: err instanceof Error ? err.message : 'Stream konnte nicht geladen werden.',
+            })
+          }
+        })()
+        return () => {
+          controller.abort()
+          if (made) URL.revokeObjectURL(made)
+        }
+      }
+
+      setOriginalUrl(current.directUrl)
+      return
+    }
     const remote = current.remote
     if (remote) {
       // Streamed where the service worker can; else fetched whole first, with its share shown.
@@ -1593,6 +1819,85 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     return () => observer.disconnect()
   }, [hasCurrent])
   const menuBelow = !immersive && frameHeight > 0 && frameHeight < 400
+
+  // Smart Prefetch: once playback reaches 75%, resolve the next episode in the background.
+  useEffect(() => {
+    if (!current || duration <= 30 || time / duration < 0.75) return
+    if (index >= 0 && index < items.length - 1) return
+    if (!series || !series.item.url.trim()) return
+
+    const nextEp = series.episode + 1
+    const seasonObj = series.item.seasons?.find((s) => s.number === series.season)
+    if (seasonObj?.episodes !== null && seasonObj?.episodes !== undefined && nextEp > seasonObj.episodes) {
+      return
+    }
+    const key = `${series.item.id}-s${series.season}-e${nextEp}`
+    if (prefetchingKeyRef.current === key || prefetchedNext?.key === key) return
+
+    prefetchingKeyRef.current = key
+    const controller = new AbortController()
+    const nextUrl = buildUrlWithEpisode(series.item.url, series.season, nextEp)
+
+    void (async () => {
+      try {
+        const res = await resolveViaService(nextUrl, controller.signal, {
+          language: series.item.language,
+        })
+        if (controller.signal.aborted || res.isPlaylist || !res.streams?.length) return
+        const best =
+          res.streams.find((s) => s.hasVideo && !s.isHls) ??
+          res.streams.find((s) => s.hasVideo) ??
+          res.streams[0]
+        if (!best) return
+        const streamUrl =
+          best.directUrl || (best.token ? `/api/stream?token=${encodeURIComponent(best.token)}` : null)
+        if (!streamUrl) return
+        setPrefetchedNext({
+          key,
+          label: series.season === 0 ? `Film ${nextEp}` : `Folge ${nextEp}`,
+          payload: {
+            name: res.title || `${series.item.title} - S${series.season}E${nextEp}`,
+            directUrl: streamUrl,
+            kind: best.hasVideo ? 'video' : 'audio',
+            size: best.bytes ?? 0,
+            isHls: Boolean(best.isHls && !best.directUrl),
+            token: best.token || undefined,
+            hint: { series: series.item.id, season: series.season, episode: nextEp },
+          },
+        })
+      } catch {
+        // silent background prefetch
+      }
+    })()
+
+    return () => controller.abort()
+  }, [current, duration, index, items.length, prefetchedNext?.key, series, time])
+
+  const chapters = useMemo<PlayerChapter[]>(() => {
+    if (duration <= 0) return []
+    const list: PlayerChapter[] = []
+    if (introSpan) {
+      if (introSpan.start > 3) {
+        list.push({ start: 0, end: introSpan.start, title: 'Auftakt' })
+      }
+      list.push({ start: introSpan.start, end: introSpan.end, title: 'Vorspann' })
+      list.push({
+        start: introSpan.end,
+        end: duration > 180 ? Math.max(introSpan.end + 10, duration - 90) : duration,
+        title: 'Hauptteil',
+      })
+    } else if (opening > 0 && duration > opening * 2) {
+      list.push({ start: 0, end: opening, title: 'Vorspann' })
+      list.push({ start: opening, end: duration > 180 ? duration - 90 : duration, title: 'Hauptteil' })
+    }
+    if (duration > 300) {
+      const outroStart = Math.max(0, duration - 90)
+      if (!list.some((c) => Math.abs(c.start - outroStart) < 15)) {
+        list.push({ start: outroStart, end: duration, title: 'Abspann' })
+      }
+    }
+    return list
+  }, [duration, introSpan, opening])
 
 
   /* -- keys ------------------------------------------------------------------------------ */
@@ -2376,6 +2681,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     isVideo &&
                     !version &&
                     !current.remote &&
+                    !current.directUrl &&
                     !node.paused &&
                     !node.muted &&
                     node.currentTime > 0.8 &&
@@ -2429,6 +2735,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     void video()?.play().catch(() => undefined)
                   } else if (index < items.length - 1 && (settings.autoNext || settings.repeat === 'liste')) {
                     goTo(1)
+                  } else if (prefetchedNext && settings.autoNext) {
+                    const nextPayload = prefetchedNext.payload
+                    setPrefetchedNext(null)
+                    addDirectStream(nextPayload)
                   } else if (settings.repeat === 'liste' && items.length > 0) {
                     if (items.length > 1) {
                       setCurrentId(items[0].id)
@@ -2689,6 +2999,24 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               </button>
             ) : null}
 
+            {nextOffered(time, duration) && index >= items.length - 1 && prefetchedNext ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const nextPayload = prefetchedNext.payload
+                  setPrefetchedNext(null)
+                  addDirectStream(nextPayload)
+                }}
+                title={`${prefetchedNext.label} (bereits im Hintergrund aufgelöst)`}
+                className={`pop absolute right-[12px] z-30 flex items-center gap-[6px] rounded-nav bg-stage/90 px-[14px] py-[9px] text-small font-semibold text-stage-ink ring-1 ring-inset ring-white/15 hover:bg-stage sm:right-[16px] ${
+                  controlsShown ? 'bottom-[92px]' : 'bottom-[20px]'
+                }`}
+              >
+                {prefetchedNext.label} (vorgeladen)
+                <NextIcon />
+              </button>
+            ) : null}
+
             {/* The controls, over a scrim that keeps them legible on any picture. */}
             <div
               className={`absolute inset-x-0 bottom-0 z-20 flex flex-col gap-[2px] px-[10px] pb-[6px] pt-[56px] transition-opacity duration-[var(--dur-base)] sm:px-[16px] sm:pb-[10px] ${
@@ -2696,7 +3024,18 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               }`}
               style={{ background: 'linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0.38) 55%, transparent)' }}
             >
-              <SeekBar time={time} duration={duration} buffered={buffered} loopA={loopA} loopB={loopB} marks={marks} onSeek={seek} />
+              <SeekBar
+                time={time}
+                duration={duration}
+                buffered={buffered}
+                loopA={loopA}
+                loopB={loopB}
+                marks={marks}
+                chapters={chapters}
+                sourceUrl={sourceUrl}
+                isVideo={isVideo}
+                onSeek={seek}
+              />
               <div className="flex items-center gap-[2px]">
                 <Control label="Vorheriges (P)" onClick={() => goTo(-1)} disabled={index <= 0} wideOnly>
                   <PrevIcon />
@@ -2890,7 +3229,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               {toEditor ? 'Lädt aus Drive …' : current.kind === 'audio' ? 'Im Ton-Editor öffnen' : 'Im Video-Editor öffnen'}
             </Button>
           </div>
-          <MerklisteTick name={current.name} hint={current.remote?.hint} time={time} duration={duration} enabled={settings.merkliste} />
+          <MerklisteTick name={current.name} hint={current.remote?.hint ?? current.hint} time={time} duration={duration} enabled={settings.merkliste} />
           {sleep || sleepNote ? (
             <p role="status" className="flex flex-wrap items-baseline gap-x-[10px] gap-y-[4px] text-small text-prose">
               <span className="font-semibold text-ink">Schlaf-Timer</span>

@@ -44,7 +44,20 @@ const handlers = new Set<Handler>()
 const servedLocally =
   typeof window !== 'undefined' && /^(?:localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname)
 
-let state: ServiceConnection = { endpoint: null, info: null, searching: false, enabled: servedLocally, apiKey: null }
+const inDesktopApp =
+  typeof window !== 'undefined' &&
+  Boolean(
+    (window as { sondraApp?: unknown }).sondraApp ||
+      (typeof navigator !== 'undefined' && navigator.userAgent.includes('Electron')),
+  )
+
+let state: ServiceConnection = {
+  endpoint: inDesktopApp ? 'http://localhost:9000' : null,
+  info: null,
+  searching: false,
+  enabled: servedLocally || inDesktopApp,
+  apiKey: null,
+}
 
 export function serviceConnection(): ServiceConnection {
   return state

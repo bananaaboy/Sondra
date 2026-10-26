@@ -21,7 +21,7 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, safeStorage, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, safeStorage, session, shell } from 'electron'
 
 import { createAnytype } from './anytype.mjs'
 import { createGoogleDrive } from './googleDrive.mjs'
@@ -276,6 +276,59 @@ ipcMain.handle('sondra:always-on-top', (_event, flag) => {
 
 ipcMain.handle('sondra:is-always-on-top', () => {
   return window ? window.isAlwaysOnTop() : false
+})
+
+ipcMain.handle('sondra:notify', (_event, title, body) => {
+  try {
+    if (!Notification.isSupported()) return false
+    const n = new Notification({
+      title: String(title || 'Sondra Studio'),
+      body: String(body || ''),
+    })
+    n.on('click', () => {
+      if (!window) return
+      if (window.isMinimized()) window.restore()
+      window.show()
+      window.focus()
+    })
+    n.show()
+    return true
+  } catch {
+    return false
+  }
+})
+
+ipcMain.handle('sondra:get-download-dir', () => {
+  try {
+    const settingsFile = path.join(app.getPath('userData'), 'herunterladen.json')
+    const raw = fs.existsSync(settingsFile) ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')) : {}
+    return raw.downloadDir || path.join(app.getPath('downloads'), 'Sondra')
+  } catch {
+    return path.join(app.getPath('downloads'), 'Sondra')
+  }
+})
+
+ipcMain.handle('sondra:pick-download-dir', async () => {
+  try {
+    const res = window
+      ? await dialog.showOpenDialog(window, {
+          title: 'Zielordner für Direkt-Downloads wählen',
+          properties: ['openDirectory', 'createDirectory'],
+        })
+      : await dialog.showOpenDialog({
+          title: 'Zielordner für Direkt-Downloads wählen',
+          properties: ['openDirectory', 'createDirectory'],
+        })
+    if (res.canceled || !res.filePaths?.[0]) return null
+    const chosen = res.filePaths[0]
+    const settingsFile = path.join(app.getPath('userData'), 'herunterladen.json')
+    const existing = fs.existsSync(settingsFile) ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')) : {}
+    fs.mkdirSync(app.getPath('userData'), { recursive: true })
+    fs.writeFileSync(settingsFile, JSON.stringify({ ...existing, downloadDir: chosen }, null, 2))
+    return chosen
+  } catch {
+    return null
+  }
 })
 
 app.on('second-instance', (_event, argv, workingDirectory) => {

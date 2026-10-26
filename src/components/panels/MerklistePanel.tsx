@@ -104,6 +104,18 @@ import { newEpisodesAvailable, newEpisodesOn, setNewEpisodesOn } from '../../lib
 import { canPickFolder, pickFolder, type FolderEpisode } from '../../lib/folder'
 import { includeRemembered, playEpisode, readFolder, takeFileList, useEpisodesInFolder, useFolder, useSeriesInFolderCount } from '../../lib/folderLibrary'
 import { isAniworldUrl } from '../../lib/download'
+import { sendStreamToPlayer } from '../../lib/player'
+import { resolveViaService } from '../../lib/studio'
+import {
+  fetchAniListCollection,
+  getAniListSettings,
+  onAniListSettings,
+  searchAniListMedia,
+  setAniListSettings,
+  verifyAniListToken,
+  type AniListSettings,
+} from '../../lib/anilist'
+import { sendAppNotification } from '../../lib/notifications'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
 import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
@@ -575,10 +587,64 @@ function useOpenHere() {
   const setPanel = useSession((state) => state.setPanel)
   return (item: SavedLinkItem) => {
     if (!item.url.trim()) return
-    updateMerkItem(item.id, { lastOpenedAt: Date.now() })
-    requestLookup(item)
+    const ep = item.episode ?? 1
+    const targetUrl = buildUrlWithEpisode(item.url, item.season, ep)
+    updateMerkItem(item.id, { url: targetUrl, episode: ep, lastOpenedAt: Date.now() })
+    requestLookup({ ...item, url: targetUrl, episode: ep })
     setPanel('downloader')
   }
+}
+
+/** Resolves the current episode stream and opens it directly in the Player tab without downloading first. */
+function useStreamHere() {
+  const setPanel = useSession((state) => state.setPanel)
+  const [streamingId, setStreamingId] = useState<string | null>(null)
+  const [streamError, setStreamError] = useState<string | null>(null)
+
+  const streamHere = async (item: SavedLinkItem) => {
+    if (!item.url.trim() || streamingId) return
+    setStreamingId(item.id)
+    setStreamError(null)
+    try {
+      const ep = item.episode ?? 1
+      const targetUrl = buildUrlWithEpisode(item.url, item.season, ep)
+      updateMerkItem(item.id, { url: targetUrl, episode: ep, lastOpenedAt: Date.now() })
+      const res = await resolveViaService(targetUrl, undefined, {
+        language: item.language,
+      })
+      if (res.kind === 'playlist') {
+        setStreamError('Diese Adresse verweist auf eine Playlist statt auf eine einzelne Folge.')
+        return
+      }
+      const videoStreams = res.streams.filter((s) => s.hasVideo)
+      const best = videoStreams[0] ?? res.streams[0]
+      if (!best) {
+        setStreamError('Kein direkter Stream für diese Folge gefunden. Bitte „Laden“ nutzen.')
+        return
+      }
+      const streamUrl = best.directUrl || (best.token ? `/api/stream?token=${encodeURIComponent(best.token)}` : '')
+      if (!streamUrl) {
+        setStreamError('Stream-Adresse konnte nicht aufgelöst werden.')
+        return
+      }
+      sendStreamToPlayer({
+        name: res.title || `${item.title} - S${String(item.season).padStart(2, '0')}E${String(ep).padStart(2, '0')}`,
+        directUrl: streamUrl,
+        kind: best.hasVideo ? 'video' : 'audio',
+        size: best.bytes ?? 0,
+        isHls: Boolean(best.isHls && !best.directUrl),
+        token: best.token || undefined,
+        hint: { series: item.id, season: item.season, episode: ep },
+      })
+      setPanel('player')
+    } catch (err) {
+      setStreamError(err instanceof Error ? err.message : 'Direkt-Stream fehlgeschlagen.')
+    } finally {
+      setStreamingId(null)
+    }
+  }
+
+  return { streamHere, streamingId, streamError }
 }
 
 /** „Folge 5", „Film 2", „Nr. 12" — the episode the entry stands at. */
@@ -1764,8 +1830,152 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
   const driveConnected = useDrive((state) => state.connected)
   const driveSync = useDrive((state) => state.merkSync)
 
+  const [anilistOpen, setAnilistOpen] = useState(false)
+  const [anilistSettings, setAnilistState] = useState<AniListSettings>(() => getAniListSettings())
+  const [tokenDraft, setTokenDraft] = useState(anilistSettings.anilistToken)
+  const [verifyingToken, setVerifyingToken] = useState(false)
+  const [syncingAnilist, setSyncingAnilist] = useState(false)
+  const [anilistMessage, setAnilistMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    return onAniListSettings(() => {
+      const next = getAniListSettings()
+      setAnilistState(next)
+      setTokenDraft(next.anilistToken)
+    })
+  }, [])
+
+  const handleVerifyToken = async () => {
+    const clean = tokenDraft.trim()
+    if (!clean) {
+      setAniListSettings({ anilistToken: '', anilistUser: null, enabled: false })
+      setAnilistMessage('AniList-Verbindung getrennt.')
+      return
+    }
+    setVerifyingToken(true)
+    setAnilistMessage(null)
+    try {
+      const viewer = await verifyAniListToken(clean)
+      if (!viewer) {
+        setAnilistMessage('Ungültiges AniList-Token. Bitte ein gültiges Personal Access Token einfügen.')
+      } else {
+        setAniListSettings({
+          anilistToken: clean,
+          anilistUser: viewer.name,
+          enabled: true,
+        })
+        setAnilistMessage(`Verbunden als „${viewer.name}“. Automatischer Fortschritts-Abgleich ist aktiv.`)
+      }
+    } finally {
+      setVerifyingToken(false)
+    }
+  }
+
+  const handleImportAniList = async () => {
+    setSyncingAnilist(true)
+    setAnilistMessage(null)
+    try {
+      const entries = await fetchAniListCollection()
+      if (entries.length === 0) {
+        setAnilistMessage('Keine Anime-Einträge auf diesem AniList-Konto gefunden.')
+        return
+      }
+      const mapped = entries.map((e) => {
+        const statusMap: Record<string, SavedLinkStatus> = {
+          watching: 'watching',
+          planned: 'later',
+          paused: 'paused',
+          dropped: 'paused',
+          done: 'done',
+        }
+        const total = e.totalEpisodes && e.totalEpisodes > 0 ? e.totalEpisodes : Math.max(12, e.progress)
+        const watched = Array.from({ length: Math.min(e.progress, total) }, (_, i) => i + 1)
+        return createMerkItem({
+          title: e.title,
+          url: '',
+          season: 1,
+          episode: Math.min(total, Math.max(1, e.progress + 1)),
+          seasons: [{ number: 1, episodes: e.totalEpisodes ?? null, watched }],
+          status: statusMap[e.status] ?? 'watching',
+          cover: e.coverUrl ?? undefined,
+          tags: ['AniList'],
+        })
+      })
+      const { result, before } = importMerkliste(mapped)
+      setDone({
+        before,
+        message: `Von AniList importiert: ${result.added} neu · ${result.updated} aktualisiert.`,
+      })
+      setAnilistMessage(`${entries.length} Serien von AniList abgeglichen (${result.added} neu, ${result.updated} aktualisiert).`)
+    } catch (err) {
+      setAnilistMessage(err instanceof Error ? err.message : 'AniList-Import fehlgeschlagen.')
+    } finally {
+      setSyncingAnilist(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-[12px] border-t border-line pt-[14px]">
+      {anilistOpen ? (
+        <Dialog open onClose={() => setAnilistOpen(false)} title="AniList / MyAnimeList Synchronisation" size="md">
+          <div className="flex flex-col gap-[16px]">
+            <p className="text-small text-prose leading-[1.55]">
+              Wenn aktiv, aktualisiert Sondra beim Abhaken einer Folge (oder wenn eine Folge im Player zu Ende läuft)
+              automatisch Ihren Fortschritt auf <strong>AniList</strong>. MyAnimeList-XML- und AniList-JSON-Listen
+              können zudem jederzeit direkt eingelesen werden.
+            </p>
+            <Toggle
+              label="Fortschritt beim Schauen automatisch mit AniList synchronisieren"
+              checked={anilistSettings.enabled}
+              onChange={(checked) => setAniListSettings({ enabled: checked })}
+            />
+            <div className="flex flex-col gap-[6px]">
+              <label className="text-small font-medium text-ink">
+                AniList Access Token {anilistSettings.anilistUser ? `(Verbunden: ${anilistSettings.anilistUser})` : ''}
+              </label>
+              <div className="flex items-center gap-[8px]">
+                <TextInput
+                  type="password"
+                  value={tokenDraft}
+                  onChange={(e) => setTokenDraft(e.target.value)}
+                  placeholder="AniList Personal Access Token einfügen…"
+                  className="flex-1 font-mono text-micro"
+                />
+                <Button type="button" size="sm" onClick={() => void handleVerifyToken()} disabled={verifyingToken}>
+                  {verifyingToken ? 'Prüft…' : 'Verbinden'}
+                </Button>
+              </div>
+              <span className="text-micro text-muted">
+                Token unter anilist.co → Settings → Developer erstellen oder OAuth-Token einfügen.
+              </span>
+            </div>
+            {anilistSettings.anilistUser ? (
+              <div className="flex flex-wrap items-center justify-between gap-[10px] rounded-card border border-line bg-panel-soft/60 px-[12px] py-[10px]">
+                <span className="text-small text-ink">
+                  Konto <strong>{anilistSettings.anilistUser}</strong> verknüpft
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
+                  disabled={syncingAnilist}
+                  onClick={() => void handleImportAniList()}
+                >
+                  {syncingAnilist ? 'Lädt Liste…' : 'Anime-Liste von AniList importieren'}
+                </Button>
+              </div>
+            ) : null}
+            {anilistMessage ? (
+              <p className="text-small text-ink font-medium">{anilistMessage}</p>
+            ) : null}
+            <div className="flex justify-end border-t border-line pt-[12px]">
+              <Button type="button" variant="quiet" onClick={() => setAnilistOpen(false)}>
+                Schliessen
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      ) : null}
       {driveOn ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-[20px] gap-y-[6px] text-small">
           <span role="status" className="text-prose">
@@ -1839,6 +2049,16 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
               {link.connected ? 'Anytype' : 'Mit Anytype verbinden'}
             </button>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setAnilistOpen(true)}
+            className={linkClass}
+            title="Fortschritt automatisch mit AniList / MyAnimeList abgleichen"
+          >
+            {anilistSettings.enabled && anilistSettings.anilistUser
+              ? `AniList (${anilistSettings.anilistUser})`
+              : 'AniList / MAL Sync'}
+          </button>
         </span>
       </div>
       {link.connected && link.sync.error ? (
@@ -2328,6 +2548,7 @@ function SeriesPage({
   onSeason: (number: number, part: number) => void
 }) {
   const openHere = useOpenHere()
+  const { streamHere, streamingId, streamError } = useStreamHere()
   const progress = itemProgress(item)
   const news = onlineNews(item)
   const status = statusOf(item)
@@ -2380,6 +2601,13 @@ function SeriesPage({
     // button looked as if it had done nothing.
     if (!info) setCheckNote('AniWorld war nicht zu erreichen. Später noch einmal.')
     else if (!info.hasNew) setCheckNote(`Nichts Neues: online bis Staffel ${info.maxSeason}, Folge ${info.maxEpisode}.`)
+    else {
+      sendAppNotification({
+        title: `Neue Folge: ${item.title}`,
+        body: `Online verfügbar bis Staffel ${info.maxSeason}, Folge ${info.maxEpisode}.`,
+        kind: 'episode',
+      })
+    }
   }
 
   const activeSeason = seasons.find((s) => s.number === item.season) ?? seasons[0]
@@ -2489,7 +2717,20 @@ function SeriesPage({
                   </Button>
                 ) : null}
                 {hasUrl && next ? (
-                  <Button type="button" size="sm" variant={playable ? 'quiet' : 'primary'} onClick={() => openHere(item)}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={playable ? 'quiet' : 'primary'}
+                    disabled={streamingId === item.id}
+                    onClick={() => void streamHere(item)}
+                    title="Folge sofort ohne vorherigen Download im Player abspielen"
+                  >
+                    <PlayGlyph />
+                    {streamingId === item.id ? 'Löst Stream auf…' : `${hereLabel(item)} sofort abspielen`}
+                  </Button>
+                ) : null}
+                {hasUrl && next ? (
+                  <Button type="button" size="sm" variant="quiet" onClick={() => openHere(item)}>
                     {hereLabel(item)} laden
                   </Button>
                 ) : null}
@@ -2533,6 +2774,11 @@ function SeriesPage({
               {checkNote ? (
                 <p role="status" className="text-small text-prose">
                   {checkNote}
+                </p>
+              ) : null}
+              {streamError ? (
+                <p role="alert" className="text-small text-danger">
+                  {streamError}
                 </p>
               ) : null}
               {inFolder.length > 0 ? (
@@ -2843,6 +3089,7 @@ function SeasonDialog({
   onClose: () => void
 }) {
   const openHere = useOpenHere()
+  const { streamHere, streamingId } = useStreamHere()
   const inFolder = useEpisodesInFolder(item.id)
   const season = seasonsOf(item).find((entry) => entry.number === number)
   if (!season) return null
@@ -2964,6 +3211,21 @@ function SeasonDialog({
                   type="button"
                   size="sm"
                   variant={hereInFolder(item, inFolder) ? 'quiet' : 'primary'}
+                  disabled={streamingId === item.id}
+                  onClick={async () => {
+                    await streamHere(item)
+                    onClose()
+                  }}
+                >
+                  <PlayGlyph />
+                  {streamingId === item.id ? 'Löst Stream auf…' : `${hereLabel(item)} sofort abspielen`}
+                </Button>
+              ) : null}
+              {item.url.trim() ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="quiet"
                   onClick={() => {
                     openHere(item)
                     onClose()
@@ -3440,6 +3702,12 @@ function BatchDownloadModal({
       title: `${item.title} - S${season.number}E${ep}`,
       season: season.number,
       episode: ep,
+      language: item.language,
+      mode: item.mode,
+      audioFormat: item.audioFormat,
+      videoPref: item.videoPref,
+      audioPref: item.audioPref,
+      autoTranscribe: item.autoTranscribe,
     }))
     onTransfer(batch)
   }
@@ -4432,6 +4700,9 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [coverFrame, setCoverFrame] = useState<CoverFrame | undefined>(undefined)
   const [format, setFormat] = useState<TileFormat>('poster')
   const [tags, setTags] = useState('')
+  const [fetchingMeta, setFetchingMeta] = useState(false)
+  const [metaNote, setMetaNote] = useState<string | null>(null)
+  const lastFetchedUrlRef = useRef<string>('')
 
   const counts = episodeCounts(typedCounts, seasonCount)
   const position = Math.min(atSeason, seasonCount)
@@ -4442,6 +4713,123 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
       next[index] = value
       return next
     })
+
+  const fetchMetadataForInput = async (rawUrl: string, currentTitle: string) => {
+    const cleanUrl = rawUrl.trim() ? (/^https?:\/\//i.test(rawUrl.trim()) ? rawUrl.trim() : `https://${rawUrl.trim()}`) : ''
+    const hasAniUrl = cleanUrl && isAniworldUrl(cleanUrl)
+    if (!hasAniUrl && !currentTitle.trim()) return
+
+    setFetchingMeta(true)
+    setMetaNote(null)
+    try {
+      let resolvedTitle = currentTitle.trim() || deriveLinkTitle(cleanUrl) || ''
+      let resolvedCover: string | null = null
+      let loadedSeasons = 0
+      let loadedTotalEps = 0
+
+      if (hasAniUrl) {
+        const res = await fetch('/api/resolve', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url: cleanUrl, checkUpdates: true, fullMetadata: true }),
+        })
+        if (res.ok) {
+          const data = (await res.json()) as {
+            ok?: boolean
+            seriesTitle?: string | null
+            coverUrl?: string | null
+            maxSeason?: number
+            maxEpisode?: number
+            hasMovies?: boolean
+            seasons?: { number: number; episodes: number }[]
+          }
+          if (data.ok) {
+            if (data.seriesTitle) {
+              resolvedTitle = data.seriesTitle
+              setTitle(data.seriesTitle)
+            }
+            if (data.coverUrl) {
+              resolvedCover = data.coverUrl
+            }
+            if (Array.isArray(data.seasons) && data.seasons.length > 0) {
+              const regularSeasons = data.seasons.filter((s) => s.number > 0).sort((a, b) => a.number - b.number)
+              const movieSeason = data.seasons.find((s) => s.number === 0)
+              if (regularSeasons.length > 0) {
+                const maxS = regularSeasons[regularSeasons.length - 1].number
+                setSeasonCount(maxS)
+                const nextCounts: (number | undefined)[] = Array.from({ length: maxS }, (_, idx) => {
+                  const found = regularSeasons.find((s) => s.number === idx + 1)
+                  return found?.episodes ?? 12
+                })
+                setTypedCounts(nextCounts)
+                setCountsUnknown(false)
+                loadedSeasons = maxS
+                loadedTotalEps = regularSeasons.reduce((acc, s) => acc + (s.episodes || 0), 0)
+              }
+              if (movieSeason && movieSeason.episodes > 0) {
+                setFilms(movieSeason.episodes)
+              }
+            } else if (data.maxSeason && data.maxSeason > 0) {
+              setSeasonCount(data.maxSeason)
+              if (data.maxEpisode && data.maxEpisode > 0) {
+                setTypedCounts((prev) => {
+                  const next = [...prev]
+                  next[data.maxSeason! - 1] = data.maxEpisode
+                  return next
+                })
+              }
+              loadedSeasons = data.maxSeason
+              loadedTotalEps = data.maxEpisode ?? 0
+            }
+          }
+        }
+      }
+
+      if (resolvedTitle) {
+        const aniMedia = await searchAniListMedia(resolvedTitle, 1).catch(() => null)
+        if (aniMedia) {
+          if (!resolvedCover && aniMedia.coverUrl) {
+            resolvedCover = aniMedia.coverUrl
+          }
+          if (!loadedSeasons && aniMedia.episodes && aniMedia.episodes > 0) {
+            setSeasonCount(1)
+            setTypedCounts([aniMedia.episodes])
+            loadedSeasons = 1
+            loadedTotalEps = aniMedia.episodes
+          }
+          if (!currentTitle.trim() && (aniMedia.titleEnglish || aniMedia.titleRomaji)) {
+            setTitle(aniMedia.titleEnglish || aniMedia.titleRomaji || resolvedTitle)
+          }
+        }
+      }
+
+      if (resolvedCover && !cover) {
+        setCover(resolvedCover)
+      }
+
+      if (loadedSeasons > 0 || resolvedCover) {
+        setMetaNote(
+          `✓ Automatisch geladen: ${loadedSeasons > 0 ? `${loadedSeasons} ${loadedSeasons === 1 ? 'Staffel' : 'Staffeln'}${loadedTotalEps ? ` (${loadedTotalEps} Folgen)` : ''}` : 'Metadaten'}${resolvedCover ? ' + Cover' : ''}`,
+        )
+      }
+    } catch {
+      // Ignore silent auto-fetch errors
+    } finally {
+      setFetchingMeta(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const trimmed = url.trim()
+    if (!trimmed || !isAniworldUrl(trimmed)) return
+    if (lastFetchedUrlRef.current === trimmed) return
+    const timer = window.setTimeout(() => {
+      lastFetchedUrlRef.current = trimmed
+      void fetchMetadataForInput(trimmed, title)
+    }, 450)
+    return () => window.clearTimeout(timer)
+  }, [url, open])
 
   const reset = () => {
     setTitle('')
@@ -4457,6 +4845,8 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     setCoverFrame(undefined)
     setFormat('poster')
     setTags('')
+    setMetaNote(null)
+    lastFetchedUrlRef.current = ''
   }
 
   const save = () => {
@@ -4575,6 +4965,27 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
                   </span>
                 )
               })() : null}
+              <div className="flex flex-wrap items-center justify-between gap-[8px]">
+                {fetchingMeta ? (
+                  <span className="text-micro text-muted">Lädt Cover, Staffeln & Folgenanzahl automatisch…</span>
+                ) : metaNote ? (
+                  <span className="text-micro font-medium text-accent-strong">{metaNote}</span>
+                ) : (
+                  <span className="text-micro text-muted">
+                    Bei AniWorld- & SerienStream-Links werden Cover, Staffeln & Folgen automatisch geladen.
+                  </span>
+                )}
+                {(url.trim() || title.trim()) ? (
+                  <button
+                    type="button"
+                    disabled={fetchingMeta}
+                    onClick={() => void fetchMetadataForInput(url, title)}
+                    className="text-micro font-medium text-ink underline underline-offset-[3px] hover:text-accent-strong disabled:opacity-50"
+                  >
+                    {fetchingMeta ? 'Lädt…' : 'Cover & Staffeln abrufen'}
+                  </button>
+                ) : null}
+              </div>
             </Group>
 
             <Group label="Tags (durch Komma getrennt)">

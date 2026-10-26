@@ -17,7 +17,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { IN_DESKTOP_APP } from '../../lib/desktop'
+import { APP_BRIDGE, IN_DESKTOP_APP } from '../../lib/desktop'
+import { sendStreamToPlayer } from '../../lib/player'
+import { sendAppNotification } from '../../lib/notifications'
 import { useIngestFiles } from '../../hooks/useIngest'
 import { opusArgs } from '../../lib/convert'
 import {
@@ -57,7 +59,14 @@ import { openGetAppDialog } from '../GetApp'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { ZipSave } from '../ZipSave'
 import { DriveSaveButton } from '../GoogleDrive'
-import { setMerkItems, takePendingBatchLookup, takePendingLookup, useMerkliste, type SavedLinkItem } from '../../lib/merkliste'
+import {
+  DOWNLOADER_LOOKUP_EVENT,
+  setMerkItems,
+  takePendingBatchLookup,
+  takePendingLookup,
+  useMerkliste,
+  type SavedLinkItem,
+} from '../../lib/merkliste'
 import { AUDIO_QUALITY_OPTIONS, LANGUAGE_OPTIONS, VIDEO_QUALITY_OPTIONS, episodeKindOf } from './merklisteShared'
 import { EpisodePicker } from './EpisodePicker'
 
@@ -77,6 +86,7 @@ export interface DownloadFilePreferences {
   directPref: DirectFilePref
   deliveryMode: DownloadDeliveryMode
   aniworldLanguage: AniworldLanguagePref
+  directToDisk?: boolean
 }
 
 const DEFAULT_DOWNLOAD_PREFS: DownloadFilePreferences = {
@@ -86,6 +96,7 @@ const DEFAULT_DOWNLOAD_PREFS: DownloadFilePreferences = {
   directPref: 'untouched',
   deliveryMode: 'session_only',
   aniworldLanguage: 'auto',
+  directToDisk: true,
 }
 
 const DOWNLOAD_PREFS_KEY = 'sondra:download_prefs'
@@ -815,6 +826,14 @@ export function DownloaderPanel() {
         'netzwerk',
         val === 'default' ? 'Netzwerk: Automatisch (Windows-Standard)' : `Netzwerk gebunden an: ${val}`,
       )
+      const failedIds = (batchEntriesRef.current ?? []).filter((e) => e.status === 'error').map((e) => e.id)
+      if (failedIds.length > 0) {
+        const controller = new AbortController()
+        batchAbortRef.current = controller
+        void resolveAll(failedIds, controller.signal)
+      } else if (error && url.trim() && !looking) {
+        void look(url)
+      }
     } else {
       log('netzwerk', 'Adapter konnte nicht umgestellt werden (Dienst nicht erreichbar)', 'error')
     }
@@ -1354,28 +1373,56 @@ export function DownloaderPanel() {
 
   // „Weiter" oder „Nächste Folgen laden" in der Merkliste übergibt Einträge hierher.
   useEffect(() => {
-    const pendingBatch = takePendingBatchLookup()
-    if (pendingBatch && pendingBatch.length > 0) {
-      const initial: BatchItem[] = pendingBatch.map((b) => ({
-        id: `batch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        url: b.url,
-        titleHint: b.title,
-        status: 'pending',
-      }))
-      setUrl(pendingBatch.map((b) => b.url).join(', '))
-      replaceBatch(initial)
-      setLooking(false)
-      const controller = new AbortController()
-      void resolveAll(
-        initial.map((item) => item.id),
-        controller.signal,
-      )
-      return
+    const consumePending = () => {
+      const pendingBatch = takePendingBatchLookup()
+      if (pendingBatch && pendingBatch.length > 0) {
+        const first = pendingBatch[0]
+        if (first.mode) {
+          setFilterAudioOnly(first.mode === 'audio')
+          filterAudioOnlyRef.current = first.mode === 'audio'
+        }
+        if (first.audioFormat) {
+          setTargetAudioFormat(first.audioFormat)
+          targetAudioFormatRef.current = first.audioFormat
+        }
+        if (typeof first.autoTranscribe === 'boolean') {
+          setAutoTranscribe(first.autoTranscribe)
+          autoTranscribeRef.current = first.autoTranscribe
+        }
+        updateFilePrefs({
+          ...(first.language ? { aniworldLanguage: first.language } : {}),
+          ...(first.videoPref ? { videoPref: first.videoPref } : {}),
+          ...(first.audioPref ? { audioPref: first.audioPref } : {}),
+        })
+
+        const initial: BatchItem[] = pendingBatch.map((b) => ({
+          id: `batch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          url: b.url,
+          titleHint: b.title,
+          status: 'pending',
+        }))
+        setUrl(pendingBatch.map((b) => b.url).join(', '))
+        setResult(null)
+        setError(null)
+        replaceBatch(initial)
+        setLooking(false)
+        batchAbortRef.current?.abort()
+        const controller = new AbortController()
+        batchAbortRef.current = controller
+        void resolveAll(
+          initial.map((item) => item.id),
+          controller.signal,
+        )
+        return
+      }
+
+      const pending = takePendingLookup()
+      if (pending) openSavedLink(pending, Boolean(pending.url.trim()))
     }
 
-    const pending = takePendingLookup()
-    if (pending) openSavedLink(pending, Boolean(pending.url.trim()))
-    // Once, on arrival; the request is taken and gone.
+    consumePending()
+    window.addEventListener(DOWNLOADER_LOOKUP_EVENT, consumePending)
+    return () => window.removeEventListener(DOWNLOADER_LOOKUP_EVENT, consumePending)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -1574,6 +1621,96 @@ export function DownloaderPanel() {
     return { bytes: finalBytes, ext: finalExt, mime: finalMime, kind: finalKind, name }
   }
 
+  const [desktopDownloadDir, setDesktopDownloadDir] = useState<string>('')
+  useEffect(() => {
+    if (!IN_DESKTOP_APP || !APP_BRIDGE?.getDownloadDir) return
+    void APP_BRIDGE.getDownloadDir().then((dir) => {
+      if (dir) setDesktopDownloadDir(dir)
+    })
+  }, [])
+
+  const pickDesktopDownloadDir = async () => {
+    if (!APP_BRIDGE?.pickDownloadDir) return
+    const picked = await APP_BRIDGE.pickDownloadDir()
+    if (picked) setDesktopDownloadDir(picked)
+  }
+
+  /**
+   * Zero-RAM Direct-to-Disk download in the Desktop App: streams the remote file
+   * directly to disk via Node `fs.createWriteStream` (`/api/direct-save`) without
+   * allocating a full `Uint8Array` in the browser heap.
+   */
+  const tryDirectSaveToDisk = async (
+    stream: StudioStream,
+    res: StudioResult,
+    signal: AbortSignal,
+    subFolder?: string,
+  ): Promise<{ savedPath: string; bytesWritten: number; name: string; ext: string; mime: string } | null> => {
+    if (!IN_DESKTOP_APP) return null
+    if (filePrefsRef.current.directToDisk === false) return null
+    const delivery = deliveryOf(filePrefsRef.current.deliveryMode, useDrive.getState().configured)
+    if (delivery !== 'save_only') return null
+    if (filterAudioOnlyRef.current) return null
+    if (filePrefsRef.current.videoPref !== 'untouched' && filePrefsRef.current.videoAdaptMode === 'reencode_lower') {
+      return null
+    }
+    if (isHlsStream(stream) || (!stream.directUrl && !stream.token)) return null
+
+    const targetName = filenameFor(res, stream, { mode: stealthModeRef.current })
+    const response = await fetch('/api/direct-save', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        directUrl: stream.directUrl,
+        token: stream.token,
+        targetDir: desktopDownloadDir || undefined,
+        subFolder,
+        filename: targetName,
+      }),
+      signal,
+    })
+    if (!response.ok) return null
+    const payload = (await response.json()) as {
+      ok?: boolean
+      savedPath?: string
+      bytesWritten?: number
+    }
+    if (!payload.ok || !payload.savedPath) return null
+    return {
+      savedPath: payload.savedPath,
+      bytesWritten: payload.bytesWritten ?? stream.bytes ?? 0,
+      name: targetName,
+      ext: stream.ext,
+      mime: stream.mime,
+    }
+  }
+
+  /**
+   * „Sofort abspielen“ (Direct-Stream): hands the resolved stream directly to the
+   * Player tab for instant playback without waiting for a full file download.
+   */
+  const streamNow = (stream: StudioStream, res: StudioResult, saveInBackground = false, batchId?: string) => {
+    const streamUrl = stream.directUrl || (stream.token ? `/api/stream?token=${encodeURIComponent(stream.token)}` : '')
+    if (!streamUrl) return
+    const matched = matchingSavedLink(url)
+    sendStreamToPlayer({
+      name: res.title || 'Direkt-Stream',
+      directUrl: streamUrl,
+      kind: stream.hasVideo ? 'video' : 'audio',
+      size: stream.bytes ?? 0,
+      isHls: Boolean(stream.isHls && !stream.directUrl),
+      token: stream.token || undefined,
+      hint: matched
+        ? { series: matched.id, season: linkSeason, episode: linkEpisode ?? 1 }
+        : undefined,
+    })
+    if (saveInBackground) {
+      if (batchId) void takeBatchItem(batchId)
+      else void take(stream)
+    }
+    setPanel('player')
+  }
+
   const take = async (stream: StudioStream) => {
     if (!result) return
     const controller = new AbortController()
@@ -1584,6 +1721,19 @@ export function DownloaderPanel() {
     setTaken(null)
     setProgress({ loaded: 0, total: stream.bytes })
     try {
+      const matched = matchingSavedLink(url)
+      const directDisk = await tryDirectSaveToDisk(
+        stream,
+        result,
+        controller.signal,
+        matched?.title || undefined,
+      )
+      if (directDisk) {
+        log('holen', `${directDisk.name} direkt auf Festplatte gespeichert (0 MB RAM · ${formatBytes(directDisk.bytesWritten)})`)
+        recordDownload(url, result.title, result.author ?? '', directDisk.ext, directDisk.bytesWritten)
+        return
+      }
+
       const bytes = await downloadStream(stream, {
         signal: controller.signal,
         onProgress: setProgress,
@@ -1667,6 +1817,15 @@ export function DownloaderPanel() {
     patchEntry(id, { status: 'downloading', error: undefined, progress: { loaded: 0, total: stream.bytes } })
 
     try {
+      const matched = matchingSavedLink(entry.url)
+      const directDisk = await tryDirectSaveToDisk(stream, res, signal, matched?.title || entry.groupTitle || undefined)
+      if (directDisk) {
+        log('holen', `${directDisk.name} direkt auf Festplatte gespeichert (0 MB RAM · ${formatBytes(directDisk.bytesWritten)})`)
+        patchEntry(id, { status: 'done', progress: null })
+        recordDownload(entry.url, res.title, res.author ?? '', directDisk.ext, directDisk.bytesWritten)
+        return
+      }
+
       const bytes = await downloadStream(stream, {
         signal,
         onProgress: (p) => patchEntry(id, { progress: p }),
@@ -1742,6 +1901,16 @@ export function DownloaderPanel() {
         }
       })
       await Promise.all(workers)
+      if (!controller.signal.aborted && batchEntriesRef.current) {
+        const doneCount = batchEntriesRef.current.filter((e) => e.status === 'done').length
+        if (doneCount > 0) {
+          sendAppNotification({
+            title: 'Batch-Download abgeschlossen',
+            body: `${doneCount} ${doneCount === 1 ? 'Folge wurde' : 'Folgen wurden'} erfolgreich heruntergeladen.`,
+            kind: 'batch',
+          })
+        }
+      }
     } finally {
       setBatchBusy(false)
       batchAbortRef.current = null
@@ -2264,6 +2433,32 @@ export function DownloaderPanel() {
               </div>
 
               {IN_DESKTOP_APP ? (
+                <div className="flex flex-col gap-[10px] border-t border-line pt-[10px] sm:col-span-2">
+                  <Toggle
+                    label="Zero-RAM Direkt-Download auf Festplatte (0 MB RAM)"
+                    hint="Schreibt große Downloads bei „Einfach direkt als Datei herunterladen“ ohne Zwischenspeicher im Browser-RAM direkt in den Zielordner."
+                    checked={filePrefs.directToDisk ?? true}
+                    onChange={(next) => updateFilePrefs({ directToDisk: next })}
+                  />
+                  {filePrefs.directToDisk !== false ? (
+                    <div className="flex flex-wrap items-center gap-[10px] text-small">
+                      <span className="text-muted">Zielordner:</span>
+                      <span className="value truncate max-w-[360px] rounded-nav bg-raised px-[8px] py-[3px] text-micro text-ink">
+                        {desktopDownloadDir || 'Standard-Download-Ordner'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void pickDesktopDownloadDir()}
+                        className="press rounded-nav text-small text-ink underline underline-offset-2"
+                      >
+                        Zielordner ändern …
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {IN_DESKTOP_APP ? (
                 <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
                   <label htmlFor="adapter-select" className="text-small text-prose">
                     Netzwerk
@@ -2471,24 +2666,48 @@ export function DownloaderPanel() {
                             </p>
                             <p className="value truncate text-small text-muted">{detail}</p>
                           </div>
-                          <Button
-                            size="sm"
-                            disabled={busy !== null}
-                            onClick={() => void take(stream)}
-                            className="shrink-0"
-                          >
-                            {downloadingStreamId === stream.id
-                              ? busy && busy !== stream.label
-                                ? busy
-                                : 'Lädt …'
-                              : busy !== null
-                                ? 'Warten …'
-                                : filterAudioOnly
-                                  ? targetAudioFormat === 'original' || filePrefs.audioPref === 'untouched'
-                                    ? 'Original laden'
-                                    : `${targetAudioFormat.toUpperCase()} laden`
-                                  : 'Laden'}
-                          </Button>
+                          <div className="flex shrink-0 flex-wrap items-center gap-[8px]">
+                            {(stream.directUrl || stream.token) ? (
+                              <Button
+                                size="sm"
+                                variant="quiet"
+                                disabled={busy !== null}
+                                onClick={() => streamNow(stream, result, false)}
+                                title="Stream sofort im Tab Abspielen starten, ohne vorher die ganze Datei herunterzuladen"
+                              >
+                                Sofort abspielen
+                              </Button>
+                            ) : null}
+                            {(stream.directUrl || stream.token) ? (
+                              <Button
+                                size="sm"
+                                variant="quiet"
+                                disabled={busy !== null}
+                                onClick={() => streamNow(stream, result, true)}
+                                title="Sofort im Player starten und gleichzeitig im Hintergrund herunterladen"
+                              >
+                                Abspielen & laden
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="sm"
+                              disabled={busy !== null}
+                              onClick={() => void take(stream)}
+                              className="shrink-0"
+                            >
+                              {downloadingStreamId === stream.id
+                                ? busy && busy !== stream.label
+                                  ? busy
+                                  : 'Lädt …'
+                                : busy !== null
+                                  ? 'Warten …'
+                                  : filterAudioOnly
+                                    ? targetAudioFormat === 'original' || filePrefs.audioPref === 'untouched'
+                                      ? 'Original laden'
+                                      : `${targetAudioFormat.toUpperCase()} laden`
+                                    : 'Laden'}
+                            </Button>
+                          </div>
                         </li>
                       )
                     })}
@@ -2833,6 +3052,18 @@ export function DownloaderPanel() {
                                             </span>
                                           ) : null
                                         })()}
+
+                                        {stream && (stream.directUrl || stream.token) ? (
+                                          <Button
+                                            size="sm"
+                                            variant="quiet"
+                                            disabled={batchBusy}
+                                            onClick={() => streamNow(stream, entry.result!, false, entry.id)}
+                                            title="Stream sofort ohne vorherigen Download im Player abspielen"
+                                          >
+                                            Sofort abspielen
+                                          </Button>
+                                        ) : null}
 
                                         <Button
                                           size="sm"

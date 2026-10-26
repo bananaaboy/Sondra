@@ -12,6 +12,7 @@
 
 import fs from 'node:fs'
 import http from 'node:http'
+import https from 'node:https'
 import path from 'node:path'
 
 import googleTokenFn from '../api/google-token.js'
@@ -19,6 +20,7 @@ import resolveFn from '../api/resolve.js'
 import streamFn from '../api/stream.js'
 
 const PORT = Number(process.env.PORT ?? 4199)
+const driveHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 16, timeout: 30_000 })
 
 const TYPES = {
   '.html': 'text/html',
@@ -69,6 +71,53 @@ http
       } catch (failure) {
         response.status(500).json({ error: 'crash', message: String(failure?.stack ?? failure) })
       }
+      return
+    }
+
+    const driveMatch = url.pathname.match(/^\/drive-media\/([^/]+)$/)
+    if (driveMatch) {
+      const fileId = decodeURIComponent(driveMatch[1])
+      const token = url.searchParams.get('token') || (request.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
+      if (!token) {
+        response.statusCode = 401
+        response.end('Unauthorized')
+        return
+      }
+      const mimeType = url.searchParams.get('type') || 'application/octet-stream'
+      const knownSize = Number(url.searchParams.get('size')) || 0
+      const upReq = https.request(
+        new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`),
+        {
+          method: request.method === 'HEAD' ? 'HEAD' : 'GET',
+          agent: driveHttpsAgent,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(request.headers.range ? { Range: request.headers.range } : {}),
+          },
+          timeout: 30_000,
+        },
+        (upRes) => {
+          response.statusCode = upRes.statusCode || 200
+          response.setHeader('content-type', mimeType)
+          response.setHeader('accept-ranges', 'bytes')
+          response.setHeader('cache-control', 'private, no-store')
+          if (upRes.headers['content-range']) response.setHeader('content-range', upRes.headers['content-range'])
+          if (upRes.headers['content-length']) response.setHeader('content-length', upRes.headers['content-length'])
+          else if (knownSize > 0 && response.statusCode === 200) response.setHeader('content-length', String(knownSize))
+          if (request.method === 'HEAD') {
+            upRes.resume()
+            response.end()
+            return
+          }
+          upRes.pipe(response)
+        },
+      )
+      upReq.on('error', () => {
+        if (!response.headersSent) response.statusCode = 502
+        response.end()
+      })
+      request.on('close', () => upReq.destroy())
+      upReq.end()
       return
     }
 

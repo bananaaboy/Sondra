@@ -39,6 +39,7 @@ import { loadFfmpeg, runFfmpeg } from './ffmpegClient'
 import { sanitizeFilename, withExtension } from './format'
 import {
   DEFAULT_SERVICE,
+  findLocalInstance,
   localJobArgs,
   localJobExtension,
   resolveMedia,
@@ -46,7 +47,7 @@ import {
   type ServiceItem,
   type ServiceSettings,
 } from './service'
-import { serviceConnection } from './serviceState'
+import { serviceConnection, setServiceConnection } from './serviceState'
 
 export interface StudioStream {
   id: string
@@ -309,7 +310,23 @@ export async function resolveViaService(
   signal?: AbortSignal,
   extra?: { language?: string },
 ): Promise<StudioResolveResult> {
-  const connected = serviceConnection()
+  let connected = serviceConnection()
+  if (
+    connected.enabled &&
+    !connected.endpoint &&
+    typeof window !== 'undefined' &&
+    /^(?:localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname)
+  ) {
+    try {
+      const found = await findLocalInstance(['http://localhost:9000', 'http://127.0.0.1:9000'], signal)
+      if (found) {
+        setServiceConnection({ endpoint: found.endpoint, info: found.info, searching: false })
+        connected = serviceConnection()
+      }
+    } catch {
+      // fall through to built-in endpoint
+    }
+  }
   if (connected.endpoint) {
     try {
       const outcome = await resolveMedia(

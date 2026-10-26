@@ -47,7 +47,7 @@ import {
 } from '../../lib/folder'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
-import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, useDrive } from '../../lib/googleDrive'
+import { DRIVE_PROBLEM, DriveError, driveLinked, driveMediaUrl, saveFilesToDrive, useDrive } from '../../lib/googleDrive'
 import { DriveIcon } from '../GoogleDrive'
 import { SeasonFilingDialog } from '../SeasonFiling'
 import { requestOpenSeries, useMerkliste } from '../../lib/merkliste'
@@ -219,7 +219,6 @@ function DirTile({
   useEffect(() => {
     if (focused) moveFocus(ref.current)
   }, [focused])
-  const meta = `${count} ${count === 1 ? 'Datei' : 'Dateien'} · ${formatBytes(size)}`
   if (list) {
     return (
       <div
@@ -252,12 +251,15 @@ function DirTile({
       title={`${name} öffnen`}
       className="press group flex cursor-pointer flex-col overflow-hidden rounded-card bg-panel-mid text-left ring-1 ring-inset ring-line outline-none transition-colors duration-[var(--dur-fast)] hover:bg-panel-strong focus-visible:ring-2 focus-visible:ring-ink"
     >
-      <span className="grid aspect-[16/10] place-items-center text-ink">
-        <FolderGlyph className="h-[40px] w-[40px] transition-transform duration-[var(--dur-fast)] group-hover:scale-105" />
+      <span className="relative grid aspect-[16/10] place-items-center bg-gradient-to-b from-panel-soft to-panel-mid text-ink">
+        <FolderGlyph className="h-[44px] w-[44px] transition-transform duration-[var(--dur-fast)] group-hover:scale-110" />
+        <span className="value absolute bottom-[8px] right-[8px] rounded-pill bg-raised/90 px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line">
+          {count} {count === 1 ? 'Datei' : 'Dateien'}
+        </span>
       </span>
-      <span className="flex flex-col gap-[2px] px-[12px] pb-[12px]">
+      <span className="flex flex-col gap-[3px] px-[12px] pb-[12px] pt-[8px]">
         <span className="line-clamp-2 text-small font-semibold leading-[1.3] text-ink [overflow-wrap:anywhere]">{name}</span>
-        <span className="value text-micro text-prose">{meta}</span>
+        <span className="value text-micro text-prose">Ordner · {formatBytes(size)}</span>
       </span>
     </div>
   )
@@ -271,6 +273,7 @@ function FileItem({
   onClick,
   onToggle,
   onOpen,
+  onPreview,
   episode,
   list,
 }: ItemProps & {
@@ -279,6 +282,7 @@ function FileItem({
   onClick: (event: ReactMouseEvent) => void
   onToggle: () => void
   onOpen: () => void
+  onPreview: () => void
   episode: FolderEpisode | null
   list: boolean
 }) {
@@ -292,6 +296,7 @@ function FileItem({
     seen.current = element
   }
   const duration = thumb?.duration ? formatDuration(thumb.duration) : null
+  const canPreview = file.kind === 'video' || file.kind === 'audio' || file.kind === 'image'
   const common = {
     ref: setRef,
     role: 'option',
@@ -321,7 +326,7 @@ function FileItem({
     return (
       <div
         {...common}
-        className={`grid cursor-default grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[8px] py-[7px] outline-none first:border-t-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_80px_70px] ${
+        className={`grid cursor-default grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[8px] py-[7px] outline-none first:border-t-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_80px_110px] ${
           selected ? 'bg-panel-mid' : 'hover:bg-panel-soft'
         }`}
       >
@@ -336,7 +341,23 @@ function FileItem({
         <span className="hidden text-small text-prose sm:inline">{KIND_LABEL[file.kind]}</span>
         <span className="value hidden text-small text-prose sm:inline">{formatBytes(file.size)}</span>
         <span className="value hidden text-small text-prose sm:inline">{dateOf(file.modified)}</span>
-        <span className="value text-small text-prose">{duration ?? ''}</span>
+        <span className="flex items-center justify-end gap-[6px]">
+          {duration ? <span className="value text-small text-prose">{duration}</span> : null}
+          {canPreview ? (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={(event) => {
+                event.stopPropagation()
+                onPreview()
+              }}
+              className="press rounded-pill bg-raised px-[8px] py-[2px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-strong"
+              title={`Vorschau für ${file.name}`}
+            >
+              Vorschau
+            </button>
+          ) : null}
+        </span>
       </div>
     )
   }
@@ -350,17 +371,33 @@ function FileItem({
     >
       <span className="relative grid aspect-[16/10] place-items-center overflow-hidden bg-panel-strong text-ink">
         {thumb?.url ? (
-          <img src={thumb.url} alt="" draggable={false} className="h-full w-full object-cover" />
+          <img src={thumb.url} alt="" draggable={false} className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]" />
         ) : (
-          <span className="flex flex-col items-center gap-[4px] text-ink">
+          <span className="flex flex-col items-center gap-[5px] text-ink">
             <KindGlyph kind={file.kind} />
-            <span className="value text-micro text-prose">{extensionOf(file.name)}</span>
+            <span className="value rounded-pill bg-raised/80 px-[7px] py-[1px] text-micro font-medium text-prose ring-1 ring-inset ring-line">
+              {KIND_LABEL[file.kind]} · {extensionOf(file.name)}
+            </span>
           </span>
         )}
         {episode ? (
           <span className="absolute left-[8px] top-[8px]">
             <EpisodeMark episode={episode} />
           </span>
+        ) : null}
+        {canPreview ? (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={(event) => {
+              event.stopPropagation()
+              onPreview()
+            }}
+            className="press absolute bottom-[8px] left-[8px] rounded-pill bg-ink/85 px-[8px] py-[2px] text-micro font-medium text-on-ink opacity-0 transition-opacity duration-[var(--dur-fast)] group-hover:opacity-100 group-focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
+            title={`Vorschau: ${file.name}`}
+          >
+            Vorschau
+          </button>
         ) : null}
         {duration ? (
           <span className="value absolute bottom-[8px] right-[8px] rounded-pill bg-ink/85 px-[7px] py-[2px] text-micro text-on-ink">{duration}</span>
@@ -376,7 +413,7 @@ function FileItem({
       <span className="flex flex-col gap-[2px] px-[12px] pb-[12px] pt-[8px]">
         <span className="line-clamp-2 text-small font-medium leading-[1.3] text-ink [overflow-wrap:anywhere]">{file.name}</span>
         <span className="value text-micro text-prose">
-          {formatBytes(file.size)} · {dateOf(file.modified)}
+          {KIND_LABEL[file.kind]} · {formatBytes(file.size)} · {dateOf(file.modified)}
         </span>
       </span>
     </div>
@@ -566,6 +603,8 @@ export function FolderPanel() {
   const [fetchingFiles, setFetchingFiles] = useState<string | null>(null)
   /** Episodes in Drive being filed into a series' season. */
   const [filing, setFiling] = useState<FolderFile[] | null>(null)
+  /** File currently open in the inline/modal preview. */
+  const [previewFile, setPreviewFile] = useState<FolderFile | null>(null)
   const pickerRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -1123,6 +1162,37 @@ export function FolderPanel() {
         </Notice>
       ) : null}
 
+      {/* Subfolder quick-navigation tree when folders exist */}
+      {view.dirs.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-[6px] rounded-card bg-panel-soft px-[12px] py-[8px] ring-1 ring-inset ring-line">
+          <span className="text-micro font-semibold uppercase tracking-wider text-prose">Unterordner:</span>
+          {dir !== '' ? (
+            <button
+              type="button"
+              onClick={() => {
+                const parentDir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : ''
+                goTo(parentDir)
+              }}
+              className="press flex items-center gap-[4px] rounded-pill bg-raised px-[10px] py-[3px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-mid"
+            >
+              ↑ Übergeordneter Ordner
+            </button>
+          ) : null}
+          {view.dirs.slice(0, 16).map((d) => (
+            <button
+              key={d.path}
+              type="button"
+              onClick={() => goTo(d.path)}
+              className="press flex items-center gap-[5px] rounded-pill bg-raised px-[10px] py-[3px] text-micro font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-strong"
+            >
+              <FolderGlyph className="h-[13px] w-[13px]" />
+              <span className="max-w-[160px] truncate">{d.name}</span>
+              <span className="value text-prose">({d.count})</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {/* The files. */}
       {empty ? (
         <div className="flex flex-col items-start gap-[8px] border-t border-line pt-[16px]">
@@ -1193,6 +1263,7 @@ export function FolderPanel() {
                 onOpen={(event?: ReactMouseEvent) => {
                   if (settled(event)) void open(file)
                 }}
+                onPreview={() => setPreviewFile(file)}
               />
             )
           })}
@@ -1220,6 +1291,11 @@ export function FolderPanel() {
             <span className="font-semibold">{chosen.length} ausgewählt</span> · <span className="value">{formatBytes(chosenSize)}</span>
           </span>
           <span className="flex-1" />
+          {chosen.length === 1 && (chosen[0].kind === 'video' || chosen[0].kind === 'audio' || chosen[0].kind === 'image') ? (
+            <Button type="button" size="sm" variant="quiet" onClick={() => setPreviewFile(chosen[0])}>
+              Vorschau
+            </Button>
+          ) : null}
           {selectedMedia.length > 0 ? (
             <Button type="button" size="sm" onClick={() => play(chosen, true)}>
               Abspielen{selectedMedia.length < chosen.length ? ` (${selectedMedia.length})` : ''}
@@ -1281,7 +1357,170 @@ export function FolderPanel() {
       {confirmDelete ? (
         <DeleteDialog files={confirmDelete} busy={deleting} onCancel={() => setConfirmDelete(null)} onConfirm={() => void reallyDelete(confirmDelete)} />
       ) : null}
+
+      {previewFile ? (
+        <FolderPreviewDialog
+          file={previewFile}
+          episode={episodes.get(previewFile.path) ?? null}
+          files={shownFiles}
+          onSelectFile={setPreviewFile}
+          onClose={() => setPreviewFile(null)}
+          onPlayInPlayer={(f) => {
+            setPreviewFile(null)
+            play([f], true)
+          }}
+          onTakeIntoSession={(f) => {
+            setPreviewFile(null)
+            void intoSession([f])
+          }}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function FolderPreviewDialog({
+  file,
+  episode,
+  files,
+  onSelectFile,
+  onClose,
+  onPlayInPlayer,
+  onTakeIntoSession,
+}: {
+  file: FolderFile
+  episode: FolderEpisode | null
+  files: FolderFile[]
+  onSelectFile: (next: FolderFile) => void
+  onClose: () => void
+  onPlayInPlayer: (file: FolderFile) => void
+  onTakeIntoSession: (file: FolderFile) => void
+}): ReactNode {
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const previewableList = useMemo(
+    () => files.filter((f) => f.kind === 'video' || f.kind === 'audio' || f.kind === 'image'),
+    [files],
+  )
+  const currentIdx = previewableList.findIndex((f) => f.path === file.path)
+  const prevFile = currentIdx > 0 ? previewableList[currentIdx - 1] : null
+  const nextFile = currentIdx >= 0 && currentIdx + 1 < previewableList.length ? previewableList[currentIdx + 1] : null
+
+  useEffect(() => {
+    let revoked: string | null = null
+    let cancelled = false
+    setMediaUrl(null)
+    setErr(null)
+
+    if (file.file) {
+      const u = URL.createObjectURL(file.file)
+      revoked = u
+      setMediaUrl(u)
+      setLoading(false)
+      return () => {
+        if (revoked) URL.revokeObjectURL(revoked)
+      }
+    }
+
+    if (file.drive) {
+      setLoading(true)
+      void (async () => {
+        try {
+          if (file.kind === 'video' || file.kind === 'audio') {
+            const streamUrl = await driveMediaUrl({
+              id: file.drive!.id,
+              size: file.size,
+              type: file.drive!.mime,
+            })
+            if (cancelled) return
+            if (streamUrl) {
+              setMediaUrl(streamUrl)
+              setLoading(false)
+              return
+            }
+          }
+          const fetched = await fileHere(file)
+          if (cancelled) return
+          const u = URL.createObjectURL(fetched)
+          revoked = u
+          setMediaUrl(u)
+        } catch (e) {
+          if (!cancelled) setErr(e instanceof Error ? e.message : 'Vorschau konnte nicht geladen werden.')
+        } finally {
+          if (!cancelled) setLoading(false)
+        }
+      })()
+    }
+
+    return () => {
+      cancelled = true
+      if (revoked) URL.revokeObjectURL(revoked)
+    }
+  }, [file])
+
+  return (
+    <Dialog open onClose={onClose} title={`Vorschau: ${file.name}`} size="lg">
+      <div className="flex flex-col gap-[14px]">
+        <div className="flex flex-wrap items-center justify-between gap-[8px] text-small text-prose">
+          <span className="truncate" title={file.path}>
+            {KIND_LABEL[file.kind]} · <span className="value">{formatBytes(file.size)}</span> · {dateOf(file.modified)}
+          </span>
+          {episode ? <EpisodeMark episode={episode} /> : null}
+        </div>
+
+        <div className="relative flex min-h-[240px] items-center justify-center overflow-hidden rounded-card bg-stage p-[8px] ring-1 ring-inset ring-line">
+          {loading ? (
+            <p className="text-small text-prose">Vorschau wird geladen …</p>
+          ) : err ? (
+            <p className="text-small text-danger">{err}</p>
+          ) : mediaUrl ? (
+            file.kind === 'video' ? (
+              <video
+                key={mediaUrl}
+                src={mediaUrl}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[60vh] w-full rounded-nav bg-black object-contain"
+              />
+            ) : file.kind === 'audio' ? (
+              <div className="flex w-full flex-col items-center gap-[12px] py-[28px]">
+                <KindGlyph kind="audio" className="h-[44px] w-[44px] text-ink" />
+                <audio key={mediaUrl} src={mediaUrl} controls autoPlay className="w-full max-w-[440px]" />
+              </div>
+            ) : file.kind === 'image' ? (
+              <img src={mediaUrl} alt={file.name} className="max-h-[60vh] max-w-full rounded-nav object-contain" />
+            ) : null
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-[8px]">
+          <div className="flex items-center gap-[6px]">
+            <Button type="button" size="sm" variant="quiet" disabled={!prevFile} onClick={() => prevFile && onSelectFile(prevFile)}>
+              ← Vorherige
+            </Button>
+            <Button type="button" size="sm" variant="quiet" disabled={!nextFile} onClick={() => nextFile && onSelectFile(nextFile)}>
+              Nächste →
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-[8px]">
+            {file.kind === 'video' || file.kind === 'audio' ? (
+              <Button type="button" size="sm" onClick={() => onPlayInPlayer(file)}>
+                Im Player öffnen
+              </Button>
+            ) : null}
+            <Button type="button" size="sm" variant="quiet" onClick={() => onTakeIntoSession(file)}>
+              In die Sitzung übernehmen
+            </Button>
+            <Button type="button" size="sm" variant="quiet" onClick={onClose}>
+              Schliessen
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Dialog>
   )
 }
 
