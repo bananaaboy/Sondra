@@ -30,6 +30,7 @@ import {
   type MicSession,
 } from '../../lib/micInput'
 import { encodeWav, type AudioData } from '../../lib/wav'
+import { enhanceSpeechAudioData } from '../../lib/speechEnhance'
 import { useAssetsOfKind, useSession } from '../../state/store'
 import { AudioPreview } from '../AudioPreview'
 import { ArrowRight, Button, Field, Notice, Progress, Select, Stat, Toggle } from '../ui/primitives'
@@ -260,6 +261,56 @@ export function MicPanel() {
     const samples = await session.record(PROBE_SECONDS, (fraction) => setProbing(fraction), controller.signal)
     setProbing(null)
     if (samples.length > session.sampleRate * 0.3) setProbe({ channels: [samples], sampleRate: session.sampleRate })
+  }
+
+  const [autoEnhanceProbe, setAutoEnhanceProbe] = useState(true)
+  const enhancedProbe = probe && autoEnhanceProbe ? enhanceSpeechAudioData(probe) : null
+
+  const keepEnhancedProbe = () => {
+    const target = enhancedProbe ?? probe
+    if (!target) return
+    const bytes = encodeWav(target, 24)
+    const name = `mikrofon-probe-verbessert.wav`
+    addAsset({
+      name,
+      bytes,
+      mime: 'audio/wav',
+      sizeBytes: bytes.byteLength,
+      kind: 'audio',
+      audio: target,
+      durationSeconds: target.channels[0].length / target.sampleRate,
+      origin: 'derived',
+    })
+    log('mikrofon', `${name} (KI-Sprachverbesserung) in die Sitzung übernommen`)
+  }
+
+  const enhanceSessionAssetOneClick = async () => {
+    const asset = audioAssets.find((entry) => entry.id === applyTo)
+    if (!asset) return
+    setApplying(true)
+    setCalError(null)
+    try {
+      const source = asset.audio ?? (await decodeWithBrowser(asset.bytes.slice().buffer as ArrayBuffer))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      const cleaned = enhanceSpeechAudioData(source)
+      const bytes = encodeWav(cleaned, 24)
+      const name = `${asset.name.replace(/\.[^.]+$/, '')}-sprache-verbessert.wav`
+      addAsset({
+        name,
+        bytes,
+        mime: 'audio/wav',
+        sizeBytes: bytes.byteLength,
+        kind: 'audio',
+        audio: cleaned,
+        durationSeconds: cleaned.channels[0].length / cleaned.sampleRate,
+        origin: 'derived',
+      })
+      log('mikrofon', `Sprache verbessert (Rauschen & Hall entfernt): ${asset.name} → ${name}`)
+    } catch (failure) {
+      setCalError(failure instanceof Error ? failure.message : String(failure))
+    } finally {
+      setApplying(false)
+    }
   }
 
   const runCalibration = async () => {
@@ -510,17 +561,54 @@ export function MicPanel() {
               session.setMonitor(value)
             }}
           />
-          <div className="flex flex-col gap-[8px]">
-            <div className="flex flex-wrap items-center gap-[8px]">
-              <Button size="sm" variant={probing !== null ? 'primary' : 'quiet'} onClick={() => void recordProbe()} disabled={busy}>
-                {probing !== null ? 'Probe beenden' : probe ? 'Neue Probe aufnehmen' : 'Probe aufnehmen'}
-              </Button>
-              <span className="text-small text-muted">bis {PROBE_SECONDS} Sekunden, zum Anhören</span>
-            </div>
-            {probing !== null ? <Progress value={probing} label="Nimmt auf" /> : null}
-          </div>
+          <Toggle
+            label="Ein-Klick-Sprachverbesserung (KI)"
+            hint="Unterdrückt Hintergrundrauschen, Tastaturklicken und Raumhall automatisch und hebt die Sprachverständlichkeit an."
+            checked={autoEnhanceProbe}
+            onChange={setAutoEnhanceProbe}
+          />
         </div>
-        {probe ? <AudioPreview sources={[{ id: 'probe', label: 'Probe', audio: probe }]} waveHeight={40} /> : null}
+        <div className="flex flex-wrap items-center gap-[8px]">
+          <Button size="sm" variant={probing !== null ? 'primary' : 'quiet'} onClick={() => void recordProbe()} disabled={busy}>
+            {probing !== null ? 'Probe beenden' : probe ? 'Neue Probe aufnehmen' : 'Probe aufnehmen'}
+          </Button>
+          {probe ? (
+            <Button size="sm" variant="quiet" onClick={keepEnhancedProbe}>
+              {enhancedProbe ? 'Verbesserte Probe in die Sitzung' : 'Probe in die Sitzung'}
+            </Button>
+          ) : null}
+          <span className="text-small text-muted">bis {PROBE_SECONDS} Sekunden, zum Anhören</span>
+        </div>
+        {probing !== null ? <Progress value={probing} label="Nimmt auf" /> : null}
+        {probe ? (
+          <AudioPreview
+            sources={
+              enhancedProbe
+                ? [
+                    { id: 'enhanced', label: 'Sprache verbessert (Rauschen & Hall entfernt)', audio: enhancedProbe },
+                    { id: 'probe', label: 'Original (Rohaufnahme)', audio: probe },
+                  ]
+                : [{ id: 'probe', label: 'Probe', audio: probe }]
+            }
+            waveHeight={40}
+          />
+        ) : null}
+        {audioAssets.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-[8px] rounded-nav bg-panel-soft p-[12px]">
+            <span className="text-small font-medium text-ink">Aufnahme mit 1 Klick verbessern:</span>
+            <Select value={applyTo} onChange={(event) => setApplyTo(event.target.value)} className="max-w-[300px]">
+              <option value="">Aufnahme wählen …</option>
+              {audioAssets.map((asset) => (
+                <option key={asset.id} value={asset.id}>
+                  {asset.name}
+                </option>
+              ))}
+            </Select>
+            <Button size="sm" variant="quiet" disabled={!applyTo || applying} onClick={() => void enhanceSessionAssetOneClick()}>
+              {applying ? 'Verbessert …' : 'Sprache verbessern (Rauschen & Hall entfernen)'}
+            </Button>
+          </div>
+        ) : null}
 
         {error ? (
           <Notice tone="error" title="Gerät">

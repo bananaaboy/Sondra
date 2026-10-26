@@ -9,6 +9,7 @@
 import { createDecipheriv } from 'node:crypto'
 import http from 'node:http'
 import https from 'node:https'
+import os from 'node:os'
 import { Readable } from 'node:stream'
 import tls from 'node:tls'
 
@@ -246,19 +247,71 @@ function isCertificateFailure(error) {
   return /CERT|SELF_SIGNED|UNABLE_TO_(?:GET|VERIFY)|DEPTH_ZERO|ERR_TLS/i.test(code)
 }
 
-export async function boundedFetch(url, options = {}, redirectCount = 0) {
-  const localAddr = options.localAddress && options.localAddress !== 'default' ? String(options.localAddress) : null
-  if (!localAddr && typeof globalThis.fetch === 'function') {
-    try {
-      return await globalThis.fetch(url, options)
-    } catch (error) {
-      if (error?.name === 'AbortError' || options.signal?.aborted) throw error
+const nativeFetch = typeof globalThis.fetch === 'function' ? globalThis.fetch : null
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 32, timeout: 30_000 })
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 32, timeout: 30_000 })
+
+const VIRTUAL_ADAPTER_RE =
+  /(?:vethernet|wsl|hyper-v|virtualbox|vbox|vmware|vmnet|docker|loopback|tailscale|zerotier|hamachi|radmin|npcap|tap-|tun-|utun|wireguard|nordlynx|proton|bluetooth)/i
+
+export function isVirtualAdapterName(name) {
+  return VIRTUAL_ADAPTER_RE.test(String(name || ''))
+}
+
+let cachedPrimaryIpv4 = null
+let cachedPrimaryIpv4At = 0
+
+export function detectPrimaryIpv4() {
+  if (process.env.SONDRA_TEST_STUB) return null
+  const now = Date.now()
+  if (now - cachedPrimaryIpv4At < 15_000) return cachedPrimaryIpv4
+  cachedPrimaryIpv4At = now
+  try {
+    const nets = os.networkInterfaces()
+    const physical = []
+    const virtual = []
+    for (const [name, addrs] of Object.entries(nets)) {
+      if (!addrs) continue
+      for (const a of addrs) {
+        if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.')) {
+          if (isVirtualAdapterName(name)) virtual.push(a.address)
+          else physical.push(a.address)
+        }
+      }
     }
+    if (physical.length >= 1) {
+      cachedPrimaryIpv4 = physical[0]
+    } else if (virtual.length === 1) {
+      cachedPrimaryIpv4 = virtual[0]
+    } else {
+      cachedPrimaryIpv4 = null
+    }
+  } catch {
+    cachedPrimaryIpv4 = null
+  }
+  return cachedPrimaryIpv4
+}
+
+export async function boundedFetch(url, options = {}, redirectCount = 0) {
+  // Honour unit-test mocks that replace globalThis.fetch temporarily.
+  if (typeof globalThis.fetch === 'function' && globalThis.fetch !== nativeFetch) {
+    return await globalThis.fetch(url, options)
   }
 
   const parsed = typeof url === 'string' ? new URL(url) : url
   const isHttps = parsed.protocol === 'https:'
   const transport = isHttps ? https : http
+  const isLoopbackHost = /^(?:localhost|127\.\d+\.\d+\.\d+|\[::1\]|::1)$/i.test(parsed.hostname)
+  const isIpv6Literal = parsed.hostname.startsWith('[') || parsed.hostname.includes(':')
+
+  const explicitAddr =
+    options.localAddress && options.localAddress !== 'default'
+      ? String(options.localAddress)
+      : process.env.SONDRA_BIND_ADDRESS && process.env.SONDRA_BIND_ADDRESS !== 'default'
+        ? String(process.env.SONDRA_BIND_ADDRESS)
+        : null
+  const autoAddr = !explicitAddr && !options._noAutoBind && !isLoopbackHost ? detectPrimaryIpv4() : null
+  const effectiveLocalAddr = isLoopbackHost ? null : explicitAddr || autoAddr
 
   const headers = {}
   if (options.headers) {
@@ -276,7 +329,9 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
     const req = transport.request(parsed, {
       method,
       headers,
-      localAddress: localAddr || undefined,
+      agent: isHttps ? httpsAgent : httpAgent,
+      ...(!isIpv6Literal && !isLoopbackHost ? { family: 4 } : {}),
+      localAddress: effectiveLocalAddr || undefined,
       ...(authorities ? { ca: authorities } : {}),
       rejectUnauthorized: false,
       timeout: options.timeout ?? 25_000,
@@ -350,7 +405,13 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
     req.on('timeout', () => {
       req.destroy(new Error(`Timeout after ${options.timeout ?? 25_000}ms`))
     })
-    req.on('error', reject)
+    req.on('error', (err) => {
+      if (autoAddr && !explicitAddr && !options._noAutoBind && !options.signal?.aborted) {
+        resolve(boundedFetch(url, { ...options, _noAutoBind: true }, redirectCount))
+        return
+      }
+      reject(err)
+    })
     if (options.body) req.write(options.body)
     req.end()
   })
@@ -1041,10 +1102,91 @@ export async function checkAniworldOnlineUpdates(rawUrl, options = {}) {
       .filter((n) => Number.isFinite(n) && n > 0)
     const maxEpisode = epNums.length > 0 ? Math.max(...epNums) : 1
 
+    const coverMatch =
+      html.match(/<div class=['"][^'"]*seriesCoverBox[^'"]*['"][^>]*>[\s\S]*?<img[^>]+(?:data-src|src)=['"]([^'"]+)['"]/i) ||
+      html.match(/<img[^>]+itemprop=['"]image['"][^>]+(?:data-src|src)=['"]([^'"]+)['"]/i) ||
+      html.match(/<meta property=['"]og:image['"] content=['"]([^'"]+)['"]/i)
+    let coverUrl = null
+    if (coverMatch && coverMatch[1]) {
+      try {
+        coverUrl = new URL(coverMatch[1], baseUrl).href
+      } catch {
+        coverUrl = null
+      }
+    }
+
+    const descMatch =
+      html.match(/data-full-description=['"]([^'"]+)['"]/i) ||
+      html.match(/<p class=['"][^'"]*seri_des[^'"]*['"][^>]*>([^<]+)<\/p>/i)
+    const description = descMatch
+      ? descMatch[1]
+          .replace(/&#039;/g, "'")
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&')
+          .trim()
+      : null
+
+    const hasMovies = new RegExp(`/(?:anime|serie)/stream/${slugPattern}/filme\\b`, 'i').test(html)
+
+    let seasons = undefined
+    if (options.fullMetadata) {
+      const uniqueSeasons = [...new Set(seasonNums.length > 0 ? seasonNums : [1])].sort((a, b) => a - b)
+      const countForHtml = (pageHtml, sNum, isFilm) => {
+        const matches = isFilm
+          ? [
+              ...pageHtml.matchAll(
+                new RegExp(`/(?:anime|serie)/stream/${slugPattern}/filme/film-(\\d+)`, 'gi'),
+              ),
+              ...pageHtml.matchAll(/itemprop=['"]episodeNumber['"]\s+content=['"](\d+)['"]/gi),
+            ]
+          : [
+              ...pageHtml.matchAll(
+                new RegExp(`/(?:anime|serie)/stream/${slugPattern}/staffel-${sNum}/episode-(\\d+)`, 'gi'),
+              ),
+              ...pageHtml.matchAll(/itemprop=['"]episodeNumber['"]\s+content=['"](\d+)['"]/gi),
+            ]
+        const nums = matches.map((m) => Number(m[1])).filter((n) => Number.isFinite(n) && n > 0)
+        return nums.length > 0 ? Math.max(...nums) : null
+      }
+
+      const seasonEntries = await Promise.all(
+        uniqueSeasons.map(async (sNum) => {
+          if (sNum === 1) {
+            return { number: 1, episodes: countForHtml(html, 1, false) }
+          }
+          if (sNum === maxSeason && seasonHtml !== html) {
+            return { number: maxSeason, episodes: maxEpisode }
+          }
+          try {
+            const sRes = await fetchHtml(`${baseUrl}/staffel-${sNum}`, options)
+            if (sRes.ok) {
+              const sHtml = await sRes.text()
+              return { number: sNum, episodes: countForHtml(sHtml, sNum, false) }
+            }
+          } catch {}
+          return { number: sNum, episodes: null }
+        }),
+      )
+      if (hasMovies) {
+        try {
+          const fRes = await fetchHtml(`${baseUrl}/filme`, options)
+          if (fRes.ok) {
+            const fHtml = await fRes.text()
+            seasonEntries.push({ number: 0, episodes: countForHtml(fHtml, 0, true) })
+          }
+        } catch {}
+      }
+      seasons = seasonEntries
+    }
+
     return {
       seriesTitle,
       maxSeason,
       maxEpisode,
+      ...(coverUrl ? { coverUrl } : {}),
+      ...(description ? { description } : {}),
+      ...(hasMovies ? { hasMovies: true } : {}),
+      ...(seasons ? { seasons } : {}),
       checkedAt: Date.now(),
     }
   } catch {

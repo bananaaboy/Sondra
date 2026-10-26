@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('sondraApp', {
   setAlwaysOnTop: (flag) => ipcRenderer.invoke('sondra:always-on-top', flag),
   isAlwaysOnTop: () => ipcRenderer.invoke('sondra:is-always-on-top'),
   focusWindow: () => ipcRenderer.invoke('sondra:focus'),
+  notify: (title, body) => ipcRenderer.invoke('sondra:notify', title, body),
+  getDownloadDir: () => ipcRenderer.invoke('sondra:get-download-dir'),
+  pickDownloadDir: () => ipcRenderer.invoke('sondra:pick-download-dir'),
   onOpenedFiles: (callback) => {
     const listener = (_event, files) => callback(files)
     ipcRenderer.on('sondra:files', listener)

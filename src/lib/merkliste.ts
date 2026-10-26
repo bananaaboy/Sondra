@@ -15,6 +15,7 @@
 import { useSyncExternalStore } from 'react'
 
 import { deriveLinkTitle, isAniworldUrl, parseLinkEpisodeInfo } from './download'
+import { syncProgressToTrackers } from './anilist'
 import { getProjectToolState, setProjectToolState } from './project'
 import {
   coerceToSqliteBytes,
@@ -452,11 +453,45 @@ export function merkSaveFailed(): boolean {
 }
 
 export function updateMerkItem(id: string, patch: Partial<SavedLinkItem> | ((item: SavedLinkItem) => Partial<SavedLinkItem>)): boolean {
-  return setMerkItems((current) =>
-    current.map((item) =>
-      item.id === id ? { ...item, ...(typeof patch === 'function' ? patch(item) : patch), updatedAt: Date.now() } : item,
-    ),
+  let syncedEntry: {
+    title: string
+    season: number
+    watchedCount: number
+    totalEpisodes?: number | null
+    status?: SavedLinkItem['status']
+  } | null = null
+
+  const ok = setMerkItems((current) =>
+    current.map((item) => {
+      if (item.id !== id) return item
+      const resolvedPatch = typeof patch === 'function' ? patch(item) : patch
+      const updated: SavedLinkItem = { ...item, ...resolvedPatch, updatedAt: Date.now() }
+      if (resolvedPatch.seasons) {
+        const beforeTotal = (item.seasons ?? []).reduce((s, sn) => s + sn.watched.length, 0)
+        const afterTotal = (updated.seasons ?? []).reduce((s, sn) => s + sn.watched.length, 0)
+        if (afterTotal > beforeTotal) {
+          const activeSeasonNum = updated.season || 1
+          const activeSeason =
+            updated.seasons?.find((s) => s.number === activeSeasonNum) ?? updated.seasons?.[0]
+          if (activeSeason) {
+            syncedEntry = {
+              title: updated.title,
+              season: activeSeason.number,
+              watchedCount: activeSeason.watched.length,
+              totalEpisodes: activeSeason.episodes,
+              status: updated.status,
+            }
+          }
+        }
+      }
+      return updated
+    }),
   )
+
+  if (syncedEntry) {
+    void syncProgressToTrackers(syncedEntry)
+  }
+  return ok
 }
 
 export function createMerkItem(fields: Partial<SavedLinkItem>): SavedLinkItem {
@@ -785,9 +820,17 @@ export interface BatchLookupItem {
   title: string
   season: number
   episode: number | null
+  language?: SavedLinkItem['language']
+  mode?: SavedLinkItem['mode']
+  audioFormat?: SavedLinkItem['audioFormat']
+  videoPref?: SavedLinkItem['videoPref']
+  audioPref?: SavedLinkItem['audioPref']
+  autoTranscribe?: boolean
 }
 
 let pendingBatchLookup: BatchLookupItem[] | null = null
+
+export const DOWNLOADER_LOOKUP_EVENT = 'sondra:downloader-lookup'
 
 /**
  * Asks the downloader to look an entry up where it stands. The downloader is
@@ -796,6 +839,7 @@ let pendingBatchLookup: BatchLookupItem[] | null = null
  */
 export function requestLookup(item: SavedLinkItem): void {
   pendingLookup = item
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(DOWNLOADER_LOOKUP_EVENT))
 }
 
 export function takePendingLookup(): SavedLinkItem | null {
@@ -827,6 +871,7 @@ export function takePendingOpen(): string | null {
 /** Transfers multiple episode URLs to the downloader as a batch/queue. */
 export function requestBatchLookup(batch: BatchLookupItem[]): void {
   pendingBatchLookup = batch
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(DOWNLOADER_LOOKUP_EVENT))
 }
 
 export function takePendingBatchLookup(): BatchLookupItem[] | null {

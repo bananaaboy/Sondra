@@ -30,6 +30,11 @@ export interface PlayerItem {
   directUrl?: string
   /** In Google Drive: streamed from there, `source` stays empty. */
   remote?: RemoteMedia
+  /** Merkliste episode hint for direct streams. */
+  hint?: EpisodeHint
+  /** Whether the direct stream is an HLS playlist or stream token. */
+  isHls?: boolean
+  streamToken?: string
   /** Pre-extracted resolution streams (e.g. from service/downloader) */
   streamVariants?: { height: number; url: string; label?: string }[]
 }
@@ -121,6 +126,34 @@ export function receivePlayerFiles(handler: ((delivery: PlayerDelivery) => void)
   if (handler && delivery) {
     const waiting = delivery
     delivery = null
+    handler(waiting)
+  }
+}
+
+export interface DirectStreamPayload {
+  name: string
+  directUrl: string
+  kind?: PlayerKind
+  size?: number
+  isHls?: boolean
+  token?: string
+  hint?: EpisodeHint
+  streamVariants?: { height: number; url: string; label?: string }[]
+}
+
+let pendingStream: DirectStreamPayload | null = null
+let streamDeliver: ((payload: DirectStreamPayload) => void) | null = null
+
+export function sendStreamToPlayer(payload: DirectStreamPayload): void {
+  if (streamDeliver) streamDeliver(payload)
+  else pendingStream = payload
+}
+
+export function receivePlayerStream(handler: ((payload: DirectStreamPayload) => void) | null): void {
+  streamDeliver = handler
+  if (handler && pendingStream) {
+    const waiting = pendingStream
+    pendingStream = null
     handler(waiting)
   }
 }

@@ -53,6 +53,7 @@ import {
 import { removeClicks, type ClickStrength } from '../../lib/declick'
 import { formatBytes, formatTimecode } from '../../lib/format'
 import { detectNoiseFloorRegion } from '../../lib/localAi'
+import { enhanceSpeechAudioData } from '../../lib/speechEnhance'
 import { pitchShift, stretchAudio } from '../../lib/timestretch'
 import { encodeWav, type AudioData, type WavBitDepth } from '../../lib/wav'
 import { useDecodedAudio } from '../../hooks/useDecodedAudio'
@@ -735,6 +736,15 @@ export function AudioEditorPanel() {
     })
   }, [apply, current, silenceThresholdDb])
 
+  const handleEnhanceSpeech = useCallback(async () => {
+    if (!current) return
+    await apply('Sprache verbessert (Rauschen & Hall entfernt)', (audioData) =>
+      hasSelection
+        ? processRange(audioData, span.start, span.end, (slice) => enhanceSpeechAudioData(slice))
+        : enhanceSpeechAudioData(audioData),
+    )
+  }, [apply, current, hasSelection, span.end, span.start])
+
   useEffect(() => {
     const node = silenceDialogRef.current
     if (!node) return
@@ -1112,6 +1122,14 @@ export function AudioEditorPanel() {
         return (
           <>
             <ToolHeading title="Säubern" hint={`Klicks, Rauschen und Pausen. Gilt für ${where}.`} />
+            <Module
+              title="Ein-Klick-Sprachverbesserung (KI)"
+              hint="Entfernt Lüfterrauschen, Tastaturklicken, Rumpeln und Raumhall in einem Schritt und hebt die Sprachverständlichkeit an."
+            >
+              <Button size="sm" disabled={idle} onClick={() => void handleEnhanceSpeech()}>
+                Sprache verbessern (Rauschen & Hall entfernen)
+              </Button>
+            </Module>
             <Module>
               <Toggle
                 label="Klicks und Knackser entfernen"
@@ -1417,6 +1435,9 @@ export function AudioEditorPanel() {
             <IconButton label="Wiederholen (Strg+Umschalt+Z)" onClick={redo} disabled={future.length === 0}>
               {IconRedo}
             </IconButton>
+            <Button size="sm" variant="quiet" onClick={() => void handleEnhanceSpeech()} disabled={idle || !current} className="ml-[4px]" title="Hintergrundrauschen, Tastaturklicken und Raumhall mit einem Klick entfernen">
+              Sprache verbessern
+            </Button>
             <Button size="sm" variant="quiet" onClick={() => setSilenceModalOpen(true)} disabled={idle || !current} className="ml-[4px]">
               Stille entfernen
             </Button>

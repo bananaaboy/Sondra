@@ -264,6 +264,7 @@ export default async function handler(request, response) {
     try {
       updates = await checkAniworldOnlineUpdates(targetStr, {
         localAddress: body.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
+        fullMetadata: Boolean(body.fullMetadata || request.query?.fullMetadata),
       })
     } catch {
       // Answered below as unknown.

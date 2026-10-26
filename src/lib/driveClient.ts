@@ -508,15 +508,57 @@ export function createDriveClient({
       if (!onProgress || !response.body) return new Uint8Array(await response.arrayBuffer())
       // Piece by piece, so a long film can say how far it got.
       const reader = response.body.getReader()
-      const parts: Uint8Array[] = []
+      const rawLength = Number(response.headers.get('content-length'))
+      const declaredLength = Number.isFinite(rawLength) && rawLength > 0 ? rawLength : 0
+      const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+      let lastReport = 0
       let loaded = 0
+
+      if (declaredLength > 0 && declaredLength <= 1_500_000_000) {
+        const buffer = new Uint8Array(declaredLength)
+        let overflow: Uint8Array[] | null = null
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (!overflow && loaded + value.byteLength <= buffer.byteLength) {
+            buffer.set(value, loaded)
+          } else {
+            if (!overflow) overflow = [buffer.subarray(0, loaded)]
+            overflow.push(value)
+          }
+          loaded += value.byteLength
+          const t = nowMs()
+          if (t - lastReport >= 100) {
+            lastReport = t
+            onProgress(loaded)
+          }
+        }
+        onProgress(loaded)
+        if (!overflow) {
+          return loaded === buffer.byteLength ? buffer : buffer.subarray(0, loaded)
+        }
+        const whole = new Uint8Array(loaded)
+        let at = 0
+        for (const part of overflow) {
+          whole.set(part, at)
+          at += part.byteLength
+        }
+        return whole
+      }
+
+      const parts: Uint8Array[] = []
       for (;;) {
         const { done, value } = await reader.read()
         if (done) break
         parts.push(value)
         loaded += value.byteLength
-        onProgress(loaded)
+        const t = nowMs()
+        if (t - lastReport >= 100) {
+          lastReport = t
+          onProgress(loaded)
+        }
       }
+      onProgress(loaded)
       const whole = new Uint8Array(loaded)
       let at = 0
       for (const part of parts) {

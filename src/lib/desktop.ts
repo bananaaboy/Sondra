@@ -136,6 +136,11 @@ export interface AppBridge {
   isAlwaysOnTop?: () => Promise<boolean>
   /** Brings the window forward — after a click on a notice; missing before 1.1.9. */
   focusWindow?: () => Promise<boolean>
+  /** Shows a native Windows notification; clicking focuses Sondra. */
+  notify?: (title: string, body: string) => Promise<boolean>
+  /** Gets or picks the target folder for Zero-RAM Direct-to-Disk downloads. */
+  getDownloadDir?: () => Promise<string>
+  pickDownloadDir?: () => Promise<string | null>
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   installUpdate: () => Promise<boolean>

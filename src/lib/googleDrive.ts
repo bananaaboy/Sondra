@@ -1173,6 +1173,7 @@ let streaming: Promise<boolean> | null = null
 
 /** Whether a worker that knows `drive-media/` is in charge of this page. */
 async function canStream(): Promise<boolean> {
+  if (IN_APP) return false
   if (typeof navigator === 'undefined' || !navigator.serviceWorker) return false
   let worker = navigator.serviceWorker.controller
   if (!worker) {
@@ -1206,9 +1207,27 @@ async function canStream(): Promise<boolean> {
 
 /** The address to play a file in Drive from, or null when it has to be fetched whole. */
 export async function driveMediaUrl(file: { id: string; size: number; type: string }): Promise<string | null> {
-  if (!(await canStream())) return null
   const query = new URLSearchParams({ size: String(file.size), type: file.type || 'application/octet-stream' })
-  return new URL(`drive-media/${encodeURIComponent(file.id)}?${query}`, document.baseURI).toString()
+  if (await canStream()) {
+    return new URL(`drive-media/${encodeURIComponent(file.id)}?${query}`, document.baseURI).toString()
+  }
+  const isLocalServer =
+    IN_APP ||
+    (typeof window !== 'undefined' &&
+      (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'))
+  if (isLocalServer) {
+    try {
+      await ready()
+      const token = await accessToken(false)
+      if (token) {
+        query.set('token', token)
+        return new URL(`drive-media/${encodeURIComponent(file.id)}?${query}`, document.baseURI).toString()
+      }
+    } catch {
+      return null
+    }
+  }
+  return null
 }
 
 /** The folder in Drive's own page, made if it is not there yet. */
