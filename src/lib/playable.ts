@@ -18,6 +18,7 @@ import type { DiskFacts, StreamInfo } from './ffmpegClient'
 
 let tester: HTMLVideoElement | null = null
 const canPlay = (type: string) => {
+  if (typeof document === 'undefined') return true
   tester ??= document.createElement('video')
   return tester.canPlayType(type) !== ''
 }
@@ -68,11 +69,43 @@ export function browserPlaysAudio(codec: string): boolean {
 }
 
 /**
- * Containers the browser opens itself. A file in anything else that does
- * play is still looked at once: Chromium plays an MKV with a DTS track as
- * a silent film, without a word.
+ * Containers the browser opens directly from disk without remuxing.
+ * If an MKV or other container has a silent audio track (e.g. DTS), the
+ * player detects that live via `videoElementHasDecodedAudio` during the
+ * first second of playback rather than blindly remuxing every file upfront.
  */
-export const NATIVE_CONTAINER = /\.(mp4|m4v|mov|webm)$/i
+export const NATIVE_CONTAINER = /\.(mp4|m4v|mov|webm|mkv|ogv|ogg|m4a|aac|mp3|flac|wav|opus)$/i
+
+/**
+ * Checks whether a playing `<video>` element is actively decoding audio
+ * natively. Returns `true` when audio is confirmed working, `false` when
+ * the browser reports 0 decoded audio bytes after playback started, or
+ * `null` when the browser does not expose audio decode counters.
+ */
+export function videoElementHasDecodedAudio(node: HTMLVideoElement): boolean | null {
+  const anyNode = node as HTMLVideoElement & {
+    webkitAudioDecodedByteCount?: number
+    mozHasAudio?: boolean
+    audioTracks?: { length: number }
+  }
+  if (typeof anyNode.webkitAudioDecodedByteCount === 'number') {
+    return anyNode.webkitAudioDecodedByteCount > 0
+  }
+  if (typeof anyNode.mozHasAudio === 'boolean') {
+    return anyNode.mozHasAudio
+  }
+  if (anyNode.audioTracks && typeof anyNode.audioTracks.length === 'number') {
+    return anyNode.audioTracks.length > 0
+  }
+  return null
+}
+
+/** Files larger than this (or when re-encoding picture) use instant windowed direct streaming instead of full-file buffering. */
+export const DIRECT_STREAM_THRESHOLD_BYTES = 120 * 1024 * 1024
+
+export function streamWindowSeconds(remedy: Remedy): number {
+  return remedy === 'picture' ? 30 : 120
+}
 
 /**
  * How much has to be done.
@@ -116,23 +149,44 @@ export interface StandOptions {
   crf?: number
   /** Which sound track to keep, counted among the sound tracks. */
   audioIndex?: number
+  /** Start offset in seconds for instant windowed direct streaming of huge files. */
+  startTime?: number
+  /** Window duration in seconds for instant windowed direct streaming of huge files. */
+  durationSeconds?: number
 }
 
-export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxHeight = 480, crf = 28, audioIndex = 0 }: StandOptions = {}): StandJob {
+export function standJob(
+  remedy: Remedy,
+  facts: DiskFacts,
+  input: string,
+  { maxHeight = 480, crf = 28, audioIndex = 0, startTime, durationSeconds }: StandOptions = {},
+): StandJob {
+  const seekPrefix: string[] = []
+  if (typeof startTime === 'number' && startTime > 0) {
+    seekPrefix.push('-ss', startTime.toFixed(3))
+  }
+  if (typeof durationSeconds === 'number' && durationSeconds > 0) {
+    seekPrefix.push('-t', durationSeconds.toFixed(3))
+  }
+
   // A sound file the browser cannot play (WMA, a bare AC-3) becomes AAC.
   const hasVideo = remedy === 'picture' || facts.streams.some((stream) => stream.type === 'video') || facts.videoCodec !== null
   if (!hasVideo) {
     return {
-      args: ['-hide_banner', '-i', input, '-vn', '-map', `0:a:${audioIndex}`, '-c:a', 'aac', '-b:a', '192k', 'vorschau.m4a'],
+      args: ['-hide_banner', ...seekPrefix, '-i', input, '-vn', '-map', `0:a:${audioIndex}`, '-c:a', 'aac', '-b:a', '192k', 'vorschau.m4a'],
       output: 'vorschau.m4a',
       mime: 'audio/mp4',
     }
   }
-  const head = ['-hide_banner', '-threads', '0', '-i', input, '-map', '0:v:0', '-map', `0:a:${audioIndex}?`, '-sn', '-dn']
+  const head = ['-hide_banner', '-threads', '0', ...seekPrefix, '-i', input, '-map', '0:v:0', '-map', `0:a:${audioIndex}?`, '-sn', '-dn']
   const scaleFilter = `scale=-2:'min(${maxHeight},2*trunc(ih/2))':flags=fast_bilinear`
   const sound =
     facts.streams.find((stream) => stream.type === 'audio' && stream.index === audioIndex)?.codec ?? firstOf(facts, 'audio')?.codec ?? null
   const audioFast = sound && browserPlaysAudio(sound) ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '128k', '-ac', '2']
+  const mp4Flags =
+    typeof durationSeconds === 'number' && durationSeconds > 0
+      ? ['-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-avoid_negative_ts', 'make_zero']
+      : ['-movflags', '+faststart']
 
   if (remedy === 'picture' && !browserPlaysVideo('h264')) {
     // A browser without H.264 (Chromium as some Linux systems ship it) gets
@@ -154,9 +208,9 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
       args: [
         ...head,
         '-vf', scaleFilter,
-        '-c:v', 'libx264', '-preset', 'fast', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-threads', '0',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', String(crf), '-pix_fmt', 'yuv420p', '-threads', '0',
         ...audioFast,
-        '-movflags', '+faststart', 'vorschau.mp4',
+        ...mp4Flags, 'vorschau.mp4',
       ],
       output: 'vorschau.mp4',
       mime: 'video/mp4',
@@ -173,7 +227,7 @@ export function standJob(remedy: Remedy, facts: DiskFacts, input: string, { maxH
       : ['-c:a', 'aac', '-b:a', '160k', '-ac', '2']
   const output = webm ? 'vorschau.webm' : 'vorschau.mp4'
   return {
-    args: [...head, '-c:v', 'copy', ...audio, ...(webm ? [] : ['-movflags', '+faststart']), output],
+    args: [...head, '-c:v', 'copy', ...audio, ...(webm ? [] : mp4Flags), output],
     output,
     mime: webm ? 'video/webm' : 'video/mp4',
   }

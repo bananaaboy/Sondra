@@ -16,6 +16,13 @@ import { useSyncExternalStore } from 'react'
 
 import { deriveLinkTitle, isAniworldUrl, parseLinkEpisodeInfo } from './download'
 import { getProjectToolState, setProjectToolState } from './project'
+import {
+  coerceToSqliteBytes,
+  deserializeSondraSqlite,
+  serializeSondraSqlite,
+  sqliteBytesToBase64,
+  type SqliteAppStateEntry,
+} from './sqlite'
 import type {
   AniworldLanguagePref,
   AudioFilePref,
@@ -202,6 +209,7 @@ export const OPENING_MIN = 10
 export const OPENING_MAX = 600
 
 const KEY = 'sondra:saved_links'
+const SQLITE_KEY = 'sondra:sqlite_db'
 const PROJECT_KEY = 'merkliste'
 
 const uniqueSorted = (numbers: number[]) =>
@@ -316,39 +324,116 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
   return item
 }
 
-function load(): SavedLinkItem[] {
-  // A project opened before this module was first needed already put its
-  // list where `getProjectToolState` finds it.
+const REMOVED_KEY = 'sondra:merkliste_removed'
+
+let appStateStore: Record<string, SqliteAppStateEntry> = {}
+
+function loadInitialSnapshot(): { items: SavedLinkItem[]; removals: Record<string, number>; appState: Record<string, SqliteAppStateEntry> } {
   const fromProject = getProjectToolState<unknown>(PROJECT_KEY)
-  if (Array.isArray(fromProject)) return fromProject.map((item) => normalize(item as Partial<SavedLinkItem>))
-  try {
-    const raw = localStorage.getItem(KEY)
-    const parsed: unknown = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed.map((item) => normalize(item as Partial<SavedLinkItem>)) : []
-  } catch {
-    return []
+  if (Array.isArray(fromProject)) {
+    return {
+      items: fromProject.map((item) => normalize(item as Partial<SavedLinkItem>)),
+      removals: {},
+      appState: {},
+    }
   }
+  try {
+    const rawSqlite = typeof localStorage !== 'undefined' ? localStorage.getItem(SQLITE_KEY) : null
+    if (rawSqlite && coerceToSqliteBytes(rawSqlite)) {
+      const snap = deserializeSondraSqlite(rawSqlite)
+      return {
+        items: snap.items.map((item) => normalize(item as Partial<SavedLinkItem>)),
+        removals: snap.removed ?? {},
+        appState: snap.appState ?? {},
+      }
+    }
+  } catch {
+    // Fall back to legacy JSON keys if SQLite snapshot cannot be read
+  }
+  let loadedItems: SavedLinkItem[] = []
+  let loadedRemovals: Record<string, number> = {}
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    loadedItems = Array.isArray(parsed) ? parsed.map((item) => normalize(item as Partial<SavedLinkItem>)) : []
+  } catch {
+    loadedItems = []
+  }
+  try {
+    const rawRem = typeof localStorage !== 'undefined' ? localStorage.getItem(REMOVED_KEY) : null
+    const parsedRem: unknown = rawRem ? JSON.parse(rawRem) : {}
+    loadedRemovals = parsedRem && typeof parsedRem === 'object' ? (parsedRem as Record<string, number>) : {}
+  } catch {
+    loadedRemovals = {}
+  }
+  return { items: loadedItems, removals: loadedRemovals, appState: {} }
 }
 
-let items: SavedLinkItem[] = load()
+const initialSnapshot = loadInitialSnapshot()
+let items: SavedLinkItem[] = initialSnapshot.items
+let removals: Record<string, number> = initialSnapshot.removals
+appStateStore = initialSnapshot.appState
 const listeners = new Set<() => void>()
 /** False once the device refused to store the list — a cover too large, most often. */
 let lastSaveOk = true
 
-function persist(): void {
+function persistSqliteSnapshot(): void {
   if (typeof localStorage !== 'undefined') {
     try {
+      const dbBytes = serializeSondraSqlite({
+        items: items as unknown as Record<string, unknown>[],
+        removed: removals,
+        appState: appStateStore,
+      })
+      localStorage.setItem(SQLITE_KEY, sqliteBytesToBase64(dbBytes))
       localStorage.setItem(KEY, JSON.stringify(items))
+      localStorage.setItem(REMOVED_KEY, JSON.stringify(removals))
       lastSaveOk = true
     } catch {
-      lastSaveOk = false
+      try {
+        localStorage.setItem(KEY, JSON.stringify(items))
+        localStorage.setItem(REMOVED_KEY, JSON.stringify(removals))
+        lastSaveOk = true
+      } catch {
+        lastSaveOk = false
+      }
     }
   } else {
     lastSaveOk = true
   }
   setProjectToolState(PROJECT_KEY, items)
 }
+
+if (
+  typeof localStorage !== 'undefined' &&
+  !localStorage.getItem(SQLITE_KEY) &&
+  (items.length > 0 || Object.keys(removals).length > 0)
+) {
+  persistSqliteSnapshot()
+}
+
+function persist(): void {
+  persistSqliteSnapshot()
+}
 setProjectToolState(PROJECT_KEY, items)
+
+export function getSqliteAppState<T = unknown>(key: string, fallback?: T): T {
+  const entry = appStateStore[key]
+  if (!entry || entry.value === undefined) return fallback as T
+  return entry.value as T
+}
+
+export function setSqliteAppState<T = unknown>(key: string, value: T): void {
+  appStateStore = {
+    ...appStateStore,
+    [key]: { value, updatedAt: Date.now() },
+  }
+  persistSqliteSnapshot()
+}
+
+export function sqliteAppState(): Record<string, SqliteAppStateEntry> {
+  return appStateStore
+}
 
 export function merkItems(): SavedLinkItem[] {
   return items
@@ -407,6 +492,18 @@ if (typeof window !== 'undefined') {
   })
   // Another window of the app changed the list.
   window.addEventListener('storage', (event) => {
+    if (event.key === SQLITE_KEY && event.newValue) {
+      try {
+        const snap = deserializeSondraSqlite(event.newValue)
+        items = snap.items.map((item) => normalize(item as Partial<SavedLinkItem>))
+        removals = snap.removed ?? removals
+        appStateStore = snap.appState ?? appStateStore
+        listeners.forEach((listener) => listener())
+        return
+      } catch {
+        /* ignore half-written value */
+      }
+    }
     if (event.key !== KEY) return
     try {
       const parsed: unknown = event.newValue ? JSON.parse(event.newValue) : []
@@ -813,10 +910,18 @@ export async function coverFromFile(file: File, longest = 720): Promise<string> 
 const EXPORT_KIND = 'sondra-merkliste'
 
 /**
- * The whole list as a file of its own: to keep, or to take to another
- * device. Covers chosen from a file travel inside it; covers given as an
- * address stay an address.
+ * The whole list as a SQLite 3 database file (`Sondra-Merkliste.sqlite`): to
+ * keep, or to take to another device. Covers chosen from a file travel inside
+ * it; covers given as an address stay an address.
  */
+export function exportMerklisteSqlite(list: SavedLinkItem[] = items, removed: Record<string, number> = removals): Uint8Array {
+  return serializeSondraSqlite({
+    items: list as unknown as Record<string, unknown>[],
+    removed,
+    appState: appStateStore,
+  })
+}
+
 export function exportMerkliste(list: SavedLinkItem[] = items): string {
   return JSON.stringify({ kind: EXPORT_KIND, version: 1, exportedAt: new Date().toISOString(), items: list }, null, 2)
 }
@@ -958,8 +1063,18 @@ export function importAniListJson(jsonText: string): SavedLinkItem[] {
   return items
 }
 
-/** Reads a file `exportMerkliste` wrote, or a MyAnimeList XML / AniList JSON file. */
-export function readMerklisteFile(text: string): SavedLinkItem[] {
+/** Reads a SQLite database file (`exportMerklisteSqlite`), a legacy JSON export, or a MyAnimeList XML / AniList JSON file. */
+export function readMerklisteFile(input: string | Uint8Array): SavedLinkItem[] {
+  const sqliteBytes = coerceToSqliteBytes(input)
+  if (sqliteBytes) {
+    const snap = deserializeSondraSqlite(sqliteBytes)
+    if (snap.items.length === 0) throw new Error('Die Merkliste in der SQLite-Datei ist leer.')
+    if (snap.appState && Object.keys(snap.appState).length > 0) {
+      appStateStore = { ...appStateStore, ...snap.appState }
+    }
+    return snap.items.map((entry) => normalize(entry as Partial<SavedLinkItem>))
+  }
+  const text = typeof input === 'string' ? input : new TextDecoder().decode(input)
   const trimmed = text.trim()
   if (trimmed.startsWith('<') && (trimmed.includes('<myanimelist') || trimmed.includes('<anime>'))) {
     const mal = importMalXml(trimmed)
@@ -970,7 +1085,7 @@ export function readMerklisteFile(text: string): SavedLinkItem[] {
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new Error('Die Datei ist keine Merkliste — sie lässt sich nicht als JSON lesen.')
+    throw new Error('Die Datei ist keine Merkliste — sie lässt sich weder als SQLite noch als JSON lesen.')
   }
   if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>
@@ -1186,28 +1301,8 @@ export function mergeMerkliste(current: SavedLinkItem[], incoming: SavedLinkItem
 /* Removals and the shared copy                                                */
 /* -------------------------------------------------------------------------- */
 
-const REMOVED_KEY = 'sondra:merkliste_removed'
-
-/**
- * When each entry was taken off the list, by id. A copy kept elsewhere — the
- * page in Anytype — still holds a removed entry; without this, the next
- * merge would bring it back.
- */
-let removals: Record<string, number> = (() => {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(REMOVED_KEY) ?? '{}')
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {}
-  } catch {
-    return {}
-  }
-})()
-
 function persistRemovals() {
-  try {
-    localStorage.setItem(REMOVED_KEY, JSON.stringify(removals))
-  } catch {
-    // Without it, a removed entry may come back from Anytype once.
-  }
+  persistSqliteSnapshot()
 }
 
 export function merkRemovals(): Record<string, number> {
@@ -1306,9 +1401,17 @@ export function takeShared(current: SavedLinkItem[], remote: { items: SavedLinkI
 }
 
 /**
- * The list as the file in Google Drive holds it: entries as they travel,
- * and what was removed. Read by `readMerklisteFile` like any export.
+ * The list as the SQLite 3 database file in Google Drive (`Sondra-Merkliste.sqlite`):
+ * entries as they travel, what was removed, and flexible app state.
  */
+export function sharedSqliteBytes(list: SavedLinkItem[], removed: Record<string, number>): Uint8Array {
+  return serializeSondraSqlite({
+    items: list.map(travelling) as unknown as Record<string, unknown>[],
+    removed,
+    appState: appStateStore,
+  })
+}
+
 export function sharedFileText(list: SavedLinkItem[], removed: Record<string, number>): string {
   return JSON.stringify({ kind: EXPORT_KIND, version: 2, exportedAt: new Date().toISOString(), items: list.map(travelling), removed }, null, 2)
 }
@@ -1319,10 +1422,26 @@ export function sharedKey(list: SavedLinkItem[], removed: Record<string, number>
 }
 
 /**
- * The file in Drive read back — also one an older Sondra wrote as a plain
- * backup (no removals). Null when it is no Merkliste at all.
+ * The file in Drive read back — supports both SQLite 3 binary files
+ * (`Sondra-Merkliste.sqlite`) and legacy JSON files (`Sondra-Merkliste.json`).
+ * Null when it is no Merkliste at all.
  */
-export function readSharedFile(text: string): { items: SavedLinkItem[]; removed: Record<string, number>; key: string } | null {
+export function readSharedFile(input: string | Uint8Array): { items: SavedLinkItem[]; removed: Record<string, number>; key: string } | null {
+  const sqliteBytes = coerceToSqliteBytes(input)
+  if (sqliteBytes) {
+    try {
+      const snap = deserializeSondraSqlite(sqliteBytes)
+      const items = snap.items.map((item) => createMerkItem(item as Partial<SavedLinkItem>))
+      const removed = snap.removed ?? {}
+      if (snap.appState && Object.keys(snap.appState).length > 0) {
+        appStateStore = { ...appStateStore, ...snap.appState }
+      }
+      return { items, removed, key: sharedKey(items, removed) }
+    } catch {
+      return null
+    }
+  }
+  const text = typeof input === 'string' ? input : new TextDecoder().decode(input)
   let parsed: unknown
   try {
     parsed = JSON.parse(text)

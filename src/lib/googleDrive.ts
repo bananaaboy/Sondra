@@ -44,8 +44,8 @@ import {
   onMerkliste,
   readSharedFile,
   setMerkItems,
-  sharedFileText,
   sharedKey,
+  sharedSqliteBytes,
   type SavedLinkItem,
 } from './merkliste'
 import type { EpisodeHint } from './episodeMatch'
@@ -70,7 +70,9 @@ const TOKEN_API = '/api/google-token'
 /** The channel `public/google-drive.html` answers on. */
 const CHANNEL = 'sondra-google-drive'
 const SETTINGS_KEY = 'sondra:drive'
-export const MERKLISTE_FILE = 'Sondra-Merkliste.json'
+const WEB_TOKEN_KEY = 'sondra:drive:token'
+export const MERKLISTE_FILE = 'Sondra-Merkliste.sqlite'
+const LEGACY_MERKLISTE_FILE = 'Sondra-Merkliste.json'
 /** The Merkliste is brought in step this long after its last change. */
 const MERKLISTE_DELAY = 2500
 
@@ -197,15 +199,35 @@ export interface MerkSync {
   problem: { code: MerkSyncProblem; detail?: string } | null
 }
 
+const initialSettings = readSettings()
+
+function readStoredWebToken(): { token: string; expiresAt: number } | null {
+  if (IN_APP) return null
+  try {
+    const raw = localStorage.getItem(WEB_TOKEN_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { token?: unknown; expiresAt?: unknown }
+    if (typeof parsed?.token === 'string' && typeof parsed?.expiresAt === 'number' && parsed.expiresAt - 60_000 > Date.now()) {
+      return { token: parsed.token, expiresAt: parsed.expiresAt }
+    }
+    localStorage.removeItem(WEB_TOKEN_KEY)
+  } catch {
+    // Ignore storage read errors
+  }
+  return null
+}
+
+const initialWebToken = readStoredWebToken()
+
 export const useDrive = create<DriveState>(() => ({
   configured: !IN_APP || Boolean(APP_DRIVE),
   ready: !IN_APP,
-  connected: false,
+  connected: !IN_APP && initialWebToken !== null,
   signingIn: false,
   lasting: true,
-  account: null,
+  account: initialSettings.email ? { name: initialSettings.name || initialSettings.email, email: initialSettings.email } : null,
   jobs: [],
-  settings: readSettings(),
+  settings: initialSettings,
   problem: null,
   merkSync: { running: false, at: 0, received: 0, problem: null },
 }))
@@ -318,14 +340,19 @@ function ask<T>(action: string, ...args: unknown[]): Promise<Answer<T>> {
 const KNOWN_CODES = new Set<string>(Object.keys(DRIVE_PROBLEM))
 const asCode = (error: string): DriveErrorCode => (KNOWN_CODES.has(error) ? (error as DriveErrorCode) : 'failed')
 
-/** The website's token: in memory, for its hour. */
-let webToken: { token: string; expiresAt: number } | null = null
+/** The website's token: persisted for its hour so reloads stay connected automatically. */
+let webToken: { token: string; expiresAt: number } | null = initialWebToken
 const webTokenUsable = () => webToken !== null && webToken.expiresAt - 60_000 > Date.now()
 let expiryTimer: ReturnType<typeof setTimeout> | null = null
 
 /** Keeps the website's token, and says „not connected“ when its hour is up — not first when an upload fails. */
 function holdWebToken(token: string, seconds: number) {
   webToken = { token, expiresAt: Date.now() + seconds * 1000 }
+  try {
+    localStorage.setItem(WEB_TOKEN_KEY, JSON.stringify(webToken))
+  } catch {
+    // Ignore storage quota errors
+  }
   if (expiryTimer) clearTimeout(expiryTimer)
   expiryTimer = setTimeout(() => {
     expiryTimer = null
@@ -357,6 +384,11 @@ async function accessToken(refused: boolean): Promise<string> {
   }
 
   webToken = null
+  try {
+    localStorage.removeItem(WEB_TOKEN_KEY)
+  } catch {
+    // Ignore
+  }
   set({ connected: false })
   throw new DriveError('expired')
 }
@@ -566,6 +598,18 @@ export function connectDrive(): Promise<boolean> {
   return settleSignIn(IN_APP ? signInApp() : signInWeb())
 }
 
+const autoLoadListeners = new Set<() => void>()
+
+export function onDriveAutoLoad(listener: () => void): () => void {
+  autoLoadListeners.add(listener)
+  return () => autoLoadListeners.delete(listener)
+}
+
+function notifyDriveAutoLoad(): void {
+  if (state().settings.merkliste) void syncMerklisteWithDrive()
+  autoLoadListeners.forEach((listener) => listener())
+}
+
 /** After a sign-in: the account, the queue, the Merkliste — or what went wrong. */
 function settleSignIn(signedIn: Promise<void>): Promise<boolean> {
   return signedIn.then(
@@ -577,8 +621,7 @@ function settleSignIn(signedIn: Promise<void>): Promise<boolean> {
       set({ connected: true, signingIn: false, account: account ?? state().account })
       log(`Mit Google Drive verbunden${account?.email ? ` (${account.email})` : ''}`)
       void pump()
-      // The list in step once the switch is on — first of all, before anything else changes it.
-      if (state().settings.merkliste) void syncMerklisteWithDrive()
+      notifyDriveAutoLoad()
       return true
     },
     (error: unknown) => {
@@ -608,6 +651,11 @@ export async function disconnectDrive(): Promise<void> {
     cookieGone = true
   }
   webToken = null
+  try {
+    localStorage.removeItem(WEB_TOKEN_KEY)
+  } catch {
+    // Ignore
+  }
   // An upload still running belongs to the account just left: it ends there.
   connection += 1
   client = makeClient()
@@ -637,6 +685,22 @@ export function initDrive(): void {
   })
   if (!IN_APP) {
     void resumeAppSignIn()
+    if (webTokenUsable()) {
+      const remainingSec = Math.max(60, Math.floor((webToken!.expiresAt - Date.now()) / 1000))
+      holdWebToken(webToken!.token, remainingSec)
+      void client
+        .account()
+        .then((account) => {
+          if (account) {
+            saveSettings({ linked: true, email: account.email, name: account.name })
+            set({ connected: true, account })
+          }
+        })
+        .catch(() => {})
+      void pump()
+      notifyDriveAutoLoad()
+      return
+    }
     // Signed in to stay: connected again without a click.
     void askLasting().then(() => {
       if (!state().settings.linked || !lastingHere()) return
@@ -648,7 +712,7 @@ export function initDrive(): void {
             set({ connected: true, account })
           }
           void pump()
-          if (state().settings.merkliste) void syncMerklisteWithDrive()
+          notifyDriveAutoLoad()
         })
         .catch(() => {})
     })
@@ -667,7 +731,7 @@ export function initDrive(): void {
       set({ account })
     }
     void pump()
-    if (state().settings.merkliste) void syncMerklisteWithDrive()
+    notifyDriveAutoLoad()
   })
 }
 
@@ -899,12 +963,11 @@ export function inStepWithDrive(items: SavedLinkItem[]): boolean {
 }
 
 /**
- * One round: read „Sondra-Merkliste.json“, merge it into this device's
- * list (`mergeShared`: per series the side changed last wins, removals
- * stay removed, pictures from files stay on their device), write the
- * merged list back unless the file already holds exactly that. Compared
- * with the file, not with what this device wrote last: another one may
- * have written since. A file Sondra cannot read is never written over.
+ * One round: read „Sondra-Merkliste.sqlite“ (or migrate from legacy
+ * „Sondra-Merkliste.json“), merge it into this device's list (`mergeShared`:
+ * per series the side changed last wins, removals stay removed, pictures
+ * from files stay on their device), write the merged list back unless the
+ * file already holds exactly that.
  */
 async function merkRound(quiet: boolean): Promise<void> {
   const current = state()
@@ -917,11 +980,16 @@ async function merkRound(quiet: boolean): Promise<void> {
   const started = connection
   setSync({ running: true })
   try {
-    const file = await client.find('merkliste', MERKLISTE_FILE)
-    const remote = file ? readSharedFile(new TextDecoder().decode(await client.read(file.id))) : null
+    let file = await client.find('merkliste', MERKLISTE_FILE)
+    let isLegacy = false
+    if (!file) {
+      file = await client.find('merkliste', LEGACY_MERKLISTE_FILE)
+      if (file) isLegacy = true
+    }
+    const remote = file ? readSharedFile(await client.read(file.id)) : null
     if (file && !remote) {
       setSync({ running: false, problem: { code: 'unreadable' } })
-      log(`${MERKLISTE_FILE} in Google Drive ist keine Merkliste — nicht überschrieben`, 'warn')
+      log(`${file.name} in Google Drive ist keine Merkliste — nicht überschrieben`, 'warn')
       return
     }
     if (started !== connection) return
@@ -940,9 +1008,9 @@ async function merkRound(quiet: boolean): Promise<void> {
       }
     }
     const key = sharedKey(merkItems(), merkRemovals())
-    if (!remote || remote.key !== key) {
-      const text = sharedFileText(merkItems(), merkRemovals())
-      await client.put('merkliste', MERKLISTE_FILE, new Blob([text], { type: 'application/json' }), { mode: 'replace', mime: 'application/json' })
+    if (!remote || isLegacy || remote.key !== key) {
+      const sqliteBytes = sharedSqliteBytes(merkItems(), merkRemovals())
+      await client.put('merkliste', MERKLISTE_FILE, new Blob([sqliteBytes as Uint8Array<ArrayBuffer>], { type: 'application/vnd.sqlite3' }), { mode: 'replace', mime: 'application/vnd.sqlite3' })
       if (started !== connection) return
       log(`Merkliste in Google Drive abgeglichen (${merkItems().length} Einträge${received ? `, ${received} von dort` : ''})`)
     } else if (received > 0) {
@@ -1104,9 +1172,22 @@ function answerStreamTokens(): void {
 let streaming: Promise<boolean> | null = null
 
 /** Whether a worker that knows `drive-media/` is in charge of this page. */
-function canStream(): Promise<boolean> {
-  const worker = typeof navigator !== 'undefined' ? navigator.serviceWorker?.controller : null
-  if (!worker) return Promise.resolve(false)
+async function canStream(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.serviceWorker) return false
+  let worker = navigator.serviceWorker.controller
+  if (!worker) {
+    try {
+      const reg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 1500)),
+      ])
+      worker = navigator.serviceWorker.controller ?? reg?.active ?? null
+    } catch {
+      worker = null
+    }
+  }
+  if (!worker || !navigator.serviceWorker.controller) return false
+  const activeWorker = navigator.serviceWorker.controller
   streaming ??= new Promise<boolean>((resolve) => {
     const channel = new MessageChannel()
     const timer = window.setTimeout(() => resolve(false), 1500)
@@ -1114,7 +1195,7 @@ function canStream(): Promise<boolean> {
       window.clearTimeout(timer)
       resolve(event.data === 'drive-media')
     }
-    worker.postMessage({ type: 'drive-ping' }, [channel.port2])
+    activeWorker.postMessage({ type: 'drive-ping' }, [channel.port2])
   }).then((answer) => {
     // A worker from an older build may be replaced by one that can; ask again next time.
     if (!answer) streaming = null

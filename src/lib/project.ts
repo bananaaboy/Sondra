@@ -7,6 +7,7 @@
  */
 
 import { saveBytes } from './download'
+import { deserializeSondraSqlite, serializeSondraSqlite } from './sqlite'
 import { createZip, readZip, type ZipEntry } from './zip'
 import { kindFromMime, useSession, type Asset, type AssetKind, type PanelId } from '../state/store'
 import type { ConvertSettings } from './convert'
@@ -98,9 +99,24 @@ export function buildProjectFile(customName?: string): { bytes: Uint8Array; file
     toolStates: currentToolStates,
   }
 
+  const merkItemsInProject = Array.isArray(currentToolStates.merkliste)
+    ? (currentToolStates.merkliste as Record<string, unknown>[])
+    : []
+  const sqliteData = serializeSondraSqlite({
+    items: merkItemsInProject,
+    removed: {},
+    appState: {
+      manifest: { value: manifest, updatedAt: manifest.savedAt },
+    },
+  })
+
   entries.unshift({
     name: 'project.json',
     data: encoder.encode(JSON.stringify(manifest, null, 2)),
+  })
+  entries.unshift({
+    name: 'project.sqlite',
+    data: sqliteData,
   })
 
   const archive = createZip(entries)
@@ -126,12 +142,32 @@ export function isProjectFile(file: { name: string }): boolean {
 export function loadProjectBytes(bytes: Uint8Array, sourceName = 'projekt.sondra'): { assetCount: number } {
   const decoder = new TextDecoder()
   const entries = readZip(bytes)
+  const sqliteEntry = entries.find((e) => e.name === 'project.sqlite')
   const manifestEntry = entries.find((e) => e.name === 'project.json')
-  if (!manifestEntry) {
-    throw new Error(`${sourceName} enthält keine gültige Sondra-Projektbeschreibung (project.json).`)
+  let manifest: ProjectManifest | undefined
+  if (sqliteEntry) {
+    try {
+      const snap = deserializeSondraSqlite(sqliteEntry.data)
+      const fromDb = snap.appState?.manifest?.value as ProjectManifest | undefined
+      if (fromDb && fromDb.format === 'sondra-project') {
+        manifest = fromDb
+        if (snap.items.length > 0) {
+          manifest.toolStates = {
+            ...manifest.toolStates,
+            merkliste: snap.items,
+          }
+        }
+      }
+    } catch {
+      /* fall back to project.json */
+    }
   }
-
-  const manifest = JSON.parse(decoder.decode(manifestEntry.data)) as ProjectManifest
+  if (!manifest) {
+    if (!manifestEntry) {
+      throw new Error(`${sourceName} enthält keine gültige Sondra-Projektbeschreibung (project.sqlite / project.json).`)
+    }
+    manifest = JSON.parse(decoder.decode(manifestEntry.data)) as ProjectManifest
+  }
   if (manifest.format !== 'sondra-project') {
     throw new Error(`${sourceName} ist keine unterstützte Sondra-Projektdatei.`)
   }

@@ -581,10 +581,21 @@ export function FolderPanel() {
       return next
     })
 
-  // The folder from last time is offered, never opened by itself.
+  // Automatically load Drive or remembered folder when connected or already permitted.
   useEffect(() => {
-    if (canPickFolder && !scan) void lookUpRemembered()
-  }, [scan])
+    if (scan || scanning) return
+    if (drive) {
+      void readDriveFolder().catch(() => {})
+      return
+    }
+    if (canPickFolder) {
+      void lookUpRemembered().then(async (handle) => {
+        if (handle && (await allowed(handle, 'read', false))) {
+          void readFolder(handle).catch(() => {})
+        }
+      })
+    }
+  }, [scan, scanning, drive])
 
   useEffect(() => {
     setLimit(PAGE)

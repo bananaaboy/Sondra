@@ -26,7 +26,18 @@ import { EqualizerRack, EQUALIZER_PRESETS, type EqualizerPresetName } from '../.
 import { createKaraokeProcessor, type KaraokeProcessor } from '../../lib/audioKaraoke'
 import { diskPath, probeDisk, runFfmpegOnDisk, unloadFfmpeg, type DiskFacts, type StreamInfo } from '../../lib/ffmpegClient'
 import { formatBytes } from '../../lib/format'
-import { NATIVE_CONTAINER, browserPlaysAudio, codecName, diskName, remedyFor, standJob, type Remedy } from '../../lib/playable'
+import {
+  DIRECT_STREAM_THRESHOLD_BYTES,
+  NATIVE_CONTAINER,
+  browserPlaysAudio,
+  codecName,
+  diskName,
+  remedyFor,
+  standJob,
+  streamWindowSeconds,
+  videoElementHasDecodedAudio,
+  type Remedy,
+} from '../../lib/playable'
 import {
   PLAYER_ACCEPT,
   QUALITY_STEPS,
@@ -413,6 +424,12 @@ interface Version {
   started: boolean
   url: string | null
   error: string | null
+  /** Start offset in seconds when streaming a huge file in fast windows. */
+  windowStart?: number
+  /** Duration of the current window in seconds when streaming a huge file. */
+  windowDuration?: number
+  /** Full media duration in seconds across all windows. */
+  totalDuration?: number
 }
 
 type Spec = Pick<Version, 'reason' | 'remedy' | 'height' | 'audioIndex'>
@@ -815,13 +832,28 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
   const version = current ? versions[current.id] ?? null : null
 
-  const make = async (item: PlayerItem, found: DiskFacts, spec: Spec) => {
+  const audioCheckedRef = useRef<Set<string>>(new Set())
+
+  const make = async (item: PlayerItem, found: DiskFacts, spec: Spec, requestedStartOffset?: number) => {
     jobAbort.current?.abort()
     const controller = new AbortController()
     jobAbort.current = controller
     const previous = versionsRef.current[item.id]
     const keepOld = previous?.url ?? null
     const currentActiveHeight = previous?.activeHeight ?? (previous?.url && previous?.fraction === 1 ? previous.height : null)
+
+    const totalLen = found.durationSeconds ?? 0
+    const baseWindowSec = streamWindowSeconds(spec.remedy)
+    const useWindowStream =
+      totalLen > baseWindowSec * 1.25 &&
+      (item.size > DIRECT_STREAM_THRESHOLD_BYTES || spec.remedy === 'picture')
+    const windowStart = useWindowStream
+      ? Math.max(0, Math.min(requestedStartOffset ?? time, Math.max(0, totalLen - 5)))
+      : 0
+    const windowDuration = useWindowStream
+      ? Math.min(baseWindowSec, Math.max(10, totalLen - windowStart))
+      : undefined
+
     setVersions((value) => ({
       ...value,
       [item.id]: {
@@ -832,6 +864,9 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         activeHeight: currentActiveHeight,
         url: keepOld,
         error: null,
+        windowStart: useWindowStream ? windowStart : undefined,
+        windowDuration,
+        totalDuration: totalLen > 0 ? totalLen : undefined,
       },
     }))
     const started = performance.now()
@@ -841,6 +876,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
         maxHeight: spec.height ?? 720,
         crf: spec.height && spec.height <= 480 ? 28 : 26,
         audioIndex: spec.audioIndex,
+        ...(useWindowStream ? { startTime: windowStart, durationSeconds: windowDuration } : {}),
       })
       const { files } = await runFfmpegOnDisk({
         source: item.source,
@@ -856,7 +892,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
       })
       if (controller.signal.aborted) return
       const url = URL.createObjectURL(new Blob([files[job.output] as BlobPart], { type: job.mime }))
-      if (spec.height) {
+      if (spec.height && !useWindowStream) {
         let itemCache = qualityCache.current.get(item.id)
         if (!itemCache) {
           itemCache = new Map()
@@ -867,8 +903,13 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
       // The film keeps its place and keeps playing across the swap.
       const node = videoRef.current
       if (currentIdRef.current === item.id && node) {
-        if (node.currentTime > 0) setResume(node.currentTime)
-        wasPlaying.current = !node.paused
+        if (useWindowStream) {
+          setResume(null)
+          if (totalLen > 0) setDuration(totalLen)
+        } else if (node.currentTime > 0) {
+          setResume((previous?.windowStart ?? 0) + node.currentTime)
+        }
+        wasPlaying.current = !node.paused || requestedStartOffset !== undefined
       }
       if (keepOld) {
         const isCached = Array.from(qualityCache.current.get(item.id)?.values() ?? []).includes(keepOld)
@@ -884,10 +925,16 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
           activeHeight: spec.height,
           url,
           error: null,
+          windowStart: useWindowStream ? windowStart : undefined,
+          windowDuration,
+          totalDuration: totalLen > 0 ? totalLen : undefined,
         },
       }))
       setFailed(false)
-      log('abspielen', `${item.name}: ${spec.height ? `${spec.height}p` : 'abspielbare Fassung'} bereit (${((performance.now() - started) / 1000).toFixed(1)} s)`)
+      log(
+        'abspielen',
+        `${item.name}: ${spec.height ? `${spec.height}p` : useWindowStream ? 'Direkt-Stream' : 'abspielbare Fassung'} bereit (${((performance.now() - started) / 1000).toFixed(1)} s)`,
+      )
     } catch (failure) {
       if (controller.signal.aborted) return
       const lines = (failure instanceof Error ? failure.message : String(failure)).split('\n').filter(Boolean)
@@ -1352,11 +1399,32 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const seek = (seconds: number) => {
     const node = video()
     if (!node) return
-    node.currentTime = Math.min(Math.max(0, seconds), duration || node.duration || 0)
+    const totalLen = version?.totalDuration || duration || node.duration || 0
+    const target = Math.min(Math.max(0, seconds), totalLen)
+    if (version?.windowDuration && current) {
+      const winStart = version.windowStart ?? 0
+      const winEnd = winStart + (Number.isFinite(node.duration) && node.duration > 0 ? node.duration : version.windowDuration)
+      if (target >= winStart && target <= winEnd - 0.5) {
+        node.currentTime = target - winStart
+        setTime(target)
+        return
+      }
+      setTime(target)
+      const knownFacts = facts[current.id]
+      if (knownFacts && knownFacts !== 'pending') {
+        void make(current, knownFacts, version, target)
+      } else {
+        void probe(current).then((found) => {
+          if (found) void make(current, found, version, target)
+        })
+      }
+      return
+    }
+    node.currentTime = target
     setTime(node.currentTime)
   }
   const skip = (delta: number) => {
-    seek((video()?.currentTime ?? 0) + delta)
+    seek(time + delta)
     pulse(delta < 0 ? 'back' : 'forward')
   }
   const index = items.findIndex((item) => item.id === currentId)
@@ -2239,7 +2307,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   node.volume = settings.volume
                   node.muted = settings.muted
                   node.playbackRate = settings.rate
-                  const length = Number.isFinite(node.duration) ? node.duration : 0
+                  const rawLength = Number.isFinite(node.duration) ? node.duration : 0
+                  const length = version?.totalDuration && version.totalDuration > rawLength ? version.totalDuration : rawLength
                   setDuration(length)
                   if (node.videoWidth > 0 && !version?.height) {
                     setSize({ width: node.videoWidth, height: node.videoHeight })
@@ -2256,6 +2325,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     return
                   }
                   if (!version && !NATIVE_CONTAINER.test(current.name)) void look(current, false)
+                  if (version?.windowDuration && wasPlaying.current) {
+                    void node.play().catch(() => undefined)
+                    return
+                  }
                   if (resume !== null) {
                     node.currentTime = resume
                     setResume(null)
@@ -2292,27 +2365,60 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 }}
                 onPause={() => {
                   setPlaying(false)
-                  rememberPlace(current, video()?.currentTime ?? null)
+                  rememberPlace(current, (version?.windowStart ?? 0) + (video()?.currentTime ?? 0) || null)
                 }}
                 onTimeUpdate={(event) => {
                   const node = event.currentTarget
-                  setTime(node.currentTime)
-                  if (loopA !== null && loopB !== null && loopB > loopA) {
-                    if (node.currentTime >= loopB || node.currentTime < loopA) {
-                      node.currentTime = loopA
+                  const currentRealTime = (version?.windowStart ?? 0) + node.currentTime
+                  setTime(currentRealTime)
+                  // Verify native audio decoding after 0.8s of playback for direct files (e.g. MKV with DTS)
+                  if (
+                    isVideo &&
+                    !version &&
+                    !current.remote &&
+                    !node.paused &&
+                    !node.muted &&
+                    node.currentTime > 0.8 &&
+                    !audioCheckedRef.current.has(current.id)
+                  ) {
+                    audioCheckedRef.current.add(current.id)
+                    if (videoElementHasDecodedAudio(node) === false) {
+                      void look(current, false)
                     }
                   }
-                  if (node.buffered.length) setBuffered(node.buffered.end(node.buffered.length - 1))
-                  if (Math.abs(node.currentTime - lastSaved.current) > 5) {
-                    lastSaved.current = node.currentTime
-                    rememberPlace(current, node.currentTime > 15 ? node.currentTime : null)
+                  if (loopA !== null && loopB !== null && loopB > loopA) {
+                    if (currentRealTime >= loopB || currentRealTime < loopA) {
+                      seek(loopA)
+                    }
+                  }
+                  if (node.buffered.length) {
+                    setBuffered((version?.windowStart ?? 0) + node.buffered.end(node.buffered.length - 1))
+                  }
+                  if (Math.abs(currentRealTime - lastSaved.current) > 5) {
+                    lastSaved.current = currentRealTime
+                    rememberPlace(current, currentRealTime > 15 ? currentRealTime : null)
                   }
                 }}
                 onDurationChange={(event) => {
                   const length = event.currentTarget.duration
-                  if (Number.isFinite(length) && length > 0) setDuration(length)
+                  if (version?.totalDuration && version.totalDuration > 0) {
+                    setDuration(version.totalDuration)
+                  } else if (Number.isFinite(length) && length > 0) {
+                    setDuration(length)
+                  }
                 }}
                 onEnded={() => {
+                  if (version?.windowDuration && version?.totalDuration && current) {
+                    const node = videoRef.current
+                    const nextStart = (version.windowStart ?? 0) + (node && Number.isFinite(node.duration) && node.duration > 0 ? node.duration : version.windowDuration)
+                    if (nextStart < version.totalDuration - 1.5) {
+                      const knownFacts = facts[current.id]
+                      if (knownFacts && knownFacts !== 'pending') {
+                        void make(current, knownFacts, version, nextStart)
+                      }
+                      return
+                    }
+                  }
                   rememberPlace(current, null)
                   setPlaying(false)
                   if (sleep && 'atEnd' in sleep) {
