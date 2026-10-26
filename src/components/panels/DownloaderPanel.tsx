@@ -931,7 +931,13 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         activeFrac = sumFrac / total
       }
       const overallFrac = Math.min(1, done / total + activeFrac)
-      const currentTitle = active[0]?.title || batchTitle || 'Stapel-Download'
+      const currentTitle =
+        active[0]?.result?.title ||
+        active[0]?.titleHint ||
+        active[0]?.sourceTitle ||
+        active[0]?.groupTitle ||
+        batchTitle ||
+        'Stapel-Download'
       updateDownloadProgressState({
         activeCount: active.length || 1,
         totalCount: total,
@@ -2127,7 +2133,10 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
           <p className="value text-micro leading-none text-stage-muted truncate">
             {batchBusy && batchEntries
-              ? (batchEntries.find((e) => e.status === 'downloading')?.title || batchTitle || 'Stapel im Hintergrund')
+              ? (() => {
+                  const dl = batchEntries.find((e) => e.status === 'downloading')
+                  return dl?.result?.title || dl?.titleHint || dl?.sourceTitle || dl?.groupTitle || batchTitle || 'Stapel im Hintergrund'
+                })()
               : (busy || (progress?.loaded ? `${formatBytes(progress.loaded)} geladen` : 'Lädt im Hintergrund …'))}
           </p>
         </div>
