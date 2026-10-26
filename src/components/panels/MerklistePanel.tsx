@@ -105,7 +105,7 @@ import { canPickFolder, pickFolder, type FolderEpisode } from '../../lib/folder'
 import { includeRemembered, playEpisode, readFolder, takeFileList, useEpisodesInFolder, useFolder, useSeriesInFolderCount } from '../../lib/folderLibrary'
 import { isAniworldUrl } from '../../lib/download'
 import { sendStreamToPlayer } from '../../lib/player'
-import { resolveViaService } from '../../lib/studio'
+import { isHlsStream, resolveViaService } from '../../lib/studio'
 import {
   fetchAniListCollection,
   getAniListSettings,
@@ -616,13 +616,21 @@ function useStreamHere() {
         setStreamError('Diese Adresse verweist auf eine Playlist statt auf eine einzelne Folge.')
         return
       }
-      const videoStreams = res.streams.filter((s) => s.hasVideo)
-      const best = videoStreams[0] ?? res.streams[0]
+      const playableVideo = res.streams.filter((s) => s.hasVideo && (s.directUrl || s.token))
+      const best =
+        playableVideo.find((s) => !isHlsStream(s)) ??
+        playableVideo[0] ??
+        res.streams.find((s) => s.directUrl || s.token) ??
+        res.streams[0]
       if (!best) {
         setStreamError('Kein direkter Stream für diese Folge gefunden. Bitte „Laden“ nutzen.')
         return
       }
-      const streamUrl = best.directUrl || (best.token ? `/api/stream?token=${encodeURIComponent(best.token)}` : '')
+      const streamUrl =
+        best.directUrl ||
+        (best.token ? `/api/stream?t=${encodeURIComponent(best.token)}` : '') ||
+        best.job?.tunnels?.[0] ||
+        ''
       if (!streamUrl) {
         setStreamError('Stream-Adresse konnte nicht aufgelöst werden.')
         return
@@ -632,7 +640,7 @@ function useStreamHere() {
         directUrl: streamUrl,
         kind: best.hasVideo ? 'video' : 'audio',
         size: best.bytes ?? 0,
-        isHls: Boolean(best.isHls && !best.directUrl),
+        isHls: isHlsStream(best),
         token: best.token || undefined,
         hint: { series: item.id, season: item.season, episode: ep },
       })

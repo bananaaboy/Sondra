@@ -1690,7 +1690,7 @@ export function DownloaderPanel() {
    * Player tab for instant playback without waiting for a full file download.
    */
   const streamNow = (stream: StudioStream, res: StudioResult, saveInBackground = false, batchId?: string) => {
-    const streamUrl = stream.directUrl || (stream.token ? `/api/stream?token=${encodeURIComponent(stream.token)}` : '')
+    const streamUrl = stream.directUrl || (stream.token ? `/api/stream?t=${encodeURIComponent(stream.token)}` : '')
     if (!streamUrl) return
     const matched = matchingSavedLink(url)
     sendStreamToPlayer({
@@ -1698,10 +1698,10 @@ export function DownloaderPanel() {
       directUrl: streamUrl,
       kind: stream.hasVideo ? 'video' : 'audio',
       size: stream.bytes ?? 0,
-      isHls: Boolean(stream.isHls && !stream.directUrl),
+      isHls: isHlsStream(stream),
       token: stream.token || undefined,
       hint: matched
-        ? { series: matched.id, season: linkSeason, episode: linkEpisode ?? 1 }
+        ? { series: matched.id, season: parseLinkEpisodeInfo(batchId ? (entryById(batchId)?.url ?? url) : url)?.season ?? linkSeason, episode: parseLinkEpisodeInfo(batchId ? (entryById(batchId)?.url ?? url) : url)?.episode ?? linkEpisode ?? 1 }
         : undefined,
     })
     if (saveInBackground) {
@@ -1779,6 +1779,23 @@ export function DownloaderPanel() {
       setProgress(null)
       abortRef.current = null
     }
+  }
+
+  const streamBatchItem = async (id: string) => {
+    let entry = entryById(id)
+    if (!entry || entry.status === 'downloading' || entry.status === 'resolving') return
+    let res = entry.status === 'ready' ? (entry.result ?? null) : null
+    if (!res) {
+      res = await resolveBatchItem(id)
+      entry = entryById(id)
+      if (!res || !entry) return
+    }
+    const stream = res.streams?.find((s) => s.id === entry!.selectedStreamId) || res.streams?.[0]
+    if (!stream) {
+      patchEntry(id, { status: 'error', error: 'Kein abspielbarer Medienstream gefunden.' })
+      return
+    }
+    streamNow(stream, res, false, id)
   }
 
   const takeBatchItem = async (id: string, externalSignal?: AbortSignal) => {
@@ -2989,7 +3006,7 @@ export function DownloaderPanel() {
                                   <div className="flex flex-wrap items-center gap-[8px]">
                                     {entry.status === 'pending' ? (
                                       <>
-                                        <span className="value text-small text-muted">Bereit</span>
+                                        <span className="value text-small text-muted">Bereit</span><Button size="sm" variant="quiet" disabled={batchBusy} onClick={() => void streamBatchItem(entry.id)} title="Stream sofort ohne vorherigen Download im Player abspielen">Sofort abspielen</Button>
                                         <Button
                                           size="sm"
                                           disabled={batchBusy}
