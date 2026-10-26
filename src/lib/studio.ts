@@ -472,10 +472,23 @@ export async function downloadStream(
   // without a word wherever a host hands out smaller ranges than asked for.
   for (let offset = 0; total === null || offset < total; ) {
     const end = offset + CHUNK - 1
-    const response = await fetch(proxied, {
-      headers: { range: `bytes=${offset}-${end}` },
-      signal,
-    })
+    let response: Response | null = null
+    let fetchAttempts = 0
+    while (fetchAttempts < 3) {
+      try {
+        response = await fetch(proxied, {
+          headers: { range: `bytes=${offset}-${end}` },
+          signal,
+        })
+        break
+      } catch (err) {
+        if (signal?.aborted) throw err
+        fetchAttempts++
+        if (fetchAttempts >= 3) throw err
+        await new Promise((r) => setTimeout(r, 800 * fetchAttempts))
+      }
+    }
+    if (!response) break
 
     if (response.status === 403) {
       throw new StudioError('expired', 'Der Link ist abgelaufen. Bitte die Adresse noch einmal suchen.')

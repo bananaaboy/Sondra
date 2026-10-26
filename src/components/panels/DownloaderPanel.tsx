@@ -20,6 +20,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { APP_BRIDGE, IN_DESKTOP_APP } from '../../lib/desktop'
 import { sendStreamToPlayer } from '../../lib/player'
 import { sendAppNotification } from '../../lib/notifications'
+import {
+  getDownloadChimeEnabled,
+  playCompletionChime,
+  setDownloadChimeEnabled,
+  updateDownloadProgressState,
+} from '../../lib/backgroundDownload'
 import { useIngestFiles } from '../../hooks/useIngest'
 import { opusArgs } from '../../lib/convert'
 import {
@@ -659,7 +665,7 @@ const SERVICES_NAMED = 4
 /** Versions shown before „weitere Fassungen": the best of each resolution fit. */
 const STREAMS_SHOWN = 6
 
-export function DownloaderPanel() {
+export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const addAsset = useSession((state) => state.addAsset)
   const setPanel = useSession((state) => state.setPanel)
   const log = useSession((state) => state.log)
@@ -858,6 +864,12 @@ export function DownloaderPanel() {
   const [taken, setTaken] = useState<{ name: string; bytes: Uint8Array; mime: string } | null>(null)
   const [clipboardUrl, setClipboardUrl] = useState<string | null>(null)
   const dismissedClipboardRef = useRef<Set<string>>(new Set())
+  const [chimeEnabled, setChimeEnabledState] = useState(getDownloadChimeEnabled)
+  const [autoPlayAfterDownload, setAutoPlayAfterDownload] = useState(false)
+  const setChime = (enabled: boolean) => {
+    setChimeEnabledState(enabled)
+    setDownloadChimeEnabled(enabled)
+  }
 
   useEffect(() => {
     const checkClipboard = async () => {
@@ -890,6 +902,65 @@ export function DownloaderPanel() {
     itemAbortControllers.current.forEach((c) => c.abort())
     itemAbortControllers.current.clear()
   }, [])
+
+  // Synchronize background downloading state (WakeLock, dynamic tab title, taskbar progress)
+  useEffect(() => {
+    if (busy !== null) {
+      const frac = progress?.total && progress.total > 0 ? progress.loaded / progress.total : 0.25
+      updateDownloadProgressState({
+        activeCount: 1,
+        totalCount: 1,
+        fraction: frac,
+        currentName: result?.title ?? 'Download',
+      })
+      return
+    }
+
+    if (batchBusy && batchEntries && batchEntries.length > 0) {
+      const total = batchEntries.length
+      const done = batchEntries.filter((e) => e.status === 'done').length
+      const active = batchEntries.filter((e) => e.status === 'downloading')
+      let activeFrac = 0
+      if (active.length > 0) {
+        const sumFrac = active.reduce((acc, curr) => {
+          if (curr.progress?.total && curr.progress.total > 0) {
+            return acc + curr.progress.loaded / curr.progress.total
+          }
+          return acc + (curr.progress?.loaded ? 0.3 : 0)
+        }, 0)
+        activeFrac = sumFrac / total
+      }
+      const overallFrac = Math.min(1, done / total + activeFrac)
+      const currentTitle = active[0]?.title || batchTitle || 'Stapel-Download'
+      updateDownloadProgressState({
+        activeCount: active.length || 1,
+        totalCount: total,
+        fraction: overallFrac,
+        currentName: currentTitle,
+      })
+      return
+    }
+
+    updateDownloadProgressState({
+      activeCount: 0,
+      totalCount: 0,
+      fraction: 0,
+    })
+  }, [busy, progress, batchBusy, batchEntries, result?.title, batchTitle])
+
+  // Prevent accidental tab/window close while active downloads are running
+  useEffect(() => {
+    const isDownloading = busy !== null || batchBusy || (batchEntries ?? []).some((e) => e.status === 'downloading')
+    if (!isDownloading) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [busy, batchBusy, batchEntries])
+
 
   const [autoTranscribe, setAutoTranscribe] = useState(false)
   const autoTranscribeRef = useRef(false)
@@ -1731,6 +1802,14 @@ export function DownloaderPanel() {
       if (directDisk) {
         log('holen', `${directDisk.name} direkt auf Festplatte gespeichert (0 MB RAM · ${formatBytes(directDisk.bytesWritten)})`)
         recordDownload(url, result.title, result.author ?? '', directDisk.ext, directDisk.bytesWritten)
+        playCompletionChime()
+        sendAppNotification({
+          title: 'Download abgeschlossen',
+          body: `${directDisk.name} (${formatBytes(directDisk.bytesWritten)}) wurde gespeichert.`,
+          kind: 'general',
+          onClick: () => setPanel('player'),
+        })
+        if (autoPlayAfterDownload) setPanel('player')
         return
       }
 
@@ -1762,6 +1841,14 @@ export function DownloaderPanel() {
       if (delivery !== 'drive_only') offerDownloadToDrive(done)
       setTaken({ name: done.name, bytes: done.bytes, mime: done.mime })
       recordDownload(url, result.title, result.author ?? '', done.ext, done.bytes.byteLength)
+      playCompletionChime()
+      sendAppNotification({
+        title: 'Download abgeschlossen',
+        body: `${done.name} (${formatBytes(done.bytes.byteLength)}) wurde geladen.`,
+        kind: 'general',
+        onClick: () => setPanel('player'),
+      })
+      if (autoPlayAfterDownload) setPanel('player')
       if (autoTranscribeRef.current) {
         void triggerAutoTranscribe(done.name, done.bytes)
       }
@@ -1921,10 +2008,12 @@ export function DownloaderPanel() {
       if (!controller.signal.aborted && batchEntriesRef.current) {
         const doneCount = batchEntriesRef.current.filter((e) => e.status === 'done').length
         if (doneCount > 0) {
+          playCompletionChime()
           sendAppNotification({
             title: 'Batch-Download abgeschlossen',
             body: `${doneCount} ${doneCount === 1 ? 'Folge wurde' : 'Folgen wurden'} erfolgreich heruntergeladen.`,
             kind: 'batch',
+            onClick: () => setPanel('downloader'),
           })
         }
       }
@@ -1989,8 +2078,98 @@ export function DownloaderPanel() {
       : []),
   ].join(' · ')
 
+  const isAnyDownloading = busy !== null || batchBusy || (batchEntries ?? []).some((e) => e.status === 'downloading')
+
+  const miniBar =
+    hidden && isAnyDownloading ? (
+      <aside
+        role="region"
+        aria-label="Laufender Download"
+        className="fixed inset-x-[12px] bottom-[12px] z-50 flex items-center gap-[12px] rounded-card bg-stage p-[10px] text-stage-ink ring-1 ring-inset ring-stage-line elevate-lift sm:bottom-[12px] sm:left-[24px] sm:right-auto sm:w-[420px]"
+      >
+        <div className="grid h-[40px] w-[40px] shrink-0 place-items-center rounded-pill bg-stage-ink text-stage animate-pulse">
+          <svg viewBox="0 0 20 20" className="size-[20px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M10 3v10M6 9l4 4 4-4M4 17h12" />
+          </svg>
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
+          <div className="flex items-center justify-between gap-[8px]">
+            <p className="truncate text-small font-semibold">
+              {batchBusy && batchEntries
+                ? `${batchEntries.filter((e) => e.status === 'done').length} von ${batchEntries.length} geladen`
+                : result?.title || 'Download läuft …'}
+            </p>
+            <span className="value shrink-0 text-micro text-stage-muted font-mono">
+              {batchBusy && batchEntries
+                ? `${Math.round(((batchEntries.filter((e) => e.status === 'done').length + (batchEntries.filter((e) => e.status === 'downloading').length > 0 ? 0.5 : 0)) / batchEntries.length) * 100)}%`
+                : progress?.total
+                  ? `${Math.round((progress.loaded / progress.total) * 100)}%`
+                  : progress?.loaded
+                    ? formatBytes(progress.loaded)
+                    : '…'}
+            </span>
+          </div>
+
+          <div className="h-[3px] w-full overflow-hidden rounded-pill bg-stage-line">
+            <div
+              className="h-full bg-stage-accent transition-[width] duration-[var(--dur-fast)]"
+              style={{
+                width:
+                  batchBusy && batchEntries
+                    ? `${Math.min(100, Math.round(((batchEntries.filter((e) => e.status === 'done').length + (batchEntries.filter((e) => e.status === 'downloading').length > 0 ? 0.5 : 0)) / batchEntries.length) * 100))}%`
+                    : progress?.total
+                      ? `${Math.min(100, Math.round((progress.loaded / progress.total) * 100))}%`
+                      : '30%',
+              }}
+            />
+          </div>
+
+          <p className="value text-micro leading-none text-stage-muted truncate">
+            {batchBusy && batchEntries
+              ? (batchEntries.find((e) => e.status === 'downloading')?.title || batchTitle || 'Stapel im Hintergrund')
+              : (busy || (progress?.loaded ? `${formatBytes(progress.loaded)} geladen` : 'Lädt im Hintergrund …'))}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-[6px] shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (batchBusy) {
+                batchAbortRef.current?.abort()
+                itemAbortControllers.current.forEach((c) => c.abort())
+                itemAbortControllers.current.clear()
+                setBatchBusy(false)
+              } else {
+                abortRef.current?.abort()
+                setBusy(null)
+              }
+            }}
+            aria-label="Download abbrechen"
+            title="Abbrechen"
+            className="press grid h-[32px] w-[32px] place-items-center rounded-pill text-stage-muted hover:text-stage-ink hover:bg-stage-soft"
+          >
+            <svg viewBox="0 0 20 20" className="size-[16px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPanel('downloader')}
+            className="press rounded-nav px-[12px] py-[8px] text-small font-medium text-stage-ink ring-1 ring-inset ring-stage-line hover:bg-stage-soft"
+          >
+            Öffnen
+          </button>
+        </div>
+      </aside>
+    ) : null
+
   return (
-    <div className="flex flex-col gap-[16px]">
+    <>
+      {miniBar}
+      <div className={hidden ? 'hidden' : 'flex flex-col gap-[16px]'}>
       <Card tone="cream">
         <div className="mt-[8px] mb-[12px] flex flex-wrap items-center justify-between gap-[12px]">
           <h2 className="display-md">Ein Video oder Lied von einer Adresse</h2>
@@ -2475,7 +2654,22 @@ export function DownloaderPanel() {
                 </div>
               ) : null}
 
-              {IN_DESKTOP_APP ? (
+              <div className="flex flex-col gap-[10px] border-t border-line pt-[10px] sm:col-span-2">
+                  <Toggle
+                    label="Ton bei Fertigstellung abspielen"
+                    hint="Spielt einen sanften, angenehmen Zweiklang ab, wenn ein Download oder ein ganzer Stapel fertig ist."
+                    checked={chimeEnabled}
+                    onChange={setChime}
+                  />
+                  <Toggle
+                    label="Nach Download sofort im Player abspielen"
+                    hint="Wechselt nach Abschluss des Downloads automatisch zum Player und startet die Datei."
+                    checked={autoPlayAfterDownload}
+                    onChange={setAutoPlayAfterDownload}
+                  />
+                </div>
+
+                {IN_DESKTOP_APP ? (
                 <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
                   <label htmlFor="adapter-select" className="text-small text-prose">
                     Netzwerk
@@ -3352,5 +3546,6 @@ export function DownloaderPanel() {
         </div>
       </section>
     </div>
+    </>
   )
 }

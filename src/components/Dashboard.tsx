@@ -346,7 +346,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
 
       {/* Keyed on the panel so every switch replays the entrance rather than
           swapping content in place, which reads as a jump. */}
-      {panel === 'player' ? null : (
+      {panel === 'player' || panel === 'downloader' ? null : (
         <div key={panel} role="tabpanel" aria-label={current?.label} className="panel-root rise flex min-w-0 flex-col gap-[16px]">
           {!ready ? (
             <NothingLoaded label={current?.label ?? ''} summary={current?.summary ?? ''} />
@@ -355,7 +355,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
               <Suspense fallback={<ToolLoading />}>
                 {panel === 'start' ? <Home /> : null}
                 {panel === 'folder' ? <FolderPanel /> : null}
-                {panel === 'downloader' ? <DownloaderPanel /> : null}
+
                 {panel === 'merkliste' ? <MerklistePanel /> : null}
                 {panel === 'converter' ? <ConverterPanel /> : null}
                 {panel === 'audio' ? <AudioEditorPanel /> : null}
@@ -374,6 +374,20 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
           )}
         </div>
       )}
+
+      {/* The downloader lives outside the tool panels list: it has a floating minibar
+          when another tool is open so downloads continue uninterrupted. */}
+      <div
+        role={panel === 'downloader' ? 'tabpanel' : undefined}
+        aria-label={panel === 'downloader' ? current?.label : undefined}
+        className={panel === 'downloader' ? 'panel-root rise flex min-w-0 flex-col gap-[16px]' : 'contents'}
+      >
+        <ErrorBoundary panel="downloader">
+          <Suspense fallback={null}>
+            <DownloaderPanel hidden={panel !== 'downloader'} />
+          </Suspense>
+        </ErrorBoundary>
+      </div>
 
       {/* The player lives outside the tool panels list: it has a floating minibar
           when another tool is open so playback continues uninterrupted. */}
