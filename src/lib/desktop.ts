@@ -141,6 +141,10 @@ export interface AppBridge {
   /** Gets or picks the target folder for Zero-RAM Direct-to-Disk downloads. */
   getDownloadDir?: () => Promise<string>
   pickDownloadDir?: () => Promise<string | null>
+  /** Sets progress bar in taskbar (0 to 1, or -1 to clear). */
+  setProgressBar?: (progress: number) => Promise<boolean>
+  /** Prevents OS sleep during long downloads. */
+  setPowerSaveBlocker?: (active: boolean) => Promise<boolean>
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   installUpdate: () => Promise<boolean>

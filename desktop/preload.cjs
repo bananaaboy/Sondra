@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('sondraApp', {
   notify: (title, body) => ipcRenderer.invoke('sondra:notify', title, body),
   getDownloadDir: () => ipcRenderer.invoke('sondra:get-download-dir'),
   pickDownloadDir: () => ipcRenderer.invoke('sondra:pick-download-dir'),
+  setProgressBar: (progress) => ipcRenderer.invoke('sondra:set-progress-bar', progress),
+  setPowerSaveBlocker: (active) => ipcRenderer.invoke('sondra:power-save-blocker', active),
   onOpenedFiles: (callback) => {
     const listener = (_event, files) => callback(files)
     ipcRenderer.on('sondra:files', listener)

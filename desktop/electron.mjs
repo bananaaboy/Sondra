@@ -21,7 +21,7 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, safeStorage, session, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerSaveBlocker, safeStorage, session, shell } from 'electron'
 
 import { createAnytype } from './anytype.mjs'
 import { createGoogleDrive } from './googleDrive.mjs'
@@ -328,6 +328,37 @@ ipcMain.handle('sondra:pick-download-dir', async () => {
     return chosen
   } catch {
     return null
+  }
+})
+
+let downloadPowerSaveId = null
+ipcMain.handle('sondra:power-save-blocker', (_event, active) => {
+  try {
+    if (active) {
+      if (downloadPowerSaveId === null || !powerSaveBlocker.isStarted(downloadPowerSaveId)) {
+        downloadPowerSaveId = powerSaveBlocker.start('prevent-app-suspension')
+      }
+    } else {
+      if (downloadPowerSaveId !== null && powerSaveBlocker.isStarted(downloadPowerSaveId)) {
+        powerSaveBlocker.stop(downloadPowerSaveId)
+        downloadPowerSaveId = null
+      }
+    }
+    return true
+  } catch {
+    return false
+  }
+})
+
+ipcMain.handle('sondra:set-progress-bar', (_event, progress) => {
+  try {
+    if (window && !window.isDestroyed()) {
+      window.setProgressBar(typeof progress === 'number' && progress >= 0 ? progress : -1)
+      return true
+    }
+    return false
+  } catch {
+    return false
   }
 })
 
