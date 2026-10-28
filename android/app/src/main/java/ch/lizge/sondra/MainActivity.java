@@ -255,7 +255,7 @@ public class MainActivity extends ComponentActivity {
         return intent != null && Bridge.isSignInReturn(intent.getData());
     }
 
-    /** The page's address for an intent: a link, a shortcut, else the Merkliste. */
+    /** The page's address for an intent: a link, a shortcut, else the start page. */
     private String addressFrom(Intent intent) {
         Uri data = intent != null ? intent.getData() : null;
         if (data != null && "https".equals(data.getScheme()) && isOwn(data) && !fromSignIn(intent)) return data.toString();

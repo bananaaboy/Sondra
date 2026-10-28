@@ -2,8 +2,9 @@
 <resources>
     <string name="appName">Sondra</string>
     <string name="hostName">sondra.lizge.ch</string>
-    <!-- Starts on the Merkliste: on a phone, what is watched and what comes next. -->
-    <string name="launchUrl">https://sondra.lizge.ch/#merkliste</string>
+    <!-- Starts on the start page, as the website does (28.10.2026: „öffnet immer
+         Merkliste zuerst statt Startseite“). The Merkliste is one shortcut away. -->
+    <string name="launchUrl">https://sondra.lizge.ch/</string>
     <string name="shortcutMerkliste">Merkliste</string>
     <string name="shortcutOrdner">Ordner</string>
     <string name="shortcutAbspielen">Abspielen</string>

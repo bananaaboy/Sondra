@@ -28,6 +28,20 @@ export const ANDROID_APK = 'https://github.com/bananaaboy/Sondra/releases/latest
 /** A phone or tablet with Android, in its browser: the app it can install is that one. */
 export const ON_ANDROID = typeof navigator !== 'undefined' && /\bAndroid\b/.test(navigator.userAgent)
 
+/**
+ * Nothing is fetched ahead here: a phone (Android, iPhone, iPad), or a
+ * connection that asked to save data. On the desktop the FFmpeg core and
+ * every tool are fetched once the page is idle; on a phone that was 32 MB
+ * of WebAssembly compiled at every start of the Android app, with all forty
+ * tools behind it — on mobile data, in a WebView Android may end for its
+ * memory (28.10.2026: „die Android-App funktioniert mega schlecht“).
+ * Each tool still fetches what it needs when it is opened.
+ */
+export const FETCH_LIGHT =
+  typeof navigator !== 'undefined' &&
+  (/\b(Android|iPhone|iPad|iPod)\b/.test(navigator.userAgent) ||
+    (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true)
+
 type ArchNavigator = Navigator & {
   userAgentData?: { platform?: string; getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }> }
 }

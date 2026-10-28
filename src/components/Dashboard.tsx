@@ -10,6 +10,7 @@ import { detectCapabilities, hasWebGpuAdapter, suggestedThreads } from '../lib/c
 import { onServiceConnection, serviceConnection, type ServiceConnection } from '../lib/serviceState'
 import { loadFfmpeg, onFfmpegStatus, type FfmpegStatus } from '../lib/ffmpegClient'
 import type { ResolvedTheme } from '../lib/theme'
+import { FETCH_LIGHT } from '../lib/desktop'
 import { useSession } from '../state/store'
 /*
  * Each tool is its own chunk, fetched when it is opened. The start screen used
@@ -53,9 +54,10 @@ const ScreenPanel = lazy(TOOLS.screen)
 const MixPanel = lazy(TOOLS.mix)
 const PlayerPanel = lazy(TOOLS.player)
 
-/** Fetches every tool's chunk once the page is idle. */
+/** Fetches every tool's chunk once the page is idle — not on a phone (`FETCH_LIGHT`). */
 function usePrefetchTools() {
   useEffect(() => {
+    if (FETCH_LIGHT) return
     const load = () => Object.values(TOOLS).forEach((get) => void get().catch(() => undefined))
     let idle: number | null = null
     const timer = window.setTimeout(() => {
@@ -322,6 +324,16 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
   const panel = useSession((state) => state.panel)
   const hasAssets = useSession((state) => state.assets.length > 0)
   const current = PANELS.find((entry) => entry.id === panel)
+  // The player and the downloader stay mounted once opened — a film or a
+  // download goes on behind another tool — but not before: mounted from the
+  // start they parsed 800 KB of script on every visit, the player with
+  // hls.js, for a page that only showed the start screen.
+  const [opened, setOpened] = useState(() => new Set([panel]))
+  useEffect(() => {
+    setOpened((seen) => (seen.has(panel) ? seen : new Set(seen).add(panel)))
+  }, [panel])
+  const keepDownloader = opened.has('downloader') || panel === 'downloader'
+  const keepPlayer = opened.has('player') || panel === 'player'
 
   // The start screen and the downloader never wait for a file: one is the menu
   // and the other is how files arrive. The three editors open on their own
@@ -382,11 +394,13 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
         aria-label={panel === 'downloader' ? current?.label : undefined}
         className={panel === 'downloader' ? 'panel-root rise flex min-w-0 flex-col gap-[16px]' : 'contents'}
       >
-        <ErrorBoundary panel="downloader">
-          <Suspense fallback={null}>
-            <DownloaderPanel hidden={panel !== 'downloader'} />
-          </Suspense>
-        </ErrorBoundary>
+        {keepDownloader ? (
+          <ErrorBoundary panel="downloader">
+            <Suspense fallback={null}>
+              <DownloaderPanel hidden={panel !== 'downloader'} />
+            </Suspense>
+          </ErrorBoundary>
+        ) : null}
       </div>
 
       {/* The player lives outside the tool panels list: it has a floating minibar
@@ -396,11 +410,13 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
         aria-label={panel === 'player' ? current?.label : undefined}
         className={panel === 'player' ? 'panel-root rise flex min-w-0 flex-col gap-[16px]' : 'contents'}
       >
-        <ErrorBoundary panel="player">
-          <Suspense fallback={null}>
-            <PlayerPanel hidden={panel !== 'player'} />
-          </Suspense>
-        </ErrorBoundary>
+        {keepPlayer ? (
+          <ErrorBoundary panel="player">
+            <Suspense fallback={null}>
+              <PlayerPanel hidden={panel !== 'player'} />
+            </Suspense>
+          </ErrorBoundary>
+        ) : null}
       </div>
 
       <MachineRow />
