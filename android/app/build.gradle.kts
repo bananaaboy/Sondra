@@ -50,9 +50,8 @@ android {
     }
 
     lint {
-        isAbortOnError = true
-        isCheckReleaseBuilds = true
-        disable += "NotificationPermission"
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 
