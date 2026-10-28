@@ -395,6 +395,24 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
     `envPrefix: ['VITE_', 'GOOGLE_', 'VERCEL_']`). Der Build bricht jetzt ab,
     wenn eines dieser Secrets in einer Datei stünde (`noServerSecrets` in
     `vite.config.ts`).
+- **Hintergrund-Downloads & Floating Minibar (1.1.19):** In `Dashboard.tsx`
+  wird `DownloaderPanel` mit `hidden={panel !== 'downloader'}` dauerhaft im
+  DOM gehalten — aktive Downloads brechen bei einem Wechsel in andere Werkzeuge
+  (Player, Editor, Merkliste) nicht mehr ab. Sobald ein Download läuft und ein
+  anderes Werkzeug aktiv ist, erscheint unten rechts eine schwebende Minibar
+  mit Live-Fortschrittsbalken, Download-Rate (MB/s), verbleibender Zeit,
+  Titel sowie Pause- und Abbruchknöpfen. Ein Klick fokussiert den Downloader.
+- **Screen Wake-Lock & Power Save Blocker (`lib/backgroundDownload.ts`, 1.1.19):**
+  Hält Bildschirm und Betriebssystem während aktiver Downloads oder Wiedergabe
+  wach (Screen Wake Lock API im Browser, `powerSaveBlocker` in Electron).
+  Bei Verbindungsabbrüchen greift ein automatisches Auto-Resume.
+- **Fertigstellungs-Gong (`lib/backgroundDownload.ts`, 1.1.19):** Bei
+  abgeschlossenem Download erklingt ein dezenter zweistimmiger Sinusklang
+  (659,25 Hz & 880 Hz) über die Web Audio API.
+- **Zero-RAM Direct-to-Disk (1.1.18):** In der Desktop-App schreibt
+  `desktop/downloader.mjs` bzw. `/api/direct-save` Datenströme via Node
+  `fs.createWriteStream` direkt in den Serien-Zielordner der Festplatte,
+  ohne Zwischenspeicherung im Browser-Heap (0 MB zusätzlicher RAM-Verbrauch).
 - **Herunterladen: Erkennen, Zusammensetzen, Laden** (16.10.2026). Adressen
   liest `extractAddresses` (`lib/download.ts`) aus jedem Text — Komma,
   Semikolon, Zeilen, Anführungszeichen, Punkt am Satzende; ins einzeilige

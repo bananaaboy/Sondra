@@ -6,8 +6,8 @@ Besuchers. Live unter [sondra.lizge.ch](https://www.sondra.lizge.ch), als Window
 [Microsoft Store](https://apps.microsoft.com/detail/9P0JXR5GNSMG) oder über die
 [Releases](https://github.com/bananaaboy/Sondra/releases/latest).
 
-Vite 7 · React 19 · TypeScript · Tailwind v4 · zustand · FFmpeg als
-WebAssembly und nativ.
+Vite 7 · React 19 · TypeScript · Tailwind v4 · zustand · SQLite 3 · FFmpeg als
+WebAssembly und nativ mit GPU-Beschleunigung.
 
 ## Was es kann
 
@@ -17,22 +17,24 @@ der Navigationsleiste:
 
 | Werkzeug | Adresse | |
 |---|---|---|
-| **Herunterladen** | `#herunterladen` | Direkte Links, Freigabe-Links, HLS-Playlisten, YouTube (progressive Spur) und — mit Anbieter oder eigenem Dienst — weitere Portale |
-| **Umwandeln** | `#umwandeln` | Ton und Video in andere Formate; die Ziele richten sich nach der Quelle, mehrere Dateien auf einmal als ZIP |
-| **Ton** | `#ton` | Schneiden an der Wellenform, Kopieren/Einfügen/Verdoppeln, Stille einfügen, Zoom (auch mit dem Mausrad) und Schleife; Filter, Bass/Höhen, Kompressor, Klicks und Knackser entfernen, Rauschentfernung aus einem Rauschprofil, Echo, Hall, Pegel, Blenden, Tonhöhe und Tempo — alles live zu hören, bevor es übernommen wird; Kanäle |
-| **Video** | `#video` | Schneiden an der Zeitleiste, Ausschnitt, Drehen; Bild (Helligkeit, Kontrast, Sättigung, Looks, schärfen, entrauschen, stabilisieren), Blenden, Lautstärke und Lautheit, Tempo, rückwärts, Ton herauslösen, GIF |
-| **Abspielen** | `#abspielen` | Media Player zum Ansehen und Anhören: spielt direkt von der Festplatte, auch grosse Filme, Wiedergabeliste, Untertitel aus .srt/.vtt, Vollbild, Bild im Bild, Tempo, Tastatur, „Weiter bei“; was der Browser nicht kann (AVI, MPEG-4, AC-3/DTS-Ton), macht FFmpeg abspielbar |
+| **Ordner** | `#ordner` | Lokale Ordner oder Google Drive durchsuchen; Kachel- und Listenansicht, direkte Seiten-Vorschau mit Live-Player, Weiterschauen der Merkliste und Duplikate-Finder |
+| **Herunterladen** | `#herunterladen` | Videos und Musik von Adressen holen; Hintergrund-Downloads mit Floating-Minibar, Zero-RAM Direct-to-Disk, Sofort-Abspielen, Wake-Lock und Fertigstellungs-Gong |
+| **Merkliste** | `#merkliste` | Serien und Filme verfolgen; Staffeln, Folgen, Rechner „Bis wohin?“, Ziel-Planung, AniList/MAL-Sync, Anytype- und Google-Drive-Abgleich |
+| **Umwandeln** | `#umwandeln` | Ton und Video in andere Formate; die Ziele richten sich nach der Quelle, Vorlagen für WhatsApp, Instagram Reels oder Hörbücher, Stapel als ZIP |
+| **Ton** | `#ton` | Schneiden an der Wellenform, Kopieren/Einfügen/Verdoppeln, Stille einfügen, Zoom (auch mit dem Mausrad) und Schleife; Filter, KI-Sprachverbesserung & Rauschentfernung, Echo, Hall, Pegel, Blenden, Tonhöhe und Tempo — live vorhören |
+| **Video** | `#video` | Schneiden an der Zeitleiste, Ausschnitt, Drehen; GPU-beschleunigte Konvertierung (NVENC/AMF/QSV), Bildfilter (Helligkeit, Kontrast, Sättigung, Looks, schärfen, entrauschen, stabilisieren), Blenden, Lautstärke und Lautheit, Tempo, rückwärts, Ton herauslösen, GIF |
+| **Abspielen** | `#abspielen` | Media Player für Filme und Musik: Direkt-Stream ohne Download, Smart Prefetch ab 75 %, Timeline-Vorschaubilder, Kapitel, Untertitel (.srt/.vtt), Vollbild, Kinomodus, Nachtmodus, automatische Merklisten-Abhaking |
 | **Bilder** | `#bilder` | Skalieren, zuschneiden, Farbe, umwandeln, Stapel als ZIP |
 | **Mischen** | `#mischen` | Stimme und Musik in eine Datei; die Musik wird beim Sprechen weich leiser (Schwelle aus der Aufnahme, Haltezeit, Vorlauf, Ausklang), Vorher/Nachher, als WAV oder unter das Video gelegt |
-| **Spuren trennen** | `#spuren-trennen` | Gesang, Schlagzeug, Bass, Übriges — ohne Modell-Download |
+| **Spuren trennen** | `#spuren-trennen` | Gesang, Schlagzeug, Bass, Übriges — ohne Modell-Download direkt im Browser oder mit eigenem ONNX-Modell |
 | **Lautstärke** | `#lautstaerke` | EBU R128 / ITU-R BS.1770-4 mit True-Peak-Grenze, mehrere Dateien auf einmal als ZIP |
 | **Zerschneiden** | `#zerschneiden` | Schnitte an Anschlägen oder im Tempo-Raster, 16 Pads mit Tonhöhe, Pegel, Panorama und Hüllkurve, eigene Bereiche nach Bestätigung, Step-Sequencer (Tempo, Swing, 16/32 Schritte) mit Klavierrolle je Pad, als loopbare WAV oder MIDI, Sample-Pack |
-| **Tonart** | `#tonart` | Tempo, Tonart mit Camelot-Code, Akkordverlauf, Melodie als MIDI |
+| **Tonart** | `#tonart` | Tempo (BPM), Tonart mit Camelot-Code, Akkordverlauf, Melodie als MIDI |
 | **Untertitel** | `#untertitel` | Gesprochenes als Text mit Whisper auf dem Gerät (Modell einmalig von Hugging Face), jede Zeile korrigierbar; als TXT, SRT, VTT, als Untertitelspur im Video oder ins Bild gebrannt |
 | **Bildschirm** | `#bildschirm` | Ganzer Bildschirm oder ein Fenster, mit Ton des Rechners und/oder Mikrofon, als Video direkt in die Sitzung; in der App mit Quellenauswahl samt Vorschaubildern |
-| **Mikrofon** | `#mikrofon` | Ein- und Ausgang wählen, Pegelanzeige, Mithören, Probe; Einstellen für Podcast, Streaming, Videocall, Gesang oder Instrument mit Bericht jedes Schritts und Vorher/Nachher |
+| **Mikrofon** | `#mikrofon` | Ein- und Ausgang wählen, Pegelanzeige, Mithören, Probe; Ein-Klick-KI-Sprachverbesserung (Rausch- und Halleliminierung), Profile für Podcast, Streaming, Videocall, Gesang oder Instrument mit Bericht jedes Schritts und Vorher/Nachher |
 
-Die Sitzung bleibt auf dem Gerät (IndexedDB) und wird nach dem Schliessen
+Die Sitzung bleibt auf dem Gerät (IndexedDB & SQLite 3) und wird nach dem Schliessen
 wieder angeboten; abschaltbar im Dateimenü. Ganze Projekte lassen sich als
 `.sondra`-Datei exportieren und über den Knopf „Projekt laden“ auf der Startseite
 oder per Dateiverknüpfung wiederherstellen. Nach einem Besuch geht alles ausser
@@ -58,7 +60,7 @@ npm run build            # statisches Bündel in dist/
 npm run preview          # dist/ mit den Isolations-Headern ausliefern
 npm run dev:service      # dist/ zusammen mit den Funktionen unter api/
 npm run typecheck        # TypeScript ohne Emit
-npm run verify           # Lautheit, Tempo, Harmonie und Auflösung prüfen
+npm run verify           # Alle Verifikationstests (Lautheit, Tempo, Harmonie, Ordner, Merkliste, Drive etc.)
 ```
 
 `vite preview` kennt `api/` nicht. Wer den Downloader lokal durchspielen will,
@@ -69,14 +71,11 @@ baut einmal und startet `npm run dev:service`.
 1. **Keine fremden Ursprünge.** Schriften, WASM-Module und Skripte liegen im
    eigenen Bündel. Kein CDN, keine Google Fonts, kein Analytics. Der
    Netzwerk-Tab bleibt nach dem Laden still.
-2. **Medien im Arbeitsspeicher.** Dateien liegen standardmässig ausschliesslich
-   im Heap des Tabs. Optional sichert die lokale Sitzungswiederherstellung
-   den Stand im Browser (IndexedDB), oder man exportiert die gesamte Sitzung
-   als `.sondra`-Projektdatei. Tab schliessen ohne Speichern ist die
-   Löschtaste. Im `localStorage` stehen nur Einstellungen: das
-   Erscheinungsbild (`sondra:theme`), ein selbst eingetragener
-   Extraktionsdienst (`sondra:service`, ohne API-Schlüssel) und eigene
-   Instanzen (`sondra:instances`).
+2. **Medien im Arbeitsspeicher & SQLite 3.** Dateien liegen standardmässig
+   ausschliesslich im Heap des Tabs oder werden per Stream direkt auf die Festplatte
+   geschrieben. Merkliste, Einstellungen, Schau-Historie und gelöschte Einträge
+   lagern transaktionssicher in einer vollwertigen lokalen SQLite-3-Binärdatenbank
+   (`sondra.db`). Tab schliessen ohne Speichern ist die Löschtaste.
 3. **Die Ausnahme steht, wo sie passiert.** Das Herunterladen ist das einzige
    Werkzeug, das das Gerät verlässt: die eingegebene Adresse geht an den
    kleinen Dienst dieser Seite, der die Datei durchreicht. Eigene Dateien sieht
@@ -113,6 +112,38 @@ Adresse. Volle Auflösung gibt es über einen hinterlegten Anbieter oder über
 die Wege unter „Optionen" im Panel (eigener Dienst, yt-dlp auf dem eigenen
 Gerät).
 
+### Hintergrund-Downloads & Floating Minibar (v1.1.19)
+
+- **Unterbrechungsfreies Laden:** Downloads brechen beim Verlassen des
+  Download-Reiters nicht mehr ab. Der Downloader bleibt im Hintergrund gemountet
+  und aktiv, während andere Werkzeuge (Player, Video-Editor, Mixer) genutzt werden.
+- **Floating Minibar:** Sobald ein Download läuft und ein anderes Werkzeug
+  geöffnet wird, blendet sich unten rechts eine elegante, schwebende Leiste
+  ein. Sie zeigt den aktuellen Titel, Fortschrittsbalken, Geschwindigkeit in MB/s,
+  Prozentsatz sowie Pause- und Abbruchknöpfe. Ein Klick bringt den Nutzer
+  direkt zum Downloader zurück.
+- **Screen Wake-Lock & Power Save Blocker:** Hält den Bildschirm und das
+  System über die Screen Wake Lock API und Electron-PowerSaveBlocker wach,
+  sodass der Rechner während großer Downloads nicht in den Ruhezustand fällt.
+- **Auto-Resume & Retry:** Kurze Verbindungsunterbrüche werden automatisch
+  abgefangen; der Download setzt genau am letzten Chunk wieder an.
+- **Fertigstellungs-Gong:** Bei Abschluss ertönt ein dezenter, zweistimmiger
+  Web-Audio-Gong (659,25 Hz & 880 Hz, abschaltbar in den Einstellungen).
+
+### Sofort abspielen (Direct-Stream)
+
+Statt große Folgen erst komplett herunterzuladen, übergibt die Aktion
+**„Sofort abspielen“** aufgelöste HLS- (`.m3u8` via `hls.js`) und MP4-Streams
+sofort an den Player-Tab (`PlayerPanel.tsx`). Auf Wunsch wird die Datei
+parallel im Hintergrund auf der Festplatte gespeichert.
+
+### Zero-RAM Direct-to-Disk (Desktop-App)
+
+In der Desktop-App umgeht der Download den Browser-Arbeitsspeicher vollständig:
+`desktop/downloader.mjs` schreibt den Mediendatenstrom direkt via
+`fs.createWriteStream` auf die Festplatte im Zielordner. Das senkt den
+RAM-Bedarf bei großen Staffel-Downloads auf nahezu **0 MB**.
+
 ### Umgebungsvariablen der Bereitstellung
 
 | Variable | Wofür |
@@ -136,6 +167,125 @@ eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
 Geladen wird nur, was man laden darf: AES-verschlüsselte HLS-Streams werden
 abgelehnt, Kopierschutz wird nicht umgangen. Der Hinweis zur Verantwortung
 steht im Panel, bevor man etwas eintippt.
+
+## Ordner & Explorer (`#ordner`)
+
+Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
+
+- **Moderne Kachelansicht:** Getrennte Sektionen für Ordner und Mediendateien.
+  Ordner erscheinen als kompakte, informative Karten (mit Dateizahl und
+  Gesamtgröße); Videodateien mit Thumbnails bei 15 % der Laufzeit.
+- **Integrierte Seiten-Vorschau:** Klickt man eine Datei an, öffnet sich
+  rechts daneben direkt ein Live-Player (Video, Audio, Bild) mit Metadaten,
+  Formatangaben und Direktaktionen (**Abspielen**, **Große Vorschau**, **In die Sitzung**).
+- **Listenansicht:** Strukturierte Tabelle mit Name, Art, Größe, Änderungsdatum
+  und Laufzeit.
+- **Weiterschauen:** Erkennt Folgen von Serien aus der Merkliste im Ordner und
+  bietet die nächste ungesehene Episode mit einem Klick an.
+- **Doppelte finden:** Identifiziert Dateikopien anhand von SHA-256-Prüfungen
+  (bis 32 MB ganz, darüber an 32 Stellen) und behält die Originale.
+
+## Merkliste & Serienbibliothek (`#merkliste`)
+
+Eine private Mediathek zum Verfolgen von Anime, Serien und Filmen:
+
+- **SQLite 3 Engine (`src/lib/sqlite.ts`):** Speichert Einträge, Staffeln,
+  Fortschritte, Notizen und Historie direkt in einer relationalen
+  SQLite-3-Binärdatei (`sondra.db` bzw. `Sondra-Merkliste.sqlite`).
+  Arbeitet ohne externe native oder WASM-Abhängigkeiten im Browser-OPFS und
+  IndexedDB.
+- **„Bis wohin?“-Rechner:** Berechnet exakt, wie viele Folgen und Stunden
+  bis zu einer bestimmten Staffel, Folge oder dem Serienabschluss fehlen.
+  Ermittelt anhand des persönlichen Schautempos der letzten Wochen, an
+  welchem Datum das Ziel erreicht wird.
+- **AniList & MyAnimeList Synchronisation:** Automatischer Abgleich des
+  Schau-Fortschritts mit AniList oder MAL beim Beenden einer Folge im Player.
+- **Automatischer Metadaten-Import:** Beim Einfügen von AniWorld- oder
+  SerienStream-Links werden Titel, Cover, Staffeln und Episoden automatisch
+  abgerufen.
+- **Multi-Device Sync:** Synchronisation über Anytype (lokale API) oder eine
+  geteilte JSON/SQLite-Datei im Google Drive.
+- **In Staffel einordnen:** Ausgewählte Episoden werden per Knopfdruck
+  automatisch in saubere Ordnerstrukturen (`Serien/<Titel>/Staffel n`) abgelegt.
+
+## Der Player (`#abspielen`)
+
+Ein hochperformanter Media Player für Filme und Musik:
+
+- **Direkt von der Festplatte:** Große 4K- und 1080p-Filme (> 50 GB) laufen
+  ohne Speicherlast via Blob/Object-URL direkt von der Festplatte.
+- **Smart Prefetch:** Erreicht die Wiedergabe ca. 75 % einer Folge, löst
+  Sondra die nächste Episode im Hintergrund auf und puffert sie vor — für
+  nahtlose Übergänge ohne Ladezeit.
+- **Timeline-Vorschaubilder & Kapitel:** Hover-Vorschaubilder beim Bewegen
+  über die Zeitleiste; Kapitelmarker für Intro, Hauptteil und Abspann.
+- **Automatisches Abhaken:** Erkennt Serie, Staffel und Folge aus dem
+  Dateinamen; ab 90 % Laufzeit wird die Episode in der Merkliste als
+  „gesehen“ markiert.
+- **Akustische Vorspann-Erkennung:** Haitsma/Kalker-Audio-Fingerprinting
+  erkennt gemeinsame Intros über zwei Folgen hinweg und bietet
+  „Vorspann überspringen“ an.
+- **Klang- & Bildoptimierung:** Nachtmodus (Dynamikkompression für Sprache),
+  Lautstärke-Boost bis 300 %, Kinomodus (T), Fensterfüllung (W) und Vollbild (F).
+
+## FFmpeg: Nativ und im Browser
+
+Sondra wählt automatisch den schnellsten verfügbaren Weg für Audio- und Videoberechnungen:
+
+- **GPU-beschleunigtes FFmpeg (Windows-App):** Prüft automatisch die
+  Verfügbarkeit von Hardware-Encodern:
+  - **NVIDIA:** `h264_nvenc`
+  - **AMD:** `h264_amf`
+  - **Intel:** `h264_qsv`
+  Video-Exporte und Schnitte laufen damit 5–10× schneller und entlasten die CPU fast vollständig.
+- **Natives System-FFmpeg:** Bei installiertem System-FFmpeg werden Operationen
+  ohne WebAssembly-Overhead über Systemprozesse ausgeführt.
+- **WebAssembly (mehrfädig):** Im Browser mit aktivierten Isolations-Headern
+  rechnet `@ffmpeg/core-mt` mehrfädig parallel über Web Worker und `SharedArrayBuffer`.
+- **WebAssembly (einfädig):** Fehlt die Isolation, schaltet Sondra nahtlos auf
+  den einfädigen Core zurück.
+
+Welcher Motor gerade rechnet, wird transparent in der Fußzeile (z. B. `FFmpeg: Nativ`
+oder `FFmpeg: WASM (4 Threads)`) sowie im Bereich „Unter der Haube“ ausgewiesen.
+
+Im Browser ist `@ffmpeg/ffmpeg` nur ein RPC-Client; `load()` startet einen Worker und
+übergibt ihm die Adressen von Core und WASM. Was dabei zählt:
+
+- **Alles aus dem eigenen Bündel.** Beide Cores sind Abhängigkeiten und werden
+  über Vites `?url` als gehashte Assets eingebunden, nicht per `toBlobURL` von
+  einem CDN. Die Adressen müssen absolut sein, weil der Worker relative Pfade
+  gegen seinen eigenen Ort auflöst.
+- **`optimizeDeps.exclude`** für `@ffmpeg/ffmpeg`, `@ffmpeg/util` und
+  `onnxruntime-web` — sonst schreibt das Pre-Bundling Adressen um, die diese
+  Pakete zur Laufzeit selbst auflösen.
+- **`classWorkerURL` nicht setzen** und **`assetsInlineLimit: 0`.** Ein
+  eingebetteter Worker aus einer `data:`-URL bekommt einen undurchsichtigen
+  Ursprung und darf den Core nicht importieren.
+- **Mehrfädig nur isoliert.** `@ffmpeg/core-mt` braucht `SharedArrayBuffer`,
+  also `Cross-Origin-Opener-Policy: same-origin` und
+  `Cross-Origin-Embedder-Policy: credentialless` (`credentialless`, damit
+  fremde Medien ohne CORP-Header ladbar bleiben). Die Header stehen in
+  `vite.config.ts`, `vercel.json`, `public/_headers` und
+  `public/staticwebapp.config.json`; wo sich keine Header setzen lassen,
+  ergänzt `public/coi-serviceworker.js` sie. Fehlt die Isolation trotzdem,
+  lädt `capabilities.ts` den einfädigen Core.
+- **Eingaben kopieren.** `writeFile` überträgt den ArrayBuffer; ohne Kopie wäre
+  die Datei in der Sitzung danach leer.
+- **MEMFS aufräumen.** `runFfmpeg()` löscht Ein- und Ausgaben im `finally`,
+  sonst wächst der Heap mit jeder Datei. Abbrechen geht nur über
+  `terminate()`; der nächste Aufruf lädt den Core neu.
+
+FFmpeg lädt im Hintergrund, nie hinter einem Ladebildschirm. Ein Werkzeug, das
+wartet, zeigt das Warten bei sich.
+
+## KI-Sprachverbesserung (Mic & Audio)
+
+In `#mikrofon` und `#ton` steht eine lokale KI-Sprachverbesserung bereit:
+- **1-Klick-Säuberung:** Entfernt Tastaturklicken, Rauschen, Brummen und
+  störenden Raumhall (De-Reverb) in Echtzeit.
+- **Präsenz-EQ & Normalisierung:** Hebt Sprachfrequenzen bei 2,8 kHz sanft an
+  und pegelt die Aufnahme auf Standard-Sprachlautheit ein.
+- **100 % lokal:** Läuft rein mathematisch in Float32Array ohne Cloud-Übertragung.
 
 ## Als Windows-App
 
@@ -238,50 +388,6 @@ Arbeitsstand als portable `.sondra`-Datei sichern und transportieren:
 - **Einfaches Laden:** Direkt über den Knopf **„Projekt laden“** auf der Startseite,
   per Drag & Drop oder über die Windows-Dateiverknüpfung mit dem offiziellen
   Sondra-Dateisymbol.
-
-## FFmpeg: Nativ und im Browser
-
-Sondra wählt automatisch den schnellsten verfügbaren Weg für Audio- und Videoberechnungen:
-
-- **Natives FFmpeg:** Ist auf dem Rechner (oder in der Windows-App) ein natives
-  FFmpeg verfügbar, nutzt Sondra direkte Systemaufrufe ohne WebAssembly-Overhead.
-- **WebAssembly (mehrfädig):** Im Browser mit aktivierten Isolations-Headern
-  rechnet `@ffmpeg/core-mt` mehrfädig parallel über Web Worker und `SharedArrayBuffer`.
-- **WebAssembly (einfädig):** Fehlt die Isolation, schaltet Sondra nahtlos auf
-  den einfädigen Core zurück.
-
-Welcher Motor gerade rechnet, wird transparent in der Fußzeile (z. B. `FFmpeg: Nativ`
-oder `FFmpeg: WASM (4 Threads)`) sowie im Bereich „Unter der Haube“ ausgewiesen.
-
-Im Browser ist `@ffmpeg/ffmpeg` nur ein RPC-Client; `load()` startet einen Worker und
-übergibt ihm die Adressen von Core und WASM. Was dabei zählt:
-
-- **Alles aus dem eigenen Bündel.** Beide Cores sind Abhängigkeiten und werden
-  über Vites `?url` als gehashte Assets eingebunden, nicht per `toBlobURL` von
-  einem CDN. Die Adressen müssen absolut sein, weil der Worker relative Pfade
-  gegen seinen eigenen Ort auflöst.
-- **`optimizeDeps.exclude`** für `@ffmpeg/ffmpeg`, `@ffmpeg/util` und
-  `onnxruntime-web` — sonst schreibt das Pre-Bundling Adressen um, die diese
-  Pakete zur Laufzeit selbst auflösen.
-- **`classWorkerURL` nicht setzen** und **`assetsInlineLimit: 0`.** Ein
-  eingebetteter Worker aus einer `data:`-URL bekommt einen undurchsichtigen
-  Ursprung und darf den Core nicht importieren.
-- **Mehrfädig nur isoliert.** `@ffmpeg/core-mt` braucht `SharedArrayBuffer`,
-  also `Cross-Origin-Opener-Policy: same-origin` und
-  `Cross-Origin-Embedder-Policy: credentialless` (`credentialless`, damit
-  fremde Medien ohne CORP-Header ladbar bleiben). Die Header stehen in
-  `vite.config.ts`, `vercel.json`, `public/_headers` und
-  `public/staticwebapp.config.json`; wo sich keine Header setzen lassen,
-  ergänzt `public/coi-serviceworker.js` sie. Fehlt die Isolation trotzdem,
-  lädt `capabilities.ts` den einfädigen Core.
-- **Eingaben kopieren.** `writeFile` überträgt den ArrayBuffer; ohne Kopie wäre
-  die Datei in der Sitzung danach leer.
-- **MEMFS aufräumen.** `runFfmpeg()` löscht Ein- und Ausgaben im `finally`,
-  sonst wächst der Heap mit jeder Datei. Abbrechen geht nur über
-  `terminate()`; der nächste Aufruf lädt den Core neu.
-
-FFmpeg lädt im Hintergrund, nie hinter einem Ladebildschirm. Ein Werkzeug, das
-wartet, zeigt das Warten bei sich.
 
 ## Die Rechenverfahren
 
@@ -405,6 +511,7 @@ Theme sieht.
 Wellenformen zeichnen auf Canvas und in Wavesurfer mit echten Farbwerten. Die
 werden zur Laufzeit aus dem Cascade gelesen; beim Wechsel wird Wavesurfer
 umgefärbt statt neu aufgebaut, sonst wären alle gesetzten Bereiche weg.
+
 ## Offline
 
 Der Service Worker setzt auf der Website die Isolations-Header und hält einen
@@ -434,23 +541,24 @@ als App installieren.
 ## Projektstruktur
 
 ```
-api/                 Funktionen des Downloaders (resolve, stream, _shared)
+api/                 Funktionen des Downloaders (resolve, stream, google-token)
 desktop/             Windows-App: Electron-Fenster, lokaler Server, Setup-Texte, Icons
+android/             Native Android-App (Java, WebView-Brücke)
 public/              statische Dateien: Schriften, Icons, Manifest,
                      Service Worker, Datenschutzerklärung
 scripts/             Build der App, lokaler Dienst, Prüf- und Screenshot-Skripte
 src/
   components/        Kopfzeile, Startseite, Reiter, Sitzungsmenü, Wellenform
     editor/          gemeinsame Editor-Hülle und Zuschnitt
-    panels/          die 14 Werkzeug-Panels, Step-Sequencer und Piano-Roll
+    panels/          die 16 Werkzeug-Panels, Step-Sequencer und Piano-Roll
     player/          Media Player, Mini-Bar, Abspiellisten-Steuerung
     ui/              Grundbausteine (Button, Notice, Reveal …)
   hooks/             Routing, Dateiaufnahme, Dekodierung, Theme, Undo/Redo
-  lib/               Rechenverfahren, Effekte, Mikrofon-Kalibrierung, Pattern,
-                     Projektdateien (.sondra), FFmpeg-Client, Downloader-Client
+  lib/               Rechenverfahren, SQLite-3-Engine, Hintergrund-Downloads,
+                     KI-Sprachverbesserung, AniList, Projektdateien (.sondra)
   state/             Sitzung (zustand, nur im Speicher)
   styles/            Tokens und Theme
-.github/workflows/   Build, Test und Release der Windows-App (Setup & MSIX)
+.github/workflows/   Build, Test und Release der Windows- und Android-App
 ```
 
 Produktgrundlagen stehen in [PRODUCT.md](PRODUCT.md), die gestalterischen
