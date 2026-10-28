@@ -211,6 +211,8 @@ export const OPENING_MAX = 600
 
 const KEY = 'sondra:saved_links'
 const SQLITE_KEY = 'sondra:sqlite_db'
+/** Set while the SQLite copy is behind the JSON; cleared when it is written. */
+const SQLITE_STALE_KEY = 'sondra:sqlite_db_stale'
 const PROJECT_KEY = 'merkliste'
 
 const uniqueSorted = (numbers: number[]) =>
@@ -338,14 +340,20 @@ function loadInitialSnapshot(): { items: SavedLinkItem[]; removals: Record<strin
       appState: {},
     }
   }
+  let sqliteAppState: Record<string, SqliteAppStateEntry> = {}
   try {
     const rawSqlite = typeof localStorage !== 'undefined' ? localStorage.getItem(SQLITE_KEY) : null
     if (rawSqlite && coerceToSqliteBytes(rawSqlite)) {
       const snap = deserializeSondraSqlite(rawSqlite)
-      return {
-        items: snap.items.map((item) => normalize(item as Partial<SavedLinkItem>)),
-        removals: snap.removed ?? {},
-        appState: snap.appState ?? {},
+      sqliteAppState = snap.appState ?? {}
+      // Behind the JSON (the page closed before the quiet moment came, or the
+      // database did not fit): the list from the JSON, which is never behind.
+      if (localStorage.getItem(SQLITE_STALE_KEY) !== '1') {
+        return {
+          items: snap.items.map((item) => normalize(item as Partial<SavedLinkItem>)),
+          removals: snap.removed ?? {},
+          appState: sqliteAppState,
+        }
       }
     }
   } catch {
@@ -367,7 +375,7 @@ function loadInitialSnapshot(): { items: SavedLinkItem[]; removals: Record<strin
   } catch {
     loadedRemovals = {}
   }
-  return { items: loadedItems, removals: loadedRemovals, appState: {} }
+  return { items: loadedItems, removals: loadedRemovals, appState: sqliteAppState }
 }
 
 const initialSnapshot = loadInitialSnapshot()
@@ -389,6 +397,7 @@ function persistSqliteSnapshot(): void {
       localStorage.setItem(SQLITE_KEY, sqliteBytesToBase64(dbBytes))
       localStorage.setItem(KEY, JSON.stringify(items))
       localStorage.setItem(REMOVED_KEY, JSON.stringify(removals))
+      localStorage.removeItem(SQLITE_STALE_KEY)
       lastSaveOk = true
     } catch {
       try {
@@ -413,8 +422,48 @@ if (
   persistSqliteSnapshot()
 }
 
-function persist(): void {
+let sqliteTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushSqlite(): void {
+  if (sqliteTimer === null) return
+  clearTimeout(sqliteTimer)
+  sqliteTimer = null
   persistSqliteSnapshot()
+}
+
+/**
+ * The list at once as JSON, the SQLite copy of all of it in a quiet moment.
+ * Writing the whole database on every change took a phone some 150 ms per
+ * „+1“ (28.10.2026); the JSON is what a restart reads while the copy is
+ * behind (`SQLITE_STALE_KEY`), and leaving the page writes it.
+ */
+function persist(): void {
+  if (typeof localStorage === 'undefined') {
+    lastSaveOk = true
+    setProjectToolState(PROJECT_KEY, items)
+    return
+  }
+  try {
+    localStorage.setItem(SQLITE_STALE_KEY, '1')
+    localStorage.setItem(KEY, JSON.stringify(items))
+    localStorage.setItem(REMOVED_KEY, JSON.stringify(removals))
+    lastSaveOk = true
+  } catch {
+    lastSaveOk = false
+  }
+  setProjectToolState(PROJECT_KEY, items)
+  if (sqliteTimer !== null) clearTimeout(sqliteTimer)
+  sqliteTimer = setTimeout(() => {
+    sqliteTimer = null
+    persistSqliteSnapshot()
+  }, 1500)
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushSqlite)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSqlite()
+  })
 }
 setProjectToolState(PROJECT_KEY, items)
 

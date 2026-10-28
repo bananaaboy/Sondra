@@ -1,31 +1,32 @@
 /**
- * The start screen: a way in, three featured jobs, and every capability as a tile.
+ * The start screen: a way in, films and series, and every tool as a tile.
  *
- * Flat surfaces, no glow, no shadow — strictly following DESIGN.md („Das ruhige Blatt"):
- * 1. The way in: two side-by-side blocks on `bg-panel-soft` — the headline with
- *    the local-privacy badge on the left, and the dashed drop zone with the two
- *    entry actions on the right. With an active file, it names the file and
- *    offers the tools that fit it.
- * 2. The filter bar: group pills on the left, search pill on the right.
- * 3. The tools: three featured horizontal cards (`Ton schneiden`,
- *    `Rauschen entfernen`, `Gesprochenes als Text`) with flat vector graphics,
- *    followed by the 5-column grid of all remaining tools.
- * 4. The Windows app block at the foot (web only).
+ * Rebuilt on 28.10.2026 after „sie ist sehr cluttered“: two boxes, a
+ * privacy badge, three illustrated cards and forty-five tiles of the same
+ * weight in one block — 4 300 px on a phone, where the app also advertised
+ * the Windows app. Now, following DESIGN.md („Das ruhige Blatt“):
+ * 1. The way in: one tinted block — headline, one sentence, „Datei
+ *    auswählen“; the whole block takes a dropped file.
+ * 2. Films and series: the Merkliste (with what comes next), the player, the
+ *    folder and the downloader — on a phone the reason to open Sondra.
+ * 3. The tools in their groups, each under its heading, two rows of each
+ *    and the rest one click on; a group pill shows one group whole, the
+ *    search looks through everything.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useShallow } from 'zustand/shallow'
 
 import { useFilePicker, useIngestFiles, useProjectPicker } from '../hooks/useIngest'
 import { ACTIONS, GROUP_LABEL, actionsFor, searchActions, type ToolAction, type ToolGroup } from '../lib/actions'
-import { IN_DESKTOP_APP } from '../lib/desktop'
 import { formatBytes, formatDuration } from '../lib/format'
+import { useMerkliste } from '../lib/merkliste'
 import { saveProjectFile } from '../lib/project'
 import { KIND_LABEL, useActiveAsset, useSession, type PanelId } from '../state/store'
 import { SondraProjectIcon } from './AssetList'
-import { openGetAppDialog } from './GetApp'
 import { ProjectToDriveButton } from './GoogleDrive'
+import { positionLabel } from './panels/merklisteShared'
 import { PANELS, ToolIcon } from './panelMeta'
 import { ArrowRight, Button } from './ui/primitives'
 
@@ -62,11 +63,11 @@ const iconFor = (action: ToolAction): ReactNode => ACTION_ICONS[action.id] ?? IC
 /** The groups a visitor filters by. „Hereinholen" is the way in above. */
 const FILTERS: ToolGroup[] = ['ton', 'video', 'bild', 'musik']
 
-/** The three featured cards shown in the top row. */
-const FEATURED_IDS = ['audio-cut', 'audio-noise', 'transcript'] as const
-
-/** Priority ordering for the compact 5-column grid directly below the featured row. */
+/** The order within a group: the common jobs first, the rest as the list keeps them. */
 const PRIORITY_GRID_IDS = [
+  'audio-cut',
+  'audio-noise',
+  'transcript',
   'mic-test',
   'mix-duck',
   'convert-audio',
@@ -79,186 +80,17 @@ const PRIORITY_GRID_IDS = [
   'audio-reverse',
 ]
 
-/* -- featured card illustrations (flat, no glow, DESIGN.md compliant) ------ */
-
-const WAVE_BARS_LEFT = [5, 9, 4, 12, 7, 14, 6, 10, 5, 11, 7, 13, 5, 8, 6, 10]
-const WAVE_BARS_SELECTED = [9, 15, 11, 17, 13, 16, 8, 14, 17, 10, 15, 12, 16, 9]
-const WAVE_BARS_RIGHT = [10, 6, 12, 5, 9, 13, 7, 4, 10, 6, 11, 5, 8, 12, 6, 5]
-
-function CutIllustration() {
-  return (
-    <svg viewBox="0 0 64 64" className="h-[64px] w-[64px] shrink-0 text-ink" fill="none" aria-hidden>
-      {/* Flat horizontal waveform behind the blades */}
-      <path
-        d="M4 32h7l2.5-6 3 12 2.5-6h6M39 32h6l2.5-5 3 10 2.5-5h7"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="opacity-45"
-      />
-      {/* Flat geometric scissors */}
-      <path
-        d="M22 12L38 36M42 12L26 36"
-        stroke="currentColor"
-        strokeWidth="4.2"
-        strokeLinecap="round"
-      />
-      <circle cx="21" cy="44" r="7.5" stroke="currentColor" strokeWidth="3.8" />
-      <circle cx="43" cy="44" r="7.5" stroke="currentColor" strokeWidth="3.8" />
-      <circle cx="32" cy="27" r="2" fill="currentColor" />
-    </svg>
-  )
-}
-
-function CutWaveformStrip() {
-  return (
-    <div
-      aria-hidden
-      className="mt-[6px] flex h-[28px] w-full min-w-0 items-center justify-between gap-[3px] overflow-hidden rounded-nav bg-panel-soft px-[8px] ring-1 ring-inset ring-line"
-    >
-      <div className="flex min-w-0 flex-1 items-center justify-between gap-[2px] overflow-hidden">
-        {WAVE_BARS_LEFT.map((h, i) => (
-          <span
-            key={`l-${i}`}
-            className="w-[2px] rounded-pill bg-faint opacity-65"
-            style={{ height: `${h}px` }}
-          />
-        ))}
-      </div>
-      <div className="flex h-[22px] items-center gap-[2.5px] rounded-[4px] bg-panel-strong px-[6px] ring-1 ring-inset ring-ink">
-        {WAVE_BARS_SELECTED.map((h, i) => (
-          <span
-            key={`s-${i}`}
-            className="w-[2px] rounded-pill bg-ink"
-            style={{ height: `${h}px` }}
-          />
-        ))}
-      </div>
-      <div className="flex min-w-0 flex-1 items-center justify-between gap-[2px] overflow-hidden">
-        {WAVE_BARS_RIGHT.map((h, i) => (
-          <span
-            key={`r-${i}`}
-            className="w-[2px] rounded-pill bg-faint opacity-65"
-            style={{ height: `${h}px` }}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function NoiseIllustration() {
-  return (
-    <svg viewBox="0 0 64 64" className="h-[64px] w-[64px] shrink-0 text-ink" fill="none" aria-hidden>
-      {/* Four-point flat star marks (cleaned signal) */}
-      <path
-        d="M24 12l2.4 6.6L33 21l-6.6 2.4L24 30l-2.4-6.6L15 21l6.6-2.4L24 12z"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M44 10l1.4 3.8L49 15.2l-3.6 1.4L44 20.4l-1.4-3.8L39 15.2l3.6-1.4L44 10z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <circle cx="14" cy="31" r="1.6" fill="currentColor" />
-      <circle cx="48" cy="27" r="1.6" fill="currentColor" />
-      {/* Smooth double wave below */}
-      <path
-        d="M8 42c5.5 0 5.5-7 11-7s5.5 7 11 7 5.5-7 11-7 5.5 7 11 7 5.5-4 8-4"
-        stroke="currentColor"
-        strokeWidth="2.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M12 50c5 0 5-5 10-5s5 5 10 5 5-5 10-5 5 5 10 5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        className="opacity-55"
-      />
-    </svg>
-  )
-}
-
-function TranscriptIllustration() {
-  return (
-    <svg viewBox="0 0 64 64" className="h-[64px] w-[64px] shrink-0 text-ink" fill="none" aria-hidden>
-      <rect
-        x="6"
-        y="10"
-        width="52"
-        height="44"
-        rx="8"
-        className="fill-panel-soft stroke-rule"
-        strokeWidth="2"
-      />
-      {/* T | cursor and lines */}
-      <path
-        d="M15 21h9M19.5 21v11M28 19v15"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <rect x="34" y="21" width="15" height="3" rx="1.5" fill="currentColor" className="opacity-55" />
-      <rect x="34" y="28" width="11" height="3" rx="1.5" fill="currentColor" className="opacity-55" />
-      <rect x="15" y="39" width="22" height="3.2" rx="1.6" fill="currentColor" />
-      <rect x="40" y="39" width="9" height="3.2" rx="1.6" fill="currentColor" className="opacity-45" />
-      <rect x="15" y="45.5" width="13" height="3.2" rx="1.6" fill="currentColor" className="opacity-55" />
-      <rect x="31" y="45.5" width="16" height="3.2" rx="1.6" fill="currentColor" />
-    </svg>
-  )
-}
-
-function FeaturedTool({
-  action,
-  dimmed,
-  onClick,
-}: {
-  action: ToolAction
-  dimmed: boolean
-  onClick: () => void
-}) {
-  const illustration =
-    action.id === 'audio-cut' ? (
-      <CutIllustration />
-    ) : action.id === 'audio-noise' ? (
-      <NoiseIllustration />
-    ) : (
-      <TranscriptIllustration />
-    )
-
-  return (
-    <button
-      id={`v-${action.id}`}
-      type="button"
-      onClick={onClick}
-      className={`press group flex scroll-mt-[120px] items-center gap-[16px] rounded-card bg-panel-mid p-[18px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-strong sm:p-[20px] ${
-        dimmed ? 'opacity-75' : ''
-      }`}
-    >
-      {illustration}
-      <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
-        <span className="text-body font-bold leading-[1.25] text-ink">{action.label}</span>
-        <span className="text-small leading-[1.45] text-prose">{action.hint}</span>
-        {action.id === 'audio-cut' ? <CutWaveformStrip /> : null}
-      </div>
-    </button>
-  )
-}
-
 /**
  * One tool, as a tile.
  *
  * A tint gives the tile its edge, the radius makes it an object you can press
  * rather than a cell of a table. The icon sits beside the label instead of
  * stacked above it: a column of icon, label, hint made thirty tiles thirty
- * little posters.
+ * little posters. The tint is the pale one (`panel-soft`) since 28.10.2026 —
+ * forty tiles on `panel-mid` made the page one green wall — and the hint
+ * stops after two lines.
  *
- * The hint is `prose`, not `muted`: on this tint `muted` measured APCA Lc 59.3
+ * The hint is `prose`, not `muted`: on a tint `muted` measured APCA Lc 59.3
  * in the dark theme against a floor of 60.
  */
 function Tool({
@@ -275,13 +107,12 @@ function Tool({
       id={`v-${action.id}`}
       type="button"
       onClick={onClick}
-      className="press group flex scroll-mt-[120px] flex-col gap-[8px] rounded-card bg-panel-mid p-[14px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-strong"
+      className="press group flex scroll-mt-[120px] flex-col gap-[6px] rounded-card bg-panel-soft p-[12px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-mid sm:p-[14px]"
     >
       <span className="flex items-center gap-[8px]">
         {/* A tool that needs a kind of file the session does not hold says so
-            through its icon only; fading the whole tile cost legibility. */}
-        {/* The icon sits on its own small field, which takes the ink when the
-            tile is pointed at — the one moment a tile spends ink. */}
+            through its icon only; fading the whole tile cost legibility. The
+            icon's own small field takes the ink when the tile is pointed at. */}
         <span
           className={`grid h-[26px] w-[26px] shrink-0 place-items-center rounded-nav bg-raised transition-colors duration-[var(--dur-fast)] ${
             dimmed ? 'text-faint' : 'text-ink group-hover:bg-ink group-hover:text-on-ink'
@@ -291,7 +122,7 @@ function Tool({
         </span>
         <span className="text-small font-semibold leading-[1.25] text-ink">{action.label}</span>
       </span>
-      <span className="text-small leading-[1.4] text-prose">{action.hint}</span>
+      <span className="line-clamp-2 text-small leading-[1.4] text-prose">{action.hint}</span>
     </button>
   )
 }
@@ -301,11 +132,33 @@ function Grid({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-2 gap-[10px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{children}</div>
 }
 
+/** How many tiles stand in a row of `Grid` at this width — two rows of a group are shown. */
+function useColumns(): number {
+  const read = () =>
+    typeof window === 'undefined'
+      ? 5
+      : window.matchMedia('(min-width: 1280px)').matches
+        ? 5
+        : window.matchMedia('(min-width: 1024px)').matches
+          ? 4
+          : window.matchMedia('(min-width: 640px)').matches
+            ? 3
+            : 2
+  const [columns, setColumns] = useState(read)
+  useEffect(() => {
+    const queries = ['(min-width: 640px)', '(min-width: 1024px)', '(min-width: 1280px)'].map((q) => window.matchMedia(q))
+    const update = () => setColumns(read())
+    queries.forEach((query) => query.addEventListener('change', update))
+    return () => queries.forEach((query) => query.removeEventListener('change', update))
+  }, [])
+  return columns
+}
+
 /* -- the way in ------------------------------------------------------------- */
 
 function UploadTrayIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-[32px] w-[32px] text-ink" fill="none" aria-hidden>
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" aria-hidden>
       <path
         d="M12 15.5V4.5M7.5 9L12 4.5 16.5 9M4.5 15v3a2 2 0 002 2h11a2 2 0 002-2v-3"
         stroke="currentColor"
@@ -317,29 +170,11 @@ function UploadTrayIcon() {
   )
 }
 
-function ShieldCheckIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-[15px] w-[15px] shrink-0 text-ink" fill="none" aria-hidden>
-      <path
-        d="M8 1.8L2.8 4v3.8c0 3.4 2.2 5.5 5.2 6.4 3-.9 5.2-3 5.2-6.4V4L8 1.8z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M5.7 8.1l1.6 1.6 3.1-3.2"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 /**
- * Without a file: the dashed drop target with the two entry buttons inside it.
- * Flat surface, no glow, following DESIGN.md.
+ * Without a file: one block that says what Sondra does and opens a file —
+ * and takes one dropped on it anywhere. Before, a headline box with a
+ * „100 % lokal & privat“ badge stood beside a dashed drop box with three
+ * buttons: two blocks and a badge for one step.
  */
 function WayIn({
   onOpen,
@@ -357,7 +192,8 @@ function WayIn({
   const [dragging, setDragging] = useState(false)
 
   return (
-    <div
+    <section
+      aria-label="Datei öffnen"
       onDragEnter={(event) => {
         if (!event.dataTransfer.types.includes('Files')) return
         event.preventDefault()
@@ -381,43 +217,99 @@ function WayIn({
         setDragging(false)
         if (event.dataTransfer.files.length) void ingest(event.dataTransfer.files, 'hierher gezogen')
       }}
-      className={`flex rounded-card p-[8px] transition-colors duration-[var(--dur-fast)] ${
+      className={`flex flex-col gap-[20px] rounded-card p-[20px] transition-colors duration-[var(--dur-fast)] sm:p-[28px] lg:flex-row lg:items-end lg:justify-between lg:gap-[40px] ${
         dragging ? 'bg-panel-mid ring-2 ring-inset ring-ink' : 'bg-panel-soft ring-1 ring-inset ring-line'
       }`}
     >
-      <div
-        className={`flex flex-1 flex-col items-center justify-center gap-[10px] rounded-[12px] border border-dashed px-[20px] py-[22px] text-center transition-colors sm:px-[28px] sm:py-[26px] ${
-          dragging ? 'border-ink bg-raised/60' : 'border-rule'
-        }`}
-      >
-        <UploadTrayIcon />
-        <p className="display-sm">{dragging ? 'Loslassen zum Öffnen' : 'Datei hierher ziehen'}</p>
-        <div className="mt-[4px] flex flex-wrap items-center justify-center gap-[8px]">
-          <Button size="sm" onClick={onOpen} disabled={busy} className="px-[16px] py-[9px] font-semibold">
+      <div className="flex max-w-[34em] flex-col gap-[8px]">
+        <h2 className="display-md sm:display-lg">{dragging ? 'Loslassen zum Öffnen' : 'Ton, Video und Bilder bearbeiten'}</h2>
+        <p className="text-body leading-[1.55] text-prose">
+          Gerechnet wird auf Ihrem Gerät — keine Datei wird hochgeladen.
+        </p>
+      </div>
+      <div className="flex flex-col gap-[10px] lg:items-end">
+        <div className="flex flex-wrap items-center gap-[8px]">
+          <Button onClick={onOpen} disabled={busy} className="font-semibold">
+            <UploadTrayIcon />
             {busy ? 'Wird gelesen…' : 'Datei auswählen'}
           </Button>
-          <Button
-            variant="quiet"
-            size="sm"
-            onClick={onOpenProject}
-            disabled={projectBusy}
-            className="px-[14px] py-[9px]"
-            title=".sondra Projektdatei laden"
-          >
-            <SondraProjectIcon />
-            <span>{projectBusy ? 'Lädt…' : 'Projekt laden'}</span>
-          </Button>
-          <Button
-            variant="quiet"
-            size="sm"
-            onClick={() => setPanel('downloader')}
-            className="px-[16px] py-[9px]"
-          >
+          <Button variant="quiet" onClick={() => setPanel('downloader')}>
             Von Adresse laden
           </Button>
         </div>
+        <p className="flex flex-wrap items-center gap-x-[6px] text-small text-prose">
+          <span className="hidden sm:inline">oder hierher ziehen ·</span>
+          <button
+            type="button"
+            onClick={onOpenProject}
+            disabled={projectBusy}
+            className="press inline-flex items-center gap-[5px] text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink disabled:opacity-40"
+            title=".sondra Projektdatei laden"
+          >
+            <SondraProjectIcon />
+            {projectBusy ? 'Lädt…' : 'Projekt laden'}
+          </button>
+        </p>
       </div>
-    </div>
+    </section>
+  )
+}
+
+/* -- films and series ------------------------------------------------------- */
+
+/**
+ * The Merkliste, the player, the folder and the downloader: what is watched
+ * and kept, as four wide tiles. On a phone, the reason Sondra is opened; the
+ * Merkliste says what comes next.
+ */
+function MediaTiles() {
+  const setPanel = useSession((state) => state.setPanel)
+  const list = useMerkliste()
+  const watching = list
+    .filter((item) => (item.status ?? 'watching') === 'watching')
+    .sort((a, b) => (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt))
+  const next = watching[0]
+  const tiles: { id: PanelId; label: string; line: string }[] = [
+    {
+      id: 'merkliste',
+      label: 'Merkliste',
+      line: next
+        ? `Weiter: ${next.title} · ${positionLabel(next.season, next.episode)}`
+        : list.length
+          ? `${list.length} ${list.length === 1 ? 'Eintrag' : 'Einträge'}`
+          : 'Serien und Filme, mit Staffeln und Stand',
+    },
+    { id: 'player', label: 'Abspielen', line: 'Filme und Musik, mit Untertiteln' },
+    { id: 'folder', label: 'Ordner', line: 'Folgen auf dem Gerät oder in Drive' },
+    { id: 'downloader', label: 'Herunterladen', line: 'Von einer Adresse holen' },
+  ]
+  return (
+    <section aria-labelledby="start-filme" className="flex flex-col gap-[12px]">
+      <h2 id="start-filme" className="text-subheading text-ink">
+        Filme und Serien
+      </h2>
+      <div className="grid grid-cols-2 gap-[10px] lg:grid-cols-4">
+        {tiles.map((tile, index) => (
+          <button
+            key={tile.id}
+            type="button"
+            onClick={() => setPanel(tile.id)}
+            // The Merkliste across the row on a phone: „Weiter: …“ needs the width.
+            className={`${index === 0 ? 'col-span-2 lg:col-span-1 ' : ''}press group flex min-w-0 items-center gap-[12px] rounded-card bg-panel-soft p-[12px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-mid sm:p-[14px]`}
+          >
+            <span className="grid h-[36px] w-[36px] shrink-0 place-items-center rounded-nav bg-raised text-ink transition-colors duration-[var(--dur-fast)] group-hover:bg-ink group-hover:text-on-ink">
+              <ToolIcon>{ICONS[tile.id]}</ToolIcon>
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-small font-semibold leading-[1.25] text-ink">{tile.label}</span>
+              <span className="line-clamp-2 text-small leading-[1.4] text-prose sm:line-clamp-1" title={tile.line}>
+                {tile.line}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -497,43 +389,22 @@ export function Home() {
   const active = useActiveAsset()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ToolGroup | 'alle'>('alle')
+  const [unfolded, setUnfolded] = useState<Set<ToolGroup>>(() => new Set())
   const picker = useFilePicker('geöffnet')
   const projectPicker = useProjectPicker()
+  const columns = useColumns()
 
   const searching = query.trim().length > 0
 
-  const featuredActions = useMemo(
-    () =>
-      FEATURED_IDS.map((id) => ACTIONS.find((a) => a.id === id)).filter(
-        (a): a is ToolAction => Boolean(a),
-      ),
-    [],
-  )
-
-  const showFeatured = !searching && (filter === 'alle' || filter === 'ton')
-
-  // Searching looks through everything, the way in included; filtering by a
-  // group narrows the grid; „Alle" shows all tools in one compact grid below
-  // the three featured cards.
-  const matches = useMemo(() => {
-    if (searching) return searchActions(query)
-    const featuredSet = new Set<string>(FEATURED_IDS)
-    const pool = ACTIONS.filter(
-      (action) =>
-        action.group !== 'holen' &&
-        (filter === 'alle' || action.group === filter) &&
-        !(showFeatured && featuredSet.has(action.id)),
-    )
-    if (filter === 'alle' || filter === 'ton') {
-      const rank = new Map(PRIORITY_GRID_IDS.map((id, index) => [id, index]))
-      return [...pool].sort((a, b) => {
-        const ra = rank.get(a.id) ?? 999
-        const rb = rank.get(b.id) ?? 999
-        return ra - rb
-      })
-    }
-    return pool
-  }, [query, searching, filter, showFeatured])
+  // Each group in its order: the common jobs first.
+  const groups = useMemo(() => {
+    const rank = new Map(PRIORITY_GRID_IDS.map((id, index) => [id, index]))
+    return FILTERS.map((group) => ({
+      group,
+      actions: ACTIONS.filter((action) => action.group === group).sort((a, b) => (rank.get(a.id) ?? 999) - (rank.get(b.id) ?? 999)),
+    }))
+  }, [])
+  const matches = useMemo(() => (searching ? searchActions(query) : []), [query, searching])
 
   // Through `useShallow` and a `useMemo`, not `new Set(...)` inside the
   // selector: a fresh Set on every read is a fresh identity on every read,
@@ -548,7 +419,7 @@ export function Home() {
   )
 
   return (
-    <div className="flex flex-col gap-[24px] sm:gap-[28px]">
+    <div className="flex flex-col gap-[28px] sm:gap-[36px]">
       {picker.input}
       {projectPicker.input}
 
@@ -570,130 +441,109 @@ export function Home() {
           <FileCard onOpen={picker.open} onOpenProject={projectPicker.open} />
         </section>
       ) : (
-        <section className="grid grid-cols-1 gap-[16px] lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-          <div className="flex flex-col justify-between gap-[20px] rounded-card bg-panel-soft p-[24px] ring-1 ring-inset ring-line sm:p-[32px]">
-            <div className="flex max-w-[38em] flex-col gap-[10px]">
-              <h2 className="display-md sm:display-lg">Ton, Video und Bilder bearbeiten</h2>
-              <p className="text-body leading-[1.55] text-prose">
-                Alles rechnet direkt auf deinem Gerät. Deine Dateien bleiben 100% privat.
-              </p>
-            </div>
-            <div className="inline-flex self-start items-center gap-[8px] rounded-pill bg-panel-mid px-[12px] py-[6px] text-small font-medium text-ink ring-1 ring-inset ring-rule">
-              <ShieldCheckIcon />
-              <span>100% lokal &amp; privat</span>
-            </div>
-          </div>
-          <WayIn
-            onOpen={picker.open}
-            onOpenProject={projectPicker.open}
-            busy={picker.busy}
-            projectBusy={projectPicker.busy}
-          />
-        </section>
+        <WayIn onOpen={picker.open} onOpenProject={projectPicker.open} busy={picker.busy} projectBusy={projectPicker.busy} />
       )}
+
+      {active ? null : <MediaTiles />}
 
       {/* -- the tools ------------------------------------------------------ */}
-      <section aria-label="Werkzeuge" className="flex flex-col gap-[14px]">
-        {/* One bar: narrow by group on the left, search on the right. */}
-        <div className="flex flex-col-reverse gap-[12px] md:flex-row md:items-center md:justify-between">
-          <div
-            role="radiogroup"
-            aria-label="Werkzeuge nach Gruppe"
-            className={`flex flex-wrap gap-[8px] transition-opacity duration-[var(--dur-fast)] ${searching ? 'opacity-40' : ''}`}
-          >
-            {(['alle', ...FILTERS] as const).map((group) => {
-              const on = !searching && filter === group
-              return (
-                <button
-                  key={group}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => {
-                    setQuery('')
-                    setFilter(group)
-                  }}
-                  className={`press rounded-pill px-[14px] py-[7px] text-small font-medium transition-colors duration-[var(--dur-fast)] ${
-                    on
-                      ? 'bg-ink font-semibold text-on-ink'
-                      : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
-                  }`}
-                >
-                  {group === 'alle' ? 'Alle' : GROUP_LABEL[group]}
-                </button>
-              )
-            })}
-          </div>
-
-          <label className="relative flex w-full items-center md:w-[300px]">
-            <svg
-              viewBox="0 0 16 16"
-              aria-hidden
-              className="pointer-events-none absolute left-[14px] h-4 w-4 text-muted"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
+      <section aria-labelledby="start-werkzeuge" className="flex flex-col gap-[16px]">
+        <div className="flex flex-col gap-[12px] border-b border-line pb-[14px] md:flex-row md:items-center md:justify-between">
+          <h2 id="start-werkzeuge" className="text-subheading text-ink">
+            Werkzeuge
+          </h2>
+          <div className="flex flex-col-reverse gap-[10px] md:flex-row md:items-center">
+            <div
+              role="radiogroup"
+              aria-label="Werkzeuge nach Gruppe"
+              className={`flex flex-wrap gap-[6px] transition-opacity duration-[var(--dur-fast)] ${searching ? 'opacity-40' : ''}`}
             >
-              <circle cx="7" cy="7" r="4.5" />
-              <path d="M10.4 10.4L14 14" />
-            </svg>
-            <input
-              type="search"
-              data-own-focus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Werkzeug suchen…"
-              aria-label="Werkzeuge durchsuchen, zum Beispiel „mp3 aus video“ oder „tonart“"
-              className="w-full rounded-pill border-0 bg-panel-soft py-[8px] pl-[38px] pr-[16px] text-small text-ink outline-none ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] placeholder:text-muted hover:bg-panel-mid focus:bg-raised focus:ring-2 focus:ring-ink [&::-webkit-search-cancel-button]:hidden"
-            />
-          </label>
+              {(['alle', ...FILTERS] as const).map((group) => {
+                const on = !searching && filter === group
+                return (
+                  <button
+                    key={group}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => {
+                      setQuery('')
+                      setFilter(group)
+                    }}
+                    className={`press rounded-pill px-[12px] py-[6px] text-small font-medium transition-colors duration-[var(--dur-fast)] ${
+                      on ? 'bg-ink font-semibold text-on-ink' : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
+                    }`}
+                  >
+                    {group === 'alle' ? 'Alle' : GROUP_LABEL[group]}
+                  </button>
+                )
+              })}
+            </div>
+
+            <label className="relative flex w-full items-center md:w-[260px]">
+              <svg
+                viewBox="0 0 16 16"
+                aria-hidden
+                className="pointer-events-none absolute left-[14px] h-4 w-4 text-muted"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
+                <circle cx="7" cy="7" r="4.5" />
+                <path d="M10.4 10.4L14 14" />
+              </svg>
+              <input
+                type="search"
+                data-own-focus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Werkzeug suchen…"
+                aria-label="Werkzeuge durchsuchen, zum Beispiel „mp3 aus video“ oder „tonart“"
+                className="w-full rounded-pill border-0 bg-raised py-[8px] pl-[38px] pr-[16px] text-small text-ink outline-none ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] placeholder:text-muted hover:ring-rule focus:ring-2 focus:ring-ink [&::-webkit-search-cancel-button]:hidden"
+              />
+            </label>
+          </div>
         </div>
 
-        {/* Featured 3-card row */}
-        {showFeatured ? (
-          <div className="grid grid-cols-1 gap-[12px] lg:grid-cols-3">
-            {featuredActions.map((action) => (
-              <FeaturedTool
-                key={action.id}
-                action={action}
-                dimmed={dimmed(action)}
-                onClick={() => setPanel(action.panel)}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        {/* Main tool grid */}
-        {searching && matches.length === 0 ? (
-          <p className="text-small text-muted">
-            Nichts gefunden für <span className="value text-ink">{query}</span>. Versuchen Sie es mit
-            einem Format („mp3“, „webp“, „gif“) oder mit dem, was herauskommen soll.
-          </p>
+        {searching ? (
+          matches.length === 0 ? (
+            <p className="text-small text-prose">
+              Nichts gefunden für <span className="value text-ink">{query}</span>. Versuchen Sie es mit einem Format („mp3“,
+              „webp“, „gif“) oder mit dem, was herauskommen soll.
+            </p>
+          ) : (
+            <Grid>{matches.map(tile)}</Grid>
+          )
         ) : (
-          <Grid>{matches.map(tile)}</Grid>
+          groups
+            .filter(({ group }) => filter === 'alle' || filter === group)
+            .map(({ group, actions }) => {
+              // Two rows of each group; a chosen group, or one opened, whole.
+              const whole = filter === group || unfolded.has(group)
+              const shown = whole ? actions : actions.slice(0, columns * 2)
+              const rest = actions.length - shown.length
+              return (
+                <section key={group} aria-labelledby={`start-${group}`} className="flex flex-col gap-[10px]">
+                  <h3 id={`start-${group}`} className="flex items-baseline gap-[8px] text-body font-semibold text-ink">
+                    {GROUP_LABEL[group]}
+                    <span className="value text-small font-normal text-prose">{actions.length}</span>
+                  </h3>
+                  <Grid>{shown.map(tile)}</Grid>
+                  {rest > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setUnfolded((current) => new Set(current).add(group))}
+                      className="press self-start text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+                    >
+                      {rest === 1 ? 'Noch ein Werkzeug' : `Noch ${rest} Werkzeuge`} für {GROUP_LABEL[group]}
+                    </button>
+                  ) : null}
+                </section>
+              )
+            })
         )}
       </section>
-
-      {/* -- the Windows app ------------------------------------------------ */}
-      {IN_DESKTOP_APP ? null : (
-        <section className="flex flex-col items-start gap-[16px] rounded-card bg-panel-soft p-[20px] ring-1 ring-inset ring-line sm:flex-row sm:items-center sm:justify-between sm:p-[24px]">
-          <div className="flex flex-col gap-[4px]">
-            <h2 className="text-body font-semibold text-ink">Sondra als Windows-App</h2>
-            <p className="text-small text-prose">Eigenes Fenster, läuft ohne Browser, rechnet auf Ihrem Rechner.</p>
-          </div>
-          <button
-            type="button"
-            onClick={openGetAppDialog}
-            className="press inline-flex shrink-0 items-center gap-[8px] rounded-nav bg-raised px-[14px] py-[10px] text-small font-medium text-ink ring-1 ring-inset ring-rule hover:ring-ink"
-          >
-            <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
-              <path d="M8 2.5v7.5M4.8 6.8 8 10l3.2-3.2M3 13h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Für Windows herunterladen
-          </button>
-        </section>
-      )}
     </div>
   )
 }

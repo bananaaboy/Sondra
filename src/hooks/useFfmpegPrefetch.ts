@@ -17,6 +17,7 @@
 
 import { useEffect } from 'react'
 
+import { FETCH_LIGHT } from '../lib/desktop'
 import { loadFfmpeg } from '../lib/ffmpegClient'
 
 /**
@@ -29,6 +30,8 @@ const SETTLE_MS = 2500
 
 export function useFfmpegPrefetch() {
   useEffect(() => {
+    // On a phone only when a tool asks for it (`FETCH_LIGHT`).
+    if (FETCH_LIGHT) return
     // Failures surface through the boot state and through whichever panel
     // needs the core; there is nothing to do with the rejection here.
     const start = () => void loadFfmpeg().catch(() => {})

@@ -51,7 +51,7 @@ check() {
 
 main=(-n "$pkg/.MainActivity")
 
-check "Symbol" "Seite geladen: https://sondra.lizge.ch/#merkliste" \
+check "Symbol" "Seite geladen: https://sondra.lizge.ch/" \
   -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "${main[@]}"
 # The page found the app's bridge (it reports its theme on load).
 log="$(adb logcat -d)"
@@ -84,6 +84,6 @@ check "Zurück von Google" "Zurück von der Anmeldung bei Google" \
 
 # Cold again, with the page's state gone: the start must still hold.
 adb shell am force-stop "$pkg"
-check "Neustart" "Seite geladen: https://sondra.lizge.ch/#merkliste" \
+check "Neustart" "Seite geladen: https://sondra.lizge.ch/" \
   -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "${main[@]}"
 echo "Sondra startet ohne Absturz."

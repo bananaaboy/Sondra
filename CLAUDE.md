@@ -51,7 +51,18 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   auch auf der Startseite, auf jeder Breite (Wunsch vom 23.10.2026: „im
   Startmenü kann man die Navbar nicht sehen“); unterhalb `sm` war sie dort
   ausgeblendet, weil sie abgeschnitten wurde — seit „Mehr“ wird nichts mehr
-  abgeschnitten.
+  abgeschnitten. **Die Startseite seit dem 28.10.2026** („sie ist sehr
+  cluttered“; vorher zwei Kästen, Plakette „100 % lokal & privat“, drei
+  Bildkarten und 45 gleich schwere Kacheln am Stück, 4 300 px auf dem
+  Handy): ein getönter Einstieg (Überschrift, ein Satz in Sie-Form, „Datei
+  auswählen“, „Von Adresse laden“; der ganze Block nimmt eine Datei an),
+  „Filme und Serien“ (Merkliste mit „Weiter: …“, Abspielen, Ordner,
+  Herunterladen), dann „Werkzeuge“ je Gruppe unter ihrer Überschrift, zwei
+  Reihen sichtbar, der Rest hinter „Noch n Werkzeuge für …“; eine
+  Gruppenpille zeigt die Gruppe ganz, die Suche alles. Kacheln auf
+  `panel-soft`, Hinweis höchstens zwei Zeilen. Kein Windows-Block mehr unten
+  — die Kopfzeile hat „App herunterladen“, und in der Android-App warb er
+  für Windows.
 - **Die Spalte wächst mit dem Schreibtisch, aber nicht endlos.** `shell` geht
   in Stufen von 1280 auf 1840 px; das Kachelraster von 2 über 3 und 4 auf 5
   Spalten. Mehr Fläche heisst mehr sichtbare Kacheln, nicht breitere — und ein
@@ -73,7 +84,17 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Ladebildschirm. Ein Werkzeug, das wartet, zeigt das Warten bei sich. Jedes
   Werkzeug ist ein eigener Chunk (`React.lazy` in `Dashboard.tsx`) und wird
   erst beim Öffnen geholt, der Rest im Leerlauf; ein neues Panel gehört in
-  `TOOLS` dort, nicht als statischer Import.
+  `TOOLS` dort, nicht als statischer Import. **Auf einem Telefon wird nichts
+  vorgeholt** (`FETCH_LIGHT` in `lib/desktop.ts`: Android, iPhone/iPad oder
+  „Daten sparen“): weder der FFmpeg-Kern (32 MB WebAssembly, bei jedem Start
+  der Android-App übersetzt) noch die vierzig Werkzeuge — das war der
+  Hauptgrund, dass die App „mega schlecht“ lief. Player und Herunterladen
+  werden erst beim ersten Öffnen eingehängt und bleiben dann (Film und
+  Download laufen hinter anderen Werkzeugen weiter); vorher kosteten sie
+  jeden Besuch 800 KB Skript. Die Merkliste schreibt bei jeder Änderung
+  sofort ihr JSON und die SQLite-Kopie erst 1,5 s später oder beim Verlassen
+  (`sondra:sqlite_db_stale` sagt dem nächsten Start, dass das JSON neuer
+  ist) — ein „+1“ kostete ein Telefon sonst 150 ms.
 - **Ordner** (`#ordner`, `FolderPanel.tsx`, `lib/folder.ts`, 1.1.12): die
   Dateien eines Ordners auf diesem Gerät als Kacheln (Vorschaubild aus dem
   Video bei ~15 %, Bild verkleinert beim Dekodieren, Dauer; `lib/thumbnails.ts`,
@@ -739,7 +760,7 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   die über Google Drive läuft statt Anytype“; am 23.10.: „es soll wirklich
   wie eine App sein, nicht Webapp“): eine eigene App um die Website, Paket
   `ch.lizge.sondra`, Java, keine Bibliothek für Web-Apps. `MainActivity`
-  hält ein WebView auf `https://sondra.lizge.ch` (Start `#merkliste`),
+  hält ein WebView auf `https://sondra.lizge.ch` (Start auf der Startseite wie die Website, seit 28.10.2026; vorher `#merkliste`),
   zwischen den Systemleisten (Insets als Abstand, Tastatur eingeschlossen),
   Startbild über die SplashScreen-API, bis die Seite gezeichnet hat; nur die
   eigene Adresse bleibt drin, alles andere und neue Fenster gehen an den
