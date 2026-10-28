@@ -22,6 +22,19 @@ android {
         targetSdk = 36
         versionName = sondraVersion
         versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
+        // yt-dlp comes with its own Python and FFmpeg, built per processor:
+        // phones (arm64, older arm) and the x86_64 emulator the workflow starts.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+    }
+
+    // Python and FFmpeg run as programs from the app's library folder, so
+    // they must lie there unpacked (youtubedl-android).
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     signingConfigs {
@@ -61,4 +74,7 @@ dependencies {
     implementation("androidx.webkit:webkit:1.18.0")
     // The Google sign-in for Drive opens in a Custom Tab: Google refuses it in a WebView.
     implementation("androidx.browser:browser:1.10.0")
+    // Downloading as in the Windows app: yt-dlp on the device (YtDlp.java).
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
 }

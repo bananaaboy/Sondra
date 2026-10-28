@@ -18,7 +18,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { APP_BRIDGE, IN_DESKTOP_APP } from '../../lib/desktop'
-import { ANDROID_BRIDGE } from '../../lib/android'
+import { ANDROID_BRIDGE, type YtdlpInfo } from '../../lib/android'
+import { DeviceDownload, DeviceJobs, forDevice } from './DeviceDownload'
 import { sendStreamToPlayer } from '../../lib/player'
 import { sendAppNotification } from '../../lib/notifications'
 import {
@@ -498,13 +499,13 @@ function useOnline(): boolean {
   return online
 }
 
-function AppNotice() {
+function AppNotice({ where }: { where: 'Rechner' | 'Telefon' }) {
   const [open, setOpen] = useState(false)
   return (
     <div role="note" className="rounded-nav bg-panel-soft px-[12px] py-[8px] ring-1 ring-inset ring-rule">
       <div className="flex flex-wrap items-center justify-between gap-x-[12px] gap-y-[4px] text-small">
         <span className="text-prose">
-          <strong className="font-semibold text-ink">Direkt über diesen Rechner (yt-dlp)</strong> · Bitte nur laden, was Sie herunterladen dürfen.
+          <strong className="font-semibold text-ink">Direkt über {where === 'Telefon' ? 'dieses Telefon' : 'diesen Rechner'} (yt-dlp)</strong> · Bitte nur laden, was Sie herunterladen dürfen.
         </span>
         <button
           type="button"
@@ -517,7 +518,9 @@ function AppNotice() {
       </div>
       {open ? (
         <p className="mt-[6px] border-t border-line pt-[6px] text-small leading-[1.45] text-prose">
-          Sondra fragt die Seite direkt auf diesem Rechner an, ohne fremden Server dazwischen. Ich hafte dafür absolut nicht; Kopierschutz wird nicht umgangen.
+          Sondra fragt die Seite direkt auf {where === 'Telefon' ? 'diesem Telefon' : 'diesem Rechner'} an, ohne fremden Server dazwischen
+          {where === 'Telefon' ? ' — AniWorld und seine Hoster gehen weiter über Sondras eigenen Dienst' : ''}. Ich hafte dafür absolut nicht;
+          Kopierschutz wird nicht umgangen.
         </p>
       ) : null}
     </div>
@@ -848,6 +851,8 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
   const [looking, setLooking] = useState(false)
   const [result, setResult] = useState<StudioResult | null>(null)
+  /** In the Android app: what yt-dlp on the phone found behind the address. */
+  const [device, setDevice] = useState<{ url: string; info: YtdlpInfo } | null>(null)
   const [batchEntries, setBatchEntries] = useState<BatchItem[] | null>(null)
   /** A playlist's or season's own title, as the archive's suggested name. */
   const [batchTitle, setBatchTitle] = useState<string | null>(null)
@@ -1309,6 +1314,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
     setLooking(true)
     setError(null)
     setResult(null)
+    setDevice(null)
     setShowAllStreams(false)
     replaceBatch(null)
     setBatchTitle(null)
@@ -1322,6 +1328,24 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
     if (targets.length === 1) {
       try {
+        // In the Android app, as in the Windows app: yt-dlp on the device.
+        // Its first start unpacks Python and may update yt-dlp, which takes
+        // longer than the 30 seconds a website lookup gets.
+        if (forDevice(targets[0]) && ANDROID_BRIDGE) {
+          clearTimeout(timeoutTimer)
+          const info = await ANDROID_BRIDGE.ytdlpInfo(targets[0])
+          if (controller.signal.aborted) return
+          if (info && info.ok) {
+            setDevice({ url: targets[0], info })
+            log('holen', `${info.title} — yt-dlp auf dem Telefon`)
+            return
+          }
+          if (info && !info.ok) {
+            setError({ code: 'ytdlp', message: `yt-dlp auf dem Telefon: ${info.error}` })
+            return
+          }
+          // An app from before yt-dlp: the website's way, below.
+        }
         const found = await resolveViaService(targets[0], controller.signal, {
           language: activeLang,
         })
@@ -2222,7 +2246,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
           </Button>
         </div>
 
-        {IN_DESKTOP_APP ? <AppNotice /> : <NotLocalNotice />}
+        {IN_DESKTOP_APP ? <AppNotice where="Rechner" /> : ANDROID_BRIDGE ? <AppNotice where="Telefon" /> : <NotLocalNotice />}
 
         {!online ? (
           <div className="mt-[16px]">
@@ -2426,7 +2450,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
             </div>
           </div>
 
-          {isPortalUrl(url) && !IN_DESKTOP_APP ? (
+          {isPortalUrl(url) && !IN_DESKTOP_APP && !ANDROID_BRIDGE ? (
             <p className="text-small leading-[1.5] text-prose">
               Portalinhalte lassen sich aus dem Browser allein oft nicht oder nur in kleiner Auflösung laden; voll geht es mit der App
               oder einer Brücke auf diesem Rechner.{' '}
@@ -2747,6 +2771,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
       {error ? (
         !IN_DESKTOP_APP &&
+        error.code !== 'ytdlp' &&
         (isPortalUrl(url) ||
           error.code === 'youtube.sabr' ||
           error.code === 'no-extractor' ||
@@ -2788,6 +2813,16 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
           </Notice>
         )
       ) : null}
+
+      {device ? (
+        <DeviceDownload
+          url={device.url}
+          info={device.info}
+          preferAudio={filterAudioOnly}
+          maxHeight={/^(\d+)p$/.test(filePrefs.videoPref) ? Number(filePrefs.videoPref.slice(0, -1)) : 0}
+        />
+      ) : null}
+      {ANDROID_BRIDGE ? <DeviceJobs /> : null}
 
       {result ? (
         <Card tone="keylime" className="rise">

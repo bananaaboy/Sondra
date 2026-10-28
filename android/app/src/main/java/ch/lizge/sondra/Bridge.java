@@ -52,6 +52,7 @@ final class Bridge {
     private final MainActivity activity;
     private final Saver saver;
     private final Downloader downloader;
+    private final YtDlp ytdlp;
     private Updater updater;
     private final Handler main = new Handler(Looper.getMainLooper());
     /** The sign-in is open in the browser. */
@@ -67,6 +68,7 @@ final class Bridge {
         this.activity = activity;
         this.saver = new Saver(activity);
         this.downloader = new Downloader(activity);
+        this.ytdlp = new YtDlp(activity, this);
         // What the app's own sign-in kept before it went the website's way.
         activity.deleteSharedPreferences("drive");
     }
@@ -143,6 +145,24 @@ final class Bridge {
                 activity.setPageDark(message.optBoolean("dark"));
                 break;
 
+            // --- yt-dlp on the device, as in the Windows app ---
+            case "ytdlp-info":
+                ytdlp.info(message.optString("url"), result -> answer(reply, id, result));
+                break;
+            case "ytdlp-download":
+                ytdlp.download(
+                        message.optString("url"),
+                        message.optString("mode", "video"),
+                        message.optInt("height", 0),
+                        message.optString("audioFormat", "m4a"),
+                        message.optString("title"),
+                        result -> answer(reply, id, result));
+                break;
+            case "ytdlp-cancel":
+                ytdlp.cancel(message.optString("job"));
+                answer(reply, id, new JSONObject().put("ok", true));
+                break;
+
             // --- Auto-Updater ---
             case "update-state":
                 answer(reply, id, updater != null ? updater.getState() : new JSONObject().put("status", "off"));
@@ -192,6 +212,19 @@ final class Bridge {
             default:
                 answer(reply, id, new JSONObject().put("ok", false).put("error", "rejected"));
         }
+    }
+
+    /** An event the page listens for, posted on the main thread. */
+    @SuppressLint("RequiresFeature")
+    void tellEvent(JSONObject event) {
+        activity.runOnUiThread(() -> {
+            if (page == null) return;
+            try {
+                page.postMessage(event.toString());
+            } catch (IllegalStateException ignored) {
+                // The page went away meanwhile.
+            }
+        });
     }
 
     /** Emits an update state change event to the web page. */

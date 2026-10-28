@@ -16,6 +16,9 @@
  *   save     a file into Downloads/Sondra, in pieces (a WebView cannot save
  *            a `blob:` address)
  *   theme    the theme the page shows, for the system bars
+ *   ytdlp    downloading as the Windows app does: yt-dlp on the phone
+ *            (`YtDlp.java`) — what is behind an address, a download with its
+ *            progress as `ytdlp` events, cancelling
  *   update   in-app auto updater for Android APK releases
  *   wake-lock keeps the screen illuminated during playback and downloads
  */
@@ -40,6 +43,7 @@ const waiting = new Map<string, (answer: unknown) => void>()
 const openedListeners = new Set<() => void>()
 const signInListeners = new Set<(closed: boolean) => void>()
 const updateListeners = new Set<(state: UpdateState) => void>()
+const ytdlpListeners = new Set<(event: YtdlpEvent) => void>()
 let ids = 0
 
 if (port) {
@@ -56,6 +60,10 @@ if (port) {
     }
     if (message.event === 'sign-in' || message.event === 'sign-in-closed') {
       for (const listener of signInListeners) listener(message.event === 'sign-in-closed')
+      return
+    }
+    if (message.event === 'ytdlp') {
+      for (const listener of ytdlpListeners) listener(message as unknown as YtdlpEvent)
       return
     }
     if (message.event === 'update' && message.state) {
@@ -89,6 +97,32 @@ function base64(bytes: Uint8Array): string {
   return btoa(text)
 }
 
+/** What yt-dlp on the phone found behind an address. */
+export interface YtdlpInfo {
+  title: string
+  uploader: string
+  /** Seconds; 0 when unknown. */
+  duration: number
+  thumbnail: string
+  extractor: string
+  /** Whether there is a picture at all (a song on SoundCloud has none). */
+  video: boolean
+  /** The heights the video comes in, highest first. */
+  heights: number[]
+}
+
+/** How a download on the phone goes. */
+export interface YtdlpEvent {
+  job: string
+  status: 'running' | 'done' | 'error' | 'cancelled'
+  progress?: number
+  /** Seconds left, -1 when unknown. */
+  eta?: number
+  name?: string
+  savedPath?: string
+  error?: string
+}
+
 export interface AndroidBridge {
   /** Opens Google's sign-in in the browser; `rejected` from an app too old for it. */
   openSignIn: (url: string) => Promise<{ ok: boolean; error?: string }>
@@ -116,6 +150,21 @@ export interface AndroidBridge {
   /** Prevents screen dimming / device standby */
   setPowerSaveBlocker: (active: boolean) => Promise<boolean>
   setOrientation: (orientation: 'portrait' | 'landscape' | 'unspecified') => Promise<boolean>
+  /**
+   * yt-dlp on the phone. `null` from an app too old to have it (before 1.1.20),
+   * which then downloads the website's way.
+   */
+  ytdlpInfo: (url: string) => Promise<({ ok: true } & YtdlpInfo) | { ok: false; error: string } | null>
+  ytdlpDownload: (options: {
+    url: string
+    mode: 'video' | 'audio'
+    /** Highest height wanted; 0 for the best there is. */
+    height: number
+    audioFormat: 'm4a' | 'mp3' | 'opus'
+    title?: string
+  }) => Promise<{ ok: boolean; job?: string; error?: string }>
+  ytdlpCancel: (job: string) => Promise<void>
+  onYtdlp: (callback: (event: YtdlpEvent) => void) => () => void
 }
 
 /** The app's side of the page, or null on the website and in the Windows app. */
@@ -162,6 +211,18 @@ export const ANDROID_BRIDGE: AndroidBridge | null = port
       },
       setPowerSaveBlocker: (active) => ask<{ ok: boolean }>('power-save-blocker', { active }).then((r) => r.ok),
       setOrientation: (orientation) => ask<{ ok: boolean }>('fullscreen-orientation', { orientation }).then((r) => r.ok),
+      async ytdlpInfo(url) {
+        const answer = await ask<Answer>('ytdlp-info', { url })
+        // An app before yt-dlp answers every unknown message „rejected“.
+        if (!answer.ok && answer.error === 'rejected') return null
+        return answer as unknown as ({ ok: true } & YtdlpInfo) | { ok: false; error: string }
+      },
+      ytdlpDownload: (options) => ask<{ ok: boolean; job?: string; error?: string }>('ytdlp-download', options),
+      ytdlpCancel: (job) => ask<Answer>('ytdlp-cancel', { job }).then(() => undefined),
+      onYtdlp: (callback) => {
+        ytdlpListeners.add(callback)
+        return () => ytdlpListeners.delete(callback)
+      },
     }
   : null
 
