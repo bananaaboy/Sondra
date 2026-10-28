@@ -78,16 +78,17 @@
       <a class="back" href="./">Zurück zu Sondra</a>
 
       <h1>Datenschutz</h1>
-      <p class="stand">Stand: 23. Oktober 2026 · gilt für die Website, die Windows-App und die Android-App</p>
+      <p class="stand">Stand: 28. Oktober 2026 · gilt für die Website, die Windows-App und die Android-App</p>
 
       <p class="kurz">
         Sondra bearbeitet Ihre Dateien auf Ihrem Gerät. Nichts davon wird zu uns hochgeladen. Es gibt keine
         Konten, kein Tracking und keine Werbung, und ein Cookie nur, wenn Sie Google Drive verbinden.
       </p>
       <p>
-        Daten verlassen Ihr Gerät nur in drei Fällen: beim Aufruf der Website, wie bei jeder Website, wenn
-        Sie Sondra selbst bitten, eine Datei von einer Adresse zu laden, und wenn Sie Ihr Google Drive
-        verbinden und etwas dorthin schicken. Alles drei ist unten genau beschrieben.
+        Daten verlassen Ihr Gerät nur in vier Fällen: beim Aufruf der Website, wie bei jeder Website, wenn
+        Sie Sondra selbst bitten, eine Datei von einer Adresse zu laden, wenn Sie Ihr Google Drive verbinden
+        und etwas dorthin schicken, und wenn Sie Ihre Geräte verbinden und einem davon etwas senden. Alles
+        vier ist unten genau beschrieben.
       </p>
 
       <section>
@@ -148,6 +149,17 @@
             <code>sondra:drive</code>: ob Google Drive verbunden ist, mit welchem Konto (Name und E-Mail-Adresse),
             Ihre beiden Schalter dafür und die Kennungen der Sondra-Ordner in Ihrem Drive. Kein Zugangsschlüssel;
             „Trennen“ löscht das Konto daraus.
+          </li>
+          <li>
+            <code>sondra:gesehene-version</code>: welche Version von Sondra Sie zuletzt gesehen haben, damit „Neu in …“
+            nach einem Update einmal erscheint.
+          </li>
+          <li>
+            <code>sondra:geraete:an</code>: ob dieses Gerät mit Ihren anderen verbunden ist. In der Datenbank Ihres
+            Browsers (<code>sondra-geraet</code>) liegen dazu der Schlüssel dieses Geräts — dessen geheimen Teil kann
+            auch Sondra nicht auslesen — und der Verweis auf den Ordner, den Sie für empfangene Dateien gewählt haben.
+            Für die Dauer des Besuchs merkt sich Sondra (sessionStorage), welche Nachrichten anderer Geräte schon
+            gelesen sind.
           </li>
         </ul>
         <p>
@@ -261,6 +273,46 @@
       </section>
 
       <section>
+        <h2>Wenn Sie Ihre Geräte verbinden</h2>
+        <p>
+          Unter „Geräte“ können Sie dieses Gerät mit Ihren anderen Geräten verbinden, die mit demselben Google-Konto
+          angemeldet sind, und ihnen Dateien senden. Das geschieht nur, nachdem Sie „Dieses Gerät verbinden“ gewählt
+          haben, und braucht Google Drive.
+        </p>
+        <ul>
+          <li>
+            In Ihrem Drive liegt dann im Ordner „Sondra/Geräte“ je Gerät eine kleine Datei: der Name, den Sie ihm
+            geben, die Art (etwa „Chrome auf Windows“ oder „Android-App · Pixel 8“), der öffentliche Schlüssel des
+            Geräts und wann es verbunden wurde und zuletzt offen war — solange Sondra offen ist, alle zwei Minuten neu
+            geschrieben. Jede dieser Dateien ist mit dem Schlüssel ihres Geräts signiert.
+          </li>
+          <li>
+            Eine Übertragung wird über Ihr Drive angeboten und angenommen. Dafür liegt im Ordner „Sondra/Geräte/Post“
+            kurz eine Nachricht mit den Namen und Grössen der Dateien und der Beschreibung der Verbindung; diese
+            enthält die Adressen des Geräts in Ihrem lokalen Netz. Das empfangende Gerät liest die Nachricht und löscht
+            sie; was niemand abholt, löscht das sendende Gerät nach einem Tag.
+          </li>
+          <li>
+            Die Dateien selbst gehen direkt von Gerät zu Gerät, verschlüsselt (WebRTC), ohne Server von Sondra und
+            ohne fremden Vermittlungsdienst. Deshalb klappt das direkt nur, wenn beide Geräte im selben Netz sind.
+          </li>
+          <li>
+            Findet sich kein direkter Weg, können Sie die Dateien über Google Drive senden: erst auf Ihren Klick
+            liegen sie dann im Ordner „Sondra/Geräte/Übergabe“, und das empfangende Gerät löscht sie, sobald es sie
+            hat. Für diese Zeit gilt, was oben für Google Drive steht.
+          </li>
+          <li>
+            Das andere Gerät fragt, bevor es etwas annimmt. Empfangene Dateien legt die Android-App in
+            „Downloads/Sondra“ ab, ein Browser oder die Windows-App in den Ordner, den Sie beim ersten Mal wählen.
+          </li>
+          <li>
+            „Trennen“ löscht den Eintrag dieses Geräts aus Ihrem Drive; „Dieses Gerät ganz vergessen“ löscht dazu
+            seinen Schlüssel.
+          </li>
+        </ul>
+      </section>
+
+      <section>
         <h2>Das Mikrofon</h2>
         <p>
           Sondra greift nur auf Ihr Mikrofon zu, wenn Sie unter „Mikrofon“ selbst auf „Mikrofon einschalten“
@@ -314,6 +366,19 @@
           das Mikrofon-Werkzeug benutzen. Die Merkliste und den Ordner bringt die App über Ihr Google Drive mit Ihren
           anderen Geräten zusammen, wie oben beschrieben.
         </p>
+        <ul>
+          <li>
+            Laden Sie in der App etwas von einem Videoportal, läuft yt-dlp auf Ihrem Telefon und fragt die Quelle
+            direkt; sie sieht dabei die IP-Adresse Ihres Telefons, Vercel ist nicht beteiligt. Beim ersten Gebrauch und
+            danach höchstens einmal pro Woche holt die App eine neue Fassung von yt-dlp von GitHub. Während eines
+            Downloads zeigt Android eine Benachrichtigung mit dem Fortschritt.
+          </li>
+          <li>
+            20 Sekunden nach dem Start fragt die App bei GitHub nach, ob es eine neue Fassung gibt; GitHub sieht dabei
+            Ihre IP-Adresse und die installierte Version. Die neue Fassung lädt die App erst, wenn Sie
+            „Aktualisieren“ wählen, ebenfalls von GitHub, und Android fragt vor dem Installieren.
+          </li>
+        </ul>
       </section>
 
       <section>
@@ -384,7 +449,8 @@
           stützt sich auf die Garantien, die beide in ihren Auftragsverarbeitungsverträgen bieten
           (Standardvertragsklauseln). Hugging Face (ebenfalls USA) erhält nur beim ersten Laden des
           Untertitel-Modells Ihre IP-Adresse, wie jeder Server, von dem Ihr Browser eine Datei abruft. Google
-          erhält nur, was Sie selbst in Ihr Google Drive schicken, und das in Ihr eigenes Konto.
+          erhält nur, was Sie selbst in Ihr Google Drive schicken, und das in Ihr eigenes Konto — mit verbundenen
+          Geräten dazu deren kleine Einträge und die Nachrichten, mit denen sie sich Übertragungen anbieten.
         </p>
       </section>
 

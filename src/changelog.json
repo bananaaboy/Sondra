@@ -2,6 +2,17 @@
   "_": "Was in jeder Version dazukam — für Menschen, nicht für Entwickler. Die neueste zuerst. Neue Version: oben einen Eintrag mit der Version aus package.json anlegen; der Release-Workflow bricht ab, wenn er fehlt, und nimmt ihn als Notizen des GitHub-Release.",
   "versions": [
     {
+      "version": "1.1.21",
+      "date": "2026-10-28",
+      "items": [
+        "Geräte: Dateien direkt zwischen Ihren eigenen Geräten — Handy, Laptop, Rechner. Sie finden sich über Ihr Google-Konto, die Dateien gehen direkt und verschlüsselt hinüber, und das andere Gerät fragt vorher.",
+        "„An Gerät“ neben jedem „In Drive“: ein Ergebnis mit einem Klick auf ein anderes Gerät.",
+        "Jedes verbundene Gerät ist eindeutig und kann von keinem anderen überschrieben oder nachgeahmt werden: eigener Schlüssel, signierte Einträge, eindeutige Namen.",
+        "Sind die Geräte nicht im selben Netz, auf Wunsch über Google Drive — die Dateien werden danach dort gelöscht.",
+        "Android: Updates lädt die App selbst, mit Fortschritt, und öffnet danach den Installer — nicht mehr über den Browser, wo Chrome bei 99 % auf „Trotzdem herunterladen“ wartete."
+      ]
+    },
+    {
       "version": "1.1.20",
       "date": "2026-10-28",
       "items": [

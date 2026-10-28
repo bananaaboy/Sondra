@@ -40,7 +40,8 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Radius" war die ausdrückliche Ansage. Ausnahme, ebenso gewünscht:
   Zeitflächen — Zeitleiste, Wellenformen, Klavierrolle, Editorbühne — bleiben
   eckig. Die eine Schattenstufe gehört dem, was wirklich
-  über dem Blatt schwebt: Editor-Platte, Popover, Ablage-Overlay.
+  über dem Blatt schwebt: Editor-Platte, Popover, Ablage-Overlay, die
+  kleinen Leisten unten und die Karte der Geräte.
 - **Klartext, kein Amtston.** Überschriften heissen, was sie sind —
   „Werkzeuge", nicht „Verfügbare Verfahren". Sie-Form und nüchterner Ton
   bleiben; Behördendeutsch war nie dasselbe wie Sachlichkeit.
@@ -149,7 +150,8 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   lokal. Seit dem 23.9. trägt sie die fette Warnung im Downloader
   („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte), seit dem
   22.10. dazu den einen Satz im Fenster „Google Drive“ („Was Sie in Drive
-  speichern, verlässt dieses Gerät …“) — dieselbe Aussage, sonst nichts. Den Lokal-Chip
+  speichern, verlässt dieses Gerät …“), seit dem 28.10. den Satz zum Weg über
+  Drive unter „Geräte“ — dieselbe Aussage, sonst nichts. Den Lokal-Chip
   in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
   „App herunterladen" mit dem Fenster „Sondra als App“ (bis 860 px; neu
