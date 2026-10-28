@@ -80,7 +80,7 @@ export interface UpdateState {
    * `portable`: the portable build, which cannot replace itself; a newer
    * version is `available` as a file at `download`.
    */
-  channel?: 'setup' | 'store' | 'portable'
+  channel?: 'setup' | 'store' | 'portable' | 'apk'
   download?: string
 }
 
@@ -147,6 +147,7 @@ export interface AppBridge {
   setPowerSaveBlocker?: (active: boolean) => Promise<boolean>
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
+  downloadUpdate?: () => Promise<UpdateState>
   installUpdate: () => Promise<boolean>
   onUpdate: (callback: (state: UpdateState) => void) => () => void
 }

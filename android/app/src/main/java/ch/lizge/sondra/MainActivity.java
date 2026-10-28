@@ -3,17 +3,25 @@ package ch.lizge.sondra;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
 import android.webkit.RenderProcessGoneDetail;
@@ -51,8 +59,8 @@ import androidx.webkit.WebViewFeature;
 /**
  * Sondra: the website in the app's own WebView, full screen between the
  * system bars, with the parts a page cannot do itself handed to the app
- * ({@link Bridge}). Only sondra.lizge.ch stays inside; every other address
- * goes to the browser.
+ * ({@link Bridge} and {@link Updater}). Only sondra.lizge.ch stays inside;
+ * every other address goes to the browser.
  */
 public class MainActivity extends ComponentActivity {
     static final String TAG = "SondraApp";
@@ -65,13 +73,27 @@ public class MainActivity extends ComponentActivity {
     private View fullscreen;
     private WebChromeClient.CustomViewCallback fullscreenDone;
     private Bridge bridge;
+    private Updater updater;
     private boolean drawn;
     private boolean pageDark;
+    private int wakeLockCount = 0;
+    private int previousOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
 
     private ValueCallback<Uri[]> pickDone;
     private PermissionRequest micRequest;
     private Runnable afterStorage;
     private Runnable storageDenied;
+
+    /** Pauses media immediately when headphones or Bluetooth audio are disconnected. */
+    private final BroadcastReceiver noisyAudioReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction()) && webView != null) {
+                Log.i(TAG, "Audio Becoming Noisy: Pausiere Wiedergabe");
+                webView.evaluateJavascript("document.querySelectorAll('video, audio').forEach(el => el.pause());", null);
+            }
+        }
+    };
 
     private final ActivityResultLauncher<Intent> picker =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -103,6 +125,11 @@ public class MainActivity extends ComponentActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Enforce hardware acceleration on the window level for fluid 60fps canvas & video
+        getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
+
         SplashScreen splash = SplashScreen.installSplashScreen(this);
         super.onCreate(savedInstanceState);
         long started = SystemClock.uptimeMillis();
@@ -126,7 +153,21 @@ public class MainActivity extends ComponentActivity {
         });
 
         bridge = new Bridge(this);
+        updater = new Updater(this, bridge);
+        bridge.setUpdater(updater);
+
         createWebView();
+
+        // Register noisy receiver to pause audio when headphones are unplugged
+        registerReceiver(noisyAudioReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+
+        // Silent background update check 20 seconds after app startup
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (!isFinishing() && !isDestroyed()) {
+                updater.checkForUpdates(false, null);
+            }
+        }, 20000);
+
         if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE)
                 && WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) {
             // The service worker's own requests, so files handed to Sondra reach it there too.
@@ -163,6 +204,23 @@ public class MainActivity extends ComponentActivity {
         }
     }
 
+    /** Ref-counted screen wake lock (FLAG_KEEP_SCREEN_ON). */
+    public synchronized void setKeepScreenOn(boolean keep) {
+        if (keep) {
+            wakeLockCount++;
+        } else {
+            wakeLockCount = Math.max(0, wakeLockCount - 1);
+        }
+        boolean active = wakeLockCount > 0;
+        runOnUiThread(() -> {
+            if (active) {
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } else {
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            }
+        });
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private void createWebView() {
         webView = new WebView(this);
@@ -179,10 +237,16 @@ public class MainActivity extends ComponentActivity {
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        // Enhanced WebSettings for fluid playback & accurate mobile layout
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         // The page can tell it runs here; the bridge is what it really relies on.
         settings.setUserAgentString(settings.getUserAgentString() + " SondraAndroid/" + version());
-        CookieManager.getInstance().setAcceptCookie(true);
+
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(webView, true);
 
         bridge.attach(webView);
         webView.setWebViewClient(new Client());
@@ -247,6 +311,9 @@ public class MainActivity extends ComponentActivity {
 
     @Override
     protected void onDestroy() {
+        try {
+            unregisterReceiver(noisyAudioReceiver);
+        } catch (Exception ignored) {}
         if (webView != null) {
             webView.destroy();
             webView = null;
@@ -357,6 +424,16 @@ public class MainActivity extends ComponentActivity {
         if (fullscreen == null) return;
         root.removeView(fullscreen);
         fullscreen = null;
+
+        // Restore underlying WebView visibility
+        if (webView != null) webView.setVisibility(View.VISIBLE);
+
+        // Restore previous screen orientation
+        setRequestedOrientation(previousOrientation);
+
+        // Release fullscreen wake lock
+        setKeepScreenOn(false);
+
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         controller.show(WindowInsetsCompat.Type.systemBars());
         if (fullscreenDone != null) fullscreenDone.onCustomViewHidden();
@@ -456,8 +533,20 @@ public class MainActivity extends ComponentActivity {
             fullscreen = view;
             fullscreenDone = callback;
             view.setBackgroundColor(Color.BLACK);
+
+            // Hide webView to eliminate dual-GPU compositor layers
+            if (webView != null) webView.setVisibility(View.GONE);
+
             root.addView(view, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+            // Save orientation and switch to sensor landscape for full immersion
+            previousOrientation = getRequestedOrientation();
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+
+            // Keep screen on while video is playing in fullscreen
+            setKeepScreenOn(true);
+
             WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
             controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             controller.hide(WindowInsetsCompat.Type.systemBars());

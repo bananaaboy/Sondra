@@ -2091,7 +2091,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
       <aside
         role="region"
         aria-label="Laufender Download"
-        className="fixed inset-x-[12px] bottom-[12px] z-50 flex items-center gap-[12px] rounded-card bg-stage p-[10px] text-stage-ink ring-1 ring-inset ring-stage-line elevate-lift sm:bottom-[12px] sm:left-[24px] sm:right-auto sm:w-[420px]"
+        className="fixed inset-x-[12px] bottom-[calc(12px+env(safe-area-inset-bottom,0px))] z-50 flex items-center gap-[12px] rounded-card bg-stage p-[10px] text-stage-ink ring-1 ring-inset ring-stage-line elevate-lift sm:bottom-[12px] sm:left-[24px] sm:right-auto sm:w-[420px]"
       >
         <div className="grid h-[40px] w-[40px] shrink-0 place-items-center rounded-pill bg-stage-ink text-stage animate-pulse">
           <svg viewBox="0 0 20 20" className="size-[20px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -2278,7 +2278,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     spellCheck={false}
                     aria-label="Adresse zum Herunterladen"
                     aria-describedby="download-address-hint"
-                    className="value h-full w-full cursor-text rounded-nav border-0 bg-transparent pl-[42px] pr-[210px] pt-[8px] text-body text-prose outline-none placeholder:font-sans placeholder:text-muted"
+                    className="value h-full w-full cursor-text rounded-nav border-0 bg-transparent pl-[42px] pr-[12px] md:pr-[210px] pt-[8px] text-body text-prose outline-none placeholder:font-sans placeholder:text-muted"
                   />
                 </div>
               </div>
@@ -2876,7 +2876,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                         .filter(Boolean)
                         .join(' · ')
                       return (
-                        <li key={stream.id} className="flex max-w-none items-center justify-between gap-[12px] py-[10px]">
+                        <li key={stream.id} className="flex max-w-none flex-col sm:flex-row sm:items-center justify-between gap-[10px] py-[10px] border-t border-line/40 first:border-t-0">
                           <div className="min-w-0">
                             <p className="truncate text-body text-ink">
                               {group.isAudio ? (audioTierLabel ? `Ton · ${audioTierLabel}` : 'Ton') : group.title}
@@ -2886,7 +2886,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                             </p>
                             <p className="value truncate text-small text-muted">{detail}</p>
                           </div>
-                          <div className="flex shrink-0 flex-wrap items-center gap-[8px]">
+                          <div className="flex w-full sm:w-auto shrink-0 flex-wrap items-center justify-end gap-[8px] pt-[2px] sm:pt-0">
                             {(stream.directUrl || stream.token) ? (
                               <Button
                                 size="sm"
