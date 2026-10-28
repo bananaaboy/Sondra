@@ -231,6 +231,9 @@ if (port && typeof window !== 'undefined' && !window.sondraApp) {
   window.sondraApp = {
     updateState: () => ask<UpdateState>('update-state'),
     checkForUpdates: () => ask<UpdateState>('update-check'),
+    // The app fetches the APK itself and opens Android's installer; through
+    // the browser, Chrome holds an APK at 99 % until „Trotzdem herunterladen“.
+    downloadUpdate: () => ask<UpdateState>('update-download'),
     installUpdate: () => ask<{ ok: boolean }>('update-install').then((r) => r.ok),
     onUpdate: (callback) => {
       updateListeners.add(callback)
