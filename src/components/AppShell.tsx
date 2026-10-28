@@ -19,6 +19,7 @@ import type { ThemeChoice } from '../lib/theme'
 import { SessionMenu } from './AssetList'
 import { AppUpdateButton } from './AppUpdate'
 import { GetAppButton, openGetAppDialog } from './GetApp'
+import { openWhatsNew } from './WhatsNew'
 import { DriveButton } from './GoogleDrive'
 import { PanelTabs } from './PanelTabs'
 import { ThemeToggle } from './ThemeToggle'
@@ -60,9 +61,14 @@ export function Logo({ as = 'h1' }: { as?: 'h1' | 'span' }) {
       <span className="font-wordmark text-[25px] font-light tracking-[-0.01em]">Sondra</span>
       {/* On a phone it gives way to the buttons; the footer still names the version. */}
       {IN_DESKTOP_APP ? null : (
-        <span className="value rounded-pill border border-line bg-panel-soft px-[7px] py-[1.5px] text-[11px] font-medium tracking-normal text-muted max-[419px]:hidden">
+        <button
+          type="button"
+          onClick={openWhatsNew}
+          title="Was ist neu in dieser Version"
+          className="press value rounded-pill border border-line bg-panel-soft px-[7px] py-[1.5px] text-[11px] font-medium tracking-normal text-muted hover:border-rule hover:text-ink max-[419px]:hidden"
+        >
           v{APP_VERSION}
-        </span>
+        </button>
       )}
       <span className="sr-only"> — Ton, Video und Bilder bearbeiten</span>
     </Tag>
@@ -223,6 +229,9 @@ export function Footer() {
             Sondra für Windows und Android
           </button>
         )}
+        <button type="button" className={footerLink} onClick={openWhatsNew}>
+          Was ist neu in {APP_VERSION}
+        </button>
         {driveConfigured ? (
           <button type="button" className={footerLink} onClick={openDriveDialog}>
             Google Drive

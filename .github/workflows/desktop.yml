@@ -392,8 +392,19 @@ jobs:
           node scripts/merge-update-info.mjs release/latest.yml release-arm64/latest.yml release/latest.yml
           if ($LASTEXITCODE -ne 0) { throw 'latest.yml nicht zusammengefuehrt.' }
 
+          # What this version brought, from the same list the app shows.
+          # Read here rather than from node's output, whose umlauts the
+          # console code page would mangle.
+          $entry = (Get-Content src/changelog.json -Raw -Encoding utf8 | ConvertFrom-Json).versions | Where-Object { $_.version -eq $version } | Select-Object -First 1
+          if (-not $entry -or -not $entry.items) { throw "src/changelog.json hat keinen Eintrag für $version." }
+          $changes = ($entry.items | ForEach-Object { "- $_" }) -join "`n"
+
           $notes = @"
           Sondra $version — für Windows und Android.
+
+          **Neu in $version**
+
+          $changes
 
           **Installieren:** Sondra-Setup.exe herunterladen und ausführen — auf Windows-Rechnern mit Arm-Prozessor (z. B. Snapdragon) Sondra-Setup-arm64.exe. Sondra installiert sich für alle Benutzer unter „Programme“ (eine Windows-Abfrage) und legt einen Eintrag im Startmenü und eine Verknüpfung auf dem Desktop an.
 
