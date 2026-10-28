@@ -47,6 +47,7 @@ import {
 import { IN_ANDROID_APP } from '../lib/desktop'
 import { useMerkliste } from '../lib/merkliste'
 import { useSession } from '../state/store'
+import { DeviceSendButton } from './DeviceSend'
 import { Button, Dialog, Notice, Toggle } from './ui/primitives'
 
 const linkClass =
@@ -100,7 +101,9 @@ export function DriveSaveButton({
   } else if (job?.status === 'failed') {
     label = 'Drive: erneut versuchen'
   }
+  // „An Gerät“ stands beside it wherever it stands: both send a result elsewhere, and devices find each other through Drive.
   return (
+    <>
     <Button
       type="button"
       size={size}
@@ -115,6 +118,8 @@ export function DriveSaveButton({
       <DriveIcon />
       <span aria-live="polite">{label}</span>
     </Button>
+    <DeviceSendButton name={name} bytes={bytes} mime={mime} source={source} size={size} disabled={disabled} />
+    </>
   )
 }
 

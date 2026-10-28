@@ -123,6 +123,14 @@ export interface YtdlpEvent {
   error?: string
 }
 
+/** A file being written into Downloads/Sondra, piece by piece. */
+export interface AndroidSave {
+  write: (bytes: Uint8Array) => Promise<void>
+  /** Resolves with where it went. */
+  close: () => Promise<string>
+  abort: () => void
+}
+
 export interface AndroidBridge {
   /** Opens Google's sign-in in the browser; `rejected` from an app too old for it. */
   openSignIn: (url: string) => Promise<{ ok: boolean; error?: string }>
@@ -141,6 +149,8 @@ export interface AndroidBridge {
     mime?: string
     subFolder?: string
   }) => Promise<{ ok: boolean; savedPath?: string; bytesWritten?: number; error?: string }>
+  /** Starts a file in Downloads/Sondra that is written as it arrives, not held whole first. */
+  openSave: (name: string, mime: string) => Promise<AndroidSave>
   /** Auto-updater methods */
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
@@ -198,6 +208,45 @@ export const ANDROID_BRIDGE: AndroidBridge | null = port
         const ended = await ask<Answer>('save-end', { handle })
         if (!ended.ok) throw new Error(String(ended.error ?? 'nicht gespeichert'))
         return String(ended.where ?? '')
+      },
+      async openSave(name, mime) {
+        const begun = await ask<Answer>('save-begin', { name, mime })
+        if (!begun.ok) throw new Error(String(begun.error ?? 'nicht gespeichert'))
+        const handle = begun.handle
+        // Gathered to one piece per message: 64 KB from the network would be sixteen round trips.
+        let held: Uint8Array[] = []
+        let heldBytes = 0
+        const flush = async () => {
+          if (!heldBytes) return
+          const piece = new Uint8Array(heldBytes)
+          let at = 0
+          for (const part of held) {
+            piece.set(part, at)
+            at += part.byteLength
+          }
+          held = []
+          heldBytes = 0
+          const written = await ask<Answer>('save-chunk', { handle, data: base64(piece) })
+          if (!written.ok) throw new Error(String(written.error ?? 'nicht gespeichert'))
+        }
+        return {
+          async write(bytes) {
+            held.push(bytes)
+            heldBytes += bytes.byteLength
+            if (heldBytes >= SAVE_PIECE) await flush()
+          },
+          async close() {
+            await flush()
+            const ended = await ask<Answer>('save-end', { handle })
+            if (!ended.ok) throw new Error(String(ended.error ?? 'nicht gespeichert'))
+            return String(ended.where ?? 'Downloads/Sondra')
+          },
+          abort() {
+            held = []
+            heldBytes = 0
+            port!.postMessage(JSON.stringify({ type: 'save-abort', handle }))
+          },
+        }
       },
       downloadDirect: (options) =>
         ask<{ ok: boolean; savedPath?: string; bytesWritten?: number; error?: string }>('direct-download', options),

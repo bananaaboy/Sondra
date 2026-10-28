@@ -15,7 +15,7 @@
     "verify:loudness": "esbuild scripts/verify-loudness.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-loudness.mjs && node node_modules/.verify-loudness.mjs",
     "verify:convert": "esbuild scripts/verify-convert.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-convert.mjs && node node_modules/.verify-convert.mjs",
     "verify:tempo": "esbuild scripts/verify-tempo.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-tempo.mjs && node node_modules/.verify-tempo.mjs",
-    "verify": "npm run verify:changelog && npm run verify:loudness && npm run verify:tempo && npm run verify:harmony && npm run verify:resolve && npm run verify:extractors && npm run verify:services && npm run verify:ytdlp && npm run verify:download && npm run verify:anytype && npm run verify:merkliste && npm run verify:discord && npm run verify:drive && npm run verify:google-token && npm run verify:intro && npm run verify:folder",
+    "verify": "npm run verify:changelog && npm run verify:devices && npm run verify:loudness && npm run verify:tempo && npm run verify:harmony && npm run verify:resolve && npm run verify:extractors && npm run verify:services && npm run verify:ytdlp && npm run verify:download && npm run verify:anytype && npm run verify:merkliste && npm run verify:discord && npm run verify:drive && npm run verify:google-token && npm run verify:intro && npm run verify:folder",
     "verify:harmony": "esbuild scripts/verify-harmony.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-harmony.mjs && node node_modules/.verify-harmony.mjs",
     "verify:resolve": "node scripts/verify-resolve.mjs",
     "verify:extractors": "node scripts/verify-extractors.mjs",
@@ -33,7 +33,8 @@
     "build:desktop": "npm run build && node scripts/build-desktop.mjs",
     "desktop": "node desktop/main.mjs",
     "verify:google-token": "node scripts/verify-google-token.mjs",
-    "verify:changelog": "node scripts/verify-changelog.mjs"
+    "verify:changelog": "node scripts/verify-changelog.mjs",
+    "verify:devices": "esbuild scripts/verify-devices.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-devices.mjs && node node_modules/.verify-devices.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",

@@ -66,6 +66,13 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M4.2 2.4h7.6v11.2L8 10.9l-3.8 2.7zM6.2 5.6h3.6" />,
   },
   {
+    id: 'devices',
+    slug: 'geraete',
+    label: 'Geräte',
+    summary: 'Dateien direkt an Ihr Handy oder Ihren Rechner senden',
+    icon: <path d="M1.8 4.4c0-.5.4-.9.9-.9h7.4c.5 0 .9.4.9.9v5.2H1.8zM.8 11.6h9.8M11.6 6.2h2.6c.4 0 .8.4.8.8v6c0 .4-.4.8-.8.8h-2.6c-.4 0-.8-.4-.8-.8V7c0-.4.4-.8.8-.8zM12.6 12h.6" />,
+  },
+  {
     id: 'converter',
     slug: 'umwandeln',
     label: 'Umwandeln',

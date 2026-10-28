@@ -35,7 +35,7 @@ import { create } from 'zustand'
 
 import { ANDROID_BRIDGE } from './android'
 import { APP_BRIDGE } from './desktop'
-import { createDriveClient, DriveError, folderPath, type DriveErrorCode, type DriveFile, type DriveFolder } from './driveClient'
+import { createDriveClient, DriveError, folderPath, type DriveClient, type DriveErrorCode, type DriveFile, type DriveFolder } from './driveClient'
 import {
   adoptRemovals,
   merkItems,
@@ -1114,6 +1114,11 @@ export async function readDriveTree(options: { signal?: AbortSignal; onProgress?
 
 /** Whether Drive can be read right now, without a click to sign in. */
 export const driveReadable = (): boolean => driveLinked() && canRun()
+
+/** Drive for linking devices: only while it works without a click, never a sign-in of its own. */
+export function deviceDrive(): DriveClient | null {
+  return driveLinked() && canRun() ? client : null
+}
 
 /** One file's bytes, from Drive. */
 export async function readDriveFile(id: string, signal?: AbortSignal, onProgress?: (loaded: number) => void): Promise<Uint8Array> {

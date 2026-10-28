@@ -20,6 +20,7 @@ import { useSession } from '../state/store'
  */
 const TOOLS = {
   folder: () => import('./panels/FolderPanel').then((m) => ({ default: m.FolderPanel })),
+  devices: () => import('./panels/DevicesPanel').then((m) => ({ default: m.DevicesPanel })),
   downloader: () => import('./panels/DownloaderPanel').then((m) => ({ default: m.DownloaderPanel })),
   merkliste: () => import('./panels/MerklistePanel').then((m) => ({ default: m.MerklistePanel })),
   converter: () => import('./panels/ConverterPanel').then((m) => ({ default: m.ConverterPanel })),
@@ -38,6 +39,7 @@ const TOOLS = {
 } satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType<{ hidden?: boolean }> | ComponentType }>>
 
 const FolderPanel = lazy(TOOLS.folder)
+const DevicesPanel = lazy(TOOLS.devices)
 const DownloaderPanel = lazy(TOOLS.downloader)
 const MerklistePanel = lazy(TOOLS.merkliste)
 const ConverterPanel = lazy(TOOLS.converter)
@@ -342,6 +344,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     hasAssets ||
     panel === 'start' ||
     panel === 'folder' ||
+    panel === 'devices' ||
     panel === 'downloader' ||
     panel === 'merkliste' ||
     panel === 'video' ||
@@ -369,6 +372,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
                 {panel === 'folder' ? <FolderPanel /> : null}
 
                 {panel === 'merkliste' ? <MerklistePanel /> : null}
+                {panel === 'devices' ? <DevicesPanel /> : null}
                 {panel === 'converter' ? <ConverterPanel /> : null}
                 {panel === 'audio' ? <AudioEditorPanel /> : null}
                 {panel === 'video' ? <VideoPanel /> : null}
