@@ -5,7 +5,7 @@
   WebView; what a page cannot do there is done by the app: the Google sign-in
   for Drive (in a Custom Tab: Google refuses its sign-in in a WebView), saving to
   Downloads, files shared with Sondra or opened with it, the file picker,
-  full-screen video and the microphone.
+  full-screen video, the microphone, and seamless in-app auto-updates.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -14,6 +14,8 @@
     <!-- The microphone tool, asked for when it is opened. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- In-App Auto-Updater for downloading and installing newer Sondra APK releases. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Saving to Downloads before Android 10; from 10 on that needs no permission. -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -21,6 +23,7 @@
 
     <application
         android:allowBackup="true"
+        android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/appName"
@@ -31,6 +34,7 @@
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:exported="true"
+            android:hardwareAccelerated="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Sondra.Starting"
             android:windowSoftInputMode="adjustResize">
@@ -99,5 +103,17 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.NoDisplay" />
+
+        <!-- FileProvider for installing downloaded APK updates -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 </manifest>

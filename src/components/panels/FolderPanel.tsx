@@ -1336,13 +1336,25 @@ export function FolderPanel() {
           </div>
 
           {chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path) ? (
-            <FolderInlinePreview
-              file={chosen[0]}
-              episode={episodes.get(chosen[0].path) ?? null}
-              onExpand={() => setPreviewFile(chosen[0])}
-              onPlay={() => play([chosen[0]], true)}
-              onTakeIntoSession={() => void intoSession([chosen[0]])}
-            />
+            <div className="xl:contents fixed inset-x-0 bottom-0 z-40 xl:static max-h-[85dvh] xl:max-h-none overflow-y-auto rounded-t-card xl:rounded-none bg-raised xl:bg-transparent p-[16px] xl:p-0 shadow-2xl xl:shadow-none ring-1 ring-line xl:ring-0 pb-[calc(16px+env(safe-area-inset-bottom,0px))]">
+              <div className="flex items-center justify-between pb-[10px] xl:hidden border-b border-line mb-[12px]">
+                <span className="text-small font-semibold text-ink">Vorschau</span>
+                <button
+                  type="button"
+                  onClick={() => select(new Set(), null)}
+                  className="press rounded-nav px-[8px] py-[4px] text-micro text-muted hover:text-ink"
+                >
+                  Schliessen ✕
+                </button>
+              </div>
+              <FolderInlinePreview
+                file={chosen[0]}
+                episode={episodes.get(chosen[0].path) ?? null}
+                onExpand={() => setPreviewFile(chosen[0])}
+                onPlay={() => play([chosen[0]], true)}
+                onTakeIntoSession={() => void intoSession([chosen[0]])}
+              />
+            </div>
           ) : null}
         </div>
       )}

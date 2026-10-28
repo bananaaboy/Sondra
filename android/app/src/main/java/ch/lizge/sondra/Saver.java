@@ -2,7 +2,6 @@ package ch.lizge.sondra;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
-import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -24,20 +23,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Files the page saves — a conversion, a download, a ZIP — into
- * Downloads/Sondra, where the gallery and the file manager find them.
+ * Saves a file from the page into Downloads/Sondra.
  *
- * A WebView cannot save a `blob:` address itself, so the page sends the bytes
- * in pieces; each is written before the next is asked for, so a film never
- * has to fit in memory twice. From Android 10 on through MediaStore (no
- * permission), before through the folder itself.
+ * A WebView cannot open a `blob:` address for download, so the page sends the
+ * bytes in pieces through the bridge.
+ *
+ * From Android 10 on, MediaStore puts files into Downloads without a storage
+ * permission; on Android 9 and older the app asks for it before starting.
  */
 final class Saver {
     interface Done {
-        void answer(JSONObject result);
+        void done(JSONObject result);
     }
 
-    private static final class Target {
+    private static class Target {
         final String name;
         final Uri uri;
         final File file;
@@ -71,6 +70,7 @@ final class Saver {
                     handle = next++;
                     open.put(handle, target);
                 }
+                activity.setKeepScreenOn(true);
                 reply(done, result(true, null).put("handle", handle));
             } catch (IOException | RuntimeException | JSONException e) {
                 Log.w(MainActivity.TAG, "Speichern nicht begonnen: " + e);
@@ -102,9 +102,12 @@ final class Saver {
     void end(int handle, Done done) {
         disk.execute(() -> {
             Target target;
+            boolean empty;
             synchronized (open) {
                 target = open.remove(handle);
+                empty = open.isEmpty();
             }
+            if (empty) activity.setKeepScreenOn(false);
             if (target == null) {
                 reply(done, result(false, "unknown"));
                 return;
@@ -129,10 +132,13 @@ final class Saver {
 
     private void drop(int handle) {
         Target target;
+        boolean empty;
         synchronized (open) {
             target = open.remove(handle);
+            empty = open.isEmpty();
         }
         if (target != null) discard(target);
+        if (empty) activity.setKeepScreenOn(false);
     }
 
     private Target create(String name, String type) throws IOException {
@@ -160,61 +166,52 @@ final class Saver {
             ContentValues values = new ContentValues();
             values.put(MediaStore.MediaColumns.IS_PENDING, 0);
             activity.getContentResolver().update(target.uri, values, null, null);
-        } else if (target.file != null) {
-            MediaScannerConnection.scanFile(activity, new String[] {target.file.getAbsolutePath()}, null, null);
         }
     }
 
     private void discard(Target target) {
         try {
             target.out.close();
-        } catch (IOException ignored) {
-            // Already broken; it goes either way.
-        }
+        } catch (IOException ignored) {}
         if (target.uri != null) activity.getContentResolver().delete(target.uri, null, null);
-        else if (target.file != null && !target.file.delete()) Log.w(MainActivity.TAG, "Halbe Datei blieb: " + target.file);
+        if (target.file != null) target.file.delete();
     }
 
-    /** „Film.mp4“, else „Film (1).mp4“, as MediaStore does it from Android 10 on. */
+    private static String cleanName(String name) {
+        if (name == null || name.trim().isEmpty()) return "sondra-datei";
+        return name.replace('/', '_').replace('\\', '_');
+    }
+
     private static File free(File folder, String name) {
         File file = new File(folder, name);
+        if (!file.exists()) return file;
         int dot = name.lastIndexOf('.');
-        String stem = dot > 0 ? name.substring(0, dot) : name;
+        String base = dot > 0 ? name.substring(0, dot) : name;
         String ext = dot > 0 ? name.substring(dot) : "";
-        for (int i = 1; file.exists(); i++) file = new File(folder, stem + " (" + i + ")" + ext);
+        for (int i = 1; i < 1000; i++) {
+            File candidate = new File(folder, base + " (" + i + ")" + ext);
+            if (!candidate.exists()) return candidate;
+        }
         return file;
     }
 
-    /** What the file systems refuse goes; an empty name becomes „Sondra“. */
-    static String cleanName(String name) {
-        String clean = name == null ? "" : name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").trim();
-        while (clean.startsWith(".")) clean = clean.substring(1);
-        if (clean.length() > 120) {
-            int dot = clean.lastIndexOf('.');
-            String ext = dot > 0 && clean.length() - dot <= 10 ? clean.substring(dot) : "";
-            clean = clean.substring(0, 120 - ext.length()) + ext;
+    private static JSONObject result(boolean ok, String error) {
+        try {
+            JSONObject out = new JSONObject().put("ok", ok);
+            if (error != null) out.put("error", error);
+            return out;
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
         }
-        return clean.isEmpty() ? "Sondra" : clean;
     }
 
     private void failed(Done done, String name, Exception e) {
         activity.runOnUiThread(() -> Toast.makeText(activity,
                 activity.getString(R.string.saveFailed, name), Toast.LENGTH_LONG).show());
-        reply(done, result(false, String.valueOf(e.getMessage())));
+        reply(done, result(false, e.getMessage()));
     }
 
-    private static JSONObject result(boolean ok, String error) {
-        JSONObject answer = new JSONObject();
-        try {
-            answer.put("ok", ok);
-            if (error != null) answer.put("error", error);
-        } catch (JSONException e) {
-            throw new IllegalArgumentException(e);
-        }
-        return answer;
-    }
-
-    private static void reply(Done done, JSONObject answer) {
-        done.answer(answer);
+    private void reply(Done done, JSONObject result) {
+        activity.runOnUiThread(() -> done.done(result));
     }
 }

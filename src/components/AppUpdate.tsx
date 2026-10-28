@@ -164,7 +164,7 @@ export function AppUpdateButton() {
     >
       <RefreshIcon />
       <span className="hidden sm:inline">{label}</span>
-      <span className="value text-muted">{state.version}</span>
+      <span className="value hidden sm:inline text-muted">{state.version}</span>
     </button>
   )
 }

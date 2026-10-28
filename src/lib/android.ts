@@ -16,9 +16,11 @@
  *   save     a file into Downloads/Sondra, in pieces (a WebView cannot save
  *            a `blob:` address)
  *   theme    the theme the page shows, for the system bars
+ *   update   in-app auto updater for Android APK releases
+ *   wake-lock keeps the screen illuminated during playback and downloads
  */
 
-import type { OpenedFile } from './desktop'
+import type { OpenedFile, UpdateState } from './desktop'
 
 interface NativePort {
   postMessage(message: string): void
@@ -37,11 +39,12 @@ const port: NativePort | null = typeof window !== 'undefined' ? (window.SondraNa
 const waiting = new Map<string, (answer: unknown) => void>()
 const openedListeners = new Set<() => void>()
 const signInListeners = new Set<(closed: boolean) => void>()
+const updateListeners = new Set<(state: UpdateState) => void>()
 let ids = 0
 
 if (port) {
   port.onmessage = (event) => {
-    let message: { id?: string; answer?: unknown; event?: string }
+    let message: { id?: string; answer?: unknown; event?: string; state?: UpdateState }
     try {
       message = JSON.parse(String(event.data))
     } catch {
@@ -53,6 +56,10 @@ if (port) {
     }
     if (message.event === 'sign-in' || message.event === 'sign-in-closed') {
       for (const listener of signInListeners) listener(message.event === 'sign-in-closed')
+      return
+    }
+    if (message.event === 'update' && message.state) {
+      for (const listener of updateListeners) listener(message.state)
       return
     }
     const done = message.id ? waiting.get(message.id) : undefined
@@ -93,6 +100,15 @@ export interface AndroidBridge {
   onOpenedFiles: (callback: () => void) => () => void
   /** Into Downloads/Sondra; resolves with where it went. */
   save: (blob: Blob, name: string, mime: string) => Promise<string>
+  /** Auto-updater methods */
+  updateState: () => Promise<UpdateState>
+  checkForUpdates: () => Promise<UpdateState>
+  downloadUpdate: () => Promise<UpdateState>
+  installUpdate: () => Promise<boolean>
+  onUpdate: (callback: (state: UpdateState) => void) => () => void
+  /** Prevents screen dimming / device standby */
+  setPowerSaveBlocker: (active: boolean) => Promise<boolean>
+  setOrientation: (orientation: 'portrait' | 'landscape' | 'unspecified') => Promise<boolean>
 }
 
 /** The app's side of the page, or null on the website and in the Windows app. */
@@ -127,8 +143,32 @@ export const ANDROID_BRIDGE: AndroidBridge | null = port
         if (!ended.ok) throw new Error(String(ended.error ?? 'nicht gespeichert'))
         return String(ended.where ?? '')
       },
+      updateState: () => ask<UpdateState>('update-state'),
+      checkForUpdates: () => ask<UpdateState>('update-check'),
+      downloadUpdate: () => ask<UpdateState>('update-download'),
+      installUpdate: () => ask<{ ok: boolean }>('update-install').then((r) => r.ok),
+      onUpdate: (callback) => {
+        updateListeners.add(callback)
+        return () => updateListeners.delete(callback)
+      },
+      setPowerSaveBlocker: (active) => ask<{ ok: boolean }>('power-save-blocker', { active }).then((r) => r.ok),
+      setOrientation: (orientation) => ask<{ ok: boolean }>('fullscreen-orientation', { orientation }).then((r) => r.ok),
     }
   : null
+
+// Provide unified desktop/app bridge for AppUpdate component and power save blocker on Android
+if (port && typeof window !== 'undefined' && !window.sondraApp) {
+  window.sondraApp = {
+    updateState: () => ask<UpdateState>('update-state'),
+    checkForUpdates: () => ask<UpdateState>('update-check'),
+    installUpdate: () => ask<{ ok: boolean }>('update-install').then((r) => r.ok),
+    onUpdate: (callback) => {
+      updateListeners.add(callback)
+      return () => updateListeners.delete(callback)
+    },
+    setPowerSaveBlocker: (active) => ask<{ ok: boolean }>('power-save-blocker', { active }).then((r) => r.ok),
+  }
+}
 
 /** Tells the app which theme the page shows, now and whenever it changes. */
 function followTheme(): void {

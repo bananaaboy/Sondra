@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Handler;
@@ -39,18 +40,6 @@ import java.util.UUID;
  * WebMessageListener), and only on https://sondra.lizge.ch — no other
  * address that might end up in the WebView gets it. A message is a JSON
  * object with an `id` and a `type`; the answer comes back with the same `id`.
- *
- *   sign-in   Google's sign-in for Drive in the browser (a Custom Tab): Google
- *             refuses it in a WebView. The page builds the address, the
- *             website's `google-drive.html` sends the answer back to the app
- *             (`ch.lizge.sondra://angemeldet?…`, an intent naming this
- *             package), the page takes it with `sign-in-result` and has the
- *             code exchanged by the website's function, as on the website —
- *             nothing of Google's lives in the app
- *   opened    files shared with Sondra or opened with it, as addresses the
- *             page fetches (served by {@link #intercept}, never cached)
- *   save-*    a file from the page into Downloads/Sondra, in pieces
- *   theme     which theme the page shows, for the system bars
  */
 final class Bridge {
     private static final String OPENED_PATH = "/__app/opened/";
@@ -62,6 +51,7 @@ final class Bridge {
 
     private final MainActivity activity;
     private final Saver saver;
+    private Updater updater;
     private final Handler main = new Handler(Looper.getMainLooper());
     /** The sign-in is open in the browser. */
     private boolean signingIn;
@@ -77,6 +67,10 @@ final class Bridge {
         this.saver = new Saver(activity);
         // What the app's own sign-in kept before it went the website's way.
         activity.deleteSharedPreferences("drive");
+    }
+
+    void setUpdater(Updater updater) {
+        this.updater = updater;
     }
 
     // The listener, and with it every reply proxy, exists only where the feature does.
@@ -134,9 +128,65 @@ final class Bridge {
             case "theme":
                 activity.setPageDark(message.optBoolean("dark"));
                 break;
+
+            // --- Auto-Updater ---
+            case "update-state":
+                answer(reply, id, updater != null ? updater.getState() : new JSONObject().put("status", "off"));
+                break;
+            case "update-check":
+                if (updater != null) {
+                    updater.checkForUpdates(true, result -> answer(reply, id, result));
+                } else {
+                    answer(reply, id, new JSONObject().put("status", "off"));
+                }
+                break;
+            case "update-download":
+                if (updater != null) {
+                    updater.startDownload(result -> answer(reply, id, result));
+                } else {
+                    answer(reply, id, new JSONObject().put("status", "off"));
+                }
+                break;
+            case "update-install":
+                boolean started = updater != null && updater.installUpdate();
+                answer(reply, id, new JSONObject().put("ok", started));
+                break;
+
+            // --- Screen Wake Lock / Power Save Blocker ---
+            case "wake-lock":
+            case "power-save-blocker":
+                activity.setKeepScreenOn(message.optBoolean("active", false));
+                answer(reply, id, new JSONObject().put("ok", true));
+                break;
+
+            // --- Fullscreen Screen Orientation ---
+            case "fullscreen-orientation": {
+                String mode = message.optString("orientation");
+                activity.runOnUiThread(() -> {
+                    if ("portrait".equals(mode)) {
+                        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+                    } else if ("landscape".equals(mode)) {
+                        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                    } else {
+                        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                    }
+                });
+                answer(reply, id, new JSONObject().put("ok", true));
+                break;
+            }
+
             default:
                 answer(reply, id, new JSONObject().put("ok", false).put("error", "rejected"));
         }
+    }
+
+    /** Emits an update state change event to the web page. */
+    @SuppressLint("RequiresFeature")
+    void tellUpdate(JSONObject state) {
+        if (page == null) return;
+        try {
+            page.postMessage(new JSONObject().put("event", "update").put("state", state).toString());
+        } catch (JSONException | IllegalStateException ignored) {}
     }
 
     /* ---------------------------------------------------------------- */

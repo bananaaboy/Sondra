@@ -78,6 +78,7 @@ import { isHlsStream, resolveViaService } from '../../lib/studio'
 import { holdScreenAwake } from '../../lib/wakeLock'
 import { connectDrive, DRIVE_PROBLEM, DriveError, driveMediaUrl, driveReadable, readDriveFile } from '../../lib/googleDrive'
 import { useSession, type Asset } from '../../state/store'
+import { ANDROID_BRIDGE } from '../../lib/android'
 import { APP_BRIDGE, updateDiscordPresence } from '../../lib/desktop'
 import { matchEpisode, matchHint } from '../../lib/episodeMatch'
 import { INTROS_KEPT, OPENING_MAX, OPENING_MIN, merkItems, updateMerkItem, useMerkliste } from '../../lib/merkliste'
@@ -428,6 +429,7 @@ function SeekBar({
         if (dragging && point) onSeek(point.seconds)
       }}
       onPointerUp={() => setDragging(false)}
+      onPointerCancel={() => setDragging(false)}
       onPointerLeave={() => !dragging && setHover(null)}
       onKeyDown={(event) => {
         if (!known) return
@@ -439,7 +441,7 @@ function SeekBar({
         event.preventDefault()
         event.stopPropagation()
       }}
-      className="group/seek relative flex h-[20px] cursor-pointer touch-none items-center rounded-pill outline-none focus-visible:ring-2 focus-visible:ring-white"
+      className="group/seek relative flex h-[38px] sm:h-[20px] cursor-pointer touch-none items-center rounded-pill outline-none focus-visible:ring-2 focus-visible:ring-white"
     >
       <div className={`relative w-full overflow-hidden rounded-pill bg-white/25 transition-[height] duration-[var(--dur-fast)] ${dragging ? 'h-[7px]' : 'h-[4px] group-hover/seek:h-[7px]'}`}>
         <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: share(buffered) }} />
@@ -483,7 +485,7 @@ function SeekBar({
       {known ? (
         <div
           className={`pointer-events-none absolute top-1/2 h-[15px] w-[15px] -translate-x-1/2 -translate-y-1/2 rounded-pill bg-white shadow-[0_1px_6px_rgb(0_0_0/0.5)] transition-transform duration-[var(--dur-fast)] ${
-            dragging ? 'scale-100' : 'scale-0 group-hover/seek:scale-100 group-focus-visible/seek:scale-100'
+            dragging ? 'scale-125' : 'scale-100 sm:scale-0 sm:group-hover/seek:scale-100 sm:group-focus-visible/seek:scale-100'
           }`}
           style={{ left: share(time) }}
           aria-hidden
@@ -640,6 +642,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [items, setItems] = useState<PlayerItem[]>([])
   const [currentId, setCurrentId] = useState<string | null>(null)
   const current = items.find((item) => item.id === currentId) ?? null
+  const isVideo = current?.kind === 'video'
+  const index = items.findIndex((item) => item.id === currentId)
 
   const [settings, setSettings] = useState<PlayerSettings>(rememberedSettings)
   // The series the file is on the Merkliste, if any: its opening is its own.
@@ -665,6 +669,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   /** This file's bookmarks, kept on this device by name and size. */
   const [marks, setMarks] = useState<PlayerMark[]>([])
   /** Smart-prefetched next episode from the Merkliste once playback reaches 75%. */
+  const lastTapRef = useRef<{ time: number; x: number }>({ time: 0, x: 0 })
   const [prefetchedNext, setPrefetchedNext] = useState<{
     key: string
     label: string
@@ -1255,13 +1260,23 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   )
 
   useEffect(() => {
-    if (!useHlsJs || !sourceUrl) return
     const node = videoRef.current
-    if (!node) return
+    if (!node || !sourceUrl) return
+
+    if (!useHlsJs) {
+      if (node.src !== sourceUrl) {
+        node.src = sourceUrl
+        if (wasPlaying.current) void node.play().catch(() => undefined)
+      }
+      return
+    }
+
+    node.removeAttribute('src')
     const hls = new Hls({
       enableWorker: true,
       lowLatencyMode: false,
-      backBufferLength: 60,
+      backBufferLength: 30,
+      maxBufferSize: 30 * 1000 * 1000,
     })
     let networkRetried = false
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -1592,17 +1607,95 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     }
   }, [showVisualizer, hidden, settings.visualizerMode, playing, current?.id])
 
-  // A playing film keeps the screen awake.
+  // A playing film or visualizer keeps the screen awake (with self-healing re-acquisition).
   useEffect(() => {
-    if (!playing || current?.kind !== 'video') return
+    const needsWakeLock = playing && (current?.kind === 'video' || (current?.kind === 'audio' && showVisualizer))
+    if (!needsWakeLock) return
     let release: (() => void) | null = null
     let gone = false
-    void holdScreenAwake().then((free) => (gone ? free() : (release = free)))
+    const acquire = () => {
+      void holdScreenAwake().then((free) => {
+        if (gone) free()
+        else release = free
+      })
+    }
+    acquire()
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && needsWakeLock) {
+        if (release) {
+          release()
+          release = null
+        }
+        acquire()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
     return () => {
       gone = true
+      document.removeEventListener('visibilitychange', onVisibility)
       release?.()
     }
-  }, [playing, current?.kind])
+  }, [playing, current?.kind, showVisualizer])
+
+  // MediaSession API integration for mobile notification shade and lockscreen controls
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || !current) return
+
+    const artwork: MediaImage[] = []
+    const coverSrc = series?.item.cover || coverPickerImage
+    if (coverSrc) {
+      artwork.push({ src: coverSrc, sizes: '512x512', type: 'image/webp' })
+    }
+
+    const titleText = series?.item.title
+      ? `${series.item.title} — S${series.season}E${series.episode}`
+      : current.name.replace(/\.[^.]+$/, '')
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: titleText,
+      artist: series?.item.title ?? 'Sondra',
+      album: series ? `Staffel ${series.season}` : undefined,
+      artwork,
+    })
+
+    const actionHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['play', () => { void video()?.play(); setPlaying(true) }],
+      ['pause', () => { video()?.pause(); setPlaying(false) }],
+      ['seekbackward', (details) => skip(-(details.seekOffset || settings.skip || 10))],
+      ['seekforward', (details) => skip(details.seekOffset || settings.skip || 10)],
+      ['previoustrack', index > 0 ? () => goTo(-1) : () => seek(0)],
+      ['nexttrack', index < items.length - 1 ? () => goTo(1) : (undefined as unknown as MediaSessionActionHandler)],
+      ['seekto', (details) => { if (details.seekTime !== undefined) seek(details.seekTime) }],
+      ['stop', () => { video()?.pause(); setPlaying(false) }],
+    ]
+
+    actionHandlers.forEach(([action, handler]) => {
+      if (handler) {
+        try { navigator.mediaSession.setActionHandler(action, handler) } catch {}
+      }
+    })
+
+    return () => {
+      actionHandlers.forEach(([action]) => {
+        try { navigator.mediaSession.setActionHandler(action, null) } catch {}
+      })
+    }
+  }, [current?.id, current?.name, series, series?.item.cover, coverPickerImage, index, items.length])
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return
+    if (duration > 0 && Number.isFinite(duration)) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: Math.max(0, duration),
+          playbackRate: settings.rate || 1,
+          position: Math.min(duration, Math.max(0, time)),
+        })
+      } catch {}
+    }
+  }, [time, duration, settings.rate])
 
   /* -- playback ----------------------------------------------------------------------- */
 
@@ -1650,7 +1743,6 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     seek(time + delta)
     pulse(delta < 0 ? 'back' : 'forward')
   }
-  const index = items.findIndex((item) => item.id === currentId)
   const goTo = (offset: number) => {
     const next = items[index + offset]
     if (next) setCurrentId(next.id)
@@ -1752,9 +1844,47 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     if (series) updateMerkItem(series.item.id, { opening: seconds })
     else updateSettings({ opening: seconds })
   }
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined)
-    else void frameRef.current?.requestFullscreen?.().catch(() => undefined)
+  const toggleFullscreen = async () => {
+    const frame = frameRef.current
+    const vid = videoRef.current
+    const isFs = Boolean(
+      document.fullscreenElement ||
+      (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement
+    )
+
+    if (isFs) {
+      if (document.exitFullscreen) await document.exitFullscreen().catch(() => undefined)
+      else if ((document as unknown as { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen) {
+        await (document as unknown as { webkitExitFullscreen: () => Promise<void> }).webkitExitFullscreen().catch(() => undefined)
+      }
+      if (typeof screen !== 'undefined' && (screen.orientation as any)?.unlock) {
+        try { (screen.orientation as any).unlock() } catch {}
+      }
+      if (ANDROID_BRIDGE?.setOrientation) {
+        void ANDROID_BRIDGE.setOrientation('unspecified')
+      }
+    } else {
+      try {
+        if (frame?.requestFullscreen) {
+          await frame.requestFullscreen()
+        } else if ((frame as unknown as { webkitRequestFullscreen?: () => Promise<void> })?.webkitRequestFullscreen) {
+          await (frame as unknown as { webkitRequestFullscreen: () => Promise<void> }).webkitRequestFullscreen()
+        } else if (vid && (vid as unknown as { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen) {
+          (vid as unknown as { webkitEnterFullscreen: () => void }).webkitEnterFullscreen()
+          return
+        }
+
+        const isLandscape = (size?.width ?? 16) >= (size?.height ?? 9)
+        if (typeof screen !== 'undefined' && (screen.orientation as any)?.lock && isVideo) {
+          await (screen.orientation as any).lock(isLandscape ? 'sensor-landscape' : 'portrait').catch(() => undefined)
+        }
+        if (ANDROID_BRIDGE?.setOrientation) {
+          void ANDROID_BRIDGE.setOrientation(isLandscape ? 'landscape' : 'portrait')
+        }
+      } catch {
+        setFill(true)
+      }
+    }
   }
   const canPip = typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled
   const togglePip = () => {
@@ -1765,10 +1895,32 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   }
 
   useEffect(() => {
-    const onChange = () => setFullscreen(document.fullscreenElement === frameRef.current)
+    const onChange = () => {
+      const isFs = Boolean(
+        document.fullscreenElement === frameRef.current ||
+        (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement === frameRef.current
+      )
+      setFullscreen(isFs)
+      if (!isFs && typeof screen !== 'undefined' && (screen.orientation as any)?.unlock) {
+        try { (screen.orientation as any).unlock() } catch {}
+      }
+    }
     document.addEventListener('fullscreenchange', onChange)
-    return () => document.removeEventListener('fullscreenchange', onChange)
-  }, [])
+    document.addEventListener('webkitfullscreenchange', onChange)
+
+    const handleOrientation = () => {
+      if (typeof window !== 'undefined' && window.matchMedia('(orientation: landscape)').matches && playing && isVideo && !fullscreen) {
+        void toggleFullscreen()
+      }
+    }
+    window.addEventListener('orientationchange', handleOrientation)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange)
+      document.removeEventListener('webkitfullscreenchange', onChange)
+      window.removeEventListener('orientationchange', handleOrientation)
+    }
+  }, [playing, isVideo, fullscreen])
 
   // Filling the window: the page underneath stops scrolling, Escape leaves.
   useEffect(() => {
@@ -1798,7 +1950,6 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   useEffect(() => () => {
     if (idleTimer.current) window.clearTimeout(idleTimer.current)
   }, [])
-  const isVideo = current?.kind === 'video'
   const controlsShown = !isVideo || !playing || !idle || menuOpen
   const immersive = fullscreen || fill
 
@@ -2585,10 +2736,41 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               className={`relative flex items-center justify-center ${
                 immersive ? 'h-full' : isVideo ? (theater ? 'aspect-video max-h-[82vh] w-full' : 'aspect-video max-h-[72vh] w-full') : 'h-[300px] sm:h-[360px]'
               }`}
+              onTouchEnd={(event) => {
+                if (event.target !== event.currentTarget && event.target !== videoRef.current) return
+                const touch = event.changedTouches[0]
+                if (!touch) return
+                const now = Date.now()
+                const box = event.currentTarget.getBoundingClientRect()
+                const relX = (touch.clientX - box.left) / box.width
+                const dt = now - lastTapRef.current.time
+                const dist = Math.abs(touch.clientX - lastTapRef.current.x)
+
+                if (dt < 320 && dist < 45) {
+                  if (relX < 0.35) {
+                    skip(-settings.skip)
+                    pulse('back')
+                  } else if (relX > 0.65) {
+                    skip(settings.skip)
+                    pulse('forward')
+                  } else {
+                    toggle()
+                  }
+                  lastTapRef.current = { time: 0, x: 0 }
+                } else {
+                  lastTapRef.current = { time: now, x: touch.clientX }
+                  if (controlsShown) setIdle(true)
+                  else wake()
+                }
+              }}
               onClick={(event) => {
                 if (event.target !== event.currentTarget && event.target !== videoRef.current) return
-                // On a touch screen the first tap shows the controls.
-                if ((event.nativeEvent as PointerEvent).pointerType === 'touch' && !controlsShown) return wake()
+                const isTouch = (event.nativeEvent as PointerEvent).pointerType === 'touch' || ('ontouchstart' in window && window.innerWidth < 768)
+                if (isTouch) {
+                  if (controlsShown) setIdle(true)
+                  else wake()
+                  return
+                }
                 toggle()
               }}
               onDoubleClick={(event) => {
@@ -2596,11 +2778,12 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               }}
             >
               <video
-                key={useHlsJs ? `hls:${current?.id ?? 'leer'}` : (sourceUrl ?? 'leer')}
+                key={current?.id ?? 'leer'}
                 ref={videoRef}
-                src={useHlsJs ? undefined : (sourceUrl ?? undefined)}
                 preload="auto"
                 playsInline
+                {...{ 'webkit-playsinline': 'true' }}
+                crossOrigin={current?.directUrl || current?.remote ? 'anonymous' : undefined}
                 autoPlay={wasPlaying.current}
                 className={isVideo ? 'h-full w-full' : 'hidden'}
                 style={{ objectFit: settings.fit, filter: pictureFilter, transform: settings.mirror ? 'scaleX(-1)' : undefined }}
@@ -3047,15 +3230,15 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 <Control label="Nächstes (N)" onClick={() => goTo(1)} disabled={index >= items.length - 1} wideOnly>
                   <NextIcon />
                 </Control>
-                <Control label={`${settings.skip} Sekunden zurück (←)`} onClick={() => skip(-settings.skip)} wideOnly>
+                <Control label={`${settings.skip} Sekunden zurück (←)`} onClick={() => skip(-settings.skip)}>
                   <BackIcon />
                 </Control>
-                <Control label={`${settings.skip} Sekunden vor (→)`} onClick={() => skip(settings.skip)} wideOnly>
+                <Control label={`${settings.skip} Sekunden vor (→)`} onClick={() => skip(settings.skip)}>
                   <ForwardIcon />
                 </Control>
 
-                {/* Volume: the slider opens beside the speaker on hover. */}
-                <div className="group/vol flex items-center">
+                {/* Volume: hidden on mobile (< sm) because phones have physical volume buttons */}
+                <div className="group/vol hidden sm:flex items-center">
                   <Control label={settings.muted ? 'Ton an (M)' : 'Stumm (M)'} onClick={() => updateSettings({ muted: !settings.muted })}>
                     <VolumeIcon level={settings.muted ? 0 : settings.volume} />
                   </Control>
@@ -3080,7 +3263,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   className="press value ml-[2px] shrink-0 whitespace-nowrap rounded-pill px-[8px] py-[6px] text-small text-white hover:bg-white/10"
                 >
                   {remaining ? `−${clock(Math.max(0, duration - time))}` : clock(time)}
-                  <span className="text-white/70"> / {clock(duration)}</span>
+                  <span className="hidden sm:inline text-white/70"> / {clock(duration)}</span>
                 </button>
 
                 {/* A–B: the first press marks the start, the second the end,
@@ -3133,6 +3316,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   </Control>
                 ) : null}
                 <Control
+                  wideOnly
                   label={eqDrawerOpen ? 'Equalizer schliessen' : 'Equalizer (5-Band)'}
                   active={
                     eqDrawerOpen ||

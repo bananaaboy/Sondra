@@ -14,7 +14,7 @@ let sentinel: Sentinel | null = null
 let holders = 0
 
 export function wakeLockSupported(): boolean {
-  return typeof navigator !== 'undefined' && 'wakeLock' in navigator
+  return (typeof navigator !== 'undefined' && 'wakeLock' in navigator) || (typeof window !== 'undefined' && Boolean(window.sondraApp?.setPowerSaveBlocker))
 }
 
 /**
@@ -23,6 +23,10 @@ export function wakeLockSupported(): boolean {
  */
 export async function holdScreenAwake(): Promise<() => void> {
   holders += 1
+
+  if (holders === 1 && typeof window !== 'undefined' && window.sondraApp?.setPowerSaveBlocker) {
+    void window.sondraApp.setPowerSaveBlocker(true).catch(() => undefined)
+  }
 
   const nav = navigator as WakeLockNavigator
   if (nav.wakeLock && !sentinel) {
@@ -43,9 +47,14 @@ export async function holdScreenAwake(): Promise<() => void> {
     if (released) return
     released = true
     holders = Math.max(0, holders - 1)
-    if (holders === 0 && sentinel) {
-      void sentinel.release().catch(() => undefined)
-      sentinel = null
+    if (holders === 0) {
+      if (typeof window !== 'undefined' && window.sondraApp?.setPowerSaveBlocker) {
+        void window.sondraApp.setPowerSaveBlocker(false).catch(() => undefined)
+      }
+      if (sentinel) {
+        void sentinel.release().catch(() => undefined)
+        sentinel = null
+      }
     }
   }
 }

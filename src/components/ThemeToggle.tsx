@@ -69,7 +69,7 @@ export function ThemeToggle({
       onClick={() => onChange(next.value)}
       title={`${current.title} — wechseln zu: ${next.label}`}
       aria-label={`Erscheinungsbild: ${current.label}. Wechseln zu ${next.label}`}
-      className="press flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-nav text-ink hover:bg-panel-soft"
+      className="press flex h-[36px] w-[36px] sm:h-[32px] sm:w-[32px] shrink-0 items-center justify-center rounded-nav text-ink hover:bg-panel-soft"
     >
       <Icon choice={current.value} />
     </button>
