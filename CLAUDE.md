@@ -867,6 +867,15 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   eigene Extraktoren; eine ältere App antwortet `rejected`, dann gilt der
   Weg der Website. Die Aufträge leben im Modul, nicht im Panel — wer das
   Werkzeug verlässt, sieht sie beim Zurückkommen.
+  **Updates der App** (`Updater.java`, ab 1.1.20): die App holt die APK
+  selbst (`update-download`, Fortschritt in der Kopfzeile) und öffnet dann
+  Androids Installer („1.1.21 installieren“). Vorher stand dort ein Link,
+  und Chrome hielt die APK bei 99 %, bis jemand im Browser „Trotzdem
+  herunterladen“ bestätigte — vom Nutzer am 28.10.2026 so erlebt. Eine App
+  vor 1.1.20 kennt `update-state` nicht (`rejected`); dann vergleicht
+  `AppUpdate` die Version im User-Agent mit der der Seite und bietet die
+  APK über den Browser an, mit genau diesem Hinweis. Die APK ist seit yt-dlp
+  rund 150 MB (Python und FFmpeg für drei Architekturen).
   Icons: `npm run android:icons` (Vektor-Vordergrund aus den Balken des
   Zeichens, auch für das Startbild; PNGs mit den Helfern aus
   `store-tiles.mjs`). Lokal bauen: Android SDK mit `platforms;android-36`,

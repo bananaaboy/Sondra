@@ -18,8 +18,9 @@
 
 import { useEffect, useState } from 'react'
 
-import { APP_BRIDGE, WINDOWS_SETUP, type UpdateState } from '../lib/desktop'
+import { ANDROID_APK, APP_BRIDGE, IN_ANDROID_APP, WINDOWS_SETUP, type UpdateState } from '../lib/desktop'
 import { keepSession } from '../lib/sessionStore'
+import { APP_VERSION } from '../lib/version'
 
 const BASE = 'press flex items-center gap-[8px] rounded-nav px-[12px] py-[8px] text-small'
 
@@ -40,15 +41,42 @@ function RefreshIcon() {
   )
 }
 
+function newer(candidate: string, base: string): boolean {
+  const a = candidate.split('.').map(Number)
+  const b = base.split('.').map(Number)
+  for (let i = 0; i < 3; i += 1) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0)
+  return false
+}
+
+/**
+ * An Android app before 1.1.20 has no updater and answers „rejected“. The page
+ * is always the newest, so the app's version in the user agent says whether
+ * there is one: then the APK, through the browser, is the only way.
+ */
+function known(state: UpdateState): UpdateState | null {
+  if (state?.status) return state
+  if (!IN_ANDROID_APP) return null
+  const version = /\bSondraAndroid\/([\d.]+)/.exec(navigator.userAgent)?.[1]
+  if (!version) return null
+  return newer(APP_VERSION, version)
+    ? { status: 'available', version, next: APP_VERSION, channel: 'apk', download: ANDROID_APK }
+    : { status: 'off', version, channel: 'apk' }
+}
+
 export function AppUpdateButton() {
   const bridge = APP_BRIDGE
   const [state, setState] = useState<UpdateState | null>(null)
   /** „Aktuell“ is an answer to a click, shown for a moment, then gone. */
   const [asked, setAsked] = useState(false)
+  /** An Android app without an updater of its own (before 1.1.20). */
+  const [legacy, setLegacy] = useState(false)
 
   useEffect(() => {
     if (!bridge) return
-    void bridge.updateState().then(setState)
+    void bridge.updateState().then((answer) => {
+      if (!answer?.status) setLegacy(true)
+      setState(known(answer))
+    })
     return bridge.onUpdate(setState)
   }, [bridge])
 
@@ -64,7 +92,13 @@ export function AppUpdateButton() {
     return (
       <span
         className="value text-small text-muted"
-        title={state.channel === 'store' ? 'Updates kommen über den Microsoft Store.' : 'Updates gibt es nur in der installierten Windows-App.'}
+        title={
+          state.channel === 'store'
+            ? 'Updates kommen über den Microsoft Store.'
+            : state.channel === 'apk'
+              ? 'Sondra ist aktuell.'
+              : 'Updates gibt es nur in der installierten Windows-App.'
+        }
       >
         Version {state.version}
       </span>
@@ -76,6 +110,11 @@ export function AppUpdateButton() {
       <button
         type="button"
         onClick={() => {
+          // Android asks itself, in its installer; the list and the folder stay.
+          if (state.channel === 'apk') {
+            void bridge.installUpdate()
+            return
+          }
           const ok = window.confirm(
             keepSession()
               ? `Sondra startet neu und installiert ${state.next}. Die Dateien der Sitzung sind gespeichert und werden danach wieder angeboten. Jetzt aktualisieren?`
@@ -87,6 +126,24 @@ export function AppUpdateButton() {
         title={`Version ${state.version} → ${state.next}`}
       >
         <RefreshIcon />
+        <span className="hidden sm:inline">{state.channel === 'apk' ? `${state.next} installieren` : `Auf ${state.next} aktualisieren`}</span>
+        <span className="sm:hidden">Update</span>
+      </button>
+    )
+  }
+
+  // The Android app fetches its update itself, with progress here, and opens
+  // the installer when it is there.
+  if (state.status === 'available' && state.channel === 'apk' && !legacy && bridge.downloadUpdate) {
+    const download = bridge.downloadUpdate
+    return (
+      <button
+        type="button"
+        onClick={() => void download().then(setState)}
+        className={`${BASE} bg-ink font-semibold text-on-ink hover:bg-ink-hover`}
+        title={`Version ${state.version} → ${state.next}`}
+      >
+        <DownloadIcon />
         <span className="hidden sm:inline">Auf {state.next} aktualisieren</span>
         <span className="sm:hidden">Update</span>
       </button>
@@ -100,7 +157,11 @@ export function AppUpdateButton() {
         target="_blank"
         rel="noreferrer"
         className={`${BASE} bg-ink font-semibold text-on-ink hover:bg-ink-hover`}
-        title={`Version ${state.version} → ${state.next}. Die neue Datei ersetzt diese; der Ordner „Sondra-Daten“ daneben bleibt.`}
+        title={
+          state.channel === 'apk'
+            ? `Version ${state.version} → ${state.next}. Lädt im Browser; dort „Trotzdem herunterladen“ bestätigen, dann die Datei öffnen.`
+            : `Version ${state.version} → ${state.next}. Die neue Datei ersetzt diese; der Ordner „Sondra-Daten“ daneben bleibt.`
+        }
       >
         <DownloadIcon />
         <span className="hidden sm:inline">{state.next} herunterladen</span>
@@ -136,12 +197,12 @@ export function AppUpdateButton() {
           <span className="sm:hidden">Erneut</span>
         </button>
         <a
-          href={state.download ?? WINDOWS_SETUP}
+          href={state.download ?? (state.channel === 'apk' ? ANDROID_APK : WINDOWS_SETUP)}
           target="_blank"
           rel="noreferrer"
           className="press rounded-nav px-[8px] py-[8px] text-small text-ink underline underline-offset-4 hover:bg-panel-soft"
         >
-          {state.channel === 'portable' ? 'Neueste laden' : 'Setup laden'}
+          {state.channel === 'portable' ? 'Neueste laden' : state.channel === 'apk' ? 'APK laden' : 'Setup laden'}
         </a>
       </span>
     )
