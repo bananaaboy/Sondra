@@ -30,6 +30,14 @@ Abspielen
   Unter „Abspielen“ Filme und Musik ansehen und anhören, auch sehr grosse
   Dateien: sie werden direkt von der Festplatte gelesen. Mehrere Dateien
   werden eine Wiedergabeliste, eine .srt mit gleichem Namen der Untertitel.
+  Neu in v1.1.18:
+  - Direkt-Stream („Sofort abspielen“): Sendungen und Folgen ohne Vorab-
+    Download sofort ansehen; auf Wunsch wird parallel im Hintergrund
+    gespeichert.
+  - Smart Prefetch: Bei 75 % einer Folge wird die nächste Folge automatisch
+    im Hintergrund aufgelöst und vorgepuffert — für übergangsloses Bingen.
+  - Timeline-Vorschaubilder & Kapitel: Miniatur-Szenenbilder beim Fahren über
+    die Zeitleiste sowie sichtbare Intro-/Outro-Marker auf dem Fortschrittsbalken.
   Hinter dem Zahnrad: Qualität, Tempo, Untertitel, Tonspur, Bild, Ton und
   Wiedergabe. Kinomodus (T), fensterfüllend (W) und Vollbild (F). Was
   Windows' Browser-Kern nicht abspielt (etwa AVI oder DTS-Ton), macht Sondra
@@ -38,11 +46,61 @@ Abspielen
   Musik zeigt die Bühne den Titel und, wenn unter „Ton“ eingeschaltet, einen
   Visualizer.
 
-Ton
+Herunterladen & Hintergrund-Downloads
+  Sondra lädt Videos und Tonspuren von Adressen und Portalen:
+  - Hintergrund-Downloads (v1.1.19): Downloads brechen beim Verlassen des
+    Download-Reiters nicht mehr ab. Wechseln Sie frei zwischen Player, Editor
+    und Merkliste.
+  - Schwebende Minibar: Sobald ein Download läuft und ein anderes Werkzeug
+    geöffnet ist, erscheint unten rechts ein handliches Widget mit Live-Rate
+    (MB/s), Restzeit, Titel sowie Pause- und Abbruchknöpfen.
+  - Screen Wake-Lock: Verhindert, dass Windows während großer Downloads oder
+    beim Filmschauen in den Standby schaltet.
+  - Zero-RAM Direct-to-Disk: In der App werden Streams ohne Zwischenspeicher
+    im Arbeitsspeicher direkt via Node-Stream auf die Festplatte geschrieben
+    (0 MB zusätzlicher RAM-Verbrauch).
+  - Fertigstellungs-Gong: Ein sanfter zweistimmiger Klang signalisiert das
+    Ende des Downloads.
+
+Video & GPU-Beschleunigung
+  Unter „Video“ schneiden, drehen, Farben anpassen, Blenden setzen und Ton
+  herauslösen. Neu in v1.1.18:
+  - GPU-beschleunigtes FFmpeg: Sondra erkennt automatisch NVIDIA NVENC
+    (h264_nvenc), AMD AMF (h264_amf) oder Intel QuickSync (h264_qsv). Video-
+    Exporte und Renderaufgaben laufen damit 5–10× schneller und belasten die
+    CPU kaum.
+
+Ton & KI-Sprachverbesserung
   Unter „Ton“ links ein Werkzeug wählen — Schnitt, Pegel, Klang, Säubern,
   Raum, Tempo, Ausgabe, Verlauf —, rechts stehen nur seine Regler. Was ein
   Regler tut, ist sofort zu hören; „Übernehmen“ schreibt es in die Datei.
-  Über die Welle ziehen wählt einen Ausschnitt, die Leertaste spielt.
+  Neu in v1.1.18:
+  - KI-Sprachverbesserung: Spektrale Rauschunterdrückung, Raumhall-Reduktion
+    (De-Reverb) und Sprachpräsenz-EQ auf Knopfdruck — 100 % lokal ohne Cloud.
+
+Ordner
+  Im Reiter „Ordner“ einen lokalen Ordner oder Google Drive durchsuchen:
+  - Neu gestaltete Kachelansicht: Ordner liegen als übersichtliche Karten
+    oben, Mediendateien mit Vorschaubildern darunter.
+  - Integrierte Seiten-Vorschau: Eine markierte Datei öffnet direkt rechts
+    einen Live-Player samt Metadaten und Aktionen (Abspielen, Große Vorschau,
+    In die Sitzung).
+  - Weiterschauen: Erkennt Folgen Ihrer Merkliste im Ordner und spielt die
+    nächste ungesehene Episode an.
+  - Doppelte finden: Findet Dateikopien über SHA-256-Signaturen.
+
+Merkliste & SQLite 3
+  Unter „Merkliste“ Serien und Listen festhalten, die Sie schauen:
+  - SQLite 3 Datenbank (v1.1.17): Vollwertige relationale Datenbank
+    (Sondra-Merkliste.sqlite) für atomare Transaktionen und Schau-Historie.
+  - Rechner „Bis wohin?“: Ermittelt anhand Ihres Schautempos der letzten
+    Wochen, wie viele Folgen/Stunden fehlen und an welchem Tag Sie das Ziel
+    erreichen.
+  - AniList & MyAnimeList Synchronisation: Automatisches Aktualisieren der
+    gesehenen Folgen in Ihrem AniList- oder MAL-Konto.
+  - Automatischer Import: Cover, Titel und Staffeln werden beim Einfügen von
+    AniWorld- oder SerienStream-Links automatisch ergänzt.
+  - Sync über Anytype oder Google Drive.
 
 Zerschneiden
   Ein Verfahren wählen — Anschläge, Stärkste, Takt, Pausen, Gleich oder
@@ -63,61 +121,6 @@ Windows-SmartScreen
   blockiert Windows unsignierte Setups ganz; dann Sondra Studio über den
   Microsoft Store installieren.
 
-Herunterladen von Videoportalen
-  Sondra startet dafür selbst einen Dienst auf diesem Rechner
-  (127.0.0.1:9000), der yt-dlp benutzt. Ist yt-dlp noch nicht da, fragt
-  Sondra beim ersten Mal, ob die offizielle Fassung von
-  github.com/yt-dlp/yt-dlp geladen werden soll; sie wird gegen die
-  veröffentlichte Prüfsumme geprüft, liegt danach in %APPDATA%\Sondra und
-  aktualisiert sich einmal pro Woche. Verlangt YouTube eine Anmeldung, fragt
-  Sondra, aus welchem Browser sie kommen soll. Läuft auf Port 9000 schon ein
-  eigener Dienst, benutzt Sondra diesen. Solange die App läuft, kann auch die
-  Website sondra.lizge.ch im Browser diesen Dienst benutzen; andere Websites
-  bekommen keine Antwort.
-  Unter „Was laden“ wählen Sie Video mit Ton oder nur den Ton (MP3, WAV, M4A,
-  FLAC oder Opus). Mehrere Adressen, durch Komma oder Zeilen getrennt, werden
-  eine Liste zum Laden. „Zuletzt geladen“ merkt sich die letzten Adressen nur
-  auf diesem Rechner. Eine Stream-Adresse (.m3u8) wird Stück für Stück
-  geladen und hier zu einer MP4 zusammengefügt.
-
-Merkliste
-  Unter „Merkliste“ Serien und Listen festhalten, die Sie schauen: zuerst
-  alle als Poster nebeneinander, nach „Am Schauen“, „Später“ und „Fertig“
-  geordnet; ein Klick öffnet die Serie mit ihren Staffeln (Filmposter 2:3
-  oder Manga 5:7, je Staffel die eigene Folgenzahl, eine Staffel in Teilen
-  bekommt je Teil eine Kachel). Ein Klick auf eine Staffel zeigt die Folgen
-  zum Abhaken. „Folge … laden“ holt die nächste Folge im Herunterladen,
-  „Folge … gesehen“ hakt sie ab. Cover per Bildadresse oder Datei, den
-  Ausschnitt wählen Sie durch Ziehen und Zoomen; dazu Notiz und Bewertung.
-  Gespeichert nur auf diesem Rechner; „Exportieren“ unter der Liste macht
-  eine Datei daraus, „Aus Datei einlesen“ holt sie auf einem anderen Gerät
-  zurück. Mit Anytype verbinden: Unter der Liste „Mit Anytype verbinden“
-  wählen, Anytype offen haben, den vierstelligen Code aus Anytype eintippen
-  und einen Space wählen. Sondra legt dort die Seite „Sondra · Merkliste“ an
-  und gleicht sie bei jeder Änderung ab; Anytype bringt sie auf Ihre anderen
-  Geräte, Sondra auf einem anderen Rechner holt sie dort zurück. Liegt im
-  Space schon eine Merkliste, lädt Sondra sie beim Verbinden („Nicht laden —
-  beide Listen zusammenführen“ behält auch die dieses Rechners). Fragt
-  Anytype beim Bestätigen, welche Spaces Sondra sehen darf, geben Sie den
-  Space der Merkliste frei; Sondra sieht dann nur die freigegebenen.
-  Abspielen hakt ab: Heisst eine Datei wie eine Folge auf der Liste
-  („Frieren S01E13.mkv“), hakt Sondra sie ab 90 % ab; unter dem Bild steht
-  es, mit „Rückgängig“. Neue Folgen: Ist „Neue Folgen melden“ an, prüft
-  Sondra alle drei Stunden die Serien „Am Schauen“ mit AniWorld-Adresse und
-  meldet eine neue Folge über Windows; ein Klick öffnet die Serie.
-  Vorspann überspringen: In den ersten Minuten einer Folge steht ein Knopf
-  auf dem Bild (Taste S), im Abspann „Nächste Folge“ (Taste N). Wie lang
-  der Vorspann ist, merkt sich Sondra je Serie der Merkliste (Zahnrad →
-  Wiedergabe). Schlaf-Timer: im Zahnrad unter Wiedergabe, 15, 30 oder 60
-  Minuten oder bis zum Ende des Titels; zum Schluss wird es leiser.
-  Vorspann am Ton erkennen: Zwei Folgen einer Serie der Merkliste in die
-  Liste nehmen, Zahnrad → Vorspann → „Vorspann erkennen“. Danach findet
-  Sondra den Vorspann in jeder Folge dieser Serie selbst — auch nach einem
-  Cold Open — und der Knopf steht genau dann da, wenn er läuft.
-  Lesezeichen: Taste B setzt eins an der Stelle, die gerade läuft;
-  Umschalt + ← und → springen. Im Zahnrad unter „Lesezeichen“ lassen sie
-  sich benennen und als Kapitel für YouTube kopieren.
-
 Entfernen
   Einstellungen → Apps → Installierte Apps → Sondra Studio →
   Deinstallieren.
@@ -128,52 +131,18 @@ Entfernen
   „Öffnen mit“ ein und macht sich für keine Dateiart zum Standard. Läuft
   Sondra schon, kommt die Datei in die offene Sitzung.
 
-Sitzung
-  Die Dateien der Sitzung bleiben auf diesem Rechner gespeichert und werden
-  nach dem Schliessen oder einem Update wieder angeboten („Letzte Sitzung:
-  Wiederherstellen“). Abschalten lässt sich das unter dem Dateinamen oben
-  rechts; dabei wird das Gespeicherte gelöscht.
-  Ebendort speichert „Alle als ZIP speichern“ die ganze Sitzung in ein
-  Archiv. Wo Sondra ein ZIP anbietet — Sitzung, mehrere Downloads, Pads,
-  Bilder, Spuren —, steht davor das Feld „Name des ZIP“; leer gelassen
-  gilt der Vorschlag. Umbenennen: der Stift neben einer Datei (oder ein
-  Doppelklick auf ihren Namen); die Endung bleibt.
-
-Ordner
-  Im Reiter „Ordner“ einen Ordner wählen: Sondra zeigt die Dateien als
-  Kacheln mit Vorschaubild oder als Liste, nach Art, Name, Datum oder
-  Grösse, auf Wunsch mit allen Unterordnern. Auswählen mit Klick, Strg und
-  Umschalt oder den Pfeiltasten; die Auswahl lässt sich abspielen, in die
-  Sitzung nehmen, als ZIP speichern, nach Google Drive schicken oder nach
-  einer Rückfrage löschen (endgültig, nicht in den Papierkorb). Folgen
-  Ihrer Merkliste erkennt Sondra am Namen: „Weiterschauen“ spielt die
-  nächste ungesehene und die folgenden. „Doppelte finden“ sucht gleiche
-  Dateien und wählt die Kopien aus. Den Ordner bietet Sondra beim nächsten
-  Mal wieder an.
-
 Google Drive
   Unten auf der Seite „Google Drive“ → „Mit Google verbinden“: die
   Anmeldung öffnet sich in Ihrem Browser, danach geht es in Sondra weiter.
   Sondra legt in Ihrem Drive den Ordner „Sondra“ an und darin „Projekte“,
   „Dateien“ (Ton, Video, Bilder, Andere), „Heruntergeladen“ und
-  „Merkliste“. „In Drive“ neben „Projekt speichern“ legt das Projekt dort
-  ab, die Wolke neben einer Datei der Sitzung die Datei. Was Sie
-  herunterladen und die Merkliste kommen von selbst dazu, solange die
-  beiden Schalter im Fenster „Google Drive“ an sind. Sondra sieht in Ihrem
-  Drive nur, was es selbst dort abgelegt hat. „Trennen“ zieht den Zugang
-  bei Google zurück; die Dateien in Drive bleiben.
+  „Merkliste“.
 
 Aktualisieren
   Sondra sucht kurz nach dem Start und dann alle sechs Stunden selbst nach
   einer neueren Fassung, lädt sie im Hintergrund und prüft sie. Oben rechts
   steht dann „Auf x.y.z aktualisieren“; ohne Klick wird beim nächsten
-  Schliessen installiert. Windows fragt dabei einmal nach der Erlaubnis, wie
-  beim Setup. Klappt das nicht, steht dort „Update nicht möglich“ mit dem
-  Grund und daneben „Setup laden“: das neuere Setup einfach darüber
-  installieren. Jeder Schritt des Updates steht im Protokoll.
-  Die portable Fassung ersetzt sich nicht selbst. Ist eine neuere da, steht
-  oben rechts „x.y.z herunterladen“; die neue Datei an die Stelle der alten
-  legen, der Ordner „Sondra-Daten“ daneben bleibt.
+  Schliessen installiert.
 
 Wenn etwas nicht geht
   Sondra schreibt ein Protokoll nach %APPDATA%\Sondra\sondra.log (in die

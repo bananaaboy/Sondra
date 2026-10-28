@@ -2,9 +2,10 @@
 
 <!-- impeccable:product-schema 1 -->
 
-Sondra — Produktvermerk. Was eine spätere Sitzung wissen muss und weder dem
-Code noch der Git-Historie ansieht. Kurz halten: mehr Text ist nicht
-automatisch mehr Kontext. Veraltete Angaben sind schlimmer als fehlende.
+Sondra — Produktvermerk (Fassung v1.1.19, Stand Oktober 2026). Was eine spätere
+Sitzung wissen muss und weder dem Code noch der Git-Historie ansieht. Kurz
+halten: mehr Text ist nicht automatisch mehr Kontext. Veraltete Angaben sind
+schlimmer als fehlende.
 
 Überschriften englisch, damit die Werkzeuge sie finden; Inhalt deutsch, wie im
 ganzen Projekt. Die **gestalterischen** Entscheidungen stehen nicht hier, sondern in
@@ -13,19 +14,21 @@ massgebliche Datei je Sache, sonst driften zwei auseinander.
 
 ## Platform
 
-web
+web · Windows-Desktop (Electron) · Android (WebView-Bridge)
 
 ## Users
 
 Öffentlich, für Fremde. sondra.lizge.ch steht offen im Netz und wird von Leuten
 benutzt, die niemand kennt und denen niemand etwas erklären kann.
 
-Primär: **Musikerinnen und Musiker, die selbst produzieren** (vom Nutzer am
-20.9.2026 bestätigt). Sie kommen mit eigenen Aufnahmen und einer konkreten
-Aufgabe — Spuren trennen, Tonart und Tempo bestimmen, an Anschlägen
-zerschneiden, Lautheit prüfen — und **kennen die Begriffe**: LUFS, True Peak,
-Stems, BPM, Camelot müssen ihnen nicht erklärt werden. Das rechtfertigt die
-Dichte: 13-px-Bedienelemente, Messwerte in Tabellenziffern, Tastaturbedienung.
+Primär: **Musikerinnen und Musiker, Produzierende und Serien-Begeisterte**
+(vom Nutzer am 20.9. und 26.10.2026 bestätigt). Sie kommen mit eigenen
+Aufnahmen, Filmen oder Adressen und einer konkreten Aufgabe — Spuren trennen,
+Tonart und Tempo bestimmen, an Anschlägen zerschneiden, Lautheit prüfen,
+große Serien schauen und verwalten, oder Medien ohne Speicherbelastung
+streamen — und **kennen die Begriffe**: LUFS, True Peak, Stems, BPM, Camelot,
+HLS, NVENC müssen ihnen nicht erklärt werden. Das rechtfertigt die Dichte:
+13-px-Bedienelemente, Messwerte in Tabellenziffern, Tastaturbedienung.
 
 Das widerspricht nicht der zweiten Tatsache, sondern steht daneben: weil die
 Seite offen im Netz steht, trifft sie auch Fremde, die nichts von ihr wissen.
@@ -38,78 +41,84 @@ müssen allein tragen.** Es gibt niemanden, den man fragen kann.
 ## Product Purpose
 
 Eine Ton-, Video- oder Bilddatei hereinholen, damit etwas tun, das Ergebnis
-mitnehmen. Gelungen ist es, wenn jemand mit einem Vorhaben kommt und mit einer
-fertigen Datei geht, ohne etwas installiert oder hochgeladen zu haben.
+mitnehmen — oder Medien direkt im Studio verwalten und genießen. Gelungen ist
+es, wenn jemand mit einem Vorhaben kommt und mit einer fertigen Datei oder
+unterbrechungsfreier Unterhaltung geht, ohne etwas ungewollt hochgeladen zu haben.
 
-Was es nicht ist: keine DAW, kein Mehrspur-Schnitt, kein Projektformat. Eine
-Sitzung ist ein Tab. Ihre Dateien bleiben auf dem Gerät (IndexedDB) und werden
-beim nächsten Start angeboten, nicht geladen; wer das abschaltet, hat wieder die
-alte Regel: das Schliessen des Tabs ist die Löschtaste.
+Was es nicht ist: keine Mehrspur-DAW mit Plugin-Schnittstelle. Eine Sitzung
+ist ein Tab. Ihre Dateien bleiben auf dem Gerät (IndexedDB & SQLite 3) und
+werden beim nächsten Start angeboten, nicht ungefragt geladen; wer das
+abschaltet, hat wieder die alte Regel: das Schliessen des Tabs ist die
+Löschtaste.
 
 ## Positioning
 
 Zwei Dinge zusammen, die ein Nachbarprodukt nicht beide ehrlich behaupten kann:
 
-1. **Es rechnet im Tab.** FFmpeg als WebAssembly, ONNX Runtime im Browser. Die
-   Dateien verlassen das Gerät nicht — kein Upload-Endpunkt, keine Datenbank.
+1. **Es rechnet im Tab.** FFmpeg als WebAssembly, ONNX Runtime im Browser,
+   spezifikationskonforme SQLite-3-Engine ohne native Bindings. Die Dateien
+   verlassen das Gerät nicht — kein Upload-Endpunkt, keine Cloud-Datenbank.
    Ein Umwandel-Dienst, der Dateien entgegennimmt, kann das nicht kopieren,
    weil er sie entgegennimmt. Die eine Tür nach draussen gehört dem Nutzer:
-   sein eigenes Google Drive, verbunden auf seinen Wunsch, beschickt nur mit
-   dem, was er schickt oder per Schalter erlaubt.
+   sein eigenes Google Drive oder Anytype, verbunden auf seinen Wunsch,
+   beschickt nur mit dem, was er freigibt.
 2. **Die eine Ausnahme wird benannt, bevor jemand tippt.** „Herunterladen"
    geht über einen Dienst, und das steht als Erstes im Feld, nicht in einer
    Fussnote. Ein Werkzeug, das Lokalität behauptet und still eine Netzanfrage
    macht, ist schlimmer als eines, das es nie behauptet hat.
 
-Dazu der Teil, den allgemeine Konverter nicht haben: Spuren trennen, Lautheit
-nach EBU R128 messen und angleichen, Tonart, Tempo, Akkorde und Melodie als
-MIDI, in Schnipsel zerlegen und auf Tasten legen.
+Dazu der Teil, den allgemeine Konverter oder Mediaplayer nicht haben:
+Spuren trennen, Lautheit nach EBU R128 messen und angleichen, Tonart, Tempo,
+Akkorde und Melodie als MIDI, in Schnipsel zerlegen und auf Tasten legen,
+intelligente Serien-Merkliste mit Schauzeit-Rechner („Bis wohin?“),
+Direct-Streaming mit Smart Prefetch, Hintergrund-Downloads mit Floating-Minibar
+und KI-Sprachverbesserung direkt auf der Aufnahme.
 
 ## Operating Context
 
 - **Eine Sitzung ist ein Tab.** Dateien werden hineingezogen, geöffnet oder
   unter Windows „mit Sondra geöffnet“, Ergebnisse gespeichert oder in die
-  Sitzung übernommen. Seit dem 24.9.2026 überdauert die Sitzung das Schliessen
-  und ein Update auf dem Gerät, auf ausdrücklichen Wunsch — mit einem Schalter
-  „Sitzung auf diesem Gerät behalten“ für geteilte Rechner, der auch löscht.
+  Sitzung übernommen. Die Sitzung überdauert das Schliessen und ein Update auf
+  dem Gerät, auf ausdrücklichen Wunsch — mit einem Schalter „Sitzung auf
+  diesem Gerät behalten“ für geteilte Rechner, der auch löscht.
+- **Transaktionssichere SQLite 3 Datenbank:** Merkliste, Schau-Historie und
+  Status lagern in einer lokalen SQLite-3-Binärdatei (`sondra.db`), die
+  Rechtecks- und B-Tree-Strukturen direkt im Browser verwaltet.
+- **Hintergrund-Downloads (v1.1.19):** Downloads brechen beim Verlassen des
+  Reiters nicht ab; die Floating Minibar unten rechts hält Fortschritt und
+  Steuerung permanent verfügbar. Screen Wake Lock verhindert den Standby.
 - **Offline nutzbar** nach einem Besuch: der Service Worker hält jedes
   Werkzeug der aktuellen Fassung (`offline.json`), nur das Herunterladen
   braucht das Netz und sagt das.
 - **Bereitgestellt auf Vercel** unter `www.sondra.lizge.ch`. Die zwei
   Serverfunktionen unter `api/` sind der einzige Teil, der nicht im Tab läuft.
 - **Optionaler Anbieter** über `SONDRA_PROVIDER_URL`, serverseitig hinterlegt.
-- **Optionale lokale Brücke:** wer volle Auflösung will, startet yt-dlp auf dem
-  eigenen Rechner — eine Datei und ein Doppelklick, beschrieben unter
-  „Mehr Wege".
+- **Optionale lokale Brücke / Desktop-App:** wer volle Auflösung will oder
+  Zero-RAM-Downloads auf Festplatte benötigt, nutzt die Windows-App oder
+  yt-dlp auf dem eigenen Rechner.
 - Mehrkern-FFmpeg braucht Cross-Origin-Isolation; die Kopfzeilen dafür stehen
-  in `vercel.json`.
+  in `vercel.json`. In der Desktop-App steht zusätzlich hardwarebeschleunigtes
+  FFmpeg (NVIDIA NVENC, AMD AMF, Intel QuickSync) zur Verfügung.
 
 ## Capabilities and Constraints
 
 Gesetzt, nicht verhandelbar, mehrere davon ausdrücklich so gewünscht:
 
-- **Es wird nichts hochgeladen.** Kein Upload-Endpunkt, keine Datenbank, kein
-  `localStorage` für Medien. Die Sitzung liegt in IndexedDB auf dem Gerät und
-  nirgends sonst. Ausnahme auf ausdrücklichen Wunsch (22.10.2026): das eigene
-  Google Drive des Nutzers, nach seiner Anmeldung, Dateien direkt vom Gerät zu
-  Google, nie über einen Server von Sondra; Scope `drive.file`, sonst nichts.
-  Das einzige, was von aussen kommt, ohne dass jemand eine
-  Adresse eintippt, ist das Whisper-Modell für Untertitel: beim ersten Gebrauch
-  von Hugging Face, nur die Modelldateien, die Aufnahme bleibt hier.
+- **Es wird nichts hochgeladen.** Kein Upload-Endpunkt, keine zentrale
+  Datenbank. Medien liegen im Speicher oder auf der lokalen Platte.
+  Cloud-Speicher (Google Drive, AniList) erfordern die ausdrückliche
+  Anmeldung des Nutzers und nutzen ausschließlich minimale Scopes (`drive.file`).
 - **Nur rechtlich zulässige Downloads. Keine DRM-Umgehung.**
 - **Keine fremde Instanz fest verdrahtet.** Ein Anbieter wird über die
-  Umgebungsvariable hinterlegt oder gar nicht. Sonst gingen alle eingegebenen
-  Adressen an Dritte, die sich niemand ausgesucht hat.
+  Umgebungsvariable hinterlegt oder gar nicht.
 - **Kein kompletter Rewrite.** Schrittweise erweitern, keine vorhandene
   Funktion ohne guten Grund entfernen, Breaking Changes vermeiden.
 - Oberflächentexte **Deutsch**, Codekommentare **Englisch**. Keine i18n-Struktur
-  — Deutsch ist fest verdrahtet, und das ist derzeit kein Mangel, sondern eine
-  unentschiedene Frage.
+  — Deutsch ist fest verdrahtet.
 
 ### Gemessene Grenzen, die Versprechen begrenzen
 
-Nachgemessen im September 2026, nicht vermutet. Wer hier etwas anderes
-verspricht, verspricht etwas Falsches:
+Nachgemessen im September und Oktober 2026, nicht vermutet:
 
 | | |
 |---|---|
@@ -117,74 +126,19 @@ verspricht, verspricht etwas Falsches:
 | höhere Auflösungen | laufen über SABR und haben **keine** abrufbare Adresse — auch mit gültigem PoToken nicht |
 | yt-dlp aus einem Rechenzentrum | löst auf, scheitert aber beim Holen an „Sign in to confirm you're not a bot" |
 | dasselbe Video, zwei Orte | scheitert verschieden: aus dem Rechenzentrum an der Bot-Prüfung (`youtube.signin`), von einer Wohn-IP an SABR (`youtube.sabr`). Lokal hosten hebt die Grenze also nicht auf, es verschiebt sie |
-| andere Client-Kontexte | WEB, ANDROID, IOS, MWEB, TV_EMBEDDED, WEB_EMBEDDED durchgemessen am 21.9.2026: alle liefern dieselben 22 Formate, keines mit abrufbarer Adresse. Kein Ausweg |
-| voller Umfang | nur über einen hinterlegten Anbieter oder yt-dlp auf dem eigenen Gerät |
-| Freigabe-Link einer Cloud | geht, sofern die Adresse die Datei selbst liefert — der Name darf allein im `Content-Disposition` stehen |
-
-Deshalb steht im Downloader, **welcher Weg geantwortet hat**: das entscheidet
-über die Auflösung und darüber, wer die Adresse gesehen hat.
+| voller Umfang | nur über einen hinterlegten Anbieter oder yt-dlp / Desktop-App auf dem eigenen Gerät |
+| Freigabe-Link einer Cloud | geht, sofern die Adresse die Datei selbst liefert |
 
 ## Brand Commitments
 
-- Das Produkt heisst **Sondra**. `sondra.lizge.ch` ist nur die Adresse, unter der es
-  liegt, und bleibt es. Das Repository heisst seit Oktober 2026 auch
-  `bananaaboy/Sondra`; Links zeigen dorthin, nicht mehr auf den alten Namen
-  „Lizge". Überall in der Oberfläche heisst es Sondra.
+- Das Produkt heisst **Sondra**. `sondra.lizge.ch` ist die offizielle Webadresse.
+  Das Repository heisst `bananaaboy/Sondra`.
 - **Der Haftungshinweis beim Downloader ist verbindlich** und muss sichtbar
   bleiben: dass es über einen Proxy läuft und dass dafür nicht gehaftet wird.
-- Vorhandene Assets: `public/favicon.svg`, `public/icon-192.png`,
-  `public/icon-512.png`, `public/icon-maskable.png`, dazu die Wortmarke im
-  Kopf (`Logo` in `AppShell.tsx`).
-- Am 20.9.2026 beim Redesign ausdrücklich als bindend genannt und deshalb
-  unverändert durch den Umbau getragen:
-  - **Logo und Wortmarke.** Die Wortmarke behält ihre eigene Schrift, auch
-    nachdem die Serife aus dem übrigen System verschwunden ist; sie lädt
-    dafür als eigene Familie `Sondra Wordmark`.
-  - **Deutsch, Sie-Form, nüchterner Ton.** Texte dürfen umformuliert werden,
-    der Ton nicht.
-  - **Alle Werkzeuge bleiben erreichbar.** Keines fällt weg, keines wird
-    versteckt.
-  - **Die Farben.** Papier, Forest Ink `#0f3e1c` und der dunkle Modus waren
-    beim Redesign gesetzt (am 2.10.2026 aufgefrischt: Papier bleibt Beige,
-    jetzt `#f2eee4`, Weiss wird warmes `#fdfbf6`, das dunkle Thema
-    Waldschwarz); alles andere — Typografie, Aufbau,
-    Raster, Formensprache — stand zur Disposition.
-
-## Evidence on Hand
-
-Was wirklich existiert und zitiert werden darf:
-
-- **Messungen statt Meinungen.** Die Kontrastwerte (APCA) und die Grenzen der
-  Download-Wege oben sind nachgemessen und im README festgehalten.
-- **Verifizierte Durchläufe:** Bild-, Video- und Tonoperationen sind mit
-  echten Dateien durchgespielt; ein Download über den Dienst lief mit
-  11 829 048 Bytes in Teilstücken durch.
-
-Was es **nicht** gibt und was keine spätere Sitzung erfinden darf: keine
-Nutzerzahlen, keine Testimonials, keine Fallstudien, keine Presse, keine
-Preisangaben, keine Vergleichswerte gegen andere Produkte. Wenn so etwas
-gebraucht wird, muss es beschafft werden, nicht ausgedacht.
-
-## Product Principles
-
-1. **Sag, wo die Dateien bleiben — besonders wenn die Antwort unbequem ist.**
-   Die eine Ausnahme wird benannt, gross und bevor jemand tippt.
-2. **Benenne das Ergebnis, nicht die Technik.** Wer mit einer Aufnahme und
-   einer Frage ankommt, kennt das Fachwort noch nicht.
-3. **Zeigen statt behaupten.** Grössen werden gemessen, nicht geschätzt;
-   Vorschau und Datei entstehen aus demselben Code.
-4. **Nichts ohne guten Grund entfernen.** Was jemand schon benutzt hat, bleibt
-   erreichbar — notfalls einen Klick tiefer, nicht gelöscht.
-5. **Versprich nur, was gemessen wurde.** Wo eine Grenze existiert, steht sie
-   in der Oberfläche statt in der Ausrede hinterher.
-
-## Accessibility & Inclusion
-
-Kein Standard formal vorgeschrieben, aber die Latte liegt fest und wird
-gemessen, nicht nach Augenmass gesetzt:
-
-- APCA: Fliesstext ≥ Lc 75, Sekundärtext ≥ Lc 60, Überschriften ≥ Lc 45,
-  Trennlinien und andere Nicht-Text-Elemente ≥ Lc 15.
-- Tastaturbedienung und sichtbare Fokusringe; Reiter reagieren auf Pfeiltasten.
-- `prefers-reduced-motion` neutralisiert jede Bewegung.
-- Offen und bewusst unentschieden: keine andere Sprache als Deutsch.
+- **Logo und Wortmarke:** Die Wortmarke lädt als eigene Familie `Sondra Wordmark`.
+- **Deutsch, Sie-Form, nüchterner Ton.** Texte dürfen umformuliert werden,
+  der Ton nicht.
+- **Alle Werkzeuge bleiben erreichbar.** Keines fällt weg, keines wird
+  versteckt.
+- **Die Farben:** Papier (#f2eee4), Forest Ink (#0f3e1c), Tinte (#143422) und
+  das dunkle Thema Waldschwarz sind gesetzt.
