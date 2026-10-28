@@ -1,5 +1,10 @@
 package ch.lizge.sondra;
 
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.content.pm.PackageManager;
+import androidx.core.content.ContextCompat;
+
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.ContentResolver;
@@ -280,8 +285,18 @@ final class Downloader {
         }
     }
 
+    private boolean canPostNotifications() {
+        if (notificationManager == null) return false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
+                    == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+
+    @SuppressLint("MissingPermission")
     private void showProgressNotification(int id, String filename, long loaded, long total) {
-        if (notificationManager == null) return;
+        if (!canPostNotifications()) return;
         try {
             NotificationCompat.Builder b = new NotificationCompat.Builder(activity, CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -301,8 +316,9 @@ final class Downloader {
         } catch (Exception ignored) {}
     }
 
+    @SuppressLint("MissingPermission")
     private void showCompletionNotification(int id, String filename, long total) {
-        if (notificationManager == null) return;
+        if (!canPostNotifications()) return;
         try {
             NotificationCompat.Builder b = new NotificationCompat.Builder(activity, CHANNEL_ID)
                     .setSmallIcon(android.R.drawable.stat_sys_download_done)

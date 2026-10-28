@@ -14,6 +14,8 @@
     <!-- The microphone tool, asked for when it is opened. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Notification for active downloads progress -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- In-App Auto-Updater for downloading and installing newer Sondra APK releases. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Saving to Downloads before Android 10; from 10 on that needs no permission. -->
