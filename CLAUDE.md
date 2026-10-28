@@ -152,12 +152,19 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   speichern, verlässt dieses Gerät …“) — dieselbe Aussage, sonst nichts. Den Lokal-Chip
   in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
-  „App herunterladen" mit einem breiten Auswahlfenster „Sondra Studio"
-  (bis 1120 px, Setup-Kachel in Tinte): zwei grosse Kacheln nebeneinander, Setup (.exe) und Microsoft
-  Store — die Hauptwege —, darunter zwei schmale: „Website
-  als App" (Edge/Chrome-Installation über `lib/install.ts`, der einzige Weg,
-  den die intelligente App-Steuerung nicht blockiert, solange das Setup
-  unsigniert ist) und „Portabel“ (die .exe ohne Installation). Die Store-Kachel ist ein Link auf den Eintrag
+  „App herunterladen" mit dem Fenster „Sondra als App“ (bis 860 px; neu
+  am 28.10.2026, „app herunterladen teil ist auch nicht gut designed“ —
+  vorher sechs Kacheln in vier Grössen unter einer 76-px-Wortmarke, Android
+  als Fussnotenzeile): zwei Reiter, **Windows** und **Android**, der des
+  Geräts in der Hand zuerst (`ON_ANDROID`). Je Reiter ein Weg in Tinte
+  (`MainWay`: Setup bzw. APK, Fakten in Courier) und daneben der
+  zweitbeste auf `panel-soft` — der Microsoft Store bzw. „So installieren
+  Sie sie“ in drei, vier Schritten. Darunter bei Windows die übrigen Wege
+  als Zeilen zwischen Linien (`OtherWay`): „Website als App“
+  (Edge/Chrome-Installation über `lib/install.ts`, der einzige Weg, den die
+  intelligente App-Steuerung nicht blockiert, solange das Setup unsigniert
+  ist), „Portabel“ (die .exe ohne Installation) und das Setup für den
+  anderen Prozessor. Die Store-Kachel ist ein Link auf den Eintrag
   (`MICROSOFT_STORE` in `lib/desktop.ts`, Store-ID 9P0JXR5GNSMG, live seit
   1.10.2026); ohne ihn trüge sie „Bald verfügbar" sichtbar auf der Fläche. In der App selbst entfällt der Knopf. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
   Prämisse der Warnung nicht:** dort startet `desktop/downloader.mjs` einen
@@ -395,8 +402,20 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `isAdminRightsRequired` in `latest.yml`, und das Update geht bei der
   Installation für alle Benutzer direkt über elevate.exe. Alles, was der
   Updater sagt, steht in `sondra.log`. Neue Version: `version`
-  in `package.json` und `desktop/package.json` erhöhen, dann den Workflow mit
+  in `package.json` und `desktop/package.json` erhöhen, **oben in
+  `src/changelog.json` einen Eintrag anlegen**, dann den Workflow mit
   „release“ starten.
+- **Was ist neu** (`src/changelog.json`, `WhatsNew.tsx`, 28.10.2026,
+  Wunsch: „auf allen Plattformen einen Release-Log, wo steht, was in jeder
+  Version dazugekommen ist“): eine Liste für Website, beide Apps und die
+  GitHub-Release-Notizen — für Menschen geschrieben, nicht als Commit-Log.
+  Geöffnet über die Versionsmarke neben dem Namen und die Fusszeile; nach
+  einem Update einmal eine Zeile unter der Kopfzeile („Neu in 1.1.20 …“,
+  `sondra:gesehene-version`), ein erster Besuch bekommt sie nicht.
+  `verify:changelog` (in `verify`) bricht ab, wenn die Version aus
+  `package.json` nicht oben steht; der Release-Schritt setzt den Eintrag
+  als „Neu in x“ vor die Notizen (in PowerShell gelesen — Nodes Ausgabe
+  verbog die Codepage die Umlaute).
 - Umgebungsvariablen der Bereitstellung:
   - `SONDRA_SECRET` — signiert die Adressen, die der Proxy weiterreicht.
   - `SONDRA_PROVIDER_URL` — ein cobalt-kompatibler Anbieter. Ist einer
@@ -833,9 +852,21 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   das Release ab. „release“ in „Android“ allein hängt die APK an ein
   bestehendes Release. Die Website verlinkt sie (`ANDROID_APK`,
   `releases/latest/download/Sondra-Android.apk`): in „App herunterladen“
-  eine eigene Zeile unter „Website als App“ und „Portabel“, auf einem
-  Android-Telefon (`ON_ANDROID`) die grosse Kachel in Tinte oben — das Setup
-  tritt dort auf die getönte Fläche zurück.
+  der Reiter „Android“, auf einem Android-Telefon der erste.
+  **Herunterladen in der App** (28.10.2026, Wunsch: „eine Möglichkeit wie
+  auf Desktop zu downloaden“; `YtDlp.java`, `panels/DeviceDownload.tsx`):
+  youtubedl-android 0.18.1 bringt yt-dlp samt Python und FFmpeg mit
+  (arm64-v8a, armeabi-v7a, x86_64; `extractNativeLibs` und
+  `useLegacyPackaging`, sonst findet die Bibliothek ihre Binärdateien
+  nicht), beim ersten Gebrauch entpackt, yt-dlp einmal pro Woche
+  aktualisiert. Brücke: `ytdlp-info`, `ytdlp-download` (sofort `{job}`,
+  Fortschritt als Ereignis `ytdlp`, auch in einer Benachrichtigung),
+  `ytdlp-cancel`; die fertige Datei kommt über MediaStore nach
+  Downloads/Sondra. Im Downloader geht in der App jede Portal-Adresse
+  dorthin (`forDevice`), AniWorld und seine Hoster weiter über Sondras
+  eigene Extraktoren; eine ältere App antwortet `rejected`, dann gilt der
+  Weg der Website. Die Aufträge leben im Modul, nicht im Panel — wer das
+  Werkzeug verlässt, sieht sie beim Zurückkommen.
   Icons: `npm run android:icons` (Vektor-Vordergrund aus den Balken des
   Zeichens, auch für das Startbild; PNGs mit den Helfern aus
   `store-tiles.mjs`). Lokal bauen: Android SDK mit `platforms;android-36`,

@@ -459,8 +459,9 @@ function persist(): void {
   }, 1500)
 }
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', flushSqlite)
+// The checks under Node give a `window` but no `document`.
+if (typeof window !== 'undefined') window.addEventListener('pagehide', flushSqlite)
+if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushSqlite()
   })

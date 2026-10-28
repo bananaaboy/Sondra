@@ -1,0 +1,201 @@
+{
+  "_": "Was in jeder Version dazukam — für Menschen, nicht für Entwickler. Die neueste zuerst. Neue Version: oben einen Eintrag mit der Version aus package.json anlegen; der Release-Workflow bricht ab, wenn er fehlt, und nimmt ihn als Notizen des GitHub-Release.",
+  "versions": [
+    {
+      "version": "1.1.20",
+      "date": "2026-10-28",
+      "items": [
+        "Android: Herunterladen wie in der Windows-App — yt-dlp läuft auf dem Telefon, für YouTube und alle anderen Portale in voller Auflösung bis 2160p oder nur als Ton, mit Fortschritt in der Benachrichtigung, nach Downloads/Sondra.",
+        "Android: startet auf der Startseite statt der Merkliste und lädt beim Start nur noch das Nötige — rund 0,7 statt 34 MB, spürbar schneller.",
+        "Android: eigener Updater in der App, Player für das Telefon, grosse Dateien direkt auf den Speicher statt in den Arbeitsspeicher.",
+        "Neue Startseite: ein Einstieg, „Filme und Serien“ mit „Weiter: …“, Werkzeuge nach Gruppen — halb so lang auf dem Handy.",
+        "„Was ist neu“: dieser Verlauf, auf der Website und in beiden Apps (ein Klick auf die Versionsnummer).",
+        "„App herunterladen“ neu gestaltet: Windows und Android klar getrennt, das passende zuerst.",
+        "Merkliste: „+1“ reagiert auf dem Telefon rund dreimal schneller."
+      ]
+    },
+    {
+      "version": "1.1.19",
+      "date": "2026-10-26",
+      "items": [
+        "Herunterladen im Hintergrund: läuft weiter, während Sie andere Werkzeuge benutzen, mit kleiner Leiste unten.",
+        "Bildschirm bleibt beim Laden wach, abgebrochene Downloads setzen fort, ein Ton meldet „fertig“."
+      ]
+    },
+    {
+      "version": "1.1.18",
+      "date": "2026-10-26",
+      "items": [
+        "Abspielen direkt vom Stream, ohne erst herunterzuladen; die nächste Folge wird vorgeladen.",
+        "Ordner: Vorschau beim Auswählen, neu gestaltete Kacheln.",
+        "Merkliste mit AniList abgleichen.",
+        "Sprache verbessern mit KI im Mikrofon-Werkzeug; FFmpeg nutzt die Grafikkarte, wo es geht."
+      ]
+    },
+    {
+      "version": "1.1.17",
+      "date": "2026-10-26",
+      "items": [
+        "Merkliste zusätzlich als SQLite-Datenbank gespeichert.",
+        "Google Drive lädt beim Start von selbst.",
+        "Sehr grosse Videos spielen direkt, ohne Umweg über den Arbeitsspeicher."
+      ]
+    },
+    {
+      "version": "1.1.16",
+      "date": "2026-10-25",
+      "items": [
+        "Merkliste: Rechner „Bis wohin?“ — wie viele Folgen und wie viel Zeit bis zu einem gewählten Punkt, an welchem Tag Sie dort sind, und was es dafür am Tag braucht.",
+        "Merkliste: Ziel merken, mit „vor/hinter dem Plan“.",
+        "Merkliste: neue Stände „Pausiert“ und „Abgebrochen“, Ansicht als Liste, Sortierung „Am wenigsten übrig“.",
+        "„In Staffel einordnen“ neu gestaltet: Poster, Zielordner, Folgenstreifen, doppelte Nummern werden gemeldet."
+      ]
+    },
+    {
+      "version": "1.1.15",
+      "date": "2026-10-23",
+      "items": [
+        "Android-App im offiziellen Release und auf der Website.",
+        "Anmeldung bei Google Drive in der Android-App über den Browser.",
+        "In Drive speichern direkt aus jedem Werkzeug, ohne Umweg über die Sitzung.",
+        "Reiterleiste auch auf der Startseite."
+      ]
+    },
+    {
+      "version": "1.1.14",
+      "date": "2026-10-22",
+      "items": [
+        "Android: eine eigene App statt der Website in Chrome.",
+        "Google-Anmeldung bleibt auf der Website bestehen; das Secret liegt nur noch auf dem Server."
+      ]
+    },
+    {
+      "version": "1.1.13",
+      "date": "2026-10-22",
+      "items": [
+        "Erste Android-App, Merkliste und Ordner über Google Drive.",
+        "Ordner aus Drive: Folgen in Serie und Staffel einordnen."
+      ]
+    },
+    {
+      "version": "1.1.12",
+      "date": "2026-10-22",
+      "items": [
+        "Neue Seite „Ordner“: Dateien eines Ordners als Kacheln, auswählen, abspielen, weiterschauen.",
+        "Doppelte Dateien finden.",
+        "Merkliste über Google Drive auf allen Geräten gleich; Ordner aus Drive ansehen und abspielen."
+      ]
+    },
+    {
+      "version": "1.1.11",
+      "date": "2026-10-22",
+      "items": [
+        "Player erkennt den Vorspann am Ton und überspringt ihn genau.",
+        "Lesezeichen im Player, als Kapitel kopierbar.",
+        "Dateien der Sitzung umbenennen."
+      ]
+    },
+    {
+      "version": "1.1.10",
+      "date": "2026-10-21",
+      "items": [
+        "Google Drive: Projekte, Dateien, Downloads und Merkliste geordnet in einen Ordner.",
+        "Vorspann überspringen, „Nächste Folge“ und Schlaf-Timer im Player."
+      ]
+    },
+    {
+      "version": "1.1.9",
+      "date": "2026-10-21",
+      "items": [
+        "Portable Windows-App ohne Installation.",
+        "Player hakt gesehene Folgen in der Merkliste ab.",
+        "Vorlagen fürs Umwandeln: WhatsApp, Instagram Reel, Hörbuch, E-Mail.",
+        "Neue Folgen melden (Windows-App); Reiter, die nicht passen, unter „Mehr“."
+      ]
+    },
+    {
+      "version": "1.1.5",
+      "date": "2026-10-21",
+      "items": [
+        "Merkliste: Tags, Verlauf, Statistik, Zufallsauswahl, Folgenlängen, Discord-Status.",
+        "Merkliste mit Anytype abgleichen (Windows-App)."
+      ]
+    },
+    {
+      "version": "1.1.2",
+      "date": "2026-10-20",
+      "items": [
+        "Merkliste als eigener Reiter: Serien und Staffeln als Poster, Teile, Export und Import.",
+        "Staffel und Folge im Herunterladen als ein Wähler."
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-10-19",
+      "items": [
+        "Herunterladen: gemerkte Links, Staffel und Folge wechseln, Sprachfassung wählen."
+      ]
+    },
+    {
+      "version": "1.0.22",
+      "date": "2026-10-16",
+      "items": [
+        "Projektdateien (.sondra) speichern und laden, rückgängig und wiederholen.",
+        "Herunterladen: HLS-Streams zusammensetzen, Spotify, Einstellungen für Dateitypen."
+      ]
+    },
+    {
+      "version": "1.0.19",
+      "date": "2026-10-14",
+      "items": [
+        "Ton und Zerschneiden als Studio; Pads und Pattern als ein Rack.",
+        "Umwandeln liefert verlässlich eine Datei."
+      ]
+    },
+    {
+      "version": "1.0.15",
+      "date": "2026-10-12",
+      "items": [
+        "Warteschlange beim Herunterladen, mehrere Links auf einmal, Netzwerkadapter wählbar.",
+        "Visualizer, Equalizer-Vorlagen und Tempo-Messung im Player."
+      ]
+    },
+    {
+      "version": "1.0.13",
+      "date": "2026-10-01",
+      "items": [
+        "Neues Werkzeug „Abspielen“: Videos und Musik ansehen, auch grosse Filme und fremde Formate.",
+        "Frischere Farben; Windows-App für Arm-Rechner."
+      ]
+    },
+    {
+      "version": "1.0.12",
+      "date": "2026-09-24",
+      "items": [
+        "Bildschirm aufnehmen, Stimme und Musik mischen, Klicks entfernen.",
+        "Sondra im Microsoft Store."
+      ]
+    },
+    {
+      "version": "1.0.8",
+      "date": "2026-09-23",
+      "items": [
+        "Die Windows-App aktualisiert sich selbst."
+      ]
+    },
+    {
+      "version": "1.0.3",
+      "date": "2026-09-23",
+      "items": [
+        "Beat bauen im Step-Sequencer, Mikrofon-Werkzeug, viele neue Schritte im Ton- und Video-Editor."
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-09-11",
+      "items": [
+        "Erste Fassung: Ton, Video und Bilder bearbeiten, umwandeln, Spuren trennen, Lautstärke, Tonart — alles auf dem eigenen Gerät."
+      ]
+    }
+  ]
+}

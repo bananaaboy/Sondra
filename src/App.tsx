@@ -9,6 +9,7 @@ import { useKeptSession } from './hooks/useKeptSession'
 import { useNewEpisodes } from './hooks/useNewEpisodes'
 import { usePanelRoute } from './hooks/usePanelRoute'
 import { useTheme } from './hooks/useTheme'
+import { WhatsNewDialog, WhatsNewLine } from './components/WhatsNew'
 
 export default function App() {
   const { choice, resolved, setChoice } = useTheme()
@@ -22,12 +23,14 @@ export default function App() {
     <ErrorBoundary>
       <div className="flex min-h-dvh flex-col bg-canvas">
         <Header themeChoice={choice} onThemeChange={setChoice} />
+        <WhatsNewLine />
         <main className="flex-1">
           <Dashboard theme={resolved} />
         </main>
         <Footer />
         <CommandPalette />
         <ShortcutHelp />
+        <WhatsNewDialog />
       </div>
     </ErrorBoundary>
   )
