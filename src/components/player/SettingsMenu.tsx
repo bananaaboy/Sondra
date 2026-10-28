@@ -114,7 +114,7 @@ function Check({ on }: { on: boolean }) {
   )
 }
 
-const ROW = 'press flex w-full items-center gap-[12px] px-[16px] py-[10px] text-left text-small outline-none transition-colors duration-[var(--dur-fast)] hover:bg-stage-line/60 focus-visible:bg-stage-line/60 disabled:opacity-40'
+const ROW = 'press flex w-full min-h-[44px] sm:min-h-0 items-center gap-[12px] px-[16px] py-[10px] text-left text-small outline-none transition-colors duration-[var(--dur-fast)] hover:bg-stage-line/60 focus-visible:bg-stage-line/60 disabled:opacity-40'
 
 function MainRow({ label, value, onClick, hidden = false }: { label: string; value: string; onClick: () => void; hidden?: boolean }) {
   if (hidden) return null
@@ -421,24 +421,47 @@ export function SettingsMenu({
         : 'Anhalten am Ende'
 
   return (
-    <div
-      ref={box}
-      role="menu"
-      aria-label="Einstellungen"
-      className={`pop flex flex-col overflow-hidden rounded-card bg-stage text-stage-ink ring-1 ring-inset ring-stage-line ${
-        placement === 'over'
-          ? 'absolute bottom-[68px] right-[12px] z-30 max-h-[min(460px,calc(100%-84px))] w-[320px] max-w-[calc(100%-24px)] shadow-[0_18px_50px_-12px_rgb(0_0_0/0.7)]'
-          : 'relative w-full sm:ml-auto sm:w-[360px]'
-      }`}
-    >
-      {page !== 'main' ? (
-        <button type="button" onClick={() => setPage('main')} className={`${ROW} border-b border-stage-line/60 font-semibold`}>
-          <Chevron back />
-          <span>{TITLES[page]}</span>
-        </button>
-      ) : null}
+    <>
+      {/* Mobile backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] sm:hidden"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        ref={box}
+        role="menu"
+        aria-label="Einstellungen"
+        className={`pop flex flex-col overflow-hidden bg-stage text-stage-ink ${
+          placement === 'over'
+            ? 'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-50 max-sm:max-h-[82vh] max-sm:w-full max-sm:rounded-t-[20px] max-sm:rounded-b-none max-sm:border-t max-sm:border-line max-sm:shadow-2xl sm:absolute sm:bottom-[68px] sm:right-[12px] sm:z-30 sm:max-h-[min(460px,calc(100%-84px))] sm:w-[340px] sm:max-w-[calc(100%-24px)] sm:rounded-card sm:ring-1 sm:ring-inset sm:ring-stage-line sm:shadow-[0_18px_50px_-12px_rgb(0_0_0/0.7)]'
+            : 'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-50 max-sm:max-h-[82vh] max-sm:w-full max-sm:rounded-t-[20px] max-sm:rounded-b-none max-sm:border-t max-sm:border-line max-sm:shadow-2xl sm:relative sm:w-full sm:ml-auto sm:w-[360px] sm:rounded-card sm:ring-1 sm:ring-inset sm:ring-stage-line'
+        }`}
+      >
+        {/* Mobile handle & title header */}
+        <div className="flex sm:hidden items-center justify-between border-b border-stage-line/50 px-[16px] py-[10px]">
+          <span className="text-small font-semibold text-stage-ink">{page === 'main' ? 'Einstellungen' : TITLES[page]}</span>
+          <button
+            type="button"
+            aria-label="Schliessen"
+            onClick={onClose}
+            className="press grid h-[32px] w-[32px] place-items-center rounded-pill text-stage-muted hover:bg-white/10 hover:text-stage-ink"
+          >
+            <svg viewBox="0 0 16 16" className="h-[14px] w-[14px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="3" x2="13" y2="13" />
+              <line x1="13" y1="3" x2="3" y2="13" />
+            </svg>
+          </button>
+        </div>
 
-      <div className="min-h-0 overflow-y-auto overscroll-contain py-[4px]">
+        {page !== 'main' ? (
+          <button type="button" onClick={() => setPage('main')} className={`${ROW} border-b border-stage-line/60 font-semibold`}>
+            <Chevron back />
+            <span>Zurück zu Einstellungen</span>
+          </button>
+        ) : null}
+
+        <div className="min-h-0 overflow-y-auto overscroll-contain py-[4px] pb-[calc(12px+env(safe-area-inset-bottom,0px))]">
         {page === 'main' ? (
           <>
             <MainRow label="Qualität" value={qualityValue} onClick={() => open('quality')} hidden={kind !== 'video'} />
@@ -802,5 +825,6 @@ export function SettingsMenu({
         ) : null}
       </div>
     </div>
+    </>
   )
 }

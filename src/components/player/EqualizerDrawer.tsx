@@ -84,16 +84,23 @@ export function EqualizerDrawer({
   const isFlat = matchesPreset(gains, EQUALIZER_PRESETS['Flat'])
 
   return (
-    <div
-      ref={box}
-      role="region"
-      aria-label="Parametrischer 5-Band Equalizer & Master Limiter"
-      className={`pop flex flex-col overflow-hidden rounded-card bg-stage text-stage-ink ring-1 ring-inset ring-stage-line ${
-        placement === 'over'
-          ? 'absolute bottom-[68px] right-[12px] z-30 w-[410px] max-w-[calc(100%-24px)] shadow-[0_18px_50px_-12px_rgb(0_0_0/0.7)]'
-          : 'relative w-full sm:ml-auto sm:w-[410px]'
-      }`}
-    >
+    <>
+      {/* Mobile backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px] sm:hidden"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        ref={box}
+        role="region"
+        aria-label="Parametrischer 5-Band Equalizer & Master Limiter"
+        className={`pop flex flex-col overflow-hidden bg-stage text-stage-ink ${
+          placement === 'over'
+            ? 'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-50 max-sm:max-h-[85vh] max-sm:w-full max-sm:rounded-t-[20px] max-sm:rounded-b-none max-sm:border-t max-sm:border-line max-sm:shadow-2xl sm:absolute sm:bottom-[68px] sm:right-[12px] sm:z-30 sm:w-[410px] sm:max-w-[calc(100%-24px)] sm:rounded-card sm:ring-1 sm:ring-inset sm:ring-stage-line sm:shadow-[0_18px_50px_-12px_rgb(0_0_0/0.7)]'
+            : 'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-50 max-sm:max-h-[85vh] max-sm:w-full max-sm:rounded-t-[20px] max-sm:rounded-b-none max-sm:border-t max-sm:border-line max-sm:shadow-2xl sm:relative sm:w-full sm:ml-auto sm:w-[410px] sm:rounded-card sm:ring-1 sm:ring-inset sm:ring-stage-line'
+        }`}
+      >
       {/* Drawer Header */}
       <div className="flex items-center justify-between gap-[8px] border-b border-stage-line/60 px-[16px] py-[10px]">
         <div className="flex min-w-0 items-center gap-[8px]">
@@ -303,5 +310,6 @@ export function EqualizerDrawer({
         </button>
       </div>
     </div>
+    </>
   )
 }
