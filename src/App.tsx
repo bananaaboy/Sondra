@@ -1,5 +1,8 @@
+import { useEffect } from 'react'
+
 import { CommandPalette } from './components/CommandPalette'
 import { Dashboard } from './components/Dashboard'
+import { DeviceInbox } from './components/DeviceSend'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Footer, Header } from './components/AppShell'
@@ -10,6 +13,7 @@ import { useNewEpisodes } from './hooks/useNewEpisodes'
 import { usePanelRoute } from './hooks/usePanelRoute'
 import { useTheme } from './hooks/useTheme'
 import { WhatsNewDialog, WhatsNewLine } from './components/WhatsNew'
+import { initDevices } from './lib/devices'
 
 export default function App() {
   const { choice, resolved, setChoice } = useTheme()
@@ -18,6 +22,7 @@ export default function App() {
   useKeptSession()
   usePanelRoute()
   useNewEpisodes()
+  useEffect(() => initDevices(), [])
 
   return (
     <ErrorBoundary>
@@ -31,6 +36,7 @@ export default function App() {
         <CommandPalette />
         <ShortcutHelp />
         <WhatsNewDialog />
+        <DeviceInbox />
       </div>
     </ErrorBoundary>
   )

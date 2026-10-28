@@ -775,6 +775,50 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   wird, hakt `MerklisteTick` ab wie sonst, und die Runde trägt es nach
   Drive. Getestet mit `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1`, sonst
   erreichen die Anfragen des Workers in Playwright die Nachbildung nicht.
+- **Geräte** (`#geraete`, `DevicesPanel.tsx`, `lib/devices.ts`,
+  `lib/deviceIdentity.ts`, `lib/deviceTransfer.ts`; 28.10.2026, Wunsch:
+  „verschiedene Geräte verbinden und seamless Daten tauschen“, dazu: „die
+  Geräte, wo registriert sind, unique und nicht überschreibbar von anderen
+  Geräten“): Geräte desselben Google-Kontos finden sich über Drive, die
+  Dateien gehen direkt (WebRTC-Datenkanal, DTLS). Opt-in über „Dieses
+  Gerät verbinden“ (`sondra:geraete:an`). **Eindeutig und nicht
+  überschreibbar:** jedes Gerät erzeugt beim ersten Verbinden ein
+  ECDSA-P-256-Paar, der private Schlüssel ist nicht auslesbar
+  (`extractable: false`) und liegt in IndexedDB `sondra-geraet`; die
+  Kennung ist der SHA-256 des öffentlichen Schlüssels (20 Zeichen
+  Crockford-Base32) — wählen kann man sie nicht, nur verdienen. Jeder
+  Eintrag in `Sondra/Geräte/Gerät-<Kennung>.json` ist signiert; Drive kennt
+  innerhalb eines Kontos keine feineren Rechte, also gilt: was nicht
+  sauber signiert ist oder dessen Kennung nicht zum Schlüssel passt, wird
+  von allen ignoriert (`checkRecord`, `pickDevices`), und der Besitzer
+  schreibt seinen Eintrag in der nächsten Runde neu und löscht Kopien unter
+  seiner Kennung. Jedes Gerät schreibt nur seine eigene Datei. Namen sind
+  eindeutig (`uniqueName`: „Laptop 2“); wer einen Namen später nahm als
+  ein anderes Gerät (`created`), benennt sich selbst um, nie das andere.
+  **Post:** `Sondra/Geräte/Post`, je Nachricht eine Datei mit
+  `appProperties` `sondraAn`/`sondraVon`, signiert, höchstens 15 Min. alt,
+  nur einmal (`openMessage`); gelesen alle 4 s (im Hintergrund 15 s), der
+  Empfänger löscht jede an ihn. Liste alle 30 s, eigener Eintrag alle
+  2 Min. („offen“ = in den letzten 3 Min. gesehen). **Ablauf:** Angebot
+  mit SDP und Dateiliste → das andere Gerät fragt („Annehmen“/„Ablehnen“,
+  auch als schwebende Karte auf jeder Seite, `DeviceInbox`) → Antwort →
+  Datenkanal. Protokoll in `deviceTransfer.ts` (64-KB-Stücke, der
+  Empfänger bestätigt alle 4 MB, der Sender ist höchstens 16 MB voraus —
+  sonst hielte ein langsames Telefon den Film im Speicher). **Kein
+  STUN-Server** („kein Anbieter fest verdrahtet“): direkt geht es im
+  selben Netz; sonst „Kein direkter Weg“ und — erst auf Klick, auf
+  `panel-cool` gesagt — über Drive (`Sondra/Geräte/Übergabe`, nach dem
+  Empfang gelöscht; geholt wird nur, was die Notiz `sondraUebergabe` genau
+  dieser Übertragung trägt). **Ablage:** Android-App über `openSave`
+  (save-begin/chunk/end in 1-MB-Stücken nach Downloads/Sondra), Chromium
+  in einen beim ersten Mal gewählten Ordner (`showDirectoryPicker`, Handle
+  in IndexedDB), sonst über `saveBytes`. „An Gerät“ steht neben jedem „In
+  Drive“ (`DeviceSendButton` in `DriveSaveButton`). `npm run
+  verify:devices` (Kennung, Fälschung, Wiederholung, Namen, Flusskontrolle,
+  Abbruch); zwei Geräte samt nachgebautem Drive wurden mit Playwright
+  durchgespielt (direkt, über Drive, beide Richtungen, Manipulation).
+  **Ein IndexedDB-Fehler in `idb` wird zur Ablehnung:** ein Wert, der sich
+  nicht speichern lässt, warf im Callback, und das Annehmen hing für immer.
 - **Android-App** (`android/`, Wunsch vom 22.10.2026: „eine Android-App,
   die über Google Drive läuft statt Anytype“; am 23.10.: „es soll wirklich
   wie eine App sein, nicht Webapp“): eine eigene App um die Website, Paket

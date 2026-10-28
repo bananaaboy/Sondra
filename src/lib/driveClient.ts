@@ -275,7 +275,15 @@ export function createDriveClient({
   }
 
   /** Up to five megabytes: metadata and content in one request. */
-  async function simple(parentId: string, name: string, data: Blob, mime: string, existing: DriveFile | null, signal?: AbortSignal) {
+  async function simple(
+    parentId: string,
+    name: string,
+    data: Blob,
+    mime: string,
+    existing: DriveFile | null,
+    signal?: AbortSignal,
+    extra: Record<string, unknown> = {},
+  ) {
     if (existing) {
       return asFile(
         await json(`${endpoints.upload}/files/${encodeURIComponent(existing.id)}?uploadType=media&fields=${FILE_FIELDS}`, {
@@ -287,7 +295,7 @@ export function createDriveClient({
       )
     }
     const boundary = `sondra${Math.random().toString(36).slice(2)}`
-    const meta = JSON.stringify({ name, parents: [parentId], mimeType: mime })
+    const meta = JSON.stringify({ name, parents: [parentId], mimeType: mime, ...extra })
     const body = new Blob([
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`,
       data,
@@ -304,7 +312,15 @@ export function createDriveClient({
   }
 
   /** Above five megabytes: a resumable upload, piece by piece, picked up again after a dropped connection. */
-  async function resumable(parentId: string, name: string, data: Blob, mime: string, existing: DriveFile | null, options: PutOptions) {
+  async function resumable(
+    parentId: string,
+    name: string,
+    data: Blob,
+    mime: string,
+    existing: DriveFile | null,
+    options: Pick<PutOptions, 'onProgress' | 'signal'>,
+    extra: Record<string, unknown> = {},
+  ) {
     const size = data.size
     const opened = await call(
       existing
@@ -317,7 +333,7 @@ export function createDriveClient({
           'X-Upload-Content-Type': mime,
           'X-Upload-Content-Length': String(size),
         },
-        body: JSON.stringify(existing ? {} : { name, parents: [parentId], mimeType: mime }),
+        body: JSON.stringify(existing ? {} : { name, parents: [parentId], mimeType: mime, ...extra }),
         signal: options.signal,
       },
     )
@@ -374,6 +390,43 @@ export function createDriveClient({
         options.onProgress?.(offset, size)
       }
     }
+  }
+
+  /**
+   * A folder by its path below „Sondra“, made where it is missing:
+   * [„Serien“, „Frieren“, „Staffel 1“]. One that is there is used, also
+   * when another device made it.
+   */
+  const foldersAt = new Map<string, string>()
+  async function folderAt(path: string[]): Promise<string> {
+    const cached = foldersAt.get(path.join('/'))
+    if (cached) return cached
+    const id = await walk(path)
+    foldersAt.set(path.join('/'), id)
+    return id
+  }
+  async function walk(path: string[]): Promise<string> {
+    let parentId = await folder('root')
+    for (const name of path) {
+      const found = await json<{ files?: Record<string, unknown>[] }>(
+        `${endpoints.api}/files?${query({
+          q: `name = ${quote(name)} and mimeType = '${FOLDER_TYPE}' and ${quote(parentId)} in parents and trashed = false`,
+          fields: 'files(id,name)',
+          spaces: 'drive',
+          pageSize: '10',
+        })}`,
+      )
+      parentId = found.files?.[0]?.id
+        ? String(found.files[0].id)
+        : (
+            await json<{ id: string }>(`${endpoints.api}/files?fields=id`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+              body: JSON.stringify({ name, mimeType: FOLDER_TYPE, parents: [parentId] }),
+            })
+          ).id
+    }
+    return parentId
   }
 
   return {
@@ -456,34 +509,7 @@ export function createDriveClient({
       return { files, dirs: dirs.sort(), truncated }
     },
 
-    /**
-     * A folder by its path below „Sondra“, made where it is missing:
-     * [„Serien“, „Frieren“, „Staffel 1“]. One that is there is used, also
-     * when another device made it.
-     */
-    async folderAt(path: string[]): Promise<string> {
-      let parentId = await folder('root')
-      for (const name of path) {
-        const found = await json<{ files?: Record<string, unknown>[] }>(
-          `${endpoints.api}/files?${query({
-            q: `name = ${quote(name)} and mimeType = '${FOLDER_TYPE}' and ${quote(parentId)} in parents and trashed = false`,
-            fields: 'files(id,name)',
-            spaces: 'drive',
-            pageSize: '10',
-          })}`,
-        )
-        parentId = found.files?.[0]?.id
-          ? String(found.files[0].id)
-          : (
-              await json<{ id: string }>(`${endpoints.api}/files?fields=id`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-                body: JSON.stringify({ name, mimeType: FOLDER_TYPE, parents: [parentId] }),
-              })
-            ).id
-      }
-      return parentId
-    },
+    folderAt,
 
     /** Moves a file into another folder, with Sondra's notes on it. */
     async move(id: string, { to, from, appProperties }: { to: string; from?: string; appProperties?: Record<string, string> }): Promise<DriveFile> {
@@ -566,6 +592,78 @@ export function createDriveClient({
         at += part.byteLength
       }
       return whole
+    },
+
+    /**
+     * Files anywhere Sondra can see that match a query on its notes,
+     * `appProperties has { key='sondraAn' and value='…' }`, oldest first.
+     */
+    async search(q: string, signal?: AbortSignal): Promise<DriveFile[]> {
+      const found = await json<{ files?: Record<string, unknown>[] }>(
+        `${endpoints.api}/files?${query({
+          q: `${q} and mimeType != '${FOLDER_TYPE}' and trashed = false`,
+          fields: `files(${FILE_FIELDS},appProperties,createdTime)`,
+          orderBy: 'createdTime',
+          spaces: 'drive',
+          pageSize: '200',
+        })}`,
+        { signal },
+      )
+      return (found.files ?? []).map(asFile)
+    },
+
+    /** A new file in a folder below „Sondra“, with Sondra's notes on it. Never replaces one. */
+    async create(
+      path: string[],
+      name: string,
+      data: Blob,
+      options: { mime?: string; appProperties?: Record<string, string>; onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal } = {},
+    ): Promise<DriveFile> {
+      const mime = options.mime || data.type || 'application/octet-stream'
+      const extra = options.appProperties ? { appProperties: options.appProperties } : {}
+      const put = async () => {
+        const parentId = path.length ? await folderAt(path) : await folder('root')
+        options.onProgress?.(0, data.size)
+        return data.size <= SIMPLE_LIMIT
+          ? await simple(parentId, name, data, mime, null, options.signal, extra)
+          : await resumable(parentId, name, data, mime, null, options, extra)
+      }
+      let file: DriveFile
+      try {
+        file = await put()
+      } catch (error) {
+        // The folder remembered from earlier was deleted meanwhile: find or make it anew.
+        if (!(error instanceof DriveError) || error.code !== 'missing' || !path.length) throw error
+        foldersAt.delete(path.join('/'))
+        file = await put()
+      }
+      options.onProgress?.(data.size, data.size)
+      return file
+    },
+
+    /** New content for a file Sondra made; its name, folder and notes stay. */
+    async rewrite(id: string, data: Blob, mime = 'application/json'): Promise<DriveFile> {
+      return asFile(
+        await json(`${endpoints.upload}/files/${encodeURIComponent(id)}?uploadType=media&fields=${FILE_FIELDS},appProperties`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': mime },
+          body: data,
+        }),
+      )
+    },
+
+    /** Deletes a file for good; one that is gone already is fine. */
+    async remove(id: string): Promise<void> {
+      try {
+        await call(`${endpoints.api}/files/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      } catch (error) {
+        if (!(error instanceof DriveError) || error.code !== 'missing') throw error
+      }
+    },
+
+    /** A file's content as a stream, for something too large to hold. */
+    async open(id: string, signal?: AbortSignal): Promise<Response> {
+      return call(`${endpoints.api}/files/${encodeURIComponent(id)}?alt=media`, { signal })
     },
 
     async account(): Promise<{ name: string; email: string }> {
