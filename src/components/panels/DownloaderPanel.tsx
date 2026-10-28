@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { APP_BRIDGE, IN_DESKTOP_APP } from '../../lib/desktop'
+import { ANDROID_BRIDGE } from '../../lib/android'
 import { sendStreamToPlayer } from '../../lib/player'
 import { sendAppNotification } from '../../lib/notifications'
 import {
@@ -1723,7 +1724,8 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
     signal: AbortSignal,
     subFolder?: string,
   ): Promise<{ savedPath: string; bytesWritten: number; name: string; ext: string; mime: string } | null> => {
-    if (!IN_DESKTOP_APP) return null
+    const isAndroid = Boolean(ANDROID_BRIDGE?.downloadDirect)
+    if (!IN_DESKTOP_APP && !isAndroid) return null
     if (filePrefsRef.current.directToDisk === false) return null
     const delivery = deliveryOf(filePrefsRef.current.deliveryMode, useDrive.getState().configured)
     if (delivery !== 'save_only') return null
@@ -1734,6 +1736,30 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
     if (isHlsStream(stream) || (!stream.directUrl && !stream.token)) return null
 
     const targetName = filenameFor(res, stream, { mode: stealthModeRef.current })
+
+    // On Android: Native Direct-to-Disk background download via Downloader.java (0 MB RAM)
+    if (isAndroid && ANDROID_BRIDGE?.downloadDirect && stream.directUrl) {
+      try {
+        const result = await ANDROID_BRIDGE.downloadDirect({
+          url: stream.directUrl,
+          filename: targetName,
+          mime: stream.mime,
+          subFolder,
+        })
+        if (!result?.ok || !result.savedPath) return null
+        return {
+          savedPath: result.savedPath,
+          bytesWritten: result.bytesWritten ?? stream.bytes ?? 0,
+          name: targetName,
+          ext: stream.ext,
+          mime: stream.mime,
+        }
+      } catch {
+        return null
+      }
+    }
+
+    if (!IN_DESKTOP_APP) return null
     const response = await fetch('/api/direct-save', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

@@ -100,6 +100,13 @@ export interface AndroidBridge {
   onOpenedFiles: (callback: () => void) => () => void
   /** Into Downloads/Sondra; resolves with where it went. */
   save: (blob: Blob, name: string, mime: string) => Promise<string>
+  /** Direct-to-Disk background streaming download (0 MB RAM) */
+  downloadDirect: (options: {
+    url: string
+    filename: string
+    mime?: string
+    subFolder?: string
+  }) => Promise<{ ok: boolean; savedPath?: string; bytesWritten?: number; error?: string }>
   /** Auto-updater methods */
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
@@ -143,6 +150,8 @@ export const ANDROID_BRIDGE: AndroidBridge | null = port
         if (!ended.ok) throw new Error(String(ended.error ?? 'nicht gespeichert'))
         return String(ended.where ?? '')
       },
+      downloadDirect: (options) =>
+        ask<{ ok: boolean; savedPath?: string; bytesWritten?: number; error?: string }>('direct-download', options),
       updateState: () => ask<UpdateState>('update-state'),
       checkForUpdates: () => ask<UpdateState>('update-check'),
       downloadUpdate: () => ask<UpdateState>('update-download'),

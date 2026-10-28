@@ -51,6 +51,7 @@ final class Bridge {
 
     private final MainActivity activity;
     private final Saver saver;
+    private final Downloader downloader;
     private Updater updater;
     private final Handler main = new Handler(Looper.getMainLooper());
     /** The sign-in is open in the browser. */
@@ -65,6 +66,7 @@ final class Bridge {
     Bridge(MainActivity activity) {
         this.activity = activity;
         this.saver = new Saver(activity);
+        this.downloader = new Downloader(activity);
         // What the app's own sign-in kept before it went the website's way.
         activity.deleteSharedPreferences("drive");
     }
@@ -124,6 +126,18 @@ final class Bridge {
                 break;
             case "save-abort":
                 saver.abort(message.optInt("handle"));
+                break;
+            case "direct-download":
+                downloader.downloadDirect(
+                        message.optString("url"),
+                        message.optString("filename"),
+                        message.optString("mime"),
+                        message.optString("subFolder"),
+                        result -> answer(reply, id, result));
+                break;
+            case "direct-download-abort":
+                downloader.abort(message.optInt("taskId"));
+                answer(reply, id, new JSONObject().put("ok", true));
                 break;
             case "theme":
                 activity.setPageDark(message.optBoolean("dark"));

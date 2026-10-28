@@ -674,6 +674,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   /** Smart-prefetched next episode from the Merkliste once playback reaches 75%. */
   const lastTapRef = useRef<{ time: number; x: number }>({ time: 0, x: 0 })
   const touchHandledRef = useRef(false)
+  const [dismissedIntroId, setDismissedIntroId] = useState<string | null>(null)
   const [prefetchedNext, setPrefetchedNext] = useState<{
     key: string
     label: string
@@ -1319,6 +1320,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
     setFailed(false)
     setResume(null)
     setMenuOpen(false)
+    setDismissedIntroId(null)
     lastSaved.current = 0
     wasPlaying.current = true
   }, [currentId])
@@ -3157,21 +3159,41 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
             {settings.skipOpening &&
             isVideo &&
             !menuOpen &&
+            dismissedIntroId !== current.id &&
             // Heard: exactly while it plays, as often as it is reached. Not
             // heard: the first minutes, once, by the length set.
             (introSpan
               ? time >= introSpan.start - 1 && time < introSpan.end - 2
               : !introFinding && openingDone !== current.id && openingOffered(time, duration, opening)) ? (
-              <button
-                type="button"
-                onClick={skipOpening}
-                className={`pop absolute right-[12px] z-30 flex items-baseline gap-[8px] rounded-nav bg-stage/90 px-[14px] py-[9px] text-small font-semibold text-stage-ink ring-1 ring-inset ring-white/15 hover:bg-stage sm:right-[16px] ${
+              <div
+                className={`pop absolute right-[12px] z-30 flex items-center overflow-hidden rounded-nav bg-stage/95 shadow-lg ring-1 ring-inset ring-white/15 sm:right-[16px] ${
                   controlsShown ? 'bottom-[92px]' : 'bottom-[20px]'
                 }`}
               >
-                Vorspann überspringen
-                <span className="value font-normal text-stage-muted">{minutesSeconds(introSpan ? Math.max(0, introSpan.end - time) : opening)}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={skipOpening}
+                  className="press flex items-baseline gap-[8px] px-[14px] py-[9px] text-small font-semibold text-stage-ink hover:bg-white/10"
+                >
+                  Vorspann überspringen
+                  <span className="value font-normal text-stage-muted">{minutesSeconds(introSpan ? Math.max(0, introSpan.end - time) : opening)}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Vorspann-Button für diese Folge ausblenden"
+                  title="Für diese Folge ausblenden"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDismissedIntroId(current.id)
+                  }}
+                  className="press flex h-[36px] w-[32px] items-center justify-center border-l border-white/15 text-stage-muted hover:bg-white/10 hover:text-stage-ink"
+                >
+                  <svg viewBox="0 0 16 16" className="h-[13px] w-[13px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="3" y1="3" x2="13" y2="13" />
+                    <line x1="13" y1="3" x2="3" y2="13" />
+                  </svg>
+                </button>
+              </div>
             ) : settings.skipOpening && isVideo && !menuOpen && index < items.length - 1 && nextOffered(time, duration) ? (
               <button
                 type="button"
