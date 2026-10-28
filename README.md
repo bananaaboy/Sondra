@@ -3,8 +3,10 @@
 Ein Medienstudio im Browser, das nichts hochlädt. Der Server liefert HTML,
 JavaScript und WebAssembly aus — danach rechnet ausschliesslich der Rechner des
 Besuchers. Live unter [sondra.lizge.ch](https://www.sondra.lizge.ch), als Windows-App im
-[Microsoft Store](https://apps.microsoft.com/detail/9P0JXR5GNSMG) oder über die
-[Releases](https://github.com/bananaaboy/Sondra/releases/latest).
+[Microsoft Store](https://apps.microsoft.com/detail/9P0JXR5GNSMG), als Windows- und
+Android-App über die [Releases](https://github.com/bananaaboy/Sondra/releases/latest).
+Was in jeder Version dazukam, steht unter „Was ist neu“ (ein Klick auf die
+Versionsnummer) und in [`src/changelog.json`](src/changelog.json).
 
 Vite 7 · React 19 · TypeScript · Tailwind v4 · zustand · SQLite 3 · FFmpeg als
 WebAssembly und nativ mit GPU-Beschleunigung.
@@ -18,8 +20,9 @@ der Navigationsleiste:
 | Werkzeug | Adresse | |
 |---|---|---|
 | **Ordner** | `#ordner` | Lokale Ordner oder Google Drive durchsuchen; Kachel- und Listenansicht, direkte Seiten-Vorschau mit Live-Player, Weiterschauen der Merkliste und Duplikate-Finder |
-| **Herunterladen** | `#herunterladen` | Videos und Musik von Adressen holen; Hintergrund-Downloads mit Floating-Minibar, Zero-RAM Direct-to-Disk, Sofort-Abspielen, Wake-Lock und Fertigstellungs-Gong |
+| **Herunterladen** | `#herunterladen` | Videos und Musik von Adressen holen; Hintergrund-Downloads mit Floating-Minibar, Zero-RAM Direct-to-Disk, Sofort-Abspielen, Wake-Lock und Fertigstellungs-Gong; in der Android-App mit yt-dlp auf dem Telefon in voller Auflösung |
 | **Merkliste** | `#merkliste` | Serien und Filme verfolgen; Staffeln, Folgen, Rechner „Bis wohin?“, Ziel-Planung, AniList/MAL-Sync, Anytype- und Google-Drive-Abgleich |
+| **Geräte** | `#geraete` | Dateien direkt zwischen den eigenen Geräten (Handy, Laptop, Rechner): gefunden über das Google-Konto, übertragen per WebRTC, das andere Gerät fragt vorher; „An Gerät“ neben jedem „In Drive“ |
 | **Umwandeln** | `#umwandeln` | Ton und Video in andere Formate; die Ziele richten sich nach der Quelle, Vorlagen für WhatsApp, Instagram Reels oder Hörbücher, Stapel als ZIP |
 | **Ton** | `#ton` | Schneiden an der Wellenform, Kopieren/Einfügen/Verdoppeln, Stille einfügen, Zoom (auch mit dem Mausrad) und Schleife; Filter, KI-Sprachverbesserung & Rauschentfernung, Echo, Hall, Pegel, Blenden, Tonhöhe und Tempo — live vorhören |
 | **Video** | `#video` | Schneiden an der Zeitleiste, Ausschnitt, Drehen; GPU-beschleunigte Konvertierung (NVENC/AMF/QSV), Bildfilter (Helligkeit, Kontrast, Sättigung, Looks, schärfen, entrauschen, stabilisieren), Blenden, Lautstärke und Lautheit, Tempo, rückwärts, Ton herauslösen, GIF |
@@ -60,7 +63,7 @@ npm run build            # statisches Bündel in dist/
 npm run preview          # dist/ mit den Isolations-Headern ausliefern
 npm run dev:service      # dist/ zusammen mit den Funktionen unter api/
 npm run typecheck        # TypeScript ohne Emit
-npm run verify           # Alle Verifikationstests (Lautheit, Tempo, Harmonie, Ordner, Merkliste, Drive etc.)
+npm run verify           # Alle Verifikationstests (Versionsverlauf, Geräte, Lautheit, Tempo, Harmonie, Ordner, Merkliste, Drive …)
 ```
 
 `vite preview` kennt `api/` nicht. Wer den Downloader lokal durchspielen will,
@@ -77,13 +80,21 @@ baut einmal und startet `npm run dev:service`.
    lagern transaktionssicher in einer vollwertigen lokalen SQLite-3-Binärdatenbank
    (`sondra.db`). Tab schliessen ohne Speichern ist die Löschtaste.
 3. **Die Ausnahme steht, wo sie passiert.** Das Herunterladen ist das einzige
-   Werkzeug, das das Gerät verlässt: die eingegebene Adresse geht an den
-   kleinen Dienst dieser Seite, der die Datei durchreicht. Eigene Dateien sieht
-   er nie, gespeichert wird dort nichts. Das sagt eine fette Warnung oben im
-   Downloader, bevor jemand tippt.
+   Werkzeug, das einen Dienst dieser Seite braucht: die eingegebene Adresse
+   geht an ihn, er reicht die Datei durch. Eigene Dateien sieht er nie,
+   gespeichert wird dort nichts. Das sagt eine fette Warnung oben im
+   Downloader, bevor jemand tippt. Google Drive bekommt nur, was jemand
+   ausdrücklich dorthin schickt, in das eigene Konto.
 4. **Das Mikrofon bleibt im Tab.** Es wird nur auf Knopfdruck geöffnet, roh
    (ohne die Filter des Browsers), und beim Verlassen des Werkzeugs wieder
    freigegeben. Aufnahmen liegen nur im Arbeitsspeicher.
+5. **Von Gerät zu Gerät ohne Umweg.** Unter „Geräte“ gehen Dateien direkt
+   und verschlüsselt (WebRTC) auf ein anderes eigenes Gerät, kein Server von
+   Sondra und kein fremder Vermittler liegt dazwischen. Im Drive liegt dafür
+   nur je Gerät ein kleiner, signierter Eintrag und für Sekunden die
+   Nachricht, die eine Übertragung anbietet. Über Drive selbst geht eine
+   Datei nur auf Klick, wenn kein direkter Weg da ist, und wird danach dort
+   gelöscht.
 
 Die Datenschutzerklärung steht in
 [`public/datenschutz.html`](public/datenschutz.html), live unter
@@ -208,6 +219,34 @@ Eine private Mediathek zum Verfolgen von Anime, Serien und Filmen:
 - **In Staffel einordnen:** Ausgewählte Episoden werden per Knopfdruck
   automatisch in saubere Ordnerstrukturen (`Serien/<Titel>/Staffel n`) abgelegt.
 
+## Geräte (`#geraete`)
+
+Dateien zwischen den eigenen Geräten: vom Laptop aufs Handy, vom Handy auf den
+Rechner, auch zwischen Website, Windows-App und Android-App.
+
+- **Verbinden:** auf jedem Gerät unter „Geräte“ einmal „Dieses Gerät
+  verbinden“, mit demselben Google-Konto. Die Geräte erscheinen dort mit
+  „offen“ oder „zuletzt vor …“.
+- **Senden:** „Dateien senden“ beim Gerät, Dateien darauf ziehen, oder „An
+  Gerät“ neben jedem „In Drive“ unter einem Ergebnis. Das andere Gerät fragt,
+  bevor es annimmt — auf jeder Seite, als schwebende Karte.
+- **Ankommen:** in der Android-App in Downloads/Sondra, im Browser und in der
+  Windows-App in einem Ordner, der beim ersten Mal gewählt wird (Firefox und
+  Safari: als gewöhnlicher Download).
+- **Eindeutig und nicht überschreibbar:** jedes Gerät erzeugt ein eigenes
+  Schlüsselpaar (ECDSA P-256), dessen geheimer Teil das Gerät nie verlässt.
+  Die Kennung ist der SHA-256 des öffentlichen Schlüssels, jeder Eintrag in
+  `Sondra/Geräte` und jede Nachricht ist signiert. Ein veränderter oder
+  gefälschter Eintrag wird von allen ignoriert, sein Besitzer schreibt ihn
+  neu. Namen bleiben eindeutig („Laptop 2“).
+- **Der Weg:** Drive vermittelt nur, wer wer ist, und den Handschlag; die
+  Datei geht direkt per WebRTC-Datenkanal. Einen STUN-Dienst gibt es nicht
+  (kein fremder Anbieter fest verdrahtet), direkt geht es deshalb im selben
+  Netz. Sonst bietet Sondra Google Drive an — erst auf Klick, und danach
+  wird die Datei dort gelöscht.
+- **Prüfung:** `npm run verify:devices` (Kennungen, Signaturen, Fälschungen,
+  Wiederholungen, Namen, Flusskontrolle, Abbruch).
+
 ## Der Player (`#abspielen`)
 
 Ein hochperformanter Media Player für Filme und Musik:
@@ -292,8 +331,9 @@ In `#mikrofon` und `#ton` steht eine lokale KI-Sprachverbesserung bereit:
 Sondra gibt es auch als installierte Windows-App: eigenes Fenster statt
 Browser, Eintrag im Startmenü, Verknüpfung auf dem Desktop, Deinstallation
 über die Windows-Einstellungen. Oben auf der Website öffnet „App
-herunterladen" die Auswahl zwischen
-[Microsoft Store](https://apps.microsoft.com/detail/9P0JXR5GNSMG) und Setup. Das Setup installiert für alle Benutzer
+herunterladen" das Fenster „Sondra als App“ mit zwei Reitern: Windows (Setup,
+[Microsoft Store](https://apps.microsoft.com/detail/9P0JXR5GNSMG), Website als App,
+Portabel) und Android (die APK) — der des eigenen Geräts zuerst. Das Setup installiert für alle Benutzer
 unter „Programme“ (eine UAC-Abfrage), läuft mit `/S` ganz ohne Oberfläche,
 wie es der Microsoft Store verlangt, und zeigt sonst vorher `LIZENZ.txt`. In
 „Apps & Features“ steht es als „Sondra Studio“ von „Lizge“ — beides
@@ -324,7 +364,10 @@ die Website ausliefert, ohne Bereitstellungsdateien, Service Worker und
   herunter (eine Adresse oder das neueste Release), installiert sie und klickt
   sie ebenso durch.
   Von Hand gestartet, veröffentlicht die Option `release` ein Release
-  `v<Version>` mit `Sondra-Setup.exe`. Für den Microsoft Store baut jeder Lauf
+  `v<Version>` mit `Sondra-Setup.exe`. Vorher gehört die Version in
+  `package.json` und `desktop/package.json` und oben in `src/changelog.json`
+  ein Eintrag dazu: er wird zu den Notizen des Releases („Neu in …“), und
+  `verify:changelog` bricht ab, wenn er fehlt. Für den Microsoft Store baut jeder Lauf
   das MSIX-Paket (Artefakt „Sondra-Store-MSIX“); eine Setup-Adresse ohne
   Umleitung braucht es dafür nicht mehr.
 
@@ -339,8 +382,18 @@ Website, im Browser geöffnet), Speichern nach Downloads/Sondra, „Teilen“ un
 „Öffnen mit“ für Videos und Ton (sie laufen dann im Player), die
 Dateiauswahl (auch ganze Ordner), Vollbild-Video und das Mikrofon. Eigenes
 Symbol, Startbild, Kurzbefehle (Merkliste, Ordner, Abspielen); sie startet
-auf der Merkliste. Statt Anytype (das nur die Windows-App erreicht) bringt
+auf der Startseite. Statt Anytype (das nur die Windows-App erreicht) bringt
 Google Drive die Merkliste und den Ordner mit den anderen Geräten zusammen.
+
+- **Herunterladen wie in der Windows-App:** youtubedl-android bringt yt-dlp
+  samt Python und FFmpeg mit; Portal-Adressen lädt das Telefon selbst, in
+  voller Auflösung oder nur als Ton, mit Fortschritt in der Benachrichtigung,
+  nach Downloads/Sondra. Deshalb ist die APK rund 150 MB gross.
+- **Updates:** die App fragt GitHub nach der neuesten Fassung, lädt die APK
+  selbst (Fortschritt in der Kopfzeile) und öffnet danach Androids
+  Installer. Apps vor 1.1.20 kennen das nicht; ihnen bietet die Seite die
+  APK über den Browser an.
+- **Geräte:** Dateien von anderen Geräten landen in Downloads/Sondra.
 
 - **GitHub Actions → „Android":** baut APK und AAB, prüft sie und legt sie
   als Artefakt „Sondra-Android“ ab. Jeder Lauf startet die App auf einem
@@ -537,6 +590,11 @@ als App installieren.
   Seite ansieht, holt unter 400 KB.
 - **Das Windows-Setup ist nicht signiert.** SmartScreen fragt nach, und Smart
   App Control kann es blockieren.
+- **Geräte direkt nur im selben Netz.** Ohne STUN-Dienst findet sich zwischen
+  zwei Netzen kein direkter Weg; dann geht es auf Klick über Google Drive. Das
+  empfangende Gerät muss Sondra offen haben, ein Angebot wartet 15 Minuten.
+- **Die Android-APK ist rund 150 MB gross** — Python und FFmpeg für yt-dlp,
+  für drei Prozessorarten.
 
 ## Projektstruktur
 
@@ -550,12 +608,14 @@ scripts/             Build der App, lokaler Dienst, Prüf- und Screenshot-Skript
 src/
   components/        Kopfzeile, Startseite, Reiter, Sitzungsmenü, Wellenform
     editor/          gemeinsame Editor-Hülle und Zuschnitt
-    panels/          die 16 Werkzeug-Panels, Step-Sequencer und Piano-Roll
+    panels/          die 17 Werkzeug-Panels, Step-Sequencer und Piano-Roll
     player/          Media Player, Mini-Bar, Abspiellisten-Steuerung
     ui/              Grundbausteine (Button, Notice, Reveal …)
   hooks/             Routing, Dateiaufnahme, Dekodierung, Theme, Undo/Redo
   lib/               Rechenverfahren, SQLite-3-Engine, Hintergrund-Downloads,
-                     KI-Sprachverbesserung, AniList, Projektdateien (.sondra)
+                     KI-Sprachverbesserung, AniList, Projektdateien (.sondra),
+                     Geräte (Identität, Register, Übertragung)
+  changelog.json     „Was ist neu“ und die Release-Notizen, je Version
   state/             Sitzung (zustand, nur im Speicher)
   styles/            Tokens und Theme
 .github/workflows/   Build, Test und Release der Windows- und Android-App
@@ -570,7 +630,8 @@ Sondra steht unter der [MIT-Lizenz](LICENSE).
 
 Mitgelieferte und eingebundene Fremdprojekte behalten ihre eigenen Lizenzen:
 FFmpeg (über ffmpeg.wasm, GPL), ONNX Runtime Web, Wavesurfer.js, Tone.js,
-youtubei.js, React und zustand. Die Schriften Public Sans, Courier Prime und
+youtubei.js, React und zustand. Die Android-App enthält youtubedl-android
+(GPL-3.0) mit yt-dlp (Unlicense), Python (PSF-Lizenz) und FFmpeg (GPL). Die Schriften Public Sans, Courier Prime und
 Cormorant Garamond stehen unter der SIL Open Font License und liegen als
 Teilmengen im Repository. Die Windows-App legt die Lizenztexte unter
 `lizenzen/` in ihren Installationsordner.

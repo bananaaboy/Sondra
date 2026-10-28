@@ -499,9 +499,11 @@ mit den Karten verschwunden, die sie anhob.
 ### Shadow Vocabulary
 
 - **Lift** (`--shadow-lift`, Utility `elevate-lift`): das Einzige, was schwebt.
-  Im gebauten Stand trägt es drei Dinge: das Popover mit dem Lokalitäts-
-  Versprechen, die Ablage-Überlagerung beim Ziehen einer Datei, und das Bild
-  beziehungsweise Video, das auf der Bühne gezeigt wird. Im dunklen Thema ist
+  Im gebauten Stand trägt es: die Popover und Menüs (auch „An Gerät“), die
+  Ablage-Überlagerung beim Ziehen einer Datei, das Bild beziehungsweise Video
+  auf der Bühne, die kleinen Leisten unten (Player läuft weiter, Download
+  läuft) und die Karte der Geräte (`DeviceInbox`), die auf jeder Seite fragt,
+  ob angenommen wird, was ein anderes Gerät schickt. Im dunklen Thema ist
   es eine eigene, deutlich tiefere Umrechnung, keine Anpassung des hellen.
 
 ### Named Rules
@@ -655,25 +657,26 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   über Beschriftung in Label-Grösse; ein Werkzeug mit geänderter Einstellung
   trägt ein 5-px-Quadrat oben rechts. Unter 1024 px waagerecht.
 - **Kopfzeile:** klebt oben, schwerere Linie nach unten, Grund `canvas/95` mit
-  Unschärfe. Links die Wortmarke, rechts drei ruhige Bedienelemente: das
-  Dateimenü, „App herunterladen" — als einziges getönt — und ein einzelner
-  Themenknopf, der durch System, Hell und Dunkel schaltet. Der Download-Knopf
-  öffnet ein natives `<dialog>` (Schattenstufe, Hintergrund abgedunkelt, bis
-  1120 px breit) — bewusst die lauteste Stelle der Seite, auf Wunsch
-  „breiter und extravaganter". Oben die Wortmarke gross: Zeichen, „Sondra" in
-  der Wortmarken-Schrift, „Studio" in Public Sans. Darunter drei Kacheln:
-  Setup (.exe) und Microsoft Store als die zwei grossen nebeneinander (bis
-  420 px hoch, Name in 48 px, die Dateiart als Courier-Pille, die Handlung am
-  Fuss), darunter zwei schmale nebeneinander: „Website als App" und
-  „Portabel" (eine .exe ohne Installation, Daten im Ordner „Sondra-Daten“
-  daneben); der Windows-Hinweis gilt für Setup und portable Datei. Die
-  Setup-Kachel ist die eine Fläche in Tinte: die fünf Balken des Zeichens
-  liegen riesig und blass darauf, gleiten beim Öffnen nacheinander herein
-  (`bar-in`, der eine Bewegungsmoment des Fensters) und rücken bei Hover
-  nach links. Die Store-Kachel steht auf `panel-strong` und ist der
-  Link zum Store-Eintrag; ohne Eintrag sagt sie „Bald verfügbar" als Pille
-  auf der Fläche, nicht erst bei Hover. Unter `md`
-  stehen die Kacheln untereinander. In der App entfällt er. Den Lokal-Chip („Lokal · 1
+  Unschärfe. Links die Wortmarke mit der Versionsmarke (ein Klick öffnet „Was
+  ist neu“), rechts ruhige Bedienelemente: das Dateimenü, „Drive“, „App
+  herunterladen" — als einziges getönt — und ein einzelner Themenknopf, der
+  durch System, Hell und Dunkel schaltet. Der Download-Knopf öffnet das
+  `<dialog>` „Sondra als App“ (Schattenstufe, Hintergrund abgedunkelt, bis
+  860 px breit; neu am 28.10.2026 — vorher sechs Kacheln in vier Grössen
+  unter einer 76-px-Wortmarke, Android als Fussnotenzeile, „nicht gut
+  designed“). Kopf: Zeichen, „Sondra als App“, ein Satz. Darunter zwei
+  Reiter als Pillen, **Windows** und **Android**, der des Geräts in der Hand
+  zuerst. Je Reiter ein Hauptweg in Tinte (`MainWay`: Symbol, die Fakten in
+  Courier, Name in `heading-sm`, ein Satz, die Handlung am Fuss; die fünf
+  Balken des Zeichens liegen gross und blass darauf, gleiten beim Öffnen
+  nacheinander herein — `bar-in`, der eine Bewegungsmoment — und rücken bei
+  Hover nach links) und daneben der zweitbeste Weg auf `panel-soft`: der
+  Microsoft Store (ohne Eintrag „Bald verfügbar“ auf der Fläche) bzw. „So
+  installieren Sie sie“ in drei, vier Schritten. Darunter bei Windows die
+  übrigen Wege als Zeilen zwischen Linien (`OtherWay`): Website als App,
+  Portabel, Setup für den anderen Prozessor; zuletzt der Satz zur fehlenden
+  Signatur. Unter `md` steht alles untereinander. In der App entfällt der
+  Knopf; dort sitzt an seiner Stelle das Update. Den Lokal-Chip („Lokal · 1
   Ausnahme") gibt es seit dem 23.9. nicht mehr; die Ausnahme sagt der
   Downloader selbst, laut.
   „Installieren" und der Suchknopf sind auf Wunsch entfallen; gesucht wird auf
@@ -687,6 +690,16 @@ Es gibt **keine Karte**. `Card` ist der Name der Komponente, nicht ihrer Form:
   Datei". Die Werkzeuge sind dadurch einspaltig oder behalten nur ihre eigene
   Seitenspalte. Das Menü trägt die eine Schattenstufe; auf dem Handy liegt es
   fest unter der Kopfzeile über die volle Breite.
+- **Geräte** (`DevicesPanel.tsx`, 28.10.2026): eine Spalte bis 760 px, drei
+  Abschnitte unter `SectionHead` (mit `max-w-none`, sonst endet die Linie
+  nach 34em): „Dieses Gerät“ (Symbol auf Tinte, Name, die Kennung als
+  Courier-Kürzel, „Umbenennen“, „Trennen“), „Ihre anderen Geräte“ als
+  getönte Zeilen (`panel-soft`, Symbol auf `raised`, „● offen“ oder „zuletzt
+  vor …“, „Dateien senden“ in Tinte; eine Datei darüber gezogen färbt die
+  Zeile `panel-mid` mit Ring in Tinte) und „Übertragungen“ als Zeilen
+  zwischen Linien. Der Weg über Drive steht als ein Satz auf `panel-cool` —
+  dieselbe Aussage wie überall: hier verlässt etwas das Gerät. Der Rest der
+  Seite ist ruhig; ausser „Dateien senden“ und „Annehmen“ trägt nichts Tinte.
 - **Ton und Zerschneiden sind Studios** (14.10.2026, auf „mega cluttered,
   soll studiomässig sein"). Vorher vier Racks und eine Seitenspalte
   untereinander, jedes mit allen Reglern offen. Jetzt:

@@ -1,15 +1,38 @@
-# Handoff: Sondra (v1.1.19)
+# Handoff: Sondra (v1.1.21)
 
 **Datum:** 28. Oktober 2026  
 **Projektpfad:** `C:\Users\lizge.navajeetharan\Documents\PGM\Sondra`  
-**Aktueller Branch:** `main` (auf Commit `bfa6b01` synchronisiert mit `origin/main`)  
-**Status:** Alle 15 Verifikationstests (`npm run verify`) und `npm run typecheck` bestanden (Code 0).
+**Aktueller Branch:** `main` (Release-Commit von v1.1.21, synchronisiert mit `origin/main`)  
+**Status:** Alle 17 Verifikationstests (`npm run verify`) und `npm run typecheck` bestanden (Code 0).
 
 ---
 
-## 1. Übersicht der Meilensteine bis Version 1.1.19
+## 1. Übersicht der Meilensteine bis Version 1.1.21
 
-### Version 1.1.19 (Zuletzt hinzugefügt):
+### Version 1.1.21 (Zuletzt hinzugefügt):
+- **Geräte (`#geraete`, `src/lib/devices.ts`, `deviceIdentity.ts`, `deviceTransfer.ts`):**
+  Geräte desselben Google-Kontos finden sich über Drive (`Sondra/Geräte`) und tauschen
+  Dateien direkt per WebRTC; das andere Gerät fragt vorher (`DeviceInbox`, auf jeder Seite).
+  „An Gerät“ neben jedem „In Drive“.
+- **Eindeutig und nicht überschreibbar:** ECDSA-P-256-Schlüssel je Gerät (privat nicht
+  auslesbar), Kennung = SHA-256 des öffentlichen Schlüssels, Einträge und Nachrichten
+  signiert; Fälschungen werden ignoriert, der Besitzer stellt seinen Eintrag wieder her.
+  Namen eindeutig („Laptop 2“).
+- **Kein STUN:** direkt im selben Netz; sonst auf Klick über Drive (`Sondra/Geräte/Übergabe`,
+  danach gelöscht).
+- **Android-Update in der App:** die Kopfzeile ruft den eingebauten Updater (APK laden,
+  Installer öffnen) statt eines Links in den Browser; Apps vor 1.1.20 bekommen die APK über
+  den Browser angeboten.
+- **Prüfung:** `npm run verify:devices`.
+
+### Version 1.1.20:
+- **„Was ist neu“ (`src/changelog.json`, `WhatsNew.tsx`):** Verlauf auf allen Plattformen und
+  als Release-Notizen; `verify:changelog` verlangt den Eintrag der Version.
+- **Android:** yt-dlp auf dem Telefon (`YtDlp.java`, youtubedl-android 0.18.1), Start auf der
+  Startseite, nichts vorgeholt auf Telefonen (`FETCH_LIGHT`).
+- **Startseite neu**, Fenster **„App herunterladen“** neu (Reiter Windows/Android).
+
+### Version 1.1.19:
 - **Hintergrund-Downloads (`src/lib/backgroundDownload.ts`):**
   Downloads brechen beim Wechseln auf andere Werkzeuge (Player, Video-Editor, Merkliste)
   nicht mehr ab. `DownloaderPanel` bleibt im Hintergrund gemountet.
@@ -64,7 +87,7 @@ public/                   Assets, Schriften, Icons, Service Worker (Isolations-H
 scripts/                  Build-, Test-, Screenshot- und Verifikationsskripte
 src/
   components/
-    panels/               Die 16 Werkzeuge (Ordner, Downloader, Merkliste, Converter, Player etc.)
+    panels/               Die 17 Werkzeuge (Ordner, Downloader, Merkliste, Geräte, Converter, Player etc.)
     editor/               EditorShell, SoundStage, CropOverlay
     player/               MediaPlayer, SettingsMenu, Visualizer, Scrubbing
     ui/                   Design-System Primitives (Button, Notice, Card, Select, Toggle)
@@ -77,6 +100,10 @@ src/
     folder.ts             Ordner-Scan, Sortierung, Selektion, Duplikaterkennung
     player.ts             Player-Steuerung, DirectStream, Smart Prefetch
     googleDrive.ts        Google Drive Client & Scopes
+    devices.ts            Geräte: Register in Drive, Post, WebRTC, Ablage beim Empfänger
+    deviceIdentity.ts     Schlüssel, Kennung, Signaturen, eindeutige Namen
+    deviceTransfer.ts     Übertragungsprotokoll mit Flusskontrolle
+  changelog.json          „Was ist neu“ und Release-Notizen
   state/
     store.ts              Zustand Sitzungsspeicher (Memory-only für Medien)
 ```
@@ -88,7 +115,7 @@ src/
 Befehle zur Überprüfung des gesamten Systems:
 
 ```powershell
-npm run verify           # Führt alle 15 Verifikationstests aus (Lautheit, Tempo, Harmonie, Ordner, Merkliste etc.)
+npm run verify           # Führt alle 17 Verifikationstests aus (Versionsverlauf, Geräte, Lautheit, Tempo, Harmonie, Ordner, Merkliste etc.)
 npm run typecheck        # Strikte TypeScript-Prüfung ohne Emit
 npm run build            # Produktions-Build (Vite + TypeScript)
 npm run build:desktop    # Erstellt Windows Setup (.exe), Portabel und Store MSIX

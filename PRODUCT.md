@@ -2,7 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-Sondra — Produktvermerk (Fassung v1.1.19, Stand Oktober 2026). Was eine spätere
+Sondra — Produktvermerk (Fassung v1.1.21, Stand 28. Oktober 2026). Was eine spätere
 Sitzung wissen muss und weder dem Code noch der Git-Historie ansieht. Kurz
 halten: mehr Text ist nicht automatisch mehr Kontext. Veraltete Angaben sind
 schlimmer als fehlende.
@@ -61,7 +61,9 @@ Zwei Dinge zusammen, die ein Nachbarprodukt nicht beide ehrlich behaupten kann:
    Ein Umwandel-Dienst, der Dateien entgegennimmt, kann das nicht kopieren,
    weil er sie entgegennimmt. Die eine Tür nach draussen gehört dem Nutzer:
    sein eigenes Google Drive oder Anytype, verbunden auf seinen Wunsch,
-   beschickt nur mit dem, was er freigibt.
+   beschickt nur mit dem, was er freigibt — und seine eigenen anderen
+   Geräte, zu denen eine Datei unter „Geräte“ direkt geht (WebRTC), ohne
+   Server dazwischen.
 2. **Die eine Ausnahme wird benannt, bevor jemand tippt.** „Herunterladen"
    geht über einen Dienst, und das steht als Erstes im Feld, nicht in einer
    Fussnote. Ein Werkzeug, das Lokalität behauptet und still eine Netzanfrage
@@ -87,6 +89,16 @@ und KI-Sprachverbesserung direkt auf der Aufnahme.
 - **Hintergrund-Downloads (v1.1.19):** Downloads brechen beim Verlassen des
   Reiters nicht ab; die Floating Minibar unten rechts hält Fortschritt und
   Steuerung permanent verfügbar. Screen Wake Lock verhindert den Standby.
+- **Geräte (v1.1.21):** Geräte desselben Google-Kontos finden sich über
+  einen signierten Eintrag je Gerät in Drive und tauschen Dateien direkt.
+  Kennung = Hash des eigenen Schlüssels, Einträge und Nachrichten signiert:
+  kein Gerät kann ein anderes überschreiben oder nachahmen (ausdrücklich so
+  gewünscht). Das andere Gerät fragt vor dem Annehmen.
+- **Android-App:** startet auf der Startseite, lädt Portale mit yt-dlp auf
+  dem Telefon (die APK ist dadurch rund 150 MB) und aktualisiert sich über
+  GitHub-Releases selbst, mit Androids Installer.
+- **„Was ist neu“** (`src/changelog.json`): ein Verlauf für Website, beide
+  Apps und die Release-Notizen; ohne Eintrag für die Version kein Release.
 - **Offline nutzbar** nach einem Besuch: der Service Worker hält jedes
   Werkzeug der aktuellen Fassung (`offline.json`), nur das Herunterladen
   braucht das Netz und sagt das.
@@ -110,7 +122,8 @@ Gesetzt, nicht verhandelbar, mehrere davon ausdrücklich so gewünscht:
   Anmeldung des Nutzers und nutzen ausschließlich minimale Scopes (`drive.file`).
 - **Nur rechtlich zulässige Downloads. Keine DRM-Umgehung.**
 - **Keine fremde Instanz fest verdrahtet.** Ein Anbieter wird über die
-  Umgebungsvariable hinterlegt oder gar nicht.
+  Umgebungsvariable hinterlegt oder gar nicht. Das gilt auch für Geräte:
+  kein STUN- oder TURN-Dienst, deshalb direkt nur im selben Netz.
 - **Kein kompletter Rewrite.** Schrittweise erweitern, keine vorhandene
   Funktion ohne guten Grund entfernen, Breaking Changes vermeiden.
 - Oberflächentexte **Deutsch**, Codekommentare **Englisch**. Keine i18n-Struktur
@@ -128,6 +141,8 @@ Nachgemessen im September und Oktober 2026, nicht vermutet:
 | dasselbe Video, zwei Orte | scheitert verschieden: aus dem Rechenzentrum an der Bot-Prüfung (`youtube.signin`), von einer Wohn-IP an SABR (`youtube.sabr`). Lokal hosten hebt die Grenze also nicht auf, es verschiebt sie |
 | voller Umfang | nur über einen hinterlegten Anbieter oder yt-dlp / Desktop-App auf dem eigenen Gerät |
 | Freigabe-Link einer Cloud | geht, sofern die Adresse die Datei selbst liefert |
+| Geräte ohne STUN | direkt nur im selben Netz; zwischen zwei Netzen auf Klick über Google Drive |
+| Android-APK mit yt-dlp | rund 151 MB (Python und FFmpeg für arm64, armv7 und x86_64) |
 
 ## Brand Commitments
 
