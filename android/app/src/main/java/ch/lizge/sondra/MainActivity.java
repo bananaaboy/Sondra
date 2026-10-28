@@ -237,9 +237,6 @@ public class MainActivity extends ComponentActivity {
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
-        // Enhanced WebSettings for fluid playback & accurate mobile layout
-        settings.setUseWideViewPort(true);
-        settings.setLoadWithOverviewMode(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         // The page can tell it runs here; the bridge is what it really relies on.
         settings.setUserAgentString(settings.getUserAgentString() + " SondraAndroid/" + version());
@@ -425,9 +422,6 @@ public class MainActivity extends ComponentActivity {
         root.removeView(fullscreen);
         fullscreen = null;
 
-        // Restore underlying WebView visibility
-        if (webView != null) webView.setVisibility(View.VISIBLE);
-
         // Restore previous screen orientation
         setRequestedOrientation(previousOrientation);
 
@@ -533,9 +527,6 @@ public class MainActivity extends ComponentActivity {
             fullscreen = view;
             fullscreenDone = callback;
             view.setBackgroundColor(Color.BLACK);
-
-            // Hide webView to eliminate dual-GPU compositor layers
-            if (webView != null) webView.setVisibility(View.GONE);
 
             root.addView(view, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));

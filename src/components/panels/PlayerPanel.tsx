@@ -417,6 +417,7 @@ function SeekBar({
       aria-valuetext={`${clock(time)} von ${clock(duration)}`}
       aria-disabled={!known}
       onPointerDown={(event) => {
+        event.stopPropagation()
         const point = at(event)
         if (!point) return
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -425,7 +426,9 @@ function SeekBar({
       }}
       onPointerMove={(event) => {
         const point = at(event)
-        setHover(point)
+        if (event.pointerType === 'mouse') {
+          setHover(point)
+        }
         if (dragging && point) onSeek(point.seconds)
       }}
       onPointerUp={() => setDragging(false)}
@@ -670,6 +673,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [marks, setMarks] = useState<PlayerMark[]>([])
   /** Smart-prefetched next episode from the Merkliste once playback reaches 75%. */
   const lastTapRef = useRef<{ time: number; x: number }>({ time: 0, x: 0 })
+  const touchHandledRef = useRef(false)
   const [prefetchedNext, setPrefetchedNext] = useState<{
     key: string
     label: string
@@ -1945,12 +1949,12 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const wake = () => {
     setIdle(false)
     if (idleTimer.current) window.clearTimeout(idleTimer.current)
-    idleTimer.current = window.setTimeout(() => setIdle(true), 2600)
+    idleTimer.current = window.setTimeout(() => setIdle(true), 4000)
   }
   useEffect(() => () => {
     if (idleTimer.current) window.clearTimeout(idleTimer.current)
   }, [])
-  const controlsShown = !isVideo || !playing || !idle || menuOpen
+  const controlsShown = !isVideo || !playing || !idle || menuOpen || eqDrawerOpen
   const immersive = fullscreen || fill
 
   // How tall the frame is, for where the settings menu fits: over the picture
@@ -2715,7 +2719,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
             ref={frameRef}
             onPointerMove={wake}
             onPointerDown={wake}
-            onPointerLeave={() => playing && setIdle(true)}
+            onPointerLeave={(event) => { if (event.pointerType === 'mouse' && playing) setIdle(true) }}
             onDragOver={(event) => {
               if (!event.dataTransfer.types.includes('Files')) return
               event.preventDefault()
@@ -2737,9 +2741,11 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 immersive ? 'h-full' : isVideo ? (theater ? 'aspect-video max-h-[82vh] w-full' : 'aspect-video max-h-[72vh] w-full') : 'h-[300px] sm:h-[360px]'
               }`}
               onTouchEnd={(event) => {
-                if (event.target !== event.currentTarget && event.target !== videoRef.current) return
                 const touch = event.changedTouches[0]
                 if (!touch) return
+                touchHandledRef.current = true
+                setTimeout(() => { touchHandledRef.current = false }, 400)
+
                 const now = Date.now()
                 const box = event.currentTarget.getBoundingClientRect()
                 const relX = (touch.clientX - box.left) / box.width
@@ -2757,6 +2763,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     toggle()
                   }
                   lastTapRef.current = { time: 0, x: 0 }
+                  wake()
                 } else {
                   lastTapRef.current = { time: now, x: touch.clientX }
                   if (controlsShown) setIdle(true)
@@ -2764,26 +2771,22 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 }
               }}
               onClick={(event) => {
+                if (touchHandledRef.current) return
                 if (event.target !== event.currentTarget && event.target !== videoRef.current) return
-                const isTouch = (event.nativeEvent as PointerEvent).pointerType === 'touch' || ('ontouchstart' in window && window.innerWidth < 768)
-                if (isTouch) {
-                  if (controlsShown) setIdle(true)
-                  else wake()
-                  return
-                }
                 toggle()
+                wake()
               }}
               onDoubleClick={(event) => {
                 if (event.target === videoRef.current && isVideo) toggleFullscreen()
               }}
             >
               <video
-                key={current?.id ?? 'leer'}
+                key={useHlsJs ? `hls:${current?.id ?? 'leer'}` : (sourceUrl ?? 'leer')}
                 ref={videoRef}
+                src={useHlsJs ? undefined : (sourceUrl ?? undefined)}
                 preload="auto"
                 playsInline
                 {...{ 'webkit-playsinline': 'true' }}
-                crossOrigin={current?.directUrl || current?.remote ? 'anonymous' : undefined}
                 autoPlay={wasPlaying.current}
                 className={isVideo ? 'h-full w-full' : 'hidden'}
                 style={{ objectFit: settings.fit, filter: pictureFilter, transform: settings.mirror ? 'scaleX(-1)' : undefined }}
@@ -3203,6 +3206,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
             {/* The controls, over a scrim that keeps them legible on any picture. */}
             <div
+              onPointerDown={(e) => { e.stopPropagation(); wake(); }}
+              onTouchEnd={(e) => { e.stopPropagation(); wake(); }}
               className={`absolute inset-x-0 bottom-0 z-20 flex flex-col gap-[2px] px-[10px] pb-[6px] pt-[56px] transition-opacity duration-[var(--dur-base)] sm:px-[16px] sm:pb-[10px] ${
                 controlsShown ? 'opacity-100' : 'pointer-events-none opacity-0'
               }`}
