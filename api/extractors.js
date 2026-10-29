@@ -12,6 +12,7 @@ import https from 'node:https'
 import os from 'node:os'
 import { Readable } from 'node:stream'
 import tls from 'node:tls'
+import { resolveYoutube } from './_shared.js'
 
 /* -------------------------------------------------------------------------- */
 /* Constants & URL matchers                                                   */
@@ -31,6 +32,46 @@ const STREAMTAPE_HOSTS = /(?:^|\.)(?:streamtape\.(?:com|net|to|xyz)|streamta\.pe
 const VIDOZA_HOSTS = /(?:^|\.)(?:vidoza\.(?:net|org|co))$/i
 const BILIBILI_HOSTS = /(?:^|\.)(?:bilibili\.com|b23\.tv)$/i
 const SPOTIFY_HOSTS = /(?:^|\.)(?:spotify\.com|spoti\.fi|spotify\.link)$/i
+const MVFLIX_HOSTS = /(?:^|\.)mvflix\.net$/i
+const NINEANIME_HOSTS = /(?:^|\.)(?:9anime\.[a-z]+|9animez\.to)$/i
+const ANIMEKAIZEN_HOSTS = /(?:^|\.)(?:animekaizen\.org|anime4u\.org)$/i
+const GOOGLEDRIVE_HOSTS = /(?:^|\.)(?:drive\.google\.com|drive\.usercontent\.google\.com)$/i
+
+export function isMvflixUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    return MVFLIX_HOSTS.test(u.hostname)
+  } catch {
+    return false
+  }
+}
+
+export function is9AnimeUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    return NINEANIME_HOSTS.test(u.hostname)
+  } catch {
+    return false
+  }
+}
+
+export function isAnimeKaizenUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    return ANIMEKAIZEN_HOSTS.test(u.hostname)
+  } catch {
+    return false
+  }
+}
+
+export function isGoogleDriveUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    return GOOGLEDRIVE_HOSTS.test(u.hostname)
+  } catch {
+    return false
+  }
+}
 
 export function isSpotifyUrl(rawUrl) {
   try {
@@ -1444,6 +1485,18 @@ export async function extractDirectMedia(rawUrl, options = {}) {
   if (isBilibiliUrl(rawUrl)) {
     return extractBilibili(rawUrl, options)
   }
+  if (isMvflixUrl(rawUrl)) {
+    return extractMvflix(rawUrl, options)
+  }
+  if (is9AnimeUrl(rawUrl)) {
+    return extract9Anime(rawUrl, options)
+  }
+  if (isAnimeKaizenUrl(rawUrl)) {
+    return extractAnimeKaizen(rawUrl, options)
+  }
+  if (isGoogleDriveUrl(rawUrl)) {
+    return extractGoogleDrive(rawUrl, options)
+  }
   return extractDirectHoster(rawUrl, options)
 }
 
@@ -1754,6 +1807,487 @@ export async function extractSpotify(rawUrl, options = {}) {
     }
   } catch {
     return null
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Google Drive Extractor                                                     */
+/* -------------------------------------------------------------------------- */
+
+export async function extractGoogleDriveFile(fileId, options = {}) {
+  const initialUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download`
+  const res = await boundedFetch(initialUrl, {
+    headers: { 'User-Agent': DEFAULT_USER_AGENT },
+    localAddress: options.localAddress,
+    redirect: 'follow',
+  })
+  const html = await res.text()
+  const cookies = res.headers.getSetCookie ? res.headers.getSetCookie() : [res.headers.get('set-cookie')].filter(Boolean)
+  const cookieHeader = cookies.map((c) => c.split(';')[0]).join('; ')
+
+  const uuidMatch = html.match(/name="uuid" value="([^"]+)"/)
+  const confirmMatch = html.match(/name="confirm" value="([^"]+)"/)
+
+  let downloadUrl = initialUrl
+  if (confirmMatch || uuidMatch) {
+    const confirm = confirmMatch ? confirmMatch[1] : 't'
+    const uuid = uuidMatch ? uuidMatch[1] : ''
+    downloadUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=${encodeURIComponent(confirm)}&uuid=${encodeURIComponent(uuid)}`
+  }
+
+  let filename = 'download.mkv'
+  let size = null
+  try {
+    const probeRes = await boundedFetch(downloadUrl, {
+      method: 'HEAD',
+      headers: {
+        'User-Agent': DEFAULT_USER_AGENT,
+        ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+      },
+      localAddress: options.localAddress,
+    })
+    const disposition = probeRes.headers.get('content-disposition')
+    if (disposition) {
+      const fnMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i) || disposition.match(/filename="([^"]+)"/i)
+      if (fnMatch) filename = decodeURIComponent(fnMatch[1])
+    }
+    const len = Number(probeRes.headers.get('content-length') || 0)
+    if (len > 0) size = len
+  } catch {}
+
+  const ext = filename.includes('.') ? filename.split('.').pop().toLowerCase() : 'mkv'
+  const isVideo = ['mkv', 'mp4', 'webm', 'mov', 'avi', 'ts'].includes(ext)
+
+  return {
+    title: filename,
+    seriesTitle: 'Google Drive',
+    author: 'Google Drive',
+    thumbnail: null,
+    streams: [
+      {
+        id: 'gdrive-stream',
+        label: `Google Drive (${size ? (size / 1024 / 1024).toFixed(0) + ' MB' : ext.toUpperCase()})`,
+        url: downloadUrl,
+        cookie: cookieHeader,
+        ext,
+        mime: ext === 'mkv' ? 'video/x-matroska' : isVideo ? 'video/mp4' : 'application/octet-stream',
+        bytes: size,
+        hasVideo: isVideo,
+        hasAudio: true,
+      },
+    ],
+  }
+}
+
+export async function extractGoogleDriveFolder(folderId, options = {}) {
+  const url = `https://drive.google.com/drive/folders/${folderId}`
+  const res = await boundedFetch(url, {
+    headers: { 'User-Agent': DEFAULT_USER_AGENT },
+    localAddress: options.localAddress,
+    redirect: 'follow',
+  })
+  if (!res.ok) throw new Error(`Google Drive Ordner nicht erreichbar (HTTP ${res.status})`)
+  const html = await res.text()
+
+  const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
+  const folderTitle = titleMatch ? titleMatch[1].replace(/\s*-\s*Google Drive.*$/i, '').trim() : 'Google Drive Ordner'
+
+  const items = []
+  const matches = [...html.matchAll(/aria-label="([^"]+\.(?:mkv|mp4|webm|avi|mov|ts|m4v))[^"]*"[^>]*ssk='5:[^:]+:([a-zA-Z0-9_-]+)-0-/gi)]
+  for (const m of matches) {
+    const rawName = m[1].replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim()
+    const id = m[2]
+    if (!items.some((it) => it.id === `gdrive-${id}`)) {
+      items.push({
+        id: `gdrive-${id}`,
+        title: rawName,
+        url: `https://drive.google.com/file/d/${id}/view`,
+        author: folderTitle,
+        thumbnail: null,
+      })
+    }
+  }
+
+  if (items.length > 0) {
+    return {
+      isPlaylist: true,
+      title: folderTitle,
+      seriesTitle: folderTitle,
+      author: 'Google Drive',
+      items,
+    }
+  }
+
+  throw new Error('Keine Mediendateien in diesem Google Drive Ordner gefunden.')
+}
+
+export async function extractGoogleDrive(rawUrl, options = {}) {
+  const u = new URL(rawUrl)
+  const folderMatch = u.pathname.match(/\/folders\/([a-zA-Z0-9_-]+)/i)
+  if (folderMatch) {
+    return extractGoogleDriveFolder(folderMatch[1], options)
+  }
+  const fileMatch =
+    u.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/i) ||
+    u.searchParams.get('id') ||
+    u.pathname.match(/\/open\/([a-zA-Z0-9_-]+)/i)
+  const fileId = typeof fileMatch === 'string' ? fileMatch : fileMatch?.[1]
+  if (fileId) {
+    return extractGoogleDriveFile(fileId, options)
+  }
+  return null
+}
+
+/* -------------------------------------------------------------------------- */
+/* AnimeKaizen Extractor                                                      */
+/* -------------------------------------------------------------------------- */
+
+export async function extractAnimeKaizen(url, options = {}) {
+  const pageRes = await boundedFetch(url, {
+    headers: {
+      'User-Agent': DEFAULT_USER_AGENT,
+      Referer: url,
+    },
+    localAddress: options.localAddress,
+    redirect: 'follow',
+  })
+  if (!pageRes.ok) throw new Error(`AnimeKaizen antwortete mit HTTP ${pageRes.status}`)
+  const html = await pageRes.text()
+
+  const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
+  const rawTitle = titleMatch ? titleMatch[1].replace(/\s*-\s*AnimeKaizen.*$/i, '').trim() : 'Anime'
+  const posterMatch =
+    html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+    html.match(/<img[^>]+class=["'][^"']*a4u-poster[^"']*["'][^>]*src=["']([^"']+)["']/i)
+  const thumbnail = posterMatch ? posterMatch[1] : null
+
+  // Find all /open/?id= download links
+  const openLinks = [...html.matchAll(/<a[^>]+href=["'](\/open\/\?id=[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
+  const allPlaylistItems = []
+
+  for (const match of openLinks) {
+    const openPath = match[1]
+    const label = match[2].replace(/<[^>]+>/g, '').trim()
+    const fullOpenUrl = new URL(openPath, url).toString()
+
+    try {
+      const openRes = await boundedFetch(fullOpenUrl, {
+        headers: {
+          'User-Agent': DEFAULT_USER_AGENT,
+          Referer: url,
+        },
+        localAddress: options.localAddress,
+      })
+      if (!openRes.ok) continue
+      const openHtml = await openRes.text()
+
+      // Extract destination URL
+      const destMatch =
+        openHtml.match(/fallback\s*=\s*["']([^"']+)["']/) ||
+        openHtml.match(/class=["']btn["'][^>]*href=["'](https?:\/\/[^"']+)["']/) ||
+        openHtml.match(/class=["']url-box["'][\s\S]*?<span>(https?:\/\/[^<]+)<\/span>/)
+
+      const destUrl = destMatch ? destMatch[1] : null
+      if (!destUrl) continue
+
+      if (isGoogleDriveUrl(destUrl)) {
+        const driveData = await extractGoogleDrive(destUrl, options)
+        if (driveData && driveData.isPlaylist && Array.isArray(driveData.items)) {
+          for (const item of driveData.items) {
+            allPlaylistItems.push({
+              ...item,
+              author: rawTitle,
+              thumbnail: thumbnail || item.thumbnail,
+            })
+          }
+        } else if (driveData && driveData.streams) {
+          allPlaylistItems.push({
+            id: `kaizen-${allPlaylistItems.length + 1}`,
+            title: label ? `${rawTitle} - ${label}` : rawTitle,
+            url: destUrl,
+            author: rawTitle,
+            thumbnail,
+          })
+        }
+      }
+    } catch {}
+  }
+
+  if (allPlaylistItems.length > 0) {
+    return {
+      isPlaylist: true,
+      title: rawTitle,
+      seriesTitle: rawTitle,
+      author: 'AnimeKaizen',
+      thumbnail,
+      items: allPlaylistItems,
+    }
+  }
+
+  throw new Error('Keine herunterladbaren Folgen auf AnimeKaizen gefunden.')
+}
+
+/* -------------------------------------------------------------------------- */
+/* 9anime Extractor                                                           */
+/* -------------------------------------------------------------------------- */
+
+export async function extract9Anime(rawUrl, options = {}) {
+  const u = new URL(rawUrl)
+  let iframeUrl = null
+  let title = 'Anime Video'
+  let thumbnail = null
+
+  if (/(?:9animez\.to)$/i.test(u.hostname) && (u.pathname.startsWith('/v/') || u.pathname.startsWith('/d/'))) {
+    iframeUrl = rawUrl
+  } else {
+    // Watch page
+    const pageRes = await boundedFetch(rawUrl, {
+      headers: {
+        'User-Agent': DEFAULT_USER_AGENT,
+        Referer: rawUrl,
+      },
+      localAddress: options.localAddress,
+      redirect: 'follow',
+    })
+    if (!pageRes.ok) throw new Error(`9anime antwortete mit HTTP ${pageRes.status}`)
+    const html = await pageRes.text()
+
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i)
+    if (titleMatch) {
+      title = titleMatch[1].replace(/\s*-\s*9anime.*$/i, '').trim()
+    }
+    const posterMatch =
+      html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+      html.match(/<img[^>]+class=["'][^"']*poster[^"']*["'][^>]*src=["']([^"']+)["']/i)
+    if (posterMatch) {
+      const rawPoster = posterMatch[1]
+      thumbnail = rawPoster.startsWith('/') ? new URL(rawPoster, rawUrl).toString() : rawPoster
+    }
+
+    const iframeMatch = html.match(/<iframe[^>]+src=["'](https?:\/\/[^"']*9animez\.[^"']+)["']/i)
+    if (iframeMatch) {
+      iframeUrl = iframeMatch[1]
+    } else {
+      const tokenMatch = html.match(/data-token=["']([A-Za-z0-9+/=]+)["']/)
+      if (tokenMatch) {
+        try {
+          const decoded = JSON.parse(Buffer.from(tokenMatch[1], 'base64').toString('utf8'))
+          if (decoded.u) iframeUrl = decoded.u
+        } catch {}
+      }
+    }
+  }
+
+  if (!iframeUrl) throw new Error('Kein Videoplayer auf 9anime gefunden.')
+
+  const slug = iframeUrl.split('/').filter(Boolean).pop()
+  const dlUrl = `https://cdn.9animez.to/d/${slug}`
+  const streams = []
+
+  try {
+    const dlRes = await boundedFetch(dlUrl, {
+      headers: {
+        'User-Agent': DEFAULT_USER_AGENT,
+        Referer: iframeUrl,
+      },
+      localAddress: options.localAddress,
+    })
+    if (dlRes.ok) {
+      const dlHtml = await dlRes.text()
+      const dlItems = [...dlHtml.matchAll(/<a[^>]+href=["'](\/stream\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
+
+      for (const item of dlItems) {
+        const streamRel = item[1]
+        const itemText = item[2]
+        const qualityMatch = itemText.match(/<strong>([^<]+)<\/strong>/i) || itemText.match(/(\d+p)/i)
+        const quality = qualityMatch ? qualityMatch[1].trim() : 'Video'
+        const streamEndpoint = new URL(streamRel, 'https://cdn.9animez.to').toString()
+
+        let finalUrl = streamEndpoint
+        try {
+          const redirectRes = await boundedFetch(streamEndpoint, {
+            headers: {
+              'User-Agent': DEFAULT_USER_AGENT,
+              Referer: dlUrl,
+            },
+            localAddress: options.localAddress,
+            redirect: 'manual',
+          })
+          const loc = redirectRes.headers.get('location')
+          if (loc) finalUrl = loc
+        } catch {}
+
+        streams.push({
+          id: `9anime-${quality.toLowerCase()}`,
+          label: `9anime (${quality})`,
+          url: finalUrl,
+          ext: 'mp4',
+          mime: 'video/mp4',
+          referer: 'https://cdn.9animez.to/',
+          hasVideo: true,
+          hasAudio: true,
+        })
+      }
+    }
+  } catch {}
+
+  // Fallback: Check iframe html for qualities
+  if (streams.length === 0) {
+    try {
+      const vRes = await boundedFetch(`https://cdn.9animez.to/v/${slug}`, {
+        headers: {
+          'User-Agent': DEFAULT_USER_AGENT,
+          Referer: rawUrl,
+        },
+        localAddress: options.localAddress,
+      })
+      if (vRes.ok) {
+        const vHtml = await vRes.text()
+        const qMatch = vHtml.match(/var\s+qualities\s*=\s*(\[[^;]+\]);/)
+        if (qMatch) {
+          const qualities = JSON.parse(qMatch[1])
+          for (const q of qualities) {
+            const streamEndpoint = new URL(q.url, 'https://cdn.9animez.to').toString()
+            let finalUrl = streamEndpoint
+            try {
+              const redirectRes = await boundedFetch(streamEndpoint, {
+                headers: {
+                  'User-Agent': DEFAULT_USER_AGENT,
+                  Referer: `https://cdn.9animez.to/v/${slug}`,
+                },
+                localAddress: options.localAddress,
+                redirect: 'manual',
+              })
+              const loc = redirectRes.headers.get('location')
+              if (loc) finalUrl = loc
+            } catch {}
+
+            streams.push({
+              id: `9anime-${(q.name || 'mp4').toLowerCase()}`,
+              label: `9anime (${q.name || 'Auto'})`,
+              url: finalUrl,
+              ext: 'mp4',
+              mime: 'video/mp4',
+              referer: 'https://cdn.9animez.to/',
+              hasVideo: true,
+              hasAudio: true,
+            })
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (streams.length > 0) {
+    return {
+      title,
+      seriesTitle: title,
+      author: '9anime',
+      thumbnail,
+      streams,
+    }
+  }
+
+  throw new Error('Kein abspielbarer Stream für 9anime gefunden.')
+}
+
+/* -------------------------------------------------------------------------- */
+/* MovieFlix Extractor                                                        */
+/* -------------------------------------------------------------------------- */
+
+export async function extractMvflix(rawUrl, options = {}) {
+  const u = new URL(rawUrl)
+  const movieMatch = u.pathname.match(/(?:\/player)?\/movie\/(\d+)(?:\/([^/?#]+))?/i)
+  const tvMatch = u.pathname.match(/(?:\/player)?\/tv\/(\d+)(?:\/(\d+))?(?:\/(\d+))?(?:\/([^/?#]+))?/i)
+
+  let id = null
+  let type = 'movie'
+  let season = 1
+  let episode = 1
+
+  if (movieMatch) {
+    id = movieMatch[1]
+    type = 'movie'
+  } else if (tvMatch) {
+    id = tvMatch[1]
+    type = 'tv'
+    season = tvMatch[2] ? parseInt(tvMatch[2], 10) : 1
+    episode = tvMatch[3] ? parseInt(tvMatch[3], 10) : 1
+  } else {
+    throw new Error('Ungültiges URL-Format für MovieFlix.')
+  }
+
+  const tmdbUrl = `https://mvflix.net/api/tmdb?endpoint=/${type}/${id}&append_to_response=videos,credits&language=en-US`
+  const metaRes = await boundedFetch(tmdbUrl, {
+    headers: { 'User-Agent': DEFAULT_USER_AGENT },
+    localAddress: options.localAddress,
+  })
+  if (!metaRes.ok) throw new Error(`MovieFlix Metadaten nicht erreichbar (HTTP ${metaRes.status})`)
+  const data = await metaRes.json()
+
+  const titleName = data.title || data.name || 'Movie'
+  const year = (data.release_date || data.first_air_date || '').slice(0, 4)
+  const fullTitle = year ? `${titleName} (${year})` : titleName
+  const thumbnail = data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : null
+  const duration = data.runtime ? data.runtime * 60 : null
+
+  const streams = []
+
+  // Resolve official YouTube trailer/teasers so users get high quality video instantly
+  const videos = (data.videos?.results || []).filter(
+    (v) => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser'),
+  )
+
+  if (videos.length > 0) {
+    const topTrailers = videos.filter((v) => v.official && v.type === 'Trailer')
+    const candidates = topTrailers.length > 0 ? topTrailers.slice(0, 2) : videos.slice(0, 2)
+    for (const v of candidates) {
+      try {
+        const yt = await resolveYoutube(v.key)
+        if (yt && Array.isArray(yt.streams)) {
+          for (const s of yt.streams) {
+            streams.push({
+              id: `trailer-${v.key}-${s.id}`,
+              label: `${v.type}: ${v.name} (${s.label || s.ext})`,
+              url: s.url || null,
+              token: s.token || null,
+              ext: s.ext || 'mp4',
+              mime: s.mime || 'video/mp4',
+              hasVideo: s.hasVideo,
+              hasAudio: s.hasAudio,
+              width: s.width,
+              height: s.height,
+            })
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // Also include CineSrc player stream entry
+  const embedUrl =
+    type === 'tv'
+      ? `https://cinesrc.st/embed/tv/${id}?s=${season}&e=${episode}`
+      : `https://cinesrc.st/embed/movie/${id}`
+
+  streams.push({
+    id: 'mvflix-cinesrc',
+    label: `MovieFlix Player (${type === 'tv' ? `S${season}E${episode}` : 'Film'})`,
+    url: embedUrl,
+    ext: 'mp4',
+    mime: 'video/mp4',
+    referer: 'https://mvflix.net/',
+    hasVideo: true,
+    hasAudio: true,
+  })
+
+  return {
+    title: type === 'tv' ? `${fullTitle} S${season}E${episode}` : fullTitle,
+    seriesTitle: fullTitle,
+    author: 'MovieFlix',
+    thumbnail,
+    duration,
+    streams,
   }
 }
 

@@ -23,6 +23,10 @@ import {
   isHosterUrl,
   isPodcastOrRssUrl,
   isSpotifyUrl,
+  isMvflixUrl,
+  is9AnimeUrl,
+  isAnimeKaizenUrl,
+  isGoogleDriveUrl,
   parsePodcastFeed,
 } from './extractors.js'
 
@@ -273,7 +277,16 @@ export default async function handler(request, response) {
     return
   }
 
-  if (isAniworldUrl(targetStr) || isHosterUrl(targetStr) || isBilibiliUrl(targetStr) || isSpotifyUrl(targetStr)) {
+  if (
+    isAniworldUrl(targetStr) ||
+    isHosterUrl(targetStr) ||
+    isBilibiliUrl(targetStr) ||
+    isSpotifyUrl(targetStr) ||
+    isMvflixUrl(targetStr) ||
+    is9AnimeUrl(targetStr) ||
+    isAnimeKaizenUrl(targetStr) ||
+    isGoogleDriveUrl(targetStr)
+  ) {
     try {
       const media = await extractDirectMedia(targetStr, {
         localAddress: body.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
@@ -329,19 +342,19 @@ export default async function handler(request, response) {
         const streams = []
         if (Array.isArray(media.streams) && media.streams.length > 0) {
           for (const s of media.streams) {
-            const safeUrl = s.url.startsWith('//') ? `https:${s.url}` : s.url
+            const safeUrl = s.url ? (s.url.startsWith('//') ? `https:${s.url}` : s.url) : null
             streams.push({
               id: s.id,
               label: s.label || `${s.provider || 'Video'} (${s.language || 'Stream'})`,
-              hasVideo: true,
-              hasAudio: true,
-              width: null,
-              height: 1080,
+              hasVideo: s.hasVideo ?? true,
+              hasAudio: s.hasAudio ?? true,
+              width: s.width ?? null,
+              height: s.height ?? 1080,
               ext: s.ext || (s.isHls ? 'mp4' : 'mp4'),
-              mime: s.isHls ? 'application/x-mpegurl' : 'video/mp4',
-              bytes: null,
+              mime: s.mime || (s.isHls ? 'application/x-mpegurl' : 'video/mp4'),
+              bytes: s.bytes ?? null,
               isHls: Boolean(s.isHls),
-              token: sign(safeUrl, { ref: s.referer, isHls: Boolean(s.isHls) }),
+              token: s.token || (safeUrl ? sign(safeUrl, { ref: s.referer, cookie: s.cookie, isHls: Boolean(s.isHls) }) : null),
             })
           }
         } else if (media.url) {
@@ -357,16 +370,26 @@ export default async function handler(request, response) {
             mime: media.isHls ? 'application/x-mpegurl' : 'video/mp4',
             bytes: null,
             isHls: Boolean(media.isHls),
-            token: sign(safeUrl, { ref: media.referer, isHls: Boolean(media.isHls) }),
+            token: sign(safeUrl, { ref: media.referer, cookie: media.cookie, isHls: Boolean(media.isHls) }),
           })
         }
 
         response.status(200).json({
-          source: isAniworldUrl(targetStr) ? 'aniworld' : 'direct',
+          source: isAniworldUrl(targetStr)
+            ? 'aniworld'
+            : isMvflixUrl(targetStr)
+              ? 'mvflix'
+              : is9AnimeUrl(targetStr)
+                ? '9anime'
+                : isAnimeKaizenUrl(targetStr)
+                  ? 'animekaizen'
+                  : isGoogleDriveUrl(targetStr)
+                    ? 'googledrive'
+                    : 'direct',
           kind: 'direct',
           title: media.title || 'Video',
           author: media.seriesTitle || target.hostname,
-          durationSeconds: null,
+          durationSeconds: media.duration || null,
           thumbnail: media.thumbnail || null,
           availableLanguages: media.availableLanguages,
           currentLanguage: media.language,

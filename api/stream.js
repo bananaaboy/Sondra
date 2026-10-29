@@ -96,6 +96,7 @@ export default async function handler(request, response) {
   if (range) headers.range = range
   const referer = claim.ref || claim.referer
   if (referer) headers.Referer = referer
+  if (claim.cookie) headers.Cookie = claim.cookie
 
   try {
     let target = await targetFor(claim)

@@ -2,6 +2,17 @@
   "_": "Was in jeder Version dazukam — für Menschen, nicht für Entwickler. Die neueste zuerst. Neue Version: oben einen Eintrag mit der Version aus package.json anlegen; der Release-Workflow bricht ab, wenn er fehlt, und nimmt ihn als Notizen des GitHub-Release.",
   "versions": [
     {
+      "version": "1.1.22",
+      "date": "2026-10-29",
+      "items": [
+        "Herunterladen: Direkte Unterstützung für MovieFlix, 9anime und AnimeKaizen mit Episoden-Playlists und Video-Streams.",
+        "Google Drive: Freigegebene Ordner und Dateien werden direkt erkannt und ohne Google-Login mit maximaler Geschwindigkeit geladen (inklusive automatischer Bestätigung bei grossen Dateien).",
+        "9anime: Direkte Video-Streams (MP4) im Player und für den Download auflösbar.",
+        "AnimeKaizen: Serien-Seiten werden als vollständige Episoden-Playlist mit Staffeln aufgelöst und lassen sich direkt herunterladen.",
+        "MovieFlix: Filminformationen, TMDB-Metadaten und offizielle Trailer direkt integriert."
+      ]
+    },
+    {
       "version": "1.1.21",
       "date": "2026-10-28",
       "items": [
