@@ -31,6 +31,10 @@ import {
   isVidozaUrl,
   isPodcastOrRssUrl,
   isSpotifyUrl,
+  isMvflixUrl,
+  is9AnimeUrl,
+  isAnimeKaizenUrl,
+  isGoogleDriveUrl,
   parsePodcastFeed,
 } from '../api/extractors.js'
 
@@ -64,6 +68,14 @@ check('URL: Vidoza', isVidozaUrl('https://vidoza.net/embed-8x7y6z5w4v.html'), tr
 check('URL: Spotify Track', isSpotifyUrl('https://open.spotify.com/track/4HCOHRCSQelz2GPX8iTamO?si=274d78f4803a4df3'), true)
 check('URL: Spotify Album', isSpotifyUrl('https://open.spotify.com/album/4m2880jivSbbyEGAKfITCa'), true)
 check('URL: Spotify Playlist', isSpotifyUrl('https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'), true)
+check('URL: Mvflix Movie Player', isMvflixUrl('https://mvflix.net/player/movie/1283515/verity'), true)
+check('URL: Mvflix TV Player', isMvflixUrl('https://mvflix.net/player/tv/1234/1/1/title'), true)
+check('URL: 9anime Watch', is9AnimeUrl('https://9anime.si/watch/uthvt6yr-episode-4'), true)
+check('URL: 9anime Player CDN', is9AnimeUrl('https://cdn.9animez.to/v/egrVaBJbm737hMK'), true)
+check('URL: AnimeKaizen Series', isAnimeKaizenUrl('https://www.animekaizen.org/the-detective-is-already-dead/'), true)
+check('URL: Anime4u Mirror', isAnimeKaizenUrl('https://anime4u.org/series/xyz'), true)
+check('URL: Google Drive Folder', isGoogleDriveUrl('https://drive.google.com/drive/folders/1G6pj8BT0OxWpm1U9Gcy_agIM1P3mb4an'), true)
+check('URL: Google Drive File', isGoogleDriveUrl('https://drive.google.com/file/d/1jxqi5Tdi1OpxW69ILpRfz8P7dpb9QgYw/view'), true)
 
 /* -------------------------------------------------------------------------- */
 /* 2. P.A.C.K.E.R Unpacker Check                                              */

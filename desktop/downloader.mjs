@@ -33,7 +33,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, isSpotifyUrl, boundedFetch, DEFAULT_USER_AGENT, detectPrimaryIpv4, isVirtualAdapterName } from '../api/extractors.js'
+import { extractDirectMedia, isAniworldUrl, isBilibiliUrl, isHosterUrl, isSpotifyUrl, isMvflixUrl, is9AnimeUrl, isAnimeKaizenUrl, isGoogleDriveUrl, boundedFetch, DEFAULT_USER_AGENT, detectPrimaryIpv4, isVirtualAdapterName } from '../api/extractors.js'
 
 export function getNetworkAdapters() {
   const nets = os.networkInterfaces()
@@ -435,7 +435,14 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
   function directMediaResponse(directMedia, bindAddr) {
     const stem = String(directMedia.title ?? 'download').replace(/[\\/:*?"<>|]/g, '-').slice(0, 120)
-    if (directMedia.previewUrl && !directMedia.url) {
+    const activeStream = directMedia.streams ? directMedia.streams.find((s) => s.url) || directMedia.streams[0] : null
+    const streamUrl = directMedia.url || activeStream?.url
+    const streamReferer = directMedia.referer || activeStream?.referer
+    const streamExt = directMedia.ext || activeStream?.ext || 'mp4'
+    const isHls = Boolean(directMedia.isHls || activeStream?.isHls)
+    const streamMime = directMedia.mime || activeStream?.mime || (isHls ? 'application/vnd.apple.mpegurl' : 'video/mp4')
+
+    if (directMedia.previewUrl && !streamUrl) {
       return {
         status: 'tunnel',
         url: remember({
@@ -451,16 +458,16 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
         filename: `${stem} (Preview).mp3`,
       }
     }
-    if (directMedia.isHls) {
+    if (isHls) {
       return {
         status: 'local-processing',
         type: 'remux',
         tunnel: [
           remember({
             bin: null,
-            url: directMedia.url,
-            referer: directMedia.referer,
-            filename: `${stem}.mp4`,
+            url: streamUrl,
+            referer: streamReferer,
+            filename: `${stem}.${streamExt}`,
             format: { format_id: 'best' },
             mime: 'application/vnd.apple.mpegurl',
             directFetch: true,
@@ -476,15 +483,15 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
       status: 'tunnel',
       url: remember({
         bin: null,
-        url: directMedia.url,
-        referer: directMedia.referer,
-        filename: `${stem}.mp4`,
+        url: streamUrl,
+        referer: streamReferer,
+        filename: `${stem}.${streamExt}`,
         format: { format_id: 'best' },
-        mime: 'video/mp4',
+        mime: streamMime,
         directFetch: true,
         bindAddress: bindAddr,
       }),
-      filename: `${stem}.mp4`,
+      filename: `${stem}.${streamExt}`,
     }
   }
 
@@ -494,7 +501,16 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
     const bindAddr = getBindAddress(body.bindAddress)
     let directMedia = null
-    if (isAniworldUrl(target) || isHosterUrl(target) || isBilibiliUrl(target) || isSpotifyUrl(target)) {
+    if (
+      isAniworldUrl(target) ||
+      isHosterUrl(target) ||
+      isBilibiliUrl(target) ||
+      isSpotifyUrl(target) ||
+      isMvflixUrl(target) ||
+      is9AnimeUrl(target) ||
+      isAnimeKaizenUrl(target) ||
+      isGoogleDriveUrl(target)
+    ) {
       try {
         directMedia = await extractDirectMedia(target, {
           localAddress: bindAddr,
@@ -515,7 +531,7 @@ export async function startDownloader({ port = 9000, dataDir, origin, log = () =
 
     // When direct extraction resolved a playable stream (AniWorld, SerienStream, VOE, FileMoon, etc.),
     // serve it directly through the local tunnel without wasting 10–25s on a redundant yt-dlp probe.
-    if (directMedia && !directMedia.isSpotifyTrack && directMedia.url) {
+    if (directMedia && !directMedia.isSpotifyTrack && (directMedia.url || (directMedia.streams && directMedia.streams.length > 0))) {
       return directMediaResponse(directMedia, bindAddr)
     }
 
