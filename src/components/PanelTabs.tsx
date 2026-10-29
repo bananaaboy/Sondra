@@ -74,6 +74,11 @@ export function PanelTabs() {
   const moreRef = useRef<HTMLButtonElement>(null)
   const [measure, setMeasure] = useState<Measure | null>(null)
   const [open, setOpen] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
+  // Where the one rule under the chosen tab stands. It glides from the tab
+  // that was chosen to the next, along the header's own rule, so a switch
+  // shows where it went; the very first placement does not glide in from 0.
+  const [rule, setRule] = useState<{ left: number; width: number; glide: boolean } | null>(null)
 
   // Measured from a hidden copy of the whole row, every label set in the
   // chosen tab's weight, so a choice never makes the row longer than planned.
@@ -99,6 +104,19 @@ export function PanelTabs() {
     PANELS.findIndex((entry) => entry.id === panel),
   )
   const { shown, rest } = useMemo(() => split(measure, activeIndex), [measure, activeIndex])
+
+  useLayoutEffect(() => {
+    const tab = listRef.current?.querySelector<HTMLElement>(`[data-panel="${panel}"]`)
+    if (!tab) return
+    // The rule sits under the label, not the padding: 12 px either side,
+    // none on the left of the first tab.
+    const inset = tab === listRef.current?.firstElementChild ? 0 : 12
+    const left = tab.offsetLeft + inset
+    const width = Math.max(0, tab.offsetWidth - inset - 12)
+    setRule((before) =>
+      before && before.left === left && before.width === width ? before : { left, width, glide: before !== null },
+    )
+  }, [panel, shown, measure])
 
   // Closes on a click anywhere else and on Escape, like every other popover.
   useEffect(() => {
@@ -147,7 +165,7 @@ export function PanelTabs() {
   return (
     <div ref={rootRef} className="relative">
       <div ref={rowRef} className="flex items-end overflow-x-clip">
-        <div role="tablist" aria-label="Werkzeuge" onKeyDown={onKeyDown} className="flex min-w-0">
+        <div ref={listRef} role="tablist" aria-label="Werkzeuge" onKeyDown={onKeyDown} className="relative flex min-w-0">
           {shown.map((entry, index) => {
             const active = entry.id === panel
             return (
@@ -162,16 +180,21 @@ export function PanelTabs() {
                 className={`${TAB} ${index === 0 ? 'pl-0' : ''} ${active ? 'font-semibold text-ink' : 'text-prose hover:text-ink'}`}
               >
                 {entry.label}
-                {/* The rule under the chosen tab lands on the header's own rule. */}
-                <span
-                  aria-hidden
-                  className={`absolute bottom-[-2px] right-[12px] h-[2px] bg-ink transition-opacity duration-[var(--dur-fast)] ${
-                    index === 0 ? 'left-0' : 'left-[12px]'
-                  } ${active ? 'opacity-100' : 'opacity-0'}`}
-                />
               </button>
             )
           })}
+          {/* The rule under the chosen tab lands on the header's own rule.
+              One element, scaled from a single pixel, so the glide is a
+              transform and never a layout. */}
+          {rule ? (
+            <span
+              aria-hidden
+              className={`pointer-events-none absolute bottom-[-2px] left-0 h-[2px] w-[1px] origin-left bg-ink ${
+                rule.glide ? 'transition-transform duration-[var(--dur-slow)] ease-[var(--ease-settle)]' : ''
+              }`}
+              style={{ transform: `translateX(${rule.left}px) scaleX(${rule.width})` }}
+            />
+          ) : null}
         </div>
 
         {rest.length > 0 ? (
@@ -197,7 +220,7 @@ export function PanelTabs() {
           onKeyDown={onListKey}
           // Right-aligned under „Mehr“; on a phone the same rule makes it
           // the screen's width less its margins.
-          className="rise elevate-lift absolute right-0 top-[calc(100%+8px)] z-30 grid max-h-[calc(100dvh-140px)] w-[min(560px,calc(100vw-32px))] grid-cols-1 gap-[2px] overflow-y-auto overscroll-contain rounded-card bg-raised p-[8px] ring-1 ring-inset ring-line min-[480px]:grid-cols-2"
+          className="drop elevate-lift absolute right-0 top-[calc(100%+8px)] z-30 grid max-h-[calc(100dvh-140px)] w-[min(560px,calc(100vw-32px))] grid-cols-1 gap-[2px] overflow-y-auto overscroll-contain rounded-card bg-raised p-[8px] ring-1 ring-inset ring-line min-[480px]:grid-cols-2"
         >
           {rest.map((entry, index) => (
             <button

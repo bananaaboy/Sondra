@@ -87,6 +87,12 @@ const ANSWER = process.env.SONDRA_ASK
 const primary = app.requestSingleInstanceLock()
 if (!primary) app.exit(0)
 
+// „Geräte“: Chromium hides this computer's local addresses behind a random
+// „….local“ name that the other device has to resolve over multicast —
+// which phones often cannot, so a transfer to this computer found its way
+// only every few tries. Only Sondra's own page runs in this window.
+app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns')
+
 let window = null
 
 /**

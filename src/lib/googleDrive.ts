@@ -1115,6 +1115,22 @@ export async function readDriveTree(options: { signal?: AbortSignal; onProgress?
 /** Whether Drive can be read right now, without a click to sign in. */
 export const driveReadable = (): boolean => driveLinked() && canRun()
 
+/** Files of Sondra's folder into Drive's bin, one after the other; says which went and which not. */
+export async function trashDriveFiles(ids: string[]): Promise<{ trashed: string[]; failed: { id: string; reason: string }[] }> {
+  await ready()
+  const trashed: string[] = []
+  const failed: { id: string; reason: string }[] = []
+  for (const id of ids) {
+    try {
+      await client.trash(id)
+      trashed.push(id)
+    } catch (error) {
+      failed.push({ id, reason: error instanceof DriveError ? DRIVE_PROBLEM[error.code] : error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return { trashed, failed }
+}
+
 /** Drive for linking devices: only while it works without a click, never a sign-in of its own. */
 export function deviceDrive(): DriveClient | null {
   return driveLinked() && canRun() ? client : null

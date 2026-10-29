@@ -628,16 +628,61 @@ export async function startServer({ root, port, dataDir, onError }) {
       server.listen(candidate, HOST)
     })
 
-  try {
-    await listen(port)
-  } catch (failure) {
-    // Something else already has the usual port, or Windows has reserved it
-    // (Hyper-V and WSL claim whole ranges, and binding inside one is EACCES).
-    // Any free port works; it only costs the origin, and with it whatever the
-    // page kept in storage.
-    if (failure.code !== 'EADDRINUSE' && failure.code !== 'EACCES') throw failure
-    onError?.(`Port ${port} nicht verfügbar (${failure.code}), weiche aus.`)
+  // The port is part of the origin, and the origin is where the page keeps
+  // everything: the session, the Merkliste, the key that makes this computer
+  // the same device under „Geräte“. A new port is a new, empty Sondra — after
+  // an update that looked like the device was forgotten.
+  const portFile = dataDir ? path.join(dataDir, 'port.json') : null
+  const readSpare = () => {
+    try {
+      const value = JSON.parse(fs.readFileSync(portFile, 'utf8')).spare
+      return Number.isInteger(value) && value > 1024 && value < 65536 && value !== port ? value : null
+    } catch {
+      return null
+    }
+  }
+  const unavailable = (failure) => failure.code === 'EADDRINUSE' || failure.code === 'EACCES'
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  let bound = false
+  // An update starts the new app while the old one is still letting go of
+  // the port: wait for it a few seconds rather than move away for good.
+  for (let attempt = 0; attempt < 16 && !bound; attempt += 1) {
+    try {
+      await listen(port)
+      bound = true
+    } catch (failure) {
+      if (!unavailable(failure)) throw failure
+      // A reserved range (Hyper-V, WSL: EACCES) does not clear by waiting.
+      if (failure.code === 'EACCES') break
+      if (attempt === 0) onError?.(`Port ${port} belegt, warte kurz.`)
+      await wait(250)
+    }
+  }
+  if (!bound) {
+    // The spare port from last time, so the page finds its storage again.
+    const spare = portFile ? readSpare() : null
+    if (spare) {
+      try {
+        await listen(spare)
+        bound = true
+        onError?.(`Port ${port} nicht verfügbar, nehme wie zuletzt ${spare}.`)
+      } catch (failure) {
+        if (!unavailable(failure)) throw failure
+      }
+    }
+  }
+  if (!bound) {
+    onError?.(`Port ${port} nicht verfügbar, weiche aus.`)
     await listen(0)
+    if (portFile) {
+      try {
+        fs.mkdirSync(dataDir, { recursive: true })
+        fs.writeFileSync(portFile, JSON.stringify({ spare: server.address().port }))
+      } catch {
+        // Then the next start may choose another one.
+      }
+    }
   }
 
   return { server, url: `http://${HOST}:${server.address().port}/` }

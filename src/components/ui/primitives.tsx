@@ -431,10 +431,18 @@ export function Reveal({
   return (
     <details open={initiallyOpen || undefined} className={`group border-t border-line ${className}`}>
       <summary className="press inline-flex cursor-pointer list-none items-center gap-[8px] py-[8px] text-small text-muted hover:text-ink">
-        <span className="value text-ink">
-          <span className="group-open:hidden">+</span>
-          <span className="hidden group-open:inline">−</span>
-        </span>
+        {/* A plus whose upright turns down into the bar: open is the same
+            mark, folded, rather than a different glyph swapped in. */}
+        <svg viewBox="0 0 12 12" className="h-[10px] w-[10px] shrink-0 text-ink" fill="none" aria-hidden>
+          <path d="M1.5 6h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <path
+            d="M6 1.5v9"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            className="origin-center transition-transform duration-[var(--dur-base)] ease-[var(--ease-settle)] [transform-box:fill-box] group-open:rotate-90"
+          />
+        </svg>
         {label}
       </summary>
       <div className="rise pb-[8px]">{children}</div>

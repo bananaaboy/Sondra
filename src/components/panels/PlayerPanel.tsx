@@ -2656,7 +2656,7 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   // corner — it floats over the sheet, so it carries the one shadow.
   const miniBar =
     hidden && current ? (
-      <div className="fixed inset-x-[12px] bottom-[12px] z-50 flex items-center gap-[12px] rounded-card bg-stage p-[10px] text-stage-ink ring-1 ring-inset ring-stage-line elevate-lift sm:left-auto sm:right-[24px] sm:w-[400px]">
+      <div className="dock fixed inset-x-[12px] bottom-[12px] z-50 flex items-center gap-[12px] rounded-card bg-stage p-[10px] text-stage-ink ring-1 ring-inset ring-stage-line elevate-lift sm:left-auto sm:right-[24px] sm:w-[400px]">
         <button
           type="button"
           onClick={toggle}

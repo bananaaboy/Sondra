@@ -149,6 +149,8 @@ export interface AndroidBridge {
     mime?: string
     subFolder?: string
   }) => Promise<{ ok: boolean; savedPath?: string; bytesWritten?: number; error?: string }>
+  /** Lets multicast in while two devices connect (mDNS for WebRTC); false from an app too old for it. */
+  multicast: (on: boolean) => Promise<boolean>
   /** Starts a file in Downloads/Sondra that is written as it arrives, not held whole first. */
   openSave: (name: string, mime: string) => Promise<AndroidSave>
   /** Auto-updater methods */
@@ -209,6 +211,11 @@ export const ANDROID_BRIDGE: AndroidBridge | null = port
         if (!ended.ok) throw new Error(String(ended.error ?? 'nicht gespeichert'))
         return String(ended.where ?? '')
       },
+      multicast: (on) =>
+        ask<Answer>('multicast', { on }).then(
+          (answer) => answer.ok === true,
+          () => false,
+        ),
       async openSave(name, mime) {
         const begun = await ask<Answer>('save-begin', { name, mime })
         if (!begun.ok) throw new Error(String(begun.error ?? 'nicht gespeichert'))

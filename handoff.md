@@ -9,7 +9,21 @@
 
 ## 1. Übersicht der Meilensteine bis Version 1.1.21
 
-### Version 1.1.21 (Zuletzt hinzugefügt):
+### Seit 1.1.21 (noch nicht veröffentlicht):
+- **Geräte wiedererkennen:** die Windows-App wartet auf ihren Port und nimmt sonst einen
+  gemerkten Ersatz (`port.json`), nie einen zufälligen — der Port ist Teil der Herkunft.
+  Nach Neuinstallation: „Das war dieses Gerät“ (`adoptFormer`) übernimmt den alten Eintrag;
+  „Entfernen“ für Geräte, die nicht offen sind (`removeDevice`).
+- **Übertragung zuverlässig:** Abfragen alle 1,2 s während einer Übertragung, Sammeln der
+  Wege bis 8 s, weiches Aufgeben nach 25/45 s, hartes nach 3 Min.; Android-Multicast-Lock
+  (`Bridge.java`, `multicast`), Electron ohne mDNS-Verschleierung lokaler Adressen.
+- **Ordner:** Löschen im Ordner „Sondra“ in Drive (Papierkorb, `trashDriveFiles`); die
+  Seiten-Vorschau ist entfernt.
+- **Bewegung:** gleitender Strich unter den Reitern, Werkzeuge kommen von der Seite ihres
+  Reiters, Dialoge mit Ein- und Ausgang, Menüs (`drop`), Leisten unten (`dock`), Blätter auf
+  dem Handy (`sheet`), gestaffelte Listen (`rise-list`), Überblendung beim Themenwechsel.
+
+### Version 1.1.21:
 - **Geräte (`#geraete`, `src/lib/devices.ts`, `deviceIdentity.ts`, `deviceTransfer.ts`):**
   Geräte desselben Google-Kontos finden sich über Drive (`Sondra/Geräte`) und tauschen
   Dateien direkt per WebRTC; das andere Gerät fragt vorher (`DeviceInbox`, auf jeder Seite).
@@ -57,7 +71,7 @@
   Hover-Thumbnails über der Zeitleiste und eingebettete Kapitelmarker.
 - **Redesign des Ordner-Explorers (`FolderPanel.tsx`):**
   Strikte Trennung von Ordner-Karten und Mediendateien, Beseitigung störender Badges/Pills,
-  integriertes 2-Spalten-Layout mit Seiten-Vorschau (`FolderInlinePreview`).
+  integriertes 2-Spalten-Layout mit Seiten-Vorschau (seit dem 29.10.2026 wieder entfernt).
 - **AniList & MyAnimeList Synchronisation (`src/lib/anilist.ts`):**
   Automatisches Cloud-Update von gesehenen Folgen.
 - **Zero-RAM Direct-to-Disk (Desktop-App):**

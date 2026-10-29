@@ -3,7 +3,7 @@
  * away underneath it.
  */
 
-import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type CSSProperties } from 'react'
 
 import { ErrorBoundary } from './ErrorBoundary'
 import { detectCapabilities, hasWebGpuAdapter, suggestedThreads } from '../lib/capabilities'
@@ -326,6 +326,15 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
   const panel = useSession((state) => state.panel)
   const hasAssets = useSession((state) => state.assets.length > 0)
   const current = PANELS.find((entry) => entry.id === panel)
+  // The tabs stand in a row, so a tool to the right of the last one comes in
+  // from the right, and one to the left from the left. Settled while
+  // rendering: the entrance starts with this very render.
+  const travel = useRef({ panel, from: 0 })
+  if (travel.current.panel !== panel) {
+    const before = PANELS.findIndex((entry) => entry.id === travel.current.panel)
+    const after = PANELS.findIndex((entry) => entry.id === panel)
+    travel.current = { panel, from: before < 0 || after < 0 ? 0 : after > before ? 1 : -1 }
+  }
   // The player and the downloader stay mounted once opened — a film or a
   // download goes on behind another tool — but not before: mounted from the
   // start they parsed 800 KB of script on every visit, the player with
@@ -356,7 +365,11 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     panel === 'player'
 
   return (
-    <section id="studio" className="shell flex flex-col gap-[16px] pb-[16px] pt-[24px] sm:pt-[32px]">
+    <section
+      id="studio"
+      className="shell flex flex-col gap-[16px] pb-[16px] pt-[24px] sm:pt-[32px]"
+      style={{ '--enter-x': `${travel.current.from * 20}px` } as CSSProperties}
+    >
       <RestoreOffer />
 
       {/* Keyed on the panel so every switch replays the entrance rather than

@@ -11,9 +11,12 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react'
 
 import {
+  adoptFormer,
+  dismissFormer,
   forgetThisDevice,
   isOnline,
   refreshDevices,
+  removeDevice,
   renameThisDevice,
   sendToDevice,
   setDevicesEnabled,
@@ -93,7 +96,25 @@ function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
         <Button size="sm" onClick={() => input.current?.click()}>
           Dateien senden
         </Button>
-        {online ? null : <span className="text-small text-prose">Kommt an, wenn Sondra dort innerhalb von 15 Min. offen ist.</span>}
+        {online ? null : (
+          <span className="flex flex-wrap items-baseline gap-x-[10px] text-small text-prose sm:justify-end">
+            <span>Kommt an, wenn Sondra dort innerhalb von 15 Min. offen ist.</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `„${device.name}“ aus der Liste nehmen? Ist es noch in Gebrauch, erscheint es wieder, sobald Sondra dort offen ist.`,
+                  )
+                )
+                  void removeDevice(device.id)
+              }}
+              className="press text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+            >
+              Entfernen
+            </button>
+          </span>
+        )}
       </span>
       <input
         ref={input}
@@ -106,6 +127,43 @@ function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
         }}
       />
     </li>
+  )
+}
+
+/**
+ * After a reinstall or wiped browser data this device has a new key, and its
+ * old entry stands beside it, never to come back. The page asks once.
+ */
+function FormerHint() {
+  const former = useDevices((state) => state.former)
+  const now = Date.now()
+  if (!former.length) return null
+  return (
+    <div className="rise flex flex-col gap-[10px] rounded-card bg-panel-soft p-[16px]">
+      <p className="text-small leading-[1.55] text-ink">
+        Neu installiert oder Daten gelöscht? Dann war dieses Gerät vielleicht schon verbunden — es kann seinen alten Eintrag übernehmen.
+      </p>
+      <ul className="flex flex-col gap-[8px]">
+        {former.map((device) => (
+          <li key={device.id} className="flex max-w-none flex-wrap items-center gap-x-[12px] gap-y-[6px]">
+            <span className="min-w-0 flex-1 text-small text-prose">
+              <span className="font-semibold text-ink">{device.name}</span> <span className="value">{shortId(device.id)}</span> ·{' '}
+              {device.platform} · {seenLabel(device, now)}
+            </span>
+            <Button size="sm" onClick={() => void adoptFormer(device.id)}>
+              Das war dieses Gerät
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={() => void dismissFormer()}
+        className="press self-start text-small text-ink underline decoration-rule underline-offset-[3px] hover:decoration-ink"
+      >
+        Nein, {former.length === 1 ? 'das ist ein anderes Gerät' : 'das sind andere Geräte'}
+      </button>
+    </div>
   )
 }
 
@@ -183,6 +241,7 @@ function ThisDevice() {
         )}
       </div>
       {note ? <p className="text-small text-prose">{note}</p> : null}
+      <FormerHint />
     </div>
   )
 }
@@ -279,7 +338,7 @@ export function DevicesPanel() {
               </p>
             ) : (
               <>
-                <ul className="flex flex-col gap-[8px]">
+                <ul className="rise-list flex flex-col gap-[8px]">
                   {[...open, ...away].map((device) => (
                     <OtherDevice key={device.id} device={device} now={now} />
                   ))}
@@ -294,7 +353,7 @@ export function DevicesPanel() {
               <SectionHead className="max-w-none">
                 <span id="geraete-uebertragungen">Übertragungen</span>
               </SectionHead>
-              <ul className="flex flex-col">
+              <ul className="rise-list flex flex-col">
                 {transfers.map((transfer) => (
                   <li key={transfer.id} className="max-w-none border-t border-line py-[12px] first:border-t-0 first:pt-0">
                     <TransferRow transfer={transfer} />

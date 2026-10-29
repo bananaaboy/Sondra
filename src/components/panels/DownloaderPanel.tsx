@@ -2141,7 +2141,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
       <aside
         role="region"
         aria-label="Laufender Download"
-        className="fixed inset-x-[12px] bottom-[calc(12px+env(safe-area-inset-bottom,0px))] z-50 flex items-center gap-[12px] rounded-card bg-stage p-[10px] text-stage-ink ring-1 ring-inset ring-stage-line elevate-lift sm:bottom-[12px] sm:left-[24px] sm:right-auto sm:w-[420px]"
+        className="dock fixed inset-x-[12px] bottom-[calc(12px+env(safe-area-inset-bottom,0px))] z-50 flex items-center gap-[12px] rounded-card bg-stage p-[10px] text-stage-ink ring-1 ring-inset ring-stage-line elevate-lift sm:bottom-[12px] sm:left-[24px] sm:right-auto sm:w-[420px]"
       >
         <div className="grid h-[40px] w-[40px] shrink-0 place-items-center rounded-pill bg-stage-ink text-stage animate-pulse">
           <svg viewBox="0 0 20 20" className="size-[20px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
