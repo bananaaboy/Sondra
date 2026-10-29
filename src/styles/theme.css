@@ -507,18 +507,30 @@ select option {
 }
 
 /* --- motion ----------------------------------------------------------------
-   Four movements, and nothing else in the app invents a fifth.
+   Motion says where something came from and that something happened — never
+   decoration. One vocabulary, and a new movement needs a new meaning:
 
-   `rise` is how anything new arrives — a panel after a tab click, a result
-   after a computation. `pop` is for a figure that was just calculated and
-   wants to be noticed once. `sweep` fills a bar. `breathe` marks a process
-   that is running but cannot report progress. `arrive` is the one exception
-   to „opacity and transform only": the file menu in the header blinks three
-   times when a file lands in the session, so a download or a „In die Sitzung"
-   is answered where the file now lives.
+   `rise`      something new arrived: a result, a hint, a row.
+   `rise-list` a list arrived as a list; its items follow one another,
+               never more than 240 ms in all.
+   enter       a tool after a tab click, from the side of the tab row it sits
+               on (`.panel-root.rise`); the rule under the tabs glides along.
+   `drop`      a menu unfolds from the button that asked for it.
+   `dock`      what floats at the bottom edge comes up from that edge.
+   `sheet`     a phone's bottom sheet slides up; beside its button it pops.
+   dialogs     come up out of a slight squeeze over a dimming room and leave
+               faster than they came (`dialog`, `@starting-style`).
+   `pop`       a figure just calculated, or an arrival mark, lands once.
+   `sweep`     fills a bar. `pulse-dot` something really is running now.
+   `arrive`    the one exception to „opacity and transform only": the file
+               menu blinks three times when a file lands in the session.
 
-   Everything here is opacity and transform only, so none of it forces layout,
-   and the reduced-motion block above already neutralises all of it.
+   Three durations (`--dur-fast` 130 ms feedback, `--dur-base` 240 ms state,
+   `--dur-slow` 420 ms travel) and two curves; exits are faster than
+   entrances. Entrances fill `backwards`, so once they end they hold nothing —
+   a `press` nudge or a fixed child is not captured by a finished animation.
+   Everything here is opacity and transform only, and the reduced-motion
+   block above neutralises all of it.
    --------------------------------------------------------------------------- */
 @keyframes sondra-rise {
   from {
@@ -558,8 +570,46 @@ select option {
 /* Anything mounting for the first time. `--delay` staggers a list without a
    separate class per position. */
 @utility rise {
-  animation: sondra-rise var(--dur-base) var(--ease-out) both;
+  animation: sondra-rise var(--dur-base) var(--ease-out) backwards;
   animation-delay: var(--delay, 0ms);
+}
+
+/* A tool arriving after a tab click comes from the side of the tab row it
+   sits on (`--enter-x`, set by the dashboard: ±20 px, 0 on the first load).
+   The rule under the tabs glides the same way, so both say where you went. */
+@keyframes sondra-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--enter-x, 0px), 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.panel-root.rise {
+  animation-name: sondra-enter;
+  animation-duration: 300ms;
+  animation-timing-function: var(--ease-settle);
+}
+
+/* A list that arrives as a list: its items rise one after another, 30 ms
+   apart and never more than 240 ms in all — a long list must not keep its
+   last rows waiting. Set on the container, so the items need no index; an
+   item added later rises on its own. */
+@utility rise-list {
+  & > * {
+    animation: sondra-rise var(--dur-base) var(--ease-out) backwards;
+  }
+  & > :nth-child(2) { animation-delay: 30ms; }
+  & > :nth-child(3) { animation-delay: 60ms; }
+  & > :nth-child(4) { animation-delay: 90ms; }
+  & > :nth-child(5) { animation-delay: 120ms; }
+  & > :nth-child(6) { animation-delay: 150ms; }
+  & > :nth-child(7) { animation-delay: 180ms; }
+  & > :nth-child(8) { animation-delay: 210ms; }
+  & > :nth-child(n + 9) { animation-delay: 240ms; }
 }
 
 /* A player filling the window leaves its column with `position: fixed`, and
@@ -571,7 +621,7 @@ select option {
 }
 
 @utility pop {
-  animation: sondra-pop var(--dur-base) var(--ease-settle) both;
+  animation: sondra-pop var(--dur-base) var(--ease-settle) backwards;
   animation-delay: var(--delay, 0ms);
 }
 
@@ -589,8 +639,110 @@ select option {
 }
 
 @utility bar-in {
-  animation: sondra-bar-in var(--dur-slow) var(--ease-settle) both;
+  animation: sondra-bar-in var(--dur-slow) var(--ease-settle) backwards;
   animation-delay: var(--delay, 0ms);
+}
+
+/* A menu unfolds from the button that asked for it: down a few pixels and
+   out of a slight squeeze, anchored at its top edge, so it reads as coming
+   from above rather than rising out of the page like new content. */
+@keyframes sondra-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility drop {
+  transform-origin: top;
+  animation: sondra-drop var(--dur-base) var(--ease-settle) backwards;
+}
+
+/* What floats at the bottom edge — the small bars, the inbox card, a
+   selection bar — docks from below, the edge it belongs to. */
+@keyframes sondra-dock {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility dock {
+  animation: sondra-dock 320ms var(--ease-settle) backwards;
+}
+
+/* A panel that is a bottom sheet on a phone slides up from the screen's
+   edge there; from `sm` on, where it hangs beside its button, it pops. */
+@keyframes sondra-sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@utility sheet {
+  animation: sondra-pop var(--dur-base) var(--ease-settle) backwards;
+  @media (max-width: 639.98px) {
+    animation: sondra-sheet var(--dur-slow) var(--ease-settle) backwards;
+  }
+}
+
+/* Every modal: the sheet comes up out of a slight squeeze while the room
+   behind it dims, and leaves faster than it came. The platform's own
+   `<dialog>` keeps its focus trap and Escape; `@starting-style` and the
+   discrete `overlay`/`display` transitions give it an entrance and an exit
+   without a second element. Browsers without them just open and close. */
+dialog {
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    overlay var(--dur-fast) allow-discrete,
+    display var(--dur-fast) allow-discrete;
+}
+
+dialog[open] {
+  opacity: 1;
+  transform: none;
+  transition-duration: var(--dur-base);
+  transition-timing-function: var(--ease-settle);
+}
+
+@starting-style {
+  dialog[open] {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+dialog::backdrop {
+  opacity: 0;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    overlay var(--dur-fast) allow-discrete,
+    display var(--dur-fast) allow-discrete;
+}
+
+dialog[open]::backdrop {
+  opacity: 1;
+  transition-duration: var(--dur-base);
+}
+
+@starting-style {
+  dialog[open]::backdrop {
+    opacity: 0;
+  }
 }
 
 /* Cards lie on the canvas; only the thing being dragged or hovered lifts. */
@@ -776,4 +928,13 @@ table,
     background-color: var(--color-panel-mid);
     box-shadow: 0 0 0 2px var(--color-ink);
   }
+}
+
+/* --- theme switch ----------------------------------------------------------
+   The whole page crossfades between light and dark (`useTheme`, View
+   Transitions). Short: the old picture is frozen while it fades. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-base);
+  animation-timing-function: var(--ease-out);
 }

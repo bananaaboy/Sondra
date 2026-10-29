@@ -5,8 +5,10 @@ import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.OpenableColumns;
@@ -63,6 +65,14 @@ final class Bridge {
     private final List<JSONObject> waiting = new ArrayList<>();
     private final Map<String, Uri> served = Collections.synchronizedMap(new HashMap<>());
     private final Map<String, String> servedTypes = Collections.synchronizedMap(new HashMap<>());
+    /**
+     * „Geräte“: while two devices look for each other, Android has to let
+     * multicast in — WebRTC hides local addresses behind „….local“ names
+     * that are resolved over mDNS, and without the lock most phones drop
+     * those packets. Held only while a connection is being made.
+     */
+    private WifiManager.MulticastLock multicast;
+    private final Runnable releaseMulticast = this::releaseMulticast;
 
     Bridge(MainActivity activity) {
         this.activity = activity;
@@ -186,6 +196,10 @@ final class Bridge {
                 answer(reply, id, new JSONObject().put("ok", started));
                 break;
 
+            case "multicast":
+                answer(reply, id, new JSONObject().put("ok", setMulticast(message.optBoolean("on", false))));
+                break;
+
             // --- Screen Wake Lock / Power Save Blocker ---
             case "wake-lock":
             case "power-save-blocker":
@@ -225,6 +239,33 @@ final class Bridge {
                 // The page went away meanwhile.
             }
         });
+    }
+
+    /** Lets multicast in for a while (at most two minutes per request), or no longer. */
+    private boolean setMulticast(boolean on) {
+        main.removeCallbacks(releaseMulticast);
+        if (!on) {
+            releaseMulticast();
+            return true;
+        }
+        try {
+            if (multicast == null) {
+                WifiManager wifi = (WifiManager) activity.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                if (wifi == null) return false;
+                multicast = wifi.createMulticastLock("sondra-geraete");
+                multicast.setReferenceCounted(false);
+            }
+            if (!multicast.isHeld()) multicast.acquire();
+            main.postDelayed(releaseMulticast, 120_000);
+            return true;
+        } catch (RuntimeException e) {
+            Log.w(MainActivity.TAG, "Multicast nicht freigegeben: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void releaseMulticast() {
+        if (multicast != null && multicast.isHeld()) multicast.release();
     }
 
     /** Emits an update state change event to the web page. */

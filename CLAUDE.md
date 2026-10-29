@@ -235,6 +235,14 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   sekundär ≥ 60, Überschriften ≥ 45, Nicht-Text ≥ 15. Eine Palettenänderung
   ist erst fertig, wenn sie durch die Zahlen gelaufen ist — und eine getönte
   Fläche verschiebt den Grund, auf dem gemessen wurde.
+- **Bewegung sagt, woher etwas kommt** (29.10.2026: „es hat überall viel zu
+  wenig Animationen“). Der Strich unter den Reitern gleitet, ein Werkzeug
+  kommt von der Seite seines Reiters, Listen kommen gestaffelt
+  (`rise-list`), Menüs klappen aus ihrem Knopf (`drop`), Leisten kommen vom
+  unteren Rand (`dock`), Blätter fahren auf dem Handy hoch (`sheet`),
+  Dialoge haben Ein- und Ausgang (global auf `dialog`, keine eigene
+  Animation daneben), hell/dunkel blendet über. Eintritte füllen
+  `backwards`. Liste und Gründe: DESIGN.md, „Motion“.
 - **Keine Eyebrows.** Ausnahmslos gebannt, auch als Platzhalter. Eine
   Überschrift trägt sich selbst. Versalien gibt es nur im `Badge`.
 - **Kein Bauteil ohne Fehler-, Leer-, Lade-, Fokus- und Deaktiviert-Zustand.**
@@ -724,10 +732,19 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `nextPageToken`), als `FolderScan` mit `source: 'drive'`; ein Eintrag hat
   dann `drive: { id, mime }` statt `file`. Mehr sieht Sondra in Drive mit
   `drive.file` nicht, und die Seite sagt das. Keine Vorschaubilder (hiesse,
-  jeden Film zu holen), kein Löschen, kein „Doppelte finden“; „In die
+  jeden Film zu holen), kein „Doppelte finden“; „In die
   Sitzung“ und ZIP holen die Dateien zuerst (`fileHere`). Gemerkt wird die
   Quelle (`sondra:ordner:quelle`), und die Merkliste liest Drive von selbst
   wieder ein, sobald angemeldet, sonst „Google Drive einbeziehen“.
+  **Löschen in Drive** (Wunsch vom 29.10.2026: „Sachen im Sondra Ordner
+  löschen können“): „Löschen …“ steht auch dort, nur geht es in den
+  Papierkorb von Drive (`trash` in `driveClient.ts`, PATCH `trashed: true`;
+  `trashDriveFiles`), und Dialog und Knopf sagen das („In den Papierkorb“,
+  30 Tage wiederherstellbar). Eine Datei, die schon fehlt, gilt als
+  gelöscht. **Keine Vorschau neben der Liste** (29.10.2026: „Vorschau im
+  Tab Ordner braucht es nicht“): `FolderInlinePreview` und das grosse
+  Vorschau-Fenster sind weg, die Kacheln haben die ganze Breite — auch mit
+  einer gewählten Datei, die vorher eine Spalte kostete.
   **In Staffel einordnen** (Wunsch vom 22.10.2026: Folgen auswählen, einer
   Serie und Staffel zuweisen, „dann wird ein Ordner erstellt vom Anime und
   die ausgewählten Episoden sind im Ordner in einem anderen Ordner mit der
@@ -821,6 +838,34 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   durchgespielt (direkt, über Drive, beide Richtungen, Manipulation).
   **Ein IndexedDB-Fehler in `idb` wird zur Ablehnung:** ein Wert, der sich
   nicht speichern lässt, warf im Callback, und das Annehmen hing für immer.
+  **Wiedererkennen** (29.10.2026: „nach einem Update oder Reinstall nicht
+  mehr erkannt“): Schlüssel und Kennung hängen an der Herkunft, und zu der
+  gehört der Port. `desktop/server.mjs` nahm bei belegtem 47199 sofort
+  einen zufälligen — nach einem Update, solange der alte Prozess noch
+  auslief, war die App ein neues Gerät mit leerer Merkliste. Jetzt: bis 16 ×
+  250 ms warten, dann der gemerkte Ersatz aus `port.json` im Datenordner,
+  erst dann ein freier, der dort gemerkt wird. Nach einer Neuinstallation
+  (oder gelöschten Websitedaten) ist der Schlüssel unwiederbringlich weg —
+  „nicht überschreibbar“ heisst genau das. Deshalb fragt `FormerHint`:
+  Einträge, die nicht offen sind, dieselbe Art und Plattform haben, vor
+  diesem angelegt und höchstens 14 Tage vor ihm zuletzt gesehen wurden,
+  stehen mit „Das war dieses Gerät“ (`adoptFormer`: alter Eintrag gelöscht,
+  sein Name übernommen) und „Nein, das ist ein anderes Gerät“ (`decided`,
+  nie wieder gefragt). „Entfernen“ gibt es nur für Geräte, die nicht offen
+  sind; ein lebendes schreibt seinen Eintrag ohnehin neu.
+  **Zuverlässig** („funktioniert all 3–5 mal“): ein hartes Aus nach 15 s
+  traf auf Post, die im Hintergrund nur alle 15 s gelesen wurde, und auf
+  3 s Sammeln der Wege. Jetzt liest die Post jede 1,2 s, solange eine
+  Übertragung auf Antwort wartet (nicht beim Fragen), und 400 ms nach jedem
+  eigenen Angebot; gesammelt wird bis 8 s; nach 25 s (Sender) bzw. 45 s
+  (Empfänger) steht „Kein direkter Weg“ samt Drive-Angebot da, aber die
+  Verbindung wartet weiter bis drei Minuten und übernimmt, wenn sie doch
+  aufgeht (`waitOpen`). Android hört `.local`-Namen nur mit
+  `WifiManager.MulticastLock` (`multicast` in `Bridge.java`, Erlaubnis
+  `CHANGE_WIFI_MULTICAST_STATE`, nach 120 s von selbst frei); Electron
+  nennt seine Adresse im Netz direkt (`WebRtcHideLocalIpsWithMdns` aus),
+  weil Windows-mDNS oft gesperrt ist. Beides wirkt erst mit einer neuen
+  App-Fassung.
 - **Android-App** (`android/`, Wunsch vom 22.10.2026: „eine Android-App,
   die über Google Drive läuft statt Anytype“; am 23.10.: „es soll wirklich
   wie eine App sein, nicht Webapp“): eine eigene App um die Website, Paket

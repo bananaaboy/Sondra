@@ -22,6 +22,7 @@ import { useFilePicker, useIngestFiles, useProjectPicker } from '../hooks/useIng
 import { ACTIONS, GROUP_LABEL, actionsFor, searchActions, type ToolAction, type ToolGroup } from '../lib/actions'
 import { formatBytes, formatDuration } from '../lib/format'
 import { useMerkliste } from '../lib/merkliste'
+import { stagger } from '../lib/motion'
 import { saveProjectFile } from '../lib/project'
 import { KIND_LABEL, useActiveAsset, useSession, type PanelId } from '../state/store'
 import { SondraProjectIcon } from './AssetList'
@@ -96,10 +97,13 @@ const PRIORITY_GRID_IDS = [
 function Tool({
   action,
   dimmed,
+  index,
   onClick,
 }: {
   action: ToolAction
   dimmed: boolean
+  /** Place in its group: the tiles of a group arrive one after another. */
+  index: number
   onClick: () => void
 }) {
   return (
@@ -107,15 +111,16 @@ function Tool({
       id={`v-${action.id}`}
       type="button"
       onClick={onClick}
-      className="press group flex scroll-mt-[120px] flex-col gap-[6px] rounded-card bg-panel-soft p-[12px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-mid sm:p-[14px]"
+      style={stagger(index, 24)}
+      className="rise press group flex scroll-mt-[120px] flex-col gap-[6px] rounded-card bg-panel-soft p-[12px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-mid sm:p-[14px]"
     >
       <span className="flex items-center gap-[8px]">
         {/* A tool that needs a kind of file the session does not hold says so
             through its icon only; fading the whole tile cost legibility. The
             icon's own small field takes the ink when the tile is pointed at. */}
         <span
-          className={`grid h-[26px] w-[26px] shrink-0 place-items-center rounded-nav bg-raised transition-colors duration-[var(--dur-fast)] ${
-            dimmed ? 'text-faint' : 'text-ink group-hover:bg-ink group-hover:text-on-ink'
+          className={`grid h-[26px] w-[26px] shrink-0 place-items-center rounded-nav bg-raised transition-[background-color,color,transform] duration-[var(--dur-fast)] ease-[var(--ease-settle)] ${
+            dimmed ? 'text-faint' : 'text-ink group-hover:scale-[1.08] group-hover:bg-ink group-hover:text-on-ink'
           }`}
         >
           <ToolIcon>{iconFor(action)}</ToolIcon>
@@ -294,10 +299,11 @@ function MediaTiles() {
             key={tile.id}
             type="button"
             onClick={() => setPanel(tile.id)}
+            style={stagger(index)}
             // The Merkliste across the row on a phone: „Weiter: …“ needs the width.
-            className={`${index === 0 ? 'col-span-2 lg:col-span-1 ' : ''}press group flex min-w-0 items-center gap-[12px] rounded-card bg-panel-soft p-[12px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-mid sm:p-[14px]`}
+            className={`${index === 0 ? 'col-span-2 lg:col-span-1 ' : ''}rise press group flex min-w-0 items-center gap-[12px] rounded-card bg-panel-soft p-[12px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-mid sm:p-[14px]`}
           >
-            <span className="grid h-[36px] w-[36px] shrink-0 place-items-center rounded-nav bg-raised text-ink transition-colors duration-[var(--dur-fast)] group-hover:bg-ink group-hover:text-on-ink">
+            <span className="grid h-[36px] w-[36px] shrink-0 place-items-center rounded-nav bg-raised text-ink transition-[background-color,color,transform] duration-[var(--dur-fast)] ease-[var(--ease-settle)] group-hover:scale-[1.06] group-hover:bg-ink group-hover:text-on-ink">
               <ToolIcon>{ICONS[tile.id]}</ToolIcon>
             </span>
             <span className="flex min-w-0 flex-col">
@@ -414,8 +420,8 @@ export function Home() {
   const dimmed = (action: ToolAction) =>
     have.size > 0 && action.kinds.length > 0 && !action.kinds.some((kind) => have.has(kind))
 
-  const tile = (action: ToolAction) => (
-    <Tool key={action.id} action={action} dimmed={dimmed(action)} onClick={() => setPanel(action.panel)} />
+  const tile = (action: ToolAction, index: number) => (
+    <Tool key={action.id} action={action} dimmed={dimmed(action)} index={index} onClick={() => setPanel(action.panel)} />
   )
 
   return (

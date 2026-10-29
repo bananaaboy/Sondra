@@ -123,8 +123,16 @@ export function TransferRow({ transfer, compact = false }: { transfer: Transfer;
         </span>
         <span className="shrink-0 text-small text-prose">{out ? `an ${transfer.peerName}` : `von ${transfer.peerName}`}</span>
       </div>
-      <p className="text-small leading-[1.5] text-prose" aria-live="polite">
-        {transfer.state === 'done' ? '● ' : transfer.state === 'failed' ? '! ' : ''}
+      {/* Keyed on the state: each step arrives instead of swapping in place,
+          a waiting step breathes, and the arrival mark lands once. */}
+      <p key={transfer.state} className="rise text-small leading-[1.5] text-prose" aria-live="polite">
+        {transfer.state === 'done' ? (
+          <span className="pop mr-[4px] inline-block text-ink">●</span>
+        ) : transfer.state === 'failed' ? (
+          '! '
+        ) : transfer.state === 'offering' || transfer.state === 'connecting' || (transfer.state === 'direct-failed' && !out) ? (
+          <span aria-hidden className="pulse-dot mr-[4px] inline-block text-ink">●</span>
+        ) : null}
         {line}
         {transfer.state === 'done' && transfer.places?.length ? (
           <>
@@ -204,7 +212,7 @@ export function DeviceInbox() {
     <div
       role="region"
       aria-label="Übertragungen zwischen Geräten"
-      className="fixed inset-x-[12px] bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-50 flex max-h-[60dvh] flex-col gap-[12px] overflow-y-auto rounded-card bg-raised p-[14px] ring-1 ring-inset ring-line elevate-lift sm:bottom-[84px] sm:left-auto sm:right-[24px] sm:w-[400px]"
+      className="dock fixed inset-x-[12px] bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-50 flex max-h-[60dvh] flex-col gap-[12px] overflow-y-auto rounded-card bg-raised p-[14px] ring-1 ring-inset ring-line elevate-lift sm:bottom-[84px] sm:left-auto sm:right-[24px] sm:w-[400px]"
     >
       {shown.slice(0, 3).map((transfer, index) => (
         <div key={transfer.id} className={index ? 'border-t border-line pt-[12px]' : ''}>
@@ -314,7 +322,7 @@ export function DeviceSendButton({
         <span aria-live="polite">{sentTo ? `An „${sentTo}“ angeboten` : 'An Gerät'}</span>
       </Button>
       {open ? (
-        <div role="menu" className="absolute left-0 top-[calc(100%+6px)] z-40 w-[min(320px,calc(100vw-32px))] rounded-card bg-raised p-[6px] ring-1 ring-inset ring-line elevate-lift">
+        <div role="menu" className="drop absolute left-0 top-[calc(100%+6px)] z-40 w-[min(320px,calc(100vw-32px))] rounded-card bg-raised p-[6px] ring-1 ring-inset ring-line elevate-lift">
           <DevicePicker
             files={asFile}
             onSent={(device) => {

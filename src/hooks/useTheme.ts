@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 import {
   applyThemeChoice,
@@ -35,7 +36,21 @@ export function useTheme(): ThemeState {
     return watchSystemTheme(setResolved)
   }, [choice])
 
-  const setChoice = useCallback((next: ThemeChoice) => setChoiceState(next), [])
+  // A switch the person makes crossfades the whole page rather than flipping
+  // every colour at once; the browser holds the old picture while the new
+  // theme is written underneath. Without View Transitions, or with reduced
+  // motion, it simply flips.
+  const setChoice = useCallback((next: ThemeChoice) => {
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (calm || typeof document.startViewTransition !== 'function') {
+      setChoiceState(next)
+      return
+    }
+    document.startViewTransition(() => {
+      applyThemeChoice(next)
+      flushSync(() => setChoiceState(next))
+    })
+  }, [])
 
   return { choice, resolved, setChoice }
 }

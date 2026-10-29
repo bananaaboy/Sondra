@@ -356,7 +356,7 @@ export function SessionMenu() {
         <div
           role="dialog"
           aria-label="Dateien dieser Sitzung"
-          className="rise elevate-lift fixed inset-x-[16px] top-[64px] z-30 flex flex-col gap-[12px] rounded-card bg-raised p-[16px] ring-1 ring-inset ring-line sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[380px]"
+          className="drop elevate-lift fixed inset-x-[16px] top-[64px] z-30 flex flex-col gap-[12px] rounded-card bg-raised p-[16px] ring-1 ring-inset ring-line sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[380px]"
         >
           <SelectedPlayer />
 

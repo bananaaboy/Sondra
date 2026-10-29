@@ -1100,13 +1100,46 @@ Dialoge hängen am `body` (Portal): einer in einem zugeklappten Abschnitt
 
 ### Motion
 
-Vier Bewegungen, und keine fünfte wird erfunden. `rise` (etwas ist angekommen),
-`pop` (eine Zahl wurde gerade errechnet), `press` (ein Bedienelement antwortet
-dem Zeiger), `pulse-dot` (etwas läuft wirklich gerade). Dazu `sondra-drift` für
-den unbestimmten Balken, wenn der Server keine Länge meldet. Drei Dauern
-(`--dur-fast` 130 ms, `--dur-base` 240 ms, `--dur-slow` 420 ms) und zwei
-Kurven (`--ease-out`, `--ease-settle`); alles nur Transform und Deckkraft, und
-`prefers-reduced-motion` neutralisiert es vollständig.
+Bewegung sagt, woher etwas kommt und dass etwas geschehen ist — nie Schmuck.
+Bis zum 29.10.2026 waren es vier Bewegungen; „es hat überall viel zu wenig
+Animationen“ war der Befund, und die Antwort ist nicht mehr Wackeln, sondern
+mehr Herkunft. Jede Bewegung hat genau eine Bedeutung:
+
+- `rise` — etwas Neues ist da: ein Ergebnis, ein Hinweis, eine Zeile.
+- `rise-list` — eine Liste kommt als Liste: Kacheln, Poster, Zeilen folgen
+  einander, 30 ms auseinander, nie mehr als 240 ms im Ganzen (Startseite,
+  Merkliste, Staffeln, Ordner, Geräte, Übertragungen).
+- **Werkzeugwechsel** — das Werkzeug kommt von der Seite, auf der sein Reiter
+  steht (±20 px, `--enter-x`), und der Strich unter den Reitern gleitet in
+  `--dur-slow` vom alten zum neuen: beide sagen, wohin es ging. Ein Element,
+  aus einem Pixel skaliert — nie eine Breite, die neu gesetzt wird.
+- `drop` — ein Menü klappt aus dem Knopf, der es rief (von oben verankert).
+- `dock` — was am unteren Rand schwebt (Leisten, Annahme-Karte,
+  Auswahlleiste), kommt von diesem Rand.
+- `sheet` — auf dem Handy fährt ein Blatt von unten herein; daneben, ab `sm`,
+  springt es auf wie `pop`.
+- **Dialoge** — kommen aus einer leichten Stauchung über einem sich
+  abdunkelnden Raum und gehen schneller, als sie kamen (`dialog`,
+  `@starting-style`, `overlay`/`display` diskret). Kein Dialog trägt dazu
+  eine eigene Animation: deren Füllung hielt sonst Deckkraft und Transform
+  fest.
+- `pop` — eine gerade errechnete Zahl oder die Ankunftsmarke einer
+  Übertragung landet einmal. `pulse-dot` — etwas läuft wirklich gerade
+  (eine Übertragung wartet auf Antwort). `press` — ein Bedienelement
+  antwortet dem Zeiger. `sondra-drift` — der unbestimmte Balken.
+- **Kleine Rückmeldungen:** das Symbolfeld einer Kachel nimmt beim Zeigen
+  Tinte und wächst um 6–8 %; das Plus eines aufklappbaren Abschnitts dreht
+  seinen Strich zum Minus, statt das Zeichen zu tauschen; ein Wechsel hell/
+  dunkel blendet die ganze Seite über (View Transition), statt jede Farbe auf
+  einmal umzuwerfen.
+
+Drei Dauern (`--dur-fast` 130 ms Rückmeldung, `--dur-base` 240 ms Zustand,
+`--dur-slow` 420 ms Weg) und zwei Kurven (`--ease-out`, `--ease-settle`), kein
+Federn. Eintritte füllen `backwards`: ist eine Ankunft vorbei, hält sie nichts
+mehr fest — sonst schluckte ihre Füllung den `press`-Versatz, und ein
+`fixed`-Kind (der fensterfüllende Player) blieb in ihr gefangen. Alles nur
+Transform und Deckkraft, und `prefers-reduced-motion` neutralisiert es
+vollständig (der Themenwechsel springt dann).
 
 ## Do's and Don'ts
 

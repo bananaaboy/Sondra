@@ -652,6 +652,19 @@ export function createDriveClient({
       )
     },
 
+    /** Into Drive's bin, where it stays restorable for 30 days; one that is gone already is fine. */
+    async trash(id: string): Promise<void> {
+      try {
+        await call(`${endpoints.api}/files/${encodeURIComponent(id)}?fields=id`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+          body: JSON.stringify({ trashed: true }),
+        })
+      } catch (error) {
+        if (!(error instanceof DriveError) || error.code !== 'missing') throw error
+      }
+    },
+
     /** Deletes a file for good; one that is gone already is fine. */
     async remove(id: string): Promise<void> {
       try {

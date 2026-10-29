@@ -19,7 +19,7 @@ der Navigationsleiste:
 
 | Werkzeug | Adresse | |
 |---|---|---|
-| **Ordner** | `#ordner` | Lokale Ordner oder Google Drive durchsuchen; Kachel- und Listenansicht, direkte Seiten-Vorschau mit Live-Player, Weiterschauen der Merkliste und Duplikate-Finder |
+| **Ordner** | `#ordner` | Lokale Ordner oder Google Drive durchsuchen; Kachel- und Listenansicht, Weiterschauen der Merkliste, Duplikate-Finder, Löschen (in Drive in den Papierkorb) |
 | **Herunterladen** | `#herunterladen` | Videos und Musik von Adressen holen; Hintergrund-Downloads mit Floating-Minibar, Zero-RAM Direct-to-Disk, Sofort-Abspielen, Wake-Lock und Fertigstellungs-Gong; in der Android-App mit yt-dlp auf dem Telefon in voller Auflösung |
 | **Merkliste** | `#merkliste` | Serien und Filme verfolgen; Staffeln, Folgen, Rechner „Bis wohin?“, Ziel-Planung, AniList/MAL-Sync, Anytype- und Google-Drive-Abgleich |
 | **Geräte** | `#geraete` | Dateien direkt zwischen den eigenen Geräten (Handy, Laptop, Rechner): gefunden über das Google-Konto, übertragen per WebRTC, das andere Gerät fragt vorher; „An Gerät“ neben jedem „In Drive“ |
@@ -186,9 +186,13 @@ Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
 - **Moderne Kachelansicht:** Getrennte Sektionen für Ordner und Mediendateien.
   Ordner erscheinen als kompakte, informative Karten (mit Dateizahl und
   Gesamtgröße); Videodateien mit Thumbnails bei 15 % der Laufzeit.
-- **Integrierte Seiten-Vorschau:** Klickt man eine Datei an, öffnet sich
-  rechts daneben direkt ein Live-Player (Video, Audio, Bild) mit Metadaten,
-  Formatangaben und Direktaktionen (**Abspielen**, **Große Vorschau**, **In die Sitzung**).
+- **Auswählen wie im Dateimanager:** Klick, Strg/⌘, Umschalt, Pfeile; dann
+  Abspielen, In die Sitzung, Als ZIP, In Drive oder Löschen. Ein Doppelklick
+  spielt ab. Eine eigene Vorschau neben der Liste gibt es nicht mehr — die
+  Kacheln nehmen die ganze Breite.
+- **Löschen:** auf diesem Gerät endgültig, nach Rückfrage (Edge, Chrome, die
+  App). Im Ordner „Sondra“ in Google Drive gehen gelöschte Dateien in den
+  Papierkorb von Drive und lassen sich dort 30 Tage lang wiederherstellen.
 - **Listenansicht:** Strukturierte Tabelle mit Name, Art, Größe, Änderungsdatum
   und Laufzeit.
 - **Weiterschauen:** Erkennt Folgen von Serien aus der Merkliste im Ordner und
@@ -244,6 +248,20 @@ Rechner, auch zwischen Website, Windows-App und Android-App.
   (kein fremder Anbieter fest verdrahtet), direkt geht es deshalb im selben
   Netz. Sonst bietet Sondra Google Drive an — erst auf Klick, und danach
   wird die Datei dort gelöscht.
+- **Wiedererkannt nach Update und Neuinstallation:** die Windows-App bleibt
+  auf ihrem Port (127.0.0.1:47199; ist er belegt, wartet sie und nimmt dann
+  einen gemerkten Ersatz statt eines zufälligen) — der Port gehört zur
+  Herkunft, und mit ihm verschwanden Schlüssel und Merkliste. Nach einer
+  Neuinstallation oder gelöschten Daten ist der alte Schlüssel weg; „Geräte“
+  fragt dann „Neu installiert?“, und „Das war dieses Gerät“ übernimmt Namen
+  und Platz des alten Eintrags. Ein Gerät, das nicht mehr offen ist, lässt
+  sich „Entfernen“.
+- **Zuverlässiger Weg:** während einer Übertragung fragt Sondra jede 1,2 s
+  nach Antworten statt alle 4–15 s, sammelt Verbindungswege bis zu 8 s und
+  gibt einen direkten Weg erst nach drei Minuten auf (vorher nach 15 s, was
+  jeden dritten bis fünften Versuch scheitern liess). Die Android-App hält
+  dafür kurz ein Multicast-Lock (sonst hört sie die `.local`-Namen der
+  anderen Geräte nicht), die Windows-App nennt ihre Adresse im Netz direkt.
 - **Prüfung:** `npm run verify:devices` (Kennungen, Signaturen, Fälschungen,
   Wiederholungen, Namen, Flusskontrolle, Abbruch).
 

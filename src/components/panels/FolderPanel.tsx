@@ -47,7 +47,7 @@ import {
 } from '../../lib/folder'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
-import { DRIVE_PROBLEM, DriveError, driveLinked, driveMediaUrl, saveFilesToDrive, useDrive } from '../../lib/googleDrive'
+import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, trashDriveFiles, useDrive } from '../../lib/googleDrive'
 import { DriveIcon } from '../GoogleDrive'
 import { SeasonFilingDialog } from '../SeasonFiling'
 import { requestOpenSeries, useMerkliste } from '../../lib/merkliste'
@@ -584,7 +584,6 @@ export function FolderPanel() {
   /** Episodes in Drive being filed into a series' season. */
   const [filing, setFiling] = useState<FolderFile[] | null>(null)
   /** File currently open in the inline/modal preview. */
-  const [previewFile, setPreviewFile] = useState<FolderFile | null>(null)
   const pickerRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -771,6 +770,27 @@ export function FolderPanel() {
   }
 
   const reallyDelete = async (files: FolderFile[]) => {
+    if (scan?.source === 'drive') {
+      setDeleting(true)
+      try {
+        const byId = new Map(files.flatMap((file) => (file.drive ? [[file.drive.id, file] as const] : [])))
+        const { trashed, failed } = await trashDriveFiles([...byId.keys()])
+        const gone = new Set(trashed.map((id) => byId.get(id)!.path))
+        useFolder.setState((state) => ({
+          scan: state.scan ? withoutFiles(state.scan, gone) : null,
+          selected: new Set([...state.selected].filter((path) => !gone.has(path))),
+        }))
+        log('ordner', `${trashed.length} ${trashed.length === 1 ? 'Datei' : 'Dateien'} in Drive in den Papierkorb gelegt`)
+        if (failed.length > 0) setProblem(`${failed.length} nicht gelöscht: ${byId.get(failed[0].id)?.name ?? ''} — ${failed[0].reason}`)
+        else setNote(`${trashed.length} ${trashed.length === 1 ? 'Datei' : 'Dateien'} im Papierkorb von Google Drive.`)
+      } catch (error) {
+        setProblem(error instanceof DriveError ? DRIVE_PROBLEM[error.code] : error instanceof Error ? error.message : String(error))
+      } finally {
+        setDeleting(false)
+        setConfirmDelete(null)
+      }
+      return
+    }
     if (!scan?.handle) return
     setDeleting(true)
     try {
@@ -1010,7 +1030,8 @@ export function FolderPanel() {
       {fromDrive ? (
         <p className="max-w-[72ch] text-small leading-[1.5] text-prose">
           Der Ordner „Sondra“ in Ihrem Google Drive. Sondra sieht dort nur, was es selbst abgelegt hat — Heruntergeladenes, Dateien,
-          Projekte. Filme spielen direkt aus Drive; was Sie zu Ende schauen, hakt die Merkliste ab.
+          Projekte. Filme spielen direkt aus Drive; was Sie zu Ende schauen, hakt die Merkliste ab. Gelöschtes landet im
+          Papierkorb von Drive.
         </p>
       ) : null}
 
@@ -1185,13 +1206,7 @@ export function FolderPanel() {
           ) : null}
         </div>
       ) : (
-        <div
-          className={
-            chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path)
-              ? 'grid grid-cols-1 items-start gap-[16px] xl:grid-cols-[minmax(0,1fr)_340px]'
-              : 'flex flex-col'
-          }
-        >
+        <div className="flex flex-col">
           <div
             ref={listRef}
             role="listbox"
@@ -1201,7 +1216,7 @@ export function FolderPanel() {
             className={
               prefs.view === 'kacheln'
                 ? 'flex flex-col gap-[18px]'
-                : 'flex flex-col overflow-hidden rounded-card ring-1 ring-inset ring-line'
+                : 'rise-list flex flex-col overflow-hidden rounded-card ring-1 ring-inset ring-line'
             }
           >
             {prefs.view === 'kacheln' ? (
@@ -1214,13 +1229,7 @@ export function FolderPanel() {
                         <span className="value text-micro text-prose">{view.dirs.length}</span>
                       </div>
                     ) : null}
-                    <div
-                      className={
-                        chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path)
-                          ? 'grid grid-cols-1 gap-[10px] sm:grid-cols-2 lg:grid-cols-3'
-                          : 'grid grid-cols-1 gap-[10px] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-                      }
-                    >
+                    <div className="rise-list grid grid-cols-1 gap-[10px] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {view.dirs.map((entry, index) => (
                         <DirTile
                           key={entry.path}
@@ -1247,13 +1256,7 @@ export function FolderPanel() {
                         <span className="value text-micro text-prose">{view.files.length}</span>
                       </div>
                     ) : null}
-                    <div
-                      className={
-                        chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path)
-                          ? 'grid grid-cols-2 gap-[12px] sm:grid-cols-3 lg:grid-cols-4'
-                          : 'grid grid-cols-2 gap-[12px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
-                      }
-                    >
+                    <div className="rise-list grid grid-cols-2 gap-[12px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                       {shownFiles.map((file, at) => {
                         const index = view.dirs.length + at
                         return (
@@ -1335,27 +1338,6 @@ export function FolderPanel() {
             )}
           </div>
 
-          {chosen.length === 1 && view.files.some((f) => f.path === chosen[0].path) ? (
-            <div className="xl:contents fixed inset-x-0 bottom-0 z-40 xl:static max-h-[85dvh] xl:max-h-none overflow-y-auto rounded-t-card xl:rounded-none bg-raised xl:bg-transparent p-[16px] xl:p-0 shadow-2xl xl:shadow-none ring-1 ring-line xl:ring-0 pb-[calc(16px+env(safe-area-inset-bottom,0px))]">
-              <div className="flex items-center justify-between pb-[10px] xl:hidden border-b border-line mb-[12px]">
-                <span className="text-small font-semibold text-ink">Vorschau</span>
-                <button
-                  type="button"
-                  onClick={() => select(new Set(), null)}
-                  className="press rounded-nav px-[8px] py-[4px] text-micro text-muted hover:text-ink"
-                >
-                  Schliessen ✕
-                </button>
-              </div>
-              <FolderInlinePreview
-                file={chosen[0]}
-                episode={episodes.get(chosen[0].path) ?? null}
-                onExpand={() => setPreviewFile(chosen[0])}
-                onPlay={() => play([chosen[0]], true)}
-                onTakeIntoSession={() => void intoSession([chosen[0]])}
-              />
-            </div>
-          ) : null}
         </div>
       )}
       {view.files.length > limit ? (
@@ -1374,17 +1356,12 @@ export function FolderPanel() {
         <div
           role="region"
           aria-label="Auswahl"
-          className="rise elevate-lift sticky bottom-[12px] z-20 flex flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-card bg-raised px-[14px] py-[10px] ring-1 ring-inset ring-rule"
+          className="dock elevate-lift sticky bottom-[12px] z-20 flex flex-wrap items-center gap-x-[12px] gap-y-[8px] rounded-card bg-raised px-[14px] py-[10px] ring-1 ring-inset ring-rule"
         >
           <span className="text-small text-ink">
             <span className="font-semibold">{chosen.length} ausgewählt</span> · <span className="value">{formatBytes(chosenSize)}</span>
           </span>
           <span className="flex-1" />
-          {chosen.length === 1 && (chosen[0].kind === 'video' || chosen[0].kind === 'audio' || chosen[0].kind === 'image') ? (
-            <Button type="button" size="sm" variant="quiet" onClick={() => setPreviewFile(chosen[0])}>
-              Vorschau
-            </Button>
-          ) : null}
           {selectedMedia.length > 0 ? (
             <Button type="button" size="sm" onClick={() => play(chosen, true)}>
               Abspielen{selectedMedia.length < chosen.length ? ` (${selectedMedia.length})` : ''}
@@ -1416,7 +1393,7 @@ export function FolderPanel() {
               In Drive
             </Button>
           ) : null}
-          {scan.handle ? (
+          {scan.handle || fromDrive ? (
             <Button type="button" size="sm" variant="quiet" onClick={() => setConfirmDelete(chosen)}>
               Löschen …
             </Button>
@@ -1444,336 +1421,43 @@ export function FolderPanel() {
       ) : null}
 
       {confirmDelete ? (
-        <DeleteDialog files={confirmDelete} busy={deleting} onCancel={() => setConfirmDelete(null)} onConfirm={() => void reallyDelete(confirmDelete)} />
+        <DeleteDialog files={confirmDelete} toBin={fromDrive} busy={deleting} onCancel={() => setConfirmDelete(null)} onConfirm={() => void reallyDelete(confirmDelete)} />
       ) : null}
 
-      {previewFile ? (
-        <FolderPreviewDialog
-          file={previewFile}
-          episode={episodes.get(previewFile.path) ?? null}
-          files={shownFiles}
-          onSelectFile={setPreviewFile}
-          onClose={() => setPreviewFile(null)}
-          onPlayInPlayer={(f) => {
-            setPreviewFile(null)
-            play([f], true)
-          }}
-          onTakeIntoSession={(f) => {
-            setPreviewFile(null)
-            void intoSession([f])
-          }}
-        />
-      ) : null}
     </div>
   )
 }
 
-function FolderInlinePreview({
-  file,
-  episode,
-  onExpand,
-  onPlay,
-  onTakeIntoSession,
-}: {
-  file: FolderFile
-  episode: FolderEpisode | null
-  onExpand: () => void
-  onPlay: () => void
-  onTakeIntoSession: () => void
-}): ReactNode {
-  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    let revoked: string | null = null
-    let cancelled = false
-    setMediaUrl(null)
-
-    if (file.file) {
-      const u = URL.createObjectURL(file.file)
-      revoked = u
-      setMediaUrl(u)
-      setLoading(false)
-      return () => {
-        if (revoked) URL.revokeObjectURL(revoked)
-      }
-    }
-
-    if (file.drive && (file.kind === 'video' || file.kind === 'audio' || file.kind === 'image')) {
-      setLoading(true)
-      void (async () => {
-        try {
-          if (file.kind === 'video' || file.kind === 'audio') {
-            const streamUrl = await driveMediaUrl({
-              id: file.drive!.id,
-              size: file.size,
-              type: file.drive!.mime,
-            })
-            if (cancelled) return
-            if (streamUrl) {
-              setMediaUrl(streamUrl)
-              setLoading(false)
-              return
-            }
-          }
-          const fetched = await fileHere(file)
-          if (cancelled) return
-          const u = URL.createObjectURL(fetched)
-          revoked = u
-          setMediaUrl(u)
-        } catch {
-          // Fallback to cover or icon if inline preview cannot be loaded
-        } finally {
-          if (!cancelled) setLoading(false)
-        }
-      })()
-    }
-
-    return () => {
-      cancelled = true
-      if (revoked) URL.revokeObjectURL(revoked)
-    }
-  }, [file])
-
-  const canPreviewModal = file.kind === 'video' || file.kind === 'audio' || file.kind === 'image'
-
-  return (
-    <aside
-      aria-label="Dateivorschau"
-      className="sticky top-[16px] flex flex-col gap-[12px] rounded-card bg-panel-mid p-[14px] ring-1 ring-inset ring-line"
-    >
-      <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-nav bg-stage ring-1 ring-inset ring-line">
-        {loading ? (
-          <span className="text-small text-prose">Lädt Vorschau …</span>
-        ) : mediaUrl && file.kind === 'video' ? (
-          <video
-            key={mediaUrl}
-            src={mediaUrl}
-            controls
-            playsInline
-            preload="metadata"
-            className="h-full w-full bg-black object-contain"
-          />
-        ) : mediaUrl && file.kind === 'image' ? (
-          <img src={mediaUrl} alt={file.name} className="h-full w-full object-contain" />
-        ) : mediaUrl && file.kind === 'audio' ? (
-          <div className="flex w-full flex-col items-center gap-[10px] px-[12px]">
-            <KindGlyph kind="audio" className="h-[36px] w-[36px] text-ink" />
-            <audio key={mediaUrl} src={mediaUrl} controls preload="metadata" className="w-full" />
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-[6px] text-ink">
-            <KindGlyph kind={file.kind} className="h-[36px] w-[36px]" />
-            <span className="value text-micro uppercase tracking-wider text-prose">
-              {extensionOf(file.name) || KIND_LABEL[file.kind]}
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-[4px]">
-        <p className="m-0 break-words text-body font-semibold leading-[1.3] text-ink">{file.name}</p>
-        <p className="value m-0 truncate text-micro text-prose" title={file.path}>
-          {file.path}
-        </p>
-      </div>
-
-      <dl className="grid grid-cols-2 gap-x-[10px] gap-y-[6px] border-t border-line pt-[10px] text-small">
-        <div>
-          <dt className="text-micro text-prose">Art</dt>
-          <dd className="m-0 font-medium text-ink">
-            {KIND_LABEL[file.kind]} ({extensionOf(file.name)})
-          </dd>
-        </div>
-        <div>
-          <dt className="text-micro text-prose">Grösse</dt>
-          <dd className="value m-0 font-medium text-ink">{formatBytes(file.size)}</dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-micro text-prose">Geändert</dt>
-          <dd className="value m-0 text-ink">{dateOf(file.modified)}</dd>
-        </div>
-      </dl>
-
-      {episode ? (
-        <div className="flex items-center justify-between border-t border-line pt-[10px] text-small">
-          <span className="text-prose">Merkliste</span>
-          <EpisodeMark episode={episode} />
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-[8px] border-t border-line pt-[10px]">
-        {file.kind === 'video' || file.kind === 'audio' ? (
-          <Button type="button" size="sm" onClick={onPlay}>
-            Abspielen
-          </Button>
-        ) : null}
-        {canPreviewModal ? (
-          <Button type="button" size="sm" variant="quiet" onClick={onExpand}>
-            Große Vorschau
-          </Button>
-        ) : null}
-        <Button type="button" size="sm" variant="quiet" onClick={onTakeIntoSession}>
-          In die Sitzung
-        </Button>
-      </div>
-    </aside>
-  )
-}
-
-function FolderPreviewDialog({
-  file,
-  episode,
+function DeleteDialog({
   files,
-  onSelectFile,
-  onClose,
-  onPlayInPlayer,
-  onTakeIntoSession,
+  toBin = false,
+  busy,
+  onCancel,
+  onConfirm,
 }: {
-  file: FolderFile
-  episode: FolderEpisode | null
   files: FolderFile[]
-  onSelectFile: (next: FolderFile) => void
-  onClose: () => void
-  onPlayInPlayer: (file: FolderFile) => void
-  onTakeIntoSession: (file: FolderFile) => void
+  /** Drive: into its bin, restorable there for 30 days. */
+  toBin?: boolean
+  busy: boolean
+  onCancel: () => void
+  onConfirm: () => void
 }): ReactNode {
-  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-
-  const previewableList = useMemo(
-    () => files.filter((f) => f.kind === 'video' || f.kind === 'audio' || f.kind === 'image'),
-    [files],
-  )
-  const currentIdx = previewableList.findIndex((f) => f.path === file.path)
-  const prevFile = currentIdx > 0 ? previewableList[currentIdx - 1] : null
-  const nextFile = currentIdx >= 0 && currentIdx + 1 < previewableList.length ? previewableList[currentIdx + 1] : null
-
-  useEffect(() => {
-    let revoked: string | null = null
-    let cancelled = false
-    setMediaUrl(null)
-    setErr(null)
-
-    if (file.file) {
-      const u = URL.createObjectURL(file.file)
-      revoked = u
-      setMediaUrl(u)
-      setLoading(false)
-      return () => {
-        if (revoked) URL.revokeObjectURL(revoked)
-      }
-    }
-
-    if (file.drive) {
-      setLoading(true)
-      void (async () => {
-        try {
-          if (file.kind === 'video' || file.kind === 'audio') {
-            const streamUrl = await driveMediaUrl({
-              id: file.drive!.id,
-              size: file.size,
-              type: file.drive!.mime,
-            })
-            if (cancelled) return
-            if (streamUrl) {
-              setMediaUrl(streamUrl)
-              setLoading(false)
-              return
-            }
-          }
-          const fetched = await fileHere(file)
-          if (cancelled) return
-          const u = URL.createObjectURL(fetched)
-          revoked = u
-          setMediaUrl(u)
-        } catch (e) {
-          if (!cancelled) setErr(e instanceof Error ? e.message : 'Vorschau konnte nicht geladen werden.')
-        } finally {
-          if (!cancelled) setLoading(false)
-        }
-      })()
-    }
-
-    return () => {
-      cancelled = true
-      if (revoked) URL.revokeObjectURL(revoked)
-    }
-  }, [file])
-
-  return (
-    <Dialog open onClose={onClose} title={`Vorschau: ${file.name}`} size="lg">
-      <div className="flex flex-col gap-[14px]">
-        <div className="flex flex-wrap items-center justify-between gap-[8px] text-small text-prose">
-          <span className="truncate" title={file.path}>
-            {KIND_LABEL[file.kind]} · <span className="value">{formatBytes(file.size)}</span> · {dateOf(file.modified)}
-          </span>
-          {episode ? <EpisodeMark episode={episode} /> : null}
-        </div>
-
-        <div className="relative flex min-h-[240px] items-center justify-center overflow-hidden rounded-card bg-stage p-[8px] ring-1 ring-inset ring-line">
-          {loading ? (
-            <p className="text-small text-prose">Vorschau wird geladen …</p>
-          ) : err ? (
-            <p className="text-small text-danger">{err}</p>
-          ) : mediaUrl ? (
-            file.kind === 'video' ? (
-              <video
-                key={mediaUrl}
-                src={mediaUrl}
-                controls
-                autoPlay
-                playsInline
-                className="max-h-[60vh] w-full rounded-nav bg-black object-contain"
-              />
-            ) : file.kind === 'audio' ? (
-              <div className="flex w-full flex-col items-center gap-[12px] py-[28px]">
-                <KindGlyph kind="audio" className="h-[44px] w-[44px] text-ink" />
-                <audio key={mediaUrl} src={mediaUrl} controls autoPlay className="w-full max-w-[440px]" />
-              </div>
-            ) : file.kind === 'image' ? (
-              <img src={mediaUrl} alt={file.name} className="max-h-[60vh] max-w-full rounded-nav object-contain" />
-            ) : null
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-[8px]">
-          <div className="flex items-center gap-[6px]">
-            <Button type="button" size="sm" variant="quiet" disabled={!prevFile} onClick={() => prevFile && onSelectFile(prevFile)}>
-              ← Vorherige
-            </Button>
-            <Button type="button" size="sm" variant="quiet" disabled={!nextFile} onClick={() => nextFile && onSelectFile(nextFile)}>
-              Nächste →
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-[8px]">
-            {file.kind === 'video' || file.kind === 'audio' ? (
-              <Button type="button" size="sm" onClick={() => onPlayInPlayer(file)}>
-                Im Player öffnen
-              </Button>
-            ) : null}
-            <Button type="button" size="sm" variant="quiet" onClick={() => onTakeIntoSession(file)}>
-              In die Sitzung übernehmen
-            </Button>
-            <Button type="button" size="sm" variant="quiet" onClick={onClose}>
-              Schliessen
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Dialog>
-  )
-}
-
-function DeleteDialog({ files, busy, onCancel, onConfirm }: { files: FolderFile[]; busy: boolean; onCancel: () => void; onConfirm: () => void }): ReactNode {
   const total = files.reduce((sum, file) => sum + file.size, 0)
   return (
     <Dialog open onClose={busy ? () => undefined : onCancel} title={files.length === 1 ? 'Datei löschen?' : `${files.length} Dateien löschen?`} size="md">
       <div className="flex flex-col gap-[16px]">
         <p className="text-body leading-[1.55] text-prose">
-          {files.length === 1 ? 'Sie wird' : 'Sie werden'} endgültig aus dem Ordner gelöscht —{' '}
-          <span className="font-semibold text-ink">nicht in den Papierkorb</span>. Zusammen <span className="value">{formatBytes(total)}</span>.
+          {toBin ? (
+            <>
+              {files.length === 1 ? 'Sie kommt' : 'Sie kommen'} in den <span className="font-semibold text-ink">Papierkorb von Google Drive</span> und{' '}
+              {files.length === 1 ? 'lässt' : 'lassen'} sich dort 30 Tage lang wiederherstellen. Zusammen <span className="value">{formatBytes(total)}</span>.
+            </>
+          ) : (
+            <>
+              {files.length === 1 ? 'Sie wird' : 'Sie werden'} endgültig aus dem Ordner gelöscht —{' '}
+              <span className="font-semibold text-ink">nicht in den Papierkorb</span>. Zusammen <span className="value">{formatBytes(total)}</span>.
+            </>
+          )}
         </p>
         <ul className="flex max-h-[240px] flex-col overflow-y-auto">
           {files.slice(0, 12).map((file) => (
@@ -1785,7 +1469,7 @@ function DeleteDialog({ files, busy, onCancel, onConfirm }: { files: FolderFile[
         </ul>
         <div className="flex flex-wrap items-center gap-[10px]">
           <Button type="button" disabled={busy} onClick={onConfirm}>
-            {busy ? 'Löscht …' : 'Endgültig löschen'}
+            {busy ? 'Löscht …' : toBin ? 'In den Papierkorb' : 'Endgültig löschen'}
           </Button>
           <Button type="button" variant="quiet" disabled={busy} onClick={onCancel}>
             Abbrechen

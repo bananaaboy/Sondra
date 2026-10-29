@@ -1283,7 +1283,7 @@ export function MerklistePanel() {
               <span className="value text-small text-muted">{group.entries.length}</span>
             </h3>
             {view === 'liste' ? (
-              <ul className="flex flex-col" onPointerDown={() => setFocusedId(null)}>
+              <ul className="rise-list flex flex-col" onPointerDown={() => setFocusedId(null)}>
                 {group.entries.map((item) => (
                   <SeriesRow key={item.id} item={item} onOpen={() => openSeries(item.id)} isFocused={focusedId === item.id} />
                 ))}
@@ -1293,7 +1293,7 @@ export function MerklistePanel() {
                whatever their shape. */
             <div
               onPointerDown={() => setFocusedId(null)}
-              className="grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] items-end gap-x-[14px] gap-y-[24px] sm:grid-cols-[repeat(auto-fill,minmax(156px,1fr))] sm:gap-x-[18px]"
+              className="rise-list grid grid-cols-[repeat(auto-fill,minmax(136px,1fr))] items-end gap-x-[14px] gap-y-[24px] sm:grid-cols-[repeat(auto-fill,minmax(156px,1fr))] sm:gap-x-[18px]"
             >
               {group.entries.map((item) => (
                 <SeriesTile
@@ -2860,7 +2860,7 @@ function SeasonTiles({
   const tiles = seasonsOf(item).flatMap((season) => partsOf(season).map((part) => ({ season, part })))
   return (
     <div
-      className={`grid gap-[10px] sm:gap-[14px] ${
+      className={`rise-list grid gap-[10px] sm:gap-[14px] ${
         large
           ? 'grid-cols-[repeat(auto-fill,minmax(100px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))]'
           : 'grid-cols-[repeat(auto-fill,minmax(100px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(124px,1fr))]'

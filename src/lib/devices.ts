@@ -59,13 +59,25 @@ const HANDOVER = ['Geräte', 'Übergabe']
 /** How often: the post while the page is in front, while it is not, the list, this device's own record. */
 const POLL_FRONT = 4_000
 const POLL_BACK = 15_000
+/** While a transfer waits for an answer or a connection: the other side should not wait on this one's rhythm. */
+const POLL_BUSY = 1_200
 const LIST_EVERY = 30_000
 const BEAT_EVERY = 2 * 60_000
 /** Seen within this counts as „offen“. */
 export const ONLINE_WITHIN = 3 * 60_000
 /** Devices not seen for this long are not listed. */
 const FORGET_AFTER = 60 * 24 * 60 * 60_000
-const CONNECT_TIMEOUT = 15_000
+/**
+ * After this long without a connection the transfer says „Kein direkter Weg“
+ * and offers Drive — but the attempt goes on until `CONNECT_GIVE_UP`, and a
+ * connection that opens late still carries the files. The answer reaches the
+ * sender only on its next look at Drive, so the receiver waits longer.
+ */
+const CONNECT_SOFT_SENDER = 25_000
+const CONNECT_SOFT_RECEIVER = 45_000
+const CONNECT_GIVE_UP = 3 * 60_000
+/** States in which a transfer waits on the other side. */
+const WAITING: TransferState[] = ['offering', 'asking', 'connecting', 'direct-failed', 'via-drive']
 const OFFER_TIMEOUT = MESSAGE_MAX_AGE
 
 export type TransferState =
@@ -107,6 +119,13 @@ interface DevicesState {
   problem: string | null
   self: DeviceRecord | null
   devices: DeviceRecord[]
+  /**
+   * Entries that may be this very device before a reinstall or wiped data:
+   * same kind and platform, not open now, older than this one. A new key
+   * cannot take an old id — the user says „Das war dieses Gerät“, and the
+   * old entry goes.
+   */
+  former: DeviceRecord[]
   transfers: Transfer[]
 }
 
@@ -124,6 +143,7 @@ export const useDevices = create<DevicesState>(() => ({
   problem: null,
   self: null,
   devices: [],
+  former: [],
   transfers: [],
 }))
 
@@ -154,6 +174,8 @@ interface Own {
   name: string
   created: number
   fileId?: string
+  /** Asked once whether an older entry was this device; answered. */
+  decided?: boolean
 }
 
 function idb<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
@@ -334,7 +356,12 @@ async function refreshList(client: DriveClient, { beat }: { beat: boolean }): Pr
     own.fileId = file.id
     await saveOwn(own)
   }
-  set({ self: current, devices: others, status: 'ready', problem: null })
+  // Offered for two weeks after joining: a reinstall is noticed on its first days.
+  const former =
+    own.decided || now - own.created > 14 * 24 * 60 * 60_000
+      ? []
+      : others.filter((device) => device.kind === current!.kind && device.platform === current!.platform && device.created < own!.created && !isOnline(device, now))
+  set({ self: current, devices: others, former, status: 'ready', problem: null })
   lastList = now
 }
 
@@ -400,10 +427,18 @@ function schedule() {
   timers = []
   if (!state().enabled) return
   const next = () => {
-    const wait = document.visibilityState === 'visible' ? POLL_FRONT : POLL_BACK
+    const waiting = state().transfers.some((entry) => WAITING.includes(entry.state) && entry.state !== 'asking')
+    const wait = waiting ? POLL_BUSY : document.visibilityState === 'visible' ? POLL_FRONT : POLL_BACK
     timers = [window.setTimeout(() => void round().finally(next), wait)]
   }
   void round().finally(next)
+}
+
+/** Something was just sent that the other side will answer: look again soon, not in fifteen seconds. */
+function lookSoon() {
+  if (!state().enabled) return
+  for (const timer of timers) window.clearTimeout(timer)
+  timers = [window.setTimeout(() => schedule(), 400)]
 }
 
 let started = false
@@ -486,6 +521,54 @@ export async function renameThisDevice(wanted: string): Promise<string> {
   const client = deviceDrive()
   if (client) await refreshList(client, { beat: true })
   return name
+}
+
+/** Deletes a device's entry in Drive, and every copy of it. */
+async function dropEntry(client: DriveClient, id: string): Promise<void> {
+  const files = await client.search(`appProperties has { key='sondraGeraet' and value='${id}' }`)
+  for (const file of files) {
+    await client.remove(file.id)
+    recordCache.delete(file.id)
+  }
+}
+
+/**
+ * „Das war dieses Gerät“: after a reinstall the old entry is this device
+ * under a lost key. It goes, and this device takes its name.
+ */
+export async function adoptFormer(id: string): Promise<void> {
+  const client = deviceDrive()
+  const former = state().former.find((device) => device.id === id)
+  if (!client || !own || !former || isOnline(former)) return
+  await dropEntry(client, id)
+  own.name = uniqueName(
+    former.name,
+    state().devices.filter((device) => device.id !== id).map((device) => device.name),
+  )
+  own.decided = true
+  await saveOwn(own)
+  set({ devices: state().devices.filter((device) => device.id !== id), former: [] })
+  await refreshList(client, { beat: true })
+}
+
+/** „Nein, ein anderes Gerät“: the old entries stay, and the question is not asked again. */
+export async function dismissFormer(): Promise<void> {
+  if (!own) return
+  own.decided = true
+  await saveOwn(own)
+  set({ former: [] })
+}
+
+/**
+ * Takes an entry off the list that is not open now. Safe for a device still
+ * in use: it writes its entry again on its next round and is back.
+ */
+export async function removeDevice(id: string): Promise<void> {
+  const client = deviceDrive()
+  const device = state().devices.find((entry) => entry.id === id)
+  if (!client || !device || isOnline(device)) return
+  await dropEntry(client, id)
+  set({ devices: state().devices.filter((entry) => entry.id !== id), former: state().former.filter((entry) => entry.id !== id) })
 }
 
 export function refreshDevices(): void {
@@ -573,11 +656,15 @@ async function handle(type: string, from: string, transferId: string, body: unkn
 /* WebRTC                                                                     */
 /* -------------------------------------------------------------------------- */
 
-/** All candidates at once, so one message carries the whole description; three seconds at most. */
+/**
+ * All candidates at once, so one message carries the whole description.
+ * Eight seconds at most: a phone names its addresses over mDNS first, and
+ * three seconds sent descriptions without them.
+ */
 function gathered(pc: RTCPeerConnection): Promise<void> {
   if (pc.iceGatheringState === 'complete') return Promise.resolve()
   return new Promise((resolve) => {
-    const timer = window.setTimeout(resolve, 3000)
+    const timer = window.setTimeout(resolve, 8000)
     pc.addEventListener('icegatheringstatechange', () => {
       if (pc.iceGatheringState === 'complete') {
         window.clearTimeout(timer)
@@ -611,20 +698,56 @@ function wireOf(channel: RTCDataChannel, pc: RTCPeerConnection): Wire {
   }
 }
 
-function opened(channel: RTCDataChannel, within: number): Promise<boolean> {
-  if (channel.readyState === 'open') return Promise.resolve(true)
+/** Android lets multicast in only while asked to; outside the app this does nothing. */
+let multicastHolds = 0
+function holdMulticast(on: boolean) {
+  multicastHolds = Math.max(0, multicastHolds + (on ? 1 : -1))
+  void ANDROID_BRIDGE?.multicast?.(multicastHolds > 0)
+}
+
+/**
+ * The open channel, or null. After `soft` the transfer says there is no
+ * direct way and offers Drive, but this keeps waiting: an answer that came
+ * late, or a phone that found the other's address on the third try, still
+ * connects. It stops when the connection fails for good, after
+ * `CONNECT_GIVE_UP`, or when the transfer ends another way (cancelled, sent
+ * through Drive).
+ */
+function waitOpen(id: string, pc: RTCPeerConnection, channel: Promise<RTCDataChannel>, soft: number): Promise<RTCDataChannel | null> {
+  holdMulticast(true)
   return new Promise((resolve) => {
-    const timer = window.setTimeout(() => resolve(false), within)
-    channel.addEventListener(
-      'open',
-      () => {
-        window.clearTimeout(timer)
-        resolve(true)
-      },
-      { once: true },
-    )
+    let finished = false
+    const finish = (value: RTCDataChannel | null) => {
+      if (finished) return
+      finished = true
+      window.clearTimeout(softTimer)
+      window.clearTimeout(hardTimer)
+      unsubscribe()
+      holdMulticast(false)
+      resolve(value)
+    }
+    const softTimer = window.setTimeout(() => {
+      if (state().transfers.find((entry) => entry.id === id)?.state === 'connecting') patchTransfer(id, { state: 'direct-failed' })
+    }, soft)
+    const hardTimer = window.setTimeout(() => finish(null), CONNECT_GIVE_UP)
+    const unsubscribe = useDevices.subscribe((current) => {
+      const transfer = current.transfers.find((entry) => entry.id === id)
+      if (!transfer || !['connecting', 'direct-failed'].includes(transfer.state)) finish(null)
+    })
+    const watch = () => {
+      if (pc.iceConnectionState === 'failed' || pc.connectionState === 'failed') finish(null)
+    }
+    pc.addEventListener('iceconnectionstatechange', watch)
+    pc.addEventListener('connectionstatechange', watch)
+    void channel.then((ready) => {
+      if (ready.readyState === 'open') finish(ready)
+      else ready.addEventListener('open', () => finish(ready), { once: true })
+    })
   })
 }
+
+/** Still waiting on a direct way (or shown as having none, but not yet given up)? */
+const stillDirect = (id: string) => ['connecting', 'direct-failed'].includes(state().transfers.find((entry) => entry.id === id)?.state ?? '')
 
 /* -------------------------------------------------------------------------- */
 /* Sending                                                                    */
@@ -668,6 +791,7 @@ export async function sendToDevice(deviceId: string, files: File[]): Promise<str
     await pc.setLocalDescription(await pc.createOffer())
     await gathered(pc)
     await post(deviceId, 'offer', id, { sdp: pc.localDescription?.sdp ?? '', files: infos } satisfies OfferBody)
+    lookSoon()
   } catch (error) {
     pc.close()
     outgoingPending.delete(id)
@@ -692,12 +816,13 @@ export async function sendToDevice(deviceId: string, files: File[]): Promise<str
       patchTransfer(id, { state: 'direct-failed' })
       return
     }
-    if (!(await opened(channel, CONNECT_TIMEOUT))) {
+    const open = await waitOpen(id, pc, Promise.resolve(channel), CONNECT_SOFT_SENDER)
+    if (!open || !stillDirect(id)) {
       pc.close()
-      if (state().transfers.find((entry) => entry.id === id)?.state === 'connecting') patchTransfer(id, { state: 'direct-failed' })
+      if (stillDirect(id)) patchTransfer(id, { state: 'direct-failed' })
       return
     }
-    patchTransfer(id, { state: 'sending', route: 'direct' })
+    patchTransfer(id, { state: 'sending', route: 'direct', error: undefined })
     try {
       const places = await sendOver(
         wireOf(channel, pc),
@@ -895,6 +1020,7 @@ export async function acceptTransfer(id: string): Promise<void> {
     await pc.setLocalDescription(await pc.createAnswer())
     await gathered(pc)
     await post(transfer.peer, 'answer', id, { sdp: pc.localDescription?.sdp ?? '' })
+    lookSoon()
   } catch (error) {
     pc.close()
     patchTransfer(id, { state: 'direct-failed', error: error instanceof Error ? error.message : String(error) })
@@ -902,14 +1028,14 @@ export async function acceptTransfer(id: string): Promise<void> {
   }
   offers.delete(id)
 
-  const channel = await Promise.race([channelArrived, new Promise<null>((resolve) => window.setTimeout(() => resolve(null), CONNECT_TIMEOUT))])
-  if (!channel || !(await opened(channel, CONNECT_TIMEOUT))) {
+  const channel = await waitOpen(id, pc, channelArrived, CONNECT_SOFT_RECEIVER)
+  if (!channel || !stillDirect(id)) {
     pc.close()
     // The sender is asked whether to go through Drive; its message finishes this.
-    if (state().transfers.find((entry) => entry.id === id)?.state === 'connecting') patchTransfer(id, { state: 'direct-failed' })
+    if (stillDirect(id)) patchTransfer(id, { state: 'direct-failed' })
     return
   }
-  patchTransfer(id, { state: 'receiving', route: 'direct' })
+  patchTransfer(id, { state: 'receiving', route: 'direct', error: undefined })
   try {
     const places = await receiveOver(wireOf(channel, pc), target.sinkFor, {
       signal: control.signal,

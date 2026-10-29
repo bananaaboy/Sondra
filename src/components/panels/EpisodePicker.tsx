@@ -120,7 +120,7 @@ export function EpisodePicker({
         <div
           role="dialog"
           aria-label={kind === 'list' ? 'Stelle in der Liste wählen' : 'Staffel und Folge wählen'}
-          className="rise absolute left-0 top-[calc(100%+6px)] z-30 flex w-[min(440px,calc(100vw-32px))] flex-col gap-[14px] rounded-card bg-raised p-[14px] shadow-lift ring-1 ring-line"
+          className="drop absolute left-0 top-[calc(100%+6px)] z-30 flex w-[min(440px,calc(100vw-32px))] flex-col gap-[14px] rounded-card bg-raised p-[14px] shadow-lift ring-1 ring-line"
         >
           {kind === 'series' ? (
             <div className="flex flex-col gap-[8px]">
