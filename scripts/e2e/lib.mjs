@@ -51,13 +51,15 @@ function meta(file) {
     mimeType: file.mimeType,
     size: file.bytes ? String(file.bytes.length) : undefined,
     modifiedTime: file.modifiedTime,
+    trashedTime: file.trashed ? file.trashedTime : undefined,
     createdTime: file.createdTime,
     parents: file.parents,
     appProperties: file.appProperties,
   }
 }
 function matches(file, q) {
-  if (file.trashed) return false
+  // „trashed = true“ asks for the bin, anything else for what is not in it.
+  if (Boolean(file.trashed) !== /trashed = true/.test(q)) return false
   const name = /name = '((?:[^'\\]|\\.)*)'/.exec(q)
   if (name && file.name !== name[1].replace(/\\'/g, "'")) return false
   const mimeIs = /mimeType = '([^']*)'/.exec(q)
@@ -158,7 +160,10 @@ export async function drive(route) {
     }
     if (method === 'PATCH') {
       const body = JSON.parse(request.postData() || '{}')
-      if (body.trashed) file.trashed = true
+      if (body.trashed !== undefined) {
+        file.trashed = Boolean(body.trashed)
+        file.trashedTime = file.trashed ? now() : undefined
+      }
       return json(route, { ...meta(file), trashed: Boolean(file.trashed) })
     }
     return json(route, { ...meta(file), trashed: Boolean(file.trashed) })

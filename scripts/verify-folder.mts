@@ -14,15 +14,19 @@ import {
   BIN_NAME,
   binFiles,
   clickSelect,
+  countBin,
   crumbs,
+  eraseFromBin,
   folderEpisodes,
   folderSeries,
   hintOf,
   hintProperties,
+  listBin,
   listing,
   matchFile,
   playQueue,
   restoreBinned,
+  restoreFromBin,
   scanDrive,
   scanFileList,
   scanHandle,
@@ -309,6 +313,63 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
     check(`Papierkorb ${way}: alle drei kommen zurück`, back.restored.length, 3)
     check(`Papierkorb ${way}: die inzwischen belegte Datei bleibt, die zurückgelegte bekommt eine Nummer`, [text(season as never, 'Folge 2.mkv'), text(season as never, 'Folge 2 (2).mkv')], ['inzwischen', 'zwei'])
     check(`Papierkorb ${way}: danach ist der Papierkorb leer`, bin.entries.size, 0)
+  }
+  // The bin looked into later, by a page that knows nothing of what went in:
+  // the notes in the bin say where each lay and when.
+  for (const canMove of [true, false]) {
+    const way = canMove ? 'mit Verschieben' : 'ohne Verschieben (kopiert)'
+    const root = new MemoryDir('Anime', canMove)
+    const season = await root.getDirectoryHandle('Staffel 1', { create: true })
+    for (const [dir, name, body] of [[root, 'Cover.jpg', 'bild'], [season, 'Folge 1.mkv', 'eins'], [season, 'Folge 2.mkv', 'zwei']] as const) {
+      const out = await (await dir.getFileHandle(name, { create: true })).createWritable!()
+      await out.write(new TextEncoder().encode(body))
+      await out.close()
+    }
+    check(`Ansehen ${way}: ohne Papierkorb nichts darin`, [await countBin(root as never), (await listBin(root as never)).length], [0, 0])
+    const listed = await scanHandle(root as never)
+    await binFiles(root as never, listed.files.filter((file) => file.name.startsWith('Folge')))
+    check(`Ansehen ${way}: zwei Dateien im Papierkorb`, await countBin(root as never), 2)
+    const bin = (await root.getDirectoryHandle(BIN_NAME)) as unknown as MemoryDir
+    check(`Ansehen ${way}: die Notizen zählen nicht als Datei und stehen nicht in der Liste`, bin.entries.has('.sondra-papierkorb.json'), true)
+    const afterBin = await scanHandle(root as never)
+    check(`Ansehen ${way}: die Notizen stören den Ordner nicht`, afterBin.files.map((file) => file.path), ['Cover.jpg'])
+    const items = await listBin(root as never)
+    check(`Ansehen ${way}: Namen und woher sie kamen`, items.map((item) => [item.name, item.from]).sort(), [['Folge 1.mkv', 'Staffel 1/Folge 1.mkv'], ['Folge 2.mkv', 'Staffel 1/Folge 2.mkv']])
+    check(`Ansehen ${way}: wann sie hineinkamen`, items.every((item) => typeof item.at === 'number' && item.at > 0), true)
+    // The folder they lay in is gone meanwhile: it is made again.
+    root.entries.delete('Staffel 1')
+    const one = await restoreFromBin(root as never, items.filter((item) => item.name === 'Folge 1.mkv'))
+    const again = (await root.getDirectoryHandle('Staffel 1')) as unknown as MemoryDir
+    check(`Zurücklegen ${way}: eine Datei, in einem neu angelegten Ordner`, [one.done.length, text(again, 'Folge 1.mkv')], [1, 'eins'])
+    const rest = await listBin(root as never)
+    check(`Zurücklegen ${way}: die andere liegt noch im Papierkorb`, [rest.map((item) => item.name), rest[0]?.from], [['Folge 2.mkv'], 'Staffel 1/Folge 2.mkv'])
+    // Without a note, a file goes back to the top.
+    const loose = await (await bin.getFileHandle('Dazu.txt', { create: true })).createWritable!()
+    await loose.write(new TextEncoder().encode('lose'))
+    await loose.close()
+    const withLoose = await listBin(root as never)
+    check(`Ansehen ${way}: eine von Hand hineingelegte Datei ist ohne Herkunft da`, withLoose.find((item) => item.name === 'Dazu.txt')?.from, undefined)
+    const top = await restoreFromBin(root as never, withLoose.filter((item) => item.name === 'Dazu.txt'))
+    check(`Zurücklegen ${way}: ohne Herkunft ganz nach oben`, [top.done.length, text(root, 'Dazu.txt')], [1, 'lose'])
+    // For good.
+    const gone = await eraseFromBin(root as never, await listBin(root as never))
+    check(`Endgültig ${way}: gelöscht, und der Papierkorb ist leer samt Notizen`, [gone.done.length, gone.failed.length, bin.entries.size], [1, 0, 0])
+    check(`Endgültig ${way}: was zurückgelegt war, bleibt`, text(again, 'Folge 1.mkv'), 'eins')
+  }
+  // A note that points out of the folder is not followed.
+  {
+    const root = new MemoryDir('Sicher', true)
+    const bin = await root.getDirectoryHandle(BIN_NAME, { create: true })
+    const file = await (await bin.getFileHandle('x.txt', { create: true })).createWritable!()
+    await file.write(new TextEncoder().encode('x'))
+    await file.close()
+    const notes = await (await bin.getFileHandle('.sondra-papierkorb.json', { create: true })).createWritable!()
+    await notes.write(new TextEncoder().encode(JSON.stringify({ 'x.txt': { path: '../../etc/x.txt', at: 1 } })))
+    await notes.close()
+    const [item] = await listBin(root as never)
+    const result = await restoreFromBin(root as never, [item])
+    const etc = (await root.getDirectoryHandle('etc')) as unknown as MemoryDir
+    check('Notiz mit „..“: die Teile werden übergangen, die Datei bleibt im Ordner', [result.done.length, text(etc, 'x.txt'), [...root.entries.keys()].sort()], [1, 'x', [BIN_NAME, 'etc']])
   }
   // Too big to copy where the browser cannot move: said, and left where it is.
   const root = new MemoryDir('Gross', false)

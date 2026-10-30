@@ -41,6 +41,7 @@ import {
   withoutFiles,
   BIN_NAME,
   binFiles,
+  countBin,
   restoreBinned,
   type Binned,
   type DirectoryHandle,
@@ -53,6 +54,7 @@ import { formatBytes, formatDuration } from '../../lib/format'
 import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
 import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, trashDriveFiles, useDrive } from '../../lib/googleDrive'
 import { PlayOnDeviceButton, SendToDevicesButton } from '../DeviceSend'
+import { FolderBin } from './FolderBin'
 import { FolderSubtitles } from './FolderSubtitles'
 import { DriveIcon } from '../GoogleDrive'
 import { SeasonFilingDialog } from '../SeasonFiling'
@@ -585,10 +587,22 @@ export function FolderPanel() {
   const [confirmDelete, setConfirmDelete] = useState<FolderFile[] | null>(null)
   /** What went into the bin last, to take back with one click. */
   const [binned, setBinned] = useState<Binned[] | null>(null)
+  /** The bin to look into, and how many files lie in the one of this folder. */
+  const [binOpen, setBinOpen] = useState(false)
+  const [binCount, setBinCount] = useState(0)
   const [subtitling, setSubtitling] = useState<FolderFile[] | null>(null)
   /** „Weitere … zeigen“ presses itself when it comes into view: a long folder is one list to scroll, not pages to click through. */
   const moreRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => setBinned(null), [scan?.handle])
+  useEffect(() => {
+    setBinCount(0)
+    if (!scan?.handle || scan.source === 'drive') return
+    let current = true
+    void countBin(scan.handle).then((count) => current && setBinCount(count)).catch(() => undefined)
+    return () => {
+      current = false
+    }
+  }, [scan?.handle, scan?.source])
   const [deleting, setDeleting] = useState(false)
   const [zipping, setZipping] = useState(false)
   /** Files on their way from Drive for the session or a ZIP. */
@@ -832,6 +846,7 @@ export function FolderPanel() {
         }))
         setDupes(null)
         setBinned(result.binned.length > 0 ? result.binned : null)
+        setBinCount((count) => count + result.binned.length)
         log('ordner', `${result.binned.length} ${result.binned.length === 1 ? 'Datei' : 'Dateien'} in den Papierkorb „${BIN_NAME}“ gelegt`)
         if (result.failed.length > 0) setProblem(`${result.failed.length} nicht verschoben: ${result.failed[0].file.name} — ${result.failed[0].reason}`)
         else setNote(`${result.binned.length} ${result.binned.length === 1 ? 'Datei' : 'Dateien'} im Ordner „${BIN_NAME}“.`)
@@ -860,6 +875,7 @@ export function FolderPanel() {
     try {
       const { restored, failed } = await restoreBinned(scan.handle, binned)
       setBinned(failed.length > 0 ? failed.map((entry) => entry.item) : null)
+      setBinCount((count) => Math.max(0, count - restored.length))
       log('ordner', `${restored.length} ${restored.length === 1 ? 'Datei' : 'Dateien'} aus dem Papierkorb zurückgelegt`)
       // Read again, but stay in the folder one was in.
       const here = useFolder.getState().dir
@@ -1186,6 +1202,11 @@ export function FolderPanel() {
             Mit Unterordnern
           </label>
           <span className="flex-1" />
+          {scan?.handle || fromDrive ? (
+            <button type="button" onClick={() => setBinOpen(true)} className={`${linkClass} text-small`}>
+              Papierkorb{binCount > 0 ? ` (${binCount})` : ''}
+            </button>
+          ) : null}
           {!dupes && !fromDrive ? (
             <button type="button" onClick={() => void runDuplicates()} className={`${linkClass} text-small`}>
               Doppelte finden
@@ -1216,6 +1237,11 @@ export function FolderPanel() {
           {binned && scan?.handle ? (
             <button type="button" disabled={deleting} onClick={() => void undoBin()} className={`${linkClass} text-small`}>
               Rückgängig
+            </button>
+          ) : null}
+          {binned && scan?.handle ? (
+            <button type="button" disabled={deleting} onClick={() => setBinOpen(true)} className={`${linkClass} text-small`}>
+              Papierkorb ansehen
             </button>
           ) : null}
         </p>
@@ -1513,6 +1539,23 @@ export function FolderPanel() {
         />
       ) : null}
 
+      {binOpen && (scan?.handle || fromDrive) ? (
+        <FolderBin
+          handle={fromDrive ? undefined : scan?.handle}
+          drive={fromDrive}
+          onClose={() => setBinOpen(false)}
+          onChanged={() => {
+            // Read again, so what came back turns up in the list, and stay in the folder one was in.
+            const here = useFolder.getState().dir
+            if (fromDrive) void readDriveFolder().then(() => useFolder.setState({ dir: here })).catch(() => undefined)
+            else if (scan?.handle) {
+              void countBin(scan.handle).then(setBinCount).catch(() => undefined)
+              void read(scan.handle).then(() => useFolder.setState({ dir: here }))
+            }
+          }}
+        />
+      ) : null}
+
       {confirmDelete ? (
         <DeleteDialog
           files={confirmDelete}
@@ -1558,7 +1601,7 @@ function DeleteDialog({
           ) : canBin ? (
             <>
               {files.length === 1 ? 'Sie kommt' : 'Sie kommen'} in den Ordner <span className="font-semibold text-ink">{BIN_NAME}</span> in diesem Ordner und{' '}
-              {files.length === 1 ? 'lässt' : 'lassen'} sich gleich mit „Rückgängig“ zurücklegen. Weg ist es erst, wenn Sie diesen Ordner selbst leeren. Zusammen{' '}
+              {files.length === 1 ? 'lässt' : 'lassen'} sich gleich mit „Rückgängig“ und später unter „Papierkorb“ zurücklegen. Weg ist es erst, wenn Sie es dort endgültig löschen. Zusammen{' '}
               <span className="value">{formatBytes(total)}</span>.
             </>
           ) : (

@@ -78,6 +78,8 @@ export interface DriveFile {
   mimeType: string | null
   /** The folder it is in, where Drive said (the tree asks for it). */
   parents?: string[]
+  /** When it went into Drive's bin, where the bin was asked for. */
+  trashedTime?: string
   /** Sondra's own notes on the file, private to it: which episode it was filed as. */
   appProperties?: Record<string, string>
 }
@@ -126,6 +128,7 @@ function asFile(raw: Record<string, unknown>): DriveFile {
     modifiedTime: typeof raw.modifiedTime === 'string' ? raw.modifiedTime : null,
     mimeType: typeof raw.mimeType === 'string' ? raw.mimeType : null,
     ...(Array.isArray(raw.parents) ? { parents: raw.parents.map(String) } : {}),
+    ...(typeof raw.trashedTime === 'string' ? { trashedTime: raw.trashedTime } : {}),
     ...(raw.appProperties && typeof raw.appProperties === 'object' ? { appProperties: raw.appProperties as Record<string, string> } : {}),
   }
 }
@@ -663,6 +666,40 @@ export function createDriveClient({
       } catch (error) {
         if (!(error instanceof DriveError) || error.code !== 'missing') throw error
       }
+    },
+
+    /**
+     * What Sondra put into Drive's bin and it still keeps (30 days), the last
+     * first. `drive.file` shows only the files Sondra made, so this is never
+     * more than Sondra's own.
+     */
+    async trashed(): Promise<DriveFile[]> {
+      const files: DriveFile[] = []
+      let pageToken = ''
+      do {
+        const page = await json<{ files?: Record<string, unknown>[]; nextPageToken?: string }>(
+          `${endpoints.api}/files?${query({
+            q: `trashed = true and mimeType != '${FOLDER_TYPE}'`,
+            fields: `nextPageToken,files(${FILE_FIELDS},trashedTime)`,
+            orderBy: 'modifiedTime desc',
+            spaces: 'drive',
+            pageSize: '200',
+            ...(pageToken ? { pageToken } : {}),
+          })}`,
+        )
+        files.push(...(page.files ?? []).map(asFile))
+        pageToken = page.nextPageToken ?? ''
+      } while (pageToken && files.length < 2000)
+      return files
+    },
+
+    /** Out of Drive's bin, back where it was. */
+    async untrash(id: string): Promise<void> {
+      await call(`${endpoints.api}/files/${encodeURIComponent(id)}?fields=id`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify({ trashed: false }),
+      })
     },
 
     /** Deletes a file for good; one that is gone already is fine. */
