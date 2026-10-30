@@ -128,7 +128,7 @@ final class Bridge {
                 answer(reply, id, takeOpened());
                 break;
             case "save-begin":
-                saver.begin(message.optString("name"), message.optString("mime"), result -> answer(reply, id, result));
+                saver.begin(message.optString("name"), message.optString("mime"), message.optString("dir"), result -> answer(reply, id, result));
                 break;
             case "save-chunk":
                 saver.chunk(message.optInt("handle"), message.optString("data"), result -> answer(reply, id, result));

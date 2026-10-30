@@ -15,7 +15,7 @@ import {
   uniqueName,
   type DeviceRecord,
 } from '../src/lib/deviceIdentity'
-import { freeName, outgoing, receiveOver, safeFileName, sendOver, TransferError, type Sink, type Wire } from '../src/lib/deviceTransfer'
+import { freeName, outgoing, receiveOver, safeFileName, sendOver, splitPath, TransferError, type Sink, type Wire } from '../src/lib/deviceTransfer'
 
 let failed = 0
 function check(label: string, ok: boolean, detail = '') {
@@ -30,6 +30,17 @@ const intruder = await makeKeys()
 
 const laptopRecord = await signRecord(laptop, { name: 'Laptop', kind: 'windows', platform: 'Windows-App', created: now, seen: now })
 const phoneRecord = await signRecord(phone, { name: 'Handy', kind: 'android', platform: 'Android-App', created: now, seen: now })
+
+// --- Paths of a received folder --------------------------------------------
+const place = (path: string | undefined) => JSON.stringify(splitPath(path, 'Fallback.txt'))
+check('Pfad: Ordner und Name getrennt', place('Anime/Staffel 1/Folge 1.mkv') === JSON.stringify({ dir: 'Anime/Staffel 1', name: 'Folge 1.mkv' }))
+check('Pfad: ohne Ordner nur der Name', place('Folge.mkv') === JSON.stringify({ dir: '', name: 'Folge.mkv' }))
+check('Pfad: „..“ klettert nirgends hinaus', !splitPath('../../etc/passwd', 'x').dir.includes('..') && splitPath('../../etc/passwd', 'x').name === 'passwd', place('../../etc/passwd'))
+check('Pfad: absoluter Anfang wird relativ', place('/etc/hosts') === JSON.stringify({ dir: 'etc', name: 'hosts' }))
+check('Pfad: Laufwerk und Rückstriche sind Zeichen im Namen, keine Ordner', splitPath('C:\\Windows\\x.txt', 'x').dir === '' && !/[:\\]/.test(splitPath('C:\\Windows\\x.txt', 'x').name), place('C:\\Windows\\x.txt'))
+check('Pfad: leer gilt der Ersatzname', place(undefined) === JSON.stringify({ dir: '', name: 'Fallback.txt' }) && place('') === place(undefined) && place('//./..//') === place(undefined))
+check('Pfad: höchstens acht Ordner tief', splitPath(`${Array.from({ length: 20 }, (_, n) => `d${n}`).join('/')}/datei.txt`, 'x').dir.split('/').length <= 9)
+check('Pfad: „.“ und „..“ als Namen sind Datei', splitPath('a/b/..', 'x').name === 'b' && !place('a/./b').includes('"."'))
 
 // --- Capabilities ---------------------------------------------------------
 // A record written by a version without them (no `caps`) must still verify, and

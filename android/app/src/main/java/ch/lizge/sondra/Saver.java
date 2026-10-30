@@ -38,12 +38,15 @@ final class Saver {
 
     private static class Target {
         final String name;
+        /** Under Downloads/Sondra: „Staffel 1“ for a file from a folder that was sent, else empty. */
+        final String dir;
         final Uri uri;
         final File file;
         final OutputStream out;
 
-        Target(String name, Uri uri, File file, OutputStream out) {
+        Target(String name, String dir, Uri uri, File file, OutputStream out) {
             this.name = name;
+            this.dir = dir;
             this.uri = uri;
             this.file = file;
             this.out = out;
@@ -59,12 +62,13 @@ final class Saver {
         this.activity = activity;
     }
 
-    void begin(String name, String mime, Done done) {
+    void begin(String name, String mime, String dir, Done done) {
         String clean = cleanName(name);
+        String sub = cleanDir(dir);
         String type = mime == null || mime.isEmpty() ? "application/octet-stream" : mime;
         activity.withStorage(() -> disk.execute(() -> {
             try {
-                Target target = create(clean, type);
+                Target target = create(clean, sub, type);
                 int handle;
                 synchronized (open) {
                     handle = next++;
@@ -118,7 +122,7 @@ final class Saver {
                 Log.i(MainActivity.TAG, "Gespeichert: Downloads/Sondra/" + target.name);
                 activity.runOnUiThread(() -> Toast.makeText(activity,
                         activity.getString(R.string.savedTo, target.name), Toast.LENGTH_SHORT).show());
-                reply(done, result(true, null).put("where", "Downloads/Sondra/" + target.name));
+                reply(done, result(true, null).put("where", "Downloads/Sondra/" + target.dir + target.name));
             } catch (IOException | JSONException e) {
                 discard(target);
                 failed(done, target.name, e);
@@ -141,24 +145,24 @@ final class Saver {
         if (empty) activity.setKeepScreenOn(false);
     }
 
-    private Target create(String name, String type) throws IOException {
+    private Target create(String name, String sub, String type) throws IOException {
         if (Build.VERSION.SDK_INT >= 29) {
             ContentResolver resolver = activity.getContentResolver();
             ContentValues values = new ContentValues();
             values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
             values.put(MediaStore.MediaColumns.MIME_TYPE, type);
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Sondra");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Sondra" + (sub.isEmpty() ? "" : "/" + sub));
             values.put(MediaStore.MediaColumns.IS_PENDING, 1);
             Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
             if (uri == null) throw new IOException("Downloads nicht beschreibbar");
             OutputStream out = resolver.openOutputStream(uri);
             if (out == null) throw new IOException("Downloads nicht beschreibbar");
-            return new Target(name, uri, null, out);
+            return new Target(name, sub.isEmpty() ? "" : sub + "/", uri, null, out);
         }
-        File folder = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Sondra");
+        File folder = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Sondra" + (sub.isEmpty() ? "" : "/" + sub));
         if (!folder.isDirectory() && !folder.mkdirs()) throw new IOException("Downloads/Sondra nicht anlegbar");
         File file = free(folder, name);
-        return new Target(file.getName(), null, file, new FileOutputStream(file));
+        return new Target(file.getName(), sub.isEmpty() ? "" : sub + "/", null, file, new FileOutputStream(file));
     }
 
     private void finish(Target target) {
@@ -175,6 +179,25 @@ final class Saver {
         } catch (IOException ignored) {}
         if (target.uri != null) activity.getContentResolver().delete(target.uri, null, null);
         if (target.file != null) target.file.delete();
+    }
+
+    /**
+     * A folder inside Downloads/Sondra as the page names it („Anime/Staffel 1“):
+     * each part cleaned like a file name, nothing that climbs out (`..`) or
+     * stands for the current place (`.`), at most eight deep.
+     */
+    private static String cleanDir(String dir) {
+        if (dir == null || dir.trim().isEmpty()) return "";
+        StringBuilder out = new StringBuilder();
+        int depth = 0;
+        for (String part : dir.split("/")) {
+            String clean = cleanName(part).trim();
+            if (part.trim().isEmpty() || part.trim().equals(".") || part.trim().equals("..") || clean.isEmpty()) continue;
+            if (++depth > 8) break;
+            if (out.length() > 0) out.append('/');
+            out.append(clean);
+        }
+        return out.toString();
     }
 
     private static String cleanName(String name) {
