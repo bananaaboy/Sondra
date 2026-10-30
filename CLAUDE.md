@@ -615,6 +615,19 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Folgen, 2 am Tag reichen · 1 vor dem Plan“ (gegen ein gleichmässiges
   Tempo seit dem Setzen), das Poster „Ziel · noch 6“. Die alte Zeile
   „1/Tag: fertig … · 2/Tag: …“ ist darin aufgegangen.
+  **Teilen, nur lesend** (30.10.2026, `lib/merkShare.ts`,
+  `MerklisteShare.tsx`): die Liste steht im Link selbst
+  (`/#geteilt=…`, raw-deflate und URL-sicher), nichts wird hochgeladen und
+  nichts lässt sich zurückholen — wer den Link hat, sieht sie. Mit
+  Titel, Stand, Bewertung und Fortschritt (abschaltbar), **nie** mit den
+  Adressen der Folgen, Notizen oder Covers. Wer ihn öffnet, sieht die Liste
+  in einem Fenster und kann hinzufügen, was auf der eigenen noch fehlt
+  (`newFromShared`, ohne Gross-/Kleinschreibung und Akzente). Beim Lesen
+  zählt nur Klartext: Obergrenzen (500 Einträge, 512 KB entpackt — eine
+  Bombe wird abgebrochen), jedes Feld geprüft, Steuerzeichen raus. Über
+  8 000 Zeichen schneiden Chats einen Link ab; dann bietet das Fenster die
+  Datei an. Die Adresse wird beim Laden gelesen, bevor das Routing sie
+  umschreibt (`SHARED_AT_LOAD`).
   **Rückblick** (30.10.2026, `lib/recap.ts`, `MerklisteRecap.tsx` in den
   Statistiken): ein Jahr aus den Daten, die jede abgehakte Folge trägt
   (`history`: `advance` und der Player-Haken schreiben sie) — Folgen,

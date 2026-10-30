@@ -208,6 +208,9 @@ Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
 
 Eine private Mediathek zum Verfolgen von Anime, Serien und Filmen:
 
+- **Teilen:** „Teilen“ macht einen Link, der die Liste selbst trägt — nur zum Ansehen,
+  ohne Upload, ohne die Adressen der Folgen, Notizen und Cover; wer ihn öffnet,
+  kann hinzufügen, was ihm fehlt. Zu lange Listen gehen als Datei.
 - **Rückblick:** in den Statistiken ein Jahr im Überblick — Folgen, Sehzeit, stärkster
   Monat, längste Serie von Tagen, die meistgeschauten Serien, zwölf Balken. Gezählt
   wird, was mit Datum abgehakt wurde; die Seite sagt, seit wann es Daten gibt.
