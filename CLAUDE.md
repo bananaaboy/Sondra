@@ -1089,8 +1089,24 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   herunterladen“ bestätigte — vom Nutzer am 28.10.2026 so erlebt. Eine App
   vor 1.1.20 kennt `update-state` nicht (`rejected`); dann vergleicht
   `AppUpdate` die Version im User-Agent mit der der Seite und bietet die
-  APK über den Browser an, mit genau diesem Hinweis. Die APK ist seit yt-dlp
-  rund 150 MB (Python und FFmpeg für drei Architekturen).
+  APK über den Browser an, mit genau diesem Hinweis. Die universelle APK ist
+  seit yt-dlp rund 150 MB (Python und FFmpeg für drei Architekturen).
+  **Eine APK je Prozessor** (30.10.2026, `splits { abi }` in
+  `build.gradle.kts`): neben der universellen `Sondra-Android.apk` liegen im
+  Release `Sondra-Android-arm64-v8a.apk`, `-armeabi-v7a.apk` und `-x86_64.apk`,
+  alle mit derselben `versionCode` und demselben Schlüssel, deshalb ersetzt
+  jede jede andere. Die x86-Bibliotheken der Abhängigkeiten sind ausgeschlossen
+  (`packaging.jniLibs.excludes`), das AAB teilt Google Play selbst. Der
+  Workflow „Android“ prüft jede einzelne (Paket, Version, derselbe Schlüssel
+  wie die universelle, kein `GOCSPX-`, nur Bibliotheken des eigenen
+  Prozessors) und nennt die Grössen in der Zusammenfassung; der Emulator
+  installiert die zum eigenen Prozessor (`launch-check.sh`, x86_64).
+  `Updater.java` nimmt `Sondra-Android-<erster Eintrag in SUPPORTED_ABIS>.apk`,
+  sonst `Sondra-Android.apk`, sonst irgendeine APK; Apps vor dieser Fassung
+  nehmen weiter `Sondra-Android.apk` und merken nichts. Die Website verlinkt
+  weiter die universelle (`ANDROID_APK`): sie weiss nicht, welcher Prozessor
+  im Telefon steckt, und ein 32-Bit-Telefon mit einer 64-Bit-APK bekäme
+  „App nicht installiert“.
   Icons: `npm run android:icons` (Vektor-Vordergrund aus den Balken des
   Zeichens, auch für das Startbild; PNGs mit den Helfern aus
   `store-tiles.mjs`). Lokal bauen: Android SDK mit `platforms;android-36`,

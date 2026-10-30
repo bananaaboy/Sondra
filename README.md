@@ -442,13 +442,16 @@ Google Drive die Merkliste und den Ordner mit den anderen Geräten zusammen.
   APK über den Browser an.
 - **Geräte:** Dateien von anderen Geräten landen in Downloads/Sondra.
 
-- **GitHub Actions → „Android":** baut APK und AAB, prüft sie und legt sie
+- **GitHub Actions → „Android":** baut die APKs (eine universelle und je eine
+  für arm64-v8a, armeabi-v7a und x86_64) und das AAB, prüft sie und legt sie
   als Artefakt „Sondra-Android“ ab. Jeder Lauf startet die App auf einem
   Android-14-Emulator (Symbol, Kurzbefehl, Link, Teilen, Rückkehr von der
   Google-Anmeldung) und legt Bildschirmfotos als „Sondra-Android-Bilder“ ab.
 - **Im Release:** das offizielle Release (Workflow „Desktop“ mit `release`)
-  baut die Android-App mit und legt `Sondra-Android.apk` neben die Setups;
-  die Website verlinkt sie unter „App herunterladen“.
+  baut die Android-App mit und legt `Sondra-Android.apk` (universell) und
+  `Sondra-Android-<arm64-v8a|armeabi-v7a|x86_64>.apk` neben die Setups; die
+  Website verlinkt die universelle unter „App herunterladen“, die App selbst
+  holt sich beim Aktualisieren die für ihren Prozessor.
 - **Android-Schlüssel:** jede Fassung muss mit demselben Schlüssel signiert
   sein, sonst installiert Android sie nicht über die alte. Einmal auf dem
   eigenen Rechner erzeugen — nie in einem Lauf, dessen Artefakte in diesem
@@ -640,8 +643,9 @@ als App installieren.
 - **Geräte direkt nur im selben Netz.** Ohne STUN-Dienst findet sich zwischen
   zwei Netzen kein direkter Weg; dann geht es auf Klick über Google Drive. Das
   empfangende Gerät muss Sondra offen haben, ein Angebot wartet 15 Minuten.
-- **Die Android-APK ist rund 150 MB gross** — Python und FFmpeg für yt-dlp,
-  für drei Prozessorarten.
+- **Die universelle Android-APK ist rund 150 MB gross** — Python und FFmpeg
+  für yt-dlp, für drei Prozessorarten. Die APKs je Prozessor im Release sind
+  kleiner; wer sein Telefon kennt (die meisten: arm64-v8a), nimmt die.
 
 ## Projektstruktur
 

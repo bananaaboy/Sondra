@@ -22,10 +22,20 @@ android {
         targetSdk = 36
         versionName = sondraVersion
         versionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
-        // yt-dlp comes with its own Python and FFmpeg, built per processor:
-        // phones (arm64, older arm) and the x86_64 emulator the workflow starts.
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+    }
+
+    // yt-dlp comes with its own Python and FFmpeg, built per processor:
+    // phones (arm64, older arm) and the x86_64 emulator the workflow starts.
+    // One APK per processor next to the universal one that carries all
+    // three (the workflow reports each size); the AAB splits by itself. All
+    // share one versionCode, so any of them updates any other. The 32-bit x86
+    // libraries the dependencies bring are left out: no phone runs them.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
         }
     }
 
@@ -34,6 +44,7 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            excludes += "**/x86/**"
         }
     }
 

@@ -10,8 +10,13 @@
 set -euo pipefail
 
 pkg=ch.lizge.sondra
-apk="$(ls "$1"/Sondra-Android-*.apk 2>/dev/null | head -1 || true)"
+# The APK built for the device's processor (the workflow makes one per
+# processor and a universal one); without one, the universal APK.
+abi="$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+apk="$(ls "$1"/Sondra-Android-*-"$abi".apk 2>/dev/null | head -1 || true)"
+[ -n "$apk" ] || apk="$(ls "$1"/Sondra-Android-*.apk 2>/dev/null | grep -Ev -- '-(arm64-v8a|armeabi-v7a|x86_64)\.apk$' | head -1 || true)"
 [ -n "$apk" ] || apk="$1/app-release.apk"
+echo "Installiere $apk ($abi)"
 shots="${2:-}"
 adb install -r "$apk" > /dev/null
 

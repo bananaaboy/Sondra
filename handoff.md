@@ -21,7 +21,9 @@
 - **Merkliste:** Jahresrückblick in den Statistiken (`recap.ts`), Teilen als Link (`merkShare.ts`).
 - **Untertitel im Ordner:** neben dem Film finden oder per Whisper erzeugen (`autoSubtitles.ts`).
 - **Lange Ordner:** `content-visibility` und Nachladen beim Scrollen (keine echte Fenster-Liste).
-- **Offen aus der Liste:** Android-Split-APKs.
+- **Android:** eine APK je Prozessor neben der universellen (`splits { abi }`,
+  `Sondra-Android-<abi>.apk` im Release, `Updater.java` wählt nach `SUPPORTED_ABIS`);
+  nur durch die CI prüfbar, die Grössen stehen in der Zusammenfassung des Laufs.
 
 ### Seit 1.1.21 (veröffentlicht als 1.1.22 bzw. noch offen):
 - **Geräte wiedererkennen:** die Windows-App wartet auf ihren Port und nimmt sonst einen
