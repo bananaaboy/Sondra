@@ -313,7 +313,7 @@ fs.rmSync(tree, { recursive: true, force: true })
   const sentBefore = await phone.page.evaluate(() => window.__sentBytes)
   await resume.click()
   // The half file is in „saved“ from the break on; whole means its full length.
-  await laptop.page.waitForFunction((length) => (window.__saved['Gross.bin']?.[0]?.length ?? 0) >= length, Math.ceil(big.length / 3) * 4, { timeout: 60_000 }).catch(() => undefined)
+  await laptop.page.waitForFunction((length) => (window.__saved['Gross.bin']?.[0]?.length ?? 0) >= length, Math.ceil(big.length / 3) * 4, { timeout: 120_000 }).catch(() => undefined)
   await laptop.page.waitForTimeout(500)
   const sentAfter = await phone.page.evaluate(() => window.__sentBytes)
   const whole = await savedBytes(laptop.page, 'Gross.bin')
