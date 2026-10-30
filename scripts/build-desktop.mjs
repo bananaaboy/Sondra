@@ -230,6 +230,8 @@ if (forStore) {
       { ext: ['mp3', 'wav', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'aif', 'aiff', 'wma'], name: 'sondra.ton', description: 'Ton' },
       { ext: ['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi'], name: 'sondra.video', description: 'Video' },
       { ext: ['png', 'jpg', 'jpeg', 'webp', 'gif'], name: 'sondra.bild', description: 'Bild' },
+      // A shared Merkliste: nobody else's extension, so a double click opens it here.
+      { ext: 'sondra-liste', name: 'sondra.liste', description: 'Geteilte Merkliste' },
     ],
     // The Store updates the package; there is nothing for electron-updater to read.
     publish: null,
