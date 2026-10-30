@@ -17,7 +17,8 @@ permissions:
 
 jobs:
   scenarios:
-    runs-on: ubuntu-latest
+    # Not `ubuntu-latest`: Playwright installs its browser only on the systems it knows (24.04), and `latest` moved on.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
