@@ -39,6 +39,10 @@ import {
   listing,
   pickFolder,
   withoutFiles,
+  BIN_NAME,
+  binFiles,
+  restoreBinned,
+  type Binned,
   type DirectoryHandle,
   type FolderEpisode,
   type FolderFile,
@@ -578,6 +582,9 @@ export function FolderPanel() {
   const [note, setNote] = useState<string | null>(null)
   const [dupes, setDupes] = useState<{ running: { done: number; total: number } | null; report: DuplicateReport | null; error: string | null } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<FolderFile[] | null>(null)
+  /** What went into the bin last, to take back with one click. */
+  const [binned, setBinned] = useState<Binned[] | null>(null)
+  useEffect(() => setBinned(null), [scan?.handle])
   const [deleting, setDeleting] = useState(false)
   const [zipping, setZipping] = useState(false)
   /** Files on their way from Drive for the session or a ZIP. */
@@ -770,7 +777,7 @@ export function FolderPanel() {
     }
   }
 
-  const reallyDelete = async (files: FolderFile[]) => {
+  const reallyDelete = async (files: FolderFile[], intoBin = false) => {
     if (scan?.source === 'drive') {
       setDeleting(true)
       try {
@@ -799,6 +806,20 @@ export function FolderPanel() {
         setProblem('Der Browser hat das Ändern des Ordners nicht erlaubt — es wurde nichts gelöscht.')
         return
       }
+      if (intoBin) {
+        const result = await binFiles(scan.handle, files)
+        const gone = new Set(result.binned.map((item) => item.file.path))
+        useFolder.setState((state) => ({
+          scan: state.scan ? withoutFiles(state.scan, gone) : null,
+          selected: new Set([...state.selected].filter((path) => !gone.has(path))),
+        }))
+        setDupes(null)
+        setBinned(result.binned.length > 0 ? result.binned : null)
+        log('ordner', `${result.binned.length} ${result.binned.length === 1 ? 'Datei' : 'Dateien'} in den Papierkorb „${BIN_NAME}“ gelegt`)
+        if (result.failed.length > 0) setProblem(`${result.failed.length} nicht verschoben: ${result.failed[0].file.name} — ${result.failed[0].reason}`)
+        else setNote(`${result.binned.length} ${result.binned.length === 1 ? 'Datei' : 'Dateien'} im Ordner „${BIN_NAME}“.`)
+        return
+      }
       const { deleted, failed } = await deleteFiles(files)
       const gone = new Set(deleted.map((file) => file.path))
       useFolder.setState((state) => ({
@@ -812,6 +833,25 @@ export function FolderPanel() {
     } finally {
       setDeleting(false)
       setConfirmDelete(null)
+    }
+  }
+
+  /** The files of the last „In den Papierkorb“ back where they lay, and the folder read again. */
+  const undoBin = async () => {
+    if (!scan?.handle || !binned) return
+    setDeleting(true)
+    try {
+      const { restored, failed } = await restoreBinned(scan.handle, binned)
+      setBinned(failed.length > 0 ? failed.map((entry) => entry.item) : null)
+      log('ordner', `${restored.length} ${restored.length === 1 ? 'Datei' : 'Dateien'} aus dem Papierkorb zurückgelegt`)
+      // Read again, but stay in the folder one was in.
+      const here = useFolder.getState().dir
+      await read(scan.handle)
+      useFolder.setState({ dir: here })
+      if (failed.length > 0) setProblem(`${failed.length} nicht zurückgelegt: ${failed[0].item.file.name} — ${failed[0].reason}`)
+      else setNote(`${restored.length} ${restored.length === 1 ? 'Datei' : 'Dateien'} zurückgelegt.`)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1154,8 +1194,13 @@ export function FolderPanel() {
       ) : null}
 
       {note ? (
-        <p role="status" className="text-small text-prose">
+        <p role="status" className="flex flex-wrap items-baseline gap-x-[12px] text-small text-prose">
           {note}
+          {binned && scan?.handle ? (
+            <button type="button" disabled={deleting} onClick={() => void undoBin()} className={`${linkClass} text-small`}>
+              Rückgängig
+            </button>
+          ) : null}
         </p>
       ) : null}
       {problem ? (
@@ -1424,7 +1469,14 @@ export function FolderPanel() {
       ) : null}
 
       {confirmDelete ? (
-        <DeleteDialog files={confirmDelete} toBin={fromDrive} busy={deleting} onCancel={() => setConfirmDelete(null)} onConfirm={() => void reallyDelete(confirmDelete)} />
+        <DeleteDialog
+          files={confirmDelete}
+          toBin={fromDrive}
+          canBin={!fromDrive && Boolean(scan?.handle)}
+          busy={deleting}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={(intoBin) => void reallyDelete(confirmDelete, intoBin)}
+        />
       ) : null}
 
     </div>
@@ -1434,6 +1486,7 @@ export function FolderPanel() {
 function DeleteDialog({
   files,
   toBin = false,
+  canBin = false,
   busy,
   onCancel,
   onConfirm,
@@ -1441,9 +1494,11 @@ function DeleteDialog({
   files: FolderFile[]
   /** Drive: into its bin, restorable there for 30 days. */
   toBin?: boolean
+  /** A folder of this device the browser let us into: Sondra's own bin inside it. */
+  canBin?: boolean
   busy: boolean
   onCancel: () => void
-  onConfirm: () => void
+  onConfirm: (intoBin: boolean) => void
 }): ReactNode {
   const total = files.reduce((sum, file) => sum + file.size, 0)
   return (
@@ -1454,6 +1509,12 @@ function DeleteDialog({
             <>
               {files.length === 1 ? 'Sie kommt' : 'Sie kommen'} in den <span className="font-semibold text-ink">Papierkorb von Google Drive</span> und{' '}
               {files.length === 1 ? 'lässt' : 'lassen'} sich dort 30 Tage lang wiederherstellen. Zusammen <span className="value">{formatBytes(total)}</span>.
+            </>
+          ) : canBin ? (
+            <>
+              {files.length === 1 ? 'Sie kommt' : 'Sie kommen'} in den Ordner <span className="font-semibold text-ink">{BIN_NAME}</span> in diesem Ordner und{' '}
+              {files.length === 1 ? 'lässt' : 'lassen'} sich gleich mit „Rückgängig“ zurücklegen. Weg ist es erst, wenn Sie diesen Ordner selbst leeren. Zusammen{' '}
+              <span className="value">{formatBytes(total)}</span>.
             </>
           ) : (
             <>
@@ -1471,9 +1532,14 @@ function DeleteDialog({
           {files.length > 12 ? <li className="border-t border-line py-[5px] text-small text-prose">und {files.length - 12} weitere</li> : null}
         </ul>
         <div className="flex flex-wrap items-center gap-[10px]">
-          <Button type="button" disabled={busy} onClick={onConfirm}>
-            {busy ? 'Löscht …' : toBin ? 'In den Papierkorb' : 'Endgültig löschen'}
+          <Button type="button" disabled={busy} onClick={() => onConfirm(canBin)}>
+            {busy ? 'Löscht …' : toBin || canBin ? 'In den Papierkorb' : 'Endgültig löschen'}
           </Button>
+          {canBin ? (
+            <Button type="button" variant="quiet" disabled={busy} onClick={() => onConfirm(false)}>
+              Endgültig löschen
+            </Button>
+          ) : null}
           <Button type="button" variant="quiet" disabled={busy} onClick={onCancel}>
             Abbrechen
           </Button>

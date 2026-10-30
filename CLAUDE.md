@@ -107,8 +107,19 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   In die Sitzung, Als ZIP, In Drive, Löschen nach Rückfrage. Edge, Chrome und
   die App bekommen den Ordner selbst (File System Access): gemerkt in
   IndexedDB (`sondra-ordner`), beim nächsten Mal nur angeboten („„Anime“
-  wieder öffnen“), nie still gelesen; Löschen fragt einmal nach Schreibrecht
-  und sagt „nicht in den Papierkorb“. Firefox/Safari: `webkitdirectory`, einmal
+  wieder öffnen“), nie still gelesen; Löschen fragt einmal nach Schreibrecht.
+  **Löschen geht zuerst in einen Papierkorb von Sondra** (30.10.2026,
+  `binFiles`/`restoreBinned` in `lib/folder.ts`): der Ordner `Sondra-Papierkorb`
+  oben im gewählten Ordner — das Betriebssystem hat für einen Ordner, den
+  der Browser freigibt, keinen —, die Dateien wandern dorthin
+  (`FileSystemFileHandle.move`, wo der Browser es kann, sonst bis 256 MB
+  kopiert und erst danach das Original entfernt; ein grösserer Film wird
+  gemeldet und bleibt liegen). „Rückgängig“ steht gleich bei der Meldung und
+  legt jede Datei in ihren Ordner zurück, ohne eine inzwischen belegte
+  Datei zu überschreiben (Nummer statt dessen); „Endgültig löschen“ bleibt
+  im Dialog daneben. Der Papierkorb-Ordner steht nicht in der Liste
+  (`SKIPPED`) und wird nicht von Sondra geleert — das macht, wer den Ordner
+  selbst leert. Firefox/Safari: `webkitdirectory`, einmal
   eingelesen, ohne Löschen — die Seite sagt das. Die Kachel bekommt den Fokus
   nur, wenn er schon in der Liste ist; vorher nahm die erste ihn beim
   Ankommen und scrollte dorthin. **Weiterschauen:** Folgen von Serien der

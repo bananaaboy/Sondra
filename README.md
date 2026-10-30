@@ -190,9 +190,11 @@ Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
   Abspielen, In die Sitzung, Als ZIP, In Drive oder Löschen. Ein Doppelklick
   spielt ab. Eine eigene Vorschau neben der Liste gibt es nicht mehr — die
   Kacheln nehmen die ganze Breite.
-- **Löschen:** auf diesem Gerät endgültig, nach Rückfrage (Edge, Chrome, die
-  App). Im Ordner „Sondra“ in Google Drive gehen gelöschte Dateien in den
-  Papierkorb von Drive und lassen sich dort 30 Tage lang wiederherstellen.
+- **Löschen:** auf diesem Gerät zuerst in den Ordner „Sondra-Papierkorb“ im
+  gewählten Ordner, mit „Rückgängig“ gleich daneben (Edge, Chrome, die App);
+  „Endgültig löschen“ bleibt möglich. Im Ordner „Sondra“ in Google Drive gehen
+  gelöschte Dateien in den Papierkorb von Drive und lassen sich dort 30 Tage
+  lang wiederherstellen.
 - **An Geräte senden und Auf Gerät abspielen:** unter einer Auswahl, ein oder
   mehrere Geräte des eigenen Kontos.
 - **Listenansicht:** Strukturierte Tabelle mit Name, Art, Größe, Änderungsdatum
