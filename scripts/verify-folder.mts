@@ -8,6 +8,7 @@
  *   npm run verify:folder
  */
 
+import { subtitleNameFor, subtitlesBeside } from '../src/lib/subtitleFiles'
 import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy, WHOLE_LIMIT } from '../src/lib/duplicates'
 import {
   BIN_NAME,
@@ -174,6 +175,23 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
   check('Eltern-Ordner gemerkt (zum Verschieben)', scan.files[0].drive?.parent, 'p1')
   const fr = folderEpisodes(scan.files, list).get('fr')!.map((entry) => [entry.episode, entry.seen])
   check('Im Ordner gesehen markiert, über alle Wege', fr, [[1, true], [2, false], [4, false]])
+}
+
+// --- Subtitles beside a film -----------------------------------------------
+{
+  const all = [
+    { name: 'Frieren S01E01.mkv', dir: 'Staffel 1' },
+    { name: 'Frieren S01E01.srt', dir: 'Staffel 1' },
+    { name: 'Frieren S01E01.de.srt', dir: 'Staffel 1' },
+    { name: 'Frieren S01E01.vtt', dir: 'Staffel 2' },
+    { name: 'Frieren S01E02.srt', dir: 'Staffel 1' },
+    { name: 'Frieren S01E011.srt', dir: 'Staffel 1' },
+    { name: 'Notizen.txt', dir: 'Staffel 1' },
+  ]
+  check('Untertitel neben dem Film: gleicher Name, auch mit Sprachkürzel, nur im selben Ordner', subtitlesBeside(all[0], all).map((entry) => entry.name), ['Frieren S01E01.srt', 'Frieren S01E01.de.srt'])
+  check('Untertitel: eine andere Folge, ein anderer Ordner, eine Textdatei zählen nicht', subtitlesBeside({ name: 'Frieren S01E03.mkv', dir: 'Staffel 1' }, all).length, 0)
+  check('Untertitel: „E01“ nimmt nicht „E011“ mit', subtitlesBeside({ name: 'Frieren S01E01.mkv', dir: 'Staffel 1' }, all).some((entry) => entry.name.includes('E011')), false)
+  check('Untertitel: der gemachte heisst wie der Film, mit .srt', [subtitleNameFor('Frieren S01E01.mkv'), subtitleNameFor('Ein.Punkt.Im.Namen.mp4'), subtitleNameFor('ohne-endung')], ['Frieren S01E01.srt', 'Ein.Punkt.Im.Namen.srt', 'ohne-endung.srt'])
 }
 
 // --- Deleting into the bin of Sondra's own --------------------------------
