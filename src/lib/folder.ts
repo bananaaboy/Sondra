@@ -25,12 +25,16 @@ export interface FileHandle {
   kind: 'file'
   name: string
   getFile(): Promise<File>
+  /** Where the browser can move a file (Chromium, newer than the folder picker itself): no copy, no waiting. */
+  move?(destination: DirectoryHandle, name?: string): Promise<void>
+  createWritable?(): Promise<{ write(data: BufferSource | Blob): Promise<void>; close(): Promise<void>; abort(): Promise<void> }>
 }
 export interface DirectoryHandle {
   kind: 'directory'
   name: string
   values(): AsyncIterable<FileHandle | DirectoryHandle>
-  getDirectoryHandle(name: string): Promise<DirectoryHandle>
+  getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<DirectoryHandle>
+  getFileHandle(name: string, options?: { create?: boolean }): Promise<FileHandle>
   removeEntry(name: string): Promise<void>
   queryPermission?(options: { mode: 'read' | 'readwrite' }): Promise<PermissionState>
   requestPermission?(options: { mode: 'read' | 'readwrite' }): Promise<PermissionState>
@@ -79,7 +83,7 @@ export interface FolderScan {
 export const SCAN_LIMIT = 20_000
 
 /** Hidden files and the ones systems leave behind are not anybody's media. */
-const SKIPPED = /^(\.|desktop\.ini$|thumbs\.db$|\$recycle\.bin$|system volume information$)/i
+const SKIPPED = /^(\.|desktop\.ini$|thumbs\.db$|\$recycle\.bin$|system volume information$|sondra-papierkorb$)/i
 
 function entry(file: File, path: string, parent?: DirectoryHandle): FolderFile {
   const at = path.lastIndexOf('/')
@@ -562,4 +566,110 @@ export async function deleteFiles(files: FolderFile[]): Promise<{ deleted: Folde
     }
   }
   return { deleted, failed }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Deleting into a bin of Sondra's own                                         */
+/* -------------------------------------------------------------------------- */
+
+/** At the top of the chosen folder; the scan leaves it out, so what lies there does not turn up in the list. */
+export const BIN_NAME = 'Sondra-Papierkorb'
+
+/** Without „move“ a file is copied, and a film of several GB is not: it is said, not done. */
+const COPY_LIMIT = 256 * 1024 * 1024
+
+export interface Binned {
+  file: FolderFile
+  /** The name it has in the bin. */
+  binName: string
+}
+
+async function names(dir: DirectoryHandle): Promise<Set<string>> {
+  const taken = new Set<string>()
+  for await (const child of dir.values()) taken.add(child.name)
+  return taken
+}
+
+const free = (name: string, taken: Set<string>): string => {
+  if (!taken.has(name)) return name
+  const dot = name.lastIndexOf('.')
+  const stem = dot > 0 ? name.slice(0, dot) : name
+  const ext = dot > 0 ? name.slice(dot) : ''
+  for (let n = 2; n < 10_000; n += 1) if (!taken.has(`${stem} (${n})${ext}`)) return `${stem} (${n})${ext}`
+  return `${stem} (${Date.now()})${ext}`
+}
+
+async function relocate(from: DirectoryHandle, name: string, to: DirectoryHandle, newName: string, size: number): Promise<void> {
+  const handle = await from.getFileHandle(name)
+  if (typeof handle.move === 'function') {
+    await handle.move(to, newName)
+    return
+  }
+  if (size > COPY_LIMIT) throw new Error('Zu gross, um sie in diesem Browser in den Papierkorb zu legen — er kann Dateien nur kopieren, nicht verschieben.')
+  const target = await to.getFileHandle(newName, { create: true })
+  const out = await target.createWritable?.()
+  if (!out) throw new Error('Der Browser lässt hier nichts schreiben.')
+  try {
+    await out.write(await handle.getFile())
+    await out.close()
+  } catch (error) {
+    await out.abort().catch(() => undefined)
+    await to.removeEntry(newName).catch(() => undefined)
+    throw error
+  }
+  await from.removeEntry(name)
+}
+
+/**
+ * Into `Sondra-Papierkorb` at the top of `root`, from where `restoreBinned`
+ * brings them back to the folder they lay in. Nothing is lost on the way: a
+ * copy is made whole before the original goes.
+ */
+export async function binFiles(root: DirectoryHandle, files: FolderFile[]): Promise<{ binned: Binned[]; failed: { file: FolderFile; reason: string }[] }> {
+  const binned: Binned[] = []
+  const failed: { file: FolderFile; reason: string }[] = []
+  const bin = await root.getDirectoryHandle(BIN_NAME, { create: true })
+  const taken = await names(bin)
+  for (const file of files) {
+    if (!file.parent) {
+      failed.push({ file, reason: 'In diesem Browser kann Sondra im Ordner nichts verschieben.' })
+      continue
+    }
+    const binName = free(file.name, taken)
+    try {
+      await relocate(file.parent, file.name, bin, binName, file.size)
+      taken.add(binName)
+      binned.push({ file, binName })
+    } catch (error) {
+      failed.push({ file, reason: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return { binned, failed }
+}
+
+/** Back where each lay; a name taken meanwhile gets a number, and nothing is overwritten. */
+export async function restoreBinned(root: DirectoryHandle, binned: Binned[]): Promise<{ restored: Binned[]; failed: { item: Binned; reason: string }[] }> {
+  const restored: Binned[] = []
+  const failed: { item: Binned; reason: string }[] = []
+  let bin: DirectoryHandle
+  try {
+    bin = await root.getDirectoryHandle(BIN_NAME)
+  } catch {
+    return { restored, failed: binned.map((item) => ({ item, reason: `Der Ordner „${BIN_NAME}“ ist nicht mehr da.` })) }
+  }
+  for (const item of binned) {
+    const { file, binName } = item
+    if (!file.parent) {
+      failed.push({ item, reason: 'Der ursprüngliche Ordner ist nicht erreichbar.' })
+      continue
+    }
+    try {
+      const back = free(file.name, await names(file.parent))
+      await relocate(bin, binName, file.parent, back, file.size)
+      restored.push(item)
+    } catch (error) {
+      failed.push({ item, reason: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return { restored, failed }
 }

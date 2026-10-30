@@ -10,6 +10,8 @@
 
 import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy, WHOLE_LIMIT } from '../src/lib/duplicates'
 import {
+  BIN_NAME,
+  binFiles,
   clickSelect,
   crumbs,
   folderEpisodes,
@@ -19,8 +21,10 @@ import {
   listing,
   matchFile,
   playQueue,
+  restoreBinned,
   scanDrive,
   scanFileList,
+  scanHandle,
   seasonPath,
   sortFiles,
   type FolderFile,
@@ -170,6 +174,131 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
   check('Eltern-Ordner gemerkt (zum Verschieben)', scan.files[0].drive?.parent, 'p1')
   const fr = folderEpisodes(scan.files, list).get('fr')!.map((entry) => [entry.episode, entry.seen])
   check('Im Ordner gesehen markiert, über alle Wege', fr, [[1, true], [2, false], [4, false]])
+}
+
+// --- Deleting into the bin of Sondra's own --------------------------------
+// A folder in memory with just what the browser's folder API does: handles
+// that list, make and remove entries — and, optionally, `move`.
+{
+  type Entry = { kind: 'file'; data: Uint8Array } | { kind: 'directory'; dir: MemoryDir }
+  class MemoryDir {
+    entries = new Map<string, Entry>()
+    kind = 'directory' as const
+    constructor(public name: string, private canMove: boolean) {}
+    async *values() {
+      for (const [name, entry] of this.entries) yield entry.kind === 'directory' ? entry.dir.asHandle(name) : this.fileHandle(name)
+    }
+    asHandle(name: string) {
+      return Object.assign(this, { name })
+    }
+    async getDirectoryHandle(name: string, options?: { create?: boolean }) {
+      let entry = this.entries.get(name)
+      if (!entry) {
+        if (!options?.create) throw new DOMException('weg', 'NotFoundError')
+        entry = { kind: 'directory', dir: new MemoryDir(name, this.canMove) }
+        this.entries.set(name, entry)
+      }
+      if (entry.kind !== 'directory') throw new DOMException('Datei', 'TypeMismatchError')
+      return entry.dir as never
+    }
+    async getFileHandle(name: string, options?: { create?: boolean }) {
+      if (!this.entries.has(name)) {
+        if (!options?.create) throw new DOMException('weg', 'NotFoundError')
+        this.entries.set(name, { kind: 'file', data: new Uint8Array(0) })
+      }
+      return this.fileHandle(name) as never
+    }
+    async removeEntry(name: string) {
+      if (!this.entries.delete(name)) throw new DOMException('weg', 'NotFoundError')
+    }
+    fileHandle(name: string) {
+      const dir = this
+      const handle: Record<string, unknown> = {
+        kind: 'file',
+        name,
+        async getFile() {
+          const entry = dir.entries.get(name)
+          if (!entry || entry.kind !== 'file') throw new DOMException('weg', 'NotFoundError')
+          return new File([entry.data as BlobPart], name)
+        },
+        async createWritable() {
+          const parts: Uint8Array[] = []
+          return {
+            async write(data: Blob | BufferSource) {
+              parts.push(new Uint8Array(data instanceof Blob ? await data.arrayBuffer() : (data as ArrayBuffer)))
+            },
+            async close() {
+              const all = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0))
+              let at = 0
+              for (const part of parts) {
+                all.set(part, at)
+                at += part.length
+              }
+              dir.entries.set(name, { kind: 'file', data: all })
+            },
+            async abort() {},
+          }
+        },
+      }
+      if (this.canMove) {
+        handle.move = async (to: MemoryDir, newName?: string) => {
+          const entry = dir.entries.get(name)
+          if (!entry) throw new DOMException('weg', 'NotFoundError')
+          to.entries.set(newName ?? name, entry)
+          dir.entries.delete(name)
+        }
+      }
+      return handle
+    }
+  }
+  const text = (dir: MemoryDir, name: string) => {
+    const entry = dir.entries.get(name)
+    return entry && entry.kind === 'file' ? new TextDecoder().decode(entry.data) : null
+  }
+  for (const canMove of [true, false]) {
+    const way = canMove ? 'mit Verschieben' : 'ohne Verschieben (kopiert)'
+    const root = new MemoryDir('Anime', canMove)
+    const season = await root.getDirectoryHandle('Staffel 1', { create: true })
+    for (const [dir, name, body] of [[root, 'Cover.jpg', 'bild'], [season, 'Folge 1.mkv', 'eins'], [season, 'Folge 2.mkv', 'zwei']] as const) {
+      const handle = await dir.getFileHandle(name, { create: true })
+      const out = await handle.createWritable!()
+      await out.write(new TextEncoder().encode(body))
+      await out.close()
+    }
+    const listed = await scanHandle(root as never)
+    check(`Papierkorb ${way}: Ordner wird eingelesen`, listed.files.map((file) => file.path).sort(), ['Cover.jpg', 'Staffel 1/Folge 1.mkv', 'Staffel 1/Folge 2.mkv'])
+    const wanted = listed.files.filter((file) => file.name !== 'Cover.jpg')
+    const result = await binFiles(root as never, wanted)
+    check(`Papierkorb ${way}: beide wandern in den Papierkorb`, result.binned.map((item) => item.binName).sort(), ['Folge 1.mkv', 'Folge 2.mkv'])
+    check(`Papierkorb ${way}: aus dem Ordner sind sie weg`, [text(season as never, 'Folge 1.mkv'), text(season as never, 'Folge 2.mkv')], [null, null])
+    const afterBin = await scanHandle(root as never)
+    check(`Papierkorb ${way}: der Papierkorb selbst steht nicht in der Liste`, afterBin.files.map((file) => file.path), ['Cover.jpg'])
+    check(`Papierkorb ${way}: der Ordner heisst ${BIN_NAME}`, root.entries.has(BIN_NAME), true)
+    // The same name again: it is numbered, not overwritten.
+    const again = await (await season.getFileHandle('Folge 1.mkv', { create: true })).createWritable!()
+    await again.write(new TextEncoder().encode('neu'))
+    await again.close()
+    const second = await scanHandle(root as never)
+    const twice = await binFiles(root as never, second.files.filter((file) => file.name === 'Folge 1.mkv'))
+    check(`Papierkorb ${way}: gleicher Name zweimal: nummeriert`, twice.binned[0]?.binName, 'Folge 1 (2).mkv')
+    const bin = (await root.getDirectoryHandle(BIN_NAME)) as unknown as MemoryDir
+    check(`Papierkorb ${way}: beide Fassungen liegen dort`, [text(bin, 'Folge 1.mkv'), text(bin, 'Folge 1 (2).mkv')], ['eins', 'neu'])
+    // Back, and a name taken in the meantime is not overwritten.
+    const taken = await (await season.getFileHandle('Folge 2.mkv', { create: true })).createWritable!()
+    await taken.write(new TextEncoder().encode('inzwischen'))
+    await taken.close()
+    const back = await restoreBinned(root as never, [...result.binned, ...twice.binned])
+    check(`Papierkorb ${way}: alle drei kommen zurück`, back.restored.length, 3)
+    check(`Papierkorb ${way}: die inzwischen belegte Datei bleibt, die zurückgelegte bekommt eine Nummer`, [text(season as never, 'Folge 2.mkv'), text(season as never, 'Folge 2 (2).mkv')], ['inzwischen', 'zwei'])
+    check(`Papierkorb ${way}: danach ist der Papierkorb leer`, bin.entries.size, 0)
+  }
+  // Too big to copy where the browser cannot move: said, and left where it is.
+  const root = new MemoryDir('Gross', false)
+  const handle = await root.getFileHandle('Film.mkv', { create: true })
+  const big = { path: 'Film.mkv', name: 'Film.mkv', dir: '', size: 300 * 1024 * 1024, modified: 0, kind: 'video' as const, parent: root as never }
+  void handle
+  const refused = await binFiles(root as never, [big])
+  check('Zu gross zum Kopieren: gesagt, nichts verändert', [refused.binned.length, refused.failed[0]?.reason.includes('Zu gross'), root.entries.has('Film.mkv')], [0, true, true])
 }
 
 console.log(failures === 0 ? '\nAlles in Ordnung.' : `\n${failures} Prüfung(en) fehlgeschlagen.`)
