@@ -90,6 +90,7 @@
 
         navigator.serviceWorker.register('./coi-serviceworker.js', { scope: './' }).then(
           function (registration) {
+            if (!registration) return
             registration.update().catch(function () {})
             /* Without isolation the worker only takes effect from the next load
                onwards, so reload once to get it. */

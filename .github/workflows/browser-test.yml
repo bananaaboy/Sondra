@@ -1,0 +1,36 @@
+# The browser scenarios (`scripts/e2e/`): two devices sending files to each
+# other, the Sondra folder in Drive, and the page's motion — against the
+# built site and a Drive kept in the test's own process. Nothing leaves the
+# runner. Locally: `npm run build && npm run verify:e2e`.
+
+name: Browser
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['android/**', 'desktop/**', '**/*.md']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium
+      - run: npm run typecheck
+      - name: Build the site
+        env:
+          # A made-up client: Drive is offered in the build, never contacted.
+          VITE_GOOGLE_CLIENT_ID: 123-test.apps.googleusercontent.com
+        run: npm run build
+      - run: npm run verify:e2e

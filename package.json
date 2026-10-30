@@ -34,6 +34,7 @@
     "desktop": "node desktop/main.mjs",
     "verify:google-token": "node scripts/verify-google-token.mjs",
     "verify:changelog": "node scripts/verify-changelog.mjs",
+    "verify:e2e": "node scripts/e2e/run.mjs",
     "verify:devices": "esbuild scripts/verify-devices.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-devices.mjs && node node_modules/.verify-devices.mjs"
   },
   "dependencies": {
