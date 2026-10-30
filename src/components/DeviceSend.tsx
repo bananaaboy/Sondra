@@ -22,6 +22,7 @@ import {
   playNote,
   playOnDevice,
   PLAY_TRANSFER_MAX,
+  resumeTransfer,
   sendToDevice,
   sendViaDrive,
   shortId,
@@ -70,6 +71,8 @@ function filesLabel(transfer: Transfer): string {
   const more = transfer.files.length - 1
   return more > 0 ? `${first} und ${more} weitere` : first
 }
+
+const peerNameOf = (transfer: Transfer) => transfer.peerName
 
 const isActive = (transfer: Transfer) =>
   ['offering', 'asking', 'connecting', 'sending', 'receiving', 'direct-failed', 'via-drive'].includes(transfer.state)
@@ -124,6 +127,12 @@ export function TransferRow({ transfer, compact = false }: { transfer: Transfer;
       break
     default:
       line = transfer.error ?? 'Nicht übertragen.'
+      // What arrived before the break stays, and the sender can go on from it.
+      if (transfer.resumable) {
+        line = out
+          ? `${line} Was „${peerNameOf(transfer)}“ schon hat, bleibt dort: „Fortsetzen“ macht weiter, wo es abbrach.`
+          : `${line} Was schon da ist, bleibt liegen; „${peerNameOf(transfer)}“ kann fortsetzen.`
+      }
   }
 
   const running = transfer.state === 'sending' || transfer.state === 'receiving' || transfer.state === 'via-drive'
@@ -180,6 +189,11 @@ export function TransferRow({ transfer, compact = false }: { transfer: Transfer;
             </Button>
           </>
         ) : null}
+        {out && transfer.state === 'failed' && transfer.resumable ? (
+          <Button size="sm" onClick={() => void resumeTransfer(transfer.id)}>
+            Fortsetzen
+          </Button>
+        ) : null}
         {out && transfer.state === 'direct-failed' ? (
           <Button size="sm" onClick={() => void sendViaDrive(transfer.id)}>
             Über Google Drive senden
@@ -190,9 +204,9 @@ export function TransferRow({ transfer, compact = false }: { transfer: Transfer;
             Abbrechen
           </Button>
         ) : null}
-        {!compact || isActive(transfer) ? null : (
+        {(!compact && !transfer.resumable) || isActive(transfer) ? null : (
           <Button size="sm" variant="quiet" onClick={() => dismissTransfer(transfer.id)}>
-            Schliessen
+            {transfer.resumable ? 'Aufgeben' : 'Schliessen'}
           </Button>
         )}
       </div>
