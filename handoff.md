@@ -17,8 +17,9 @@
   Warteschlange (zwei zugleich), Fortsetzen nach Abbruch (`Kept`/`Piece`).
 - **Beim Minimieren pausieren** (`lib/pauseOnMinimize.ts`, Windows-App: `onWindowState`).
 - **Ordner:** Löschen geht zuerst in `Sondra-Papierkorb` mit „Rückgängig“ (`binFiles`).
-- **Offen aus der Liste:** eigener STUN/TURN-Server, Android-Split-APKs, Untertitel
-  automatisch, Merkliste teilen, Statistik-Rückblick, virtuelle Liste.
+- **Eigener STUN/TURN-Server** (`deviceServers.ts`): Adressen gemerkt, Passwort nie.
+- **Offen aus der Liste:** Android-Split-APKs, Untertitel automatisch, Merkliste teilen,
+  Statistik-Rückblick, virtuelle Liste.
 
 ### Seit 1.1.21 (veröffentlicht als 1.1.22 bzw. noch offen):
 - **Geräte wiedererkennen:** die Windows-App wartet auf ihren Port und nimmt sonst einen

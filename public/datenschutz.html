@@ -298,6 +298,10 @@
           <li>
             Die Dateien selbst gehen direkt von Gerät zu Gerät, verschlüsselt (WebRTC), ohne Server von Sondra und
             ohne fremden Vermittlungsdienst. Deshalb klappt das direkt nur, wenn beide Geräte im selben Netz sind.
+            Tragen Sie unter „Geräte“ selbst einen STUN- oder TURN-Server ein, fragt Ihr Gerät diesen Server, und
+            der sieht die Netzadresse Ihres Geräts (ein TURN-Server leitet zudem den verschlüsselten Verkehr weiter);
+            der Server und die Adressen, die er nennt, stehen dann in der Nachricht an das andere Gerät. Sondra
+            trägt von sich aus keinen ein. Die Adressen merkt sich Ihr Gerät, ein TURN-Passwort nie.
           </li>
           <li>
             Findet sich kein direkter Weg, können Sie die Dateien über Google Drive senden: erst auf Ihren Klick

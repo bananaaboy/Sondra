@@ -8,9 +8,10 @@
  * is offered there, accepted there, and then runs directly between the two
  * devices over WebRTC — encrypted, and within one Wi-Fi without leaving it.
  *
- * No STUN server: none is wired in (a server of someone's choosing would
+ * No STUN server is wired in (one of someone's choosing would
  * see every address), so a direct connection is found within the same
- * network. Where there is none, the sender is offered Drive instead — said
+ * network — unless the person puts a server of their own in
+ * (`deviceServers.ts`; a TURN password is never kept). Where there is none, the sender is offered Drive instead — said
  * as such, since then the files do leave the device for a while; they are
  * deleted once the other side has them.
  *
@@ -46,6 +47,7 @@ import {
 import { freeName, outgoing, receiveOver, safeFileName, sendOver, splitPath, TransferError, type FileInfo, type Kept, type Sink, type SinkFor, type Wire } from './deviceTransfer'
 import type { DriveClient, DriveFile } from './driveClient'
 import { saveBytes } from './download'
+import { currentIceServers } from './deviceServers'
 import { deviceDrive, useDrive } from './googleDrive'
 
 export { shortId, type DeviceRecord }
@@ -961,7 +963,7 @@ export async function sendToDevice(deviceId: string, files: File[], options: { p
  * runs again for a transfer that broke.
  */
 async function offerOut(id: string, deviceId: string, files: File[], infos: FileInfo[], options: { play?: boolean; resume?: boolean }): Promise<void> {
-  const pc = new RTCPeerConnection({ iceServers: [] })
+  const pc = new RTCPeerConnection({ iceServers: currentIceServers() })
   const channel = pc.createDataChannel('sondra', { ordered: true })
   const abort = new AbortController()
   let answered: (sdp: string) => void = () => undefined
@@ -1379,7 +1381,7 @@ async function receiveOn(id: string, transfer: Transfer, sdp: string, target: { 
   const control = new AbortController()
   incomingPending.set(id, { abort: () => control.abort(), sinkFor: target.sinkFor })
 
-  const pc = new RTCPeerConnection({ iceServers: [] })
+  const pc = new RTCPeerConnection({ iceServers: currentIceServers() })
   const channelArrived = new Promise<RTCDataChannel>((resolve) => pc.addEventListener('datachannel', (event) => resolve(event.channel)))
   try {
     await pc.setRemoteDescription({ type: 'offer', sdp })
