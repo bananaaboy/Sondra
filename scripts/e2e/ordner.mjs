@@ -1,15 +1,17 @@
 // The Sondra folder in Drive: listing, selecting, and deleting into Drive's bin,
 // on a desktop and a phone width. No preview next to the list any more.
-import { BASE, OUT, check, create, drive, FOLDER, finish, harmless, launch } from './lib.mjs'
+import { BASE, OUT, check, create, drive, files, FOLDER, finish, harmless, launch } from './lib.mjs'
 
 const root = create({ name: 'Sondra', mimeType: FOLDER })
 const dl = create({ name: 'Heruntergeladen', mimeType: FOLDER, parents: [root.id] })
 const a = create({ name: 'Frieren S01E01.mp4', mimeType: 'video/mp4', parents: [dl.id] }, Buffer.alloc(1000))
-const b = create({ name: 'Frieren S01E02.mp4', mimeType: 'video/mp4', parents: [dl.id] }, Buffer.alloc(1000))
+let b = create({ name: 'Frieren S01E02.mp4', mimeType: 'video/mp4', parents: [dl.id] }, Buffer.alloc(1000))
 const c = create({ name: 'Notiz.txt', mimeType: 'text/plain', parents: [root.id] }, Buffer.from('hi'))
 
 const browser = await launch()
 for (const viewport of [{ width: 1280, height: 900 }, { width: 400, height: 860 }]) {
+  // The last round erased b for good; it is made again.
+  if (!files.has(b.id)) b = create({ name: 'Frieren S01E02.mp4', mimeType: 'video/mp4', parents: [dl.id] }, Buffer.alloc(1000))
   for (const f of [a, b]) f.trashed = false
   const context = await browser.newContext({ viewport, serviceWorkers: 'block' })
   await context.route('https://www.googleapis.com/**', drive)
@@ -43,6 +45,24 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 400, height: 860 
   await page.getByText(/im Papierkorb von Google Drive/).first().waitFor({ timeout: 10000 })
   check(`${viewport.width}: beide im Papierkorb`, a.trashed && b.trashed && !c.trashed)
   check(`${viewport.width}: aus der Liste`, (await page.getByText('Frieren S01E01.mp4').count()) === 0)
+  // Drive's bin to look into: one file back, the other away for good, asked once more.
+  await page.getByRole('button', { name: 'Papierkorb', exact: true }).click()
+  const bin = page.getByRole('dialog')
+  await bin.getByText('Frieren S01E02.mp4').waitFor({ timeout: 10000 })
+  check(`${viewport.width}: Drive-Papierkorb zeigt beide Dateien`, (await bin.getByRole('checkbox', { name: /Frieren S01E01/ }).count()) === 1 && (await bin.getByRole('checkbox', { name: /Frieren S01E02/ }).count()) === 1)
+  await page.screenshot({ path: OUT + `papierkorb-drive-${viewport.width}.png` })
+  await bin.getByRole('checkbox', { name: /Frieren S01E01/ }).check()
+  await bin.getByRole('button', { name: '1 zurücklegen' }).click()
+  await bin.getByText(/1 Datei zurückgelegt/).waitFor({ timeout: 10000 })
+  check(`${viewport.width}: die eine ist zurück in Drive, die andere noch im Papierkorb`, !a.trashed && b.trashed)
+  await bin.getByRole('checkbox', { name: /Frieren S01E02/ }).check()
+  await bin.getByRole('button', { name: 'Endgültig löschen' }).click()
+  check(`${viewport.width}: endgültig löschen fragt noch einmal`, files.has(b.id) && (await bin.innerText()).includes('Dafür gibt es kein Zurück'))
+  await bin.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await bin.getByText('Der Papierkorb ist leer.').waitFor({ timeout: 10000 })
+  check(`${viewport.width}: danach ist sie in Drive weg`, !files.has(b.id))
+  await bin.getByRole('button', { name: 'Schliessen', exact: true }).click()
+  await page.getByText('Frieren S01E01.mp4').first().waitFor({ timeout: 10000 })
   await page.screenshot({ path: OUT + `nachher-${viewport.width}.png` })
   check(`${viewport.width}: keine Fehler`, errors.length === 0, errors.join(' | '))
   await context.close()
@@ -94,7 +114,25 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 400, height: 860 
         bytes,
         parent,
         async getFile() {
-          return new File([handle.bytes], name, { type: 'video/mp4' })
+          return new File([handle.bytes], handle.name, { type: 'video/mp4' })
+        },
+        async createWritable() {
+          const parts = []
+          return {
+            async write(data) {
+              parts.push(data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : new Uint8Array(data))
+            },
+            async close() {
+              const all = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0))
+              let at = 0
+              for (const part of parts) {
+                all.set(part, at)
+                at += part.length
+              }
+              handle.bytes = all
+            },
+            async abort() {},
+          }
         },
         async move(to, newName) {
           handle.parent.entries.delete(handle.name)
@@ -131,12 +169,46 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 400, height: 860 
   await page.screenshot({ path: `${OUT}lokal-papierkorb.png` })
   await dialog.getByRole('button', { name: 'In den Papierkorb' }).click()
   await page.getByText(/im Ordner „Sondra-Papierkorb“/).waitFor({ timeout: 10_000 })
-  const binHas = () => page.evaluate(() => [...window.__root.entries.get('Sondra-Papierkorb').entries.keys()])
+  // The notes Sondra keeps in the bin (a dot file) are not what was thrown away.
+  const binHas = () => page.evaluate(() => [...window.__root.entries.get('Sondra-Papierkorb').entries.keys()].filter((name) => !name.startsWith('.')))
   check('Lokal: die Datei liegt im Papierkorb, nicht mehr im Ordner', (await binHas()).join() === 'Folge 1.mp4' && (await page.getByText('Folge 1.mp4').count()) === 0)
   check('Lokal: der Papierkorb steht nicht in der Liste, die andere Folge schon', (await page.getByText('Sondra-Papierkorb', { exact: true }).count()) === 0 && (await page.getByText('Folge 2.mp4').count()) > 0)
   await page.getByRole('button', { name: 'Rückgängig' }).click()
   await page.getByText('Folge 1.mp4').first().waitFor({ timeout: 10_000 })
   check('Lokal: nach „Rückgängig“ ist sie wieder da und der Papierkorb leer', (await binHas()).length === 0 && (await page.getByText(/zurückgelegt/).count()) > 0)
+  // The bin to look into: what lies there, back with a click, and away for good only after asking once more.
+  const bin = async (name) => {
+    await page.getByText(name).first().click({ modifiers: ['Control'] })
+    await page.getByRole('button', { name: 'Löschen …' }).click()
+    const ask = page.getByRole('dialog')
+    await ask.waitFor()
+    await ask.getByRole('button', { name: 'In den Papierkorb' }).click()
+    await page.getByText(/im Ordner „Sondra-Papierkorb“/).waitFor({ timeout: 10_000 })
+  }
+  const inSeason = (name) => page.evaluate((file) => window.__root.entries.get('Staffel 1').entries.has(file), name)
+  await bin('Folge 1.mp4')
+  await page.getByRole('button', { name: 'Papierkorb (1)', exact: true }).click()
+  const binDialog = page.getByRole('dialog')
+  await binDialog.getByText('Folge 1.mp4').waitFor({ timeout: 10_000 })
+  const binText = (await binDialog.innerText()).replace(/\s+/g, ' ')
+  check('Papierkorb: das Fenster zeigt die Datei, woher sie kam und wann', /aus Staffel 1/.test(binText) && /gelöscht/.test(binText), binText.slice(0, 200))
+  await page.screenshot({ path: `${OUT}papierkorb.png` })
+  await binDialog.getByRole('checkbox', { name: /Folge 1\.mp4/ }).check()
+  await binDialog.getByRole('button', { name: '1 zurücklegen' }).click()
+  await binDialog.getByText('Der Papierkorb ist leer.').waitFor({ timeout: 10_000 })
+  check('Papierkorb: zurückgelegt in „Staffel 1“, und der Papierkorb ist leer', (await inSeason('Folge 1.mp4')) && (await binHas()).length === 0)
+  await binDialog.getByRole('button', { name: 'Schliessen', exact: true }).click()
+  await page.getByText('Folge 1.mp4').first().waitFor({ timeout: 10_000 })
+  check('Papierkorb: die zurückgelegte Datei steht wieder in der Liste', (await page.getByText('Folge 1.mp4').count()) > 0)
+  await bin('Folge 2.mp4')
+  await page.getByRole('button', { name: 'Papierkorb (1)', exact: true }).click()
+  await binDialog.getByRole('checkbox', { name: /Folge 2\.mp4/ }).check()
+  await binDialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  check('Papierkorb: endgültig löschen fragt noch einmal', (await binHas()).length === 1 && (await binDialog.innerText()).includes('Dafür gibt es kein Zurück'))
+  await binDialog.getByRole('button', { name: 'Endgültig löschen' }).click()
+  await binDialog.getByText('Der Papierkorb ist leer.').waitFor({ timeout: 10_000 })
+  check('Papierkorb: danach ist die Datei weg, auch aus dem Papierkorb', (await binHas()).length === 0 && !(await inSeason('Folge 2.mp4')))
+  await binDialog.getByRole('button', { name: 'Schliessen', exact: true }).click()
   // Subtitles: the dialog says where the model comes from before anything is loaded.
   await page.getByText('Folge 1.mp4').first().click({ modifiers: ['Control'] })
   await page.getByRole('button', { name: 'Untertitel erzeugen' }).click()

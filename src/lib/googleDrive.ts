@@ -1131,6 +1131,55 @@ export async function trashDriveFiles(ids: string[]): Promise<{ trashed: string[
   return { trashed, failed }
 }
 
+export interface DriveBinned {
+  id: string
+  name: string
+  size: number | null
+  /** When it went into the bin. */
+  at: number | null
+}
+
+/** What lies in Drive's bin of what Sondra made, the last first. */
+export async function listDriveTrash(): Promise<DriveBinned[]> {
+  await ready()
+  return (await client.trashed()).map((file) => {
+    const when = Date.parse(file.trashedTime ?? file.modifiedTime ?? '')
+    return { id: file.id, name: file.name, size: file.size, at: Number.isFinite(when) ? when : null }
+  })
+}
+
+/** Back out of Drive's bin, one after the other; says which came and which did not. */
+export async function untrashDriveFiles(ids: string[]): Promise<{ done: string[]; failed: { id: string; reason: string }[] }> {
+  await ready()
+  const done: string[] = []
+  const failed: { id: string; reason: string }[] = []
+  for (const id of ids) {
+    try {
+      await client.untrash(id)
+      done.push(id)
+    } catch (error) {
+      failed.push({ id, reason: error instanceof DriveError ? DRIVE_PROBLEM[error.code] : error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return { done, failed }
+}
+
+/** Out of Drive's bin for good — there is no way back from this. */
+export async function eraseDriveFiles(ids: string[]): Promise<{ done: string[]; failed: { id: string; reason: string }[] }> {
+  await ready()
+  const done: string[] = []
+  const failed: { id: string; reason: string }[] = []
+  for (const id of ids) {
+    try {
+      await client.remove(id)
+      done.push(id)
+    } catch (error) {
+      failed.push({ id, reason: error instanceof DriveError ? DRIVE_PROBLEM[error.code] : error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return { done, failed }
+}
+
 /** Drive for linking devices: only while it works without a click, never a sign-in of its own. */
 export function deviceDrive(): DriveClient | null {
   return driveLinked() && canRun() ? client : null

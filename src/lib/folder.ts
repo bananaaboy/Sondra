@@ -584,6 +584,61 @@ export interface Binned {
   binName: string
 }
 
+/**
+ * Where each file in the bin lay and when it went in, so it can go back after
+ * the page was closed, too. A dot hides it from the scan; it is best effort —
+ * a bin without it still works, files then go back to the top.
+ */
+const BIN_NOTES = '.sondra-papierkorb.json'
+
+interface BinNote {
+  path: string
+  at: number
+}
+
+async function readNotes(bin: DirectoryHandle): Promise<Record<string, BinNote>> {
+  try {
+    const parsed: unknown = JSON.parse(await (await (await bin.getFileHandle(BIN_NOTES)).getFile()).text())
+    const notes: Record<string, BinNote> = {}
+    if (parsed && typeof parsed === 'object') {
+      for (const [name, value] of Object.entries(parsed as Record<string, unknown>)) {
+        const note = value as Partial<BinNote> | null
+        if (note && typeof note.path === 'string' && typeof note.at === 'number') notes[name] = { path: note.path, at: note.at }
+      }
+    }
+    return notes
+  } catch {
+    return {}
+  }
+}
+
+async function writeNotes(bin: DirectoryHandle, notes: Record<string, BinNote>): Promise<void> {
+  try {
+    if (Object.keys(notes).length === 0) {
+      await bin.removeEntry(BIN_NOTES).catch(() => undefined)
+      return
+    }
+    const out = await (await bin.getFileHandle(BIN_NOTES, { create: true })).createWritable?.()
+    if (!out) return
+    await out.write(new Blob([JSON.stringify(notes)]))
+    await out.close()
+  } catch {
+    // The notes are a convenience; the files themselves are what matters.
+  }
+}
+
+async function forgetNotes(bin: DirectoryHandle, binNames: string[]): Promise<void> {
+  const notes = await readNotes(bin)
+  let changed = false
+  for (const name of binNames) {
+    if (name in notes) {
+      delete notes[name]
+      changed = true
+    }
+  }
+  if (changed) await writeNotes(bin, notes)
+}
+
 async function names(dir: DirectoryHandle): Promise<Set<string>> {
   const taken = new Set<string>()
   for await (const child of dir.values()) taken.add(child.name)
@@ -644,6 +699,12 @@ export async function binFiles(root: DirectoryHandle, files: FolderFile[]): Prom
       failed.push({ file, reason: error instanceof Error ? error.message : String(error) })
     }
   }
+  if (binned.length > 0) {
+    const notes = await readNotes(bin)
+    const at = Date.now()
+    for (const item of binned) notes[item.binName] = { path: item.file.path, at }
+    await writeNotes(bin, notes)
+  }
   return { binned, failed }
 }
 
@@ -671,5 +732,111 @@ export async function restoreBinned(root: DirectoryHandle, binned: Binned[]): Pr
       failed.push({ item, reason: error instanceof Error ? error.message : String(error) })
     }
   }
+  await forgetNotes(bin, restored.map((item) => item.binName))
   return { restored, failed }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Looking into the bin                                                         */
+/* -------------------------------------------------------------------------- */
+
+export interface BinItem {
+  /** Its name in the bin. */
+  name: string
+  size: number
+  modified: number
+  /** When it went in; absent for a file somebody put there by hand. */
+  at?: number
+  /** Where it lay, relative to the folder; absent when not known — it then goes back to the top. */
+  from?: string
+}
+
+const noteFile = (name: string) => name === BIN_NOTES
+
+/** Files in the bin; nothing if there is no bin yet. */
+export async function countBin(root: DirectoryHandle): Promise<number> {
+  let bin: DirectoryHandle
+  try {
+    bin = await root.getDirectoryHandle(BIN_NAME)
+  } catch {
+    return 0
+  }
+  let count = 0
+  for await (const child of bin.values()) if (child.kind === 'file' && !noteFile(child.name)) count += 1
+  return count
+}
+
+/** What lies in the bin, the last thrown away first. */
+export async function listBin(root: DirectoryHandle): Promise<BinItem[]> {
+  let bin: DirectoryHandle
+  try {
+    bin = await root.getDirectoryHandle(BIN_NAME)
+  } catch {
+    return []
+  }
+  const notes = await readNotes(bin)
+  const items: BinItem[] = []
+  for await (const child of bin.values()) {
+    if (child.kind !== 'file' || noteFile(child.name)) continue
+    const file = await child.getFile()
+    items.push({ name: child.name, size: file.size, modified: file.lastModified, at: notes[child.name]?.at, from: notes[child.name]?.path })
+  }
+  return items.sort((a, b) => (b.at ?? b.modified) - (a.at ?? a.modified) || a.name.localeCompare(b.name, 'de'))
+}
+
+/** The folder at `path` inside `root`, made where it is gone since; `.` and `..` are never followed. */
+async function dirAt(root: DirectoryHandle, path: string): Promise<DirectoryHandle> {
+  let here = root
+  for (const part of path.split('/')) {
+    if (part === '' || part === '.' || part === '..') continue
+    here = await here.getDirectoryHandle(part, { create: true })
+  }
+  return here
+}
+
+/** Back to the folder each lay in, also after the page was closed in between; a name taken meanwhile gets a number. */
+export async function restoreFromBin(root: DirectoryHandle, items: BinItem[]): Promise<{ done: BinItem[]; failed: { item: BinItem; reason: string }[] }> {
+  const done: BinItem[] = []
+  const failed: { item: BinItem; reason: string }[] = []
+  let bin: DirectoryHandle
+  try {
+    bin = await root.getDirectoryHandle(BIN_NAME)
+  } catch {
+    return { done, failed: items.map((item) => ({ item, reason: `Der Ordner „${BIN_NAME}“ ist nicht mehr da.` })) }
+  }
+  for (const item of items) {
+    try {
+      const at = item.from ? item.from.lastIndexOf('/') : -1
+      const parent = await dirAt(root, at >= 0 ? item.from!.slice(0, at) : '')
+      const original = item.from ? item.from.slice(at + 1) : item.name
+      await relocate(bin, item.name, parent, free(original || item.name, await names(parent)), item.size)
+      done.push(item)
+    } catch (error) {
+      failed.push({ item, reason: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  await forgetNotes(bin, done.map((item) => item.name))
+  return { done, failed }
+}
+
+/** For good; the only place Sondra deletes without a way back, and only on a click on exactly this. */
+export async function eraseFromBin(root: DirectoryHandle, items: BinItem[]): Promise<{ done: BinItem[]; failed: { item: BinItem; reason: string }[] }> {
+  const done: BinItem[] = []
+  const failed: { item: BinItem; reason: string }[] = []
+  let bin: DirectoryHandle
+  try {
+    bin = await root.getDirectoryHandle(BIN_NAME)
+  } catch {
+    return { done, failed: items.map((item) => ({ item, reason: `Der Ordner „${BIN_NAME}“ ist nicht mehr da.` })) }
+  }
+  for (const item of items) {
+    try {
+      await bin.removeEntry(item.name)
+      done.push(item)
+    } catch (error) {
+      failed.push({ item, reason: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  await forgetNotes(bin, done.map((item) => item.name))
+  return { done, failed }
 }

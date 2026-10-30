@@ -118,8 +118,17 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   legt jede Datei in ihren Ordner zurück, ohne eine inzwischen belegte
   Datei zu überschreiben (Nummer statt dessen); „Endgültig löschen“ bleibt
   im Dialog daneben. Der Papierkorb-Ordner steht nicht in der Liste
-  (`SKIPPED`) und wird nicht von Sondra geleert — das macht, wer den Ordner
-  selbst leert. Firefox/Safari: `webkitdirectory`, einmal
+  (`SKIPPED`). **Den Papierkorb sieht man** (30.10.2026, „ich sehe papierkorb
+  nicht“; `FolderBin.tsx`): „Papierkorb (n)“ rechts in der Leiste der Seite
+  und „Papierkorb ansehen“ bei der Meldung nach dem Löschen öffnen ein
+  Fenster mit allem, was darin liegt — Name, woher, wann —, zum Zurücklegen
+  oder, nach einer zweiten Frage, endgültig Löschen. Woher es kam, steht in
+  `.sondra-papierkorb.json` im Papierkorb (Punkt: der Scan überspringt sie;
+  Hilfe, keine Pflicht — ohne sie geht eine Datei nach oben in den Ordner);
+  ein Ordner, den es inzwischen nicht mehr gibt, wird neu angelegt, `..` in
+  einer Notiz nie befolgt. In Drive zeigt dasselbe Fenster Drives eigenen
+  Papierkorb (`trashed = true`, `drive.file` zeigt nur, was Sondra anlegte;
+  `untrash`, `remove`). Firefox/Safari: `webkitdirectory`, einmal
   eingelesen, ohne Löschen — die Seite sagt das. Die Kachel bekommt den Fokus
   nur, wenn er schon in der Liste ist; vorher nahm die erste ihn beim
   Ankommen und scrollte dorthin. **Lange Ordner** (30.10.2026): 240 Dateien je Seite, und „Weitere … zeigen“

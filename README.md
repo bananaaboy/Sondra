@@ -195,6 +195,9 @@ Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
   „Endgültig löschen“ bleibt möglich. Im Ordner „Sondra“ in Google Drive gehen
   gelöschte Dateien in den Papierkorb von Drive und lassen sich dort 30 Tage
   lang wiederherstellen.
+- **Papierkorb:** „Papierkorb“ rechts in der Leiste der Seite zeigt, was darin
+  liegt (Name, woher, wann), zum Zurücklegen oder — nach einer zweiten
+  Frage — endgültig Löschen; auf diesem Gerät und in Drive.
 - **An Geräte senden und Auf Gerät abspielen:** unter einer Auswahl, ein oder
   mehrere Geräte des eigenen Kontos.
 - **Listenansicht:** Strukturierte Tabelle mit Name, Art, Größe, Änderungsdatum

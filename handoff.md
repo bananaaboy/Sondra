@@ -16,7 +16,8 @@
   senden (`FileInfo.path`, `splitPath`, Android `save-begin` mit `dir`), mehrere Empfänger mit
   Warteschlange (zwei zugleich), Fortsetzen nach Abbruch (`Kept`/`Piece`).
 - **Beim Minimieren pausieren** (`lib/pauseOnMinimize.ts`, Windows-App: `onWindowState`).
-- **Ordner:** Löschen geht zuerst in `Sondra-Papierkorb` mit „Rückgängig“ (`binFiles`).
+- **Ordner:** Löschen geht zuerst in `Sondra-Papierkorb` mit „Rückgängig“ (`binFiles`);
+  der Papierkorb lässt sich ansehen, leeren und zurücklegen (`FolderBin.tsx`, auch Drive).
 - **Eigener STUN/TURN-Server** (`deviceServers.ts`): Adressen gemerkt, Passwort nie.
 - **Merkliste:** Jahresrückblick in den Statistiken (`recap.ts`), Teilen als Link (`merkShare.ts`).
 - **Untertitel im Ordner:** neben dem Film finden oder per Whisper erzeugen (`autoSubtitles.ts`).
