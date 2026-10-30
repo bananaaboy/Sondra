@@ -1,15 +1,15 @@
-# Handoff: Sondra (v1.1.21)
+# Handoff: Sondra (v1.2.0)
 
-**Datum:** 28. Oktober 2026  
+**Datum:** 30. Oktober 2026  
 **Projektpfad:** `C:\Users\lizge.navajeetharan\Documents\PGM\Sondra`  
-**Aktueller Branch:** `main` (Release-Commit von v1.1.21, synchronisiert mit `origin/main`)  
+**Aktueller Branch:** `main` (Release-Commit von v1.2.0, synchronisiert mit `origin/main`)  
 **Status:** Alle 17 Verifikationstests (`npm run verify`) und `npm run typecheck` bestanden (Code 0).
 
 ---
 
-## 1. Übersicht der Meilensteine bis Version 1.1.21
+## 1. Übersicht der Meilensteine bis Version 1.2.0
 
-### Seit 1.1.22 (noch nicht veröffentlicht, 30.10.2026):
+### Version 1.2.0 (30.10.2026):
 - **Browser-Szenarien im Repository** (`npm run verify:e2e`, Workflow „Browser“): Geräte,
   Ordner in Drive, Bewegung, Pausieren.
 - **Geräte:** Fähigkeiten im Eintrag (`caps`), Text und Links, Auf Gerät abspielen, Ordner
@@ -29,7 +29,7 @@
   `Sondra-Android-<abi>.apk` im Release, `Updater.java` wählt nach `SUPPORTED_ABIS`);
   nur durch die CI prüfbar, die Grössen stehen in der Zusammenfassung des Laufs.
 
-### Seit 1.1.21 (veröffentlicht als 1.1.22 bzw. noch offen):
+### Version 1.1.22 (seit 1.1.21):
 - **Geräte wiedererkennen:** die Windows-App wartet auf ihren Port und nimmt sonst einen
   gemerkten Ersatz (`port.json`), nie einen zufälligen — der Port ist Teil der Herkunft.
   Nach Neuinstallation: „Das war dieses Gerät“ (`adoptFormer`) übernimmt den alten Eintrag;

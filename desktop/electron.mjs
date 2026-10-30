@@ -721,6 +721,10 @@ function registerSondraProjectIcon() {
     ['HKCU\\Software\\Classes\\Sondra.Projekt', '/ve', '/d', 'Sondra-Projekt', '/f'],
     ['HKCU\\Software\\Classes\\Sondra.Projekt\\DefaultIcon', '/ve', '/d', `${exe},0`, '/f'],
     ['HKCU\\Software\\Classes\\Sondra.Projekt\\shell\\open\\command', '/ve', '/d', `"${exe}" "%1"`, '/f'],
+    ['HKCU\\Software\\Classes\\.sondra-liste', '/ve', '/d', 'Sondra.Liste', '/f'],
+    ['HKCU\\Software\\Classes\\Sondra.Liste', '/ve', '/d', 'Geteilte Merkliste (Sondra)', '/f'],
+    ['HKCU\\Software\\Classes\\Sondra.Liste\\DefaultIcon', '/ve', '/d', `${exe},0`, '/f'],
+    ['HKCU\\Software\\Classes\\Sondra.Liste\\shell\\open\\command', '/ve', '/d', `"${exe}" "%1"`, '/f'],
   ]
   for (const args of entries) {
     execFile('reg.exe', ['add', ...args], { windowsHide: true }, () => {})
