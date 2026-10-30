@@ -88,7 +88,12 @@ jobs:
 
       - name: Build, lint
         working-directory: android
-        run: ./gradlew --no-daemon --console=plain lintRelease assembleRelease bundleRelease
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --console=plain lintRelease bundleRelease
+          # The APKs in a run of their own: Gradle refuses an app bundle next
+          # to several APKs. The bundle is done, so nothing of it is in the way.
+          ./gradlew --no-daemon --console=plain -PsplitApks assembleRelease
 
       - name: Check the app
         id: check

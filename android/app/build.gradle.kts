@@ -12,6 +12,11 @@ val versionParts = sondraVersion.split(".").map { it.toInt() }
 // key signs it: the app installs and runs, but the next build cannot update it.
 val keystore: String? = System.getenv("SONDRA_ANDROID_KEYSTORE")
 
+// One APK per processor only on request (-PsplitApks): Gradle refuses to
+// build an app bundle in the same run as several APKs. The workflow builds the
+// bundle first and the APKs in a run of their own.
+val splitApks = providers.gradleProperty("splitApks").isPresent
+
 android {
     namespace = "ch.lizge.sondra"
     compileSdk = 36
@@ -26,13 +31,14 @@ android {
 
     // yt-dlp comes with its own Python and FFmpeg, built per processor:
     // phones (arm64, older arm) and the x86_64 emulator the workflow starts.
-    // One APK per processor next to the universal one that carries all
-    // three (the workflow reports each size); the AAB splits by itself. All
-    // share one versionCode, so any of them updates any other. The 32-bit x86
-    // libraries the dependencies bring are left out: no phone runs them.
+    // With -PsplitApks: one APK per processor next to the universal one that
+    // carries all three (the workflow reports each size); the AAB splits by
+    // itself. All share one versionCode, so any of them updates any other.
+    // Without it, one APK with all three. The 32-bit x86 libraries the
+    // dependencies bring are left out: no phone runs them.
     splits {
         abi {
-            isEnable = true
+            isEnable = splitApks
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86_64")
             isUniversalApk = true
