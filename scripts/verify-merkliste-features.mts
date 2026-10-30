@@ -44,6 +44,7 @@ import { daysBetween, finishAt, goalState, paceFor, paceSetting, recentPace, wat
 import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib/episodeMatch'
 import { chaptersText, cleanMarks, markName, neighbourMark, nextOffered, openingOffered, sleepFade, withMark } from '../src/lib/player'
 import { renamedFile, splitName } from '../src/lib/format'
+import { recapYears, recordedSince, yearRecap } from '../src/lib/recap'
 
 console.log('--- Testing Merkliste Mega Features ---')
 
@@ -645,6 +646,43 @@ console.log('--- Testing Merkliste Mega Features ---')
   assert.ok(ssIndex !== -1 && ssIndex < inputIndex, '-ss steht vor -i für sofortiges Disk-Seeking bei riesigen Dateien')
   assert.ok(streamJob.args.includes('frag_keyframe+empty_moov+default_base_moof'), 'nutzt fragmentiertes MP4 für schnellen Direkt-Stream')
   console.log('✓ SQLite-3-Datenbank & Direkt-Wiedergabe für riesige Videodateien verifiziert')
+}
+
+// Rückblick: what was watched in a year, from the dates the Merkliste keeps.
+{
+  const at = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12).getTime()
+  const a = createMerkItem({ title: 'Frieren', url: '' })
+  const b = createMerkItem({ title: 'Nana', url: '' })
+  a.episodeDuration = 25
+  b.episodeDuration = 20
+  a.history = [
+    { id: '1', season: 1, episode: 1, at: at(2026, 3, 1) },
+    { id: '2', season: 1, episode: 2, at: at(2026, 3, 2) },
+    { id: '3', season: 1, episode: 3, at: at(2026, 3, 3) },
+    { id: '3b', season: 1, episode: 3, at: at(2026, 3, 4) },
+    { id: '4', season: 1, episode: 4, at: at(2026, 7, 9) },
+    { id: '0', season: 1, episode: 9, at: at(2025, 12, 31) },
+  ]
+  b.history = [
+    { id: '5', season: 1, episode: 1, at: at(2026, 3, 3) },
+    { id: '6', season: 1, episode: 2, at: at(2026, 3, 3) },
+  ]
+  b.status = 'done'
+  const recap = yearRecap([a, b], 2026)
+  assert.strictEqual(recap.episodes, 6, 'ein zweimal abgehaktes Folge zählt einmal, das Vorjahr gar nicht')
+  assert.strictEqual(recap.minutes, 4 * 25 + 2 * 20, 'Minuten aus der Länge jeder Folge')
+  assert.strictEqual(recap.byMonth[2], 5, 'März: fünf, davon drei an einem Tag der Serie 2')
+  assert.strictEqual(recap.byMonth[6], 1, 'Juli: eine')
+  assert.deepStrictEqual(recap.busiestMonth, { month: 2, episodes: 5 })
+  assert.strictEqual(recap.busiestDay?.episodes, 3, 'am 3. März drei Folgen (eine Frieren, zwei Nana)')
+  assert.strictEqual(recap.streak, 3, 'drei Tage hintereinander: 1., 2., 3. März')
+  assert.deepStrictEqual(recap.top.map((row) => [row.title, row.episodes]), [['Frieren', 4], ['Nana', 2]])
+  assert.strictEqual(recap.finished, 1, 'Nana ist fertig, und ihre letzte Folge war in diesem Jahr')
+  assert.deepStrictEqual(recapYears([a, b]), [2026, 2025])
+  assert.strictEqual(recordedSince([a, b]), at(2025, 12, 31))
+  assert.strictEqual(yearRecap([a, b], 2024).episodes, 0, 'ein Jahr ohne Einträge ist leer, nicht erfunden')
+  assert.strictEqual(yearRecap([], 2026).busiestMonth, null)
+  console.log('✓ Jahresrückblick aus dem Verlauf')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')

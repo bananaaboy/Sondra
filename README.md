@@ -208,6 +208,9 @@ Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
 
 Eine private Mediathek zum Verfolgen von Anime, Serien und Filmen:
 
+- **Rückblick:** in den Statistiken ein Jahr im Überblick — Folgen, Sehzeit, stärkster
+  Monat, längste Serie von Tagen, die meistgeschauten Serien, zwölf Balken. Gezählt
+  wird, was mit Datum abgehakt wurde; die Seite sagt, seit wann es Daten gibt.
 - **SQLite 3 Engine (`src/lib/sqlite.ts`):** Speichert Einträge, Staffeln,
   Fortschritte, Notizen und Historie direkt in einer relationalen
   SQLite-3-Binärdatei (`sondra.db` bzw. `Sondra-Merkliste.sqlite`).
