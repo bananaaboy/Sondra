@@ -2,8 +2,8 @@
 # its own WebView, no browser bar, and the website's Google sign-in for Drive
 # opened in the browser (nothing of Google's is built into the app).
 #
-# Every run builds the APK (to install directly) and the AAB (for Google
-# Play), checks them, starts the APK on an Android 14 emulator
+# Every run builds the APKs (one universal, one per processor, to install
+# directly) and the AAB (for Google Play), checks them, starts the APK on an Android 14 emulator
 # (android/launch-check.sh, pictures as the artifact "Sondra-Android-Bilder"),
 # and keeps both as the artifact "Sondra-Android".
 #
@@ -18,7 +18,8 @@
 # workflow and publishes the APK together with the setups. A manual run
 # with "release" ticked attaches the APK to the GitHub release v<version
 # from package.json> on its own, as Sondra-Android-<version>.apk and
-# Sondra-Android.apk.
+# Sondra-Android.apk (all processors) and one smaller Sondra-Android-<abi>.apk
+# per processor, which the app's own updater picks.
 
 name: Android
 
@@ -94,7 +95,9 @@ jobs:
         run: |
           set -euo pipefail
           tools="$ANDROID_HOME/build-tools/36.0.0"
-          apk=android/app/build/outputs/apk/release/app-release.apk
+          dir=android/app/build/outputs/apk/release
+          # The universal APK carries all processors; one more per processor.
+          apk="$dir/app-universal-release.apk"
           version="$(node -p "require('./package.json').version")"
           badging="$("$tools/aapt2" dump badging "$apk")"
           echo "$badging" | grep -q "package: name='ch.lizge.sondra'.*versionName='$version'" || { echo "::error::Paket oder Version stimmt nicht:"; echo "$badging" | head -3; exit 1; }
@@ -109,10 +112,34 @@ jobs:
           mkdir -p out
           cp "$apk" "out/Sondra-Android-$version.apk"
           cp android/app/build/outputs/bundle/release/app-release.aab "out/Sondra-Android-$version.aab"
+          # Each processor's APK: same package, version and key, nothing of
+          # Google's, and only its own processor's libraries.
+          sizes=""
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            split="$dir/app-$abi-release.apk"
+            [ -f "$split" ] || { echo "::error::Keine APK für $abi"; exit 1; }
+            # Read once, then search: "cmd | grep -q" under pipefail fails when
+            # grep stops early.
+            split_badging="$("$tools/aapt2" dump badging "$split")"
+            echo "$split_badging" | grep -q "package: name='ch.lizge.sondra'.*versionName='$version'" || { echo "::error::$abi: Paket oder Version stimmt nicht"; exit 1; }
+            [ "$("$tools/apksigner" verify --print-certs "$split" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | colons)" = "$digest" ] || { echo "::error::$abi: anderer Schlüssel als die universelle APK"; exit 1; }
+            if unzip -p "$split" 'classes*.dex' | grep -ac 'GOCSPX-' > /dev/null; then echo "::error::$abi: Ein Google-Secret steckt in der App"; exit 1; fi
+            listing="$(unzip -l "$split")"
+            own="$(echo "$listing" | grep -c " lib/$abi/" || true)"
+            foreign="$(echo "$listing" | grep -E ' lib/(arm64-v8a|armeabi-v7a|x86_64|x86)/' | grep -vc " lib/$abi/" || true)"
+            [ "$own" -gt 0 ] || { echo "::error::$abi: keine Bibliotheken in der APK"; exit 1; }
+            [ "$foreign" -eq 0 ] || { echo "::error::$abi: Bibliotheken eines anderen Prozessors in der APK"; exit 1; }
+            cp "$split" "out/Sondra-Android-$version-$abi.apk"
+            sizes="$sizes- $abi: $(du -h "$split" | cut -f1)"$'\n'
+          done
           {
             echo "### Sondra für Android $version"
             echo
-            echo "APK $(du -h "$apk" | cut -f1), signiert mit:"
+            echo "APK $(du -h "$apk" | cut -f1) (universell, alle Prozessoren), je Prozessor:"
+            echo
+            printf '%s' "$sizes"
+            echo
+            echo "Signiert mit:"
             echo
             echo '```'
             echo "$certs" | grep -E 'DN:|SHA-256|SHA-1'
@@ -177,4 +204,9 @@ jobs:
           tag="v$VERSION"
           gh release view "$tag" > /dev/null 2>&1 || gh release create "$tag" --title "Sondra $VERSION" --notes "Sondra $VERSION."
           cp "out/Sondra-Android-$VERSION.apk" out/Sondra-Android.apk
-          gh release upload "$tag" "out/Sondra-Android-$VERSION.apk" out/Sondra-Android.apk --clobber
+          files=("out/Sondra-Android-$VERSION.apk" out/Sondra-Android.apk)
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "out/Sondra-Android-$VERSION-$abi.apk" "out/Sondra-Android-$abi.apk"
+            files+=("out/Sondra-Android-$abi.apk")
+          done
+          gh release upload "$tag" "${files[@]}" --clobber

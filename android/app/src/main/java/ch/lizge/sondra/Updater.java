@@ -126,18 +126,28 @@ final class Updater {
                 latestVersion = rawVersion;
                 releaseNotes = release.optString("body", "");
 
-                // Locate APK asset
+                // Locate the APK asset: the one built for this device's
+                // processor (smaller than the universal one), else the universal
+                // Sondra-Android.apk, else any APK. The device's processor is
+                // the first it lists, which is what the installed app runs on
+                // whichever of them it was installed from.
                 JSONArray assets = release.optJSONArray("assets");
                 downloadUrl = null;
                 assetSize = 0;
+                String own = Build.SUPPORTED_ABIS.length > 0
+                        ? "Sondra-Android-" + Build.SUPPORTED_ABIS[0] + ".apk" : "";
+                int best = Integer.MAX_VALUE;
                 if (assets != null) {
                     for (int i = 0; i < assets.length(); i++) {
                         JSONObject asset = assets.getJSONObject(i);
                         String name = asset.optString("name", "");
-                        if (name.endsWith(".apk")) {
+                        int rank = name.equals(own) ? 0
+                                : name.equals("Sondra-Android.apk") ? 1
+                                : name.endsWith(".apk") ? 2 : Integer.MAX_VALUE;
+                        if (rank < best) {
+                            best = rank;
                             downloadUrl = asset.optString("browser_download_url");
                             assetSize = asset.optLong("size", 0);
-                            if (name.equals("Sondra-Android.apk")) break; // Preferred asset
                         }
                     }
                 }

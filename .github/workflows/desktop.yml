@@ -377,6 +377,15 @@ jobs:
           $apk = Get-ChildItem release-android -Filter "Sondra-Android-$version.apk" | Select-Object -First 1
           if (-not $apk) { throw 'Die Android-App fehlt.' }
           Copy-Item $apk.FullName release-android/Sondra-Android.apk
+          # One APK per processor, smaller than the universal one: the app's
+          # own updater picks the one for its device.
+          $abiApks = @()
+          foreach ($abi in 'arm64-v8a', 'armeabi-v7a', 'x86_64') {
+            $split = Get-ChildItem release-android -Filter "Sondra-Android-$version-$abi.apk" | Select-Object -First 1
+            if (-not $split) { throw "Die Android-App für $abi fehlt." }
+            Copy-Item $split.FullName "release-android/Sondra-Android-$abi.apk"
+            $abiApks += "release-android/Sondra-Android-$abi.apk"
+          }
 
           $setup = Get-ChildItem release -Filter "Sondra-Setup-$version.exe" | Select-Object -First 1
           $armSetup = Get-ChildItem release-arm64 -Filter "Sondra-Setup-arm64-$version.exe" | Select-Object -First 1
@@ -439,7 +448,7 @@ jobs:
           }
           $files = @($setup.FullName, 'release/Sondra-Setup.exe', $armSetup.FullName, 'release/Sondra-Setup-arm64.exe',
             $portable.FullName, 'release/Sondra-Portable.exe', $armPortable.FullName, 'release/Sondra-Portable-arm64.exe',
-            $apk.FullName, 'release-android/Sondra-Android.apk') + $extra + @('release/latest.yml')
+            $apk.FullName, 'release-android/Sondra-Android.apk') + $abiApks + $extra + @('release/latest.yml')
           foreach ($file in $files) {
             $done = $false
             foreach ($try in 1..4) {
