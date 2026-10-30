@@ -26,6 +26,8 @@ import { create } from 'zustand'
 
 import { ANDROID_BRIDGE } from './android'
 import { IN_ANDROID_APP, IN_DESKTOP_APP } from './desktop'
+import { sendToPlayer, type RemoteMedia } from './player'
+import { useSession } from '../state/store'
 import {
   MESSAGE_MAX_AGE,
   can,
@@ -96,6 +98,8 @@ export type TransferState =
   | 'expired'
 
 export interface Transfer {
+  /** Offered to be played there, not saved: the receiver's button says „Abspielen“. */
+  play?: boolean
   id: string
   direction: 'out' | 'in'
   peer: string
@@ -180,7 +184,7 @@ export const isOnline = (device: DeviceRecord, now = Date.now()) => now - device
  * this the sender would wait on a reply that never comes.
  */
 export function ownCaps(): string[] {
-  return ['text']
+  return ['text', 'play']
 }
 
 const sameCaps = (a: string[] | undefined, b: string[]) => [...(a ?? [])].sort().join() === [...b].sort().join()
@@ -196,7 +200,17 @@ export interface Note {
   /** The text if it is a single web address, else null. */
   link: string | null
   at: number
+  /** A request to play files that lie in Drive, here: asked first, started by a click. */
+  play?: RemoteMedia[]
 }
+
+/** A film or a song, by what the sender says it is. */
+export const isPlayableMime = (mime: string, name = '') =>
+  /^(video|audio)\//.test(mime) || /\.(mp4|m4v|mkv|webm|mov|avi|mp3|m4a|aac|flac|ogg|opus|wav)$/i.test(name)
+
+/** Largest film one device plays from another's file by transfer; beyond it, save the file and open it there. */
+export const PLAY_TRANSFER_MAX = 2 * 1024 * 1024 * 1024
+const DRIVE_ID = /^[\w-]{4,100}$/
 
 export const TEXT_MAX = 4000
 const NOTES_KEPT = 8
@@ -641,6 +655,8 @@ async function post(to: string, type: string, transfer: string, body: unknown): 
 interface OfferBody {
   sdp: string
   files: FileInfo[]
+  /** One film to play on arrival instead of saving it. */
+  play?: boolean
 }
 
 interface DriveBody {
@@ -662,10 +678,25 @@ async function handle(type: string, from: string, transferId: string, body: unkn
     set((current) => ({ notes: [note, ...current.notes].slice(0, NOTES_KEPT) }))
     return
   }
+  if (type === 'play') {
+    const raw = (body as { items?: unknown } | null)?.items
+    if (!Array.isArray(raw) || state().notes.some((note) => note.id === transferId)) return
+    const items: RemoteMedia[] = raw
+      .slice(0, 100)
+      .filter((item): item is { id: string; name: unknown; size: unknown; type: unknown } => Boolean(item) && typeof item.id === 'string' && DRIVE_ID.test(item.id))
+      .map((item) => ({ kind: 'drive' as const, id: item.id, name: safeFileName(String(item.name ?? 'Datei')), size: Number(item.size) || 0, type: String(item.type ?? '') }))
+      .filter((item) => isPlayableMime(item.type, item.name))
+    if (!items.length) return
+    const first = items[0].name
+    const text = items.length > 1 ? `„${first}“ und ${items.length - 1} weitere` : `„${first}“`
+    set((current) => ({ notes: [{ id: transferId, from, peerName, text, link: null, at: Date.now(), play: items }, ...current.notes].slice(0, NOTES_KEPT) }))
+    return
+  }
   if (type === 'offer') {
     const offer = body as OfferBody
     if (transfer || !offer || typeof offer.sdp !== 'string' || !Array.isArray(offer.files)) return
     const files = offer.files.map((file) => ({ name: safeFileName(String(file.name)), size: Number(file.size) || 0, mime: String(file.mime || '') }))
+    const toPlay = offer.play === true && files.length === 1 && files[0].size <= PLAY_TRANSFER_MAX && isPlayableMime(files[0].mime, files[0].name)
     offers.set(transferId, offer.sdp)
     addTransfer({
       id: transferId,
@@ -677,6 +708,7 @@ async function handle(type: string, from: string, transferId: string, body: unkn
       done: 0,
       state: 'asking',
       at: Date.now(),
+      ...(toPlay ? { play: true } : {}),
     })
     return
   }
@@ -819,9 +851,11 @@ interface OutgoingPending {
 const outgoingPending = new Map<string, OutgoingPending>()
 
 /** Offers files to another device; it says yes or no there. */
-export async function sendToDevice(deviceId: string, files: File[]): Promise<string> {
+export async function sendToDevice(deviceId: string, files: File[], options: { play?: boolean } = {}): Promise<string> {
   const device = state().devices.find((entry) => entry.id === deviceId)
   if (!device || !files.length) throw new Error('Gerät oder Dateien fehlen.')
+  if (options.play && !can(device, 'play')) throw new Error(`Auf „${device.name}“ läuft eine ältere Version von Sondra. Mit dem nächsten Update geht es.`)
+  if (options.play && (files.length !== 1 || files[0].size > PLAY_TRANSFER_MAX)) throw new Error('Zum Abspielen geht eine Datei bis 2 GB; grössere bitte senden und dort öffnen.')
   const id = randomId()
   const infos = files.map((file) => ({ name: safeFileName(file.name), size: file.size, mime: file.type || 'application/octet-stream' }))
   addTransfer({
@@ -834,6 +868,7 @@ export async function sendToDevice(deviceId: string, files: File[]): Promise<str
     done: 0,
     state: 'offering',
     at: Date.now(),
+    ...(options.play ? { play: true } : {}),
   })
 
   const pc = new RTCPeerConnection({ iceServers: [] })
@@ -846,7 +881,7 @@ export async function sendToDevice(deviceId: string, files: File[]): Promise<str
   try {
     await pc.setLocalDescription(await pc.createOffer())
     await gathered(pc)
-    await post(deviceId, 'offer', id, { sdp: pc.localDescription?.sdp ?? '', files: infos } satisfies OfferBody)
+    await post(deviceId, 'offer', id, { sdp: pc.localDescription?.sdp ?? '', files: infos, ...(options.play ? { play: true } : {}) } satisfies OfferBody)
     lookSoon()
   } catch (error) {
     pc.close()
@@ -948,6 +983,29 @@ export function cancelTransfer(id: string): void {
 
 export function dismissTransfer(id: string): void {
   patchTransfer(id, { dismissed: true })
+}
+
+/**
+ * Drive's own files to be played on another device: no transfer, only the
+ * names of the files in Drive — that device streams them itself, with its own
+ * sign-in. It is asked first.
+ */
+export async function playOnDevice(deviceId: string, items: Pick<RemoteMedia, 'id' | 'name' | 'size' | 'type'>[]): Promise<void> {
+  const device = state().devices.find((entry) => entry.id === deviceId)
+  if (!device) throw new Error('Dieses Gerät ist nicht mehr in der Liste.')
+  if (!can(device, 'play')) throw new Error(`Auf „${device.name}“ läuft eine ältere Version von Sondra. Mit dem nächsten Update geht es.`)
+  const playable = items.filter((item) => isPlayableMime(item.type, item.name)).slice(0, 100)
+  if (!playable.length) throw new Error('Das lässt sich nicht abspielen.')
+  await post(deviceId, 'play', randomId(), { items: playable.map(({ id, name, size, type }) => ({ id, name, size, type })) })
+  lookSoon()
+}
+
+/** „Abspielen“ on a card: what the other device asked to be played starts here. */
+export function playNote(id: string): void {
+  const note = state().notes.find((entry) => entry.id === id)
+  if (!note?.play) return
+  dismissNote(id)
+  playHere(note.play)
 }
 
 export function dismissNote(id: string): void {
@@ -1072,6 +1130,57 @@ async function receiveTarget(): Promise<{ sinkFor: SinkFor; where: string }> {
   }
 }
 
+/**
+ * A film to play, not to keep: collected in blocks of 32 MB, so the browser
+ * can move them out of memory as they pile up, and handed over whole.
+ */
+function playTarget(arrived: (file: File) => void): { sinkFor: SinkFor; where: string } {
+  return {
+    where: 'Player',
+    sinkFor: async (info) => {
+      const blocks: Blob[] = []
+      let parts: Uint8Array<ArrayBuffer>[] = []
+      let held = 0
+      const flush = () => {
+        if (!parts.length) return
+        blocks.push(new Blob(parts))
+        parts = []
+        held = 0
+      }
+      return {
+        write: async (chunk) => {
+          parts.push(chunk as Uint8Array<ArrayBuffer>)
+          held += chunk.byteLength
+          if (held >= 32 * 1024 * 1024) flush()
+        },
+        close: async () => {
+          flush()
+          arrived(new File(blocks, info.name, { type: info.mime || 'video/mp4' }))
+          return 'Player'
+        },
+        abort: async () => {
+          parts = []
+          blocks.length = 0
+        },
+      }
+    },
+  }
+}
+
+/** A film received to be played, until it is: by the channel or through Drive. */
+const arrivedToPlay = new Map<string, File>()
+function startArrived(id: string): void {
+  const file = arrivedToPlay.get(id)
+  arrivedToPlay.delete(id)
+  if (file) playHere([file])
+}
+
+/** The file to the player, and the player in front. */
+function playHere(items: (File | RemoteMedia)[]): void {
+  sendToPlayer(items, true)
+  useSession.getState().setPanel('player')
+}
+
 /** „Annehmen“: the place for the files is chosen in this click, then the answer goes back. */
 export async function acceptTransfer(id: string): Promise<void> {
   const transfer = state().transfers.find((entry) => entry.id === id)
@@ -1080,7 +1189,7 @@ export async function acceptTransfer(id: string): Promise<void> {
   patchTransfer(id, { state: 'connecting' })
   let target: Awaited<ReturnType<typeof receiveTarget>>
   try {
-    target = await receiveTarget()
+    target = transfer.play ? playTarget((file) => arrivedToPlay.set(id, file)) : await receiveTarget()
   } catch (error) {
     patchTransfer(id, { state: 'failed', error: error instanceof Error ? error.message : String(error) })
     return
@@ -1118,6 +1227,7 @@ export async function acceptTransfer(id: string): Promise<void> {
     })
     patchTransfer(id, { state: 'done', done: transfer.total, places })
     window.setTimeout(() => pc.close(), 1000)
+    startArrived(id)
   } catch (error) {
     const code = error instanceof TransferError ? error.code : 'failed'
     patchTransfer(id, {
@@ -1179,6 +1289,7 @@ async function receiveViaDrive(transfer: Transfer, body: DriveBody): Promise<voi
       await client.remove(String(entry.id)).catch(() => undefined)
     }
     patchTransfer(transfer.id, { state: 'done', done: transfer.total, places })
+    startArrived(transfer.id)
     await post(transfer.peer, 'received', transfer.id, { places }).catch(() => undefined)
   } catch (error) {
     patchTransfer(transfer.id, {

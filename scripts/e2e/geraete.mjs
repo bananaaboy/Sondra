@@ -1,6 +1,6 @@
 // Two devices, one Google account: a laptop in Chrome and a phone in the
 // Android app (bridge mocked), both against a Drive kept in this process.
-import { BASE, OUT, check, create, drive, files, finish, launch, now, sha } from './lib.mjs'
+import { BASE, FOLDER, OUT, check, create, drive, files, finish, launch, now, sha } from './lib.mjs'
 
 /* ---------------- Two devices ---------------- */
 const browser = await launch(['--disable-features=WebRtcHideLocalIpsWithMdns'])
@@ -253,11 +253,66 @@ const evil = await noteCard.innerText()
 check('Ein javascript:-Text ist Text, kein Link: nur Kopieren', /Text von/.test(evil) && (await noteCard.getByRole('button', { name: 'Öffnen' }).count()) === 0, evil.replace(/\s+/g, ' ').slice(0, 80))
 await noteCard.getByRole('button', { name: 'Verwerfen' }).click()
 check('Verwerfen entfernt die Karte', (await noteCard.count()) === 0)
+// Play on another device: a film in Drive (only its name travels), then one from a folder here (sent, played on arrival).
+const sondraRoot = [...files.values()].find((f) => f.name === 'Sondra' && f.mimeType === FOLDER)
+create({ name: 'Folge 2.mp4', mimeType: 'video/mp4', parents: [sondraRoot.id] }, Buffer.alloc(2000))
+await laptop.page.goto(`${BASE}#ordner`)
+await laptop.page.waitForTimeout(1500)
+// With Drive signed in the folder reads itself; otherwise the button asks for it.
+const fromDrive = laptop.page.getByRole('button', { name: 'Aus Google Drive' })
+if (await fromDrive.count()) await fromDrive.click()
+else await laptop.page.getByRole('button', { name: 'Neu einlesen' }).click()
+await laptop.page.screenshot({ path: `${OUT}laptop-ordner.png` })
+await laptop.page.getByText('Folge 2.mp4').first().click({ modifiers: ['Control'] })
+await laptop.page.getByRole('button', { name: 'Auf Gerät abspielen' }).click()
+await laptop.page.getByRole('menuitem', { name: /Handy/ }).click()
+await laptop.page.getByText(/An „Handy“ gefragt/).waitFor({ timeout: 20_000 })
+const playCard = phone.page.getByRole('region', { name: 'Von einem anderen Gerät gesendet' })
+await playCard.waitFor({ timeout: 30_000 })
+const playText = await playCard.innerText()
+check('Drive-Film: das Handy wird gefragt, nichts startet von selbst', /Folge 2\.mp4/.test(playText) && /abspielen\?/.test(playText) && !/#abspielen/.test(phone.page.url()), playText.replace(/\s+/g, ' ').slice(0, 90))
+check('Drive-Film: keine Datei ging über Drive oder den Kanal', ![...files.values()].some((f) => f.appProperties?.sondraUebergabe))
+await playCard.getByRole('button', { name: 'Abspielen' }).click()
+await phone.page.getByText('Folge 2', { exact: true }).first().waitFor({ timeout: 15_000 })
+await phone.page.screenshot({ path: `${OUT}handy-abspielen.png`, fullPage: true })
+check('Drive-Film: nach „Abspielen“ steht er im Player', /#abspielen/.test(phone.page.url()))
+await phone.page.screenshot({ path: `${OUT}handy-abspielen.png` })
+
+const episode = Buffer.alloc(3 * 1024 * 1024 + 11)
+for (let i = 0; i < episode.length; i += 1) episode[i] = (i * 7 + (i >> 8)) & 255
+await laptop.page.goto(`${BASE}#ordner`)
+await laptop.page.evaluate((bytes) => {
+  const data = Uint8Array.from(atob(bytes), (c) => c.charCodeAt(0))
+  window.showDirectoryPicker = async () => ({
+    name: 'Anime',
+    kind: 'directory',
+    async *values() {
+      yield { kind: 'file', name: 'Folge 1.mp4', getFile: async () => new File([data], 'Folge 1.mp4', { type: 'video/mp4' }) }
+    },
+  })
+}, episode.toString('base64'))
+const backToDevice = laptop.page.getByRole('button', { name: 'Ordner auf diesem Gerät' })
+// From the Drive view the link picks a folder here; fresh, the button does.
+if (await backToDevice.count()) await backToDevice.click()
+else await laptop.page.getByRole('button', { name: 'Ordner wählen' }).click()
+await laptop.page.getByText('Folge 1.mp4').first().click({ modifiers: ['Control'] })
+await laptop.page.getByRole('button', { name: 'Auf Gerät abspielen' }).click()
+await laptop.page.getByRole('menuitem', { name: /Handy/ }).click()
+await laptop.page.getByText(/An „Handy“ angeboten/).waitFor({ timeout: 20_000 })
+await phone.page.goto(`${BASE}#geraete`)
+const askLine = phone.page.getByText(/möchte „Folge 1\.mp4“ auf diesem Gerät abspielen/)
+await askLine.first().waitFor({ timeout: 30_000 })
+check('Lokaler Film: das Handy fragt „abspielen“, nicht „annehmen“', (await phone.page.getByRole('button', { name: 'Annehmen' }).count()) === 0)
+await phone.page.locator('section[aria-labelledby=geraete-uebertragungen]').getByRole('button', { name: 'Abspielen' }).click()
+await phone.page.getByText(/läuft im Player/).first().waitFor({ timeout: 60_000 })
+check('Lokaler Film: nach der Ankunft im Player', /#abspielen/.test(phone.page.url()))
+check('Lokaler Film: nichts ist im Download-Ordner gelandet', !('Folge 1.mp4' in (await phone.page.evaluate(() => window.__saved))))
 check('Post ist leer, nichts liegen geblieben', ![...files.values()].some((file) => file.appProperties?.sondraAn), [...files.values()].filter((f) => f.appProperties?.sondraAn).map((f) => f.name).join(', '))
 
 // The card elsewhere: the laptop on the start page gets an offer.
 await laptop.page.goto(`${BASE}`)
 await laptop.page.waitForTimeout(1500)
+await phone.page.goto(`${BASE}#geraete`)
 await otherRow(phone.page, 'Laptop').locator('input[type=file]').setInputFiles({ name: 'Unterwegs.txt', mimeType: 'text/plain', buffer: Buffer.from('hallo') })
 await laptop.page.getByRole('region', { name: 'Übertragungen zwischen Geräten' }).waitFor({ timeout: 30_000 })
 await laptop.page.screenshot({ path: `${OUT}laptop-karte.png` })

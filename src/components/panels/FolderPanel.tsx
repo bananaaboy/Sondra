@@ -48,6 +48,7 @@ import {
 import { formatBytes, formatDuration } from '../../lib/format'
 import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
 import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, trashDriveFiles, useDrive } from '../../lib/googleDrive'
+import { PlayOnDeviceButton } from '../DeviceSend'
 import { DriveIcon } from '../GoogleDrive'
 import { SeasonFilingDialog } from '../SeasonFiling'
 import { requestOpenSeries, useMerkliste } from '../../lib/merkliste'
@@ -1367,6 +1368,7 @@ export function FolderPanel() {
               Abspielen{selectedMedia.length < chosen.length ? ` (${selectedMedia.length})` : ''}
             </Button>
           ) : null}
+          <PlayOnDeviceButton media={selectedMedia} />
           {fromDrive && selectedMedia.length > 0 ? (
             <Button type="button" size="sm" variant="quiet" onClick={() => setFiling(selectedMedia)}>
               In Staffel einordnen{selectedMedia.length < chosen.length ? ` (${selectedMedia.length})` : ''}
