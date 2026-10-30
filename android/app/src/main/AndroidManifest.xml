@@ -94,6 +94,23 @@
                 <data android:mimeType="video/*" />
                 <data android:mimeType="audio/*" />
             </intent-filter>
+
+            <!--
+              „Öffnen mit“ for a shared Merkliste, a file called *.sondra-liste:
+              whatever type the sender's app gave it, the name is what counts.
+              Android matches names only by pattern, with no way to say „any
+              number of dots“, hence one pattern for each.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.sondra-liste" />
+                <data android:pathPattern=".*\\..*\\.sondra-liste" />
+                <data android:pathPattern=".*\\..*\\..*\\.sondra-liste" />
+            </intent-filter>
         </activity>
 
         <!--

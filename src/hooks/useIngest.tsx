@@ -11,6 +11,7 @@
 import { useCallback, useRef, useState } from 'react'
 
 import { formatBytes } from '../lib/format'
+import { isShareFile, offerSharedFile } from '../lib/merkShare'
 import { isProjectFile, loadProjectBytes } from '../lib/project'
 import { kindFromMime, useSession } from '../state/store'
 
@@ -26,7 +27,7 @@ export const IMAGE_ACCEPT = 'image/*,.heic,.heif,.avif,.webp'
  * system file dialog opened on a filter of sound and video, and a photo could
  * only be picked by switching that filter to „All files" by hand.
  */
-export const ACCEPTED_FILES = `audio/*,video/*,.mkv,.flac,.opus,.m4a,.ts,.aac,.wma,.aiff,.aif,${IMAGE_ACCEPT}`
+export const ACCEPTED_FILES = `audio/*,video/*,.mkv,.flac,.opus,.m4a,.ts,.aac,.wma,.aiff,.aif,.sondra-liste,${IMAGE_ACCEPT}`
 
 export function useIngestFiles() {
   const addAsset = useSession((state) => state.addAsset)
@@ -35,7 +36,11 @@ export function useIngestFiles() {
 
   const ingest = useCallback(
     async (files: File[] | FileList, source: string) => {
-      const list = Array.from(files)
+      // A shared Merkliste is not media: it opens the dialog that shows it.
+      const lists = Array.from(files).filter((file) => isShareFile(file))
+      for (const shared of lists) offerSharedFile(new Uint8Array(await shared.arrayBuffer()))
+      const list = Array.from(files).filter((file) => !isShareFile(file))
+      if (lists.length > 0 && list.length === 0) return lists.length
       const projects = list.filter((file) => isProjectFile(file))
       const usable = list.filter(
         (file) => !isProjectFile(file) && (MEDIA_PATTERN.test(file.type) || kindFromMime(file.type, file.name) !== 'unknown'),

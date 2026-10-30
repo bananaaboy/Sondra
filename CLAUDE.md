@@ -646,19 +646,74 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Folgen, 2 am Tag reichen · 1 vor dem Plan“ (gegen ein gleichmässiges
   Tempo seit dem Setzen), das Poster „Ziel · noch 6“. Die alte Zeile
   „1/Tag: fertig … · 2/Tag: …“ ist darin aufgegangen.
-  **Teilen, nur lesend** (30.10.2026, `lib/merkShare.ts`,
-  `MerklisteShare.tsx`): die Liste steht im Link selbst
-  (`/#geteilt=…`, raw-deflate und URL-sicher), nichts wird hochgeladen und
-  nichts lässt sich zurückholen — wer den Link hat, sieht sie. Mit
-  Titel, Stand, Bewertung und Fortschritt (abschaltbar), **nie** mit den
-  Adressen der Folgen, Notizen oder Covers. Wer ihn öffnet, sieht die Liste
-  in einem Fenster und kann hinzufügen, was auf der eigenen noch fehlt
-  (`newFromShared`, ohne Gross-/Kleinschreibung und Akzente). Beim Lesen
-  zählt nur Klartext: Obergrenzen (500 Einträge, 512 KB entpackt — eine
-  Bombe wird abgebrochen), jedes Feld geprüft, Steuerzeichen raus. Über
-  8 000 Zeichen schneiden Chats einen Link ab; dann bietet das Fenster die
-  Datei an. Die Adresse wird beim Laden gelesen, bevor das Routing sie
-  umschreibt (`SHARED_AT_LOAD`).
+  **Teilen, nur lesend** (30.10.2026, `lib/merkShare.ts`, `lib/shareCover.ts`,
+  `lib/qr.ts`, `MerklisteShare.tsx`; am selben Tag neu gemacht: „bei merkliste
+  teilen braucht es einen effektiveren weg“, „ohne server und ohne apis“,
+  „bilder auch im link“): die Liste steht im Link selbst, nichts wird
+  hochgeladen, kein Dienst gefragt — wer den Link hat, sieht sie. **Gewählt
+  wird, was mitgeht:** Am Schauen ist vorgewählt, Pillen je Stand und Häkchen je
+  Serie; „Empfehlen“ auf der Seite einer Serie öffnet dasselbe Fenster mit
+  genau ihr. Mit Titel, Stand, Bewertung und Fortschritt (abschaltbar),
+  **nie** mit den Adressen der Folgen oder Notizen. **Bilder im Link:** je
+  Serie ein eigenes kleines Bild, der Ausschnitt der Kachel (`coverFrame`)
+  in ihrer Form (2:3 oder 5:7), in drei Grössen — „Winzig“ (6 × 9 Pixel,
+  Helligkeit 4 bit, Farbe 4 bit je 3 × 3 Pixel, 33 Byte, glatt vergrössert ein
+  Verlauf der Farben), „Klein“ (40 × 60, WebP, JPEG wo der Browser kein WebP schreibt),
+  „Gross“ (96 × 144); aus einem Bild im Eintrag oder einer Adresse, die
+  CORS erlaubt (sonst bleibt die Serie ohne Bild, das Fenster sagt es).
+  Beim Lesen wird ein Bild nur geglaubt, wenn es nach den ersten Bytes
+  eines ist (RIFF/WEBP, FFD8FF, oder genau 34 Byte „winzig“) und höchstens
+  24 KB wiegt; es wird als `<img>` gezeigt, nie als etwas anderes.
+  **Das Format** ist binär (Fassung 2) und in Spalten, damit der Link so kurz
+  bleibt wie er kann („halte die links so klein wie möglich“): erst alle Titel
+  (ein Block, mit Zeilenumbruch getrennt), dann je Eintrag ein Byte Flags
+  (Staffel, Folge, gesehen weichen vom Üblichen ab, Bild, Manga, Stand), dann je
+  eins Bewertung, dann nur die Zahlen, die nicht das Übliche sind — Staffel 1,
+  Folge 1, nichts gesehen kostet nur sein Flag, und ohne Fortschritt fehlen die
+  drei überall —, zuletzt die Bilder; deflate-raw, URL-sicher. Der Hash heisst
+  `#g=` (sechs Zeichen weniger als `#geteilt=`, das weiter aufgeht), ein Teil
+  trägt einen Namen aus vier Zeichen. Das Fenster zeigt, was die Bilder
+  kosten („ohne Bilder: ein Link, 135 Zeichen“). Gemessen an dreissig
+  Serien: 568 Zeichen ohne Bilder, 2 124 mit „winzig“ — ein Bild ist rund 52
+  Zeichen. Nicht gemacht: ein grösseres Alphabet als Base 64 (rund 5 % kürzer,
+  aber `)` `'` `,` `.` am Ende eines Links verwirren die Erkennung in Chats),
+  und ein Wörterbuch für deflate (`CompressionStream` kennt keines). Links der
+  ersten Fassung (JSON) gehen weiter auf. **Eine lange Liste kommt in Teilen:** ein Link bis 2 000
+  Zeichen (Signal und manche Messenger schneiden darüber), sonst
+  `#g=<name>.<n>.<von>.<Daten>`, höchstens 40; der Name ist ein Hash der
+  Daten, damit Teile zweier Listen sich nie mischen. Wer sie öffnet, sieht
+  „Teil 2 von 3 ist da“; die Teile liegen zwei Tage im `localStorage`
+  (`sondra:geteilt:teile`) und setzen sich in jeder Reihenfolge zusammen, ein
+  Link in einer schon offenen Seite (`hashchange`, gelesen aus `event.newURL`,
+  weil das Routing die Adresse schon umgeschrieben haben kann) zählt wie ein
+  neuer Tab. **Vier Wege nach draussen:** Link (oder die Links, einzeln
+  oder alle auf einmal), „Als Text kopieren“ (`Frieren – S1E12 – 4/5`, eine
+  Zeile je Serie, darunter der Link — auch für wen kein Sondra hat),
+  **QR-Code** (`qrcode-generator`, Byte-Modus, Stufe L: er wird vom
+  Bildschirm gelesen; Links für Codes höchstens 1 100 Zeichen, mehrere Codes
+  nacheinander mit Zurück/Weiter; schwarz auf weiss in jedem Thema; die
+  Kamera des anderen Telefons öffnet den Link — Sondra braucht keinen
+  Lesevorgang), und die **Datei** `Sondra-Merkliste-<Datum>.sondra-liste`
+  („SLST“ und dieselben Bytes), für was auch als Teile zu viel wäre. Ausserhalb
+  des Browsers wird sie wie jede Datei geöffnet — `ingest` in `useIngest.tsx`
+  schickt sie an `offerSharedFile`, nicht in die Sitzung —; Windows-Setup
+  (`installer.nsh`: die Endung gehört Sondra allein, also Standard), Android
+  (VIEW auf `content://` mit Namen `*.sondra-liste`, `Bridge.takeOpened` nimmt
+  jede URI), die installierte Web-App (`file_handlers`, `share_target`);
+  **nicht** im MSIX des Stores (eine Endung mit Bindestrich ist dort
+  ungetestet und könnte jeden Lauf des Workflows kippen). **Empfangen**
+  stellt beide Listen nebeneinander (`compareShared`): „Beide haben 5 ·
+  nur bei Ihnen 12 · nur bei Mia 8“; die 8 stehen als Häkchen mit Bild,
+  „Alle/Keine“, „wie dort“ oder „als Später“ (`entryFromShared`: dann ohne
+  Stand, Bewertung und Folge), die gemeinsamen unter „Schon auf Ihrer Liste“.
+  Gelesen wird nur Klartext: Obergrenzen (500 Einträge, 16 MB entpackt — eine
+  Bombe wird abgebrochen —, Datei höchstens 12 MB), jedes Feld geprüft,
+  Steuerzeichen raus. Die Adresse wird beim Laden gelesen, bevor das Routing
+  sie umschreibt (`SHARED_AT_LOAD`). `verify:merkliste`, Szenario
+  „merkliste“ (Empfehlen mit Bild, Text, QR, Datei, Teile in umgekehrter
+  Reihenfolge, alter Link). Die QR-Codes wurden mit zwei Lesern gegengeprüft
+  (jsQR, ZXing): jeder Code von Stufe 1 bis 40 liess sich von mindestens
+  einem lesen, jsQR scheitert für sich an Stufe 23.
   **Rückblick** (30.10.2026, `lib/recap.ts`, `MerklisteRecap.tsx` in den
   Statistiken): ein Jahr aus den Daten, die jede abgehakte Folge trägt
   (`history`: `advance` und der Player-Haken schreiben sie) — Folgen,

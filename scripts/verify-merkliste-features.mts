@@ -45,7 +45,28 @@ import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib
 import { chaptersText, cleanMarks, markName, neighbourMark, nextOffered, openingOffered, sleepFade, withMark } from '../src/lib/player'
 import { renamedFile, splitName } from '../src/lib/format'
 import { recapYears, recordedSince, yearRecap } from '../src/lib/recap'
-import { decodeShare, encodeShare, LINK_MAX, newFromShared, shareableList, shareLink, sharedFromHash } from '../src/lib/merkShare'
+import {
+  compareShared,
+  decodeShare,
+  encodeShare,
+  entryFromShared,
+  isShareFile,
+  LINK_MAX,
+  MAX_PARTS,
+  newFromShared,
+  packList,
+  QR_LINK_MAX,
+  readShareFile,
+  readShared,
+  shareableList,
+  shareFile,
+  shareLink,
+  shareLinks,
+  sharedFromHash,
+  shareText,
+  unpackList,
+  type PartStore,
+} from '../src/lib/merkShare'
 
 console.log('--- Testing Merkliste Mega Features ---')
 
@@ -692,34 +713,172 @@ console.log('--- Testing Merkliste Mega Features ---')
   a.status = 'done'
   const b = createMerkItem({ title: 'Nana', url: 'https://geheim.example/nana', season: 2, episode: 4 })
   const share = shareableList([a, b], '  Mia  ')
-  const serialised = JSON.stringify(share)
-  assert.ok(!serialised.includes('geheim') && !serialised.includes('privat'), 'weder Adressen noch Notizen gehen mit')
+  const packed = packList(share)
+  const asText = new TextDecoder('latin1').decode(packed)
+  assert.ok(!asText.includes('geheim') && !asText.includes('privat'), 'weder Adressen noch Notizen gehen mit')
   assert.strictEqual(share.name, 'Mia')
   const link = await shareLink(share, 'https://sondra.lizge.ch/')
-  assert.ok(link.startsWith('https://sondra.lizge.ch/#geteilt='), 'der Link trägt die Liste im Hash')
+  assert.ok(link.startsWith('https://sondra.lizge.ch/#g='), 'der Link trägt die Liste im Hash, unter dem kürzesten Namen')
   assert.ok(link.length < LINK_MAX, 'zwei Einträge sind ein kurzer Link')
   const back = await decodeShare(sharedFromHash(new URL(link).hash)!)
   assert.deepStrictEqual(back?.items.map((item) => [item.title, item.status ?? 'watching', item.rating ?? 0, item.season, item.episode]), [['Frieren', 'done', 5, 1, 1], ['Nana', 'watching', 0, 2, 4]], 'hin und zurück')
+  assert.strictEqual(back?.name, 'Mia')
   assert.strictEqual((await decodeShare(await encodeShare(shareableList([a], 'x', { progress: false }))))?.items[0].rating, undefined, 'ohne Fortschritt auch ohne Bewertung')
-  // A hundred series still make a link a chat can carry.
+  // Umlauts, accents, and a title of exactly the limit survive the byte packing.
+  const odd = shareableList([createMerkItem({ title: 'Übermütige Größe – Ōkami ✨' }), createMerkItem({ title: 'x'.repeat(120) })], 'Zoë')
+  const oddBack = await decodeShare(await encodeShare(odd))
+  assert.deepStrictEqual([oddBack?.name, oddBack?.items.map((item) => item.title.length)], ['Zoë', [26, 120]])
+  assert.strictEqual(oddBack?.items[0].title, 'Übermütige Größe – Ōkami ✨')
+
+  // The packing is smaller than the JSON it replaced.
   const many = Array.from({ length: 100 }, (_, n) => createMerkItem({ title: `Serie Nummer ${n} mit einem längeren Namen`, season: 1, episode: n % 12 }))
-  const long = await shareLink(shareableList(many, 'Viele'), 'https://sondra.lizge.ch')
-  assert.ok(long.length < LINK_MAX, `hundert Serien: ${long.length} Zeichen`)
+  const manyShare = shareableList(many, 'Viele')
+  const jsonSize = (await encodeShare({ v: 2, name: '', items: [] })).length // an empty list is a few bytes
+  const long = await shareLinks(manyShare, 'https://sondra.lizge.ch')
+  console.log(`  hundert Serien: ${long.length} Link(s), ${long.map((entry) => entry.length).join(' + ')} Zeichen (leer: ${jsonSize})`)
+  assert.ok(long.every((entry) => entry.length <= LINK_MAX), 'jeder Link hält die Grenze')
+
+  // A list too long for one link comes as parts that find each other, in any order, and only with their own.
+  let seed = 7
+  const noise = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    return seed.toString(36)
+  }
+  const unique = Array.from({ length: 120 }, (_, n) => createMerkItem({ title: `${noise()}${noise()} ${noise()} ${n}`, season: 1 + (n % 3), episode: n % 20, rating: n % 6 }))
+  const uniqueShare = shareableList(unique, 'Mia')
+  const parts = await shareLinks(uniqueShare, 'https://sondra.lizge.ch')
+  assert.ok(parts.length > 1 && parts.length < MAX_PARTS, `eine lange Liste kommt in Teilen: ${parts.length}`)
+  assert.ok(parts.every((entry) => entry.length <= LINK_MAX), 'kein Teil ist länger als ein Link sein darf')
+  const memory = (): PartStore => {
+    let all = {}
+    return { read: () => JSON.parse(JSON.stringify(all)), write: (next) => void (all = JSON.parse(JSON.stringify(next))) }
+  }
+  const hashOf = (entry: string) => sharedFromHash(new URL(entry).hash)!
+  {
+    const store = memory()
+    const order = [...parts.keys()].reverse()
+    let last
+    for (const [step, index] of order.entries()) {
+      last = await readShared(hashOf(parts[index]), store)
+      if (step < order.length - 1) assert.strictEqual(last.kind, 'parts', 'solange etwas fehlt, wird gewartet')
+    }
+    assert.ok(last?.kind === 'list', 'mit dem letzten Teil ist die Liste da')
+    assert.deepStrictEqual(last.list.items.map((item) => [item.title, item.season, item.episode, item.rating ?? 0]), uniqueShare.items.map((item) => [item.title, item.season, item.episode, item.rating ?? 0]), 'in beliebiger Reihenfolge, nichts verloren')
+    assert.deepStrictEqual(store.read(), {}, 'danach liegt nichts mehr herum')
+    // The same part twice changes nothing; one that waits tells which are there.
+    const again = memory()
+    await readShared(hashOf(parts[0]), again)
+    const twice = await readShared(hashOf(parts[0]), again)
+    assert.deepStrictEqual(twice, { kind: 'parts', got: [1], of: parts.length })
+    // Another list's parts do not mix in.
+    const other = await shareLinks(shareableList(Array.from({ length: 120 }, (_, n) => createMerkItem({ title: `${noise()}${noise()}${noise()} ${n}` })), 'Jan'), 'https://sondra.lizge.ch')
+    const mixed = memory()
+    await readShared(hashOf(parts[0]), mixed)
+    const next = await readShared(hashOf(other[1]), mixed)
+    assert.strictEqual(next.kind, 'parts', 'ein Teil einer anderen Liste vervollständigt nichts')
+    // Parts that waited too long are forgotten.
+    const stale = memory()
+    await readShared(hashOf(parts[0]), stale, 1_000)
+    const later = await readShared(hashOf(parts[1]), stale, 1_000 + 3 * 24 * 60 * 60 * 1000)
+    assert.deepStrictEqual(later, { kind: 'parts', got: [2], of: parts.length }, 'nach zwei Tagen verfallen')
+    // Nonsense places in the whole.
+    for (const text of ['abcd.0.3.AAAA', 'abcd.4.3.AAAA', 'abcd.1.1.AAAA', `abcd.1.${MAX_PARTS + 1}.AAAA`, 'abcd.1.2.', 'abcdef.1.3.AAAA']) {
+      assert.strictEqual((await readShared(text, memory())).kind, 'broken', `${text} ist kein Teil`)
+    }
+    const damaged = memory()
+    await readShared(hashOf(parts[0]), damaged)
+    const wrong = await readShared(`${hashOf(parts[1]).split('.').slice(0, 3).join('.')}.${'A'.repeat(200)}`, damaged)
+    assert.ok(wrong.kind === 'parts' || wrong.kind === 'broken', 'ein verdorbener Teil stürzt nichts ab')
+  }
+  // Short links need no gathering, and a QR code gets shorter ones.
+  assert.strictEqual((await readShared(hashOf(link), memory())).kind, 'list')
+  const forQr = await shareLinks(uniqueShare, 'https://sondra.lizge.ch', QR_LINK_MAX)
+  assert.ok(forQr.length > parts.length && forQr.every((entry) => entry.length <= QR_LINK_MAX), `für den QR-Code mehr, kürzere Teile: ${forQr.length}`)
+  // Too long even for parts: nothing, and the file is the way.
+  const huge = Array.from({ length: 500 }, (_, n) => createMerkItem({ title: `${Array.from({ length: 20 }, noise).join('')} ${n}`.slice(0, 118), season: 2 }))
+  const hugeLinks = await shareLinks(shareableList(huge, 'Alle'), 'https://sondra.lizge.ch', QR_LINK_MAX)
+  assert.strictEqual(hugeLinks.length, 0, 'mehr als die erlaubten Teile: keine Links')
+
+  // Pictures travel inside: a tiny kind, a WebP, a JPEG — and what is not one is dropped, the entry stays.
+  const webp = Uint8Array.from([1, 0x52, 0x49, 0x46, 0x46, 9, 0, 0, 0, 0x57, 0x45, 0x42, 0x50, 1, 2, 3, 4, 5, 6])
+  const jpeg = Uint8Array.from([2, 0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])
+  const tiny = Uint8Array.from([0, ...new Array(33).fill(7)])
+  const pictures = new Map([[a.id, webp], [b.id, tiny]])
+  const withPictures = shareableList([a, b, createMerkItem({ title: 'Mit JPEG', tileFormat: 'manga' })], 'Bild', { thumbs: new Map([...pictures, ['x', jpeg]]) })
+  const pictureBack = await decodeShare(await encodeShare(withPictures))
+  assert.deepStrictEqual(pictureBack?.items.map((item) => [item.title, item.thumb ? [...item.thumb] : null]), [['Frieren', [...webp]], ['Nana', [...tiny]], ['Mit JPEG', null]], 'Bilder hin und zurück')
+  const manga = createMerkItem({ title: 'Manga', tileFormat: 'manga' })
+  const mangaBack = await decodeShare(await encodeShare(shareableList([manga], 'M', { thumbs: new Map([[manga.id, jpeg]]) })))
+  assert.deepStrictEqual([mangaBack?.items[0].tile, mangaBack?.items[0].thumb ? [...mangaBack.items[0].thumb] : null], ['manga', [...jpeg]], 'die Form der Kachel reist mit')
+  const fake = shareableList([a], 'x', { thumbs: new Map([[a.id, Uint8Array.from([1, 0x4d, 0x5a, 0x90, 0, 3, 0, 0, 0, 4, 0, 0, 0, 0xff, 0xff])]]) })
+  const fakeBack = unpackList(packList(fake))
+  assert.deepStrictEqual([fakeBack?.items.length, fakeBack?.items[0].thumb], [1, undefined], 'was kein Bild ist, kommt nicht mit — der Eintrag schon')
+  assert.ok(entryFromShared({ title: 'Ohne', thumb: undefined }, 'wie dort').cover === undefined, 'ohne Bild kein Cover')
+
+  // As a file: the same bytes, a name tag in front.
+  const file = await shareFile(uniqueShare)
+  assert.deepStrictEqual([...file.subarray(0, 4)], [0x53, 0x4c, 0x53, 0x54])
+  assert.strictEqual((await readShareFile(file))?.items.length, 120, 'die Datei liest sich zurück')
+  assert.strictEqual(await readShareFile(file.subarray(1)), null, 'ohne Kennung keine Liste')
+  assert.strictEqual(await readShareFile(new Uint8Array(3)), null)
+  assert.strictEqual(await readShareFile(Uint8Array.from([...file.subarray(0, 4), 1, 2, 3, 4, 5])), null, 'Müll nach der Kennung')
+  assert.ok(isShareFile({ name: 'Sondra-Merkliste-2026-10-30.sondra-liste' }) && isShareFile({ name: 'X.SONDRA-LISTE' }) && !isShareFile({ name: 'projekt.sondra' }) && !isShareFile({ name: 'liste.json' }))
+
   // What is not a list, or a hostile one, becomes nothing — never a crash, never more than the caps.
   assert.strictEqual(await decodeShare('das-ist-kein-link!'), null)
   assert.strictEqual(await decodeShare('AAAA'), null)
   assert.strictEqual(await decodeShare(''), null)
-  const hostile = await encodeShare({ v: 1, name: 'x\u0000<script>', items: [{ title: '<img src=x onerror=alert(1)>', status: 'hacked' as never, rating: 99, season: -3, episode: 1e12 }, { title: '   ' }, { title: 'Ok', seen: 5 }] } as never)
-  const clean = await decodeShare(hostile)
-  assert.deepStrictEqual(clean?.items.map((item) => [item.title, item.status, item.rating, item.season, item.episode, item.seen]), [['<img src=x onerror=alert(1)>', undefined, undefined, undefined, undefined, undefined], ['Ok', undefined, undefined, undefined, undefined, 5]], 'unbekannter Status, Bewertung, Staffel und Folge ausserhalb des Möglichen werden verworfen, leere Titel auch')
-  assert.ok(!clean?.name.includes('\u0000'), 'Steuerzeichen im Namen sind weg')
+  const bytesOf = (...values: (number | string)[]) => Uint8Array.from(values.flatMap((value) => (typeof value === 'string' ? [...new TextEncoder().encode(value)] : [value])))
+  // Columns: version, progress, name, count, titles, flags, ratings, then the numbers that are not the usual.
+  // One entry „Ok“: season, episode and seen given + status 7; rating 7; season 9999, episode 1, seen 5.
+  const wild = unpackList(bytesOf(2, 1, 0, 1, 2, 'Ok', 0b1110_0111, 7, ...[0x8f, 0x4e], 1, 5))
+  assert.deepStrictEqual(wild?.items.map((item) => [item.title, item.status, item.rating, item.season, item.episode, item.seen]), [['Ok', undefined, undefined, undefined, 1, 5]], 'Status 7, Bewertung 7 und Staffel 9999 gibt es nicht')
+  assert.strictEqual(unpackList(bytesOf(2, 0, 0, 0xf5, 0x03)), null, 'mehr Einträge als erlaubt')
+  assert.strictEqual(unpackList(bytesOf(2, 0, 0, 1, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01)), null, 'ein Titel, der länger sein will als alles')
+  assert.strictEqual(unpackList(bytesOf(2, 0, 0, 1, 9, 'kurz')), null, 'abgeschnitten')
+  assert.strictEqual(unpackList(bytesOf(3, 0, 0, 0)), null, 'unbekannte Fassung')
+  assert.strictEqual(unpackList(bytesOf(2, 0, 0, 2, 5, 'a\nb\nc', 0, 0, 0, 0)), null, 'Titel und Anzahl stimmen nicht überein')
+  assert.strictEqual(unpackList(new Uint8Array(0)), null)
+  assert.deepStrictEqual(unpackList(bytesOf(2, 0, 0, 1, 3, '   ', 0, 0))?.items, [], 'ein leerer Titel zählt nicht')
+  const huge8 = 0x7fff_ffff
+  assert.strictEqual(unpackList(bytesOf(2, 0, 0, 1, 1, 'x', 8, 0, 0xff, 0xff, 0xff, 0xff, 0x07)), null, `ein Bild von ${huge8} Byte`)
+  const hostileText = unpackList(packList({ v: 2, name: 'x\u0000<script>', items: [{ title: '<img src=x onerror=alert(1)>', status: 'hacked' as never, rating: 99, season: -3, episode: 1e12 }, { title: '   ' }, { title: 'Ok', seen: 5 }] }))
+  assert.deepStrictEqual(hostileText?.items.map((item) => [item.title, item.status, item.rating, item.season, item.episode, item.seen]), [['<img src=x onerror=alert(1)>', undefined, undefined, 1, 1, 0], ['Ok', undefined, undefined, 1, 1, 5]], 'Bewertung, Staffel und Folge ausserhalb des Möglichen sind das Übliche, leere Titel fallen weg')
+  assert.ok(!hostileText?.name.includes('\u0000'), 'Steuerzeichen im Namen sind weg')
   // A bomb: a few bytes that unpack to many megabytes.
-  const bomb = await encodeShare({ v: 1, name: '', items: [{ title: 'x'.repeat(60_000_000) }] } as never).catch(() => 'nicht-gepackt')
+  const deflateRaw = async (bytes: Uint8Array) => {
+    const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new CompressionStream('deflate-raw'))
+    return new Uint8Array(await new Response(stream).arrayBuffer())
+  }
+  const bomb = Buffer.from(await deflateRaw(new Uint8Array(40 * 1024 * 1024))).toString('base64url')
+  assert.ok(bomb.length < MAX_PARTS * LINK_MAX, `die Bombe passt in einen Link (${bomb.length} Zeichen)`)
   assert.strictEqual(await decodeShare(bomb), null, 'zu grosses Auspacken wird abgebrochen')
-  // New on this list.
-  const mine = [createMerkItem({ title: 'FRIEREN' }), createMerkItem({ title: 'Eigene' })]
+  assert.strictEqual(await readShareFile(Uint8Array.from([0x53, 0x4c, 0x53, 0x54, ...(await deflateRaw(new Uint8Array(40 * 1024 * 1024)))])), null, 'ebenso in der Datei')
+
+  // Links of the first version — JSON — still open, and are checked as before.
+  const v1 = Buffer.from(await deflateRaw(new TextEncoder().encode(JSON.stringify({ v: 1, name: 'Mia\u0000', items: [{ title: 'Frieren', status: 'done', rating: 5, season: 1, episode: 3, seen: 12 }, { title: '<b>x</b>', status: 'hacked', rating: 99, season: -3, episode: 1e12 }, { title: '   ' }] })))).toString('base64url')
+  const legacy = await decodeShare(v1)
+  assert.deepStrictEqual(legacy?.items.map((item) => [item.title, item.status, item.rating, item.season, item.episode, item.seen]), [['Frieren', 'done', 5, 1, 3, 12], ['<b>x</b>', undefined, undefined, undefined, undefined, undefined]], 'alte Links gehen weiter')
+  assert.strictEqual(legacy?.name, 'Mia')
+
+  // As text anybody reads.
+  const text = shareText(shareableList([a, b], 'Mia'), ['https://sondra.lizge.ch/#geteilt=XYZ'])
+  assert.strictEqual(text, 'Merkliste von Mia (2):\n• Frieren – S1E1 – 5/5 – Fertig\n• Nana – S2E4\n\nIn Sondra öffnen: https://sondra.lizge.ch/#geteilt=XYZ')
+  assert.ok(shareText(shareableList([a], ''), ['https://x/#geteilt=1.1.2.A', 'https://x/#geteilt=1.2.2.B']).includes('alle 2 Links'), 'mehrere Links werden als Folge genannt')
+  assert.strictEqual(shareText(shareableList([a], '', { progress: false })).split('\n')[1], '• Frieren – Fertig', 'ohne Fortschritt nur Titel und Stand')
+
+  // Against one's own list: on both, new to this one, and only here.
+  const mine = [createMerkItem({ title: 'FRIEREN' }), createMerkItem({ title: 'Eigene' }), createMerkItem({ title: 'Noch eine' })]
+  const comparison = compareShared(share, mine)
+  assert.deepStrictEqual([comparison.both.map((item) => item.title), comparison.fresh.map((item) => item.title), comparison.onlyMine], [['Frieren'], ['Nana'], 2])
   assert.deepStrictEqual(newFromShared(share, mine).map((item) => item.title), ['Nana'], 'was schon da ist, nicht doppelt')
-  console.log('✓ Merkliste teilen: Link, Prüfung, Obergrenzen')
+  assert.deepStrictEqual(compareShared({ v: 2, name: '', items: [{ title: 'A' }, { title: 'a ' }, { title: 'Ä' }] }, []).fresh.map((item) => item.title), ['A'], 'Gross-/Kleinschreibung, Akzente und Leerzeichen zählen nicht')
+  // Taken over as it stands there, or as „Später“.
+  const nana = share.items[1]
+  assert.deepStrictEqual(entryFromShared(nana, 'wie dort'), { title: 'Nana', season: 2, episode: 4 })
+  assert.deepStrictEqual(entryFromShared({ ...nana, status: 'done', rating: 4 }, 'wie dort'), { title: 'Nana', status: 'done', rating: 4, season: 2, episode: 4 })
+  assert.deepStrictEqual(entryFromShared({ ...nana, status: 'done', rating: 4 }, 'später'), { title: 'Nana', status: 'later' }, 'als Später: ohne Stand, Bewertung und Folge')
+  console.log('✓ Merkliste teilen: Link, Teile, Datei, Text, Vergleich, Prüfung, Obergrenzen')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')

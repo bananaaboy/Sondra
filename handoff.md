@@ -19,7 +19,10 @@
 - **Ordner:** Löschen geht zuerst in `Sondra-Papierkorb` mit „Rückgängig“ (`binFiles`);
   der Papierkorb lässt sich ansehen, leeren und zurücklegen (`FolderBin.tsx`, auch Drive).
 - **Eigener STUN/TURN-Server** (`deviceServers.ts`): Adressen gemerkt, Passwort nie.
-- **Merkliste:** Jahresrückblick in den Statistiken (`recap.ts`), Teilen als Link (`merkShare.ts`).
+- **Merkliste:** Jahresrückblick in den Statistiken (`recap.ts`); Teilen neu gemacht: Auswahl, „Empfehlen“, Bilder im Link
+  (`shareCover.ts`), Teile bei langen Listen, Text, QR-Code (`qr.ts`, `qrcode-generator`), Datei `.sondra-liste`,
+  Vergleich beim Empfangen (`merkShare.ts`, `MerklisteShare.tsx`).
+- **Ordner:** Papierkorb zum Ansehen, Zurücklegen und endgültig Löschen (`FolderBin.tsx`, auch Drive).
 - **Untertitel im Ordner:** neben dem Film finden oder per Whisper erzeugen (`autoSubtitles.ts`).
 - **Lange Ordner:** `content-visibility` und Nachladen beim Scrollen (keine echte Fenster-Liste).
 - **Android:** eine APK je Prozessor neben der universellen (`splits { abi }`,

@@ -215,8 +215,14 @@ Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
 Eine private Mediathek zum Verfolgen von Anime, Serien und Filmen:
 
 - **Teilen:** „Teilen“ macht einen Link, der die Liste selbst trägt — nur zum Ansehen,
-  ohne Upload, ohne die Adressen der Folgen, Notizen und Cover; wer ihn öffnet,
-  kann hinzufügen, was ihm fehlt. Zu lange Listen gehen als Datei.
+  ohne Upload, ohne Server, ohne die Adressen der Folgen und Notizen. Gewählt wird,
+  was mitgeht (Am Schauen ist vorgewählt), auf jeder Serie steht „Empfehlen“ für
+  eine einzige; auf Wunsch gehen kleine Bilder der Cover im Link mit (Winzig, Klein,
+  Gross). Weitergeben lässt es sich als Link — eine lange Liste als mehrere Links,
+  die sich beim Öffnen zusammensetzen —, als lesbarer Text, als QR-Code (von der Seite
+  selbst gezeichnet) oder als Datei `.sondra-liste`, die sich mit einem Doppelklick
+  bzw. „Öffnen mit“ öffnet. Wer sie öffnet, sieht, was beide haben und was neu ist,
+  wählt aus und übernimmt es wie dort oder als „Später“.
 - **Rückblick:** in den Statistiken ein Jahr im Überblick — Folgen, Sehzeit, stärkster
   Monat, längste Serie von Tagen, die meistgeschauten Serien, zwölf Balken. Gezählt
   wird, was mit Datum abgehakt wurde; die Seite sagt, seit wann es Daten gibt.

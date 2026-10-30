@@ -78,6 +78,16 @@
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Projekt\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
   WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\SupportedTypes" ".sondra" ""
 
+  ; A shared Merkliste, .sondra-liste: nobody else's extension, so a double
+  ; click opens it in Sondra.
+  WriteRegStr SHELL_CONTEXT "Software\Classes\.sondra-liste" "" "Sondra.Liste"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\.sondra-liste\OpenWithProgids" "Sondra.Liste" ""
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Liste" "" "Geteilte Merkliste (Sondra)"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Liste\DefaultIcon" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Liste\shell\open" "FriendlyAppName" "Sondra Studio"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Liste\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}\SupportedTypes" ".sondra-liste" ""
+
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei" "" "Mediendatei (Sondra)"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei\DefaultIcon" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME},0"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Sondra.Datei\shell\open" "FriendlyAppName" "Sondra Studio"
@@ -98,6 +108,8 @@
   !insertmacro sondraEachExtension sondraForget
   DeleteRegKey SHELL_CONTEXT "Software\Classes\.sondra"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\Sondra.Projekt"
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\.sondra-liste"
+  DeleteRegKey SHELL_CONTEXT "Software\Classes\Sondra.Liste"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\Sondra.Datei"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\Applications\${APP_EXECUTABLE_FILENAME}"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
