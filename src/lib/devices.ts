@@ -43,7 +43,7 @@ import {
   type DeviceKind,
   type DeviceRecord,
 } from './deviceIdentity'
-import { freeName, outgoing, receiveOver, safeFileName, sendOver, splitPath, TransferError, type FileInfo, type Sink, type SinkFor, type Wire } from './deviceTransfer'
+import { freeName, outgoing, receiveOver, safeFileName, sendOver, splitPath, TransferError, type FileInfo, type Kept, type Sink, type SinkFor, type Wire } from './deviceTransfer'
 import type { DriveClient, DriveFile } from './driveClient'
 import { saveBytes } from './download'
 import { deviceDrive, useDrive } from './googleDrive'
@@ -102,6 +102,8 @@ export interface Transfer {
   play?: boolean
   /** Connected, but waiting for one of the places to send in: two at a time. */
   queued?: boolean
+  /** Broke off midway, with the finished part kept: the sender can go on from there. */
+  resumable?: boolean
   id: string
   direction: 'out' | 'in'
   peer: string
@@ -186,7 +188,8 @@ export const isOnline = (device: DeviceRecord, now = Date.now()) => now - device
  * this the sender would wait on a reply that never comes.
  */
 export function ownCaps(): string[] {
-  return ['text', 'play', 'folder']
+  // The phone's save writes into Downloads in one go and cannot reopen a half file.
+  return ['text', 'play', 'folder', ...(ANDROID_BRIDGE?.openSave ? [] : ['resume'])]
 }
 
 const sameCaps = (a: string[] | undefined, b: string[]) => [...(a ?? [])].sort().join() === [...b].sort().join()
@@ -657,6 +660,8 @@ async function post(to: string, type: string, transfer: string, body: unknown): 
 interface OfferBody {
   sdp: string
   files: FileInfo[]
+  /** The same transfer again after a break: the receiver goes on from what it kept, without asking. */
+  resume?: boolean
   /** One film to play on arrival instead of saving it. */
   play?: boolean
 }
@@ -696,7 +701,7 @@ async function handle(type: string, from: string, transferId: string, body: unkn
   }
   if (type === 'offer') {
     const offer = body as OfferBody
-    if (transfer || !offer || typeof offer.sdp !== 'string' || !Array.isArray(offer.files)) return
+    if (!offer || typeof offer.sdp !== 'string' || !Array.isArray(offer.files)) return
     const files = offer.files.slice(0, FOLDER_FILES_MAX).map((file) => {
       const split = splitPath(typeof file.path === 'string' ? file.path : undefined, String(file.name))
       return {
@@ -706,6 +711,21 @@ async function handle(type: string, from: string, transferId: string, body: unkn
         ...(split.dir ? { path: `${split.dir}/${split.name}` } : {}),
       }
     })
+    if (transfer) {
+      // The same transfer again after a break: a receiver that kept the first part goes on by itself, since
+      // it said yes to exactly these files; one that kept nothing treats it as a new offer and asks.
+      const same =
+        transfer.direction === 'in' &&
+        transfer.peer === from &&
+        transfer.files.length === files.length &&
+        transfer.files.every((file, index) => file.name === files[index].name && file.size === files[index].size && file.path === files[index].path)
+      if (!same || offer.resume !== true || !['failed', 'direct-failed'].includes(transfer.state)) return
+      if (keptByTransfer.has(transferId)) {
+        void continueIncoming(transfer, offer.sdp)
+        return
+      }
+      set((current) => ({ transfers: current.transfers.filter((entry) => entry.id !== transferId) }))
+    }
     const toPlay = offer.play === true && files.length === 1 && files[0].size <= PLAY_TRANSFER_MAX && isPlayableMime(files[0].mime, files[0].name)
     offers.set(transferId, offer.sdp)
     addTransfer({
@@ -782,7 +802,11 @@ function wireOf(channel: RTCDataChannel, pc: RTCPeerConnection): Wire {
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') closed()
   })
   return {
-    send: (data) => channel.send(data as string),
+    send: (data) => {
+      // A send on a channel that closed throws something about its state; what it means is that the line is gone.
+      if (channel.readyState !== 'open') throw new TransferError('closed', 'Die Verbindung brach ab.')
+      channel.send(data as string)
+    },
     get bufferedAmount() {
       return channel.bufferedAmount
     },
@@ -853,6 +877,7 @@ const stillDirect = (id: string) => ['connecting', 'direct-failed'].includes(sta
 
 interface OutgoingPending {
   files: File[]
+  infos: FileInfo[]
   answered: (sdp: string) => void
   close: () => void
   abort: AbortController
@@ -926,23 +951,33 @@ export async function sendToDevice(deviceId: string, files: File[], options: { p
     ...(options.play ? { play: true } : {}),
   })
 
+  await offerOut(id, deviceId, files, infos, { play: options.play })
+  return id
+}
+
+/**
+ * The offer itself: a connection prepared, its description sent, and then —
+ * once it is answered and open — the files over it. Also what „Fortsetzen“
+ * runs again for a transfer that broke.
+ */
+async function offerOut(id: string, deviceId: string, files: File[], infos: FileInfo[], options: { play?: boolean; resume?: boolean }): Promise<void> {
   const pc = new RTCPeerConnection({ iceServers: [] })
   const channel = pc.createDataChannel('sondra', { ordered: true })
   const abort = new AbortController()
   let answered: (sdp: string) => void = () => undefined
   const answer = new Promise<string>((resolve) => (answered = resolve))
-  outgoingPending.set(id, { files, answered, close: () => pc.close(), abort })
+  outgoingPending.set(id, { files, infos, answered, close: () => pc.close(), abort })
 
   try {
     await pc.setLocalDescription(await pc.createOffer())
     await gathered(pc)
-    await post(deviceId, 'offer', id, { sdp: pc.localDescription?.sdp ?? '', files: infos, ...(options.play ? { play: true } : {}) } satisfies OfferBody)
+    await post(deviceId, 'offer', id, { sdp: pc.localDescription?.sdp ?? '', files: infos, ...(options.play ? { play: true } : {}), ...(options.resume ? { resume: true } : {}) } satisfies OfferBody)
     lookSoon()
   } catch (error) {
     pc.close()
     outgoingPending.delete(id)
     patchTransfer(id, { state: 'failed', error: error instanceof Error ? error.message : String(error) })
-    return id
+    return
   }
 
   void (async () => {
@@ -974,7 +1009,8 @@ export async function sendToDevice(deviceId: string, files: File[], options: { p
       outgoingPending.delete(id)
       return
     }
-    patchTransfer(id, { state: 'sending', route: 'direct', error: undefined, queued: false })
+    patchTransfer(id, { state: 'sending', route: 'direct', error: undefined, queued: false, resumable: false })
+    let broke = false
     try {
       const places = await sendOver(
         wireOf(channel, pc),
@@ -985,16 +1021,18 @@ export async function sendToDevice(deviceId: string, files: File[], options: { p
       window.setTimeout(() => pc.close(), 1000)
     } catch (error) {
       const code = error instanceof TransferError ? error.code : 'failed'
+      // A broken line is not the end: the files stay at hand, and „Fortsetzen“ goes on from what the other side kept.
+      broke = code === 'closed' && can(state().devices.find((entry) => entry.id === deviceId), 'resume')
       patchTransfer(id, {
         state: code === 'cancelled' ? 'cancelled' : code === 'refused' ? 'cancelled' : 'failed',
         error: error instanceof Error ? error.message : String(error),
+        ...(broke ? { resumable: true } : {}),
       })
     } finally {
       release()
-      outgoingPending.delete(id)
+      if (!broke) outgoingPending.delete(id)
     }
   })()
-  return id
 }
 
 /** When no direct way was found: through Drive, after the user said so. */
@@ -1025,6 +1063,15 @@ export async function sendViaDrive(id: string): Promise<void> {
   }
 }
 
+/** After a break: the same files again to the same device, which goes on from what it kept. */
+export async function resumeTransfer(id: string): Promise<void> {
+  const transfer = state().transfers.find((entry) => entry.id === id)
+  const pending = outgoingPending.get(id)
+  if (!transfer || !pending || transfer.direction !== 'out' || !transfer.resumable) return
+  patchTransfer(id, { state: 'offering', error: undefined, resumable: false })
+  await offerOut(id, transfer.peer, pending.files, pending.infos, { play: transfer.play, resume: true })
+}
+
 export function cancelTransfer(id: string): void {
   const transfer = state().transfers.find((entry) => entry.id === id)
   if (!transfer) return
@@ -1044,7 +1091,13 @@ export function cancelTransfer(id: string): void {
 }
 
 export function dismissTransfer(id: string): void {
-  patchTransfer(id, { dismissed: true })
+  const transfer = state().transfers.find((entry) => entry.id === id)
+  // Closing a broken transfer gives up on it: no one goes on from here.
+  if (transfer?.resumable) {
+    void dropKept(id)
+    outgoingPending.delete(id)
+  }
+  patchTransfer(id, { dismissed: true, resumable: false })
 }
 
 /**
@@ -1162,37 +1215,69 @@ async function receiveTarget(): Promise<{ sinkFor: SinkFor; where: string }> {
       }
       return {
         where: root.name,
-        sinkFor: async (file) => {
-          const split = splitPath(file.path, file.name)
-          const here = await folderAt(split.dir)
-          const name = freeName(split.name, (candidate) => here.taken.has(candidate))
-          here.taken.add(name)
-          const handle = await here.handle.getFileHandle(name, { create: true })
-          const writable = await handle.createWritable()
-          const shown = `${root.name}/${split.dir ? `${split.dir}/` : ''}${name}`
+        sinkFor: async (file, _index, piece) => {
+          // A half file from before the break: reopened and written on from where it ends.
+          const again = piece?.token as { dir: FileSystemDirectoryHandle; name: string; shown: string } | undefined
+          let dirHandle: FileSystemDirectoryHandle
+          let name: string
+          let shown: string
+          if (again) {
+            dirHandle = again.dir
+            name = again.name
+            shown = again.shown
+          } else {
+            const split = splitPath(file.path, file.name)
+            const here = await folderAt(split.dir)
+            name = freeName(split.name, (candidate) => here.taken.has(candidate))
+            here.taken.add(name)
+            dirHandle = here.handle
+            shown = `${root.name}/${split.dir ? `${split.dir}/` : ''}${name}`
+          }
+          const handle = await dirHandle.getFileHandle(name, { create: !again })
+          const writable = await handle.createWritable(again ? { keepExistingData: true } : undefined)
+          let bytes = again ? piece!.bytes : 0
+          if (again) await (writable as unknown as { seek: (position: number) => Promise<void> }).seek(bytes)
           return {
-            write: (chunk) => writable.write(chunk as Uint8Array<ArrayBuffer>),
+            write: async (chunk) => {
+              await writable.write(chunk as Uint8Array<ArrayBuffer>)
+              bytes += chunk.byteLength
+            },
             close: async () => {
               await writable.close()
               return shown
             },
             abort: async () => {
               await writable.abort().catch(() => undefined)
-              await here.handle.removeEntry(name).catch(() => undefined)
+              await dirHandle.removeEntry(name).catch(() => undefined)
+            },
+            // The line broke: closing keeps what was written, and the file is as long as `bytes`.
+            suspend: async () => {
+              await writable.close()
+              return {
+                bytes,
+                token: { dir: dirHandle, name, shown },
+                intact: async () => (await (await dirHandle.getFileHandle(name)).getFile()).size === bytes,
+                discard: async () => {
+                  await dirHandle.removeEntry(name).catch(() => undefined)
+                },
+              }
             },
           }
         },
       }
     }
   }
-  // Firefox, Safari: held, then handed to the browser's downloads.
+  // Firefox, Safari: held, then handed to the browser's downloads. A broken
+  // transfer keeps what it held, for as long as the page is open.
   return {
     where: 'Downloads',
-    sinkFor: async (file) => {
-      const parts: Uint8Array<ArrayBuffer>[] = []
+    sinkFor: async (file, _index, piece) => {
+      const parts: Uint8Array<ArrayBuffer>[] = (piece?.token as Uint8Array<ArrayBuffer>[] | undefined) ?? []
+      let bytes = piece?.bytes ?? 0
       return {
         write: async (chunk) => {
           parts.push(chunk as Uint8Array<ArrayBuffer>)
+          bytes += chunk.byteLength
         },
         close: async () => {
           // No folders here: the path becomes part of the name.
@@ -1205,6 +1290,7 @@ async function receiveTarget(): Promise<{ sinkFor: SinkFor; where: string }> {
         abort: async () => {
           parts.length = 0
         },
+        suspend: async () => ({ bytes, token: parts, discard: async () => void (parts.length = 0) }),
       }
     },
   }
@@ -1274,6 +1360,22 @@ export async function acceptTransfer(id: string): Promise<void> {
     patchTransfer(id, { state: 'failed', error: error instanceof Error ? error.message : String(error) })
     return
   }
+  await receiveOn(id, transfer, sdp, target)
+}
+
+/** What a broken transfer kept on this side, and the place it was being written to. */
+const keptByTransfer = new Map<string, { kept: Kept; target: { sinkFor: SinkFor; where: string } }>()
+
+/** The sender took up a transfer that broke: it goes on from what was kept, with no question asked again. */
+async function continueIncoming(transfer: Transfer, sdp: string): Promise<void> {
+  const entry = keptByTransfer.get(transfer.id)
+  if (!entry) return
+  patchTransfer(transfer.id, { state: 'connecting', error: undefined, resumable: false })
+  await receiveOn(transfer.id, transfer, sdp, entry.target, entry.kept)
+}
+
+/** The connection, the answer, and the files over it — for a first attempt and for one after a break. */
+async function receiveOn(id: string, transfer: Transfer, sdp: string, target: { sinkFor: SinkFor; where: string }, kept?: Kept): Promise<void> {
   const control = new AbortController()
   incomingPending.set(id, { abort: () => control.abort(), sinkFor: target.sinkFor })
 
@@ -1304,12 +1406,22 @@ export async function acceptTransfer(id: string): Promise<void> {
     const places = await receiveOver(wireOf(channel, pc), target.sinkFor, {
       signal: control.signal,
       onProgress: ({ done }) => patchTransfer(id, { done }),
+      kept,
+      // Only a transfer that can go on from here keeps anything: not the film on its way to the player.
+      onKept: transfer.play
+        ? undefined
+        : (left) => {
+            keptByTransfer.set(id, { kept: left, target })
+            if (Object.keys(left.pieces).length + Object.keys(left.places).length > 0) patchTransfer(id, { resumable: true })
+          },
     })
-    patchTransfer(id, { state: 'done', done: transfer.total, places })
+    keptByTransfer.delete(id)
+    patchTransfer(id, { state: 'done', done: transfer.total, places, resumable: false })
     window.setTimeout(() => pc.close(), 1000)
     startArrived(id)
   } catch (error) {
     const code = error instanceof TransferError ? error.code : 'failed'
+    if (code !== 'closed') void dropKept(id)
     patchTransfer(id, {
       state: code === 'cancelled' || code === 'refused' ? 'cancelled' : 'failed',
       error: error instanceof Error ? error.message : String(error),
@@ -1317,6 +1429,14 @@ export async function acceptTransfer(id: string): Promise<void> {
   } finally {
     incomingPending.delete(id)
   }
+}
+
+/** Gives up what a broken transfer kept: the half files go. */
+async function dropKept(id: string): Promise<void> {
+  const entry = keptByTransfer.get(id)
+  keptByTransfer.delete(id)
+  if (!entry) return
+  await Promise.all(Object.values(entry.kept.pieces).map((piece) => piece.discard?.().catch(() => undefined)))
 }
 
 export async function declineTransfer(id: string): Promise<void> {

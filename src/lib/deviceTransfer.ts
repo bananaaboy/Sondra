@@ -43,9 +43,32 @@ export interface Sink {
   write(chunk: Uint8Array): Promise<void>
   close(): Promise<string>
   abort(): Promise<void>
+  /**
+   * The connection broke: keep what was written and say how far it is, so the
+   * file can go on from there. Absent where a half file cannot be kept (the
+   * phone's save has no way to reopen one), and the file then starts over.
+   */
+  suspend?(): Promise<Piece | null>
 }
 
-export type SinkFor = (file: FileInfo, index: number) => Promise<Sink>
+/** A file kept half: how many bytes lie safely, and what the sink needs to reopen it. */
+export interface Piece {
+  bytes: number
+  token: unknown
+  /** Is it still as it was left? A file the user deleted meanwhile starts over. */
+  intact?: () => Promise<boolean>
+  /** Gives the half file up: it was not going to be finished. */
+  discard?: () => Promise<void>
+}
+
+/** What a receiver kept of a transfer that broke: finished files, and half ones. */
+export interface Kept {
+  /** Where each finished file went, by index. */
+  places: Record<number, string>
+  pieces: Record<number, Piece>
+}
+
+export type SinkFor = (file: FileInfo, index: number, piece?: Piece) => Promise<Sink>
 
 export const CHUNK = 64 * 1024
 const ACK_EVERY = 4 * 1024 * 1024
@@ -62,8 +85,9 @@ export class TransferError extends Error {
 
 type Control =
   | { t: 'start'; files: FileInfo[] }
-  | { t: 'ready' }
-  | { t: 'file'; i: number }
+  /** `done`: files the receiver has whole; `from`: how far it got with the others (bytes, by index). */
+  | { t: 'ready'; done?: number[]; from?: Record<number, number> }
+  | { t: 'file'; i: number; at?: number }
   | { t: 'end'; i: number }
   | { t: 'done' }
   | { t: 'ack'; bytes: number }
@@ -100,6 +124,7 @@ export function sendOver(
     let wake: (() => void) | null = null
     let readyWait: (() => void) | null = null
     let ready = false
+    let kept: { done: Set<number>; from: Record<number, number> } = { done: new Set(), from: {} }
     const nudge = () => {
       const run = wake
       wake = null
@@ -127,6 +152,11 @@ export function sendOver(
       const control = parse(data)
       if (!control) return
       if (control.t === 'ready') {
+        // A receiver that kept nothing says nothing here, and everything is sent.
+        kept = {
+          done: new Set(Array.isArray(control.done) ? control.done.filter((i) => Number.isInteger(i)) : []),
+          from: control.from && typeof control.from === 'object' ? control.from : {},
+        }
         ready = true
         readyWait?.()
       } else if (control.t === 'ack') {
@@ -148,11 +178,16 @@ export function sendOver(
     void (async () => {
       say(wire, { t: 'start', files: files.map(({ name, size, mime, path }) => ({ name, size, mime, ...(path ? { path } : {}) })) })
       if (!ready) await new Promise<void>((done) => (readyWait = done))
-      let sent = 0
+      // What the receiver already has counts as sent and acknowledged.
+      const startAt = files.map((file, i) => (kept.done.has(i) ? file.size : Math.min(Math.max(0, Number(kept.from[i]) || 0), file.size)))
+      let sent = startAt.reduce((sum, bytes) => sum + bytes, 0)
+      acked = Math.max(acked, sent)
+      if (sent > 0) onProgress?.({ done: sent, total })
       for (let i = 0; i < files.length && !finished; i += 1) {
         const file = files[i]
-        say(wire, { t: 'file', i })
-        for (let at = 0; at < file.size && !finished; at += CHUNK) {
+        if (kept.done.has(i)) continue
+        say(wire, { t: 'file', i, ...(startAt[i] > 0 ? { at: startAt[i] } : {}) })
+        for (let at = startAt[i]; at < file.size && !finished; at += CHUNK) {
           const piece = await file.read(at, Math.min(at + CHUNK, file.size))
           while (!finished && wire.bufferedAmount > BUFFER_HIGH) await wire.drained()
           while (!finished && sent - acked > AHEAD) await new Promise<void>((done) => (wake = done))
@@ -164,6 +199,11 @@ export function sendOver(
       }
       if (!finished) say(wire, { t: 'done' })
     })().catch((error: unknown) => {
+      // The line itself went: not the file's fault, and the sender may go on from where it broke.
+      if (error instanceof TransferError) {
+        fail(error)
+        return
+      }
       try {
         say(wire, { t: 'error', message: 'Datei nicht lesbar' })
       } catch {
@@ -181,7 +221,21 @@ export function sendOver(
 export function receiveOver(
   wire: Wire,
   sinkFor: SinkFor,
-  { onStart, onProgress, signal }: { onStart?: (files: FileInfo[]) => void; onProgress?: (progress: Progress) => void; signal?: AbortSignal } = {},
+  {
+    onStart,
+    onProgress,
+    signal,
+    kept,
+    onKept,
+  }: {
+    onStart?: (files: FileInfo[]) => void
+    onProgress?: (progress: Progress) => void
+    signal?: AbortSignal
+    /** What an earlier attempt of this transfer left: finished files, half ones. */
+    kept?: Kept
+    /** The connection broke: what is kept now, to go on from. */
+    onKept?: (kept: Kept) => void
+  } = {},
 ): Promise<string[]> {
   return new Promise<string[]>((resolve, reject) => {
     let files: FileInfo[] = []
@@ -189,13 +243,52 @@ export function receiveOver(
     let written = 0
     let lastAck = 0
     let sink: Sink | null = null
+    let sinkIndex = -1
     const places: string[] = []
+    const pieces: Record<number, Piece> = { ...(kept?.pieces ?? {}) }
+    for (const [index, place] of Object.entries(kept?.places ?? {})) places[Number(index)] = place
     let finished = false
     // Everything in the order it came: a write never overtakes the `end` before it.
     let chain: Promise<void> = Promise.resolve()
 
+    // The line broke, but what already arrived is still being written.
+    let broke = false
+    // Speaking on a line that is already gone throws; the close that follows is what ends it.
+    const tell = (control: Control) => {
+      try {
+        say(wire, control)
+      } catch {
+        // Handled when the close arrives.
+      }
+    }
     const fail = (error: TransferError) => {
       if (finished) return
+      // A broken connection is not a refusal: what is written stays, once what
+      // was already queued has been written, and the sender can go on from it.
+      if (error.code === 'closed' && onKept) {
+        if (broke) return
+        broke = true
+        void chain
+          .then(async () => {
+            if (finished) return
+            finished = true
+            const open = sink
+            const openIndex = sinkIndex
+            sink = null
+            try {
+              const piece = open?.suspend ? await open.suspend() : null
+              if (open && !piece) await open.abort().catch(() => undefined)
+              const keptPieces = { ...pieces }
+              if (piece) keptPieces[openIndex] = piece
+              else delete keptPieces[openIndex]
+              onKept({ places: { ...places }, pieces: keptPieces })
+            } catch {
+              void open?.abort().catch(() => undefined)
+            }
+            reject(error)
+          })
+        return
+      }
       finished = true
       const open = sink
       sink = null
@@ -221,7 +314,7 @@ export function receiveOver(
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           try {
-            say(wire, { t: 'error', message: `Nicht gespeichert: ${message}` })
+            tell({ t: 'error', message: `Nicht gespeichert: ${message}` })
           } catch {
             // Ignore
           }
@@ -231,7 +324,7 @@ export function receiveOver(
     }
 
     wire.onMessage((data) => {
-      if (finished) return
+      if (finished || broke) return
       if (typeof data !== 'string') {
         const bytes = new Uint8Array(data)
         step(async () => {
@@ -241,7 +334,7 @@ export function receiveOver(
           onProgress?.({ done: written, total })
           if (written - lastAck >= ACK_EVERY) {
             lastAck = written
-            say(wire, { t: 'ack', bytes: written })
+            tell({ t: 'ack', bytes: written })
           }
         })
         return
@@ -252,13 +345,41 @@ export function receiveOver(
         files = control.files
         total = files.reduce((sum, file) => sum + file.size, 0)
         onStart?.(files)
-        say(wire, { t: 'ready' })
+        step(async () => {
+          // What an earlier attempt kept counts as received — if it is still as it was left.
+          const done: number[] = []
+          const from: Record<number, number> = {}
+          written = 0
+          for (const index of Object.keys(places).map(Number)) {
+            if (files[index] && places[index]) {
+              done.push(index)
+              written += files[index].size
+            }
+          }
+          for (const [key, piece] of Object.entries(pieces)) {
+            const index = Number(key)
+            const file = files[index]
+            const fine = file && !done.includes(index) && piece.bytes > 0 && piece.bytes < file.size && (!piece.intact || (await piece.intact()))
+            if (fine) {
+              from[index] = piece.bytes
+              written += piece.bytes
+            } else delete pieces[index]
+          }
+          lastAck = written
+          if (written > 0) onProgress?.({ done: written, total })
+          tell({ t: 'ready', ...(done.length ? { done } : {}), ...(Object.keys(from).length ? { from } : {}) })
+        })
       } else if (control.t === 'file') {
         const index = control.i
+        const at = Number(control.at) || 0
         step(async () => {
           const info = files[index]
           if (!info) throw new Error('Unbekannte Datei')
-          sink = await sinkFor(info, index)
+          const piece = at > 0 ? pieces[index] : undefined
+          if (at > 0 && (!piece || piece.bytes !== at)) throw new Error('Das Fortsetzen ist nicht mehr möglich.')
+          sink = await sinkFor(info, index, piece)
+          sinkIndex = index
+          delete pieces[index]
         })
       } else if (control.t === 'end') {
         const index = control.i
@@ -269,8 +390,8 @@ export function receiveOver(
         })
       } else if (control.t === 'done') {
         step(async () => {
-          say(wire, { t: 'ack', bytes: written })
-          say(wire, { t: 'saved', places })
+          tell({ t: 'ack', bytes: written })
+          tell({ t: 'saved', places })
           finished = true
           onProgress?.({ done: total, total })
           resolve(places)

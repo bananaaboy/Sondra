@@ -231,6 +231,88 @@ const receiverError = await receiving2
 check('Abbruch beim Empfänger: Absender erfährt es', sending2 instanceof TransferError && ['refused', 'closed'].includes(sending2.code), String((sending2 as Error)?.message))
 check('Abbruch beim Empfänger: Empfänger bricht ab', receiverError instanceof TransferError && receiverError.code === 'cancelled')
 
+// --- Resuming after a break -----------------------------------------------
+// Three files; the line dies in the middle of the second. The receiver keeps
+// the first whole and the second half, the sender is asked again and sends
+// only what is missing — and every byte still arrives once, in order.
+{
+  const a = outgoing(new Blob([randomBytes(5 * 1024 * 1024 + 7)]), 'a.bin')
+  const bBytes = randomBytes(20 * 1024 * 1024 + 99)
+  const b = outgoing(new Blob([bBytes]), 'b.bin')
+  const c = outgoing(new Blob([randomBytes(300_000)]), 'c.bin')
+  const sources = [a, b, c]
+  const stored = new Map<string, Uint8Array[]>()
+  const sinkKeeping = (name: string, held?: Uint8Array[]): Sink => {
+    const parts = held ?? []
+    stored.set(name, parts)
+    const size = () => parts.reduce((sum, part) => sum + part.byteLength, 0)
+    return {
+      write: async (chunk) => {
+        parts.push(chunk)
+      },
+      close: async () => `Downloads/${name}`,
+      abort: async () => {
+        stored.delete(name)
+      },
+      suspend: async () => ({ bytes: size(), token: name, intact: async () => size() > 0 }),
+    }
+  }
+  const sinkFor = async (file: { name: string }, _index: number, piece?: { token: unknown }) =>
+    sinkKeeping(file.name, piece ? stored.get(String(piece.token)) : undefined)
+
+  // First attempt: cut the line after ~9 MB (a is whole, b a third in).
+  const [s1, r1] = pair()
+  let bytesOut = 0
+  const send1 = s1.send.bind(s1)
+  s1.send = (data) => {
+    if (typeof data !== 'string') {
+      bytesOut += data.byteLength
+      if (bytesOut > 9 * 1024 * 1024) {
+        s1.close()
+        return
+      }
+    }
+    send1(data)
+  }
+  let kept: import('../src/lib/deviceTransfer').Kept | null = null
+  const got1 = receiveOver(r1, sinkFor, { onKept: (state) => (kept = state) }).catch((error: unknown) => error)
+  const out1 = await sendOver(s1, sources).catch((error: unknown) => error)
+  await got1
+  await new Promise((done) => setTimeout(done, 20))
+  check('Abgebrochen: beide Seiten wissen es', out1 instanceof TransferError && out1.code === 'closed')
+  check('Abgebrochen: der Empfänger hat Datei a ganz und b zum Teil behalten', Boolean(kept) && Object.keys(kept!.places).join() === '0' && Boolean(kept!.pieces[1]) && kept!.pieces[1].bytes > 0 && kept!.pieces[1].bytes < bBytes.byteLength, JSON.stringify(kept && { places: kept.places, bytes: kept.pieces[1]?.bytes }))
+
+  // Second attempt on a new line: only the rest goes.
+  const [s2b, r2b] = pair()
+  let bytesAgain = 0
+  const send2 = s2b.send.bind(s2b)
+  s2b.send = (data) => {
+    if (typeof data !== 'string') bytesAgain += data.byteLength
+    send2(data)
+  }
+  const got2 = receiveOver(r2b, sinkFor, { kept: kept ?? undefined })
+  const where2 = await sendOver(s2b, sources)
+  await got2
+  const total = sources.reduce((sum, file) => sum + file.size, 0)
+  check('Fortgesetzt: nur der Rest wird gesendet', bytesAgain < total - 5 * 1024 * 1024 && bytesAgain >= total - kept!.pieces[1].bytes - a.size - 1, `${bytesAgain} von ${total}`)
+  check('Fortgesetzt: b kommt Byte für Byte an', same(join(stored.get('b.bin')), bBytes))
+  check('Fortgesetzt: der Absender erfährt alle drei Orte', where2.join(' | ') === 'Downloads/a.bin | Downloads/b.bin | Downloads/c.bin', where2.join(' | '))
+
+  // A piece that is no longer as it was left starts over.
+  const [s3, r3] = pair()
+  let bytesAll = 0
+  const send3 = s3.send.bind(s3)
+  s3.send = (data) => {
+    if (typeof data !== 'string') bytesAll += data.byteLength
+    send3(data)
+  }
+  const stale = { places: {}, pieces: { 1: { bytes: 3 * 1024 * 1024, token: 'weg', intact: async () => false } } }
+  const got3 = receiveOver(r3, async (file) => sinkKeeping(`neu-${file.name}`), { kept: stale })
+  await sendOver(s3, sources)
+  await got3
+  check('Verändertes Stück: von vorn, nichts Falsches angehängt', bytesAll === total && same(join(stored.get('neu-b.bin')), bBytes))
+}
+
 // --- Names on disk --------------------------------------------------------
 const takenNames = new Set(['Film.mp4', 'Film (2).mp4'])
 check('Freier Dateiname', freeName('Film.mp4', (n) => takenNames.has(n)) === 'Film (3).mp4')

@@ -33,6 +33,20 @@ async function device({ name, android }) {
           return super.setRemoteDescription(description)
         }
       }
+      // Cuts the line after so many bytes of file data have gone out: a break in the middle of a transfer.
+      const sendOriginal = RTCDataChannel.prototype.send
+      window.__sentBytes = 0
+      RTCDataChannel.prototype.send = function (data) {
+        if (typeof data !== 'string' && data.byteLength) {
+          window.__sentBytes += data.byteLength
+          if (window.__cutAfter && window.__sentBytes > window.__cutAfter) {
+            window.__cutAfter = 0
+            this.close()
+            return
+          }
+        }
+        return sendOriginal.call(this, data)
+      }
       window.__saved = {}
       if (android) {
         const saves = new Map()
@@ -77,22 +91,31 @@ async function device({ name, android }) {
               }
               return entries.get(child)
             },
-            async getFileHandle(fileName) {
+            async getFileHandle(fileName, options) {
+              if (!entries.has(fileName) && !options?.create) throw new DOMException('nicht da', 'NotFoundError')
               return {
-                async createWritable() {
-                  const parts = []
+                async getFile() {
+                  const bytes = entries.get(fileName) ?? new Uint8Array(0)
+                  return new File([bytes], fileName)
+                },
+                async createWritable(writeOptions) {
+                  let all = writeOptions?.keepExistingData ? new Uint8Array(entries.get(fileName) ?? []) : new Uint8Array(0)
+                  let position = all.length
                   return {
+                    async seek(to) {
+                      position = to
+                    },
                     async write(chunk) {
-                      parts.push(new Uint8Array(chunk))
+                      const piece = new Uint8Array(chunk)
+                      if (position + piece.length > all.length) {
+                        const grown = new Uint8Array(position + piece.length)
+                        grown.set(all)
+                        all = grown
+                      }
+                      all.set(piece, position)
+                      position += piece.length
                     },
                     async close() {
-                      const total = parts.reduce((s, p) => s + p.length, 0)
-                      const all = new Uint8Array(total)
-                      let at = 0
-                      for (const p of parts) {
-                        all.set(p, at)
-                        at += p.length
-                      }
                       entries.set(fileName, all)
                       let text = ''
                       for (let i = 0; i < all.length; i += 0x8000) text += String.fromCharCode(...all.subarray(i, i + 0x8000))
@@ -271,6 +294,32 @@ for (const name of ['Eins.bin', 'Zwei.bin', 'Drei.bin']) {
 }
 check('Drei Übertragungen auf einmal: alle kommen an, die Warteschlange läuft leer', true)
 fs.rmSync(tree, { recursive: true, force: true })
+
+// A break in the middle: the line is cut after ~5 MB, the laptop keeps what came, and „Fortsetzen“ sends the rest.
+{
+  const big = Buffer.alloc(14 * 1024 * 1024 + 321)
+  for (let i = 0; i < big.length; i += 1) big[i] = (i * 13 + (i >> 11)) & 255
+  await phone.page.evaluate(() => {
+    window.__cutAfter = window.__sentBytes + 5 * 1024 * 1024
+  })
+  await otherRow(phone.page, 'Laptop').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Gross.bin', mimeType: 'application/octet-stream', buffer: big })
+  await laptop.page.getByRole('button', { name: 'Annehmen' }).waitFor({ timeout: 30_000 })
+  await laptop.page.getByRole('button', { name: 'Annehmen' }).click()
+  const resume = phone.page.getByRole('button', { name: 'Fortsetzen' })
+  await resume.waitFor({ timeout: 60_000 })
+  const brokenText = await phone.page.locator('main').innerText()
+  check('Abbruch: das Handy bietet „Fortsetzen“ an', /Fortsetzen/.test(brokenText))
+  await phone.page.screenshot({ path: `${OUT}handy-unterbrochen.png`, fullPage: true })
+  const sentBefore = await phone.page.evaluate(() => window.__sentBytes)
+  await resume.click()
+  // The half file is in „saved“ from the break on; whole means its full length.
+  await laptop.page.waitForFunction((length) => (window.__saved['Gross.bin']?.[0]?.length ?? 0) >= length, Math.ceil(big.length / 3) * 4, { timeout: 60_000 }).catch(() => undefined)
+  await laptop.page.waitForTimeout(500)
+  const sentAfter = await phone.page.evaluate(() => window.__sentBytes)
+  const whole = await savedBytes(laptop.page, 'Gross.bin')
+  check('Fortgesetzt: Datei kommt Byte für Byte an, ohne Doppeltes', whole && sha(decode(whole)) === sha(big), `${whole ? decode(whole).length : 0} von ${big.length}`)
+  check('Fortgesetzt: nur der Rest wurde noch gesendet', sentAfter - sentBefore < big.length - 4 * 1024 * 1024, `${((sentAfter - sentBefore) / 1048576).toFixed(1)} MB`)
+}
 
 // Declined.
 await otherRow(laptop.page, 'Handy').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Nein.txt', mimeType: 'text/plain', buffer: Buffer.from('nein') })
