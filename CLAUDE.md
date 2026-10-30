@@ -122,7 +122,17 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   selbst leert. Firefox/Safari: `webkitdirectory`, einmal
   eingelesen, ohne Löschen — die Seite sagt das. Die Kachel bekommt den Fokus
   nur, wenn er schon in der Liste ist; vorher nahm die erste ihn beim
-  Ankommen und scrollte dorthin. **Untertitel im Ordner** (30.10.2026, `lib/autoSubtitles.ts`,
+  Ankommen und scrollte dorthin. **Lange Ordner** (30.10.2026): 240 Dateien je Seite, und „Weitere … zeigen“
+  drückt sich selbst, sobald es 900 px vor dem Bildschirm steht
+  (`IntersectionObserver`) — ein Ordner ist eine Liste zum Scrollen, nicht
+  eine zum Durchklicken. Was nicht im Bild ist, wird weder berechnet noch
+  gezeichnet (`cv-tile`, `cv-row` = `content-visibility: auto`, Grösse
+  `auto` gemerkt): die Knoten bleiben, deshalb sieht Strg+A jede Datei,
+  Umschalt-Bereiche und Pfeiltasten auch. Eine echte Fenster-Liste
+  (nur die sichtbaren Knoten) wurde erwogen und gelassen: sie müsste Fokus,
+  Bereichsauswahl und die Vorschaubilder neu erfinden. Szenario „ordner“ mit
+  3 000 Dateien.
+  **Untertitel im Ordner** (30.10.2026, `lib/autoSubtitles.ts`,
   `lib/subtitleFiles.ts`, `FolderSubtitles.tsx`): eine `.srt`/`.vtt` mit dem
   Namen des Films im selben Ordner (auch `Name.de.srt`) geht beim
   Abspielen aus dem Ordner von selbst mit in den Player (`playFiles`). Gibt es
