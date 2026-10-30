@@ -321,6 +321,26 @@ fs.rmSync(tree, { recursive: true, force: true })
   check('Fortgesetzt: nur der Rest wurde noch gesendet', sentAfter - sentBefore < big.length - 4 * 1024 * 1024, `${((sentAfter - sentBefore) / 1048576).toFixed(1)} MB`)
 }
 
+// A server of one's own: folded, empty, checked, kept — the password is not.
+{
+  await laptop.page.goto(`${BASE}#geraete`)
+  await laptop.page.getByText('Eigener Server für andere Netze', { exact: false }).first().click()
+  const stun = laptop.page.getByLabel('STUN-Server')
+  await stun.fill('https://nein.example')
+  check('Server: eine falsche Adresse wird beim Eintippen gesagt, „Übernehmen“ bleibt aus', (await laptop.page.getByText(/beginnt mit „stun:“/).count()) > 0 && (await laptop.page.getByRole('button', { name: 'Übernehmen' }).isDisabled()))
+  await stun.fill('stun:127.0.0.1:3478')
+  await laptop.page.getByLabel('TURN-Server (Relay)').fill('turn:127.0.0.1:3478')
+  await laptop.page.getByLabel('Benutzername').fill('ich')
+  await laptop.page.getByLabel('Passwort').fill('geheim-123')
+  await laptop.page.getByRole('button', { name: 'Übernehmen' }).click()
+  await laptop.page.getByText(/Übernommen — gilt für die nächste/).waitFor({ timeout: 5000 })
+  await laptop.page.screenshot({ path: `${OUT}laptop-server.png`, fullPage: true })
+  const kept = await laptop.page.evaluate(() => JSON.stringify({ ...localStorage }))
+  check('Server: die Adressen sind gemerkt, das Passwort steht nirgends im Speicher', /127\.0\.0\.1:3478/.test(kept) && !/geheim-123/.test(kept))
+  await laptop.page.getByRole('button', { name: 'Leeren' }).click()
+  check('Server: „Leeren“ räumt alles weg', !(await laptop.page.evaluate(() => localStorage.getItem('sondra:geraete:server'))))
+}
+
 // Declined.
 await otherRow(laptop.page, 'Handy').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Nein.txt', mimeType: 'text/plain', buffer: Buffer.from('nein') })
 await phone.page.getByRole('button', { name: 'Ablehnen' }).waitFor({ timeout: 30_000 })

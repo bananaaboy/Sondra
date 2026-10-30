@@ -908,6 +908,16 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `caps` gilt weiter (die Unterschrift deckt jedes Feld, das da steht); die
   Liste lässt sich nicht nachträglich ändern. Eine neue Fähigkeit gehört
   hier und in `ownCaps()`, nie nur in die Oberfläche.
+  **Ein Server in anderen Netzen** (30.10.2026, `lib/deviceServers.ts`,
+  `OwnServer` auf der Seite „Geräte“, gefaltet): ein Feld für STUN und eins
+  für TURN, leer, nichts eingetragen und nichts eingebaut — „kein Anbieter fest
+  verdrahtet“ gilt weiter, denn ein fremder Server sähe jede Adresse. Die
+  Adressen (`stun:`/`stuns:`, `turn:`/`turns:`, sonst abgelehnt) liegen im
+  `localStorage`; **das TURN-Passwort nie** — es bleibt im Speicher der
+  Seite und wird nach dem Schliessen neu gefragt. Die Verbindung nimmt
+  `currentIceServers()`; der Server und die Relay-Adressen reisen in der
+  Beschreibung durch Drive. Die Karte steht auf `panel-cool`: hier läuft etwas
+  nicht lokal.
   **Text und Links** (`sendText`, Nachricht `text`, Karte `NoteRow`): bis
   4 000 Zeichen, nichts öffnet sich von selbst, als Link gilt nur ein
   einzelnes `http`/`https`. **Auf anderem Gerät abspielen** (`play`):

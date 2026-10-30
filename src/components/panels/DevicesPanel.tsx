@@ -30,7 +30,8 @@ import {
 import { connectDrive, driveLinked, useDrive } from '../../lib/googleDrive'
 import { useSession } from '../../state/store'
 import { DeviceGlyph, TransferRow } from '../DeviceSend'
-import { Button, Notice, SectionHead, TextInput } from '../ui/primitives'
+import { Button, Card, Field, Notice, Reveal, SectionHead, TextInput } from '../ui/primitives'
+import { serverProblem, setServers, useServers } from '../../lib/deviceServers'
 
 function seenLabel(device: DeviceRecord, now: number): string {
   if (isOnline(device, now)) return 'offen'
@@ -116,6 +117,84 @@ function TextForm({ device, onClose }: { device: DeviceRecord; onClose: () => vo
         </span>
       </div>
     </form>
+  )
+}
+
+/**
+ * A server of one's own for devices in different networks. Folded: most people
+ * have all their devices in one Wi-Fi, and Drive is there for the rest. Nothing
+ * is filled in by Sondra and no server is built in.
+ */
+function OwnServer() {
+  const saved = useServers()
+  const [draft, setDraft] = useState({ stun: saved.stun, turn: saved.turn, user: saved.user, password: saved.password })
+  const [state, setState] = useState<'idle' | 'saved'>('idle')
+  const stunProblem = serverProblem(draft.stun, 'stun')
+  const turnProblem = serverProblem(draft.turn, 'turn')
+  const dirty = draft.stun !== saved.stun || draft.turn !== saved.turn || draft.user !== saved.user || draft.password !== saved.password
+  const active = Boolean(saved.stun.trim() || saved.turn.trim())
+  const change = (patch: Partial<typeof draft>) => {
+    setDraft((current) => ({ ...current, ...patch }))
+    setState('idle')
+  }
+  return (
+    <Reveal label={active ? 'Eigener Server für andere Netze (gesetzt)' : 'Eigener Server für andere Netze'} defaultOpen={active}>
+      <form
+        className="flex flex-col gap-[12px]"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (stunProblem || turnProblem) return
+          setServers({ stun: draft.stun.trim(), turn: draft.turn.trim(), user: draft.user.trim(), password: draft.password })
+          setState('saved')
+        }}
+      >
+        <Card tone="slate" className="p-[14px]">
+          <p className="text-small leading-[1.55] text-prose">
+            Geräte in verschiedenen Netzen finden sich nur mit Hilfe eines Servers. Sondra bringt keinen mit und trägt keinen ein: dieser Server sähe die
+            Netzadresse jedes Ihrer Geräte. Wenn Sie einen eigenen oder einen vertrauten haben, tragen Sie ihn hier ein; die Dateien bleiben auch über einen
+            Relay-Server (TURN) verschlüsselt. Der Server und seine Adressen reisen in der Nachricht an das andere Gerät mit.
+          </p>
+        </Card>
+        <Field label="STUN-Server" hint={stunProblem ?? 'Sagt jedem Gerät, wie es von aussen erreichbar ist. Genügt oft schon.'}>
+          <TextInput value={draft.stun} onChange={(event) => change({ stun: event.target.value })} placeholder="stun:beispiel.de:3478" aria-invalid={Boolean(stunProblem)} spellCheck={false} autoComplete="off" />
+        </Field>
+        <Field label="TURN-Server (Relay)" hint={turnProblem ?? 'Für Netze, in denen STUN allein nicht reicht: der Server leitet den Verkehr weiter.'}>
+          <TextInput value={draft.turn} onChange={(event) => change({ turn: event.target.value })} placeholder="turn:beispiel.de:3478" aria-invalid={Boolean(turnProblem)} spellCheck={false} autoComplete="off" />
+        </Field>
+        {draft.turn.trim() ? (
+          <>
+            <Field label="Benutzername">
+              <TextInput value={draft.user} onChange={(event) => change({ user: event.target.value })} spellCheck={false} autoComplete="off" />
+            </Field>
+            <Field label="Passwort" hint="Wird nicht gespeichert: nach dem Schliessen der Seite fragt Sondra neu.">
+              <TextInput type="password" value={draft.password} onChange={(event) => change({ password: event.target.value })} autoComplete="off" />
+            </Field>
+          </>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-[10px]">
+          <Button type="submit" size="sm" disabled={!dirty || Boolean(stunProblem || turnProblem)}>
+            Übernehmen
+          </Button>
+          {active || draft.stun || draft.turn ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="quiet"
+              onClick={() => {
+                setDraft({ stun: '', turn: '', user: '', password: '' })
+                setServers({ stun: '', turn: '', user: '', password: '' })
+                setState('idle')
+              }}
+            >
+              Leeren
+            </Button>
+          ) : null}
+          <span aria-live="polite" className="text-small text-prose">
+            {state === 'saved' ? '● Übernommen — gilt für die nächste Übertragung.' : ''}
+          </span>
+        </div>
+      </form>
+    </Reveal>
   )
 }
 
@@ -489,6 +568,7 @@ export function DevicesPanel() {
               </button>
               .
             </p>
+            <OwnServer />
             <div>
               <button
                 type="button"

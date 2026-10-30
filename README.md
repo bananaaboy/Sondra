@@ -250,7 +250,9 @@ Rechner, auch zwischen Website, Windows-App und Android-App.
 - **Der Weg:** Drive vermittelt nur, wer wer ist, und den Handschlag; die
   Datei geht direkt per WebRTC-Datenkanal. Einen STUN-Dienst gibt es nicht
   (kein fremder Anbieter fest verdrahtet), direkt geht es deshalb im selben
-  Netz. Sonst bietet Sondra Google Drive an — erst auf Klick, und danach
+  Netz — außer Sie tragen unter „Eigener Server für andere Netze“ einen
+  STUN- oder TURN-Server Ihrer Wahl ein. Das TURN-Passwort wird nicht
+  gespeichert. Sonst bietet Sondra Google Drive an — erst auf Klick, und danach
   wird die Datei dort gelöscht.
 - **Wiedererkannt nach Update und Neuinstallation:** die Windows-App bleibt
   auf ihrem Port (127.0.0.1:47199; ist er belegt, wartet sie und nimmt dann

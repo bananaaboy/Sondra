@@ -15,6 +15,7 @@ import {
   uniqueName,
   type DeviceRecord,
 } from '../src/lib/deviceIdentity'
+import { iceServersFor, serverProblem, setServers, useServers } from '../src/lib/deviceServers'
 import { freeName, outgoing, receiveOver, safeFileName, sendOver, splitPath, TransferError, type Sink, type Wire } from '../src/lib/deviceTransfer'
 
 let failed = 0
@@ -230,6 +231,33 @@ const sending2 = await sendOver(s2, [film]).then(
 const receiverError = await receiving2
 check('Abbruch beim Empfänger: Absender erfährt es', sending2 instanceof TransferError && ['refused', 'closed'].includes(sending2.code), String((sending2 as Error)?.message))
 check('Abbruch beim Empfänger: Empfänger bricht ab', receiverError instanceof TransferError && receiverError.code === 'cancelled')
+
+// --- A server of one's own ------------------------------------------------
+{
+  const store = new Map<string, string>()
+  Object.assign(globalThis, {
+    localStorage: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    },
+  })
+  check('Server: leer ist nichts, nie ein fremder Anbieter', JSON.stringify(iceServersFor({ stun: '', turn: '', user: '', password: '' })) === '[]' && JSON.stringify(useServers.getState().stun) === '""')
+  check('Server: stun: mit Rechner und Port gilt', serverProblem('stun:beispiel.de:3478', 'stun') === null && serverProblem('stuns:beispiel.de', 'stun') === null)
+  check('Server: eine Adresse ohne stun: wird abgelehnt', serverProblem('https://beispiel.de', 'stun') !== null && serverProblem('beispiel.de:3478', 'stun') !== null)
+  check('Server: turn: und turns: gelten, stun: dort nicht', serverProblem('turn:r.example:3478', 'turn') === null && serverProblem('turns:r.example:5349', 'turn') === null && serverProblem('stun:r.example', 'turn') !== null)
+  check('Server: Skripte und Leerzeichen sind keine Adresse', serverProblem('stun:a b', 'stun') !== null && serverProblem('stun:<script>', 'stun') !== null && serverProblem('stun:', 'stun') !== null)
+  const set = { stun: 'stun:s.example:3478', turn: 'turn:t.example:3478', user: 'ich', password: 'geheim' }
+  const servers = iceServersFor(set)
+  check('Server: STUN und TURN werden zu zwei ICE-Servern, TURN mit Zugang', servers.length === 2 && servers[0].urls === 'stun:s.example:3478' && servers[1].username === 'ich' && servers[1].credential === 'geheim')
+  setServers(set)
+  const kept = store.get('sondra:geraete:server') ?? ''
+  check('Server: die Adressen bleiben auf dem Gerät, das Passwort nie', kept.includes('s.example') && !kept.includes('geheim') && ![...store.values()].some((value) => value.includes('geheim')), kept)
+  check('Server: im Speicher gilt das Passwort bis zum Schliessen', useServers.getState().password === 'geheim')
+  setServers({ stun: '', turn: '', user: '', password: '' })
+  check('Server: geleert ist nichts mehr gespeichert', !store.has('sondra:geraete:server'))
+  check('Server: ein ungültiger Eintrag wird nicht benutzt', iceServersFor({ stun: 'javascript:alert(1)', turn: '', user: '', password: '' }).length === 0)
+}
 
 // --- Resuming after a break -----------------------------------------------
 // Three files; the line dies in the middle of the second. The receiver keeps
