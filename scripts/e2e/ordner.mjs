@@ -151,5 +151,55 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 400, height: 860 
   await context.close()
 }
 
+// A folder of 3000 files: the first page at once, the rest as one scrolls, Ctrl+A takes every file — also those not on screen.
+{
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' })
+  await context.addInitScript(() => {
+    const root = {
+      name: 'Gross',
+      kind: 'directory',
+      async queryPermission() {
+        return 'granted'
+      },
+      async requestPermission() {
+        return 'granted'
+      },
+      async *values() {
+        for (let n = 1; n <= 3000; n += 1) {
+          const name = `Folge ${String(n).padStart(4, '0')}.mp4`
+          yield { kind: 'file', name, getFile: async () => new File([new Uint8Array(10)], name, { type: 'video/mp4' }) }
+        }
+      },
+      async removeEntry() {},
+    }
+    window.showDirectoryPicker = async () => root
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (e) => {
+    if (!harmless(e)) errors.push(String(e))
+  })
+  await page.goto(`${BASE}#ordner`)
+  const started = Date.now()
+  await page.getByRole('button', { name: 'Ordner wählen' }).click()
+  await page.getByText('Folge 0001.mp4').first().waitFor({ timeout: 30_000 })
+  const firstPage = Date.now() - started
+  const count = () => page.locator('[role=option]').count()
+  check('3000 Dateien: die erste Seite steht gleich da, nicht alle auf einmal', (await count()) > 0 && (await count()) <= 480, `${await count()} Kacheln nach ${firstPage} ms`)
+  for (let i = 0; i < 8; i += 1) {
+    await page.mouse.wheel(0, 6000)
+    await page.waitForTimeout(250)
+  }
+  const grown = await count()
+  check('3000 Dateien: beim Scrollen kommen die nächsten von selbst', grown > 480, `${grown} Kacheln`)
+  await page.getByText('Folge 0001.mp4').first().click()
+  await page.keyboard.press('Control+a')
+  await page.waitForTimeout(400)
+  check('3000 Dateien: Strg+A wählt jede Datei, auch die noch nicht gezeigten', /3\s?000 ausgewählt|3000 ausgewählt/.test((await page.locator('main').innerText()).replace(/\u2009|\u202f|\u00a0/g, ' ')), (await page.locator('main').innerText()).match(/\d[\d' ]* ausgewählt/)?.[0] ?? 'kein Zähler')
+  await page.screenshot({ path: `${OUT}gross.png` })
+  check('3000 Dateien: keine Fehler', errors.length === 0, errors.join(' | '))
+  await context.close()
+}
+
 await browser.close()
 finish()

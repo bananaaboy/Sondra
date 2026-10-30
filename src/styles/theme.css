@@ -938,3 +938,19 @@ table,
   animation-duration: var(--dur-base);
   animation-timing-function: var(--ease-out);
 }
+
+/* --- long lists --------------------------------------------------------------
+   A folder of thousands of files is rendered, but what lies off screen is not
+   laid out or painted until it comes near (`content-visibility`): the nodes
+   stay, so selecting a range, Ctrl+A and the arrow keys still see every file,
+   and the box keeps the size it last had (`auto`) so the scroll bar does not
+   jump. */
+@utility cv-tile {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 210px;
+}
+
+@utility cv-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 38px;
+}

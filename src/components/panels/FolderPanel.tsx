@@ -234,7 +234,7 @@ function DirTile({
         tabIndex={focused ? 0 : -1}
         onFocus={onFocus}
         onClick={onOpen}
-        className="press grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[10px] py-[8px] outline-none first:border-t-0 hover:bg-panel-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px]"
+        className="cv-row press grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[10px] py-[8px] outline-none first:border-t-0 hover:bg-panel-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px]"
       >
         <span className="text-ink">
           <FolderGlyph className="h-[20px] w-[20px]" />
@@ -344,7 +344,7 @@ function FileItem({
     return (
       <div
         {...common}
-        className={`grid cursor-default grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[10px] py-[7px] outline-none first:border-t-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px] ${
+        className={`cv-row grid cursor-default grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[10px] py-[7px] outline-none first:border-t-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px] ${
           selected ? 'bg-panel-mid' : 'hover:bg-panel-soft'
         }`}
       >
@@ -367,7 +367,7 @@ function FileItem({
   return (
     <div
       {...common}
-      className={`group relative flex cursor-default flex-col overflow-hidden rounded-card text-left outline-none transition-colors duration-[var(--dur-fast)] focus-visible:ring-2 focus-visible:ring-ink ${
+      className={`cv-tile group relative flex cursor-default flex-col overflow-hidden rounded-card text-left outline-none transition-colors duration-[var(--dur-fast)] focus-visible:ring-2 focus-visible:ring-ink ${
         selected ? 'bg-panel-strong ring-2 ring-inset ring-ink' : 'bg-panel-mid ring-1 ring-inset ring-line hover:bg-panel-strong'
       }`}
     >
@@ -586,6 +586,8 @@ export function FolderPanel() {
   /** What went into the bin last, to take back with one click. */
   const [binned, setBinned] = useState<Binned[] | null>(null)
   const [subtitling, setSubtitling] = useState<FolderFile[] | null>(null)
+  /** „Weitere … zeigen“ presses itself when it comes into view: a long folder is one list to scroll, not pages to click through. */
+  const moreRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => setBinned(null), [scan?.handle])
   const [deleting, setDeleting] = useState(false)
   const [zipping, setZipping] = useState(false)
@@ -707,6 +709,19 @@ export function FolderPanel() {
     [scan, dir, prefs.deep, prefs.sort, prefs.descending, filter, query],
   )
   const shownFiles = view.files.slice(0, limit)
+  const hasMore = view.files.length > limit
+  useEffect(() => {
+    const button = moreRef.current
+    if (!hasMore || !button || typeof IntersectionObserver === 'undefined') return undefined
+    const watch = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setLimit((value) => value + PAGE)
+      },
+      { rootMargin: '900px 0px' },
+    )
+    watch.observe(button)
+    return () => watch.disconnect()
+  }, [hasMore, limit])
   const order = useMemo(() => view.files.map((file) => file.path), [view.files])
   const episodes = useMemo(() => {
     const map = new Map<string, FolderEpisode>()
@@ -1389,7 +1404,12 @@ export function FolderPanel() {
         </div>
       )}
       {view.files.length > limit ? (
-        <button type="button" onClick={() => setLimit((value) => value + PAGE)} className={`${linkClass} self-start text-small`}>
+        <button
+          ref={moreRef}
+          type="button"
+          onClick={() => setLimit((value) => value + PAGE)}
+          className={`${linkClass} self-start text-small`}
+        >
           Weitere {Math.min(PAGE, view.files.length - limit)} von {view.files.length - limit} zeigen
         </button>
       ) : null}
