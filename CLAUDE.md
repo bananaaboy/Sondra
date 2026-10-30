@@ -699,9 +699,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   schickt sie an `offerSharedFile`, nicht in die Sitzung —; Windows-Setup
   (`installer.nsh`: die Endung gehört Sondra allein, also Standard), Android
   (VIEW auf `content://` mit Namen `*.sondra-liste`, `Bridge.takeOpened` nimmt
-  jede URI), die installierte Web-App (`file_handlers`, `share_target`);
-  **nicht** im MSIX des Stores (eine Endung mit Bindestrich ist dort
-  ungetestet und könnte jeden Lauf des Workflows kippen). **Empfangen**
+  jede URI), die installierte Web-App (`file_handlers` mit Logo,
+  `share_target`) und das MSIX des Stores (`fileAssociations`, im Lauf des
+  Workflows gebaut, installiert und gestartet). Das Logo trägt die Endung
+  wie `.sondra`: `DefaultIcon` auf die .exe in `installer.nsh` und, für
+  die App ohne Setup-Rechte, in `registerSondraProjectIcon()`. **Empfangen**
   stellt beide Listen nebeneinander (`compareShared`): „Beide haben 5 ·
   nur bei Ihnen 12 · nur bei Mia 8“; die 8 stehen als Häkchen mit Bild,
   „Alle/Keine“, „wie dort“ oder „als Später“ (`entryFromShared`: dann ohne

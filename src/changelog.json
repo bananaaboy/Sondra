@@ -2,6 +2,23 @@
   "_": "Was in jeder Version dazukam — für Menschen, nicht für Entwickler. Die neueste zuerst. Neue Version: oben einen Eintrag mit der Version aus package.json anlegen; der Release-Workflow bricht ab, wenn er fehlt, und nimmt ihn als Notizen des GitHub-Release.",
   "versions": [
     {
+      "version": "1.2.0",
+      "date": "2026-10-30",
+      "items": [
+        "Merkliste teilen, neu gemacht: Sie wählen, was mitgeht (Am Schauen ist vorgewählt), und „Empfehlen“ auf der Seite einer Serie teilt genau diese eine. Alles steckt im Link selbst — nichts wird hochgeladen, kein Dienst gefragt.",
+        "Bilder im Link: auf Wunsch ein kleines Poster je Serie, in drei Grössen von „Winzig“ (rund 52 Zeichen je Bild) bis „Gross“. Das Fenster zeigt vorher, was die Bilder an Länge kosten.",
+        "Kurze Links: ein neues, dichtes Format, und eine lange Liste kommt in Teilen, die sich in jeder Reihenfolge zusammensetzen. Dazu „Als Text kopieren“ für alle ohne Sondra und ein QR-Code, den das andere Telefon mit der Kamera liest.",
+        "Neuer Dateityp „.sondra-liste“ mit dem Sondra-Logo: ein Doppelklick bzw. „Öffnen mit Sondra“ öffnet die Liste — in der Windows-App (auch aus dem Microsoft Store), in der Android-App und in der installierten Web-App.",
+        "Empfangen vergleicht statt nur hinzuzufügen: „Beide haben 5 · nur bei Ihnen 12 · nur bei Mia 8“. Die fehlenden wählen Sie mit Bild aus, wie dort oder als „Später“.",
+        "Merkliste: Jahresrückblick in den Statistiken — Folgen, Sehzeit, stärkster Monat, längste Serie von Tagen und die fünf meistgeschauten Serien.",
+        "Ordner: Der Papierkorb von Sondra lässt sich ansehen — mit Name, Herkunft und Datum —, Dateien lassen sich zurücklegen oder nach einer zweiten Frage endgültig löschen. In Google Drive zeigt dasselbe Fenster Drives eigenen Papierkorb.",
+        "Ordner: Eine Untertitel-Datei neben dem Film geht beim Abspielen von selbst mit; gibt es keine, erzeugt Sondra sie auf Wunsch im Browser (Ton und Film verlassen das Gerät nicht). Sehr lange Ordner laufen flüssiger.",
+        "Geräte: Text und Links, Filme auf einem anderen Gerät abspielen, ganze Ordner senden, nach einem Abbruch fortsetzen und ein eigener Server für Geräte in verschiedenen Netzen.",
+        "Neu: „Beim Minimieren pausieren“ unter Zahnrad → Wiedergabe. Dazu mehr Bewegung an Reitern, Menüs und Dialogen.",
+        "Android: eine APK je Prozessor neben der universellen — kleiner zu laden, und die App wählt beim Update die passende selbst."
+      ]
+    },
+    {
       "version": "1.1.22",
       "date": "2026-10-29",
       "items": [
