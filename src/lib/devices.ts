@@ -721,6 +721,14 @@ async function handle(type: string, from: string, transferId: string, body: unkn
         transfer.peer === from &&
         transfer.files.length === files.length &&
         transfer.files.every((file, index) => file.name === files[index].name && file.size === files[index].size && file.path === files[index].path)
+      if (same && offer.resume === true && ['connecting', 'receiving'].includes(transfer.state)) {
+        // The sender gave up on the line before this side saw it break (one that died without a word takes a
+        // while to show): its new offer is proof enough. The old line is closed and the offer is taken up
+        // once the break is registered — dropped here, the sender would wait for an answer for good.
+        heldOffers.set(transferId, { from, body: offer })
+        lineOf.get(transferId)?.()
+        return
+      }
       if (!same || offer.resume !== true || !['failed', 'direct-failed'].includes(transfer.state)) return
       if (keptByTransfer.has(transferId)) {
         void continueIncoming(transfer, offer.sdp)
@@ -1365,6 +1373,18 @@ export async function acceptTransfer(id: string): Promise<void> {
   await receiveOn(id, transfer, sdp, target)
 }
 
+/** A resumed offer that came before this side saw the line break; it is taken up when the break is registered. */
+const heldOffers = new Map<string, { from: string; body: OfferBody }>()
+/** Closes the line an incoming transfer is running on. */
+const lineOf = new Map<string, () => void>()
+
+function releaseHeld(id: string): void {
+  const held = heldOffers.get(id)
+  if (!held) return
+  heldOffers.delete(id)
+  void handle('offer', held.from, id, held.body)
+}
+
 /** What a broken transfer kept on this side, and the place it was being written to. */
 const keptByTransfer = new Map<string, { kept: Kept; target: { sinkFor: SinkFor; where: string } }>()
 
@@ -1392,6 +1412,7 @@ async function receiveOn(id: string, transfer: Transfer, sdp: string, target: { 
   } catch (error) {
     pc.close()
     patchTransfer(id, { state: 'direct-failed', error: error instanceof Error ? error.message : String(error) })
+    releaseHeld(id)
     return
   }
   offers.delete(id)
@@ -1401,11 +1422,14 @@ async function receiveOn(id: string, transfer: Transfer, sdp: string, target: { 
     pc.close()
     // The sender is asked whether to go through Drive; its message finishes this.
     if (stillDirect(id)) patchTransfer(id, { state: 'direct-failed' })
+    releaseHeld(id)
     return
   }
   patchTransfer(id, { state: 'receiving', route: 'direct', error: undefined })
+  const wire = wireOf(channel, pc)
+  lineOf.set(id, () => wire.close())
   try {
-    const places = await receiveOver(wireOf(channel, pc), target.sinkFor, {
+    const places = await receiveOver(wire, target.sinkFor, {
       signal: control.signal,
       onProgress: ({ done }) => patchTransfer(id, { done }),
       kept,
@@ -1430,6 +1454,8 @@ async function receiveOn(id: string, transfer: Transfer, sdp: string, target: { 
     })
   } finally {
     incomingPending.delete(id)
+    lineOf.delete(id)
+    releaseHeld(id)
   }
 }
 

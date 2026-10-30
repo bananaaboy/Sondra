@@ -47,6 +47,25 @@ async function device({ name, android }) {
         }
         return sendOriginal.call(this, data)
       }
+      // A line that died without a word shows late on the side that did not cut it: after `__lateClose` ms from
+      // its first close event, every close listener of this page hears of it, not before. The connection's own
+      // state counts too — it is the other way a break shows.
+      const later = (original) =>
+        function (type, listener, options) {
+          if (!['close', 'connectionstatechange'].includes(type) || typeof listener !== 'function') return original.call(this, type, listener, options)
+          const late = function (...args) {
+            if (window.__lateClose && (type === 'close' || this.connectionState === 'failed' || this.connectionState === 'closed' || this.connectionState === 'disconnected')) {
+              window.__lateUntil = performance.now() + window.__lateClose
+              window.__lateClose = 0
+            }
+            const wait = (window.__lateUntil || 0) - performance.now()
+            if (wait > 0) setTimeout(() => listener.apply(this, args), wait)
+            else listener.apply(this, args)
+          }
+          return original.call(this, type, late, options)
+        }
+      RTCDataChannel.prototype.addEventListener = later(RTCDataChannel.prototype.addEventListener)
+      RTCPeerConnection.prototype.addEventListener = later(RTCPeerConnection.prototype.addEventListener)
       window.__saved = {}
       if (android) {
         const saves = new Map()
@@ -158,10 +177,14 @@ const decode = (joined) => Buffer.concat(joined.split('|').map((part) => Buffer.
 const laptop = await device({ name: 'Laptop', android: false })
 const phone = await device({ name: 'Handy', android: true })
 
-// The laptop joins with its button; the phone was switched on already.
+const registry = () => [...files.values()].filter((file) => file.appProperties?.sondraArt === 'geraet')
+// The laptop joins with its button; the phone was switched on already. Its entry is waited for first: a laptop
+// that asks before it is there hears of the phone only with the next round, 30 s later.
+const phoneListed = Date.now() + 60_000
+while (registry().length < 1 && Date.now() < phoneListed) await phone.page.waitForTimeout(250)
 await laptop.page.getByRole('button', { name: 'Dieses Gerät verbinden' }).click()
 const otherRow = (page, label) => page.locator('li').filter({ hasText: label }).filter({ has: page.getByRole('button', { name: 'Dateien senden' }) })
-await otherRow(laptop.page, 'Handy').waitFor({ timeout: 30_000 })
+await otherRow(laptop.page, 'Handy').waitFor({ timeout: 45_000 })
 await laptop.page.waitForTimeout(500)
 check('Laptop sieht das Handy', await otherRow(laptop.page, 'Handy').isVisible())
 await phone.page.getByRole('button', { name: 'Umbenennen' }).waitFor({ timeout: 30_000 })
@@ -170,7 +193,6 @@ await phone.page.evaluate(() => document.dispatchEvent(new Event('visibilitychan
 await otherRow(phone.page, 'Computer').waitFor({ timeout: 40_000 })
 check('Handy sieht den Laptop', true)
 
-const registry = () => [...files.values()].filter((file) => file.appProperties?.sondraArt === 'geraet')
 check('Je Gerät genau eine Datei im Register', registry().length === 2, registry().map((f) => f.name).join(', '))
 const ids = registry().map((file) => file.appProperties.sondraGeraet)
 check('Zwei verschiedene Kennungen', new Set(ids).size === 2 && ids.every((id) => /^[0-9A-HJKMNP-TV-Z]{20}$/.test(id)), ids.join(' '))
@@ -305,6 +327,11 @@ fs.rmSync(tree, { recursive: true, force: true })
   await otherRow(phone.page, 'Laptop').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Gross.bin', mimeType: 'application/octet-stream', buffer: big })
   await laptop.page.getByRole('button', { name: 'Annehmen' }).waitFor({ timeout: 30_000 })
   await laptop.page.getByRole('button', { name: 'Annehmen' }).click()
+  // The laptop hears of the break 15 s late, and „Fortsetzen“ reaches it before it has: that offer must not be lost.
+  // Armed only now, so no close of an earlier transfer uses it up.
+  await laptop.page.evaluate(() => {
+    window.__lateClose = 15_000
+  })
   const resume = phone.page.getByRole('button', { name: 'Fortsetzen' })
   await resume.waitFor({ timeout: 60_000 })
   const brokenText = await phone.page.locator('main').innerText()
