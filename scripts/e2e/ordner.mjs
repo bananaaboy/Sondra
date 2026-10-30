@@ -137,6 +137,16 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 400, height: 860 
   await page.getByRole('button', { name: 'Rückgängig' }).click()
   await page.getByText('Folge 1.mp4').first().waitFor({ timeout: 10_000 })
   check('Lokal: nach „Rückgängig“ ist sie wieder da und der Papierkorb leer', (await binHas()).length === 0 && (await page.getByText(/zurückgelegt/).count()) > 0)
+  // Subtitles: the dialog says where the model comes from before anything is loaded.
+  await page.getByText('Folge 1.mp4').first().click({ modifiers: ['Control'] })
+  await page.getByRole('button', { name: 'Untertitel erzeugen' }).click()
+  const subs = page.getByRole('dialog')
+  await subs.waitFor()
+  const subsText = await subs.innerText()
+  check('Untertitel: das Fenster nennt Hugging Face und dass der Ton das Gerät nicht verlässt', /Hugging Face/.test(subsText) && /verlässt es nicht/.test(subsText), subsText.replace(/\s+/g, ' ').slice(0, 100))
+  check('Untertitel: Sprache und Genauigkeit stehen zur Wahl, „Beginnen“ wartet auf den Klick', (await subs.getByRole('combobox').count()) === 2 && (await subs.getByRole('button', { name: 'Beginnen' }).isEnabled()))
+  await page.screenshot({ path: `${OUT}untertitel.png` })
+  await subs.getByRole('button', { name: 'Schliessen', exact: true }).click()
   check('Lokal: keine Fehler', errors.length === 0, errors.join(' | '))
   await context.close()
 }

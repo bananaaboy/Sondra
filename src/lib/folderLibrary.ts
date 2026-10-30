@@ -15,6 +15,7 @@
  * the other devices.
  */
 
+import { subtitlesBeside } from './subtitleFiles'
 import { useMemo } from 'react'
 import { create } from 'zustand'
 
@@ -211,7 +212,13 @@ export function playFiles(files: FolderFile[], replace = true): void {
     .map(forPlayer)
     .filter((entry): entry is File | RemoteMedia => entry !== null)
   if (playable.length === 0) return
-  sendToPlayer(playable, replace)
+  // The subtitle files lying beside a film go with it; the player pairs them by name.
+  const beside = useFolder.getState().scan?.files ?? []
+  const subtitles = files
+    .filter((file) => file.kind === 'video' || file.kind === 'audio')
+    .flatMap((film) => subtitlesBeside(film, beside))
+    .flatMap((entry) => (entry.file ? [entry.file] : []))
+  sendToPlayer([...playable, ...subtitles], replace)
   useSession.getState().setPanel('player')
 }
 

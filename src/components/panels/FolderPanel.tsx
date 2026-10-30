@@ -53,6 +53,7 @@ import { formatBytes, formatDuration } from '../../lib/format'
 import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
 import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, trashDriveFiles, useDrive } from '../../lib/googleDrive'
 import { PlayOnDeviceButton, SendToDevicesButton } from '../DeviceSend'
+import { FolderSubtitles } from './FolderSubtitles'
 import { DriveIcon } from '../GoogleDrive'
 import { SeasonFilingDialog } from '../SeasonFiling'
 import { requestOpenSeries, useMerkliste } from '../../lib/merkliste'
@@ -584,6 +585,7 @@ export function FolderPanel() {
   const [confirmDelete, setConfirmDelete] = useState<FolderFile[] | null>(null)
   /** What went into the bin last, to take back with one click. */
   const [binned, setBinned] = useState<Binned[] | null>(null)
+  const [subtitling, setSubtitling] = useState<FolderFile[] | null>(null)
   useEffect(() => setBinned(null), [scan?.handle])
   const [deleting, setDeleting] = useState(false)
   const [zipping, setZipping] = useState(false)
@@ -1413,6 +1415,17 @@ export function FolderPanel() {
               Abspielen{selectedMedia.length < chosen.length ? ` (${selectedMedia.length})` : ''}
             </Button>
           ) : null}
+          {selectedMedia.some((file) => file.file) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="quiet"
+              onClick={() => setSubtitling(selectedMedia.filter((file) => file.file))}
+              title="Das Sprachmodell hört die Dateien ab und schreibt Name.srt daneben"
+            >
+              Untertitel erzeugen
+            </Button>
+          ) : null}
           <PlayOnDeviceButton media={selectedMedia} />
           {fromDrive ? null : <SendToDevicesButton items={chosen.map((file) => ({ file: file.file, path: file.path }))} root={scan.name} />}
           {fromDrive && selectedMedia.length > 0 ? (
@@ -1464,6 +1477,18 @@ export function FolderPanel() {
               useFolder.setState({ dir: path, selected: new Set(), anchor: null })
               setNote(`${count} ${count === 1 ? 'Folge' : 'Folgen'} in ${where}.`)
             }, () => undefined)
+          }}
+        />
+      ) : null}
+
+      {subtitling ? (
+        <FolderSubtitles
+          files={subtitling}
+          onClose={() => setSubtitling(null)}
+          onWritten={() => {
+            // Read again, so the new files turn up beside their films, and stay in the folder one was in.
+            const here = useFolder.getState().dir
+            if (scan?.handle) void read(scan.handle).then(() => useFolder.setState({ dir: here }))
           }}
         />
       ) : null}
