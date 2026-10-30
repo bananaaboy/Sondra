@@ -615,6 +615,14 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Folgen, 2 am Tag reichen · 1 vor dem Plan“ (gegen ein gleichmässiges
   Tempo seit dem Setzen), das Poster „Ziel · noch 6“. Die alte Zeile
   „1/Tag: fertig … · 2/Tag: …“ ist darin aufgegangen.
+  **Rückblick** (30.10.2026, `lib/recap.ts`, `MerklisteRecap.tsx` in den
+  Statistiken): ein Jahr aus den Daten, die jede abgehakte Folge trägt
+  (`history`: `advance` und der Player-Haken schreiben sie) — Folgen,
+  Sehzeit aus der Länge jeder Folge, stärkster Monat, längste Serie von Tagen,
+  die fünf meistgeschauten Serien, zwölf Balken. Eine Folge, die zweimal
+  abgehakt wurde, zählt einmal. Was vor dem ersten Datum abgehakt wurde, hat
+  keines und zählt nicht; die Seite sagt, seit wann Daten da sind, statt
+  ein Jahr zu behaupten. `verify:merkliste`, Szenario „merkliste“.
   **Stände** sind fünf: Am Schauen, Später, Pausiert, Fertig, Abgebrochen
   (Filterpillen nur für Stände mit Einträgen). Etwas neu Gesehenes nimmt
   eine pausierte oder abgebrochene Serie wieder auf (`settle` vergleicht

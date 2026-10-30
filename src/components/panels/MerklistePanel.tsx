@@ -121,6 +121,7 @@ import { ChoiceRow } from '../editor/EditorShell'
 import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
 import { goalState, lengthLabel, parseDay } from '../../lib/watchPlan'
 import { CoverImage, MIDDLE } from '../CoverImage'
+import { MerklisteRecap } from './MerklisteRecap'
 import { goalSentence, WatchPlanner } from './WatchPlanner'
 import type { AudioFilePref, AudioOutputFormat, VideoFilePref } from './DownloaderPanel'
 import {
@@ -4005,6 +4006,8 @@ function StatsDialog({ items, onClose }: { items: SavedLinkItem[]; onClose: () =
             </span>
           </div>
         </div>
+
+        <MerklisteRecap items={items} />
 
         {/* 2-Column Visual Dashboard: Left Visual Breakdown & Progress, Right Ratings & Activity */}
         <div className="grid grid-cols-1 gap-[20px] md:grid-cols-2">
