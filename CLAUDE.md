@@ -1052,7 +1052,14 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   nimmt genau diese Übertragung von selbst an (er hat zu diesen Dateien
   schon ja gesagt), meldet in `ready` was er hat (`done`, `from`), und der
   Sender schickt nur den Rest. Ein Stück, das nicht mehr stimmt
-  (`intact`), beginnt von vorn — nie wird Falsches angehängt. Die
+  (`intact`), beginnt von vorn — nie wird Falsches angehängt. **Das neue
+  Angebot darf nie verloren gehen:** kommt es, bevor der Empfänger den Abbruch
+  bemerkt hat (eine Leitung, die ohne Wort starb, zeigt sich spät, und die
+  Warteschlange schreibt erst zu Ende), wird es gehalten (`heldOffers`), die
+  alte Leitung geschlossen (`lineOf`) und das Angebot aufgenommen, sobald der
+  Abbruch eingetragen ist (`releaseHeld`). Vorher verwarf `handle` es, und der
+  Sender wartete ewig auf eine Antwort — in der CI gesehen, im Szenario
+  „geraete“ nachgestellt: das Laptop erfährt den Abbruch dort 15 s später. Die
   Android-App kann das nicht (ihre Ablage schreibt in einem Zug), also
   nennt sie `resume` nicht. Ein Senden auf einem geschlossenen Kanal heisst
   `closed`, nicht „Datei nicht lesbar“.
