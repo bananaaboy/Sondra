@@ -122,7 +122,19 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   selbst leert. Firefox/Safari: `webkitdirectory`, einmal
   eingelesen, ohne Löschen — die Seite sagt das. Die Kachel bekommt den Fokus
   nur, wenn er schon in der Liste ist; vorher nahm die erste ihn beim
-  Ankommen und scrollte dorthin. **Weiterschauen:** Folgen von Serien der
+  Ankommen und scrollte dorthin. **Untertitel im Ordner** (30.10.2026, `lib/autoSubtitles.ts`,
+  `lib/subtitleFiles.ts`, `FolderSubtitles.tsx`): eine `.srt`/`.vtt` mit dem
+  Namen des Films im selben Ordner (auch `Name.de.srt`) geht beim
+  Abspielen aus dem Ordner von selbst mit in den Player (`playFiles`). Gibt es
+  keine, hört das Sprachmodell des Browsers die Datei ab („Untertitel
+  erzeugen“ unter der Auswahl: FFmpeg liest den Ton über WORKERFS als
+  16-kHz-Mono, dann Whisper wie im Untertitel-Werkzeug, dieselben
+  Einstellungen `sondra:sprache`/`sondra:sprachmodell`) und schreibt `Name.srt`
+  neben den Film — ohne Schreibrecht als Download. **Nie eine Online-Suche:**
+  eine Untertitel-Datenbank wäre ein fest verdrahteter Anbieter, dem gesagt
+  wird, was man schaut. Das Fenster sagt vorher, dass das Modell einmalig von
+  Hugging Face kommt und der Ton das Gerät nicht verlässt.
+  **Weiterschauen:** Folgen von Serien der
   Merkliste im Ordner (`folderSeries`) — gesehen markiert, die nächste (der
   Stand, sonst die nach der zuletzt gesehenen) mit dem Rest dahinter in den
   Player. **Die Merkliste spielt aus dem Ordner** (`lib/folderLibrary.ts`:

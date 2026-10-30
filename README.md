@@ -199,6 +199,9 @@ Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
   mehrere Geräte des eigenen Kontos.
 - **Listenansicht:** Strukturierte Tabelle mit Name, Art, Größe, Änderungsdatum
   und Laufzeit.
+- **Untertitel:** Eine `.srt` neben dem Film geht beim Abspielen von selbst mit;
+  „Untertitel erzeugen“ hört Dateien mit dem Sprachmodell im Browser ab und schreibt
+  `Name.srt` daneben. Keine Online-Suche, der Ton bleibt auf dem Gerät.
 - **Weiterschauen:** Erkennt Folgen von Serien aus der Merkliste im Ordner und
   bietet die nächste ungesehene Episode mit einem Klick an.
 - **Doppelte finden:** Identifiziert Dateikopien anhand von SHA-256-Prüfungen
