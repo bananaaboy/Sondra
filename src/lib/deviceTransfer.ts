@@ -27,6 +27,11 @@ export interface FileInfo {
   name: string
   size: number
   mime: string
+  /**
+   * Where it lay in a folder that was sent, `/`-separated and with the name
+   * last: „Anime/Staffel 1/Folge 1.mkv“. Absent for a single file.
+   */
+  path?: string
 }
 
 export interface OutgoingFile extends FileInfo {
@@ -141,7 +146,7 @@ export function sendOver(
     })
 
     void (async () => {
-      say(wire, { t: 'start', files: files.map(({ name, size, mime }) => ({ name, size, mime })) })
+      say(wire, { t: 'start', files: files.map(({ name, size, mime, path }) => ({ name, size, mime, ...(path ? { path } : {}) })) })
       if (!ready) await new Promise<void>((done) => (readyWait = done))
       let sent = 0
       for (let i = 0; i < files.length && !finished; i += 1) {
@@ -280,9 +285,10 @@ export function receiveOver(
 }
 
 /** A file as read by the sender, from a File or Blob. */
-export function outgoing(file: Blob & { name?: string }, name = file.name ?? 'Datei'): OutgoingFile {
+export function outgoing(file: Blob & { name?: string }, name = file.name ?? 'Datei', path?: string): OutgoingFile {
   return {
     name,
+    ...(path ? { path } : {}),
     size: file.size,
     mime: file.type || 'application/octet-stream',
     read: (start, end) => file.slice(start, end).arrayBuffer(),
@@ -309,4 +315,25 @@ export function safeFileName(name: string): string {
     .replace(/^[.\s]+|[.\s]+$/g, '')
     .slice(0, 180)
   return cleaned || 'Datei'
+}
+
+/** Most folders levels a received folder keeps. */
+const PATH_DEPTH = 8
+
+/**
+ * A path as it came from the other device, made safe to build on disk: each
+ * part cleaned like a file name, nothing that climbs out (`..`) or stands for
+ * where it is (`.`), no absolute start, at most eight levels. `dir` is the
+ * folder part (`/`-separated, may be empty), `name` the file.
+ */
+export function splitPath(path: string | undefined, fallback: string): { dir: string; name: string } {
+  const parts = String(path ?? '')
+    .split('/')
+    .map((part) => part.trim())
+    .filter((part) => part !== '' && part !== '.' && part !== '..')
+    .map(safeFileName)
+    .slice(0, PATH_DEPTH + 1)
+  if (parts.length === 0) return { dir: '', name: safeFileName(fallback) }
+  const name = parts.pop() as string
+  return { dir: parts.join('/'), name }
 }

@@ -43,7 +43,7 @@ import {
   type DeviceKind,
   type DeviceRecord,
 } from './deviceIdentity'
-import { freeName, outgoing, receiveOver, safeFileName, sendOver, TransferError, type FileInfo, type Sink, type SinkFor, type Wire } from './deviceTransfer'
+import { freeName, outgoing, receiveOver, safeFileName, sendOver, splitPath, TransferError, type FileInfo, type Sink, type SinkFor, type Wire } from './deviceTransfer'
 import type { DriveClient, DriveFile } from './driveClient'
 import { saveBytes } from './download'
 import { deviceDrive, useDrive } from './googleDrive'
@@ -100,6 +100,8 @@ export type TransferState =
 export interface Transfer {
   /** Offered to be played there, not saved: the receiver's button says „Abspielen“. */
   play?: boolean
+  /** Connected, but waiting for one of the places to send in: two at a time. */
+  queued?: boolean
   id: string
   direction: 'out' | 'in'
   peer: string
@@ -184,7 +186,7 @@ export const isOnline = (device: DeviceRecord, now = Date.now()) => now - device
  * this the sender would wait on a reply that never comes.
  */
 export function ownCaps(): string[] {
-  return ['text', 'play']
+  return ['text', 'play', 'folder']
 }
 
 const sameCaps = (a: string[] | undefined, b: string[]) => [...(a ?? [])].sort().join() === [...b].sort().join()
@@ -695,7 +697,15 @@ async function handle(type: string, from: string, transferId: string, body: unkn
   if (type === 'offer') {
     const offer = body as OfferBody
     if (transfer || !offer || typeof offer.sdp !== 'string' || !Array.isArray(offer.files)) return
-    const files = offer.files.map((file) => ({ name: safeFileName(String(file.name)), size: Number(file.size) || 0, mime: String(file.mime || '') }))
+    const files = offer.files.slice(0, FOLDER_FILES_MAX).map((file) => {
+      const split = splitPath(typeof file.path === 'string' ? file.path : undefined, String(file.name))
+      return {
+        name: safeFileName(String(file.name)),
+        size: Number(file.size) || 0,
+        mime: String(file.mime || ''),
+        ...(split.dir ? { path: `${split.dir}/${split.name}` } : {}),
+      }
+    })
     const toPlay = offer.play === true && files.length === 1 && files[0].size <= PLAY_TRANSFER_MAX && isPlayableMime(files[0].mime, files[0].name)
     offers.set(transferId, offer.sdp)
     addTransfer({
@@ -850,14 +860,59 @@ interface OutgoingPending {
 
 const outgoingPending = new Map<string, OutgoingPending>()
 
+/** Most files in one transfer: the list travels in a single message through Drive. */
+export const FOLDER_FILES_MAX = 300
+
+/** At most this many transfers send at once; the rest wait their turn on their open channel. */
+const SEND_SLOTS = 2
+let slotsBusy = 0
+const slotQueue: (() => void)[] = []
+
+function takeSlot(signal: AbortSignal, onWait: () => void): Promise<(() => void) | null> {
+  const release = () => {
+    slotsBusy -= 1
+    slotQueue.shift()?.()
+  }
+  if (slotsBusy < SEND_SLOTS) {
+    slotsBusy += 1
+    return Promise.resolve(release)
+  }
+  onWait()
+  return new Promise((resolve) => {
+    const start = () => {
+      signal.removeEventListener('abort', leave)
+      slotsBusy += 1
+      resolve(release)
+    }
+    const leave = () => {
+      const at = slotQueue.indexOf(start)
+      if (at >= 0) slotQueue.splice(at, 1)
+      resolve(null)
+    }
+    slotQueue.push(start)
+    signal.addEventListener('abort', leave, { once: true })
+  })
+}
+
 /** Offers files to another device; it says yes or no there. */
-export async function sendToDevice(deviceId: string, files: File[], options: { play?: boolean } = {}): Promise<string> {
+export async function sendToDevice(deviceId: string, files: File[], options: { play?: boolean; paths?: string[] } = {}): Promise<string> {
   const device = state().devices.find((entry) => entry.id === deviceId)
   if (!device || !files.length) throw new Error('Gerät oder Dateien fehlen.')
   if (options.play && !can(device, 'play')) throw new Error(`Auf „${device.name}“ läuft eine ältere Version von Sondra. Mit dem nächsten Update geht es.`)
   if (options.play && (files.length !== 1 || files[0].size > PLAY_TRANSFER_MAX)) throw new Error('Zum Abspielen geht eine Datei bis 2 GB; grössere bitte senden und dort öffnen.')
+  if (options.paths && !can(device, 'folder')) throw new Error(`Auf „${device.name}“ läuft eine ältere Version von Sondra. Ordner gehen nach deren Update.`)
+  if (files.length > FOLDER_FILES_MAX) throw new Error(`Das sind ${files.length} Dateien; eine Übertragung nimmt bis ${FOLDER_FILES_MAX}. Senden Sie sie in Teilen oder als ZIP.`)
   const id = randomId()
-  const infos = files.map((file) => ({ name: safeFileName(file.name), size: file.size, mime: file.type || 'application/octet-stream' }))
+  const infos: FileInfo[] = files.map((file, index) => {
+    const placed = options.paths?.[index]
+    const split = placed ? splitPath(placed, file.name) : null
+    return {
+      name: split ? split.name : safeFileName(file.name),
+      size: file.size,
+      mime: file.type || 'application/octet-stream',
+      ...(split?.dir ? { path: `${split.dir}/${split.name}` } : {}),
+    }
+  })
   addTransfer({
     id,
     direction: 'out',
@@ -913,11 +968,17 @@ export async function sendToDevice(deviceId: string, files: File[], options: { p
       if (stillDirect(id)) patchTransfer(id, { state: 'direct-failed' })
       return
     }
-    patchTransfer(id, { state: 'sending', route: 'direct', error: undefined })
+    const release = await takeSlot(abort.signal, () => patchTransfer(id, { queued: true }))
+    if (!release) {
+      pc.close()
+      outgoingPending.delete(id)
+      return
+    }
+    patchTransfer(id, { state: 'sending', route: 'direct', error: undefined, queued: false })
     try {
       const places = await sendOver(
         wireOf(channel, pc),
-        files.map((file, index) => outgoing(file, infos[index].name)),
+        files.map((file, index) => outgoing(file, infos[index].name, infos[index].path)),
         { signal: abort.signal, onProgress: ({ done }) => patchTransfer(id, { done }) },
       )
       patchTransfer(id, { state: 'done', done: infos.reduce((sum, file) => sum + file.size, 0), places })
@@ -929,6 +990,7 @@ export async function sendToDevice(deviceId: string, files: File[], options: { p
         error: error instanceof Error ? error.message : String(error),
       })
     } finally {
+      release()
       outgoingPending.delete(id)
     }
   })()
@@ -1062,7 +1124,8 @@ async function receiveTarget(): Promise<{ sinkFor: SinkFor; where: string }> {
     return {
       where: 'Downloads/Sondra',
       sinkFor: async (file) => {
-        const save = await bridge.openSave(file.name, file.mime || 'application/octet-stream')
+        // A folder's files go into their folders; an app before 1.1.23 saves them flat.
+        const save = await bridge.openSave(file.name, file.mime || 'application/octet-stream', splitPath(file.path, file.name).dir)
         return {
           write: (chunk) => save.write(chunk),
           close: () => save.close(),
@@ -1083,25 +1146,39 @@ async function receiveTarget(): Promise<{ sinkFor: SinkFor; where: string }> {
       }
     }
     if (folder) {
-      const dir = folder
-      const taken = new Set<string>()
-      for await (const name of (dir as unknown as { keys: () => AsyncIterable<string> }).keys()) taken.add(name)
+      const root = folder
+      // Folders already looked into, with the names in them.
+      const listed = new Map<string, { handle: FileSystemDirectoryHandle; taken: Set<string> }>()
+      const folderAt = async (path: string) => {
+        const known = listed.get(path)
+        if (known) return known
+        let handle = root
+        for (const part of path.split('/').filter(Boolean)) handle = await handle.getDirectoryHandle(part, { create: true })
+        const taken = new Set<string>()
+        for await (const name of (handle as unknown as { keys: () => AsyncIterable<string> }).keys()) taken.add(name)
+        const entry = { handle, taken }
+        listed.set(path, entry)
+        return entry
+      }
       return {
-        where: dir.name,
+        where: root.name,
         sinkFor: async (file) => {
-          const name = freeName(file.name, (candidate) => taken.has(candidate))
-          taken.add(name)
-          const handle = await dir.getFileHandle(name, { create: true })
+          const split = splitPath(file.path, file.name)
+          const here = await folderAt(split.dir)
+          const name = freeName(split.name, (candidate) => here.taken.has(candidate))
+          here.taken.add(name)
+          const handle = await here.handle.getFileHandle(name, { create: true })
           const writable = await handle.createWritable()
+          const shown = `${root.name}/${split.dir ? `${split.dir}/` : ''}${name}`
           return {
             write: (chunk) => writable.write(chunk as Uint8Array<ArrayBuffer>),
             close: async () => {
               await writable.close()
-              return `${dir.name}/${name}`
+              return shown
             },
             abort: async () => {
               await writable.abort().catch(() => undefined)
-              await dir.removeEntry(name).catch(() => undefined)
+              await here.handle.removeEntry(name).catch(() => undefined)
             },
           }
         },
@@ -1118,9 +1195,12 @@ async function receiveTarget(): Promise<{ sinkFor: SinkFor; where: string }> {
           parts.push(chunk as Uint8Array<ArrayBuffer>)
         },
         close: async () => {
-          saveBytes(new Blob(parts, { type: file.mime }), file.name, file.mime)
+          // No folders here: the path becomes part of the name.
+          const flat = splitPath(file.path, file.name)
+          const name = flat.dir ? `${flat.dir.split('/').join(' – ')} – ${flat.name}` : flat.name
+          saveBytes(new Blob(parts, { type: file.mime }), name, file.mime)
           parts.length = 0
-          return `Downloads/${file.name}`
+          return `Downloads/${name}`
         },
         abort: async () => {
           parts.length = 0
@@ -1266,7 +1346,13 @@ async function receiveViaDrive(transfer: Transfer, body: DriveBody): Promise<voi
     )
     for (const [index, entry] of body.files.entries()) {
       if (!handed.has(String(entry.id))) throw new Error('Eine Datei in Drive gehört nicht zu dieser Übertragung.')
-      const info = { name: safeFileName(String(entry.name)), size: Number(entry.size) || 0, mime: String(entry.mime || '') }
+      const split = splitPath(typeof entry.path === 'string' ? entry.path : undefined, String(entry.name))
+      const info: FileInfo = {
+        name: safeFileName(String(entry.name)),
+        size: Number(entry.size) || 0,
+        mime: String(entry.mime || ''),
+        ...(split.dir ? { path: `${split.dir}/${split.name}` } : {}),
+      }
       const sink: Sink = await pending.sinkFor(info, index)
       const response = await client.open(String(entry.id))
       const reader = response.body?.getReader()

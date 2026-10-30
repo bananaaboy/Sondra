@@ -152,7 +152,8 @@ export interface AndroidBridge {
   /** Lets multicast in while two devices connect (mDNS for WebRTC); false from an app too old for it. */
   multicast: (on: boolean) => Promise<boolean>
   /** Starts a file in Downloads/Sondra that is written as it arrives, not held whole first. */
-  openSave: (name: string, mime: string) => Promise<AndroidSave>
+  /** `dir`: a folder inside Downloads/Sondra for a file that came in a folder; an app before 1.1.23 saves it flat. */
+  openSave: (name: string, mime: string, dir?: string) => Promise<AndroidSave>
   /** Auto-updater methods */
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
@@ -216,8 +217,8 @@ export const ANDROID_BRIDGE: AndroidBridge | null = port
           (answer) => answer.ok === true,
           () => false,
         ),
-      async openSave(name, mime) {
-        const begun = await ask<Answer>('save-begin', { name, mime })
+      async openSave(name, mime, dir) {
+        const begun = await ask<Answer>('save-begin', { name, mime, ...(dir ? { dir } : {}) })
         if (!begun.ok) throw new Error(String(begun.error ?? 'nicht gespeichert'))
         const handle = begun.handle
         // Gathered to one piece per message: 64 KB from the network would be sixteen round trips.

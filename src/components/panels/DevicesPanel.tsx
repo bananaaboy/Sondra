@@ -121,8 +121,10 @@ function TextForm({ device, onClose }: { device: DeviceRecord; onClose: () => vo
 
 function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
   const input = useRef<HTMLInputElement>(null)
+  const folderInput = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   const [writing, setWriting] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
   const online = isOnline(device, now)
   const send = (files: File[]) => {
     if (files.length) void sendToDevice(device.id, files)
@@ -169,6 +171,11 @@ function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
           <Button size="sm" onClick={() => input.current?.click()}>
             Dateien senden
           </Button>
+          {can(device, 'folder') ? (
+            <Button size="sm" variant="quiet" onClick={() => folderInput.current?.click()}>
+              Ordner senden
+            </Button>
+          ) : null}
           {can(device, 'text') ? (
             <Button size="sm" variant="quiet" aria-expanded={writing} onClick={() => setWriting((current) => !current)}>
               Text senden
@@ -176,8 +183,9 @@ function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
           ) : null}
         </span>
         {can(device, 'text') ? null : (
-          <span className="max-w-[34ch] text-small text-prose sm:text-right">Dort läuft eine ältere Version. Text und Links gehen nach deren Update.</span>
+          <span className="max-w-[34ch] text-small text-prose sm:text-right">Dort läuft eine ältere Version. Text, Links und Ordner gehen nach deren Update.</span>
         )}
+        {problem ? <span role="alert" className="max-w-[40ch] text-small text-ink sm:text-right">! {problem}</span> : null}
         {online ? null : (
           <span className="flex flex-wrap items-baseline gap-x-[10px] text-small text-prose sm:justify-end">
             <span>Kommt an, wenn Sondra dort innerhalb von 15 Min. offen ist.</span>
@@ -199,6 +207,24 @@ function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
         )}
       </span>
       {writing ? <TextForm device={device} onClose={() => setWriting(false)} /> : null}
+      <input
+        ref={folderInput}
+        type="file"
+        hidden
+        // @ts-expect-error — not in the DOM typings, but every browser and the Android picker know it
+        webkitdirectory=""
+        onChange={(event) => {
+          const picked = [...(event.target.files ?? [])]
+          event.target.value = ''
+          if (!picked.length) return
+          setProblem(null)
+          sendToDevice(
+            device.id,
+            picked,
+            { paths: picked.map((file) => (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name) },
+          ).catch((error: unknown) => setProblem(error instanceof Error ? error.message : String(error)))
+        }}
+      />
       <input
         ref={input}
         type="file"

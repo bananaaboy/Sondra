@@ -61,6 +61,11 @@ export function DeviceGlyph({ kind, className = 'h-[20px] w-[20px]' }: { kind: D
 }
 
 function filesLabel(transfer: Transfer): string {
+  // A folder: its name and how many files, not the first file's.
+  const top = transfer.files[0]?.path?.split('/')[0]
+  if (top && transfer.files.every((file) => file.path?.split('/')[0] === top)) {
+    return `${top} (${transfer.files.length} ${transfer.files.length === 1 ? 'Datei' : 'Dateien'})`
+  }
   const first = transfer.files[0]?.name ?? 'Datei'
   const more = transfer.files.length - 1
   return more > 0 ? `${first} und ${more} weitere` : first
@@ -85,7 +90,7 @@ export function TransferRow({ transfer, compact = false }: { transfer: Transfer;
       line = transfer.play ? `${peer} möchte „${transfer.files[0]?.name ?? 'eine Datei'}“ auf diesem Gerät abspielen (${formatBytes(transfer.total)})` : `${peer} schickt ${bytes}`
       break
     case 'connecting':
-      line = 'Verbindet die Geräte …'
+      line = transfer.queued ? 'Verbunden — wartet, bis eine der anderen Übertragungen fertig ist …' : 'Verbindet die Geräte …'
       break
     case 'sending':
       line = `An ${peer}, direkt`
@@ -512,6 +517,111 @@ export function PlayOnDeviceButton({
         </div>
       ) : null}
       <span role="status" aria-live="polite" className={`ml-[8px] text-small ${told?.ok === false ? 'text-ink' : 'text-prose'}`}>
+        {told ? `${told.ok ? '● ' : '! '}${told.line}` : ''}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * „An Geräte senden“ under a selection of files from a folder here: one or
+ * several devices at once, and several files keep the folders they lay in.
+ * Each device is its own transfer; two send at a time, the rest wait their
+ * turn and say so. Not for files lying in Drive — those are not here yet.
+ */
+export function SendToDevicesButton({
+  items,
+  root,
+}: {
+  items: { file?: File; path: string }[]
+  /** The chosen folder's name: several files arrive inside a folder of that name. */
+  root: string
+}) {
+  const enabled = useDevices((state) => state.enabled)
+  const devices = useDevices((state) => state.devices)
+  const [open, setOpen] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [told, setTold] = useState<{ ok: boolean; line: string } | null>(null)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => setTold(null), [items])
+  useEffect(() => {
+    if (!open) return
+    const away = (event: Event) => {
+      if (!box.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', away)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', away)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [open])
+  const here = items.filter((item): item is { file: File; path: string } => Boolean(item.file))
+  if (!enabled || !devices.length || !here.length || here.length < items.length) return null
+  const structured = here.length > 1
+  const candidates = devices.filter((device) => !structured || can(device, 'folder'))
+  const older = devices.length - candidates.length
+  const now = Date.now()
+  const go = async () => {
+    const wanted = candidates.filter((device) => picked.has(device.id))
+    if (!wanted.length) return
+    setOpen(false)
+    const files = here.map((item) => item.file)
+    const paths = structured ? here.map((item) => `${root}/${item.path}`) : undefined
+    const outcomes = await Promise.allSettled(wanted.map((device) => sendToDevice(device.id, files, paths ? { paths } : {})))
+    const bad = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
+    if (bad) setTold({ ok: false, line: bad.reason instanceof Error ? bad.reason.message : String(bad.reason) })
+    else setTold({ ok: true, line: wanted.length === 1 ? `An „${wanted[0].name}“ angeboten.` : `An ${wanted.length} Geräte angeboten — zwei senden gleichzeitig, die anderen warten.` })
+    setPicked(new Set())
+  }
+  return (
+    <div ref={box} className="relative">
+      <Button type="button" size="sm" variant="quiet" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        <DeviceGlyph kind="windows" className="h-4 w-4" />
+        An Geräte senden
+      </Button>
+      {open ? (
+        <div role="dialog" aria-label="An welche Geräte?" className="drop absolute bottom-[calc(100%+6px)] left-0 z-40 flex w-[min(340px,calc(100vw-32px))] flex-col gap-[6px] rounded-card bg-raised p-[10px] ring-1 ring-inset ring-line elevate-lift">
+          <p className="px-[4px] text-small text-prose">
+            {here.length} {here.length === 1 ? 'Datei' : 'Dateien'}{structured ? ` — mit ihren Ordnern, in „${root}“` : ''}
+          </p>
+          {candidates.length ? (
+            <ul className="flex flex-col">
+              {candidates.map((device) => (
+                <li key={device.id} className="max-w-none">
+                  <label className="press flex cursor-pointer items-center gap-[10px] rounded-nav px-[8px] py-[8px] text-ink hover:bg-panel-soft">
+                    <input
+                      type="checkbox"
+                      checked={picked.has(device.id)}
+                      onChange={() =>
+                        setPicked((current) => {
+                          const next = new Set(current)
+                          if (!next.delete(device.id)) next.add(device.id)
+                          return next
+                        })
+                      }
+                      className="h-[16px] w-[16px] accent-[var(--color-ink)]"
+                    />
+                    <DeviceGlyph kind={device.kind} className="h-[18px] w-[18px]" />
+                    <span className="min-w-0 flex-1 truncate text-small font-semibold">{device.name}</span>
+                    <span className="shrink-0 text-small text-prose">{isOnline(device, now) ? '● offen' : seenLabel(device, now)}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="px-[4px] text-small text-prose">Kein Gerät kann Ordner annehmen — es fehlt dort ein Update.</p>
+          )}
+          {older > 0 && candidates.length ? <p className="px-[4px] text-small text-prose">{older} {older === 1 ? 'Gerät fehlt' : 'Geräte fehlen'}: dort läuft eine ältere Version, die keine Ordner annimmt.</p> : null}
+          <Button type="button" size="sm" disabled={picked.size === 0} onClick={() => void go()}>
+            {picked.size > 1 ? `An ${picked.size} Geräte senden` : 'Senden'}
+          </Button>
+        </div>
+      ) : null}
+      <span role="status" aria-live="polite" className="ml-[8px] text-small text-prose">
         {told ? `${told.ok ? '● ' : '! '}${told.line}` : ''}
       </span>
     </div>

@@ -1,5 +1,9 @@
 // Two devices, one Google account: a laptop in Chrome and a phone in the
 // Android app (bridge mocked), both against a Drive kept in this process.
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
 import { BASE, FOLDER, OUT, check, create, drive, files, finish, launch, now, sha } from './lib.mjs'
 
 /* ---------------- Two devices ---------------- */
@@ -40,14 +44,14 @@ async function device({ name, android }) {
             const reply = (answer) => setTimeout(() => port.onmessage?.({ data: JSON.stringify({ id: m.id, answer }) }), 5)
             if (m.type === 'save-begin') {
               const handle = `h${(handles += 1)}`
-              saves.set(handle, { name: m.name, parts: [] })
+              saves.set(handle, { name: m.name, dir: m.dir ?? '', parts: [] })
               reply({ ok: true, handle })
             } else if (m.type === 'save-chunk') {
               saves.get(m.handle).parts.push(m.data)
               reply({ ok: true })
             } else if (m.type === 'save-end') {
               const save = saves.get(m.handle)
-              window.__saved[save.name] = save.parts
+              window.__saved[(save.dir ? `${save.dir}/` : '') + save.name] = save.parts
               reply({ ok: true, where: `Downloads/Sondra/${save.name}` })
             } else if (m.type === 'save-abort') {
               saves.delete(m.handle)
@@ -57,44 +61,54 @@ async function device({ name, android }) {
         }
         window.SondraNative = port
       } else {
-        // A folder the user picked, kept in memory.
-        const entries = new Map()
-        const dir = {
-          name: 'Downloads',
-          kind: 'directory',
-          async *keys() {
-            yield* entries.keys()
-          },
-          async getFileHandle(fileName) {
-            return {
-              async createWritable() {
-                const parts = []
-                return {
-                  async write(chunk) {
-                    parts.push(new Uint8Array(chunk))
-                  },
-                  async close() {
-                    const total = parts.reduce((s, p) => s + p.length, 0)
-                    const all = new Uint8Array(total)
-                    let at = 0
-                    for (const p of parts) {
-                      all.set(p, at)
-                      at += p.length
-                    }
-                    entries.set(fileName, all)
-                    let text = ''
-                    for (let i = 0; i < all.length; i += 0x8000) text += String.fromCharCode(...all.subarray(i, i + 0x8000))
-                    window.__saved[fileName] = [btoa(text)]
-                  },
-                  async abort() {},
-                }
-              },
-            }
-          },
-          async removeEntry(fileName) {
-            entries.delete(fileName)
-          },
+        // A folder the user picked, kept in memory — with folders inside it.
+        const directory = (name, prefix) => {
+          const entries = new Map()
+          return {
+            name,
+            kind: 'directory',
+            async *keys() {
+              yield* entries.keys()
+            },
+            async getDirectoryHandle(child, options) {
+              if (!entries.has(child)) {
+                if (!options?.create) throw new DOMException('nicht da', 'NotFoundError')
+                entries.set(child, directory(child, `${prefix}${child}/`))
+              }
+              return entries.get(child)
+            },
+            async getFileHandle(fileName) {
+              return {
+                async createWritable() {
+                  const parts = []
+                  return {
+                    async write(chunk) {
+                      parts.push(new Uint8Array(chunk))
+                    },
+                    async close() {
+                      const total = parts.reduce((s, p) => s + p.length, 0)
+                      const all = new Uint8Array(total)
+                      let at = 0
+                      for (const p of parts) {
+                        all.set(p, at)
+                        at += p.length
+                      }
+                      entries.set(fileName, all)
+                      let text = ''
+                      for (let i = 0; i < all.length; i += 0x8000) text += String.fromCharCode(...all.subarray(i, i + 0x8000))
+                      window.__saved[`${prefix}${fileName}`] = [btoa(text)]
+                    },
+                    async abort() {},
+                  }
+                },
+              }
+            },
+            async removeEntry(fileName) {
+              entries.delete(fileName)
+            },
+          }
         }
+        const dir = directory('Downloads', '')
         window.showDirectoryPicker = async () => dir
       }
     },
@@ -177,7 +191,7 @@ check('Das Handy schreibt seinen Eintrag wieder und löscht die Kopie', restored
 // Direct: 12 MB from the laptop to the phone.
 const film = Buffer.alloc(12 * 1024 * 1024 + 77)
 for (let i = 0; i < film.length; i += 1) film[i] = (i * 31 + (i >> 9)) & 255
-await otherRow(laptop.page, 'Handy').locator('input[type=file]').setInputFiles({ name: 'Film.mp4', mimeType: 'video/mp4', buffer: film })
+await otherRow(laptop.page, 'Handy').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Film.mp4', mimeType: 'video/mp4', buffer: film })
 await phone.page.getByRole('button', { name: 'Annehmen' }).waitFor({ timeout: 30_000 })
 await phone.page.screenshot({ path: `${OUT}handy-angebot.png`, fullPage: true })
 await phone.page.getByRole('button', { name: 'Annehmen' }).click()
@@ -194,7 +208,7 @@ await laptop.page.screenshot({ path: `${OUT}laptop-gesendet.png`, fullPage: true
 await phone.page.evaluate(() => (window.__noDirect = true))
 await laptop.page.evaluate(() => (window.__noDirect = true))
 const note = Buffer.from('Notiz über Drive '.repeat(20000))
-await otherRow(laptop.page, 'Handy').locator('input[type=file]').setInputFiles({ name: 'Notiz.txt', mimeType: 'text/plain', buffer: note })
+await otherRow(laptop.page, 'Handy').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Notiz.txt', mimeType: 'text/plain', buffer: note })
 await phone.page.getByRole('button', { name: 'Annehmen' }).waitFor({ timeout: 30_000 })
 await phone.page.getByRole('button', { name: 'Annehmen' }).click()
 await laptop.page.getByRole('button', { name: 'Über Google Drive senden' }).waitFor({ timeout: 45_000 })
@@ -210,7 +224,7 @@ check('Über Drive: danach nicht mehr in Drive', ![...files.values()].some((file
 await phone.page.evaluate(() => (window.__noDirect = false))
 await laptop.page.evaluate(() => (window.__noDirect = false))
 const photo = Buffer.alloc(300_000, 7)
-await otherRow(phone.page, 'Laptop').locator('input[type=file]').setInputFiles({ name: 'Foto.jpg', mimeType: 'image/jpeg', buffer: photo })
+await otherRow(phone.page, 'Laptop').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Foto.jpg', mimeType: 'image/jpeg', buffer: photo })
 await laptop.page.getByRole('button', { name: 'Annehmen' }).waitFor({ timeout: 30_000 })
 await laptop.page.getByRole('button', { name: 'Annehmen' }).click()
 await laptop.page.getByText(/Von „Handy“ gespeichert/).waitFor({ timeout: 40_000 }).catch(async () => {
@@ -221,8 +235,45 @@ await laptop.page.getByText(/Von „Handy“ gespeichert/).waitFor({ timeout: 40
 const intoFolder = await savedBytes(laptop.page, 'Foto.jpg')
 check('Handy → Laptop: Foto liegt im gewählten Ordner', intoFolder && sha(decode(intoFolder)) === sha(photo))
 
+// Folders, both ways, with their folders; then three transfers at once through the queue of two.
+const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'sondra-ordner-'))
+const anime = path.join(tree, 'Anime')
+fs.mkdirSync(path.join(anime, 'Staffel 1'), { recursive: true })
+fs.mkdirSync(path.join(anime, 'Staffel 2'))
+fs.writeFileSync(path.join(anime, 'Staffel 1', 'Folge 1.txt'), 'eins')
+fs.writeFileSync(path.join(anime, 'Staffel 1', 'Folge 2.txt'), 'zwei')
+fs.writeFileSync(path.join(anime, 'Staffel 2', 'Folge 1.txt'), 'drei')
+const savedNames = (page) => page.evaluate(() => Object.keys(window.__saved))
+const waitSaved = (page, names) => page.waitForFunction((wanted) => wanted.every((n) => window.__saved[n]), names, { timeout: 30_000 }).catch(() => undefined)
+await otherRow(laptop.page, 'Handy').locator('input[webkitdirectory]').setInputFiles(anime)
+await phone.page.getByRole('button', { name: 'Annehmen' }).waitFor({ timeout: 30_000 })
+check('Ordner: das Handy sieht „Anime (3 Dateien)“', /Anime \(3 Dateien\)/.test(await phone.page.locator('main').innerText()))
+await phone.page.getByRole('button', { name: 'Annehmen' }).click()
+await waitSaved(phone.page, ['Anime/Staffel 1/Folge 1.txt', 'Anime/Staffel 1/Folge 2.txt', 'Anime/Staffel 2/Folge 1.txt'])
+const onPhone = await savedNames(phone.page)
+check('Ordner → Handy: jede Datei in ihrem Ordner', ['Anime/Staffel 1/Folge 1.txt', 'Anime/Staffel 1/Folge 2.txt', 'Anime/Staffel 2/Folge 1.txt'].every((n) => onPhone.includes(n)), onPhone.filter((n) => n.startsWith('Anime')).join(', '))
+check('Ordner → Handy: zwei „Folge 1.txt“ überschreiben sich nicht', decode((await savedBytes(phone.page, 'Anime/Staffel 2/Folge 1.txt')) ?? '').toString() === 'drei')
+await otherRow(phone.page, 'Laptop').locator('input[webkitdirectory]').setInputFiles(anime)
+await laptop.page.getByRole('button', { name: 'Annehmen' }).waitFor({ timeout: 30_000 })
+await laptop.page.getByRole('button', { name: 'Annehmen' }).click()
+await waitSaved(laptop.page, ['Anime/Staffel 1/Folge 1.txt', 'Anime/Staffel 1/Folge 2.txt', 'Anime/Staffel 2/Folge 1.txt'])
+const onLaptop = await savedNames(laptop.page)
+check('Ordner → Laptop: Unterordner im gewählten Ordner angelegt', ['Anime/Staffel 1/Folge 1.txt', 'Anime/Staffel 2/Folge 1.txt'].every((n) => onLaptop.includes(n)), onLaptop.filter((n) => n.startsWith('Anime')).join(', '))
+for (const name of ['Eins.bin', 'Zwei.bin', 'Drei.bin']) {
+  await otherRow(laptop.page, 'Handy').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name, mimeType: 'application/octet-stream', buffer: Buffer.alloc(2 * 1024 * 1024, name.length) })
+}
+for (let i = 0; i < 3; i += 1) {
+  await phone.page.getByRole('button', { name: 'Annehmen' }).first().waitFor({ timeout: 30_000 })
+  await phone.page.getByRole('button', { name: 'Annehmen' }).first().click()
+}
+for (const name of ['Eins.bin', 'Zwei.bin', 'Drei.bin']) {
+  await phone.page.waitForFunction((n) => Boolean(window.__saved[n]), name, { timeout: 60_000 })
+}
+check('Drei Übertragungen auf einmal: alle kommen an, die Warteschlange läuft leer', true)
+fs.rmSync(tree, { recursive: true, force: true })
+
 // Declined.
-await otherRow(laptop.page, 'Handy').locator('input[type=file]').setInputFiles({ name: 'Nein.txt', mimeType: 'text/plain', buffer: Buffer.from('nein') })
+await otherRow(laptop.page, 'Handy').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Nein.txt', mimeType: 'text/plain', buffer: Buffer.from('nein') })
 await phone.page.getByRole('button', { name: 'Ablehnen' }).waitFor({ timeout: 30_000 })
 await phone.page.getByRole('button', { name: 'Ablehnen' }).click()
 await laptop.page.getByText('„Handy“ hat abgelehnt.').waitFor({ timeout: 30_000 })
@@ -313,7 +364,7 @@ check('Post ist leer, nichts liegen geblieben', ![...files.values()].some((file)
 await laptop.page.goto(`${BASE}`)
 await laptop.page.waitForTimeout(1500)
 await phone.page.goto(`${BASE}#geraete`)
-await otherRow(phone.page, 'Laptop').locator('input[type=file]').setInputFiles({ name: 'Unterwegs.txt', mimeType: 'text/plain', buffer: Buffer.from('hallo') })
+await otherRow(phone.page, 'Laptop').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Unterwegs.txt', mimeType: 'text/plain', buffer: Buffer.from('hallo') })
 await laptop.page.getByRole('region', { name: 'Übertragungen zwischen Geräten' }).waitFor({ timeout: 30_000 })
 await laptop.page.screenshot({ path: `${OUT}laptop-karte.png` })
 check('Annahme-Karte erscheint auch auf der Startseite', true)
