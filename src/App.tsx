@@ -12,6 +12,7 @@ import { useKeptSession } from './hooks/useKeptSession'
 import { useNewEpisodes } from './hooks/useNewEpisodes'
 import { usePanelRoute } from './hooks/usePanelRoute'
 import { useTheme } from './hooks/useTheme'
+import { SharedListDialog } from './components/MerklisteShare'
 import { WhatsNewDialog, WhatsNewLine } from './components/WhatsNew'
 import { initDevices } from './lib/devices'
 import { initPauseOnMinimize } from './lib/pauseOnMinimize'
@@ -38,6 +39,7 @@ export default function App() {
         <CommandPalette />
         <ShortcutHelp />
         <WhatsNewDialog />
+        <SharedListDialog />
         <DeviceInbox />
       </div>
     </ErrorBoundary>

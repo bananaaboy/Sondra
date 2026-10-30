@@ -45,6 +45,7 @@ import { alreadySeen, guessEpisode, matchEpisode, seenEpisode } from '../src/lib
 import { chaptersText, cleanMarks, markName, neighbourMark, nextOffered, openingOffered, sleepFade, withMark } from '../src/lib/player'
 import { renamedFile, splitName } from '../src/lib/format'
 import { recapYears, recordedSince, yearRecap } from '../src/lib/recap'
+import { decodeShare, encodeShare, LINK_MAX, newFromShared, shareableList, shareLink, sharedFromHash } from '../src/lib/merkShare'
 
 console.log('--- Testing Merkliste Mega Features ---')
 
@@ -683,6 +684,42 @@ console.log('--- Testing Merkliste Mega Features ---')
   assert.strictEqual(yearRecap([a, b], 2024).episodes, 0, 'ein Jahr ohne Einträge ist leer, nicht erfunden')
   assert.strictEqual(yearRecap([], 2026).busiestMonth, null)
   console.log('✓ Jahresrückblick aus dem Verlauf')
+}
+
+// Merkliste teilen: the list in an address, read back as plain data only.
+{
+  const a = createMerkItem({ title: 'Frieren', url: 'https://geheim.example/serie', notes: 'privat', rating: 5 })
+  a.status = 'done'
+  const b = createMerkItem({ title: 'Nana', url: 'https://geheim.example/nana', season: 2, episode: 4 })
+  const share = shareableList([a, b], '  Mia  ')
+  const serialised = JSON.stringify(share)
+  assert.ok(!serialised.includes('geheim') && !serialised.includes('privat'), 'weder Adressen noch Notizen gehen mit')
+  assert.strictEqual(share.name, 'Mia')
+  const link = await shareLink(share, 'https://sondra.lizge.ch/')
+  assert.ok(link.startsWith('https://sondra.lizge.ch/#geteilt='), 'der Link trägt die Liste im Hash')
+  assert.ok(link.length < LINK_MAX, 'zwei Einträge sind ein kurzer Link')
+  const back = await decodeShare(sharedFromHash(new URL(link).hash)!)
+  assert.deepStrictEqual(back?.items.map((item) => [item.title, item.status ?? 'watching', item.rating ?? 0, item.season, item.episode]), [['Frieren', 'done', 5, 1, 1], ['Nana', 'watching', 0, 2, 4]], 'hin und zurück')
+  assert.strictEqual((await decodeShare(await encodeShare(shareableList([a], 'x', { progress: false }))))?.items[0].rating, undefined, 'ohne Fortschritt auch ohne Bewertung')
+  // A hundred series still make a link a chat can carry.
+  const many = Array.from({ length: 100 }, (_, n) => createMerkItem({ title: `Serie Nummer ${n} mit einem längeren Namen`, season: 1, episode: n % 12 }))
+  const long = await shareLink(shareableList(many, 'Viele'), 'https://sondra.lizge.ch')
+  assert.ok(long.length < LINK_MAX, `hundert Serien: ${long.length} Zeichen`)
+  // What is not a list, or a hostile one, becomes nothing — never a crash, never more than the caps.
+  assert.strictEqual(await decodeShare('das-ist-kein-link!'), null)
+  assert.strictEqual(await decodeShare('AAAA'), null)
+  assert.strictEqual(await decodeShare(''), null)
+  const hostile = await encodeShare({ v: 1, name: 'x\u0000<script>', items: [{ title: '<img src=x onerror=alert(1)>', status: 'hacked' as never, rating: 99, season: -3, episode: 1e12 }, { title: '   ' }, { title: 'Ok', seen: 5 }] } as never)
+  const clean = await decodeShare(hostile)
+  assert.deepStrictEqual(clean?.items.map((item) => [item.title, item.status, item.rating, item.season, item.episode, item.seen]), [['<img src=x onerror=alert(1)>', undefined, undefined, undefined, undefined, undefined], ['Ok', undefined, undefined, undefined, undefined, 5]], 'unbekannter Status, Bewertung, Staffel und Folge ausserhalb des Möglichen werden verworfen, leere Titel auch')
+  assert.ok(!clean?.name.includes('\u0000'), 'Steuerzeichen im Namen sind weg')
+  // A bomb: a few bytes that unpack to many megabytes.
+  const bomb = await encodeShare({ v: 1, name: '', items: [{ title: 'x'.repeat(60_000_000) }] } as never).catch(() => 'nicht-gepackt')
+  assert.strictEqual(await decodeShare(bomb), null, 'zu grosses Auspacken wird abgebrochen')
+  // New on this list.
+  const mine = [createMerkItem({ title: 'FRIEREN' }), createMerkItem({ title: 'Eigene' })]
+  assert.deepStrictEqual(newFromShared(share, mine).map((item) => item.title), ['Nana'], 'was schon da ist, nicht doppelt')
+  console.log('✓ Merkliste teilen: Link, Prüfung, Obergrenzen')
 }
 
 console.log('--- All Merkliste Feature Tests Passed! ---')

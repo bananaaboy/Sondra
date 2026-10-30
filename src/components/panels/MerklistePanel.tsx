@@ -122,6 +122,7 @@ import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInpu
 import { goalState, lengthLabel, parseDay } from '../../lib/watchPlan'
 import { CoverImage, MIDDLE } from '../CoverImage'
 import { MerklisteRecap } from './MerklisteRecap'
+import { ShareDialog } from '../MerklisteShare'
 import { goalSentence, WatchPlanner } from './WatchPlanner'
 import type { AudioFilePref, AudioOutputFormat, VideoFilePref } from './DownloaderPanel'
 import {
@@ -875,6 +876,7 @@ export function MerklistePanel() {
   }, [])
 
   const stats = useMemo(() => calculateMerklisteStats(items), [items])
+  const [sharing, setSharing] = useState(false)
   const availableTags = useMemo(() => allTags(items), [items])
 
   const filteredItems = useMemo(() => {
@@ -1001,6 +1003,7 @@ export function MerklistePanel() {
     <>
       <AddDialog open={adding} onClose={() => setAdding(false)} />
       {statsOpen ? <StatsDialog items={items} onClose={() => setStatsOpen(false)} /> : null}
+      {sharing ? <ShareDialog items={items} onClose={() => setSharing(false)} /> : null}
       {historyOpen ? <WatchHistoryDialog items={items} onClose={() => setHistoryOpen(false)} /> : null}
       {shuffleOpen ? (
         <ShuffleDialog
@@ -1096,6 +1099,9 @@ export function MerklistePanel() {
                 >
                   <DiceIcon />
                   <span>Würfeln</span>
+                </Button>
+                <Button type="button" size="sm" variant="quiet" onClick={() => setSharing(true)} title="Die Liste als Link zum Ansehen teilen">
+                  Teilen
                 </Button>
               </>
             ) : null}

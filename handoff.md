@@ -18,9 +18,8 @@
 - **Beim Minimieren pausieren** (`lib/pauseOnMinimize.ts`, Windows-App: `onWindowState`).
 - **Ordner:** Löschen geht zuerst in `Sondra-Papierkorb` mit „Rückgängig“ (`binFiles`).
 - **Eigener STUN/TURN-Server** (`deviceServers.ts`): Adressen gemerkt, Passwort nie.
-- **Merkliste:** Jahresrückblick in den Statistiken (`recap.ts`).
-- **Offen aus der Liste:** Android-Split-APKs, Untertitel automatisch, Merkliste teilen,
-  virtuelle Liste.
+- **Merkliste:** Jahresrückblick in den Statistiken (`recap.ts`), Teilen als Link (`merkShare.ts`).
+- **Offen aus der Liste:** Android-Split-APKs, Untertitel automatisch, virtuelle Liste.
 
 ### Seit 1.1.21 (veröffentlicht als 1.1.22 bzw. noch offen):
 - **Geräte wiedererkennen:** die Windows-App wartet auf ihren Port und nimmt sonst einen
