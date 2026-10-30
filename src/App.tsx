@@ -14,6 +14,7 @@ import { usePanelRoute } from './hooks/usePanelRoute'
 import { useTheme } from './hooks/useTheme'
 import { WhatsNewDialog, WhatsNewLine } from './components/WhatsNew'
 import { initDevices } from './lib/devices'
+import { initPauseOnMinimize } from './lib/pauseOnMinimize'
 
 export default function App() {
   const { choice, resolved, setChoice } = useTheme()
@@ -23,6 +24,7 @@ export default function App() {
   usePanelRoute()
   useNewEpisodes()
   useEffect(() => initDevices(), [])
+  useEffect(() => initPauseOnMinimize(), [])
 
   return (
     <ErrorBoundary>

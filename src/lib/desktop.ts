@@ -159,6 +159,8 @@ export interface AppBridge {
   setProgressBar?: (progress: number) => Promise<boolean>
   /** Prevents OS sleep during long downloads. */
   setPowerSaveBlocker?: (active: boolean) => Promise<boolean>
+  /** Told when the window is minimised or comes back; missing before 1.1.23, where the page being hidden stands in. */
+  onWindowState?: (callback: (state: 'minimized' | 'restored') => void) => () => void
   updateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   downloadUpdate?: () => Promise<UpdateState>

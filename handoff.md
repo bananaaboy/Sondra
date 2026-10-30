@@ -9,7 +9,17 @@
 
 ## 1. Übersicht der Meilensteine bis Version 1.1.21
 
-### Seit 1.1.21 (noch nicht veröffentlicht):
+### Seit 1.1.22 (noch nicht veröffentlicht, 30.10.2026):
+- **Browser-Szenarien im Repository** (`npm run verify:e2e`, Workflow „Browser“): Geräte,
+  Ordner in Drive, Bewegung, Pausieren.
+- **Geräte:** Fähigkeiten im Eintrag (`caps`), Text und Links, Auf Gerät abspielen, Ordner
+  senden (`FileInfo.path`, `splitPath`, Android `save-begin` mit `dir`), mehrere Empfänger mit
+  Warteschlange (zwei zugleich), Fortsetzen nach Abbruch (`Kept`/`Piece`).
+- **Beim Minimieren pausieren** (`lib/pauseOnMinimize.ts`, Windows-App: `onWindowState`).
+- **Offen aus der Liste:** eigener STUN/TURN-Server, Android-Split-APKs, Löschen im lokalen
+  Ordner rückgängig, Untertitel automatisch, Merkliste teilen, Statistik-Rückblick, virtuelle Liste.
+
+### Seit 1.1.21 (veröffentlicht als 1.1.22 bzw. noch offen):
 - **Geräte wiedererkennen:** die Windows-App wartet auf ihren Port und nimmt sonst einen
   gemerkten Ersatz (`port.json`), nie einen zufälligen — der Port ist Teil der Herkunft.
   Nach Neuinstallation: „Das war dieses Gerät“ (`adoptFormer`) übernimmt den alten Eintrag;

@@ -260,9 +260,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Gebrauch.
 - **Browser-Szenarien** (`npm run build && npm run verify:e2e`, `scripts/e2e/`,
   Workflow „Browser“): zwei Geräte, die sich Dateien schicken (direkt, über
-  Drive, Ablehnen, Fälschungen, Neuinstallation), der Ordner „Sondra“ in
-  Drive samt Löschen, und die Bewegung (Reiterstrich, Dialoge, Menüs, ruhige
-  Bewegung). Drive läuft als Nachbildung im Prozess des Tests
+  Drive, Ablehnen, Fälschungen, Neuinstallation, Text und Links, Abspielen
+  auf dem anderen Gerät, Ordner in beide Richtungen, drei Übertragungen auf
+  einmal, Fortsetzen nach einer gekappten Leitung), der Ordner „Sondra“ in
+  Drive samt Löschen, die Bewegung (Reiterstrich, Dialoge, Menüs, ruhige
+  Bewegung) und „Beim Minimieren pausieren“. Drive läuft als Nachbildung im Prozess des Tests
   (`scripts/e2e/lib.mjs`), `run.mjs` startet `dev-service` selbst. Jedes
   Szenario ist ein eigener Prozess; neue Funktionen bekommen dort ihr
   Szenario, nicht nur eine Prüfung unter Node.
@@ -373,6 +375,18 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Striche auf der Zeitleiste, Liste im Zahnrad mit Namen und „Als Kapitel
   kopieren“ (YouTube-Format, beginnt bei 0:00). Je Datei nach Name und
   Grösse in `sondra:abspielen:marken`, wie „Weiter bei“.
+- **Beim Minimieren pausieren** (30.10.2026, Wunsch: „beim minimieren vom
+  fenster alles was am abspielen ist zu pausieren“; `lib/pauseOnMinimize.ts`):
+  aus, bis der Schalter unter Zahnrad → Wiedergabe an ist (gemerkt in
+  `sondra:pausieren-beim-minimieren`). Hält an, was in Sondra spielt —
+  Player, Ton-Editor, Sampler, Sequenzer, Vorschauen — und fängt beim
+  Zurückkommen nicht von selbst wieder an. Medienelemente findet nur
+  `play()` selbst (`new Audio()` der Wellenform steht in keinem DOM), also
+  wird es einmal umhüllt; was über Web Audio spielt, meldet sich mit
+  `registerPauser`. Ein Film im Bild-in-Bild bleibt. Die Windows-App sagt
+  Minimieren selbst (`onWindowState`, 1.1.23); sonst, im Browser und in der
+  Android-App, gilt die verborgene Seite — also auch der Wechsel zu einem
+  anderen Tab, und der Schalter sagt das.
 - **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
   Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
   über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,
@@ -874,6 +888,44 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   nennt seine Adresse im Netz direkt (`WebRtcHideLocalIpsWithMdns` aus),
   weil Windows-mDNS oft gesperrt ist. Beides wirkt erst mit einer neuen
   App-Fassung.
+  **Was ein Gerät kann, steht in seinem Eintrag** (30.10.2026, `caps` im
+  signierten Eintrag, `can()`): `text`, `play`, `folder`, `resume`. Eine
+  ältere Fassung übergeht eine Nachricht, die sie nicht kennt, ohne
+  Antwort — der Absender würde ewig warten —, also bietet er das Neue nur
+  Geräten an, die es in `caps` nennen, und die Seite sagt bei den anderen,
+  woran es liegt („Dort läuft eine ältere Version …“). Ein Eintrag ohne
+  `caps` gilt weiter (die Unterschrift deckt jedes Feld, das da steht); die
+  Liste lässt sich nicht nachträglich ändern. Eine neue Fähigkeit gehört
+  hier und in `ownCaps()`, nie nur in die Oberfläche.
+  **Text und Links** (`sendText`, Nachricht `text`, Karte `NoteRow`): bis
+  4 000 Zeichen, nichts öffnet sich von selbst, als Link gilt nur ein
+  einzelnes `http`/`https`. **Auf anderem Gerät abspielen** (`play`):
+  Filme im Ordner „Sondra“ in Drive — nur Namen und Drive-Kennungen gehen
+  (`playOnDevice`), das andere Gerät fragt, dann streamt es selbst; ein
+  einzelner Film von diesem Gerät bis 2 GB geht als Übertragung mit
+  `play: true` und startet nach der Ankunft im Player, ohne gespeichert zu
+  werden (`playTarget`: Blöcke zu 32 MB). **Ordner senden** (`folder`):
+  `FileInfo.path`, höchstens 300 Dateien je Übertragung; beim Empfang
+  bereinigt `splitPath` jeden Teil (kein `..`, kein absoluter Anfang, acht
+  Ebenen), Chromium legt Unterordner im gewählten Ordner an, die
+  Android-App über `save-begin` mit `dir` unter `Downloads/Sondra/…`
+  (eine App vor 1.1.23 speichert flach), sonst wird der Pfad Teil des
+  Namens. „An Geräte senden“ unter einer Auswahl im Ordner: mehrere Geräte
+  auf einmal, je eine Übertragung; **zwei senden zugleich** (`takeSlot`), die
+  anderen warten auf ihrem offenen Kanal und sagen es. **Fortsetzen**
+  (`resume`, `Kept`/`Piece` in `deviceTransfer.ts`): reisst die Leitung ab,
+  schreibt der Empfänger zu Ende, was schon in der Warteschlange war, und
+  hält die fertigen Dateien und das Stück der angefangenen (`suspend`:
+  Ordner-Zugriff schliesst die Datei und öffnet sie mit
+  `keepExistingData` wieder, der Browser-Speicher behält seine Teile);
+  „Fortsetzen“ beim Sender bietet die Datei noch einmal an, der Empfänger
+  nimmt genau diese Übertragung von selbst an (er hat zu diesen Dateien
+  schon ja gesagt), meldet in `ready` was er hat (`done`, `from`), und der
+  Sender schickt nur den Rest. Ein Stück, das nicht mehr stimmt
+  (`intact`), beginnt von vorn — nie wird Falsches angehängt. Die
+  Android-App kann das nicht (ihre Ablage schreibt in einem Zug), also
+  nennt sie `resume` nicht. Ein Senden auf einem geschlossenen Kanal heisst
+  `closed`, nicht „Datei nicht lesbar“.
 - **Android-App** (`android/`, Wunsch vom 22.10.2026: „eine Android-App,
   die über Google Drive läuft statt Anytype“; am 23.10.: „es soll wirklich
   wie eine App sein, nicht Webapp“): eine eigene App um die Website, Paket

@@ -193,6 +193,8 @@ Der Ordner-Tab bietet einen vollwertigen lokalen Medien-Explorer:
 - **Löschen:** auf diesem Gerät endgültig, nach Rückfrage (Edge, Chrome, die
   App). Im Ordner „Sondra“ in Google Drive gehen gelöschte Dateien in den
   Papierkorb von Drive und lassen sich dort 30 Tage lang wiederherstellen.
+- **An Geräte senden und Auf Gerät abspielen:** unter einer Auswahl, ein oder
+  mehrere Geräte des eigenen Kontos.
 - **Listenansicht:** Strukturierte Tabelle mit Name, Art, Größe, Änderungsdatum
   und Laufzeit.
 - **Weiterschauen:** Erkennt Folgen von Serien aus der Merkliste im Ordner und
@@ -262,8 +264,22 @@ Rechner, auch zwischen Website, Windows-App und Android-App.
   jeden dritten bis fünften Versuch scheitern liess). Die Android-App hält
   dafür kurz ein Multicast-Lock (sonst hört sie die `.local`-Namen der
   anderen Geräte nicht), die Windows-App nennt ihre Adresse im Netz direkt.
+- **Mehr als Dateien:** „Text senden“ schickt einen Text oder Link (er
+  erscheint als Karte, nichts öffnet sich von selbst); „Auf Gerät abspielen“
+  unter einer Auswahl im Ordner startet einen Film dort — liegt er in Drive,
+  streamt das andere Gerät ihn selbst, ein einzelner lokaler Film (bis 2 GB)
+  wird gesendet und spielt nach der Ankunft; „Ordner senden“ und „An Geräte
+  senden“ schicken ganze Ordner mit ihren Unterordnern an ein oder mehrere
+  Geräte, zwei Übertragungen gleichzeitig, die übrigen warten.
+- **Fortsetzen:** reisst die Verbindung mitten in einer Datei ab, behält der
+  Empfänger das Fertige und das Stück der angefangenen, und „Fortsetzen“
+  beim Sender schickt nur den Rest (nicht in der Android-App als Empfänger).
+- **Ältere Versionen:** jedes Gerät nennt in seinem signierten Eintrag, was es
+  kann; Neues wird nur Geräten angeboten, die es können, und die Seite sagt
+  bei den anderen, dass dort ein Update fehlt.
 - **Prüfung:** `npm run verify:devices` (Kennungen, Signaturen, Fälschungen,
-  Wiederholungen, Namen, Flusskontrolle, Abbruch).
+  Wiederholungen, Namen, Fähigkeiten, Pfade, Flusskontrolle, Abbruch,
+  Fortsetzen) und `npm run verify:e2e` (zwei Geräte im Browser).
 
 ## Der Player (`#abspielen`)
 

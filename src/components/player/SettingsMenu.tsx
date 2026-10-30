@@ -29,6 +29,7 @@ import {
   type Repeat,
   type SleepTimer,
 } from '../../lib/player'
+import { hasWindowEvents, setPauseOnMinimize, usePauseOnMinimize } from '../../lib/pauseOnMinimize'
 
 export type Quality = 'original' | number
 
@@ -343,6 +344,7 @@ export function SettingsMenu({
   onClose: () => void
 }) {
   const [page, setPage] = useState<Page>('main')
+  const pauseOnMinimize = usePauseOnMinimize((state) => state.on)
   const box = useRef<HTMLDivElement>(null)
 
   // Escape goes back a page, then closes; a click elsewhere closes.
@@ -736,6 +738,16 @@ export function SettingsMenu({
                 hint="Eine Folge, deren Dateiname auf der Merkliste steht, ab 90 % als gesehen"
                 on={settings.merkliste}
                 onChange={(merkliste) => update({ merkliste })}
+              />
+              <Switch
+                label="Beim Minimieren pausieren"
+                hint={
+                  hasWindowEvents()
+                    ? 'Alles, was in Sondra spielt — Player, Ton, Vorschauen — hält an, wenn das Fenster minimiert wird'
+                    : 'Alles, was in Sondra spielt, hält an, wenn die Seite verlassen wird — auch beim Wechsel zu einem anderen Tab'
+                }
+                on={pauseOnMinimize}
+                onChange={setPauseOnMinimize}
               />
             </Group>
             <Group title="Wiederholen">
