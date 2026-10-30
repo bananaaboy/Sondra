@@ -18,6 +18,10 @@ import {
   dismissNote,
   dismissTransfer,
   isOnline,
+  onlineDevices,
+  playNote,
+  playOnDevice,
+  PLAY_TRANSFER_MAX,
   sendToDevice,
   sendViaDrive,
   shortId,
@@ -26,6 +30,7 @@ import {
   type Note,
   type Transfer,
 } from '../lib/devices'
+import { can } from '../lib/deviceIdentity'
 import { formatBytes } from '../lib/format'
 import { useSession } from '../state/store'
 import { Button, Progress } from './ui/primitives'
@@ -77,7 +82,7 @@ export function TransferRow({ transfer, compact = false }: { transfer: Transfer;
       line = `Wartet, bis ${peer} annimmt …`
       break
     case 'asking':
-      line = `${peer} schickt ${bytes}`
+      line = transfer.play ? `${peer} möchte „${transfer.files[0]?.name ?? 'eine Datei'}“ auf diesem Gerät abspielen (${formatBytes(transfer.total)})` : `${peer} schickt ${bytes}`
       break
     case 'connecting':
       line = 'Verbindet die Geräte …'
@@ -101,7 +106,7 @@ export function TransferRow({ transfer, compact = false }: { transfer: Transfer;
         : 'Holt es aus Ihrem Google Drive …'
       break
     case 'done':
-      line = out ? `Angekommen auf ${peer}` : `Von ${peer} gespeichert`
+      line = out ? (transfer.play ? `Läuft jetzt im Player auf ${peer}` : `Angekommen auf ${peer}`) : transfer.play ? `Von ${peer} — läuft im Player` : `Von ${peer} gespeichert`
       break
     case 'declined':
       line = out ? `${peer} hat abgelehnt.` : 'Abgelehnt.'
@@ -163,7 +168,7 @@ export function TransferRow({ transfer, compact = false }: { transfer: Transfer;
         {transfer.state === 'asking' ? (
           <>
             <Button size="sm" onClick={() => void acceptTransfer(transfer.id)}>
-              Annehmen
+              {transfer.play ? 'Abspielen' : 'Annehmen'}
             </Button>
             <Button size="sm" variant="quiet" onClick={() => void declineTransfer(transfer.id)}>
               Ablehnen
@@ -277,10 +282,17 @@ export function NoteRow({ note }: { note: Note }) {
   return (
     <div className="flex min-w-0 flex-col gap-[8px]">
       <p className="text-small text-prose">
-        {note.link ? 'Link' : 'Text'} von „{note.peerName}“{note.link ? <> · <span className="value text-ink">{hostOf(note.link)}</span></> : null}
+        {note.play ? 'Abspielen' : note.link ? 'Link' : 'Text'} von „{note.peerName}“{note.link ? <> · <span className="value text-ink">{hostOf(note.link)}</span></> : null}
       </p>
-      <p className={`max-h-[18dvh] overflow-y-auto whitespace-pre-wrap break-words text-small leading-[1.5] text-ink ${note.link ? 'value' : ''}`}>{note.text}</p>
+      <p className={`max-h-[18dvh] overflow-y-auto whitespace-pre-wrap break-words text-small leading-[1.5] text-ink ${note.link || note.play ? 'value' : ''}`}>
+        {note.play ? `${note.text} auf diesem Gerät abspielen?` : note.text}
+      </p>
       <div className="flex flex-wrap items-center gap-[8px]">
+        {note.play ? (
+          <Button size="sm" onClick={() => playNote(note.id)}>
+            Abspielen
+          </Button>
+        ) : null}
         {note.link ? (
           <Button
             size="sm"
@@ -292,11 +304,13 @@ export function NoteRow({ note }: { note: Note }) {
             Öffnen
           </Button>
         ) : null}
-        <Button size="sm" variant={note.link ? 'quiet' : 'primary'} onClick={() => void copy()}>
-          Kopieren
-        </Button>
+        {note.play ? null : (
+          <Button size="sm" variant={note.link ? 'quiet' : 'primary'} onClick={() => void copy()}>
+            Kopieren
+          </Button>
+        )}
         <Button size="sm" variant="quiet" onClick={() => dismissNote(note.id)}>
-          Verwerfen
+          {note.play ? 'Ablehnen' : 'Verwerfen'}
         </Button>
         <span aria-live="polite" className="text-small text-prose">
           {copied === 'yes' ? '● Kopiert' : copied === 'no' ? 'Nicht kopiert — markieren Sie den Text selbst.' : ''}
@@ -415,6 +429,91 @@ export function DeviceSendButton({
           />
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * „Auf Gerät abspielen“: films of the Sondra folder in Drive start on another
+ * device — only their names go, the device streams them itself — and a single
+ * film on this one is sent along and starts when it has arrived. Only for
+ * devices that can (an older Sondra would ignore the request), and only for
+ * those open now: the question waits there, not for a day.
+ */
+export function PlayOnDeviceButton({
+  media,
+}: {
+  media: { name: string; size: number; kind: string; file?: File; drive?: { id: string; mime: string } }[]
+}) {
+  const enabled = useDevices((state) => state.enabled)
+  const devices = useDevices((state) => state.devices)
+  const [open, setOpen] = useState(false)
+  const [told, setTold] = useState<{ ok: boolean; line: string } | null>(null)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => setTold(null), [media])
+  useEffect(() => {
+    if (!open) return
+    const away = (event: Event) => {
+      if (!box.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', away)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', away)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [open])
+  if (!enabled || !media.length) return null
+  const targets = onlineDevices(devices).filter((device) => can(device, 'play'))
+  const inDrive = media.every((entry) => entry.drive)
+  const single = media.length === 1 && media[0].file && media[0].size <= PLAY_TRANSFER_MAX ? media[0].file : null
+  if (!targets.length || (!inDrive && !single)) return null
+  const go = async (device: DeviceRecord) => {
+    setOpen(false)
+    try {
+      if (inDrive) {
+        await playOnDevice(
+          device.id,
+          media.map((entry) => ({ id: entry.drive!.id, name: entry.name, size: entry.size, type: entry.drive!.mime })),
+        )
+        setTold({ ok: true, line: `An „${device.name}“ gefragt — dort startet es mit „Abspielen“.` })
+      } else if (single) {
+        await sendToDevice(device.id, [single], { play: true })
+        setTold({ ok: true, line: `An „${device.name}“ angeboten — dort startet es nach „Abspielen“.` })
+      }
+    } catch (error) {
+      setTold({ ok: false, line: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return (
+    <div ref={box} className="relative">
+      <Button type="button" size="sm" variant="quiet" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
+        <DeviceGlyph kind="android" className="h-4 w-4" />
+        Auf Gerät abspielen
+      </Button>
+      {open ? (
+        <div role="menu" className="drop absolute bottom-[calc(100%+6px)] left-0 z-40 w-[min(320px,calc(100vw-32px))] rounded-card bg-raised p-[6px] ring-1 ring-inset ring-line elevate-lift">
+          {targets.map((device) => (
+            <button
+              key={device.id}
+              type="button"
+              role="menuitem"
+              onClick={() => void go(device)}
+              className="press flex w-full items-center gap-[10px] rounded-nav px-[10px] py-[8px] text-left text-ink hover:bg-panel-soft"
+            >
+              <DeviceGlyph kind={device.kind} className="h-[18px] w-[18px]" />
+              <span className="min-w-0 flex-1 truncate text-small font-semibold">{device.name}</span>
+              <span className="shrink-0 text-small text-ink">● offen</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <span role="status" aria-live="polite" className={`ml-[8px] text-small ${told?.ok === false ? 'text-ink' : 'text-prose'}`}>
+        {told ? `${told.ok ? '● ' : '! '}${told.line}` : ''}
+      </span>
     </div>
   )
 }
