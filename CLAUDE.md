@@ -258,6 +258,14 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   aus `offline.json` (ein Vite-Plugin schreibt die Liste beim Build) und
   löscht, was frühere Fassungen im Cache liessen. WebAssembly-Kerne nur bei
   Gebrauch.
+- **Browser-Szenarien** (`npm run build && npm run verify:e2e`, `scripts/e2e/`,
+  Workflow „Browser“): zwei Geräte, die sich Dateien schicken (direkt, über
+  Drive, Ablehnen, Fälschungen, Neuinstallation), der Ordner „Sondra“ in
+  Drive samt Löschen, und die Bewegung (Reiterstrich, Dialoge, Menüs, ruhige
+  Bewegung). Drive läuft als Nachbildung im Prozess des Tests
+  (`scripts/e2e/lib.mjs`), `run.mjs` startet `dev-service` selbst. Jedes
+  Szenario ist ein eigener Prozess; neue Funktionen bekommen dort ihr
+  Szenario, nicht nur eine Prüfung unter Node.
 - `npm run dev:service` serviert `dist/` zusammen mit den Funktionen unter
   `api/`, was `vite preview` nicht kann — nötig, um den Downloader lokal
   durchzuspielen.
