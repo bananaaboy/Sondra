@@ -317,6 +317,13 @@ fs.rmSync(tree, { recursive: true, force: true })
   await laptop.page.waitForTimeout(500)
   const sentAfter = await phone.page.evaluate(() => window.__sentBytes)
   const whole = await savedBytes(laptop.page, 'Gross.bin')
+  if (!(whole && sha(decode(whole)) === sha(big))) {
+    // What both screens say when it does not come to an end, so a run on a machine one cannot look at tells why.
+    for (const [name, device] of [['Handy', phone], ['Laptop', laptop]]) {
+      const shown = (await device.page.locator('main').innerText()).replace(/\n{2,}/g, '\n').slice(0, 1_200)
+      console.log(`--- ${name} nach „Fortsetzen“ ---\n${shown}`)
+    }
+  }
   check('Fortgesetzt: Datei kommt Byte für Byte an, ohne Doppeltes', whole && sha(decode(whole)) === sha(big), `${whole ? decode(whole).length : 0} von ${big.length}`)
   check('Fortgesetzt: nur der Rest wurde noch gesendet', sentAfter - sentBefore < big.length - 4 * 1024 * 1024, `${((sentAfter - sentBefore) / 1048576).toFixed(1)} MB`)
 }
