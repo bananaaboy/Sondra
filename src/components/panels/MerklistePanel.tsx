@@ -56,6 +56,7 @@ import {
   takeOnlineNews,
   type OnlineNews,
   itemProgress,
+  merkItems,
   markRange,
   importMerkliste,
   itemRemainingMinutes,
@@ -2579,6 +2580,7 @@ function SeriesPage({
   const next = status !== 'done' && item.episode !== null && !caughtUp(seasons)
   const setPanel = useSession((state) => state.setPanel)
   const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [recommending, setRecommending] = useState(false)
   const [checkingUpdates, setCheckingUpdates] = useState(false)
   /** What a check asked for by hand found, when it found no new episode. */
   const [checkNote, setCheckNote] = useState<string | null>(null)
@@ -2633,6 +2635,7 @@ function SeriesPage({
 
   return (
     <div className="grid grid-cols-1 gap-[32px] xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-x-[40px]">
+      {recommending ? <ShareDialog items={merkItems()} preselect={[item.id]} onClose={() => setRecommending(false)} /> : null}
       {batchModalOpen && activeSeason ? (
         <BatchDownloadModal
           item={item}
@@ -2782,6 +2785,9 @@ function SeriesPage({
                     {checkingUpdates ? 'Prüft…' : 'Online prüfen'}
                   </Button>
                 ) : null}
+                <Button type="button" size="sm" variant="quiet" onClick={() => setRecommending(true)} title="Diese Serie mit Bild und Stand an jemanden schicken">
+                  Empfehlen
+                </Button>
                 <Button type="button" size="sm" variant="quiet" onClick={onEdit}>
                   Bearbeiten
                 </Button>

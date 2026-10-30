@@ -67,6 +67,16 @@
     },
     {
       "action": "./",
+      "name": "Geteilte Merkliste",
+      "accept": {
+        "application/x-sondra-liste": [
+          ".sondra-liste"
+        ]
+      },
+      "launch_type": "single-client"
+    },
+    {
+      "action": "./",
       "accept": {
         "audio/mpeg": [
           ".mp3"
@@ -115,7 +125,8 @@
           "name": "media",
           "accept": [
             "audio/*",
-            "video/*"
+            "video/*",
+            ".sondra-liste"
           ]
         }
       ]
