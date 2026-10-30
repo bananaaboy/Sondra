@@ -209,11 +209,15 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 400, height: 860 
   await binDialog.getByText('Der Papierkorb ist leer.').waitFor({ timeout: 10_000 })
   check('Papierkorb: danach ist die Datei weg, auch aus dem Papierkorb', (await binHas()).length === 0 && !(await inSeason('Folge 2.mp4')))
   await binDialog.getByRole('button', { name: 'Schliessen', exact: true }).click()
+  // The page reads the folder again after what came back or went; on a slow machine that is still under way here.
+  await page.waitForTimeout(1_000)
   // Subtitles: the dialog says where the model comes from before anything is loaded.
   await page.getByText('Folge 1.mp4').first().click({ modifiers: ['Control'] })
   await page.getByRole('button', { name: 'Untertitel erzeugen' }).click()
   const subs = page.getByRole('dialog')
   await subs.waitFor()
+  // Whether the model is already kept is asked first; the sentence about where it comes from follows.
+  await subs.getByText(/Hugging Face/).first().waitFor({ timeout: 15_000 })
   const subsText = await subs.innerText()
   check('Untertitel: das Fenster nennt Hugging Face und dass der Ton das Gerät nicht verlässt', /Hugging Face/.test(subsText) && /verlässt es nicht/.test(subsText), subsText.replace(/\s+/g, ' ').slice(0, 100))
   check('Untertitel: Sprache und Genauigkeit stehen zur Wahl, „Beginnen“ wartet auf den Klick', (await subs.getByRole('combobox').count()) === 2 && (await subs.getByRole('button', { name: 'Beginnen' }).isEnabled()))
