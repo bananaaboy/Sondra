@@ -31,6 +31,13 @@ export interface DeviceRecord {
   /** When it joined and when it last said it is here, ms since 1970. */
   created: number
   seen: number
+  /**
+   * What this device's version of Sondra can do beyond sending files: a
+   * sender offers „Text senden“, „Abspielen“ and the rest only to a device
+   * that lists them. A version before 1.1.23 writes none, and its record
+   * still verifies there, since a signature covers every field it finds.
+   */
+  caps?: string[]
   sig: string
 }
 
@@ -53,6 +60,9 @@ const ID_PATTERN = new RegExp(`^[${ALPHABET}]{${ID_LENGTH}}$`)
 const NAME_MAX = 40
 /** How old a message may be and still count. */
 export const MESSAGE_MAX_AGE = 15 * 60_000
+/** At most this many capabilities, each a short lower-case word; anything else is not a record. */
+const CAPS_MAX = 16
+const CAP_PATTERN = /^[a-z][a-z-]{0,23}$/
 
 const subtle = () => globalThis.crypto.subtle
 const ALGORITHM = { name: 'ECDSA', namedCurve: 'P-256' } as const
@@ -180,6 +190,8 @@ export async function signRecord(keys: DeviceKeys, fields: Omit<DeviceRecord, 'v
     key: keys.publicJwk,
     created: fields.created,
     seen: fields.seen,
+    // Left out when empty: an old record had no such field, and its signature must stay what it was.
+    ...(fields.caps?.length ? { caps: [...fields.caps].sort() } : {}),
   }
   return { ...unsigned, sig: await signValue(keys.privateKey, unsigned) }
 }
@@ -195,6 +207,7 @@ export async function checkRecord(raw: unknown): Promise<DeviceRecord | null> {
   if (typeof record.name !== 'string' || cleanName(record.name) !== record.name || !record.name) return null
   if (record.kind !== 'windows' && record.kind !== 'android' && record.kind !== 'browser') return null
   if (typeof record.platform !== 'string' || !Number.isFinite(record.created) || !Number.isFinite(record.seen)) return null
+  if (record.caps !== undefined && (!Array.isArray(record.caps) || record.caps.length > CAPS_MAX || !record.caps.every((cap) => typeof cap === 'string' && CAP_PATTERN.test(cap)))) return null
   if ((await deviceIdOf(record.key)) !== record.id) return null
   if (!(await verifyValue(record.key, record as Record<string, unknown>))) return null
   return record as DeviceRecord
@@ -255,3 +268,6 @@ export function randomId(): string {
   globalThis.crypto.getRandomValues(bytes)
   return base32(bytes)
 }
+
+/** Can this device do `cap`? A record without the list can send and take files, nothing more. */
+export const can = (device: Pick<DeviceRecord, 'caps'> | null | undefined, cap: string): boolean => Boolean(device?.caps?.includes(cap))

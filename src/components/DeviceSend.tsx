@@ -15,6 +15,7 @@ import {
   acceptTransfer,
   cancelTransfer,
   declineTransfer,
+  dismissNote,
   dismissTransfer,
   isOnline,
   sendToDevice,
@@ -22,6 +23,7 @@ import {
   shortId,
   useDevices,
   type DeviceRecord,
+  type Note,
   type Transfer,
 } from '../lib/devices'
 import { formatBytes } from '../lib/format'
@@ -206,19 +208,100 @@ export function DeviceInbox() {
     return () => window.clearTimeout(timer)
   }, [transfers])
 
-  const shown = transfers.filter((entry) => !entry.dismissed)
-  if (panel === 'devices' || !shown.length) return null
+  const notes = useDevices((state) => state.notes)
+  const shown = panel === 'devices' ? [] : transfers.filter((entry) => !entry.dismissed)
+  if (!shown.length && !notes.length) return null
+  // One stack at the bottom corner; the card for a note sits on top, since a
+  // line someone sent is read in a glance and then gone.
   return (
-    <div
-      role="region"
-      aria-label="Übertragungen zwischen Geräten"
-      className="dock fixed inset-x-[12px] bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-50 flex max-h-[60dvh] flex-col gap-[12px] overflow-y-auto rounded-card bg-raised p-[14px] ring-1 ring-inset ring-line elevate-lift sm:bottom-[84px] sm:left-auto sm:right-[24px] sm:w-[400px]"
-    >
-      {shown.slice(0, 3).map((transfer, index) => (
-        <div key={transfer.id} className={index ? 'border-t border-line pt-[12px]' : ''}>
-          <TransferRow transfer={transfer} compact />
+    <div className="pointer-events-none fixed inset-x-[12px] bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-50 flex max-h-[80dvh] flex-col gap-[10px] sm:bottom-[84px] sm:left-auto sm:right-[24px] sm:w-[400px]">
+      {notes.length ? (
+        <div
+          role="region"
+          aria-label="Von einem anderen Gerät gesendet"
+          className="dock pointer-events-auto flex max-h-[45dvh] flex-col gap-[12px] overflow-y-auto rounded-card bg-raised p-[14px] ring-1 ring-inset ring-line elevate-lift"
+        >
+          {notes.slice(0, 3).map((note, index) => (
+            <div key={note.id} className={index ? 'border-t border-line pt-[12px]' : ''}>
+              <NoteRow note={note} />
+            </div>
+          ))}
+          {notes.length > 3 ? <p className="text-small text-prose">und {notes.length - 3} weitere</p> : null}
         </div>
-      ))}
+      ) : null}
+      {shown.length ? (
+        <div
+          role="region"
+          aria-label="Übertragungen zwischen Geräten"
+          className="dock pointer-events-auto flex max-h-[45dvh] flex-col gap-[12px] overflow-y-auto rounded-card bg-raised p-[14px] ring-1 ring-inset ring-line elevate-lift"
+        >
+          {shown.slice(0, 3).map((transfer, index) => (
+            <div key={transfer.id} className={index ? 'border-t border-line pt-[12px]' : ''}>
+              <TransferRow transfer={transfer} compact />
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** Where a link leads, short: the host, without „www.“. */
+function hostOf(link: string): string {
+  try {
+    return new URL(link).hostname.replace(/^www\./, '')
+  } catch {
+    return link
+  }
+}
+
+/**
+ * A line of text or a link from another device. Nothing is opened by itself:
+ * the link is shown with where it leads, and „Öffnen“ is a click here.
+ */
+export function NoteRow({ note }: { note: Note }) {
+  const [copied, setCopied] = useState<'yes' | 'no' | null>(null)
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(null), 2400)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(note.text)
+      setCopied('yes')
+    } catch {
+      setCopied('no')
+    }
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-[8px]">
+      <p className="text-small text-prose">
+        {note.link ? 'Link' : 'Text'} von „{note.peerName}“{note.link ? <> · <span className="value text-ink">{hostOf(note.link)}</span></> : null}
+      </p>
+      <p className={`max-h-[18dvh] overflow-y-auto whitespace-pre-wrap break-words text-small leading-[1.5] text-ink ${note.link ? 'value' : ''}`}>{note.text}</p>
+      <div className="flex flex-wrap items-center gap-[8px]">
+        {note.link ? (
+          <Button
+            size="sm"
+            onClick={() => {
+              window.open(note.link!, '_blank', 'noopener,noreferrer')
+              dismissNote(note.id)
+            }}
+          >
+            Öffnen
+          </Button>
+        ) : null}
+        <Button size="sm" variant={note.link ? 'quiet' : 'primary'} onClick={() => void copy()}>
+          Kopieren
+        </Button>
+        <Button size="sm" variant="quiet" onClick={() => dismissNote(note.id)}>
+          Verwerfen
+        </Button>
+        <span aria-live="polite" className="text-small text-prose">
+          {copied === 'yes' ? '● Kopiert' : copied === 'no' ? 'Nicht kopiert — markieren Sie den Text selbst.' : ''}
+        </span>
+      </div>
     </div>
   )
 }

@@ -12,13 +12,16 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 
 import {
   adoptFormer,
+  can,
   dismissFormer,
   forgetThisDevice,
   isOnline,
   refreshDevices,
   removeDevice,
   renameThisDevice,
+  sendText,
   sendToDevice,
+  TEXT_MAX,
   setDevicesEnabled,
   shortId,
   useDevices,
@@ -48,9 +51,78 @@ function useNow(): number {
   return now
 }
 
+/**
+ * A line of text or a link to one device. It goes through Drive like every
+ * message and is shown there as a card, so the form says that and nothing
+ * more: no „delivered“ it could not know.
+ */
+function TextForm({ device, onClose }: { device: DeviceRecord; onClose: () => void }) {
+  const [text, setText] = useState('')
+  const [phase, setPhase] = useState<'idle' | 'sending' | 'sent'>('idle')
+  const [problem, setProblem] = useState<string | null>(null)
+  const field = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => field.current?.focus(), [])
+  const submit = async () => {
+    setPhase('sending')
+    setProblem(null)
+    try {
+      await sendText(device.id, text)
+      setPhase('sent')
+      setText('')
+    } catch (error) {
+      setPhase('idle')
+      setProblem(error instanceof Error ? error.message : String(error))
+    }
+  }
+  return (
+    <form
+      className="rise flex w-full basis-full flex-col gap-[8px]"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (text.trim() && phase !== 'sending') void submit()
+      }}
+    >
+      <label className="flex flex-col gap-[4px]">
+        <span className="text-small text-prose">Text oder Link an „{device.name}“</span>
+        <textarea
+          ref={field}
+          value={text}
+          maxLength={TEXT_MAX}
+          rows={3}
+          onChange={(event) => {
+            setText(event.target.value)
+            if (phase === 'sent') setPhase('idle')
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') onClose()
+            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && text.trim()) {
+              event.preventDefault()
+              void submit()
+            }
+          }}
+          className="w-full resize-y rounded-nav border-0 bg-raised px-[12px] py-[8px] text-small text-ink outline-none ring-1 ring-inset ring-rule placeholder:text-muted hover:ring-muted focus:ring-ink"
+          placeholder="https://… oder ein paar Zeilen"
+        />
+      </label>
+      <div className="flex flex-wrap items-center gap-[8px]">
+        <Button type="submit" size="sm" disabled={!text.trim() || phase === 'sending'}>
+          {phase === 'sending' ? 'Sendet …' : 'Senden'}
+        </Button>
+        <Button type="button" size="sm" variant="quiet" onClick={onClose}>
+          Schliessen
+        </Button>
+        <span aria-live="polite" className="text-small text-prose">
+          {phase === 'sent' ? '● Gesendet — erscheint dort, sobald Sondra offen ist.' : problem ? `! ${problem}` : ''}
+        </span>
+      </div>
+    </form>
+  )
+}
+
 function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
   const input = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
+  const [writing, setWriting] = useState(false)
   const online = isOnline(device, now)
   const send = (files: File[]) => {
     if (files.length) void sendToDevice(device.id, files)
@@ -72,7 +144,7 @@ function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
       }}
       onDragLeave={() => setOver(false)}
       onDrop={onDrop}
-      className={`flex max-w-none flex-col gap-[10px] rounded-card p-[14px] ring-1 ring-inset transition-colors duration-[var(--dur-fast)] sm:flex-row sm:items-center sm:gap-[16px] ${
+      className={`flex max-w-none flex-col gap-[10px] rounded-card p-[14px] ring-1 ring-inset transition-colors duration-[var(--dur-fast)] sm:flex-row sm:flex-wrap sm:items-center sm:gap-[16px] ${
         over ? 'bg-panel-mid ring-ink' : 'bg-panel-soft ring-line'
       }`}
     >
@@ -93,9 +165,19 @@ function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-start gap-[4px] pl-[54px] sm:items-end sm:pl-0">
-        <Button size="sm" onClick={() => input.current?.click()}>
-          Dateien senden
-        </Button>
+        <span className="flex flex-wrap gap-[8px]">
+          <Button size="sm" onClick={() => input.current?.click()}>
+            Dateien senden
+          </Button>
+          {can(device, 'text') ? (
+            <Button size="sm" variant="quiet" aria-expanded={writing} onClick={() => setWriting((current) => !current)}>
+              Text senden
+            </Button>
+          ) : null}
+        </span>
+        {can(device, 'text') ? null : (
+          <span className="max-w-[34ch] text-small text-prose sm:text-right">Dort läuft eine ältere Version. Text und Links gehen nach deren Update.</span>
+        )}
         {online ? null : (
           <span className="flex flex-wrap items-baseline gap-x-[10px] text-small text-prose sm:justify-end">
             <span>Kommt an, wenn Sondra dort innerhalb von 15 Min. offen ist.</span>
@@ -116,6 +198,7 @@ function OtherDevice({ device, now }: { device: DeviceRecord; now: number }) {
           </span>
         )}
       </span>
+      {writing ? <TextForm device={device} onClose={() => setWriting(false)} /> : null}
       <input
         ref={input}
         type="file"

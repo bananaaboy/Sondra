@@ -28,6 +28,7 @@ import { ANDROID_BRIDGE } from './android'
 import { IN_ANDROID_APP, IN_DESKTOP_APP } from './desktop'
 import {
   MESSAGE_MAX_AGE,
+  can,
   makeKeys,
   openMessage,
   pickDevices,
@@ -127,6 +128,8 @@ interface DevicesState {
    */
   former: DeviceRecord[]
   transfers: Transfer[]
+  /** Text and links other devices sent, until read or dismissed. */
+  notes: Note[]
 }
 
 function readEnabled(): boolean {
@@ -145,6 +148,7 @@ export const useDevices = create<DevicesState>(() => ({
   devices: [],
   former: [],
   transfers: [],
+  notes: [],
 }))
 
 const state = () => useDevices.getState()
@@ -164,6 +168,50 @@ function addTransfer(transfer: Transfer) {
 }
 
 export const isOnline = (device: DeviceRecord, now = Date.now()) => now - device.seen < ONLINE_WITHIN
+
+/* -------------------------------------------------------------------------- */
+/* What this version can do                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Written into this device's signed entry. A sender offers a feature only to
+ * a device that lists it: the phones keep an older Sondra until they update,
+ * and an older one ignores a message it does not know — silently, so without
+ * this the sender would wait on a reply that never comes.
+ */
+export function ownCaps(): string[] {
+  return ['text']
+}
+
+const sameCaps = (a: string[] | undefined, b: string[]) => [...(a ?? [])].sort().join() === [...b].sort().join()
+
+export { can }
+
+/** Sent by another device; read here, never acted on by itself. */
+export interface Note {
+  id: string
+  from: string
+  peerName: string
+  text: string
+  /** The text if it is a single web address, else null. */
+  link: string | null
+  at: number
+}
+
+export const TEXT_MAX = 4000
+const NOTES_KEPT = 8
+
+/** The text as an address to open — only `http` and `https`, only when it is nothing else. */
+export function linkOf(text: string): string | null {
+  const trimmed = text.trim()
+  if (!trimmed || /\s/.test(trimmed)) return null
+  try {
+    const url = new URL(trimmed)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 /* This device                                                                */
@@ -334,13 +382,13 @@ async function refreshList(client: DriveClient, { beat }: { beat: boolean }): Pr
     try {
       const raw = await readJson(client, file)
       const believed = (await pickDevices([raw]))[0]
-      if (believed?.id === selfId && believed.name === own.name && believed.platform === platformHere()) current = believed
+      if (believed?.id === selfId && believed.name === own.name && believed.platform === platformHere() && sameCaps(believed.caps, ownCaps())) current = believed
     } catch {
       current = null
     }
   }
   if (!current) {
-    current = await signRecord(own.keys, { name: own.name, kind: kindHere(), platform: platformHere(), created: own.created, seen: now })
+    current = await signRecord(own.keys, { name: own.name, kind: kindHere(), platform: platformHere(), created: own.created, seen: now, caps: ownCaps() })
     if (file) {
       file = await client.rewrite(file.id, jsonBlob(current))
     } else {
@@ -472,7 +520,7 @@ async function join(): Promise<void> {
       await saveOwn(stored)
     }
     own = stored
-    selfId = (await signRecord(own.keys, { name: own.name, kind: kindHere(), platform: platformHere(), created: own.created, seen: 0 })).id
+    selfId = (await signRecord(own.keys, { name: own.name, kind: kindHere(), platform: platformHere(), created: own.created, seen: 0, caps: ownCaps() })).id
     lastList = 0
     lastBeat = 0
     schedule()
@@ -501,7 +549,7 @@ export async function setDevicesEnabled(enabled: boolean): Promise<void> {
     own.fileId = undefined
     await saveOwn(own)
   }
-  set({ status: 'off', self: null, devices: [] })
+  set({ status: 'off', self: null, devices: [], notes: [] })
 }
 
 /** Leaves for good: record and key gone; joining again makes a new device. */
@@ -606,6 +654,14 @@ async function handle(type: string, from: string, transferId: string, body: unkn
   if (!TRANSFER_ID.test(transferId)) return
   const transfer = state().transfers.find((entry) => entry.id === transferId)
   const peerName = state().devices.find((device) => device.id === from)?.name ?? shortId(from)
+  if (type === 'text') {
+    const raw = (body as { text?: unknown } | null)?.text
+    const text = typeof raw === 'string' ? raw.slice(0, TEXT_MAX).trim() : ''
+    if (!text || state().notes.some((note) => note.id === transferId)) return
+    const note: Note = { id: transferId, from, peerName, text, link: linkOf(text), at: Date.now() }
+    set((current) => ({ notes: [note, ...current.notes].slice(0, NOTES_KEPT) }))
+    return
+  }
   if (type === 'offer') {
     const offer = body as OfferBody
     if (transfer || !offer || typeof offer.sdp !== 'string' || !Array.isArray(offer.files)) return
@@ -892,6 +948,25 @@ export function cancelTransfer(id: string): void {
 
 export function dismissTransfer(id: string): void {
   patchTransfer(id, { dismissed: true })
+}
+
+export function dismissNote(id: string): void {
+  set((current) => ({ notes: current.notes.filter((note) => note.id !== id) }))
+}
+
+/**
+ * A line of text or a link to another device. It waits in Drive until that
+ * device looks (and is deleted there once read); nothing says it arrived, so
+ * the sender is told only that it was sent.
+ */
+export async function sendText(deviceId: string, text: string): Promise<void> {
+  const device = state().devices.find((entry) => entry.id === deviceId)
+  if (!device) throw new Error('Dieses Gerät ist nicht mehr in der Liste.')
+  if (!can(device, 'text')) throw new Error(`Auf „${device.name}“ läuft eine ältere Version von Sondra. Mit dem nächsten Update geht es.`)
+  const clean = text.trim().slice(0, TEXT_MAX)
+  if (!clean) throw new Error('Es gibt nichts zu senden.')
+  await post(deviceId, 'text', randomId(), { text: clean })
+  lookSoon()
 }
 
 /* -------------------------------------------------------------------------- */
