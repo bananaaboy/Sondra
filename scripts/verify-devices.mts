@@ -3,6 +3,7 @@
 // forged or replayed, and files that arrive whole with the sender held back
 // by a slow receiver.
 import {
+  can,
   checkRecord,
   deviceIdOf,
   makeKeys,
@@ -29,6 +30,20 @@ const intruder = await makeKeys()
 
 const laptopRecord = await signRecord(laptop, { name: 'Laptop', kind: 'windows', platform: 'Windows-App', created: now, seen: now })
 const phoneRecord = await signRecord(phone, { name: 'Handy', kind: 'android', platform: 'Android-App', created: now, seen: now })
+
+// --- Capabilities ---------------------------------------------------------
+// A record written by a version without them (no `caps`) must still verify, and
+// one with them must not be changeable by hand: a sender trusts this list to
+// decide what it may offer.
+const modern = await signRecord(laptop, { name: 'Laptop', kind: 'windows', platform: 'Windows-App', created: now, seen: now, caps: ['text', 'play', 'folder'] })
+check('Eintrag ohne Fähigkeiten gilt weiter', (await checkRecord(JSON.parse(JSON.stringify(laptopRecord)))) !== null && laptopRecord.caps === undefined)
+check('Eintrag mit Fähigkeiten gilt', (await checkRecord(JSON.parse(JSON.stringify(modern)))) !== null && can(modern, 'text') && !can(modern, 'resume'))
+check('Fähigkeiten sind gleich geordnet signiert', JSON.stringify((await signRecord(laptop, { name: 'Laptop', kind: 'windows', platform: 'Windows-App', created: now, seen: now, caps: ['folder', 'text', 'play'] })).caps) === JSON.stringify(modern.caps))
+check('Fähigkeit nachträglich dazugeschrieben: abgelehnt', (await checkRecord({ ...laptopRecord, caps: ['play'] })) === null)
+check('Fähigkeit nachträglich gestrichen: abgelehnt', (await checkRecord({ ...modern, caps: ['text'] })) === null)
+check('Ein Gerät ohne Liste kann nichts davon', !can(laptopRecord, 'text') && !can(undefined, 'text'))
+const junk = await signRecord(laptop, { name: 'Laptop', kind: 'windows', platform: 'Windows-App', created: now, seen: now, caps: ['Text!'] })
+check('Unsinn in der Liste: abgelehnt', (await checkRecord(JSON.parse(JSON.stringify(junk)))) === null)
 
 // --- Identity -------------------------------------------------------------
 check('Id ist der Hash des Schlüssels', laptopRecord.id === (await deviceIdOf(laptop.publicJwk)))
