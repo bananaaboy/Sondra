@@ -17,6 +17,7 @@ import type { ReactNode } from 'react'
 
 import { getAudioContext, resumeAudioContext } from '../../lib/audio'
 import { concatAudio } from '../../lib/edit'
+import { registerPauser } from '../../lib/pauseOnMinimize'
 import { saveBytes } from '../../lib/download'
 import {
   SOUND_LABELS,
@@ -221,6 +222,9 @@ export function StepSequencer({
     setPlaying(false)
     setCurrent(null)
   }, [])
+
+  // „Beim Minimieren pausieren“ stops this too.
+  useEffect(() => registerPauser(() => stop()), [stop])
 
   const play = useCallback(async () => {
     const source = buffers()

@@ -17,6 +17,7 @@ import type { ReactNode } from 'react'
 import { getAudioContext, resumeAudioContext, sliceAudio, applyFades, reverseAudio, toAudioBuffer, fromAudioBuffer } from '../../lib/audio'
 import { detectSilenceRegions, stripSilence } from '../../lib/audio/silence'
 import { saveBytes } from '../../lib/download'
+import { registerPauser } from '../../lib/pauseOnMinimize'
 import {
   channelTrick,
   concatAudio,
@@ -490,6 +491,9 @@ export function AudioEditorPanel() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     setPosition(null)
   }, [])
+
+  // „Beim Minimieren pausieren“ stops this too.
+  useEffect(() => registerPauser(() => stop(false)), [stop])
 
   const play = useCallback(async (startAt?: number) => {
     if (!liveAudio) return

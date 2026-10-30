@@ -34,6 +34,7 @@ import {
 } from '../../lib/audio'
 import { saveBytes } from '../../lib/download'
 import { clamp, dbToGain, formatTimecode } from '../../lib/format'
+import { registerPauser } from '../../lib/pauseOnMinimize'
 import { DEFAULT_CHOP, MAX_PLANNED, describeMethod, planChop, type ChopMethod, type ChopPlan, type ChopSettings } from '../../lib/chop'
 import { estimateTempo, snapToZeroCrossing, type TempoEstimate } from '../../lib/tempo'
 import { withAlpha, type ResolvedTheme } from '../../lib/theme'
@@ -424,6 +425,9 @@ export function SamplerPanel(_props: { theme: ResolvedTheme }) {
   const stopAll = useCallback(() => {
     for (const index of [...voicesRef.current.keys()]) stopPad(index)
   }, [stopPad])
+
+  // „Beim Minimieren pausieren“ stops this too.
+  useEffect(() => registerPauser(() => stopAll()), [stopAll])
 
   const triggerPad = useCallback(
     (index: number, semitone = 0, velocity = 1) => {

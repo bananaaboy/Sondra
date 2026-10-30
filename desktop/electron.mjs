@@ -533,6 +533,10 @@ async function open() {
 
   log('Fenster offen')
 
+  // The page decides what a minimised window means („Beim Minimieren pausieren“); it only has to be told.
+  window.on('minimize', () => window?.webContents.send('sondra:window-state', 'minimized'))
+  window.on('restore', () => window?.webContents.send('sondra:window-state', 'restored'))
+
   try {
     globalShortcut.register('MediaPlayPause', () => {
       window?.webContents.send('sondra:media-action', 'toggle')
