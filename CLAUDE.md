@@ -1092,7 +1092,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   APK über den Browser an, mit genau diesem Hinweis. Die universelle APK ist
   seit yt-dlp rund 150 MB (Python und FFmpeg für drei Architekturen).
   **Eine APK je Prozessor** (30.10.2026, `splits { abi }` in
-  `build.gradle.kts`): neben der universellen `Sondra-Android.apk` liegen im
+  `build.gradle.kts`, nur mit `-PsplitApks`: Gradle baut kein AAB im selben
+  Lauf wie mehrere APKs — „Please disable building multiple APKs when
+  building an Android app bundle“ —, der Workflow baut deshalb erst Lint und
+  AAB, dann die APKs; ohne die Eigenschaft, also lokal, entsteht eine APK mit
+  allen drei Prozessoren): neben der universellen `Sondra-Android.apk` liegen im
   Release `Sondra-Android-arm64-v8a.apk`, `-armeabi-v7a.apk` und `-x86_64.apk`,
   alle mit derselben `versionCode` und demselben Schlüssel, deshalb ersetzt
   jede jede andere. Die x86-Bibliotheken der Abhängigkeiten sind ausgeschlossen
