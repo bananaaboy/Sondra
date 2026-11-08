@@ -23,7 +23,7 @@
  * every film — and without deleting.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -35,9 +35,9 @@ import {
   clickSelect,
   crumbs,
   deleteFiles,
-  episodeOf,
   episodesInSeason,
   folderSeries,
+  groupBySeries,
   listing,
   pickFolder,
   withoutFiles,
@@ -45,13 +45,16 @@ import {
   binFiles,
   countBin,
   restoreBinned,
+  seasonFolderName,
   type Binned,
   type DirectoryHandle,
   type FolderEpisode,
   type FolderFile,
   type KindFilter,
+  type SeriesGroup,
   type SortKey,
 } from '../../lib/folder'
+import { folderKey, lastVisit, prefsFor, savePrefs } from '../../lib/folderMemory'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
 import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, trashDriveFiles, useDrive } from '../../lib/googleDrive'
@@ -73,13 +76,15 @@ interface Preferences {
   sort: SortKey
   descending: boolean
   deep: boolean
+  /** Episodes of the Merkliste set under their series. */
+  group: boolean
 }
-const PREFS_KEY = 'sondra:ordner'
-const DEFAULT_PREFS: Preferences = { view: 'kacheln', sort: 'name', descending: false, deep: false }
+const DEFAULT_PREFS: Preferences = { view: 'kacheln', sort: 'name', descending: false, deep: false, group: true }
 
+/** The settings last used anywhere: where a folder starts, until it has settings of its own. */
 function readPrefs(): Preferences {
   try {
-    return { ...DEFAULT_PREFS, ...(JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as Partial<Preferences>) }
+    return prefsFor(DEFAULT_PREFS, '', localStorage)
   } catch {
     return DEFAULT_PREFS
   }
@@ -495,6 +500,42 @@ function FileItem({
 }
 
 /* -------------------------------------------------------------------------- */
+/* A series' season, as the folder sets it apart                               */
+/* -------------------------------------------------------------------------- */
+
+/** The heading over one season's episodes: whose, how many are here, how far along — with a thin line for it. */
+function SeriesHeader({ group, list }: { group: SeriesGroup; list: boolean }) {
+  const setPanel = useSession((state) => state.setPanel)
+  const progress = group.here > 0 ? group.seenHere / group.here : 0
+  // „von n“ only where the season has its number; else what the Merkliste has seen, and no more.
+  const meta = group.total ? `${group.here} hier · ${group.seen} von ${group.total} gesehen` : `${group.here} hier · ${group.seen} gesehen`
+  return (
+    <div role="presentation" className={list ? 'flex flex-col gap-[6px] border-t border-line bg-panel-soft px-[10px] py-[9px] first:border-t-0' : 'flex flex-col gap-[6px]'}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-[12px] gap-y-[2px]">
+        <span className="min-w-0 truncate text-body font-semibold text-ink">
+          <button
+            type="button"
+            onClick={() => {
+              requestOpenSeries(group.item.id)
+              setPanel('merkliste')
+            }}
+            title={`„${group.item.title}“ in der Merkliste öffnen`}
+            className="press text-left decoration-rule underline-offset-[3px] hover:underline"
+          >
+            {group.item.title}
+          </button>
+          <span className="font-normal text-prose"> · {seasonFolderName(group.season)}</span>
+        </span>
+        <span className="value shrink-0 text-micro text-prose">{meta}</span>
+      </div>
+      <div aria-hidden className="h-[3px] overflow-hidden rounded-pill bg-line">
+        <div className="h-full rounded-pill bg-ink" style={{ width: `${Math.round(progress * 100)}%` }} />
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* The sheet a phone gets for what the bar no longer has room for              */
 /* -------------------------------------------------------------------------- */
 
@@ -729,6 +770,11 @@ export function FolderPanel() {
 
   const [prefs, setPrefs] = useState<Preferences>(readPrefs)
   const [filter, setFilter] = useState<KindFilter>('alle')
+  /** Hide what the Merkliste has seen; show only what came since the visit before this one. */
+  const [onlyUnseen, setOnlyUnseen] = useState(false)
+  const [onlyNew, setOnlyNew] = useState(false)
+  /** When the folder was looked at last time, before this visit; null on a first one. */
+  const [since, setSince] = useState<number | null>(null)
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(PAGE)
   const [focusIndex, setFocusIndex] = useState(0)
@@ -770,11 +816,25 @@ export function FolderPanel() {
   const listRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  /** A folder remembers how it was set, and when it was last looked at. */
+  const memoryKey = scan ? folderKey(scan.name, scan.source) : null
+  useEffect(() => {
+    if (!memoryKey) return
+    try {
+      setPrefs(prefsFor(DEFAULT_PREFS, memoryKey, localStorage))
+      setSince(lastVisit(memoryKey, Date.now(), localStorage))
+    } catch {
+      /* storage blocked: the settings of the moment */
+    }
+    setOnlyUnseen(false)
+    setOnlyNew(false)
+  }, [memoryKey])
+
   const updatePrefs = (patch: Partial<Preferences>) =>
     setPrefs((current) => {
       const next = { ...current, ...patch }
       try {
-        localStorage.setItem(PREFS_KEY, JSON.stringify(next))
+        savePrefs(memoryKey, next, localStorage)
       } catch {
         /* only a convenience */
       }
@@ -800,7 +860,7 @@ export function FolderPanel() {
   useEffect(() => {
     setLimit(PAGE)
     setFocusIndex(0)
-  }, [dir, filter, query, prefs.deep, prefs.sort, prefs.descending])
+  }, [dir, filter, query, prefs.deep, prefs.sort, prefs.descending, prefs.group, onlyUnseen, onlyNew])
 
   const read = async (handle: DirectoryHandle) => {
     setProblem(null)
@@ -878,8 +938,26 @@ export function FolderPanel() {
         : { dirs: [], files: [], counts: { alle: 0, video: 0, audio: 0, image: 0, andere: 0 } },
     [scan, dir, prefs.deep, prefs.sort, prefs.descending, filter, query],
   )
-  const shownFiles = view.files.slice(0, limit)
-  const hasMore = view.files.length > limit
+  // The whole view set into series — for the headings, the badges and the counts of the two pills.
+  const everything = useMemo(() => groupBySeries(view.files, merk), [view.files, merk])
+  const seenHere = useMemo(() => view.files.filter((file) => everything.episodes.get(file.path)?.seen).length, [view.files, everything])
+  const newHere = useMemo(() => (since === null ? 0 : view.files.filter((file) => file.modified > since).length), [view.files, since])
+  // Then what the two pills leave: „Ungesehen“ hides the episodes the Merkliste has seen — and only those,
+  // so a file it cannot tell about is still there — and „Neu“ keeps what came after the last visit.
+  const kept = useMemo(
+    () =>
+      view.files.filter((file) => {
+        if (onlyUnseen && everything.episodes.get(file.path)?.seen) return false
+        if (onlyNew && since !== null && file.modified <= since) return false
+        return true
+      }),
+    [view.files, everything, onlyUnseen, onlyNew, since],
+  )
+  /** The one order the page draws, selects a range in and moves through: under series, or as sorted. */
+  const grouped = useMemo(() => (prefs.group ? (kept === view.files ? everything : groupBySeries(kept, merk)) : null), [prefs.group, kept, view.files, everything, merk])
+  const listed = grouped && grouped.groups.length > 0 ? grouped.ordered : kept
+  const shownFiles = listed.slice(0, limit)
+  const hasMore = listed.length > limit
   useEffect(() => {
     const button = moreRef.current
     if (!hasMore || !button || typeof IntersectionObserver === 'undefined') return undefined
@@ -892,15 +970,8 @@ export function FolderPanel() {
     watch.observe(button)
     return () => watch.disconnect()
   }, [hasMore, limit])
-  const order = useMemo(() => view.files.map((file) => file.path), [view.files])
-  const episodes = useMemo(() => {
-    const map = new Map<string, FolderEpisode>()
-    for (const file of shownFiles) {
-      const found = episodeOf(file, merk)
-      if (found) map.set(file.path, found)
-    }
-    return map
-  }, [shownFiles, merk])
+  const order = useMemo(() => listed.map((file) => file.path), [listed])
+  const episodes = everything.episodes
   const byPath = useMemo(() => new Map((scan?.files ?? []).map((file) => [file.path, file])), [scan])
   const chosen = useMemo(() => [...selected].map((path) => byPath.get(path)).filter((file): file is FolderFile => Boolean(file)), [selected, byPath])
   const chosenSize = chosen.reduce((sum, file) => sum + file.size, 0)
@@ -1202,7 +1273,57 @@ export function FolderPanel() {
 
   const steps = crumbs(scan.name, dir)
   const selectedMedia = media(chosen)
-  const empty = view.dirs.length === 0 && view.files.length === 0
+  const empty = view.dirs.length === 0 && listed.length === 0
+
+  /** The shown files in runs of one series' season — null when nothing is set under series. */
+  const segments = (() => {
+    if (!grouped || grouped.groups.length === 0) return null
+    const out: { key: string | null; files: FolderFile[]; start: number }[] = []
+    shownFiles.forEach((file, at) => {
+      const key = grouped.keyOf.get(file.path) ?? null
+      const last = out[out.length - 1]
+      if (last && last.key === key) last.files.push(file)
+      else out.push({ key, files: [file], start: at })
+    })
+    return out
+  })()
+  const groupOf = new Map(everything.groups.map((group) => [group.key, group]))
+  const segmentHead = (segment: { key: string | null }, list: boolean) => {
+    const group = segment.key ? groupOf.get(segment.key) : null
+    if (group) return <SeriesHeader group={group} list={list} />
+    return (
+      <div role="presentation" className={list ? 'flex items-baseline justify-between border-t border-line bg-panel-soft px-[10px] py-[9px]' : 'flex items-baseline justify-between'}>
+        <span className="text-small font-semibold text-ink">Weitere Dateien</span>
+        <span className="value text-micro text-prose">{grouped?.rest.length ?? 0}</span>
+      </div>
+    )
+  }
+  const fileItem = (file: FolderFile, at: number, list: boolean) => {
+    const index = view.dirs.length + at
+    const pick = () => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)
+    return (
+      <FileItem
+        key={file.path}
+        file={file}
+        list={list}
+        selected={selected.has(file.path)}
+        selecting={selected.size > 0}
+        episode={episodes.get(file.path) ?? null}
+        focused={focusIndex === index}
+        onFocus={() => setFocusIndex(index)}
+        onClick={(event) => {
+          if (!settled(event)) return
+          const next = clickSelect(selected, order, anchor, file.path, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })
+          select(next.selected, next.anchor)
+        }}
+        onToggle={pick}
+        onLongPress={pick}
+        onOpen={(event?: ReactMouseEvent) => {
+          if (settled(event)) void open(file)
+        }}
+      />
+    )
+  }
 
   // What the bar shows beside a mouse is what the sheet shows on a phone: written once.
   const kindPills = (
@@ -1279,9 +1400,55 @@ export function FolderPanel() {
       Mit Unterordnern
     </label>
   )
+  const pill = (on: boolean) =>
+    `press rounded-pill px-[12px] py-[6px] text-small font-medium transition-colors duration-[var(--dur-fast)] ${
+      on ? 'bg-ink font-semibold text-on-ink' : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
+    }`
+  // Two more ways to look, and only where they mean something: „Ungesehen“ once a seen episode is in view,
+  // „Neu“ once there is a file that came after the last visit. Switched on they stay, to be switched off.
+  const statePills = (
+    <>
+      {seenHere > 0 || onlyUnseen ? (
+        <button
+          type="button"
+          aria-pressed={onlyUnseen}
+          onClick={() => setOnlyUnseen((value) => !value)}
+          title="Was die Merkliste als gesehen abgehakt hat, ausblenden"
+          className={pill(onlyUnseen)}
+        >
+          Ungesehen <span className="value">{view.files.length - seenHere}</span>
+        </button>
+      ) : null}
+      {newHere > 0 || onlyNew ? (
+        <button
+          type="button"
+          aria-pressed={onlyNew}
+          onClick={() => setOnlyNew((value) => !value)}
+          title="Dateien, die seit Ihrem letzten Besuch dazugekommen sind"
+          className={pill(onlyNew)}
+        >
+          Neu <span className="value">{newHere}</span>
+        </button>
+      ) : null}
+    </>
+  )
+  const groupToggle =
+    everything.groups.length > 0 || !prefs.group ? (
+      <label className="flex cursor-pointer items-center gap-[8px] text-prose">
+        <input type="checkbox" checked={prefs.group} onChange={(event) => updatePrefs({ group: event.target.checked })} className="h-[16px] w-[16px] accent-[var(--color-ink)]" />
+        Nach Serie
+      </label>
+    ) : null
   /** How many of the settings behind „Ansicht“ differ from the usual, for the badge on the phone's button. */
   const changedSettings =
-    Number(filter !== 'alle') + Number(prefs.sort !== DEFAULT_PREFS.sort) + Number(prefs.descending) + Number(prefs.view !== DEFAULT_PREFS.view) + Number(prefs.deep)
+    Number(filter !== 'alle') +
+    Number(prefs.sort !== DEFAULT_PREFS.sort) +
+    Number(prefs.descending) +
+    Number(prefs.view !== DEFAULT_PREFS.view) +
+    Number(prefs.deep) +
+    Number(!prefs.group) +
+    Number(onlyUnseen) +
+    Number(onlyNew)
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -1369,7 +1536,10 @@ export function FolderPanel() {
       {/* Find, show, order. A phone gets the search and one button for the rest. */}
       <div className="flex flex-col gap-[10px] border-t border-line pt-[14px]">
         <div className="flex flex-wrap items-center gap-[8px]">
-          <div className="hidden sm:block">{kindPills}</div>
+          <div className="hidden flex-wrap items-center gap-[6px] sm:flex">
+            {kindPills}
+            {statePills}
+          </div>
           <span className="hidden flex-1 sm:block" />
           <label className="relative flex min-w-0 flex-1 items-center sm:w-[240px] sm:flex-none">
             <svg viewBox="0 0 16 16" aria-hidden className="pointer-events-none absolute left-[12px] h-4 w-4 text-prose" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -1395,22 +1565,32 @@ export function FolderPanel() {
             {changedSettings > 0 ? <span className="value rounded-pill bg-ink px-[6px] text-micro text-on-ink">{changedSettings}</span> : null}
           </button>
         </div>
-        {filter !== 'alle' ? (
-          <div className="flex sm:hidden">
-            <button
-              type="button"
-              onClick={() => setFilter('alle')}
-              aria-label={`Nur ${FILTERS.find((entry) => entry.id === filter)?.label}: aufheben`}
-              className="press inline-flex items-center gap-[6px] rounded-pill bg-ink px-[12px] py-[5px] text-small font-semibold text-on-ink"
-            >
-              Nur {FILTERS.find((entry) => entry.id === filter)?.label} <span aria-hidden>✕</span>
-            </button>
+        {filter !== 'alle' || onlyUnseen || onlyNew ? (
+          <div className="flex flex-wrap gap-[6px] sm:hidden">
+            {[
+              filter !== 'alle' ? { label: `Nur ${FILTERS.find((entry) => entry.id === filter)?.label}`, off: () => setFilter('alle') } : null,
+              onlyUnseen ? { label: 'Nur Ungesehenes', off: () => setOnlyUnseen(false) } : null,
+              onlyNew ? { label: 'Nur Neues', off: () => setOnlyNew(false) } : null,
+            ].map((chip) =>
+              chip ? (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={chip.off}
+                  aria-label={`${chip.label}: aufheben`}
+                  className="press inline-flex items-center gap-[6px] rounded-pill bg-ink px-[12px] py-[5px] text-small font-semibold text-on-ink"
+                >
+                  {chip.label} <span aria-hidden>✕</span>
+                </button>
+              ) : null,
+            )}
           </div>
         ) : null}
         <div className="hidden flex-wrap items-center gap-x-[16px] gap-y-[8px] text-small sm:flex">
           {sortControl}
           {viewToggle}
           {deepToggle}
+          {groupToggle}
           <span className="flex-1" />
           {scan?.handle || fromDrive ? (
             <button type="button" onClick={() => setBinOpen(true)} className={`${linkClass} text-small`}>
@@ -1430,7 +1610,10 @@ export function FolderPanel() {
           <div className="flex flex-col gap-[18px]">
             <section className="flex flex-col gap-[8px]">
               <h3 className="m-0 text-small font-semibold text-ink">Zeigen</h3>
-              {kindPills}
+              <div className="flex flex-wrap items-center gap-[6px]">
+                {kindPills}
+                {statePills}
+              </div>
             </section>
             <section className="flex flex-col gap-[10px]">
               <h3 className="m-0 text-small font-semibold text-ink">Ordnen</h3>
@@ -1438,6 +1621,7 @@ export function FolderPanel() {
               <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px] text-small">
                 {viewToggle}
                 {deepToggle}
+                {groupToggle}
               </div>
             </section>
             <section className="flex flex-col items-start gap-[12px] border-t border-line pt-[14px]">
@@ -1545,7 +1729,7 @@ export function FolderPanel() {
           </button>
           <span className="value text-micro text-prose">
             {view.dirs.length > 0 ? `${view.dirs.length} Ordner · ` : ''}
-            {view.files.length} {view.files.length === 1 ? 'Datei' : 'Dateien'}
+            {listed.length} {listed.length === 1 ? 'Datei' : 'Dateien'}
           </span>
         </div>
       ) : null}
@@ -1558,14 +1742,20 @@ export function FolderPanel() {
               ? `Keine Datei heisst wie „${query}“.`
               : filter !== 'alle'
                 ? `Hier ist keine Datei der Art „${FILTERS.find((entry) => entry.id === filter)?.label}“.`
-                : 'Dieser Ordner ist leer.'}
+                : onlyUnseen
+                  ? 'Hier ist nichts Ungesehenes mehr.'
+                  : onlyNew
+                    ? 'Seit Ihrem letzten Besuch ist hier nichts dazugekommen.'
+                    : 'Dieser Ordner ist leer.'}
           </p>
-          {query || filter !== 'alle' ? (
+          {query || filter !== 'alle' || onlyUnseen || onlyNew ? (
             <button
               type="button"
               onClick={() => {
                 setQuery('')
                 setFilter('alle')
+                setOnlyUnseen(false)
+                setOnlyNew(false)
               }}
               className={`${linkClass} text-small`}
             >
@@ -1617,41 +1807,28 @@ export function FolderPanel() {
                 ) : null}
 
                 {shownFiles.length > 0 ? (
-                  <div className="flex flex-col gap-[8px]">
-                    {view.dirs.length > 0 ? (
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-small font-semibold text-ink">Dateien</span>
-                        <span className="value text-micro text-prose">{view.files.length}</span>
+                  segments ? (
+                    segments.map((segment) => (
+                      <div key={`${segment.key ?? 'rest'}-${segment.start}`} className="flex flex-col gap-[8px]">
+                        {segmentHead(segment, false)}
+                        <div className="rise-list grid grid-cols-2 gap-[12px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                          {segment.files.map((file, at) => fileItem(file, segment.start + at, false))}
+                        </div>
                       </div>
-                    ) : null}
-                    <div className="rise-list grid grid-cols-2 gap-[12px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                      {shownFiles.map((file, at) => {
-                        const index = view.dirs.length + at
-                        return (
-                          <FileItem
-                            key={file.path}
-                            file={file}
-                            list={false}
-                            selected={selected.has(file.path)}
-                            selecting={selected.size > 0}
-                            episode={episodes.get(file.path) ?? null}
-                            focused={focusIndex === index}
-                            onFocus={() => setFocusIndex(index)}
-                            onClick={(event) => {
-                              if (!settled(event)) return
-                              const next = clickSelect(selected, order, anchor, file.path, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })
-                              select(next.selected, next.anchor)
-                            }}
-                            onToggle={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
-                            onLongPress={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
-                            onOpen={(event?: ReactMouseEvent) => {
-                              if (settled(event)) void open(file)
-                            }}
-                          />
-                        )
-                      })}
+                    ))
+                  ) : (
+                    <div className="flex flex-col gap-[8px]">
+                      {view.dirs.length > 0 ? (
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-small font-semibold text-ink">Dateien</span>
+                          <span className="value text-micro text-prose">{listed.length}</span>
+                        </div>
+                      ) : null}
+                      <div className="rise-list grid grid-cols-2 gap-[12px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                        {shownFiles.map((file, at) => fileItem(file, at, false))}
+                      </div>
                     </div>
-                  </div>
+                  )
                 ) : null}
               </>
             ) : (
@@ -1681,45 +1858,28 @@ export function FolderPanel() {
                     }}
                   />
                 ))}
-                {shownFiles.map((file, at) => {
-                  const index = view.dirs.length + at
-                  return (
-                    <FileItem
-                      key={file.path}
-                      file={file}
-                      list
-                      selected={selected.has(file.path)}
-                      selecting={selected.size > 0}
-                      episode={episodes.get(file.path) ?? null}
-                      focused={focusIndex === index}
-                      onFocus={() => setFocusIndex(index)}
-                      onClick={(event) => {
-                        if (!settled(event)) return
-                        const next = clickSelect(selected, order, anchor, file.path, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey })
-                        select(next.selected, next.anchor)
-                      }}
-                      onToggle={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
-                      onLongPress={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
-                      onOpen={(event?: ReactMouseEvent) => {
-                        if (settled(event)) void open(file)
-                      }}
-                    />
-                  )
-                })}
+                {segments
+                  ? segments.map((segment) => (
+                      <Fragment key={`${segment.key ?? 'rest'}-${segment.start}`}>
+                        {segmentHead(segment, true)}
+                        {segment.files.map((file, at) => fileItem(file, segment.start + at, true))}
+                      </Fragment>
+                    ))
+                  : shownFiles.map((file, at) => fileItem(file, at, true))}
               </>
             )}
           </div>
 
         </div>
       )}
-      {view.files.length > limit ? (
+      {listed.length > limit ? (
         <button
           ref={moreRef}
           type="button"
           onClick={() => setLimit((value) => value + PAGE)}
           className={`${linkClass} self-start text-small`}
         >
-          Weitere {Math.min(PAGE, view.files.length - limit)} von {view.files.length - limit} zeigen
+          Weitere {Math.min(PAGE, listed.length - limit)} von {listed.length - limit} zeigen
         </button>
       ) : null}
       {!empty ? (

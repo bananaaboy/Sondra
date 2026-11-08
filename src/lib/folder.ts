@@ -470,6 +470,101 @@ export function folderSeries(files: FolderFile[], items: SavedLinkItem[]): Folde
   return result.sort((a, b) => Number(b.item.status === 'watching') - Number(a.item.status === 'watching') || collator.compare(a.item.title, b.item.title))
 }
 
+/**
+ * One season of one series, as the folder page sets it apart: its episodes in
+ * order under a heading that says how far along it is.
+ */
+export interface SeriesGroup {
+  /** `<series id>|<season>` */
+  key: string
+  item: SavedLinkItem
+  season: number
+  files: FolderFile[]
+  /** Episodes in the folder — two copies of one count once. */
+  here: number
+  /** Of those, how many the Merkliste has seen. */
+  seenHere: number
+  /** Episodes of this season the Merkliste has seen, wherever they lie. */
+  seen: number
+  /** The episodes the season is known to have; null when the Merkliste does not know. */
+  total: number | null
+}
+
+export interface Grouped {
+  groups: SeriesGroup[]
+  /** Everything that is no episode of the Merkliste, in the order it came. */
+  rest: FolderFile[]
+  /**
+   * The groups one after the other, then the rest: the one order the page
+   * draws, selects a range in and moves through with the arrow keys.
+   */
+  ordered: FolderFile[]
+  /** Each episode's file → what it is, for the badges and for „Ungesehen“. */
+  episodes: Map<string, FolderEpisode>
+  /** Each grouped file → the key of its group. */
+  keyOf: Map<string, string>
+}
+
+/**
+ * The files set into series: per series of the Merkliste and season, in the
+ * order of the episodes; the series being watched first, then by title. What
+ * the Merkliste does not know stays where it was, after them.
+ */
+const matched = new WeakMap<FolderFile, { items: SavedLinkItem[]; match: EpisodeMatch | null }>()
+/** `matchFile`, remembered per file for the list it was asked with: typing in the search must not match every file again. */
+function matchOf(file: FolderFile, items: SavedLinkItem[]): EpisodeMatch | null {
+  const hit = matched.get(file)
+  if (hit && hit.items === items) return hit.match
+  const match = matchFile(file, items)
+  matched.set(file, { items, match })
+  return match
+}
+
+export function groupBySeries(files: FolderFile[], items: SavedLinkItem[]): Grouped {
+  const episodes = new Map<string, FolderEpisode>()
+  const found = new Map<string, { item: SavedLinkItem; season: number; list: FolderEpisode[] }>()
+  const rest: FolderFile[] = []
+  for (const file of files) {
+    const match = file.kind === 'video' || file.kind === 'audio' ? matchOf(file, items) : null
+    if (!match) {
+      rest.push(file)
+      continue
+    }
+    const entry: FolderEpisode = { file, season: match.season, episode: match.episode, seen: alreadySeen(match) }
+    episodes.set(file.path, entry)
+    const key = `${match.item.id}|${match.season}`
+    const group = found.get(key) ?? { item: match.item, season: match.season, list: [] }
+    group.list.push(entry)
+    found.set(key, group)
+  }
+  const watching = (item: SavedLinkItem) => Number(item.status === 'watching')
+  const groups: SeriesGroup[] = [...found.entries()]
+    .map(([key, group]) => {
+      // Two files of one episode: the plainer name first, so „(1)“ and „Kopie“ come after the original.
+      const list = [...group.list].sort((a, b) => a.episode - b.episode || a.file.name.length - b.file.name.length || collator.compare(a.file.name, b.file.name))
+      return {
+        key,
+        item: group.item,
+        season: group.season,
+        files: list.map((entry) => entry.file),
+        here: new Set(list.map((entry) => entry.episode)).size,
+        seenHere: new Set(list.filter((entry) => entry.seen).map((entry) => entry.episode)).size,
+        seen: seasonsOf(group.item).find((entry) => entry.number === group.season)?.watched.length ?? 0,
+        total: episodesInSeason(group.item, group.season),
+      }
+    })
+    // The films (season 0) after the seasons.
+    .sort(
+      (a, b) =>
+        watching(b.item) - watching(a.item) ||
+        collator.compare(a.item.title, b.item.title) ||
+        (a.season === 0 ? 1 : b.season === 0 ? -1 : a.season - b.season),
+    )
+  const keyOf = new Map<string, string>()
+  for (const group of groups) for (const file of group.files) keyOf.set(file.path, group.key)
+  return { groups, rest, ordered: [...groups.flatMap((group) => group.files), ...rest], episodes, keyOf }
+}
+
 /** The seasons a series is known to have, for „Staffel 1 · Folge 4 von 12“. */
 export function episodesInSeason(item: SavedLinkItem, season: number): number | null {
   return seasonsOf(item).find((entry) => entry.number === season)?.episodes ?? null
