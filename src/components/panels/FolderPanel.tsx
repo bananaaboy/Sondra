@@ -23,7 +23,7 @@
  * every film — and without deleting.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 
 import { saveBytes } from '../../lib/download'
 import { copiesOf, findDuplicates, type DuplicateReport } from '../../lib/duplicates'
@@ -85,6 +85,8 @@ function readPrefs(): Preferences {
 
 /** Tiles drawn at once; more on request — a folder of thousands stays quick. */
 const PAGE = 240
+/** A finger held this long on a tile selects it; a tap, on a finger, plays it. */
+const LONG_PRESS_MS = 450
 
 const FILTERS: { id: KindFilter; label: string }[] = [
   { id: 'alle', label: 'Alle' },
@@ -289,24 +291,80 @@ function DirTile({
 function FileItem({
   file,
   selected,
+  selecting,
   focused,
   onFocus,
   onClick,
   onToggle,
   onOpen,
+  onLongPress,
   episode,
   list,
 }: ItemProps & {
   file: FolderFile
   selected: boolean
+  /** Something is selected somewhere: a finger's tap then selects, instead of playing. */
+  selecting: boolean
   onClick: (event: ReactMouseEvent) => void
   onToggle: () => void
-  onOpen: () => void
+  onOpen: (event?: ReactMouseEvent) => void
+  onLongPress: () => void
   episode: FolderEpisode | null
   list: boolean
 }) {
   const { ref: seen, thumb } = useThumbnail(file)
   const node = useRef<HTMLDivElement | null>(null)
+  /**
+   * What a finger is doing. The way a click arrived decides what it means —
+   * never the width of the window: on a mouse (or a touch laptop's pad) a
+   * click selects and a double click opens, as in a file manager; with a
+   * finger a tap plays — unless something is selected, then it selects —
+   * and a long press selects.
+   */
+  const press = useRef<{ x: number; y: number; timer: number | null; long: boolean } | null>(null)
+  const wasTouch = useRef(false)
+  const stopPress = () => {
+    if (press.current?.timer) window.clearTimeout(press.current.timer)
+    if (press.current) press.current.timer = null
+  }
+  useEffect(() => () => stopPress(), [])
+  const pointerDown = (event: ReactPointerEvent) => {
+    wasTouch.current = event.pointerType === 'touch'
+    stopPress()
+    if (!wasTouch.current) {
+      press.current = null
+      return
+    }
+    const mine = { x: event.clientX, y: event.clientY, timer: null as number | null, long: false }
+    mine.timer = window.setTimeout(() => {
+      mine.timer = null
+      mine.long = true
+      try {
+        navigator.vibrate?.(12)
+      } catch {
+        /* a convenience */
+      }
+      onLongPress()
+    }, LONG_PRESS_MS)
+    press.current = mine
+  }
+  const pointerMove = (event: ReactPointerEvent) => {
+    const mine = press.current
+    if (mine?.timer && Math.hypot(event.clientX - mine.x, event.clientY - mine.y) > 10) stopPress()
+  }
+  const click = (event: ReactMouseEvent) => {
+    const mine = press.current
+    if (!mine) {
+      onClick(event)
+      return
+    }
+    press.current = null
+    // The press that selected has had its say; the click after it is not a tap.
+    if (mine.long) return
+    if (selecting) onToggle()
+    // The second tap of a double tap is not a second play.
+    else if (event.detail < 2) onOpen(event)
+  }
   useEffect(() => {
     if (focused) moveFocus(node.current)
   }, [focused])
@@ -323,8 +381,18 @@ function FileItem({
     'aria-selected': selected,
     tabIndex: focused ? 0 : -1,
     onFocus,
-    onClick,
-    onDoubleClick: onOpen,
+    onClick: click,
+    onDoubleClick: (event: ReactMouseEvent) => {
+      if (!wasTouch.current) onOpen(event)
+    },
+    onPointerDown: pointerDown,
+    onPointerMove: pointerMove,
+    onPointerUp: stopPress,
+    onPointerCancel: stopPress,
+    // A long press would open the system's own menu over the selection.
+    onContextMenu: (event: ReactMouseEvent) => {
+      if (wasTouch.current) event.preventDefault()
+    },
     title: file.path,
   } as const
   const checkbox = (
@@ -334,6 +402,12 @@ function FileItem({
       aria-label={selected ? `${file.name} abwählen` : `${file.name} auswählen`}
       onClick={(event) => {
         event.stopPropagation()
+        // A long press on the tick has already switched it.
+        if (press.current?.long) {
+          press.current = null
+          return
+        }
+        press.current = null
         onToggle()
       }}
       className="press grid place-items-center rounded-pill"
@@ -346,7 +420,7 @@ function FileItem({
     return (
       <div
         {...common}
-        className={`cv-row grid cursor-default grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-[10px] border-t border-line px-[10px] py-[7px] outline-none first:border-t-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px] ${
+        className={`cv-row grid cursor-default grid-cols-[28px_minmax(0,1fr)_auto] [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none] items-center gap-[10px] border-t border-line px-[10px] py-[7px] outline-none first:border-t-0 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink sm:grid-cols-[28px_minmax(0,1fr)_90px_90px_90px_80px] ${
           selected ? 'bg-panel-mid' : 'hover:bg-panel-soft'
         }`}
       >
@@ -369,7 +443,7 @@ function FileItem({
   return (
     <div
       {...common}
-      className={`cv-tile group relative flex cursor-default flex-col overflow-hidden rounded-card text-left outline-none transition-colors duration-[var(--dur-fast)] focus-visible:ring-2 focus-visible:ring-ink ${
+      className={`cv-tile group relative flex cursor-default flex-col [@media(pointer:coarse)]:select-none [@media(pointer:coarse)]:[-webkit-touch-callout:none] overflow-hidden rounded-card text-left outline-none transition-colors duration-[var(--dur-fast)] focus-visible:ring-2 focus-visible:ring-ink ${
         selected ? 'bg-panel-strong ring-2 ring-inset ring-ink' : 'bg-panel-mid ring-1 ring-inset ring-line hover:bg-panel-strong'
       }`}
     >
@@ -385,6 +459,16 @@ function FileItem({
         {episode ? (
           <span className="absolute left-[8px] top-[8px]">
             <EpisodeMark episode={episode} />
+          </span>
+        ) : null}
+        {!selecting && (file.kind === 'video' || file.kind === 'audio') ? (
+          // A finger plays with a tap: say so on the picture. A mouse has its double click and no need of this.
+          <span aria-hidden className="pointer-events-none absolute inset-0 hidden place-items-center [@media(pointer:coarse)]:grid">
+            <span className="grid h-[42px] w-[42px] place-items-center rounded-pill bg-ink/70 text-on-ink">
+              <svg viewBox="0 0 16 16" className="h-[16px] w-[16px] translate-x-[1px]" fill="currentColor">
+                <path d="M5 3.6c0-.6.7-1 1.2-.7l6.6 4.1c.5.3.5 1.1 0 1.4L6.2 12.5c-.5.3-1.2-.1-1.2-.7z" />
+              </svg>
+            </span>
           </span>
         ) : null}
         {duration ? (
@@ -1302,11 +1386,11 @@ export function FolderPanel() {
             aria-multiselectable
             aria-label={`Dateien in ${steps.at(-1)?.label ?? scan.name}`}
             onKeyDown={onKey}
-            className={
+            className={`touch-manipulation ${
               prefs.view === 'kacheln'
                 ? 'flex flex-col gap-[18px]'
                 : 'rise-list flex flex-col overflow-hidden rounded-card ring-1 ring-inset ring-line'
-            }
+            }`}
           >
             {prefs.view === 'kacheln' ? (
               <>
@@ -1354,6 +1438,7 @@ export function FolderPanel() {
                             file={file}
                             list={false}
                             selected={selected.has(file.path)}
+                            selecting={selected.size > 0}
                             episode={episodes.get(file.path) ?? null}
                             focused={focusIndex === index}
                             onFocus={() => setFocusIndex(index)}
@@ -1363,6 +1448,7 @@ export function FolderPanel() {
                               select(next.selected, next.anchor)
                             }}
                             onToggle={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
+                            onLongPress={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
                             onOpen={(event?: ReactMouseEvent) => {
                               if (settled(event)) void open(file)
                             }}
@@ -1408,6 +1494,7 @@ export function FolderPanel() {
                       file={file}
                       list
                       selected={selected.has(file.path)}
+                      selecting={selected.size > 0}
                       episode={episodes.get(file.path) ?? null}
                       focused={focusIndex === index}
                       onFocus={() => setFocusIndex(index)}
@@ -1417,6 +1504,7 @@ export function FolderPanel() {
                         select(next.selected, next.anchor)
                       }}
                       onToggle={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
+                      onLongPress={() => select(clickSelect(selected, order, anchor, file.path, { toggle: true, range: false }).selected, file.path)}
                       onOpen={(event?: ReactMouseEvent) => {
                         if (settled(event)) void open(file)
                       }}
@@ -1441,7 +1529,12 @@ export function FolderPanel() {
       ) : null}
       {!empty ? (
         <p className="text-small text-prose">
-          Klick wählt, Strg oder ⌘ dazu, Umschalt einen Bereich; Doppelklick oder Enter öffnet. Pfeiltasten und Leertaste gehen auch.
+          <span className="hidden [@media(hover:hover)_and_(pointer:fine)]:inline">
+            Klick wählt, Strg oder ⌘ dazu, Umschalt einen Bereich; Doppelklick oder Enter öffnet. Pfeiltasten und Leertaste gehen auch.
+          </span>
+          <span className="[@media(hover:hover)_and_(pointer:fine)]:hidden">
+            Antippen spielt ab. Das Häkchen oder langes Drücken wählt aus; danach wählt jedes Antippen.
+          </span>
         </p>
       ) : null}
 
