@@ -19,6 +19,7 @@ import {
   eraseFromBin,
   folderEpisodes,
   folderSeries,
+  groupBySeries,
   hintOf,
   hintProperties,
   listBin,
@@ -35,6 +36,7 @@ import {
   type FolderFile,
 } from '../src/lib/folder'
 import { createMerkItem } from '../src/lib/merkliste'
+import { folderKey, KEEP, lastVisit, prefsFor, savePrefs, type Store } from '../src/lib/folderMemory'
 
 let failures = 0
 function check(label: string, actual: unknown, expected: unknown) {
@@ -378,6 +380,84 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
   void handle
   const refused = await binFiles(root as never, [big])
   check('Zu gross zum Kopieren: gesagt, nichts verändert', [refused.binned.length, refused.failed[0]?.reason.includes('Zu gross'), root.entries.has('Film.mkv')], [0, true, true])
+}
+
+{
+  // Series set apart: per series and season, in the order of the episodes; the rest after them.
+  const files = scanFileList([
+    picked('Nana - 01.mp4', 'n1'),
+    picked('Frieren S02E01.mkv', 'f21'),
+    picked('Frieren S01E02.mkv', 'f12'),
+    picked('Cover.jpg', 'bild'),
+    picked('Frieren S01E01.mkv', 'f11'),
+    picked('Frieren S01E01 (1).mkv', 'f11 kopie!'),
+    picked('Urlaub.mp4', 'urlaub'),
+  ]).files
+  const frieren = createMerkItem({
+    id: 'f',
+    title: 'Frieren',
+    status: 'watching',
+    season: 1,
+    episode: 3,
+    seasons: [
+      { number: 1, episodes: 28, watched: [1, 2] },
+      { number: 2, episodes: null, watched: [] },
+    ],
+  })
+  const nana = createMerkItem({ id: 'n', title: 'Nana', status: 'later', season: 1, episode: 1, seasons: [{ number: 1, episodes: 47, watched: [] }] })
+  const grouped = groupBySeries(files, [nana, frieren])
+  check('Gruppen: „Am Schauen“ zuerst, dann nach Titel, Staffeln der Reihe nach', grouped.groups.map((group) => `${group.item.title} ${group.season}`), ['Frieren 1', 'Frieren 2', 'Nana 1'])
+  check('Folgen in der Reihenfolge der Folgen, nicht der Namen', grouped.groups[0].files.map((file) => file.name), ['Frieren S01E01.mkv', 'Frieren S01E01 (1).mkv', 'Frieren S01E02.mkv'])
+  check('Zwei Kopien einer Folge zählen einmal', [grouped.groups[0].here, grouped.groups[1].here, grouped.groups[2].here], [2, 1, 1])
+  check('Gesehen: was die Merkliste weiss, nicht nur was im Ordner liegt', [grouped.groups[0].seen, grouped.groups[1].seen], [2, 0])
+  check('…und davon, was im Ordner liegt', [grouped.groups[0].seenHere, grouped.groups[1].seenHere, grouped.groups[2].seenHere], [2, 0, 0])
+  check('„von n“ nur, wo die Staffel ihre Zahl kennt', [grouped.groups[0].total, grouped.groups[1].total, grouped.groups[2].total], [28, null, 47])
+  check('Was keine Folge ist, bleibt hinten, in seiner Reihenfolge', grouped.rest.map((file) => file.name), ['Cover.jpg', 'Urlaub.mp4'])
+  check('Die eine Reihenfolge: Gruppen, dann der Rest', grouped.ordered.map((file) => file.name), [
+    'Frieren S01E01.mkv',
+    'Frieren S01E01 (1).mkv',
+    'Frieren S01E02.mkv',
+    'Frieren S02E01.mkv',
+    'Nana - 01.mp4',
+    'Cover.jpg',
+    'Urlaub.mp4',
+  ])
+  check('Jede Datei ist genau einmal darin', new Set(grouped.ordered.map((file) => file.path)).size, files.length)
+  check('Folgen kennen ihre Gruppe, der Rest keine', [grouped.keyOf.get('Frieren S01E02.mkv'), grouped.keyOf.get('Cover.jpg')], ['f|1', undefined])
+  check('Gesehene Folgen sind markiert, auch für „Ungesehen“', [...grouped.episodes.values()].filter((entry) => entry.seen).map((entry) => `${entry.season}:${entry.episode}`).sort(), ['1:1', '1:1', '1:2'])
+  check('Ohne Merkliste keine Gruppen, alles im Rest', [groupBySeries(files, []).groups.length, groupBySeries(files, []).rest.length], [0, files.length])
+}
+
+{
+  // What is remembered of a folder: its settings, and the visit before this one.
+  const memory = () => {
+    const data = new Map<string, string>()
+    const store: Store = { getItem: (key) => data.get(key) ?? null, setItem: (key, value) => void data.set(key, value) }
+    return { data, store }
+  }
+  const defaults = { view: 'kacheln', sort: 'name', deep: false, group: true }
+  const { store } = memory()
+  check('Noch nichts gemerkt: die Vorgaben', prefsFor(defaults, folderKey('Anime'), store), defaults)
+  savePrefs(folderKey('Anime'), { ...defaults, view: 'liste', sort: 'size' }, store)
+  check('Dieser Ordner: wie beim letzten Mal', prefsFor(defaults, folderKey('Anime'), store), { ...defaults, view: 'liste', sort: 'size' })
+  check('Ein anderer Ordner beginnt mit den letzten Einstellungen', prefsFor(defaults, folderKey('Filme'), store), { ...defaults, view: 'liste', sort: 'size' })
+  savePrefs(folderKey('Filme'), { ...defaults, deep: true }, store)
+  check('…und behält danach seine eigenen', [prefsFor(defaults, folderKey('Filme'), store).deep, prefsFor(defaults, folderKey('Anime'), store).deep], [true, false])
+  check('Derselbe Name in Drive ist ein anderer Ordner', folderKey('Sondra', 'drive') !== folderKey('Sondra'), true)
+  store.setItem('sondra:ordner:je', '{kaputt')
+  check('Kaputt Gespeichertes: die letzten Einstellungen statt eines Fehlers', prefsFor(defaults, folderKey('Anime'), store).view, 'kacheln')
+  store.setItem('sondra:ordner', JSON.stringify({ view: 'liste', frueher: 'etwas' }))
+  check('Was die Vorgaben nicht kennen, fällt weg', Object.keys(prefsFor(defaults, folderKey('Anime'), store)).sort(), ['deep', 'group', 'sort', 'view'])
+
+  const visits = memory()
+  const session = new Map<string, number | null>()
+  check('Erster Besuch: nichts davor, also nichts „Neu“', lastVisit('geraet:Anime', 1000, visits.store, session), null)
+  check('Im selben Besuch bleibt die Antwort', lastVisit('geraet:Anime', 2000, visits.store, session), null)
+  check('Der nächste Besuch kennt den davor', lastVisit('geraet:Anime', 3000, visits.store, new Map()), 1000)
+  check('Und der danach den vom letzten Mal', lastVisit('geraet:Anime', 4000, visits.store, new Map()), 3000)
+  const many = memory()
+  for (let n = 0; n < KEEP + 5; n += 1) savePrefs(`geraet:${n}`, { ...defaults, sort: `s${n}` }, many.store)
+  check('Mehr als die letzten Ordner werden nicht gemerkt', [prefsFor(defaults, 'geraet:0', many.store).sort, prefsFor(defaults, `geraet:${KEEP + 4}`, many.store).sort], [`s${KEEP + 4}`, `s${KEEP + 4}`])
 }
 
 console.log(failures === 0 ? '\nAlles in Ordnung.' : `\n${failures} Prüfung(en) fehlgeschlagen.`)

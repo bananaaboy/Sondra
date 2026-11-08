@@ -19,6 +19,15 @@ await context.route('https://www.googleapis.com/**', drive)
 await context.addInitScript(() => {
   localStorage.setItem('sondra:drive', JSON.stringify({ linked: true, email: 'test@example.com' }))
   localStorage.setItem('sondra:drive:token', JSON.stringify({ token: 'tok', expiresAt: Date.now() + 3600_000 }))
+  // The Merkliste knows Frieren: two of twelve seen. And the folder was last looked at an hour ago.
+  localStorage.setItem(
+    'sondra:saved_links',
+    JSON.stringify([{ id: 'fr', title: 'Frieren', url: '', season: 1, episode: 3, status: 'watching', updatedAt: Date.now(), seasons: [{ number: 1, episodes: 12, watched: [1, 2] }] }]),
+  )
+  if (!sessionStorage.getItem('besuch-gesetzt')) {
+    localStorage.setItem('sondra:ordner:besuch', JSON.stringify({ 'drive:Google Drive': Date.now() - 3600_000 }))
+    sessionStorage.setItem('besuch-gesetzt', '1')
+  }
 })
 const page = await context.newPage()
 const errors = []
@@ -108,6 +117,87 @@ const noteButton = page.locator('p').getByRole('button', { name: /^(Mehr|Weniger
 check('Der Drive-Hinweis ist eingeklappt, „Mehr“ klappt ihn auf', !(await page.getByText('Gelöschtes landet im').isVisible()) && (await noteButton.innerText()) === 'Mehr')
 await noteButton.tap()
 check('…und „Weniger“ klappt ihn zu', (await page.getByText('Gelöschtes landet im').isVisible()) && (await noteButton.innerText()) === 'Weniger' && (await noteButton.getAttribute('aria-expanded')) === 'true')
+
+// „Weiterschauen“ is one row per series on a phone, without the file name. A fresh load, the folder last seen an hour ago.
+await page.evaluate(() => localStorage.setItem('sondra:ordner:besuch', JSON.stringify({ 'drive:Google Drive': Date.now() - 3600_000 })))
+await page.reload()
+await page.waitForTimeout(800)
+if (await page.getByRole('button', { name: 'Aus Google Drive' }).count()) await page.getByRole('button', { name: 'Aus Google Drive' }).tap()
+await page.getByRole('heading', { name: 'Weiterschauen' }).waitFor({ timeout: 15_000 })
+const next = page.getByRole('button', { name: 'Frieren', exact: true }).first()
+check('Weiterschauen: Serie, Staffel und Folge von n', /Folge\s*3\s*von\s*12/.test(await page.locator('section[aria-labelledby=ordner-weiter]').innerText()))
+check('…ohne den Dateinamen davor', !(await page.locator('section[aria-labelledby=ordner-weiter]').getByText('Frieren S01E03.mp4').isVisible()))
+const cardBox = await page.locator('section[aria-labelledby=ordner-weiter] > div > div').first().boundingBox()
+check('…eine flache Zeile', cardBox.height < 110, `${Math.round(cardBox.height)} px`)
+await page.screenshot({ path: `${OUT}ordner-handy-weiter.png` })
+void next
+await page.getByText('Heruntergeladen', { exact: true }).first().tap()
+await page.getByText('Frieren S01E01.mp4').first().waitFor({ timeout: 15_000 })
+
+// Under their series: a heading with the season, how many are here and how far along.
+const heading = page.getByRole('button', { name: 'Frieren', exact: true })
+await heading.waitFor({ timeout: 5000 })
+const list = await page.locator('[role=listbox]').innerText()
+check('Gruppe: Serie und Staffel', /Frieren\s*·\s*Staffel 1/.test(list.replace(/\n+/g, ' ')))
+check('…wie viele hier und wie weit', /3 hier · 2 von 12 gesehen/.test(list))
+check('…und „Weitere Dateien“ für den Rest', /Weitere Dateien/.test(list) && (await tile('Notiz').isVisible()))
+const order = await page.locator('[role=option]').allInnerTexts()
+check('Die Folgen der Reihe nach, der Rest danach', order.map((text) => /E0(\d)/.exec(text)?.[1] ?? 'x').join('') === '123x', order.map((text) => /E0(\d)|Notiz/.exec(text)?.[0]).join(' '))
+await page.screenshot({ path: `${OUT}ordner-handy-gruppen.png` })
+
+// „Ungesehen“ and „Neu“, in the sheet.
+await page.getByRole('button', { name: /^Ansicht/ }).tap()
+const panel = page.getByRole('dialog', { name: 'Ansicht und Ordner' })
+await panel.waitFor()
+check('Ungesehen zählt, was übrig bleibt (4 Dateien, 2 gesehen)', /Ungesehen\s*2/.test(await panel.innerText()))
+check('Neu zählt, was nach dem letzten Besuch kam', /Neu\s*4/.test(await panel.innerText()))
+await panel.getByRole('button', { name: /^Ungesehen/ }).tap()
+await page.keyboard.press('Escape')
+await panel.waitFor({ state: 'detached' })
+check('Ungesehen: die gesehenen Folgen sind weg, der Rest bleibt', (await page.getByText('Frieren S01E01.mp4').count()) === 0 && (await page.getByText('Frieren S01E02.mp4').count()) === 0 && (await tile('Frieren S01E03').isVisible()) && (await tile('Notiz').isVisible()))
+check('…als Marke da, und der Knopf zählt', (await page.getByRole('button', { name: 'Nur Ungesehenes: aufheben' }).isVisible()) && /1/.test(await page.getByRole('button', { name: /^Ansicht/ }).innerText()))
+await page.getByRole('button', { name: 'Nur Ungesehenes: aufheben' }).tap()
+await page.getByText('Frieren S01E01.mp4').first().waitFor({ timeout: 5000 })
+
+// Remembered for this folder: list instead of tiles, and not under series.
+await page.getByRole('button', { name: /^Ansicht/ }).tap()
+await panel.getByRole('radio', { name: 'Liste' }).tap()
+await panel.getByRole('checkbox', { name: 'Nach Serie' }).uncheck()
+await page.keyboard.press('Escape')
+await panel.waitFor({ state: 'detached' })
+check('Nicht mehr nach Serie: keine Überschrift', (await page.getByRole('button', { name: 'Frieren', exact: true }).count()) === 0)
+await page.reload()
+await page.waitForTimeout(800)
+if (await page.getByRole('button', { name: 'Aus Google Drive' }).count()) await page.getByRole('button', { name: 'Aus Google Drive' }).tap()
+await page.getByText('Heruntergeladen', { exact: true }).first().tap()
+await page.getByText('Frieren S01E01.mp4').first().waitFor({ timeout: 15_000 })
+await page.getByRole('button', { name: /^Ansicht/ }).tap()
+check('Beim nächsten Besuch: so, wie dieser Ordner eingestellt war', (await panel.getByRole('radio', { name: 'Liste' }).getAttribute('aria-checked')) === 'true' && !(await panel.getByRole('checkbox', { name: 'Nach Serie' }).isChecked()))
+await page.keyboard.press('Escape')
+
+// The same folder at a desk, with a mouse: everything stays in the bar, as it was.
+{
+  const desk = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' })
+  await desk.route('https://www.googleapis.com/**', drive)
+  await desk.addInitScript(() => {
+    localStorage.setItem('sondra:drive', JSON.stringify({ linked: true, email: 'test@example.com' }))
+    localStorage.setItem('sondra:drive:token', JSON.stringify({ token: 'tok', expiresAt: Date.now() + 3600_000 }))
+    localStorage.setItem('sondra:saved_links', JSON.stringify([{ id: 'fr', title: 'Frieren', url: '', season: 1, episode: 3, status: 'watching', updatedAt: Date.now(), seasons: [{ number: 1, episodes: 12, watched: [1, 2] }] }]))
+    localStorage.setItem('sondra:ordner:besuch', JSON.stringify({ 'drive:Google Drive': Date.now() - 3600_000 }))
+  })
+  const table = await desk.newPage()
+  await table.goto(`${BASE}#ordner`)
+  await table.waitForTimeout(1200)
+  if (await table.getByRole('button', { name: 'Aus Google Drive' }).count()) await table.getByRole('button', { name: 'Aus Google Drive' }).click()
+  await table.getByText('Heruntergeladen', { exact: true }).first().click()
+  await table.getByText('Frieren S01E01.mp4').first().waitFor({ timeout: 15_000 })
+  await table.waitForTimeout(700)
+  check('Am Schreibtisch: Art, Ungesehen und Neu in der Leiste', (await table.getByRole('radio', { name: /^Video/ }).isVisible()) && (await table.getByRole('button', { name: /^Ungesehen \d+$/ }).isVisible()) && (await table.getByRole('button', { name: /^Neu \d+$/ }).isVisible()))
+  check('…Sortierung, Ansicht und „Nach Serie“ ebenfalls, ohne „Ansicht“-Knopf', (await table.getByLabel('Sortieren').isVisible()) && (await table.getByRole('checkbox', { name: 'Nach Serie' }).isVisible()) && !(await table.getByRole('button', { name: /^Ansicht/ }).isVisible()))
+  check('…und die Klickregeln der Maus im Hinweis', /Strg oder ⌘/.test(await table.locator('main').innerText()))
+  await table.screenshot({ path: `${OUT}ordner-schreibtisch.png` })
+  await desk.close()
+}
 
 check('Keine Fehler auf der Seite', errors.length === 0, errors.join(' | '))
 await browser.close()
