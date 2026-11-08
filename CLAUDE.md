@@ -306,7 +306,8 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   auf dem anderen Gerät, Ordner in beide Richtungen, drei Übertragungen auf
   einmal, Fortsetzen nach einer gekappten Leitung), der Ordner „Sondra“ in
   Drive samt Löschen, die Bewegung (Reiterstrich, Dialoge, Menüs, ruhige
-  Bewegung) und „Beim Minimieren pausieren“. Drive läuft als Nachbildung im Prozess des Tests
+  Bewegung), „Beim Minimieren pausieren“ und der Player auf dem Handy (Tippen,
+  Doppeltippen, Steuerung ein- und ausblenden). Drive läuft als Nachbildung im Prozess des Tests
   (`scripts/e2e/lib.mjs`), `run.mjs` startet `dev-service` selbst. Jedes
   Szenario ist ein eigener Prozess; neue Funktionen bekommen dort ihr
   Szenario, nicht nur eine Prüfung unter Node.
@@ -368,7 +369,17 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   hier bis 720p; neu rechnen nur auf Klick, weil es so lange dauert wie der
   Film. „Weiter bei“ und Lautstärke bleiben im `localStorage` dieses Geräts.
   Seit dem 2.10.2026 ein Player wie die bekannten: Steuerung über dem Bild
-  auf einem Verlauf, blendet sich beim Abspielen aus; alles Einstellbare
+  auf einem Verlauf, blendet sich beim Abspielen aus (Maus nach 4 s, Finger
+  nach 7 s). **Auf dem Handy** (8.11.2026, „alles wird zu schnell
+  ausgeblendet, du kannst im Video nichts machen“): ein Tipp ins Bild
+  entscheidet nach dem Stand beim Aufsetzen des Fingers (`shownAtTouchRef`),
+  nicht nach dem, was der Druck selbst geweckt hat — vorher holte
+  `pointerdown` die Leiste und `touchend` blendete sie sofort wieder aus; war
+  sie oben, geht sie erst nach dem Doppeltipp-Fenster weg (320 ms), damit
+  „zehn Sekunden vor“ nicht flackert. Der Verlauf über dem Bild ist nur Farbe
+  und fängt keinen Tipp ab (`pointer-events-none`, nur die Steuerung selbst
+  nimmt Tipps an); auf einem Handy-Bild lag er vorher über fast der ganzen
+  Fläche. Szenario „abspielen“ (390 × 844, Touch, `film.webm`); alles Einstellbare
   hinter dem Zahnrad (`player/SettingsMenu.tsx`): Qualität (kleinere Fassung
   per FFmpeg, der Film läuft weiter), Tempo, Untertitel samt Grösse und
   Hintergrund, Tonspur, Bild (Einpassen/Füllen, Helligkeit, Kontrast,
