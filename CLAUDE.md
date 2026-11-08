@@ -168,6 +168,49 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Ordner-Karte öffnet die Serie in der Merkliste. **Doppelte finden** (`lib/duplicates.ts`): nur gleich grosse Dateien
   werden gelesen, bis 32 MB ganz (SHA-256), darüber an 32 Stellen; behalten
   wird die ohne „(1)“/„Kopie“, sonst die älteste. `npm run verify:folder`.
+  **Der Ordner mit dem Finger** (8.11.2026, Version 1.2.1, „den Tab Ordner
+  verbessern“; `FileItem`, `FolderSheet` in `FolderPanel.tsx`): erkannt wird
+  der Finger an `pointerType === 'touch'`, nicht an der Breite — ein Tablet
+  mit Maus bleibt ein Mauspult. Ein **Tipp spielt ab**, **langes Drücken**
+  (450 ms, weiter als 10 px Bewegung bricht es ab) **wählt aus**, und der Tipp,
+  der das lange Drücken beendet, spielt nichts; ist etwas gewählt, wählt jeder
+  Tipp weiter, und die Auswahlleiste unten (Zahl, Abspielen, die übrigen
+  Handlungen — sie umbricht auf dem Handy) ist die Bedienung dafür. Das Kontextmenü des Browsers ist für den Finger
+  aus, `event.detail < 2` verhindert, dass der zweite Tipp eines Doppeltipps
+  nachspielt. Auf dem Handy steht **eine Zeile**: Suche und „Ansicht“ (der
+  Knopf zählt, was vom Üblichen abweicht); Art, Ordnung, Ansicht, die anderen
+  Ordner und „Zuletzt geöffnet“ liegen in einem Blatt von unten (`sheet`
+  Bewegung, Escape und Tipp daneben schliessen, der Fokus bleibt darin und
+  kehrt zurück), aktive Filter stehen als Marken daneben, der Papierkorb ist
+  ein Chip, und die Hinweise (Drive: „nur was Sondra anlegte“) sind
+  eingeklappt, „Mehr“ klappt sie auf. Ab `sm` bleibt alles in der Leiste.
+  **„Weiterschauen“ gab es schon** (`ContinueRow`); es wurde nur zur flachen
+  Zeile (72 px) mit Serie, Staffel und Folge. **Folgen unter ihrer Serie**
+  (`groupBySeries` in `lib/folder.ts`, „Nach Serie“): Überschrift mit
+  Serienname (öffnet sie in der Merkliste) und Staffel, „5 hier · 2 von 12
+  gesehen“ und einer 3-px-Linie für das Gesehene hier; Folgen nach Nummer
+  (`episodeMatch`), was zu keiner Serie der Merkliste passt, kommt danach
+  unter „Weitere Dateien“. Am Schauen zuerst, Staffeln aufsteigend, Staffel 0
+  (Filme) zuletzt. Pille **„Ungesehen“** zeigt nur, was die Merkliste noch
+  nicht abgehakt hat (Dateien ohne Serie bleiben), **„Neu“** nur, was seit dem
+  letzten Besuch dieses Ordners hinzukam. **Die Ansicht gehört dem Ordner**
+  (`lib/folderMemory.ts`): Art, Sortierung, Ansicht, Tiefe, „Nach Serie“ und
+  „Ungesehen“ je Ordner (`sondra:ordner:je`, höchstens 40; Drive als
+  `drive:<Name>`), der zuletzt benutzte Satz (`sondra:ordner`) ist die Vorgabe
+  für einen neuen Ordner. Der Zeitpunkt des vorigen Besuchs
+  (`sondra:ordner:besuch`) bleibt für die Sitzung stabil (`lastVisit`, Map im
+  Modul) — sonst wäre „Neu“ nach dem Einlesen leer. **Zuletzt geöffnete
+  Ordner** (`mergeRecent`, IndexedDB `sondra-ordner`, Schlüssel `liste`, fünf,
+  der gerade offene zuerst, gleiche Ordner per `isSameEntry` zusammen, sonst
+  per Name): am Schreibtisch „Zuletzt“ als Menü in der Leiste, auf der
+  leeren Seite eine Taste je Ordner („„Musik“ öffnen“), auf dem Handy im
+  Blatt; auch sie werden nie still gelesen, nur angeboten. **Der Ordner-Tab
+  liest den gemerkten Ordner genau einmal von selbst** (`triedHandle`,
+  `triedDrive`): ein Ordner, der inzwischen fehlt, ließ die Wirkung vorher
+  ohne Ende neu lesen. Szenarien „ordner-handy“ (390 × 844, Touch) und
+  „ordner-zuletzt“ (echte Ordner im Dateisystem der Seite). Das Verhalten
+  des Fingers ist in einem simulierten Chromium (`hasTouch`, CDP-Touch)
+  geprüft, nicht auf einem echten Telefon.
 - **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
   Dateimenü oder Doppelklick auf den Namen; die Endung bleibt neben dem
   Feld stehen, was Windows ablehnt (`\ / : * ? " < > |`, CON …), wird
@@ -307,7 +350,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   einmal, Fortsetzen nach einer gekappten Leitung), der Ordner „Sondra“ in
   Drive samt Löschen, die Bewegung (Reiterstrich, Dialoge, Menüs, ruhige
   Bewegung), „Beim Minimieren pausieren“ und der Player auf dem Handy (Tippen,
-  Doppeltippen, Steuerung ein- und ausblenden). Drive läuft als Nachbildung im Prozess des Tests
+  Doppeltippen, Steuerung ein- und ausblenden), der Ordner auf dem Handy (Tippen,
+  langes Drücken, Blatt, Gruppen, Ansicht je Ordner) und die zuletzt geöffneten
+  Ordner. Drive läuft als Nachbildung im Prozess des Tests
   (`scripts/e2e/lib.mjs`), `run.mjs` startet `dev-service` selbst. Jedes
   Szenario ist ein eigener Prozess; neue Funktionen bekommen dort ihr
   Szenario, nicht nur eine Prüfung unter Node.
