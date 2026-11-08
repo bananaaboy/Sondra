@@ -24,6 +24,7 @@ import {
   folderEpisodes,
   matchFile,
   playQueue,
+  recentFolders,
   rememberFolder,
   rememberedFolder,
   scanDrive,
@@ -50,6 +51,8 @@ export interface FolderState {
   scanning: { files: number } | null
   /** The folder kept from last time, once looked up. */
   remembered: DirectoryHandle | null
+  /** The few folders before it, newest first, to offer again. */
+  recent: DirectoryHandle[]
   /** Where the folder came from last time: this device, or Google Drive. */
   source: 'device' | 'drive' | null
 }
@@ -81,6 +84,7 @@ export const useFolder = create<FolderState>(() => ({
   anchor: null,
   scanning: null,
   remembered: null,
+  recent: [],
   source: readSource(),
 }))
 
@@ -97,7 +101,7 @@ export async function readFolder(handle: DirectoryHandle): Promise<FolderScan | 
     clearThumbnails()
     useFolder.setState({ scan, dir: '', selected: new Set(), anchor: null, remembered: handle })
     keepSource('device')
-    void rememberFolder(handle)
+    void rememberFolder(handle).then(recentFolders).then((recent) => useFolder.setState({ recent }))
     useSession.getState().log('ordner', `${scan.name}: ${scan.files.length} Dateien gelesen${scan.truncated ? ' (gekürzt)' : ''}`)
     return scan
   } catch (error) {
@@ -158,6 +162,7 @@ export async function lookUpRemembered(): Promise<DirectoryHandle | null> {
   const known = useFolder.getState().remembered
   if (known) return known
   const handle = await rememberedFolder()
+  void recentFolders().then((recent) => useFolder.setState({ recent }))
   if (handle) useFolder.setState({ remembered: handle })
   return handle
 }

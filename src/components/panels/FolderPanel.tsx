@@ -536,6 +536,59 @@ function SeriesHeader({ group, list }: { group: SeriesGroup; list: boolean }) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* The folders before this one                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** „Zuletzt“: the few folders looked at before, to open again with a click — the browser asks again for each. */
+function RecentMenu({ folders, onOpen }: { folders: DirectoryHandle[]; onOpen: (handle: DirectoryHandle) => void }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const away = (event: MouseEvent) => {
+      if (!box.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', away)
+    window.addEventListener('keydown', escape, true)
+    return () => {
+      document.removeEventListener('mousedown', away)
+      window.removeEventListener('keydown', escape, true)
+    }
+  }, [open])
+  if (folders.length === 0) return null
+  return (
+    <span ref={box} className="relative">
+      <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)} className={`${linkClass} text-small`}>
+        Zuletzt
+      </button>
+      {open ? (
+        <div role="menu" aria-label="Zuletzt geöffnete Ordner" className="drop elevate-lift absolute right-0 top-full z-30 mt-[6px] flex min-w-[200px] max-w-[320px] flex-col rounded-card bg-raised p-[6px] ring-1 ring-inset ring-rule">
+          {folders.map((handle, index) => (
+            <button
+              key={`${handle.name}-${index}`}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onOpen(handle)
+              }}
+              className="press truncate rounded-nav px-[10px] py-[7px] text-left text-small text-ink hover:bg-panel-soft"
+            >
+              {handle.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </span>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* The sheet a phone gets for what the bar no longer has room for              */
 /* -------------------------------------------------------------------------- */
 
@@ -780,6 +833,7 @@ export function FolderPanel() {
   const [focusIndex, setFocusIndex] = useState(0)
   const scanning = useFolder((state) => state.scanning)
   const remembered = useFolder((state) => state.remembered)
+  const recent = useFolder((state) => state.recent)
   const [problem, setProblem] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [dupes, setDupes] = useState<{ running: { done: number; total: number } | null; report: DuplicateReport | null; error: string | null } | null>(null)
@@ -841,18 +895,26 @@ export function FolderPanel() {
       return next
     })
 
-  // Automatically load Drive or remembered folder when connected or already permitted.
+  // Automatically load Drive or remembered folder when connected or already permitted — once each. A folder
+  // that has since gone, or a Drive that does not answer, ends the attempt with `scanning` back to null, which
+  // runs this effect again: without the note of what was tried it would go on trying for good.
+  const triedHandle = useRef<unknown>(null)
+  const triedDrive = useRef(false)
   useEffect(() => {
     if (scan || scanning) return
     if (drive) {
-      void readDriveFolder().catch(() => {})
+      if (!triedDrive.current) {
+        triedDrive.current = true
+        void readDriveFolder().catch(() => {})
+      }
       return
     }
+    triedDrive.current = false
     if (canPickFolder) {
       void lookUpRemembered().then(async (handle) => {
-        if (handle && (await allowed(handle, 'read', false))) {
-          void readFolder(handle).catch(() => {})
-        }
+        if (!handle || triedHandle.current === handle) return
+        triedHandle.current = handle
+        if (await allowed(handle, 'read', false)) void readFolder(handle).catch(() => {})
       })
     }
   }, [scan, scanning, drive])
@@ -1245,6 +1307,14 @@ export function FolderPanel() {
                   „{remembered.name}“ wieder öffnen
                 </Button>
               ) : null}
+              {recent
+                .filter((handle, at) => !(at === 0 && remembered && handle.name === remembered.name))
+                .slice(0, 4)
+                .map((handle, at) => (
+                  <Button key={`${handle.name}-${at}`} type="button" variant="quiet" onClick={() => void reopen(handle)}>
+                    „{handle.name}“ öffnen
+                  </Button>
+                ))}
               {driveConfigured ? (
                 <Button type="button" variant="quiet" onClick={() => void chooseDrive()}>
                   <DriveIcon />
@@ -1271,6 +1341,8 @@ export function FolderPanel() {
 
   /* -- with a folder ---------------------------------------------------------------- */
 
+  // The folders before this one — not the one open now.
+  const otherRecent = recent.filter((handle) => fromDrive || !scan.handle || handle.name !== scan.name)
   const steps = crumbs(scan.name, dir)
   const selectedMedia = media(chosen)
   const empty = view.dirs.length === 0 && listed.length === 0
@@ -1502,6 +1574,7 @@ export function FolderPanel() {
             <button type="button" onClick={() => void choose()} className={`${linkClass} text-small`}>
               {fromDrive ? 'Ordner auf diesem Gerät' : 'Anderer Ordner'}
             </button>
+            <RecentMenu folders={otherRecent} onOpen={(handle) => void reopen(handle)} />
             {driveConfigured && !fromDrive ? (
               <button type="button" onClick={() => void chooseDrive()} className={`${linkClass} text-small`}>
                 Google Drive
@@ -1660,6 +1733,24 @@ export function FolderPanel() {
                 >
                   Google Drive
                 </button>
+              ) : null}
+              {otherRecent.length > 0 ? (
+                <div className="flex flex-col items-start gap-[8px]">
+                  <span className="text-small text-prose">Zuletzt geöffnet</span>
+                  {otherRecent.map((handle, index) => (
+                    <button
+                      key={`${handle.name}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setSheetOpen(false)
+                        void reopen(handle)
+                      }}
+                      className={`${linkClass} text-small`}
+                    >
+                      „{handle.name}“ öffnen
+                    </button>
+                  ))}
+                </div>
               ) : null}
               {!dupes && !fromDrive ? (
                 <button
