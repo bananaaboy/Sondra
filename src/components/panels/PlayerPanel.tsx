@@ -674,6 +674,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   /** Smart-prefetched next episode from the Merkliste once playback reaches 75%. */
   const lastTapRef = useRef<{ time: number; x: number }>({ time: 0, x: 0 })
   const touchHandledRef = useRef(false)
+  /** Whether the controls were up when the finger came down: a tap toggles from there, not from what the press itself woke. */
+  const shownAtTouchRef = useRef(false)
+  /** A single tap hides the controls only once no second tap has followed it. */
+  const tapHideTimer = useRef<number | null>(null)
   const [dismissedIntroId, setDismissedIntroId] = useState<string | null>(null)
   const [prefetchedNext, setPrefetchedNext] = useState<{
     key: string
@@ -1951,10 +1955,13 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const wake = () => {
     setIdle(false)
     if (idleTimer.current) window.clearTimeout(idleTimer.current)
-    idleTimer.current = window.setTimeout(() => setIdle(true), 4000)
+    // A finger needs longer than a mouse to find the button it came for.
+    const touch = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+    idleTimer.current = window.setTimeout(() => setIdle(true), touch ? 7000 : 4000)
   }
   useEffect(() => () => {
     if (idleTimer.current) window.clearTimeout(idleTimer.current)
+    if (tapHideTimer.current) window.clearTimeout(tapHideTimer.current)
   }, [])
   const controlsShown = !isVideo || !playing || !idle || menuOpen || eqDrawerOpen
   const immersive = fullscreen || fill
@@ -2720,7 +2727,10 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
           <div
             ref={frameRef}
             onPointerMove={wake}
-            onPointerDown={wake}
+            onPointerDown={() => {
+              shownAtTouchRef.current = controlsShown
+              wake()
+            }}
             onPointerLeave={(event) => { if (event.pointerType === 'mouse' && playing) setIdle(true) }}
             onDragOver={(event) => {
               if (!event.dataTransfer.types.includes('Files')) return
@@ -2755,6 +2765,8 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 const dist = Math.abs(touch.clientX - lastTapRef.current.x)
 
                 if (dt < 320 && dist < 45) {
+                  if (tapHideTimer.current) window.clearTimeout(tapHideTimer.current)
+                  tapHideTimer.current = null
                   if (relX < 0.35) {
                     skip(-settings.skip)
                     pulse('back')
@@ -2768,8 +2780,16 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   wake()
                 } else {
                   lastTapRef.current = { time: now, x: touch.clientX }
-                  if (controlsShown) setIdle(true)
-                  else wake()
+                  // The press already woke the controls. Had they been up before it, this tap puts them away
+                  // (once a second tap, which skips, is ruled out); had they been hidden, they stay.
+                  if (tapHideTimer.current) window.clearTimeout(tapHideTimer.current)
+                  tapHideTimer.current = null
+                  if (shownAtTouchRef.current && playing) {
+                    tapHideTimer.current = window.setTimeout(() => {
+                      tapHideTimer.current = null
+                      setIdle(true)
+                    }, 320)
+                  } else wake()
                 }
               }}
               onClick={(event) => {
@@ -3231,7 +3251,9 @@ export function PlayerPanel({ hidden = false }: { hidden?: boolean } = {}) {
               onPointerDown={(e) => { e.stopPropagation(); wake(); }}
               onTouchEnd={(e) => { e.stopPropagation(); wake(); }}
               className={`absolute inset-x-0 bottom-0 z-20 flex flex-col gap-[2px] px-[10px] pb-[6px] pt-[56px] transition-opacity duration-[var(--dur-base)] sm:px-[16px] sm:pb-[10px] ${
-                controlsShown ? 'opacity-100' : 'pointer-events-none opacity-0'
+                // The scrim is only paint: a tap on it belongs to the picture underneath. The controls themselves
+                // (`> *`) catch taps while they are up, and nothing at all while they are put away.
+                controlsShown ? 'pointer-events-none opacity-100 [&>*]:pointer-events-auto' : 'pointer-events-none opacity-0'
               }`}
               style={{ background: 'linear-gradient(to top, rgb(0 0 0 / 0.78), rgb(0 0 0 / 0.38) 55%, transparent)' }}
             >
