@@ -50,8 +50,21 @@ async function device({ name, android }) {
       // A line that died without a word shows late on the side that did not cut it: after `__lateClose` ms from
       // its first close event, every close listener of this page hears of it, not before. The connection's own
       // state counts too — it is the other way a break shows.
+      window.__recvBytes = 0
       const later = (original) =>
         function (type, listener, options) {
+          // File data that reached this page, so a test can tell when what was in flight has arrived.
+          if (type === 'message' && typeof listener === 'function') {
+            return original.call(
+              this,
+              type,
+              function (event) {
+                if (typeof event.data !== 'string') window.__recvBytes += event.data.byteLength ?? 0
+                return listener.call(this, event)
+              },
+              options,
+            )
+          }
           if (!['close', 'connectionstatechange'].includes(type) || typeof listener !== 'function') return original.call(this, type, listener, options)
           const late = function (...args) {
             if (window.__lateClose && (type === 'close' || this.connectionState === 'failed' || this.connectionState === 'closed' || this.connectionState === 'disconnected')) {
@@ -324,6 +337,9 @@ fs.rmSync(tree, { recursive: true, force: true })
   await phone.page.evaluate(() => {
     window.__cutAfter = window.__sentBytes + 5 * 1024 * 1024
   })
+  await laptop.page.evaluate(() => {
+    window.__recvBytes = 0
+  })
   await otherRow(phone.page, 'Laptop').locator('input[type=file]:not([webkitdirectory])').setInputFiles({ name: 'Gross.bin', mimeType: 'application/octet-stream', buffer: big })
   await laptop.page.getByRole('button', { name: 'Annehmen' }).waitFor({ timeout: 30_000 })
   await laptop.page.getByRole('button', { name: 'Annehmen' }).click()
@@ -337,6 +353,16 @@ fs.rmSync(tree, { recursive: true, force: true })
   const brokenText = await phone.page.locator('main').innerText()
   check('Abbruch: das Handy bietet „Fortsetzen“ an', /Fortsetzen/.test(brokenText))
   await phone.page.screenshot({ path: `${OUT}handy-unterbrochen.png`, fullPage: true })
+  // The line was cut after the data was queued, not after it had arrived: a person presses „Fortsetzen“ some seconds
+  // later, so what was still on its way has landed by then. Wait for that, or how much the laptop kept depends on
+  // how fast the machine is — 3.8 of 5 MB on a slow runner — and the check below measures the runner, not the resume.
+  let arrived = -1
+  for (let quiet = 0; quiet < 2; ) {
+    const now = await laptop.page.evaluate(() => window.__recvBytes)
+    quiet = now === arrived ? quiet + 1 : 0
+    arrived = now
+    await laptop.page.waitForTimeout(600)
+  }
   const sentBefore = await phone.page.evaluate(() => window.__sentBytes)
   await resume.click()
   // The half file is in „saved“ from the break on; whole means its full length.
@@ -352,7 +378,11 @@ fs.rmSync(tree, { recursive: true, force: true })
     }
   }
   check('Fortgesetzt: Datei kommt Byte für Byte an, ohne Doppeltes', whole && sha(decode(whole)) === sha(big), `${whole ? decode(whole).length : 0} von ${big.length}`)
-  check('Fortgesetzt: nur der Rest wurde noch gesendet', sentAfter - sentBefore < big.length - 4 * 1024 * 1024, `${((sentAfter - sentBefore) / 1048576).toFixed(1)} MB`)
+  check(
+    'Fortgesetzt: nur der Rest wurde noch gesendet',
+    sentAfter - sentBefore < big.length - 4 * 1024 * 1024,
+    `${((sentAfter - sentBefore) / 1048576).toFixed(1)} MB gesendet, vor dem Abbruch kamen ${(arrived / 1048576).toFixed(1)} MB an`,
+  )
 }
 
 // A server of one's own: folded, empty, checked, kept — the password is not.
