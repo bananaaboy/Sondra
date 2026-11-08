@@ -25,6 +25,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 
+import { createPortal } from 'react-dom'
+
 import { saveBytes } from '../../lib/download'
 import { copiesOf, findDuplicates, type DuplicateReport } from '../../lib/duplicates'
 import {
@@ -463,9 +465,9 @@ function FileItem({
         ) : null}
         {!selecting && (file.kind === 'video' || file.kind === 'audio') ? (
           // A finger plays with a tap: say so on the picture. A mouse has its double click and no need of this.
-          <span aria-hidden className="pointer-events-none absolute inset-0 hidden place-items-center [@media(pointer:coarse)]:grid">
-            <span className="grid h-[42px] w-[42px] place-items-center rounded-pill bg-ink/70 text-on-ink">
-              <svg viewBox="0 0 16 16" className="h-[16px] w-[16px] translate-x-[1px]" fill="currentColor">
+          <span aria-hidden className="pointer-events-none absolute bottom-[8px] left-[8px] hidden [@media(pointer:coarse)]:grid">
+            <span className="grid h-[32px] w-[32px] place-items-center rounded-pill bg-ink/80 text-on-ink">
+              <svg viewBox="0 0 16 16" className="h-[13px] w-[13px] translate-x-[1px]" fill="currentColor">
                 <path d="M5 3.6c0-.6.7-1 1.2-.7l6.6 4.1c.5.3.5 1.1 0 1.4L6.2 12.5c-.5.3-1.2-.1-1.2-.7z" />
               </svg>
             </span>
@@ -493,6 +495,73 @@ function FileItem({
 }
 
 /* -------------------------------------------------------------------------- */
+/* The sheet a phone gets for what the bar no longer has room for              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A bottom sheet, phones only: the rest of the bar — which kind, which order,
+ * the other folders — behind one button, so the files start higher on a small
+ * screen. Beside a mouse, from `sm`, all of it stays in the bar and this is
+ * never drawn. It keeps focus inside, closes on Escape and on the backdrop,
+ * and gives focus back to what opened it.
+ */
+function FolderSheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    const focusable = () => [...(box.current?.querySelectorAll<HTMLElement>('button, select, input, [href]') ?? [])].filter((node) => !node.hasAttribute('disabled'))
+    focusable()[0]?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const nodes = focusable()
+      if (nodes.length === 0) return
+      const first = nodes[0]
+      const last = nodes[nodes.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      before?.focus?.()
+    }
+  }, [onClose])
+  return createPortal(
+    <div className="sm:hidden">
+      <div className="fixed inset-0 z-40 bg-ink/50 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
+      <div
+        ref={box}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="sheet fixed inset-x-0 bottom-0 z-50 flex max-h-[82vh] flex-col overflow-hidden rounded-t-[20px] bg-canvas text-prose shadow-2xl ring-1 ring-rule/70"
+      >
+        <div className="flex items-center justify-between gap-[12px] border-b border-rule/60 px-[18px] py-[12px]">
+          <p className="display-sm">{title}</p>
+          <button type="button" onClick={onClose} aria-label="Schliessen" className="press grid h-[32px] w-[32px] place-items-center rounded-pill text-muted hover:text-ink">
+            <svg viewBox="0 0 16 16" className="h-[14px] w-[14px]" fill="none" aria-hidden>
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-[18px] py-[16px] pb-[calc(18px+env(safe-area-inset-bottom,0px))]">{children}</div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+/* -------------------------------------------------------------------------- */
 /* „Weiterschauen“                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -512,8 +581,8 @@ function ContinueRow({ files, onPlay }: { files: FolderFile[]; onPlay: (queue: F
           const total = episodesInSeason(entry.item, next.season)
           const more = entry.queue.length - 1
           return (
-            <div key={entry.item.id} className="flex flex-col gap-[10px] rounded-card bg-panel-mid p-[14px] ring-1 ring-inset ring-line">
-              <div className="flex min-w-0 flex-col gap-[2px]">
+            <div key={entry.item.id} className="flex flex-row items-center justify-between gap-[12px] rounded-card bg-panel-mid p-[12px] ring-1 ring-inset ring-line sm:flex-col sm:items-stretch sm:justify-start sm:gap-[10px] sm:p-[14px]">
+              <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
                 <button
                   type="button"
                   onClick={() => {
@@ -534,18 +603,18 @@ function ContinueRow({ files, onPlay }: { files: FolderFile[]; onPlay: (queue: F
                     </>
                   ) : null}
                 </span>
-                <span className="value truncate text-micro text-prose" title={next.file.path}>
+                <span className="value hidden truncate text-micro text-prose sm:block" title={next.file.path}>
                   {next.file.name}
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-x-[12px] gap-y-[6px]">
+              <div className="flex shrink-0 flex-wrap items-center gap-x-[12px] gap-y-[6px]">
                 <Button type="button" size="sm" onClick={() => onPlay(entry.queue)}>
                   <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor" aria-hidden>
                     <path d="M5 3.6c0-.6.7-1 1.2-.7l6.6 4.1c.5.3.5 1.1 0 1.4L6.2 12.5c-.5.3-1.2-.1-1.2-.7z" />
                   </svg>
                   Abspielen
                 </Button>
-                <span className="text-small text-prose">{more > 0 ? `danach ${more} weitere aus dem Ordner` : 'die letzte ungesehene hier'}</span>
+                <span className="hidden text-small text-prose sm:inline">{more > 0 ? `danach ${more} weitere aus dem Ordner` : 'die letzte ungesehene hier'}</span>
               </div>
             </div>
           )
@@ -675,6 +744,9 @@ export function FolderPanel() {
   const [binOpen, setBinOpen] = useState(false)
   const [binCount, setBinCount] = useState(0)
   const [subtitling, setSubtitling] = useState<FolderFile[] | null>(null)
+  /** The phone's sheet for kind, order and the other folders; and the Drive note, folded on a phone. */
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [noteOpen, setNoteOpen] = useState(false)
   /** „Weitere … zeigen“ presses itself when it comes into view: a long folder is one list to scroll, not pages to click through. */
   const moreRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => setBinned(null), [scan?.handle])
@@ -1132,6 +1204,85 @@ export function FolderPanel() {
   const selectedMedia = media(chosen)
   const empty = view.dirs.length === 0 && view.files.length === 0
 
+  // What the bar shows beside a mouse is what the sheet shows on a phone: written once.
+  const kindPills = (
+    <div role="radiogroup" aria-label="Art" className="flex flex-wrap gap-[6px]">
+      {FILTERS.map((entry) => {
+        const on = filter === entry.id
+        const count = view.counts[entry.id]
+        if (entry.id !== 'alle' && count === 0 && !on) return null
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => setFilter(entry.id)}
+            className={`press rounded-pill px-[12px] py-[6px] text-small font-medium transition-colors duration-[var(--dur-fast)] ${
+              on ? 'bg-ink font-semibold text-on-ink' : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
+            }`}
+          >
+            {entry.label} <span className="value">{count}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+  const sortControl = (
+    <>
+      <label className="flex items-center gap-[6px] text-prose">
+        Sortieren
+        <select
+          value={prefs.sort}
+          onChange={(event) => updatePrefs({ sort: event.target.value as SortKey })}
+          className="sondra-select cursor-pointer appearance-none rounded-nav bg-raised py-[5px] pl-[10px] pr-[28px] text-small text-ink outline-none ring-1 ring-inset ring-line focus:ring-ink"
+        >
+          {SORTS.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        onClick={() => updatePrefs({ descending: !prefs.descending })}
+        aria-label={prefs.descending ? 'Absteigend — umkehren' : 'Aufsteigend — umkehren'}
+        title={prefs.descending ? 'Absteigend' : 'Aufsteigend'}
+        className="press grid h-[30px] w-[30px] place-items-center rounded-nav text-ink ring-1 ring-inset ring-line hover:bg-panel-soft"
+      >
+        <svg viewBox="0 0 16 16" className={`h-4 w-4 transition-transform ${prefs.descending ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M8 3v10M4.5 9.5L8 13l3.5-3.5" />
+        </svg>
+      </button>
+    </>
+  )
+  const viewToggle = (
+    <div role="radiogroup" aria-label="Ansicht" className="flex rounded-pill bg-panel-soft p-[2px] ring-1 ring-inset ring-line">
+      {(['kacheln', 'liste'] as const).map((entry) => (
+        <button
+          key={entry}
+          type="button"
+          role="radio"
+          aria-checked={prefs.view === entry}
+          onClick={() => updatePrefs({ view: entry })}
+          className={`press rounded-pill px-[12px] py-[4px] text-small ${prefs.view === entry ? 'bg-ink font-semibold text-on-ink' : 'text-prose hover:text-ink'}`}
+        >
+          {entry === 'kacheln' ? 'Kacheln' : 'Liste'}
+        </button>
+      ))}
+    </div>
+  )
+  const deepToggle = (
+    <label className="flex cursor-pointer items-center gap-[8px] text-prose">
+      <input type="checkbox" checked={prefs.deep} onChange={(event) => updatePrefs({ deep: event.target.checked })} className="h-[16px] w-[16px] accent-[var(--color-ink)]" />
+      Mit Unterordnern
+    </label>
+  )
+  /** How many of the settings behind „Ansicht“ differ from the usual, for the badge on the phone's button. */
+  const changedSettings =
+    Number(filter !== 'alle') + Number(prefs.sort !== DEFAULT_PREFS.sort) + Number(prefs.descending) + Number(prefs.view !== DEFAULT_PREFS.view) + Number(prefs.deep)
+
   return (
     <div className="flex flex-col gap-[18px]">
       {fallbackInput}
@@ -1164,32 +1315,46 @@ export function FolderPanel() {
           <span className="value text-prose">
             {scan.files.length} Dateien{scan.truncated ? ' (gekürzt)' : ''}
           </span>
+          {/* A phone keeps the bin in sight here and has the rest behind „Ansicht“. */}
           {scan.handle || fromDrive ? (
-            <button
-              type="button"
-              onClick={() => void (fromDrive ? chooseDrive() : reopen(scan.handle!))}
-              disabled={Boolean(scanning)}
-              className={`${linkClass} text-small`}
-            >
-              {scanning ? `Liest … ${scanning.files}` : 'Neu einlesen'}
+            <button type="button" onClick={() => setBinOpen(true)} className={`${linkClass} text-small sm:hidden`}>
+              Papierkorb{binCount > 0 ? ` (${binCount})` : ''}
             </button>
           ) : null}
-          <button type="button" onClick={() => void choose()} className={`${linkClass} text-small`}>
-            {fromDrive ? 'Ordner auf diesem Gerät' : 'Anderer Ordner'}
-          </button>
-          {driveConfigured && !fromDrive ? (
-            <button type="button" onClick={() => void chooseDrive()} className={`${linkClass} text-small`}>
-              Google Drive
+          <span className="hidden items-center gap-x-[16px] sm:flex">
+            {scan.handle || fromDrive ? (
+              <button
+                type="button"
+                onClick={() => void (fromDrive ? chooseDrive() : reopen(scan.handle!))}
+                disabled={Boolean(scanning)}
+                className={`${linkClass} text-small`}
+              >
+                {scanning ? `Liest … ${scanning.files}` : 'Neu einlesen'}
+              </button>
+            ) : null}
+            <button type="button" onClick={() => void choose()} className={`${linkClass} text-small`}>
+              {fromDrive ? 'Ordner auf diesem Gerät' : 'Anderer Ordner'}
             </button>
-          ) : null}
+            {driveConfigured && !fromDrive ? (
+              <button type="button" onClick={() => void chooseDrive()} className={`${linkClass} text-small`}>
+                Google Drive
+              </button>
+            ) : null}
+          </span>
         </span>
       </div>
 
       {fromDrive ? (
         <p className="max-w-[72ch] text-small leading-[1.5] text-prose">
-          Der Ordner „Sondra“ in Ihrem Google Drive. Sondra sieht dort nur, was es selbst abgelegt hat — Heruntergeladenes, Dateien,
-          Projekte. Filme spielen direkt aus Drive; was Sie zu Ende schauen, hakt die Merkliste ab. Gelöschtes landet im
-          Papierkorb von Drive.
+          Der Ordner „Sondra“ in Ihrem Google Drive.
+          <span className={noteOpen ? '' : 'hidden sm:inline'}>
+            {' '}
+            Sondra sieht dort nur, was es selbst abgelegt hat — Heruntergeladenes, Dateien, Projekte. Filme spielen direkt aus Drive; was Sie zu
+            Ende schauen, hakt die Merkliste ab. Gelöschtes landet im Papierkorb von Drive.
+          </span>
+          <button type="button" aria-expanded={noteOpen} onClick={() => setNoteOpen((value) => !value)} className={`${linkClass} ml-[8px] text-small sm:hidden`}>
+            {noteOpen ? 'Weniger' : 'Mehr'}
+          </button>
         </p>
       ) : null}
 
@@ -1201,32 +1366,12 @@ export function FolderPanel() {
 
       {dir === '' && !query ? <ContinueRow files={scan.files} onPlay={(queue) => play(queue.map((entry) => entry.file), true)} /> : null}
 
-      {/* Find, show, order. */}
+      {/* Find, show, order. A phone gets the search and one button for the rest. */}
       <div className="flex flex-col gap-[10px] border-t border-line pt-[14px]">
         <div className="flex flex-wrap items-center gap-[8px]">
-          <div role="radiogroup" aria-label="Art" className="flex flex-wrap gap-[6px]">
-            {FILTERS.map((entry) => {
-              const on = filter === entry.id
-              const count = view.counts[entry.id]
-              if (entry.id !== 'alle' && count === 0 && !on) return null
-              return (
-                <button
-                  key={entry.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => setFilter(entry.id)}
-                  className={`press rounded-pill px-[12px] py-[6px] text-small font-medium transition-colors duration-[var(--dur-fast)] ${
-                    on ? 'bg-ink font-semibold text-on-ink' : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
-                  }`}
-                >
-                  {entry.label} <span className="value">{count}</span>
-                </button>
-              )
-            })}
-          </div>
-          <span className="flex-1" />
-          <label className="relative flex w-full items-center sm:w-[240px]">
+          <div className="hidden sm:block">{kindPills}</div>
+          <span className="hidden flex-1 sm:block" />
+          <label className="relative flex min-w-0 flex-1 items-center sm:w-[240px] sm:flex-none">
             <svg viewBox="0 0 16 16" aria-hidden className="pointer-events-none absolute left-[12px] h-4 w-4 text-prose" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
               <circle cx="7" cy="7" r="4.5" />
               <path d="M10.4 10.4L14 14" />
@@ -1240,51 +1385,32 @@ export function FolderPanel() {
               className="w-full rounded-pill border-0 bg-panel-soft py-[7px] pl-[34px] pr-[14px] text-small text-ink outline-none ring-1 ring-inset ring-line placeholder:text-prose hover:bg-panel-mid focus:bg-raised focus:ring-2 focus:ring-ink"
             />
           </label>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px] text-small">
-          <label className="flex items-center gap-[6px] text-prose">
-            Sortieren
-            <select
-              value={prefs.sort}
-              onChange={(event) => updatePrefs({ sort: event.target.value as SortKey })}
-              className="sondra-select cursor-pointer appearance-none rounded-nav bg-raised py-[5px] pl-[10px] pr-[28px] text-small text-ink outline-none ring-1 ring-inset ring-line focus:ring-ink"
-            >
-              {SORTS.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <button
             type="button"
-            onClick={() => updatePrefs({ descending: !prefs.descending })}
-            aria-label={prefs.descending ? 'Absteigend — umkehren' : 'Aufsteigend — umkehren'}
-            title={prefs.descending ? 'Absteigend' : 'Aufsteigend'}
-            className="press grid h-[30px] w-[30px] place-items-center rounded-nav text-ink ring-1 ring-inset ring-line hover:bg-panel-soft"
+            aria-haspopup="dialog"
+            onClick={() => setSheetOpen(true)}
+            className="press inline-flex shrink-0 items-center gap-[6px] rounded-pill bg-panel-soft px-[14px] py-[7px] text-small font-medium text-ink ring-1 ring-inset ring-line hover:bg-panel-mid sm:hidden"
           >
-            <svg viewBox="0 0 16 16" className={`h-4 w-4 transition-transform ${prefs.descending ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M8 3v10M4.5 9.5L8 13l3.5-3.5" />
-            </svg>
+            Ansicht
+            {changedSettings > 0 ? <span className="value rounded-pill bg-ink px-[6px] text-micro text-on-ink">{changedSettings}</span> : null}
           </button>
-          <div role="radiogroup" aria-label="Ansicht" className="flex rounded-pill bg-panel-soft p-[2px] ring-1 ring-inset ring-line">
-            {(['kacheln', 'liste'] as const).map((entry) => (
-              <button
-                key={entry}
-                type="button"
-                role="radio"
-                aria-checked={prefs.view === entry}
-                onClick={() => updatePrefs({ view: entry })}
-                className={`press rounded-pill px-[12px] py-[4px] text-small ${prefs.view === entry ? 'bg-ink font-semibold text-on-ink' : 'text-prose hover:text-ink'}`}
-              >
-                {entry === 'kacheln' ? 'Kacheln' : 'Liste'}
-              </button>
-            ))}
+        </div>
+        {filter !== 'alle' ? (
+          <div className="flex sm:hidden">
+            <button
+              type="button"
+              onClick={() => setFilter('alle')}
+              aria-label={`Nur ${FILTERS.find((entry) => entry.id === filter)?.label}: aufheben`}
+              className="press inline-flex items-center gap-[6px] rounded-pill bg-ink px-[12px] py-[5px] text-small font-semibold text-on-ink"
+            >
+              Nur {FILTERS.find((entry) => entry.id === filter)?.label} <span aria-hidden>✕</span>
+            </button>
           </div>
-          <label className="flex cursor-pointer items-center gap-[8px] text-prose">
-            <input type="checkbox" checked={prefs.deep} onChange={(event) => updatePrefs({ deep: event.target.checked })} className="h-[16px] w-[16px] accent-[var(--color-ink)]" />
-            Mit Unterordnern
-          </label>
+        ) : null}
+        <div className="hidden flex-wrap items-center gap-x-[16px] gap-y-[8px] text-small sm:flex">
+          {sortControl}
+          {viewToggle}
+          {deepToggle}
           <span className="flex-1" />
           {scan?.handle || fromDrive ? (
             <button type="button" onClick={() => setBinOpen(true)} className={`${linkClass} text-small`}>
@@ -1298,6 +1424,75 @@ export function FolderPanel() {
           ) : null}
         </div>
       </div>
+
+      {sheetOpen ? (
+        <FolderSheet title="Ansicht und Ordner" onClose={() => setSheetOpen(false)}>
+          <div className="flex flex-col gap-[18px]">
+            <section className="flex flex-col gap-[8px]">
+              <h3 className="m-0 text-small font-semibold text-ink">Zeigen</h3>
+              {kindPills}
+            </section>
+            <section className="flex flex-col gap-[10px]">
+              <h3 className="m-0 text-small font-semibold text-ink">Ordnen</h3>
+              <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px] text-small">{sortControl}</div>
+              <div className="flex flex-wrap items-center gap-x-[16px] gap-y-[10px] text-small">
+                {viewToggle}
+                {deepToggle}
+              </div>
+            </section>
+            <section className="flex flex-col items-start gap-[12px] border-t border-line pt-[14px]">
+              <h3 className="m-0 text-small font-semibold text-ink">Dieser Ordner</h3>
+              {scan.handle || fromDrive ? (
+                <button
+                  type="button"
+                  disabled={Boolean(scanning)}
+                  onClick={() => {
+                    setSheetOpen(false)
+                    void (fromDrive ? chooseDrive() : reopen(scan.handle!))
+                  }}
+                  className={`${linkClass} text-small`}
+                >
+                  Neu einlesen
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  setSheetOpen(false)
+                  void choose()
+                }}
+                className={`${linkClass} text-small`}
+              >
+                {fromDrive ? 'Ordner auf diesem Gerät' : 'Anderer Ordner'}
+              </button>
+              {driveConfigured && !fromDrive ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSheetOpen(false)
+                    void chooseDrive()
+                  }}
+                  className={`${linkClass} text-small`}
+                >
+                  Google Drive
+                </button>
+              ) : null}
+              {!dupes && !fromDrive ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSheetOpen(false)
+                    void runDuplicates()
+                  }}
+                  className={`${linkClass} text-small`}
+                >
+                  Doppelte finden
+                </button>
+              ) : null}
+            </section>
+          </div>
+        </FolderSheet>
+      ) : null}
 
       {dupes ? (
         <DuplicatesSection
