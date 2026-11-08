@@ -25,6 +25,7 @@ import {
   listBin,
   listing,
   matchFile,
+  mergeRecent,
   playQueue,
   restoreBinned,
   restoreFromBin,
@@ -458,6 +459,20 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
   const many = memory()
   for (let n = 0; n < KEEP + 5; n += 1) savePrefs(`geraet:${n}`, { ...defaults, sort: `s${n}` }, many.store)
   check('Mehr als die letzten Ordner werden nicht gemerkt', [prefsFor(defaults, 'geraet:0', many.store).sort, prefsFor(defaults, `geraet:${KEEP + 4}`, many.store).sort], [`s${KEEP + 4}`, `s${KEEP + 4}`])
+}
+
+{
+  // The folders before this one: newest first, each once, a few of them.
+  const folder = (name: string, id = name, same = true) => ({ kind: 'directory', name, id, ...(same ? { isSameEntry: async (other: { id: string }) => other.id === id } : {}) }) as never
+  const names = (list: { name: string }[]) => list.map((entry) => entry.name)
+  check('Ein erster Ordner steht allein da', names(await mergeRecent([], folder('Anime'))), ['Anime'])
+  check('Der neue steht vorn', names(await mergeRecent([folder('Anime'), folder('Filme')], folder('Musik'))), ['Musik', 'Anime', 'Filme'])
+  check('Ein Ordner, der schon dabei ist, rückt nur vor', names(await mergeRecent([folder('Anime'), folder('Filme'), folder('Musik')], folder('Musik'))), ['Musik', 'Anime', 'Filme'])
+  check('Gleicher Name, anderer Ordner: beide', names(await mergeRecent([folder('Anime', 'a')], folder('Anime', 'b'))), ['Anime', 'Anime'])
+  check('Nur die letzten fünf', names(await mergeRecent(['a', 'b', 'c', 'd', 'e'].map((name) => folder(name)), folder('f'))), ['f', 'a', 'b', 'c', 'd'])
+  const broken = { kind: 'directory', name: 'Anime', isSameEntry: async () => Promise.reject(new Error('weg')) } as never
+  check('Weiss der Browser es nicht, entscheidet der Name', names(await mergeRecent([folder('Anime', 'x'), folder('Filme')], broken)), ['Anime', 'Filme'])
+  check('Ohne isSameEntry: der Name', names(await mergeRecent([folder('Anime', 'x', false)], folder('Anime', 'y', false))), ['Anime'])
 }
 
 console.log(failures === 0 ? '\nAlles in Ordnung.' : `\n${failures} Prüfung(en) fehlgeschlagen.`)

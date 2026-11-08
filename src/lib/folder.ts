@@ -38,6 +38,8 @@ export interface DirectoryHandle {
   removeEntry(name: string): Promise<void>
   queryPermission?(options: { mode: 'read' | 'readwrite' }): Promise<PermissionState>
   requestPermission?(options: { mode: 'read' | 'readwrite' }): Promise<PermissionState>
+  /** Whether two handles are one and the same folder, however they were got. */
+  isSameEntry?(other: DirectoryHandle): Promise<boolean>
 }
 
 type PickerWindow = Window & { showDirectoryPicker?: (options?: { id?: string; mode?: 'read' | 'readwrite' }) => Promise<DirectoryHandle> }
@@ -586,18 +588,57 @@ function openDb(): Promise<IDBDatabase> {
   })
 }
 
+const request = <T>(run: (store: IDBObjectStore) => IDBRequest<T>, mode: IDBTransactionMode, db: IDBDatabase): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE, mode)
+    const done = run(transaction.objectStore(STORE))
+    transaction.oncomplete = () => resolve(done.result)
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+  })
+
+/** The folders looked at last, newest first: only handles, to be offered again — never opened by themselves. */
+const RECENT = 'liste'
+export const RECENT_KEEP = 5
+
+/**
+ * The list with `handle` first: a folder already on it moves up instead of
+ * standing twice, and what lies beyond `keep` is left off.
+ */
+export async function mergeRecent(
+  list: DirectoryHandle[],
+  handle: DirectoryHandle,
+  keep = RECENT_KEEP,
+  same: (a: DirectoryHandle, b: DirectoryHandle) => Promise<boolean> = async (a, b) => (a.isSameEntry ? a.isSameEntry(b) : a.name === b.name),
+): Promise<DirectoryHandle[]> {
+  const others: DirectoryHandle[] = []
+  for (const entry of list) {
+    let alike = false
+    try {
+      alike = await same(handle, entry)
+    } catch {
+      alike = handle.name === entry.name
+    }
+    if (!alike) others.push(entry)
+  }
+  return [handle, ...others].slice(0, keep)
+}
+
 /** Keeps the folder (the handle, not its files) to offer it again; IndexedDB stores handles as they are. */
 export async function rememberFolder(handle: DirectoryHandle | null): Promise<void> {
   try {
     const db = await openDb()
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(STORE, 'readwrite')
-      if (handle) transaction.objectStore(STORE).put(handle, 'zuletzt')
-      else transaction.objectStore(STORE).delete('zuletzt')
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
-    })
-    db.close()
+    try {
+      if (handle) await request((store) => store.put(handle, 'zuletzt'), 'readwrite', db)
+      else await request((store) => store.delete('zuletzt'), 'readwrite', db)
+      if (handle) {
+        const before = await request((store) => store.get(RECENT), 'readonly', db)
+        const list = await mergeRecent(Array.isArray(before) ? (before as DirectoryHandle[]) : [], handle)
+        await request((store) => store.put(list, RECENT), 'readwrite', db)
+      }
+    } finally {
+      db.close()
+    }
   } catch {
     // Private window or storage blocked: the folder is asked for next time.
   }
@@ -606,15 +647,28 @@ export async function rememberFolder(handle: DirectoryHandle | null): Promise<vo
 export async function rememberedFolder(): Promise<DirectoryHandle | null> {
   try {
     const db = await openDb()
-    const handle = await new Promise<DirectoryHandle | null>((resolve, reject) => {
-      const request = db.transaction(STORE, 'readonly').objectStore(STORE).get('zuletzt')
-      request.onsuccess = () => resolve((request.result as DirectoryHandle | undefined) ?? null)
-      request.onerror = () => reject(request.error)
-    })
-    db.close()
-    return handle
+    try {
+      return ((await request((store) => store.get('zuletzt'), 'readonly', db)) as DirectoryHandle | undefined) ?? null
+    } finally {
+      db.close()
+    }
   } catch {
     return null
+  }
+}
+
+/** The folders looked at before, newest first. */
+export async function recentFolders(): Promise<DirectoryHandle[]> {
+  try {
+    const db = await openDb()
+    try {
+      const list = await request((store) => store.get(RECENT), 'readonly', db)
+      return Array.isArray(list) ? (list as DirectoryHandle[]).filter((entry) => entry && entry.kind === 'directory').slice(0, RECENT_KEEP) : []
+    } finally {
+      db.close()
+    }
+  } catch {
+    return []
   }
 }
 
