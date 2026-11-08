@@ -1,13 +1,27 @@
-# Handoff: Sondra (v1.2.0)
+# Handoff: Sondra (v1.2.1)
 
-**Datum:** 30. Oktober 2026  
+**Datum:** 8. November 2026  
 **Projektpfad:** `C:\Users\lizge.navajeetharan\Documents\PGM\Sondra`  
-**Aktueller Branch:** `main` (Release-Commit von v1.2.0, synchronisiert mit `origin/main`)  
+**Aktueller Branch:** `main` (Release-Commit von v1.2.1, synchronisiert mit `origin/main`)  
 **Status:** Alle 17 Verifikationstests (`npm run verify`) und `npm run typecheck` bestanden (Code 0).
 
 ---
 
-## 1. Übersicht der Meilensteine bis Version 1.2.0
+## 1. Übersicht der Meilensteine bis Version 1.2.1
+
+### Version 1.2.1 (8.11.2026, seit 1.2.0):
+- **Player auf dem Handy:** ein Tipp entscheidet nach dem Stand beim Aufsetzen des Fingers
+  (`shownAtTouchRef`), 7 s statt 4 s Leerlauf auf Touch; der Verlauf fängt keinen Tipp ab.
+  Szenario „abspielen“.
+- **Ordner:** Touch-Bedienung (Tipp spielt, langes Drücken wählt), eine Zeile Bedienung plus
+  Blatt `FolderSheet`, Folgen unter ihrer Serie (`groupBySeries`), „Ungesehen“/„Neu“, Ansicht
+  je Ordner (`lib/folderMemory.ts`), zuletzt geöffnete Ordner (`mergeRecent`). Der Ordner-Tab
+  liest einen gemerkten Ordner nur einmal von selbst (`triedHandle`/`triedDrive`).
+  „Weiterschauen“ existierte schon. Szenarien „ordner-handy“, „ordner-zuletzt“;
+  `npm run verify:folder` deckt die reinen Funktionen.
+- **Geräte:** ein Fortsetzen-Angebot, das vor der Meldung des Abbruchs eintrifft, wird gehalten
+  (`heldOffers`, `lineOf`, `releaseHeld`) statt verworfen — in der CI gesehen.
+- Die Berührung ist in Chromium mit simuliertem Touch geprüft, nicht auf einem echten Telefon.
 
 ### Version 1.2.0 (30.10.2026):
 - **Browser-Szenarien im Repository** (`npm run verify:e2e`, Workflow „Browser“): Geräte,

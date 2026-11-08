@@ -2,6 +2,18 @@
   "_": "Was in jeder Version dazukam — für Menschen, nicht für Entwickler. Die neueste zuerst. Neue Version: oben einen Eintrag mit der Version aus package.json anlegen; der Release-Workflow bricht ab, wenn er fehlt, und nimmt ihn als Notizen des GitHub-Release.",
   "versions": [
     {
+      "version": "1.2.1",
+      "date": "2026-11-08",
+      "items": [
+        "Abspielen auf dem Handy: Die Steuerung bleibt jetzt stehen, wo Sie sie brauchen. Ein Tipp ins Bild blendet sie ein oder aus — er schluckt sie nicht mehr gleich wieder —, und sie hält auf einem Touchscreen etwas länger.",
+        "Ordner auf dem Handy: Ein Tipp auf eine Datei spielt sie ab, langes Drücken wählt sie aus, und jeder weitere Tipp wählt mit. Oben steht nur noch eine Zeile mit Suche und „Ansicht“; Art, Ordnung und die anderen Ordner liegen in einem Blatt von unten.",
+        "Ordner: Folgen stehen unter ihrer Serie aus der Merkliste, mit Staffel, „5 hier · 2 von 12 gesehen“ und einem Balken. Neue Pillen „Ungesehen“ und „Neu“ zeigen, was noch zu schauen ist und was seit Ihrem letzten Besuch dazukam.",
+        "Ordner: Sondra merkt sich die Ansicht je Ordner — Art, Sortierung, Kacheln oder Liste, „Nach Serie“, „Ungesehen“. Die zuletzt geöffneten Ordner stehen unter „Zuletzt“ zur Wahl; gelesen wird auch jetzt nichts, ohne dass Sie es anklicken.",
+        "Ordner: Ein gemerkter Ordner, den es nicht mehr gibt, lässt die Seite nicht mehr ohne Ende neu lesen.",
+        "Geräte: Setzen Sie eine abgebrochene Übertragung fort, geht das neue Angebot nicht mehr verloren, wenn der Empfänger den Abbruch erst spät bemerkt."
+      ]
+    },
+    {
       "version": "1.2.0",
       "date": "2026-10-30",
       "items": [
