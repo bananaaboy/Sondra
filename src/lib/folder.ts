@@ -243,6 +243,67 @@ export function matchFile(file: FolderFile, items: SavedLinkItem[]): EpisodeMatc
   return matchHint(file.drive?.hint, items) ?? fromPath(file, items) ?? matchEpisode(file.name, items)
 }
 
+/* -------------------------------------------------------------------------- */
+/* Series the folder holds that the Merkliste does not know                    */
+/* -------------------------------------------------------------------------- */
+
+/** A series the file names tell of, with what lies in the folder of it. */
+export interface FoundSeries {
+  /** Normalised title: the key. */
+  key: string
+  /** The title as the names spell it, tidied. */
+  title: string
+  /** The episodes there are, per season (1 where the names say none). */
+  seasons: { number: number; episodes: number[] }[]
+  /** How many files. */
+  files: number
+}
+
+/**
+ * The series in a folder that are not on the Merkliste yet, read from the file
+ * names. A series needs two episodes to count: one file called „Ocean's 11“ is
+ * a film, and the folder is not offering to follow it. `known` are the series
+ * already on the list (a file that matches one is not new) and `ignored` the
+ * normalised titles somebody said no to.
+ */
+export function findNewSeries(files: FolderFile[], known: SavedLinkItem[], ignored: ReadonlySet<string> = new Set()): FoundSeries[] {
+  const found = new Map<string, { titles: Map<string, number>; seasons: Map<number, Set<number>>; files: number }>()
+  for (const file of files) {
+    if (file.kind !== 'video' && file.kind !== 'audio') continue
+    if (matchOf(file, known)) continue
+    const guess = guessEpisode(file.name)
+    if (!guess) continue
+    const key = normalTitle(guess.title)
+    if (!key || ignored.has(key)) continue
+    const entry = found.get(key) ?? { titles: new Map(), seasons: new Map(), files: 0 }
+    entry.titles.set(guess.title, (entry.titles.get(guess.title) ?? 0) + 1)
+    const season = guess.season ?? 1
+    entry.seasons.set(season, (entry.seasons.get(season) ?? new Set()).add(guess.episode))
+    entry.files += 1
+    found.set(key, entry)
+  }
+  const all = [...found.entries()].map(([key, entry]) => ({
+    key,
+    // The spelling most files use; the first one on a tie.
+    title: [...entry.titles.entries()].sort((a, b) => b[1] - a[1])[0][0],
+    seasons: [...entry.seasons.entries()].sort((a, b) => a[0] - b[0]).map(([number, set]) => ({ number, episodes: [...set].sort((a, b) => a - b) })),
+    files: entry.files,
+  }))
+  return all.filter((series) => series.seasons.reduce((sum, season) => sum + season.episodes.length, 0) >= 2).sort((a, b) => collator.compare(a.title, b.title))
+}
+
+/** What a found series becomes on the Merkliste: following it from its first episode here, the length of it not known. */
+export function seriesToMerkItem(series: FoundSeries): Partial<SavedLinkItem> {
+  const first = series.seasons[0]
+  return {
+    title: series.title,
+    status: 'watching',
+    season: first.number,
+    episode: first.episodes[0],
+    seasons: series.seasons.map((season) => ({ number: season.number, episodes: null, watched: [] })),
+  }
+}
+
 /** The scan without some files — after they were deleted. */
 export function withoutFiles(scan: FolderScan, paths: Set<string>): FolderScan {
   return { ...scan, files: scan.files.filter((file) => !paths.has(file.path)) }

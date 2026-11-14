@@ -29,7 +29,12 @@ page.on('pageerror', (e) => {
   if (!harmless(e)) errors.push(String(e))
 })
 await page.goto(`${BASE}#merkliste`)
-await page.getByRole('button', { name: 'Statistiken zur Merkliste öffnen' }).click()
+// What is not needed every day stands behind „Mehr“ in the list's header.
+const fromMore = async (on, name) => {
+  await on.getByRole('button', { name: 'Mehr', exact: true }).click()
+  await on.getByRole('button', { name }).click()
+}
+await fromMore(page, 'Statistiken')
 const dialog = page.getByRole('dialog')
 await dialog.waitFor()
 const heading = dialog.getByRole('heading', { name: `Rückblick ${year}` })
@@ -75,7 +80,7 @@ await page.reload()
 await page.getByText('Nana', { exact: true }).first().waitFor({ timeout: 15_000 })
 // One series: „Empfehlen“ on its page, with a small picture.
 await page.getByText('Frieren', { exact: true }).first().click()
-await page.getByRole('button', { name: 'Empfehlen' }).click()
+await fromMore(page, 'Empfehlen')
 const rec = page.getByRole('dialog')
 await rec.getByText('„Frieren“ empfehlen').waitFor({ timeout: 10_000 })
 await page.waitForFunction(() => /#g=/.test(document.querySelector('dialog[open] input[readonly]')?.value ?? ''), null, { timeout: 15_000 })
@@ -89,7 +94,7 @@ await rec.getByRole('button', { name: 'Schliessen', exact: true }).last().click(
 // The whole list: what is chosen by default, the ways to hand it over.
 await page.keyboard.press('Escape')
 await page.getByRole('button', { name: 'Merkliste', exact: true }).click()
-await page.getByRole('button', { name: 'Teilen' }).click()
+await fromMore(page, 'Liste teilen')
 const share = page.getByRole('dialog')
 await share.waitFor()
 await share.getByLabel(/Ihr Name/).fill('Mia')
@@ -182,7 +187,7 @@ const mineOf = [
   await sender.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(BASE).origin })
   const big = await sender.newPage()
   await big.goto(`${BASE}#merkliste`)
-  await big.getByRole('button', { name: 'Teilen' }).click()
+  await fromMore(big, 'Liste teilen')
   const bigDialog = big.getByRole('dialog')
   await bigDialog.getByRole('button', { name: /Alle \d+ Links kopieren/ }).waitFor({ timeout: 20_000 })
   const label = await bigDialog.getByRole('button', { name: /Alle \d+ Links kopieren/ }).innerText()
