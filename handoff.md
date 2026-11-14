@@ -1,15 +1,15 @@
-# Handoff: Sondra (v1.3.0)
+# Handoff: Sondra (v1.2.2)
 
 **Datum:** 14. November 2026  
 **Projektpfad:** `C:\Users\lizge.navajeetharan\Documents\PGM\Sondra`  
-**Aktueller Branch:** `main` (Release-Commit von v1.3.0, synchronisiert mit `origin/main`)  
+**Aktueller Branch:** `main` (Release-Commit von v1.2.2, synchronisiert mit `origin/main`)  
 **Status:** Alle 17 Verifikationstests (`npm run verify`) und `npm run typecheck` bestanden (Code 0).
 
 ---
 
-## 1. Übersicht der Meilensteine bis Version 1.3.0
+## 1. Übersicht der Meilensteine bis Version 1.2.2
 
-### Version 1.3.0 (14.11.2026, seit 1.2.1):
+### Version 1.2.2 (14.11.2026, seit 1.2.1):
 - **Serien ohne Arbeit** (grösste Priorität: einfach für jeden): „Serie hinzufügen“ als ein Feld
   (`AddDialog`, Rest hinter „Mehr Angaben“); der Ordner erkennt Serien an den Dateinamen
   (`findNewSeries`, `NewSeriesOffer`); in Drive „Einordnen“ mit einem Klick (`unfiledEpisodes`,
