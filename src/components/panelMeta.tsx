@@ -43,11 +43,25 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M2.6 7.2L8 2.6l5.4 4.6v5.6a.9.9 0 01-.9.9H3.5a.9.9 0 01-.9-.9z" />,
   },
   {
+    id: 'merkliste',
+    slug: 'merkliste',
+    label: 'Merkliste',
+    summary: 'Serien und Listen, die Sie schauen — Staffeln, Folgen, Fortschritt',
+    icon: <path d="M4.2 2.4h7.6v11.2L8 10.9l-3.8 2.7zM6.2 5.6h3.6" />,
+  },
+  {
     id: 'folder',
     slug: 'ordner',
     label: 'Ordner',
     summary: 'Die Dateien eines Ordners sehen, auswählen und weiterschauen',
     icon: <path d="M2 4.6c0-.6.5-1.1 1.1-1.1h3l1.4 1.5h5.4c.6 0 1.1.5 1.1 1.1v5.8c0 .6-.5 1.1-1.1 1.1H3.1c-.6 0-1.1-.5-1.1-1.1z" />,
+  },
+  {
+    id: 'player',
+    slug: 'abspielen',
+    label: 'Abspielen',
+    summary: 'Videos und Musik ansehen und anhören, auch grosse Filme',
+    icon: <path d="M2 3.4h12v9.2H2zM6.6 5.8l3.6 2.2-3.6 2.2z" />,
   },
   {
     id: 'downloader',
@@ -57,13 +71,6 @@ export const PANELS: PanelMeta[] = [
     icon: (
       <path d="M8 2.6v7.2m0 0L5.2 7M8 9.8L10.8 7M2.8 12.2h10.4" />
     ),
-  },
-  {
-    id: 'merkliste',
-    slug: 'merkliste',
-    label: 'Merkliste',
-    summary: 'Serien und Listen, die Sie schauen — Staffeln, Folgen, Fortschritt',
-    icon: <path d="M4.2 2.4h7.6v11.2L8 10.9l-3.8 2.7zM6.2 5.6h3.6" />,
   },
   {
     id: 'devices',
@@ -92,13 +99,6 @@ export const PANELS: PanelMeta[] = [
     label: 'Video',
     summary: 'Schneiden, drehen, Farbe, Blenden, Tempo, Ton',
     icon: <path d="M1.8 4.2h8.6v7.6H1.8zM10.4 7l3.8-2.2v6.4L10.4 9z" />,
-  },
-  {
-    id: 'player',
-    slug: 'abspielen',
-    label: 'Abspielen',
-    summary: 'Videos und Musik ansehen und anhören, auch grosse Filme',
-    icon: <path d="M2 3.4h12v9.2H2zM6.6 5.8l3.6 2.2-3.6 2.2z" />,
   },
   {
     id: 'images',

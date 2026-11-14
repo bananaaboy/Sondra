@@ -292,6 +292,36 @@ export function findNewSeries(files: FolderFile[], known: SavedLinkItem[], ignor
   return all.filter((series) => series.seasons.reduce((sum, season) => sum + season.episodes.length, 0) >= 2).sort((a, b) => collator.compare(a.title, b.title))
 }
 
+/** Episodes lying loose in Drive that belong to a series on the list: where they should go. */
+export interface Unfiled {
+  item: SavedLinkItem
+  season: number
+  files: { file: FolderFile; episode: number }[]
+}
+
+/**
+ * The files in Google Drive that the Merkliste knows by name but that are not
+ * filed yet — no note on them, not in „Serien/<Titel>/Staffel n“ — grouped by
+ * series and season. Only what the name says clearly: a file that matches no
+ * series on the list is left where it lies.
+ */
+export function unfiledEpisodes(files: FolderFile[], items: SavedLinkItem[]): Unfiled[] {
+  const groups = new Map<string, Unfiled>()
+  for (const file of files) {
+    if (!file.drive || (file.kind !== 'video' && file.kind !== 'audio')) continue
+    if (file.drive.hint || /(?:^|\/)Serien\/[^/]+\/(?:Staffel \d+|Filme)$/.test(file.dir)) continue
+    const match = matchEpisode(file.name, items)
+    if (!match) continue
+    const key = `${match.item.id}|${match.season}`
+    const group = groups.get(key) ?? { item: match.item, season: match.season, files: [] }
+    group.files.push({ file, episode: match.episode })
+    groups.set(key, group)
+  }
+  return [...groups.values()]
+    .map((group) => ({ ...group, files: group.files.sort((a, b) => a.episode - b.episode) }))
+    .sort((a, b) => collator.compare(a.item.title, b.item.title) || a.season - b.season)
+}
+
 /** What a found series becomes on the Merkliste: following it from its first episode here, the length of it not known. */
 export function seriesToMerkItem(series: FoundSeries): Partial<SavedLinkItem> {
   const first = series.seasons[0]

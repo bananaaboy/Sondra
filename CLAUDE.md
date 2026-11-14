@@ -247,7 +247,20 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Ordnerseite einen Ordner aus dem Dateisystem der Seite (OPFS) las — auch mit dem Stand
   von vor dieser Änderung; die Ursache ist nicht geklärt. Das Szenario „serien“
   benutzt deshalb einen Ordner im Speicher (wie „ordner“); „ordner-zuletzt“ liest
-  noch OPFS und lief dort nicht.
+  noch OPFS und lief dort nicht. **Einordnen ohne Fenster** (`unfiledEpisodes` in
+  `lib/folder.ts`, `FilingOffer` in `FolderPanel.tsx`): in einem Drive-Ordner
+  steht oben „3 Folgen liegen noch lose“ mit „Einordnen“ — was die Merkliste am
+  Namen kennt und noch keine Notiz trägt und nicht schon in
+  „Serien/Titel/Staffel n“ liegt, geht mit einem Klick durch `fileIntoSeason`
+  (je Serie und Staffel, mit der Folge als Notiz, nichts umbenannt). Was kein
+  Titel der Liste trifft, bleibt liegen; das Fenster „In Staffel einordnen“
+  bleibt in der Auswahlleiste für alles andere. Es gibt kein „Rückgängig“: die
+  Dateien liegen danach in Drive im Staffel-Ordner. **Die Reiter folgen den
+  Aufgaben** (`PANELS` in `panelMeta.tsx`): Start, Merkliste, Ordner,
+  Abspielen, Herunterladen, Geräte, dann die Werkzeuge — bei knapper Breite
+  stehen die Werkzeuge hinter „Mehr“, nicht die Aufgaben. Der Drive-Nachbau der
+  Szenarien (`scripts/e2e/lib.mjs`) versteht jetzt `addParents`/`removeParents` und
+  Notizen beim Verschieben.
 - **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
   Dateimenü oder Doppelklick auf den Namen; die Endung bleibt neben dem
   Feld stehen, was Windows ablehnt (`\ / : * ? " < > |`, CON …), wird

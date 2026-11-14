@@ -55,12 +55,13 @@ import {
   type SeriesGroup,
   seriesToMerkItem,
   type SortKey,
+  unfiledEpisodes,
   withoutFiles,
 } from '../../lib/folder'
 import { folderKey, lastVisit, prefsFor, savePrefs } from '../../lib/folderMemory'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { fileHere, lookUpRemembered, playFiles, readDriveFolder, readFolder, stopReading, takeFileList, useFolder } from '../../lib/folderLibrary'
-import { DRIVE_PROBLEM, DriveError, driveLinked, saveFilesToDrive, trashDriveFiles, useDrive } from '../../lib/googleDrive'
+import { DRIVE_PROBLEM, DriveError, driveLinked, fileIntoSeason, saveFilesToDrive, trashDriveFiles, useDrive } from '../../lib/googleDrive'
 import { PlayOnDeviceButton, SendToDevicesButton } from '../DeviceSend'
 import { FolderBin } from './FolderBin'
 import { FolderSubtitles } from './FolderSubtitles'
@@ -594,6 +595,62 @@ function RecentMenu({ folders, onOpen }: { folders: DirectoryHandle[]; onOpen: (
 /* -------------------------------------------------------------------------- */
 /* The sheet a phone gets for what the bar no longer has room for              */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Episodes lying loose in Drive that the Merkliste knows by name: one click
+ * puts them where they belong — „Sondra/Serien/<Titel>/Staffel n“, each
+ * noted with its episode — so nobody has to open a dialog, pick a series and
+ * number the files. What the names do not make clear stays where it is.
+ */
+function FilingOffer({ files, onDone }: { files: FolderFile[]; onDone: (where: string, count: number) => void }) {
+  const merk = useMerkliste()
+  const groups = useMemo(() => unfiledEpisodes(files, merk), [files, merk])
+  const [busy, setBusy] = useState<{ done: number; total: number } | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+  const total = groups.reduce((sum, group) => sum + group.files.length, 0)
+  if (total === 0 && !busy) return null
+
+  const run = async () => {
+    setProblem(null)
+    let done = 0
+    setBusy({ done, total })
+    try {
+      for (const group of groups) {
+        await fileIntoSeason(
+          group.files.map((entry) => ({ id: entry.file.drive!.id, parent: entry.file.drive!.parent, hint: { series: group.item.id, season: group.season, episode: entry.episode } })),
+          { title: group.item.title, season: group.season, onProgress: (count) => setBusy({ done: done + count, total }) },
+        )
+        done += group.files.length
+      }
+      onDone('Sondra/Serien', done)
+    } catch (error) {
+      setProblem(error instanceof DriveError ? DRIVE_PROBLEM[error.code] : error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <section aria-labelledby="ordner-einordnen" className="flex flex-col gap-[10px] rounded-card bg-panel-soft p-[14px] sm:p-[16px]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[6px]">
+        <h3 id="ordner-einordnen" className="m-0 text-body font-semibold text-ink">
+          {total} {total === 1 ? 'Folge liegt' : 'Folgen liegen'} noch lose
+        </h3>
+        <Button type="button" size="sm" disabled={busy !== null} onClick={() => void run()}>
+          {busy ? `Ordnet ein … ${busy.done} von ${busy.total}` : 'Einordnen'}
+        </Button>
+      </div>
+      <p className="m-0 text-small text-prose">
+        {groups.map((group) => `${group.item.title}${group.season === 0 ? ' (Filme)' : `, Staffel ${group.season}`}: ${group.files.length}`).join('; ')}. Sie kommen nach „Sondra/Serien/Titel/Staffel“ in Ihrem Drive, nichts wird umbenannt.
+      </p>
+      {problem ? (
+        <p role="alert" className="m-0 text-small text-danger">
+          {problem}
+        </p>
+      ) : null}
+    </section>
+  )
+}
 
 /* -------------------------------------------------------------------------- */
 /* Series the folder holds that the Merkliste does not know                    */
@@ -1708,6 +1765,16 @@ export function FolderPanel() {
         <Notice tone="warn" title="Sehr grosser Ordner">
           Sondra hat die ersten {scan.files.length} Dateien gelesen und dann aufgehört. Ein Unterordner davon ist schneller.
         </Notice>
+      ) : null}
+
+      {fromDrive && dir === '' && !query ? (
+        <FilingOffer
+          files={scan.files}
+          onDone={(where, count) => {
+            setNote(`${count} ${count === 1 ? 'Folge' : 'Folgen'} eingeordnet (${where}).`)
+            void readDriveFolder().catch(() => undefined)
+          }}
+        />
       ) : null}
 
       {dir === '' && !query ? <NewSeriesOffer files={scan.files} /> : null}

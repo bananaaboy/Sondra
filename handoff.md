@@ -1,13 +1,24 @@
-# Handoff: Sondra (v1.2.1)
+# Handoff: Sondra (v1.3.0)
 
-**Datum:** 8. November 2026  
+**Datum:** 14. November 2026  
 **Projektpfad:** `C:\Users\lizge.navajeetharan\Documents\PGM\Sondra`  
-**Aktueller Branch:** `main` (Release-Commit von v1.2.1, synchronisiert mit `origin/main`)  
+**Aktueller Branch:** `main` (Release-Commit von v1.3.0, synchronisiert mit `origin/main`)  
 **Status:** Alle 17 Verifikationstests (`npm run verify`) und `npm run typecheck` bestanden (Code 0).
 
 ---
 
-## 1. Übersicht der Meilensteine bis Version 1.2.1
+## 1. Übersicht der Meilensteine bis Version 1.3.0
+
+### Version 1.3.0 (14.11.2026, seit 1.2.1):
+- **Serien ohne Arbeit** (grösste Priorität: einfach für jeden): „Serie hinzufügen“ als ein Feld
+  (`AddDialog`, Rest hinter „Mehr Angaben“); der Ordner erkennt Serien an den Dateinamen
+  (`findNewSeries`, `NewSeriesOffer`); in Drive „Einordnen“ mit einem Klick (`unfiledEpisodes`,
+  `FilingOffer`); Merkliste-Kopfzeile auf Suche, Hinzufügen und „Mehr“ (`MoreMenu`);
+  Serienseite mit einem Weg nach vorn; leere Merkliste führt; Startseite „Heute weiterschauen“
+  (`ContinueTiles`); Reiter nach Aufgaben geordnet (`PANELS`).
+- Szenario „serien“ (Ordner im Speicher, Drive-Nachbau mit Verschieben); „merkliste“ nutzt das
+  Menü „Mehr“. Auf einem Entwicklungsrechner stürzte Chromium beim Lesen eines OPFS-Ordners ab
+  („ordner-zuletzt“ dort rot, Ursache ungeklärt).
 
 ### Version 1.2.1 (8.11.2026, seit 1.2.0):
 - **Player auf dem Handy:** ein Tipp entscheidet nach dem Stand beim Aufsetzen des Fingers
