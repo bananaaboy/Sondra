@@ -1,6 +1,6 @@
 // Series without the work: one field adds one, the folder tells which series it holds, the Merkliste
 // keeps what is not needed every day behind „Mehr“, and the start page goes on where you stopped.
-import { BASE, OUT, check, finish, harmless, launch } from './lib.mjs'
+import { BASE, OUT, check, create, drive, files, FOLDER, finish, harmless, launch } from './lib.mjs'
 
 const browser = await launch()
 const errors = []
@@ -128,6 +128,45 @@ const saved = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('son
   await page.getByRole('button', { name: 'Neu einlesen' }).click()
   await page.waitForTimeout(800)
   check('…und fragt nach dem Neu-Einlesen nicht wieder', (await page.locator('section[aria-labelledby="ordner-neu"]').getByText(ignored[0] ?? '§', { exact: false }).count()) === 0)
+  await context.close()
+}
+
+/* -- loose episodes in Drive are filed with one click ------------------------------------------- */
+{
+  const root = create({ name: 'Sondra', mimeType: FOLDER })
+  const dl = create({ name: 'Heruntergeladen', mimeType: FOLDER, parents: [root.id] })
+  const mine = ['Frieren S01E01.mp4', 'Frieren S01E02.mp4', 'Frieren S02E01.mp4'].map((name) => create({ name, mimeType: 'video/mp4', parents: [dl.id] }, Buffer.alloc(100)))
+  const other = create({ name: 'Unbekannte Serie S01E01.mp4', mimeType: 'video/mp4', parents: [dl.id] }, Buffer.alloc(100))
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' })
+  await context.route('https://www.googleapis.com/**', drive)
+  await context.addInitScript(() => {
+    localStorage.setItem('sondra:drive', JSON.stringify({ linked: true, email: 'test@example.com' }))
+    localStorage.setItem('sondra:drive:token', JSON.stringify({ token: 'tok', expiresAt: Date.now() + 3600_000 }))
+    localStorage.setItem('sondra:saved_links', JSON.stringify([{ id: 'fr', title: 'Frieren', url: '', season: 1, episode: 1, status: 'watching', updatedAt: Date.now(), seasons: [{ number: 1, episodes: 28, watched: [] }, { number: 2, episodes: null, watched: [] }] }]))
+  })
+  const page = await context.newPage()
+  page.on('pageerror', (e) => {
+    if (!harmless(e)) errors.push(String(e))
+  })
+  await page.goto(`${BASE}#ordner`)
+  await page.waitForTimeout(1200)
+  const pick = page.getByRole('button', { name: 'Aus Google Drive' })
+  if (await pick.count()) await pick.click()
+  const offer = page.locator('section[aria-labelledby="ordner-einordnen"]')
+  await offer.waitFor({ timeout: 20_000 })
+  const text = await offer.innerText()
+  check('Drive: „3 Folgen liegen noch lose“, die fremde Serie nicht', /3 Folgen liegen noch lose/.test(text) && /Frieren, Staffel 1: 2/.test(text) && !/Unbekannte/.test(text), text.replace(/\s+/g, ' ').slice(0, 200))
+  await page.screenshot({ path: `${OUT}serien-einordnen.png` })
+  await offer.getByRole('button', { name: 'Einordnen' }).click()
+  await page.getByText(/3 Folgen eingeordnet/).waitFor({ timeout: 20_000 })
+  const folderOf = (file) => files.get(file.id)?.parents?.[0]
+  const parentNames = mine.map((file) => files.get(folderOf(file))?.name)
+  check('Eingeordnet: in „Staffel 1“ und „Staffel 2“', parentNames.join() === 'Staffel 1,Staffel 1,Staffel 2', parentNames.join())
+  const noted = mine.map((file) => files.get(file.id)?.appProperties?.sondraFolge).join()
+  check('…mit der Folge als Notiz an der Datei', noted === '1,2,1', noted)
+  check('…und die fremde Datei blieb liegen', files.get(other.id)?.parents?.[0] === dl.id)
+  await page.waitForTimeout(800)
+  check('Danach ist nichts mehr lose', (await page.locator('section[aria-labelledby="ordner-einordnen"]').count()) === 0)
   await context.close()
 }
 

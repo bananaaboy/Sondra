@@ -164,6 +164,11 @@ export async function drive(route) {
         file.trashed = Boolean(body.trashed)
         file.trashedTime = file.trashed ? now() : undefined
       }
+      // Moving: the parents change by the query, and notes are merged, as Drive does.
+      const removed = (url.searchParams.get('removeParents') ?? '').split(',').filter(Boolean)
+      const added = (url.searchParams.get('addParents') ?? '').split(',').filter(Boolean)
+      if (removed.length || added.length) file.parents = [...(file.parents ?? []).filter((id) => !removed.includes(id)), ...added]
+      if (body.appProperties) file.appProperties = { ...file.appProperties, ...body.appProperties }
       return json(route, { ...meta(file), trashed: Boolean(file.trashed) })
     }
     return json(route, { ...meta(file), trashed: Boolean(file.trashed) })

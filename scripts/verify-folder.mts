@@ -36,6 +36,7 @@ import {
   seasonPath,
   seriesToMerkItem,
   sortFiles,
+  unfiledEpisodes,
   type FolderFile,
 } from '../src/lib/folder'
 import { createMerkItem } from '../src/lib/merkliste'
@@ -502,6 +503,35 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
   check('Kein Ton und kein Bild als Serie', findNewSeries(scanFileList([picked('Cover 01.jpg', 'a'), picked('Cover 02.jpg', 'b')]).files, []).length, 0)
   const item = seriesToMerkItem(found[0])
   check('Auf die Merkliste: am Schauen, bei der ersten Folge hier, Länge unbekannt', [item.title, item.status, item.season, item.episode, item.seasons?.map((season) => `${season.number}:${season.episodes}`).join(' ')], ['Frieren', 'watching', 1, 1, '1:null 2:null'])
+}
+
+{
+  // Loose in Drive: what the list knows by name and is not filed yet.
+  const drive = (name: string, dir = '', hint?: { series: string; season: number; episode: number }): FolderFile => ({
+    path: dir ? `${dir}/${name}` : name,
+    name,
+    dir,
+    size: 1,
+    modified: 1,
+    kind: 'video',
+    drive: { id: `id-${dir}-${name}`, mime: 'video/mp4', ...(hint ? { hint } : {}) },
+  })
+  const frieren = createMerkItem({ id: 'f', title: 'Frieren', status: 'watching', season: 1, episode: 1, seasons: [{ number: 1, episodes: 28, watched: [] }, { number: 2, episodes: null, watched: [] }] })
+  const spy = createMerkItem({ id: 'spy', title: 'Spy x Family', status: 'watching', season: 1, episode: 1, seasons: [{ number: 1, episodes: 12, watched: [] }] })
+  const files = [
+    drive('Frieren S01E02.mkv', 'Heruntergeladen'),
+    drive('Frieren S01E01.mkv', 'Heruntergeladen'),
+    drive('Frieren S02E01.mkv'),
+    drive('Spy x Family - 03.mp4'),
+    drive('Frieren S01E03.mkv', 'Serien/Frieren/Staffel 1'),
+    drive('Frieren S01E04.mkv', 'Heruntergeladen', { series: 'f', season: 1, episode: 4 }),
+    drive('Unbekannt S01E01.mkv'),
+    { ...drive('Frieren S01E05.mkv'), drive: undefined },
+  ]
+  const unfiled = unfiledEpisodes(files, [frieren, spy])
+  check('Einordnen: lose Folgen je Serie und Staffel', unfiled.map((group) => `${group.item.title} ${group.season}: ${group.files.map((entry) => entry.episode).join(',')}`), ['Frieren 1: 1,2', 'Frieren 2: 1', 'Spy x Family 1: 3'])
+  check('…nicht, was schon eine Notiz trägt, im Staffel-Ordner liegt, keiner Serie gehört oder nicht in Drive liegt', unfiled.reduce((sum, group) => sum + group.files.length, 0), 4)
+  check('Ohne Merkliste nichts zu ordnen', unfiledEpisodes(files, []).length, 0)
 }
 
 console.log(failures === 0 ? '\nAlles in Ordnung.' : `\n${failures} Prüfung(en) fehlgeschlagen.`)

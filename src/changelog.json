@@ -2,6 +2,19 @@
   "_": "Was in jeder Version dazukam — für Menschen, nicht für Entwickler. Die neueste zuerst. Neue Version: oben einen Eintrag mit der Version aus package.json anlegen; der Release-Workflow bricht ab, wenn er fehlt, und nimmt ihn als Notizen des GitHub-Release.",
   "versions": [
     {
+      "version": "1.3.0",
+      "date": "2026-11-14",
+      "items": [
+        "Serien einfacher: „Serie hinzufügen“ ist jetzt ein einziges Feld. Sie tippen den Namen und sagen, wie weit Sie sind — Staffeln, Folgenzahl, Cover und Tags sind nur noch ein Klick „Mehr Angaben“ entfernt und werden nie verlangt.",
+        "Der Ordner erkennt Serien selbst: Sondra liest die Dateinamen und fragt „3 Serien erkannt“ — ein Klick legt sie auf die Merkliste, bei der ersten Folge, die im Ordner liegt. „Nicht fragen“ merkt sich Ihre Antwort.",
+        "In Google Drive ordnet ein Klick auf „Einordnen“ lose Folgen in Sondra/Serien/Titel/Staffel ein. Das Fenster „In Staffel einordnen“ brauchen Sie dafür nicht mehr.",
+        "Die Startseite zeigt oben „Heute weiterschauen“: Ihre drei zuletzt geschauten Serien mit Poster und Folge, ein Klick öffnet die Serie.",
+        "Die Merkliste ist aufgeräumt: oben stehen nur noch Suche, „Serie hinzufügen“ und „Mehr“. Verlauf, Würfeln, Statistiken, Teilen, Ansicht und Ordnung liegen im Menü. Eine leere Merkliste fragt „Welche Serien schauen Sie?“ statt eines Formulars.",
+        "Die Seite einer Serie hat einen Weg nach vorn: „Folge 3 abspielen“. Laden, Online nach Neuem suchen und Empfehlen stehen hinter „Mehr“.",
+        "Die Reiter folgen dem, was man tut: Start, Merkliste, Ordner, Abspielen, Herunterladen, Geräte — danach die Werkzeuge."
+      ]
+    },
+    {
       "version": "1.2.1",
       "date": "2026-11-08",
       "items": [
