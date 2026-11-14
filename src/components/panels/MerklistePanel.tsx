@@ -1058,69 +1058,14 @@ export function MerklistePanel() {
                 Serien, Staffeln und Listen, die Sie schauen — mit dem, was Sie schon gesehen haben.
               </p>
             ) : (
-              <button
-                type="button"
-                onClick={() => setStatsOpen(true)}
-                className="press group mt-[4px] -ml-[6px] inline-flex flex-wrap items-center gap-x-[8px] gap-y-[4px] rounded-nav px-[6px] py-[3px] text-left text-body text-prose hover:bg-panel-soft hover:text-ink transition-colors cursor-pointer"
-                title="Alle Statistiken zur Merkliste anzeigen"
-                aria-label="Statistiken zur Merkliste öffnen"
-              >
+              <p className="mt-[4px] flex flex-wrap items-center gap-x-[8px] gap-y-[4px] text-body text-prose">
                 <span className="font-semibold text-ink">{stats.watchingCount} am Schauen</span>
                 {stats.laterCount > 0 ? <span className="text-muted">· {stats.laterCount} später</span> : null}
-                {stats.pausedCount > 0 ? <span className="text-muted">· {stats.pausedCount} pausiert</span> : null}
-                {stats.doneCount > 0 ? <span className="text-muted">· {stats.doneCount} fertig</span> : null}
                 <span>· {stats.seenTotal} {stats.seenTotal === 1 ? 'Folge' : 'Folgen'} gesehen</span>
-                <span className="text-muted">· ca. {stats.watchTime.short}</span>
-                <span className="inline-flex items-center gap-[3px] font-sans text-small font-medium text-ink/80 underline decoration-dotted underline-offset-2 group-hover:text-ink">
-                  Statistiken
-                  <span aria-hidden className="transition-transform group-hover:translate-x-[2px]">›</span>
-                </span>
-              </button>
+              </p>
             )}
           </div>
           <div className="flex w-full flex-wrap items-center gap-[8px] sm:w-auto">
-            {items.length > 0 ? (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="quiet"
-                  onClick={() => setHistoryOpen(true)}
-                  title="Kürzlich gesehene Folgen im Verlauf anzeigen"
-                >
-                  Verlauf
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="quiet"
-                  onClick={() => setShuffleOpen(true)}
-                  title="Zufällige Serie aus der Merkliste vorschlagen"
-                  className="inline-flex items-center gap-[6px]"
-                >
-                  <DiceIcon />
-                  <span>Würfeln</span>
-                </Button>
-                <Button type="button" size="sm" variant="quiet" onClick={() => setSharing(true)} title="Die Liste als Link zum Ansehen teilen">
-                  Teilen
-                </Button>
-              </>
-            ) : null}
-            {items.length > 1 ? <ViewChoice value={view} onChange={chooseView} /> : null}
-            {items.length > 1 ? (
-              <Select
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as MerklisteSortOption)}
-                aria-label="Merkliste sortieren"
-                className="w-auto! text-small font-sans"
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            ) : null}
             {items.length > 5 ? (
               <TextInput
                 type="search"
@@ -1134,6 +1079,62 @@ export function MerklistePanel() {
             <Button type="button" size="sm" onClick={() => setAdding(true)}>
               Serie hinzufügen
             </Button>
+            {items.length > 0 ? (
+              <MoreMenu>
+                <MenuItem onClick={() => setHistoryOpen(true)}>Verlauf</MenuItem>
+                <MenuItem onClick={() => setShuffleOpen(true)}>Zufällige Serie würfeln</MenuItem>
+                <MenuItem onClick={() => setStatsOpen(true)}>Statistiken</MenuItem>
+                <MenuItem onClick={() => setSharing(true)}>Liste teilen</MenuItem>
+                {items.length > 1 ? (
+                  <div className="mt-[4px] flex flex-col items-start gap-[8px] border-t border-line px-[10px] pb-[6px] pt-[10px]">
+                    <span className="text-micro font-semibold text-prose">Ansicht</span>
+                    <ViewChoice value={view} onChange={chooseView} />
+                    <Select
+                      value={sortBy}
+                      onChange={(event) => setSortBy(event.target.value as MerklisteSortOption)}
+                      aria-label="Merkliste sortieren"
+                      className="w-full! text-small font-sans"
+                    >
+                      {SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
+                {newEpisodesAvailable || APP_BRIDGE?.setDiscordPresence ? (
+                  <div className="mt-[4px] flex flex-col gap-[2px] border-t border-line pt-[6px]">
+                    {/* Only in the app, where the check runs in the background and Windows shows the notice (lib/newEpisodes.ts). */}
+                    {newEpisodesAvailable ? (
+                      <MenuItem
+                        pressed={newEpisodesWatch}
+                        onClick={() => {
+                          const next = !newEpisodesWatch
+                          setNewEpisodesWatch(next)
+                          setNewEpisodesOn(next)
+                        }}
+                      >
+                        Neue Folgen melden
+                      </MenuItem>
+                    ) : null}
+                    {/* Only in the app: a web page cannot reach Discord on this computer. */}
+                    {APP_BRIDGE?.setDiscordPresence ? (
+                      <MenuItem
+                        pressed={discordRpcOn}
+                        onClick={() => {
+                          const next = !discordRpcOn
+                          setDiscordRpcOn(next)
+                          setDiscordRpcEnabled(next)
+                        }}
+                      >
+                        In Discord zeigen
+                      </MenuItem>
+                    ) : null}
+                  </div>
+                ) : null}
+              </MoreMenu>
+            ) : null}
           </div>
         </div>
 
@@ -1206,41 +1207,6 @@ export function MerklistePanel() {
                 <span>Nur offene Folgen</span>
               </button>
 
-              {/* Only in the app, where the check runs in the background and
-                  Windows shows the notice (lib/newEpisodes.ts). */}
-              {newEpisodesAvailable ? (
-                <button
-                  type="button"
-                  aria-pressed={newEpisodesWatch}
-                  onClick={() => {
-                    const next = !newEpisodesWatch
-                    setNewEpisodesWatch(next)
-                    setNewEpisodesOn(next)
-                  }}
-                  className="press flex items-center gap-[6px] rounded-pill px-[10px] py-[5px] text-small text-prose hover:bg-panel-soft hover:text-ink"
-                  title="Alle drei Stunden prüft Sondra die Serien „Am Schauen“ mit AniWorld-Adresse und meldet eine neue Folge über Windows."
-                >
-                  <span aria-hidden className={`size-[7px] rounded-pill ${newEpisodesWatch ? 'bg-accent-strong' : 'ring-1 ring-inset ring-rule'}`} />
-                  <span>Neue Folgen melden {newEpisodesWatch ? 'an' : 'aus'}</span>
-                </button>
-              ) : null}
-              {/* Only in the app: a web page cannot reach Discord on this computer. */}
-              {APP_BRIDGE?.setDiscordPresence ? (
-                <button
-                  type="button"
-                  aria-pressed={discordRpcOn}
-                  onClick={() => {
-                    const next = !discordRpcOn
-                    setDiscordRpcOn(next)
-                    setDiscordRpcEnabled(next)
-                  }}
-                  className="press flex items-center gap-[6px] rounded-pill px-[10px] py-[5px] text-small text-prose hover:bg-panel-soft hover:text-ink"
-                  title="In Discord zeigen, was Sie gerade schauen"
-                >
-                  <span aria-hidden className={`size-[7px] rounded-pill ${discordRpcOn ? 'bg-accent-strong' : 'ring-1 ring-inset ring-rule'}`} />
-                  <span>Discord {discordRpcOn ? 'an' : 'aus'}</span>
-                </button>
-              ) : null}
             </div>
           </div>
 
@@ -1280,7 +1246,7 @@ export function MerklistePanel() {
       ) : null}
 
       {items.length === 0 ? (
-        <EmptyState onAdd={() => setAdding(true)} onDownload={() => setPanel('downloader')} />
+        <EmptyState onAdd={() => setAdding(true)} onFolder={() => setPanel('folder')} />
       ) : groups.length === 0 ? (
         <p className="text-small text-prose">Keine Serien gefunden für die gewählten Filter.</p>
       ) : (
@@ -2117,21 +2083,80 @@ function Transfer({ items, link, onAnytype }: { items: SavedLinkItem[]; link: An
   )
 }
 
-function EmptyState({ onAdd, onDownload }: { onAdd: () => void; onDownload: () => void }) {
+/**
+ * „Mehr“: what is not needed every day, in one place that opens from its
+ * button — history, shuffle, statistics, sharing, the view and the order.
+ * Closes on a click beside it and on Escape.
+ */
+function MoreMenu({ children, align = 'right', size = 'sm' }: { children: ReactNode; align?: 'left' | 'right'; size?: 'sm' | 'md' }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!open) return undefined
+    const away = (event: MouseEvent) => {
+      if (!box.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', away)
+    window.addEventListener('keydown', escape, true)
+    return () => {
+      document.removeEventListener('mousedown', away)
+      window.removeEventListener('keydown', escape, true)
+    }
+  }, [open])
+  return (
+    <span ref={box} className="relative">
+      <Button type="button" size={size} variant="quiet" aria-haspopup="true" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        Mehr
+        <svg viewBox="0 0 16 16" aria-hidden className="size-[12px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 6l4 4 4-4" />
+        </svg>
+      </Button>
+      {open ? (
+        <div
+          onClick={(event) => {
+            // An action closes it; a choice inside (the view, the order) leaves it open.
+            if ((event.target as HTMLElement).closest('[data-closes]')) setOpen(false)
+          }}
+          className={`drop elevate-lift absolute ${align === 'left' ? 'left-0' : 'right-0'} top-full z-30 mt-[6px] flex w-[260px] flex-col gap-[2px] rounded-card bg-raised p-[6px] ring-1 ring-inset ring-rule`}
+        >
+          {children}
+        </div>
+      ) : null}
+    </span>
+  )
+}
+
+const MENU_ITEM = 'press rounded-nav px-[10px] py-[8px] text-left text-small text-ink hover:bg-panel-soft'
+
+function MenuItem({ children, onClick, pressed }: { children: ReactNode; onClick: () => void; pressed?: boolean }) {
+  return (
+    <button type="button" data-closes={pressed === undefined ? '' : undefined} aria-pressed={pressed} onClick={onClick} className={`${MENU_ITEM} flex items-center justify-between gap-[10px]`}>
+      {children}
+      {pressed === undefined ? null : <span className="value text-micro text-prose">{pressed ? 'an' : 'aus'}</span>}
+    </button>
+  )
+}
+
+function EmptyState({ onAdd, onFolder }: { onAdd: () => void; onFolder: () => void }) {
   return (
     <div className="grid gap-[24px] border-t border-line pt-[20px] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="flex flex-col gap-[12px]">
-        <p className="text-subheading text-ink">Noch nichts auf der Merkliste</p>
+        <p className="text-subheading text-ink">Welche Serien schauen Sie?</p>
         <p className="max-w-[60ch] text-small leading-[1.55] text-prose">
-          Eine Serie hinzufügen, Staffeln und Folgen angeben, abhaken, was gesehen ist. Mit einer Adresse holt „Folge …
-          laden“ die nächste gleich im Herunterladen.
+          Tippen Sie einen Namen ein — oder wählen Sie einen Ordner mit Folgen, dann erkennt Sondra die Serien an den Dateinamen und merkt sich,
+          wie weit Sie sind.
         </p>
         <div className="flex flex-wrap gap-[8px]">
-          <Button type="button" onClick={onAdd}>
-            Erste Serie hinzufügen
+          <Button type="button" onClick={onFolder}>
+            Ordner mit Serien wählen
           </Button>
-          <Button type="button" variant="quiet" onClick={onDownload}>
-            Adresse im Herunterladen merken
+          <Button type="button" variant="quiet" onClick={onAdd}>
+            Eine Serie eintippen
           </Button>
         </div>
       </div>
@@ -2723,74 +2748,39 @@ function SeriesPage({
               ) : null}
 
               <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
+                {/* One way forward, the best one there is: from the folder, else streamed, else just ticked off. */}
                 {playable ? (
                   <Button
                     type="button"
-                    size="sm"
                     onClick={() => playEpisode(inFolder, playable.season, playable.episode)}
                     title={`Aus „${folderName}“: ${playable.file.name}${followers ? ` — danach ${followers} weitere` : ''}`}
                   >
                     <PlayGlyph />
                     {hereLabel(item)} abspielen
                   </Button>
-                ) : null}
-                {hasUrl && next ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={playable ? 'quiet' : 'primary'}
-                    disabled={streamingId === item.id}
-                    onClick={() => void streamHere(item)}
-                    title="Folge sofort ohne vorherigen Download im Player abspielen"
-                  >
+                ) : hasUrl && next ? (
+                  <Button type="button" disabled={streamingId === item.id} onClick={() => void streamHere(item)} title="Folge sofort ohne vorherigen Download im Player abspielen">
                     <PlayGlyph />
-                    {streamingId === item.id ? 'Löst Stream auf…' : `${hereLabel(item)} sofort abspielen`}
-                  </Button>
-                ) : null}
-                {hasUrl && next ? (
-                  <Button type="button" size="sm" variant="quiet" onClick={() => openHere(item)}>
-                    {hereLabel(item)} laden
-                  </Button>
-                ) : null}
-                {hasUrl ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="quiet"
-                    onClick={() => setBatchModalOpen(true)}
-                    title="Nächste Folgen in den Downloader übertragen"
-                  >
-                    Nächste Folgen laden …
+                    {streamingId === item.id ? 'Löst Stream auf…' : `${hereLabel(item)} abspielen`}
                   </Button>
                 ) : null}
                 {next ? (
-                  <Button type="button" size="sm" variant={hasUrl || playable ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
+                  <Button type="button" variant={playable || hasUrl ? 'quiet' : 'primary'} onClick={() => markSeen(item)}>
                     {hereLabel(item)} gesehen
                   </Button>
                 ) : null}
-                {hasUrl && !next ? (
-                  <Button type="button" size="sm" variant="quiet" onClick={() => openHere(item)}>
-                    Nachsehen
-                  </Button>
-                ) : null}
-                {hasUrl && isAniworldUrl(item.url) ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="quiet"
-                    disabled={checkingUpdates}
-                    onClick={() => void handleCheckUpdates()}
-                    title="Auf AniWorld nach neuen Staffeln oder Folgen suchen"
-                  >
-                    {checkingUpdates ? 'Prüft…' : 'Online prüfen'}
-                  </Button>
-                ) : null}
-                <Button type="button" size="sm" variant="quiet" onClick={() => setRecommending(true)} title="Diese Serie mit Bild und Stand an jemanden schicken">
-                  Empfehlen
-                </Button>
-                <Button type="button" size="sm" variant="quiet" onClick={onEdit}>
+                <Button type="button" variant="quiet" onClick={onEdit}>
                   Bearbeiten
                 </Button>
+                <MoreMenu align="left" size="md">
+                  {hasUrl && next ? <MenuItem onClick={() => openHere(item)}>{hereLabel(item)} laden</MenuItem> : null}
+                  {hasUrl ? <MenuItem onClick={() => setBatchModalOpen(true)}>Nächste Folgen laden …</MenuItem> : null}
+                  {hasUrl && !next ? <MenuItem onClick={() => openHere(item)}>Nachsehen</MenuItem> : null}
+                  {hasUrl && isAniworldUrl(item.url) ? (
+                    <MenuItem onClick={() => void handleCheckUpdates()}>{checkingUpdates ? 'Prüft …' : 'Online nach Neuem suchen'}</MenuItem>
+                  ) : null}
+                  <MenuItem onClick={() => setRecommending(true)}>Empfehlen</MenuItem>
+                </MoreMenu>
               </div>
               {checkNote ? (
                 <p role="status" className="text-small text-prose">
@@ -4715,7 +4705,10 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [status, setStatus] = useState<SavedLinkStatus>('watching')
   const [seasonCount, setSeasonCount] = useState(1)
   const [typedCounts, setTypedCounts] = useState<(number | undefined)[]>([])
-  const [countsUnknown, setCountsUnknown] = useState(false)
+  // Unknown until something says otherwise: nobody is asked for the length of a series to follow it.
+  const [countsUnknown, setCountsUnknown] = useState(true)
+  const [more, setMore] = useState(false)
+  const [quick, setQuick] = useState('')
   const [films, setFilms] = useState(0)
   const [atSeason, setAtSeason] = useState(1)
   const [atEpisode, setAtEpisode] = useState(1)
@@ -4794,6 +4787,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
               }
             } else if (data.maxSeason && data.maxSeason > 0) {
               setSeasonCount(data.maxSeason)
+              if (data.maxEpisode && data.maxEpisode > 0) setCountsUnknown(false)
               if (data.maxEpisode && data.maxEpisode > 0) {
                 setTypedCounts((prev) => {
                   const next = [...prev]
@@ -4817,6 +4811,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
           if (!loadedSeasons && aniMedia.episodes && aniMedia.episodes > 0) {
             setSeasonCount(1)
             setTypedCounts([aniMedia.episodes])
+            setCountsUnknown(false)
             loadedSeasons = 1
             loadedTotalEps = aniMedia.episodes
           }
@@ -4854,13 +4849,55 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     return () => window.clearTimeout(timer)
   }, [url, open])
 
+  /** An address typed or pasted: its title and, where it names them, the season and episode are taken from it. */
+  const changeUrl = (next: string) => {
+    setUrl(next)
+    if (!next.trim()) return
+    const info = parseLinkEpisodeInfo(next)
+    const derived = deriveLinkTitle(next)
+    if (derived && (!title.trim() || title === 'Serie' || title === 'Neuer Link')) setTitle(derived)
+    if (info.isEpisodicUrl) {
+      if (info.season > 0) {
+        setSeasonCount((curr) => Math.max(curr, info.season))
+        setAtSeason(info.season)
+      }
+      if (info.episode !== null && info.episode > 0) setAtEpisode(info.episode)
+    }
+  }
+
+  /** The one field of the short form: a name, or an address. */
+  const changeQuick = (next: string) => {
+    setQuick(next)
+    if (/^(https?:\/\/|www\.)\S+$/i.test(next.trim())) {
+      changeUrl(next)
+    } else {
+      setUrl('')
+      setTitle(next)
+    }
+  }
+
+  const openMore = () => {
+    // The long form shows the length as it always did, unless something told it.
+    if (typedCounts.length === 0) setCountsUnknown(false)
+    setMore(true)
+  }
+
+  // The dialog moves focus to its first control when it opens; the short form wants it in its one field.
+  useEffect(() => {
+    if (!open || more) return undefined
+    const timer = window.setTimeout(() => document.getElementById('serie-name')?.focus(), 80)
+    return () => window.clearTimeout(timer)
+  }, [open, more])
+
   const reset = () => {
     setTitle('')
     setUrl('')
     setStatus('watching')
     setSeasonCount(1)
     setTypedCounts([])
-    setCountsUnknown(false)
+    setCountsUnknown(true)
+    setMore(false)
+    setQuick('')
     setFilms(0)
     setAtSeason(1)
     setAtEpisode(1)
@@ -4904,13 +4941,88 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Serie hinzufügen" size="lg">
+    <Dialog open={open} onClose={onClose} title="Serie hinzufügen" size={more ? 'lg' : 'md'}>
       <form
         onSubmit={(event) => {
           event.preventDefault()
           if (title.trim() || url.trim()) save()
         }}
       >
+        {!more ? (
+          <div className="flex flex-col gap-[20px]">
+            <Group label="Wie heisst die Serie?">
+              <TextInput
+                id="serie-name"
+                value={quick}
+                onChange={(event) => changeQuick(event.target.value)}
+                placeholder="Name der Serie oder eine Adresse"
+                aria-label="Name der Serie oder Adresse"
+                className="font-sans"
+              />
+              {url.trim() ? (
+                <span className="text-micro text-prose">
+                  {fetchingMeta ? 'Lädt Titel, Cover und Folgenzahl …' : (metaNote ?? (title.trim() ? `Erkannt: „${title.trim()}“` : ''))}
+                </span>
+              ) : title.trim() ? (
+                <span className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-micro text-prose">
+                  <span>{fetchingMeta ? 'Sucht …' : (metaNote ?? 'Cover und Folgenzahl lassen sich zum Titel suchen (fragt AniList).')}</span>
+                  {!fetchingMeta && !metaNote ? (
+                    <button type="button" onClick={() => void fetchMetadataForInput('', title)} className={`${linkClass} font-semibold`}>
+                      Suchen
+                    </button>
+                  ) : null}
+                </span>
+              ) : null}
+            </Group>
+
+            <Group label="Wie weit sind Sie?">
+              <span className="flex flex-wrap items-center gap-[10px]">
+                <span role="radiogroup" aria-label="Wie weit sind Sie" className="flex items-center gap-[6px]">
+                  {[
+                    { value: false, label: 'Ganz neu' },
+                    { value: true, label: 'Schon angefangen' },
+                  ].map((option) => {
+                    const active = (atEpisode > 1) === option.value
+                    return (
+                      <button
+                        key={option.label}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setAtEpisode(option.value ? Math.max(2, atEpisode) : 1)}
+                        className={`press rounded-pill px-[12px] py-[5px] text-small font-medium ${
+                          active ? 'bg-ink font-semibold text-on-ink' : 'bg-panel-soft text-prose ring-1 ring-inset ring-line hover:bg-panel-mid hover:text-ink'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </span>
+                {atEpisode > 1 ? (
+                  <span className="flex items-center gap-[6px] text-small text-prose">
+                    Nächste Folge:
+                    <Stepper label="Nächste Folge" value={atEpisode} max={positionCount ?? 2000} onChange={setAtEpisode} />
+                  </span>
+                ) : null}
+              </span>
+            </Group>
+
+            <div className="flex flex-wrap items-center justify-between gap-[8px] border-t border-line pt-[14px]">
+              <button type="button" onClick={openMore} className={`${linkClass} text-small`}>
+                Mehr Angaben: Staffeln, Cover, Tags …
+              </button>
+              <span className="flex items-center gap-[8px]">
+                <Button type="button" size="sm" variant="quiet" onClick={onClose}>
+                  Abbrechen
+                </Button>
+                <Button type="submit" size="sm" disabled={!title.trim() && !url.trim()}>
+                  Auf die Merkliste
+                </Button>
+              </span>
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-[24px]">
           {/* Linke Spalte: Cover, Format & Start-Status */}
           <div className="flex flex-col gap-[18px] border-b md:border-b-0 md:border-r border-line pb-[18px] md:pb-0 md:pr-[24px]">
@@ -4952,26 +5064,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
             <Group label="Web- / Stream-Adresse (zum Laden & Schnellstart)">
               <TextInput
                 value={url}
-                onChange={(event) => {
-                  const next = event.target.value
-                  setUrl(next)
-                  if (next.trim()) {
-                    const info = parseLinkEpisodeInfo(next)
-                    const derived = deriveLinkTitle(next)
-                    if (derived && (!title.trim() || title === 'Serie' || title === 'Neuer Link')) {
-                      setTitle(derived)
-                    }
-                    if (info.isEpisodicUrl) {
-                      if (info.season > 0) {
-                        setSeasonCount((curr) => Math.max(curr, info.season))
-                        setAtSeason(info.season)
-                      }
-                      if (info.episode !== null && info.episode > 0) {
-                        setAtEpisode(info.episode)
-                      }
-                    }
-                  }
-                }}
+                onChange={(event) => changeUrl(event.target.value)}
                 placeholder="https://…"
                 inputMode="url"
                 spellCheck={false}
@@ -5092,6 +5185,7 @@ function AddDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
             </div>
           </div>
         </div>
+        )}
       </form>
     </Dialog>
   )

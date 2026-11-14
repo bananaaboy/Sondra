@@ -31,28 +31,31 @@ import { saveBytes } from '../../lib/download'
 import { copiesOf, findDuplicates, type DuplicateReport } from '../../lib/duplicates'
 import {
   allowed,
-  canPickFolder,
-  clickSelect,
-  crumbs,
-  deleteFiles,
-  episodesInSeason,
-  folderSeries,
-  groupBySeries,
-  listing,
-  pickFolder,
-  withoutFiles,
   BIN_NAME,
   binFiles,
-  countBin,
-  restoreBinned,
-  seasonFolderName,
   type Binned,
+  canPickFolder,
+  clickSelect,
+  countBin,
+  crumbs,
+  deleteFiles,
   type DirectoryHandle,
+  episodesInSeason,
+  findNewSeries,
   type FolderEpisode,
   type FolderFile,
+  folderSeries,
+  type FoundSeries,
+  groupBySeries,
   type KindFilter,
+  listing,
+  pickFolder,
+  restoreBinned,
+  seasonFolderName,
   type SeriesGroup,
+  seriesToMerkItem,
   type SortKey,
+  withoutFiles,
 } from '../../lib/folder'
 import { folderKey, lastVisit, prefsFor, savePrefs } from '../../lib/folderMemory'
 import { formatBytes, formatDuration } from '../../lib/format'
@@ -63,7 +66,7 @@ import { FolderBin } from './FolderBin'
 import { FolderSubtitles } from './FolderSubtitles'
 import { DriveIcon } from '../GoogleDrive'
 import { SeasonFilingDialog } from '../SeasonFiling'
-import { requestOpenSeries, useMerkliste } from '../../lib/merkliste'
+import { createMerkItem, requestOpenSeries, setMerkItems, useMerkliste } from '../../lib/merkliste'
 import { thumbnailFor, type Thumbnail } from '../../lib/thumbnails'
 import { createZip, uniqueEntryNames } from '../../lib/zip'
 import { useIngestFiles } from '../../hooks/useIngest'
@@ -591,6 +594,109 @@ function RecentMenu({ folders, onOpen }: { folders: DirectoryHandle[]; onOpen: (
 /* -------------------------------------------------------------------------- */
 /* The sheet a phone gets for what the bar no longer has room for              */
 /* -------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
+/* Series the folder holds that the Merkliste does not know                    */
+/* -------------------------------------------------------------------------- */
+
+const IGNORED_KEY = 'sondra:ordner:ignoriert'
+
+function readIgnored(): Set<string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(IGNORED_KEY) ?? '[]') as unknown
+    return new Set(Array.isArray(raw) ? raw.filter((entry): entry is string => typeof entry === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function describeSeries(series: FoundSeries): string {
+  const episodes = series.seasons.reduce((sum, season) => sum + season.episodes.length, 0)
+  const seasons = series.seasons.length > 1 ? `, ${series.seasons.length} Staffeln` : ''
+  return `${episodes} ${episodes === 1 ? 'Folge' : 'Folgen'}${seasons}`
+}
+
+/**
+ * The series that lie in the folder and are not on the Merkliste: one click
+ * puts them there, so nobody has to type a name, a season or a count. A „no“
+ * is kept (by title), and what was just added says so, with the way to it.
+ */
+function NewSeriesOffer({ files }: { files: FolderFile[] }) {
+  const merk = useMerkliste()
+  const setPanel = useSession((state) => state.setPanel)
+  const [ignored, setIgnored] = useState(readIgnored)
+  const [added, setAdded] = useState<{ id: string; title: string }[]>([])
+  const found = useMemo(() => findNewSeries(files, merk, ignored), [files, merk, ignored])
+
+  const add = (list: FoundSeries[]) => {
+    const created = list.map((series) => createMerkItem(seriesToMerkItem(series)))
+    setMerkItems((current) => [...created, ...current])
+    setAdded(created.map((item) => ({ id: item.id, title: item.title })))
+  }
+  const ignore = (series: FoundSeries) => {
+    const next = new Set(ignored).add(series.key)
+    setIgnored(next)
+    try {
+      localStorage.setItem(IGNORED_KEY, JSON.stringify([...next]))
+    } catch {
+      // Private window: the answer holds until the page closes.
+    }
+  }
+
+  if (found.length === 0 && added.length === 0) return null
+  return (
+    <section aria-labelledby="ordner-neu" className="flex flex-col gap-[10px] rounded-card bg-panel-soft p-[14px] sm:p-[16px]">
+      {found.length > 0 ? (
+        <>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-[16px] gap-y-[6px]">
+            <h3 id="ordner-neu" className="m-0 text-body font-semibold text-ink">
+              {found.length === 1 ? 'Eine Serie erkannt' : `${found.length} Serien erkannt`}
+            </h3>
+            {found.length > 1 ? (
+              <Button type="button" size="sm" onClick={() => add(found)}>
+                Alle auf die Merkliste
+              </Button>
+            ) : null}
+          </div>
+          <p className="m-0 text-small text-prose">An den Dateinamen erkannt. Auf der Merkliste weiss Sondra, wie weit Sie sind, und spielt die nächste Folge.</p>
+          <ul className="m-0 flex list-none flex-col divide-y divide-line p-0">
+            {found.map((series) => (
+              <li key={series.key} className="flex flex-wrap items-center justify-between gap-x-[16px] gap-y-[6px] py-[8px] first:pt-0 last:pb-0">
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-body font-semibold text-ink">{series.title}</span>
+                  <span className="value text-small text-prose">{describeSeries(series)}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-[12px]">
+                  <button type="button" onClick={() => ignore(series)} className="press rounded-nav text-small text-prose underline decoration-rule underline-offset-[3px] hover:text-ink">
+                    Nicht fragen
+                  </button>
+                  <Button type="button" size="sm" variant={found.length > 1 ? 'quiet' : 'primary'} onClick={() => add([series])}>
+                    Auf die Merkliste
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {added.length > 0 ? (
+        <p role="status" className="rise m-0 flex flex-wrap items-center gap-x-[12px] text-small text-prose">
+          <span>{added.length === 1 ? `„${added[0].title}“ steht jetzt auf der Merkliste.` : `${added.length} Serien stehen jetzt auf der Merkliste.`}</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (added.length === 1) requestOpenSeries(added[0].id)
+              setPanel('merkliste')
+            }}
+            className="press rounded-nav font-semibold text-ink underline decoration-rule underline-offset-[3px]"
+          >
+            Ansehen
+          </button>
+        </p>
+      ) : null}
+    </section>
+  )
+}
 
 /**
  * A bottom sheet, phones only: the rest of the bar — which kind, which order,
@@ -1603,6 +1709,8 @@ export function FolderPanel() {
           Sondra hat die ersten {scan.files.length} Dateien gelesen und dann aufgehört. Ein Unterordner davon ist schneller.
         </Notice>
       ) : null}
+
+      {dir === '' && !query ? <NewSeriesOffer files={scan.files} /> : null}
 
       {dir === '' && !query ? <ContinueRow files={scan.files} onPlay={(queue) => play(queue.map((entry) => entry.file), true)} /> : null}
 

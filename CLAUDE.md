@@ -211,6 +211,43 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   „ordner-zuletzt“ (echte Ordner im Dateisystem der Seite). Das Verhalten
   des Fingers ist in einem simulierten Chromium (`hasTouch`, CDP-Touch)
   geprüft, nicht auf einem echten Telefon.
+- **Serien ohne Arbeit** (14.11.2026, „alles ist mega kompliziert … so simpel und
+  benutzerfreundlich wie möglich, dass jeder damit klarkommt“ — die grösste
+  Priorität): man tut drei Dinge — eine Serie finden oder hinzufügen, schauen,
+  sehen wie weit man ist. **„Serie hinzufügen“ ist ein Feld** (`AddDialog`,
+  Name oder Adresse, Enter): dazu nur „Wie weit sind Sie?“ (ganz neu, oder
+  schon angefangen mit der nächsten Folge). Die Länge einer Serie wird nie
+  verlangt oder geraten — `countsUnknown` ist die Vorgabe, die Folgenzahl
+  kommt aus AniWorld/AniList, wenn man „Suchen“ drückt (fragt AniList; nie von
+  selbst, „kein Anbieter fest verdrahtet“) oder später auf der Serienseite.
+  Staffeln, Filme, Cover, Tags und Status liegen hinter „Mehr Angaben“
+  (die alte Form, unverändert). Der Fokus gehört dem Feld: `Dialog` setzt ihn
+  auf sein erstes Bedienelement, deshalb holt ihn `AddDialog` nach 80 ms
+  zurück. **Der Ordner legt Serien an** (`findNewSeries`, `seriesToMerkItem`
+  in `lib/folder.ts`, `NewSeriesOffer` in `FolderPanel.tsx`): was die
+  Dateinamen als Serie verraten (`guessEpisode`) und die Merkliste nicht
+  kennt, steht oben als „2 Serien erkannt“ mit „Auf die Merkliste“ je Serie
+  oder „Alle“ — **zwei Folgen genügen**, ein einzelnes „Ocean's 11“ ist ein
+  Film —, „Nicht fragen“ merkt den Titel (`sondra:ordner:ignoriert`). Die
+  Serie beginnt bei der ersten Folge dort, Länge unbekannt; danach sagt die
+  Zeile „steht jetzt auf der Merkliste · Ansehen“. **Die Kopfzeile der
+  Merkliste hat drei Dinge** (Suche ab sechs Einträgen, „Serie hinzufügen“,
+  „Mehr“); Verlauf, Würfeln, Statistiken, Teilen, Ansicht, Ordnung und — in
+  der App — „Neue Folgen melden“ und Discord stehen im Menü `MoreMenu`
+  (schliesst bei Klick daneben und Escape; eine Wahl darin lässt es offen,
+  eine Handlung schliesst es über `data-closes`). **Die Serienseite hat einen
+  Weg nach vorn:** „Folge n abspielen“ (aus dem Ordner, sonst als Stream,
+  sonst nur „gesehen“), „Folge n gesehen“, „Bearbeiten“; Laden, Nächste
+  Folgen laden, Online suchen und Empfehlen hinter „Mehr“. **Die leere
+  Merkliste führt:** „Ordner mit Serien wählen“ oder „Eine Serie eintippen“,
+  kein Formular. **Die Startseite** hat „Heute weiterschauen“ (`ContinueTiles`
+  in `Home.tsx`): die drei zuletzt geschauten Serien als Kachel mit Poster
+  und der Folge, ein Klick öffnet die Serie. Szenario „serien“, Prüfung
+  `findNewSeries` in `npm run verify:folder`. Auf einem Entwicklungsrechner stürzte Chromium am 14.11.2026 ab (SIGTRAP), sobald die
+  Ordnerseite einen Ordner aus dem Dateisystem der Seite (OPFS) las — auch mit dem Stand
+  von vor dieser Änderung; die Ursache ist nicht geklärt. Das Szenario „serien“
+  benutzt deshalb einen Ordner im Speicher (wie „ordner“); „ordner-zuletzt“ liest
+  noch OPFS und lief dort nicht.
 - **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
   Dateimenü oder Doppelklick auf den Namen; die Endung bleibt neben dem
   Feld stehen, was Windows ablehnt (`\ / : * ? " < > |`, CON …), wird
@@ -351,8 +388,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Drive samt Löschen, die Bewegung (Reiterstrich, Dialoge, Menüs, ruhige
   Bewegung), „Beim Minimieren pausieren“ und der Player auf dem Handy (Tippen,
   Doppeltippen, Steuerung ein- und ausblenden), der Ordner auf dem Handy (Tippen,
-  langes Drücken, Blatt, Gruppen, Ansicht je Ordner) und die zuletzt geöffneten
-  Ordner. Drive läuft als Nachbildung im Prozess des Tests
+  langes Drücken, Blatt, Gruppen, Ansicht je Ordner), die zuletzt geöffneten
+  Ordner und der Weg zu einer Serie (ein Feld, Ordner erkennt, „Mehr“,
+  Startseite). Drive läuft als Nachbildung im Prozess des Tests
   (`scripts/e2e/lib.mjs`), `run.mjs` startet `dev-service` selbst. Jedes
   Szenario ist ein eigener Prozess; neue Funktionen bekommen dort ihr
   Szenario, nicht nur eine Prüfung unter Node.

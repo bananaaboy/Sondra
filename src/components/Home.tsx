@@ -21,11 +21,12 @@ import { useShallow } from 'zustand/shallow'
 import { useFilePicker, useIngestFiles, useProjectPicker } from '../hooks/useIngest'
 import { ACTIONS, GROUP_LABEL, actionsFor, searchActions, type ToolAction, type ToolGroup } from '../lib/actions'
 import { formatBytes, formatDuration } from '../lib/format'
-import { useMerkliste } from '../lib/merkliste'
+import { requestOpenSeries, seasonsOf, useMerkliste } from '../lib/merkliste'
 import { stagger } from '../lib/motion'
 import { saveProjectFile } from '../lib/project'
 import { KIND_LABEL, useActiveAsset, useSession, type PanelId } from '../state/store'
 import { SondraProjectIcon } from './AssetList'
+import { CoverImage } from './CoverImage'
 import { ProjectToDriveButton } from './GoogleDrive'
 import { positionLabel } from './panels/merklisteShared'
 import { PANELS, ToolIcon } from './panelMeta'
@@ -260,6 +261,65 @@ function WayIn({
   )
 }
 
+/* -- keep watching ---------------------------------------------------------- */
+
+/**
+ * The series being watched, the last ones first, each as one tile that goes
+ * on where it stopped: for anyone who comes back for an episode, one click
+ * to the series instead of a tool to find among forty.
+ */
+function ContinueTiles() {
+  const setPanel = useSession((state) => state.setPanel)
+  const list = useMerkliste()
+  const watching = useMemo(
+    () =>
+      list
+        .filter((item) => (item.status ?? 'watching') === 'watching' && item.episode !== null)
+        .sort((a, b) => (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt))
+        .slice(0, 3),
+    [list],
+  )
+  const [broken, setBroken] = useState<Set<string>>(new Set())
+  if (watching.length === 0) return null
+  return (
+    <section aria-labelledby="start-weiter" className="flex flex-col gap-[12px]">
+      <h2 id="start-weiter" className="text-subheading text-ink">
+        Heute weiterschauen
+      </h2>
+      <div className="grid grid-cols-1 gap-[10px] sm:grid-cols-2 lg:grid-cols-3">
+        {watching.map((item, index) => {
+          const picture = item.cover ?? seasonsOf(item).find((season) => season.cover)?.cover
+          const shown = picture && !broken.has(picture) ? picture : null
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                requestOpenSeries(item.id)
+                setPanel('merkliste')
+              }}
+              style={stagger(index)}
+              className="rise press group flex min-w-0 items-center gap-[14px] rounded-card bg-panel-soft p-[10px] text-left ring-1 ring-inset ring-line transition-colors duration-[var(--dur-fast)] hover:bg-panel-mid"
+            >
+              <span className="relative block aspect-[2/3] w-[56px] shrink-0 overflow-hidden rounded-nav bg-panel-mid">
+                {shown ? <CoverImage src={shown} frame={item.coverFrame} onError={() => setBroken((current) => new Set(current).add(shown))} /> : null}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-[2px]">
+                <span className="truncate text-body font-semibold text-ink">{item.title}</span>
+                <span className="text-small text-prose">{positionLabel(item.season, item.episode)}</span>
+                <span className="mt-[4px] inline-flex items-center gap-[6px] text-small font-semibold text-ink">
+                  Weiter
+                  <ArrowRight />
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 /* -- films and series ------------------------------------------------------- */
 
 /**
@@ -449,6 +509,8 @@ export function Home() {
       ) : (
         <WayIn onOpen={picker.open} onOpenProject={projectPicker.open} busy={picker.busy} projectBusy={projectPicker.busy} />
       )}
+
+      {active ? null : <ContinueTiles />}
 
       {active ? null : <MediaTiles />}
 

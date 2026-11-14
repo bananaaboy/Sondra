@@ -18,6 +18,7 @@ import {
   crumbs,
   eraseFromBin,
   folderEpisodes,
+  findNewSeries,
   folderSeries,
   groupBySeries,
   hintOf,
@@ -33,6 +34,7 @@ import {
   scanFileList,
   scanHandle,
   seasonPath,
+  seriesToMerkItem,
   sortFiles,
   type FolderFile,
 } from '../src/lib/folder'
@@ -473,6 +475,33 @@ check('Pfad zum Zurückklicken', crumbs('Anime', 'Nana/Extras'), [
   const broken = { kind: 'directory', name: 'Anime', isSameEntry: async () => Promise.reject(new Error('weg')) } as never
   check('Weiss der Browser es nicht, entscheidet der Name', names(await mergeRecent([folder('Anime', 'x'), folder('Filme')], broken)), ['Anime', 'Filme'])
   check('Ohne isSameEntry: der Name', names(await mergeRecent([folder('Anime', 'x', false)], folder('Anime', 'y', false))), ['Anime'])
+}
+
+{
+  // Series the folder holds that the list does not know.
+  const names = [
+    'Frieren S01E01.mkv',
+    'Frieren S01E02.mkv',
+    'Frieren S02E01.mkv',
+    'Spy x Family - 01.mp4',
+    'Spy x Family - 02.mp4',
+    'Spy x Family - 03.mp4',
+    "Ocean's 11.mkv",
+    'Nana - 01.mp4',
+    'Urlaub.mp4',
+    'Cover.jpg',
+  ]
+  const files = scanFileList(names.map((name) => picked(name, name))).files
+  const found = findNewSeries(files, [])
+  check('Neue Serien: zwei Folgen genügen, ein einzelner Film ist keine Serie', found.map((series) => series.title), ['Frieren', 'Spy x Family'])
+  check('…mit Staffeln und Folgen, die da sind', found.map((series) => series.seasons.map((season) => `${season.number}:${season.episodes.join(',')}`).join(' ')), ['1:1,2 2:1', '1:1,2,3'])
+  check('…und der Zahl der Dateien', found.map((series) => series.files), [3, 3])
+  const frieren = createMerkItem({ id: 'f', title: 'Frieren', status: 'watching', season: 1, episode: 1, seasons: [{ number: 1, episodes: 28, watched: [] }] })
+  check('Was die Merkliste kennt, ist nicht neu', findNewSeries(files, [frieren]).map((series) => series.title), ['Spy x Family'])
+  check('Wer „nicht jetzt“ sagte, wird nicht wieder gefragt', findNewSeries(files, [], new Set(['spy x family'])).map((series) => series.title), ['Frieren'])
+  check('Kein Ton und kein Bild als Serie', findNewSeries(scanFileList([picked('Cover 01.jpg', 'a'), picked('Cover 02.jpg', 'b')]).files, []).length, 0)
+  const item = seriesToMerkItem(found[0])
+  check('Auf die Merkliste: am Schauen, bei der ersten Folge hier, Länge unbekannt', [item.title, item.status, item.season, item.episode, item.seasons?.map((season) => `${season.number}:${season.episodes}`).join(' ')], ['Frieren', 'watching', 1, 1, '1:null 2:null'])
 }
 
 console.log(failures === 0 ? '\nAlles in Ordnung.' : `\n${failures} Prüfung(en) fehlgeschlagen.`)
