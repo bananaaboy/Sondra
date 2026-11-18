@@ -142,6 +142,11 @@ impl Snapshot {
             let mut node = Node::new(info.role);
             if let Some(label) = &info.label {
                 node.set_label(label.as_ref());
+                // Static text is named by its value, not its label: that is where AccessKit
+                // (and so UI Automation) takes a Label's name from.
+                if info.role == Role::Label && info.value.is_none() {
+                    node.set_value(label.as_ref());
+                }
             }
             if let Some(description) = &info.description {
                 node.set_description(description.as_ref());

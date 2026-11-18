@@ -19,6 +19,8 @@ struct WindowState {
     stack: Vec<NodeId>,
     used: HashSet<NodeId>,
     last_fingerprint: Option<u64>,
+    /// The window's title, as set through [`set_window_title`] (GPUI cannot read it back on Windows).
+    title: Option<String>,
     /// The last frame that was sent on, for answering requests from outside.
     current: Option<Rc<Snapshot>>,
     sink: Option<Sink>,
@@ -34,6 +36,14 @@ impl Global for Hub {}
 fn state<'a>(window: &Window, cx: &'a mut App) -> &'a mut WindowState {
     let id = window.window_handle().window_id();
     cx.default_global::<Hub>().windows.entry(id).or_default()
+}
+
+/// Sets the window's title and tells assistive technology: the title is the window's name. Use this
+/// rather than `Window::set_window_title`, because GPUI cannot read a title back on every platform.
+pub fn set_window_title(window: &mut Window, cx: &mut App, title: &str) {
+    window.set_window_title(title);
+    state(window, cx).title = Some(title.to_owned());
+    window.refresh();
 }
 
 /// Gives every changed frame to `sink`, and keeps the latest to answer
@@ -60,7 +70,7 @@ pub(crate) fn end_frame(window: &Window, cx: &mut App) {
         }
         state.open = false;
         Snapshot {
-            title: window.window_title(),
+            title: state.title.clone().unwrap_or_else(|| window.window_title()),
             size: window.viewport_size(),
             scale: window.scale_factor(),
             nodes: std::mem::take(&mut state.nodes),

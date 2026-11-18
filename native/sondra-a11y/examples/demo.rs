@@ -11,7 +11,7 @@ use gpui::{
     div, prelude::*, px, rgb, size, App, Application, Bounds, Context, FocusHandle, Render, Window,
     WindowBounds, WindowOptions,
 };
-use sondra_a11y::{a11y_root, accessible, attach, Role};
+use sondra_a11y::{a11y_root, accessible, attach, set_window_title, Role};
 
 struct Demo {
     play: FocusHandle,
@@ -145,6 +145,7 @@ fn main() {
             |window, cx| {
                 let attached = attach(window, cx);
                 eprintln!("accessibility bridge attached: {attached}");
+                set_window_title(window, cx, "Sondra Bedienungshilfen");
                 window.activate_window();
                 cx.new(|cx| Demo {
                     play: cx.focus_handle(),

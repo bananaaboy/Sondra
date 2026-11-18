@@ -138,6 +138,13 @@ fn the_accesskit_tree_is_complete_and_consistent(cx: &mut TestAppContext) {
 
     let root = nodes[&ROOT_ID];
     assert_eq!(root.role(), Role::Window);
+    // Static text is named by its value: that is where AccessKit takes a Label's name from.
+    let (_, title) = update
+        .nodes
+        .iter()
+        .find(|(_, n)| n.role() == Role::Label)
+        .unwrap();
+    assert_eq!(title.value(), Some("Frieren"));
     assert_eq!(root.children().len(), 2, "toolbar and title");
 
     let (play_id, play) = update
@@ -324,4 +331,17 @@ fn an_accessible_element_outside_a_root_is_ignored_not_a_crash(cx: &mut TestAppC
         |_, _| accessible("lonely", Role::Button, div().h(px(20.))).label("Allein"),
     );
     assert!(seen.borrow().is_empty());
+}
+
+#[gpui::test]
+fn the_window_title_is_the_windows_name(cx: &mut TestAppContext) {
+    let (cx, seen) = window(cx);
+    cx.update(|window, cx| sondra_a11y::set_window_title(window, cx, "Sondra · Merkliste"));
+    draw(cx, "Abspielen", false, Rc::default());
+    let snapshots = seen.borrow();
+    let snap = snapshots.last().expect("a frame");
+    assert_eq!(snap.title, "Sondra · Merkliste");
+    let update = snap.to_tree_update();
+    let (_, root) = update.nodes.iter().find(|(id, _)| *id == ROOT_ID).unwrap();
+    assert_eq!(root.label(), Some("Sondra · Merkliste"));
 }

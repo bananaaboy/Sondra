@@ -9,6 +9,7 @@
 //! * [`a11y_root`] wraps the window's root element. While it paints, every
 //!   [`accessible`] inside it reports its role, name and bounds; when the frame
 //!   is done the result is one [`Snapshot`], the accessibility tree of that frame.
+//! * [`set_window_title`] names the window for assistive technology.
 //! * [`attach`] hands each changed snapshot to the platform: on Windows,
 //!   AccessKit's UI Automation provider. Requests from assistive technology
 //!   (activate, focus) come back and are carried out on the UI thread.
@@ -28,7 +29,7 @@ mod windows;
 
 pub use accesskit::{Action, ActionRequest, Role};
 pub use element::{a11y_root, accessible, A11yRoot, Accessible};
-pub use hub::{attach_sink, run_action};
+pub use hub::{attach_sink, run_action, set_window_title};
 pub use model::{node_id_for, NodeInfo, Snapshot, ROOT_ID};
 
 use gpui::{App, Window};
