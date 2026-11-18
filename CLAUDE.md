@@ -486,9 +486,12 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
 - **Sondra nativ** (`native/`, 18.11.2026, Entscheidung des Nutzers: „komplett
   wechseln wie Discord“ — Electron raus, Rust und GPUI rein, FFmpeg nativ):
   ein Rust-Workspace neben der bestehenden App, kein Ersatz über Nacht.
-  **Stand: nur der Kern** (`sondra-core`: die geteilte Merkliste lesen — SQLite
-  und altes JSON —, entscheiden was geladen wird, was bei einer Speichergrenze
-  weg darf, wann geladen werden darf; 18 Tests). Kein Fenster, kein Dienst.
+  **Stand: Kern und eine Runde des Dienstes** (`sondra-core`: die geteilte
+  Merkliste lesen — SQLite und altes JSON —, entscheiden was geladen wird, was bei
+  einer Speichergrenze weg darf, wann geladen werden darf; `sondra-daemon`:
+  `run_round` sucht, räumt auf, lädt, alles Äußere hinter Traits, mit
+  nachgebauter Außenwelt getestet). Kein Fenster, kein laufendes Programm —
+  Drive, Extraktoren, Papierkorb, Tray fehlen noch.
   Die Testdateien schreibt der Serializer der Website
   (`npm run native:fixture`), der Workflow „Native“ prüft sie auf Windows und
   Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern

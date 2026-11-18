@@ -5,8 +5,10 @@ keine Webseite im Fenster mehr, sondern eine Oberfläche, die direkt auf der
 Grafikkarte gezeichnet wird (GPUI, das Framework hinter dem Zed-Editor), und
 Medienverarbeitung mit dem echten FFmpeg statt der WebAssembly-Fassung.
 
-**Stand: Fundament.** Gebaut ist nur der Kern (`sondra-core`). Es gibt noch kein
-Fenster, keinen Hintergrunddienst und kein Setup. Die Electron-App und die
+**Stand: Fundament.** Gebaut sind der Kern (`sondra-core`) und die Logik einer
+Runde des Hintergrunddienstes (`sondra-daemon`: suchen, aufräumen, laden), beides
+gegen nachgebaute Außenwelt getestet. Es gibt noch kein Fenster, kein Programm,
+das läuft, und kein Setup. Die Electron-App und die
 Website laufen unverändert weiter, bis das native Sondra sie Stück für Stück
 ersetzt — nichts davon wird abgeschaltet, bevor das Neue es besser kann.
 
@@ -24,6 +26,8 @@ ersetzt — nichts davon wird abgeschaltet, bevor das Neue es besser kann.
 ```
 native/
   sondra-core/    Entscheidungen, ohne Fenster und ohne Netz — überall testbar
+  sondra-daemon/  eine Runde des Hintergrunddienstes; alles Äußere hinter Traits
+                  (Library, Checker, Fetcher, Trash, Host)
 ```
 
 Geplant, in dieser Reihenfolge:
@@ -31,10 +35,13 @@ Geplant, in dieser Reihenfolge:
 1. **`sondra-core`** *(da)*: die geteilte Merkliste lesen (SQLite und älteres
    JSON), entscheiden, was als Nächstes geladen wird, was bei einer
    Speichergrenze weg darf, wann geladen werden darf.
-2. **`sondra-daemon`**: Tray, Autostart, Google-Anmeldung (Systembrowser,
-   Loopback, PKCE, derselbe Client „Desktop-App“), Drive lesen, Folgen suchen,
-   laden, Papierkorb. Läuft ohne Fenster. Der Rechner bleibt wach, wenn man es
-   gewählt hat.
+2. **`sondra-daemon`**: *die Runde ist da* (`round::run_round`: neue Folgen suchen
+   und melden, bei Speichergrenze gesehene Folgen in den Papierkorb, laden, solange
+   Fenster, Netzteil und Verbindung es erlauben — vor jeder Datei neu geprüft; was
+   geladen ist, steht nach jedem Schritt auf der Platte). **Noch zu bauen, hinter
+   denselben Traits:** Google-Anmeldung (Systembrowser, Loopback, PKCE, derselbe
+   Client „Desktop-App“) und Drive lesen, die Seiten (Extraktoren für AniWorld und
+   yt-dlp), der Papierkorb von Windows, Tray, Autostart, Rechner wach halten.
 3. **`sondra-media`**: natives FFmpeg als Prozess; Umwandeln zuerst.
 4. **`sondra-app`**: das Fenster in GPUI, Werkzeug für Werkzeug in der
    Reihenfolge, in der sie benutzt werden (Start, Merkliste, Ordner, Player, …).

@@ -258,6 +258,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sondra-daemon"
+version = "0.1.0"
+dependencies = [
+ "sondra-core",
+ "tempfile",
+]
+
+[[package]]
 name = "syn"
 version = "3.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"

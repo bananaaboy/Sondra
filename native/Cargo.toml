@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["sondra-core"]
+members = ["sondra-core", "sondra-daemon"]
 
 [workspace.package]
 version = "0.1.0"

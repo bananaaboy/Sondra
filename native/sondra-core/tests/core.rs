@@ -7,10 +7,10 @@
 use std::path::PathBuf;
 
 use sondra_core::cleanup::plan_cleanup;
-use sondra_core::config::{Config, Window};
+use sondra_core::config::{Config, KeepAwake, Window};
 use sondra_core::merkliste::{read_shared, Online, Shared, Status};
 use sondra_core::plan::{episodes_out, wanted};
-use sondra_core::schedule::{allowed, Conditions, Wait};
+use sondra_core::schedule::{allowed, keep_awake, Conditions, Wait};
 use sondra_core::state::{Fetched, State};
 
 const SQLITE: &[u8] = include_bytes!("fixtures/merkliste.sqlite");
@@ -320,4 +320,16 @@ fn config_reads_a_partial_file_with_defaults_for_the_rest() {
     assert_eq!(config.ahead, 3);
     assert!(!config.shutdown_when_done);
     assert_eq!(config.storage_limit_bytes(), Some(100 * 1024 * 1024 * 1024));
+}
+
+#[test]
+fn the_computer_is_kept_awake_only_as_chosen() {
+    let with = |keep_awake| Config {
+        keep_awake,
+        ..Config::default()
+    };
+    assert!(!keep_awake(&with(KeepAwake::Off), true));
+    assert!(keep_awake(&with(KeepAwake::WhileFetching), true));
+    assert!(!keep_awake(&with(KeepAwake::WhileFetching), false));
+    assert!(keep_awake(&with(KeepAwake::Always), false));
 }

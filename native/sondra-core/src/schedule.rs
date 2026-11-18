@@ -1,6 +1,6 @@
 //! Whether fetching is allowed right now.
 
-use crate::config::Config;
+use crate::config::{Config, KeepAwake};
 
 /// What the computer reports at this moment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,4 +37,15 @@ pub fn allowed(config: &Config, now: Conditions) -> Result<(), Wait> {
         return Err(Wait::MeteredConnection);
     }
     Ok(())
+}
+
+/// Whether the computer should be kept from sleeping right now. `busy` is
+/// true while something is being fetched or about to be. Closing the lid is
+/// not this service's to override: that stays Windows' setting.
+pub fn keep_awake(config: &Config, busy: bool) -> bool {
+    match config.keep_awake {
+        KeepAwake::Off => false,
+        KeepAwake::WhileFetching => busy,
+        KeepAwake::Always => true,
+    }
 }
