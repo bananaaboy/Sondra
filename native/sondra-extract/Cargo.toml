@@ -11,6 +11,9 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 regex = "1"
+base64 = "0.22"
+aes-gcm = "0.10"
+getrandom = "0.3"
 url = "2"
 # Certificates are always checked; the system's store is used so that a school or
 # company network that inspects HTTPS works the way the rest of the computer does.
