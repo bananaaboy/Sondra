@@ -69,9 +69,8 @@ fn unprotect(stored: &[u8]) -> Option<Vec<u8>> {
 
 #[cfg(windows)]
 fn protect(plain: &[u8]) -> io::Result<Vec<u8>> {
-    use windows::Win32::Foundation::HLOCAL;
+    use windows::Win32::Foundation::{LocalFree, HLOCAL};
     use windows::Win32::Security::Cryptography::{CryptProtectData, CRYPT_INTEGER_BLOB};
-    use windows::Win32::System::Memory::LocalFree;
 
     let input = CRYPT_INTEGER_BLOB {
         cbData: plain.len() as u32,
@@ -91,9 +90,8 @@ fn protect(plain: &[u8]) -> io::Result<Vec<u8>> {
 
 #[cfg(windows)]
 fn unprotect(stored: &[u8]) -> Option<Vec<u8>> {
-    use windows::Win32::Foundation::HLOCAL;
+    use windows::Win32::Foundation::{LocalFree, HLOCAL};
     use windows::Win32::Security::Cryptography::{CryptUnprotectData, CRYPT_INTEGER_BLOB};
-    use windows::Win32::System::Memory::LocalFree;
 
     let input = CRYPT_INTEGER_BLOB {
         cbData: stored.len() as u32,
