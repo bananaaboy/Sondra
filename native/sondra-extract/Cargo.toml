@@ -1,0 +1,17 @@
+[package]
+name = "sondra-extract"
+description = "Finding the stream behind a link: the series sites and their hosters. A port of api/extractors.js."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+regex = "1"
+url = "2"
+# Certificates are always checked; the system's store is used so that a school or
+# company network that inspects HTTPS works the way the rest of the computer does.
+ureq = { version = "3", features = ["platform-verifier"] }
