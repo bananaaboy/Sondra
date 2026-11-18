@@ -36,8 +36,42 @@ jobs:
         run: |
           npm run native:fixture
           git diff --exit-code -- native/sondra-core/tests/fixtures
+      - name: Libraries GPUI links against on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-x11-dev libxcb1-dev libfontconfig-dev libfreetype-dev libwayland-dev
       - uses: actions/cache@v4
         with:
           path: native/target
           key: native-${{ matrix.os }}-${{ hashFiles('native/Cargo.lock') }}
       - run: cargo test --manifest-path native/Cargo.toml --locked
+
+  # The accessibility bridge, asked the way a screen reader asks: through Windows
+  # UI Automation, about a real window. Names, roles, places, activation, toggling, focus.
+  uia:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: native/target
+          key: native-uia-${{ hashFiles('native/Cargo.lock') }}
+      - run: cargo build --release --locked --example demo -p sondra-a11y --manifest-path native/Cargo.toml
+      - name: Start the demo window and ask it through UI Automation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path run | Out-Null
+          $exe = (Resolve-Path native/target/release/examples/demo.exe).Path
+          $p = Start-Process -FilePath $exe -WorkingDirectory (Resolve-Path run).Path -PassThru
+          Start-Sleep -Seconds 4
+          $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-a11y/uia-check.ps1 -ProcessId $p.Id -WorkDir (Resolve-Path run).Path 2>&1
+          $code = $LASTEXITCODE
+          $out | Tee-Object -FilePath uia.txt
+          Get-Content uia.txt | Out-String | Add-Content $env:GITHUB_STEP_SUMMARY
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: uia-result
+          path: uia.txt

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["sondra-core", "sondra-daemon"]
+members = ["sondra-core", "sondra-daemon", "sondra-a11y"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,3 +12,8 @@ publish = false
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+
+# GPUI pulls in `xattr`, which does not build on Linux with the current `libc`.
+# See vendor/xattr/PATCH.md.
+[patch.crates-io]
+xattr = { path = "vendor/xattr" }
