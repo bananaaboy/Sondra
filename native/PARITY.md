@@ -81,7 +81,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | P10 | Film läuft hinter anderen Werkzeugen weiter, kleine Leiste | `Dashboard` | 5 | Klicktest | offen |
 | P11 | Visualizer für Musik | `PlayerPanel` | 5 | Bildschirmfoto | offen |
 | D01 | Downloader: Wege (eigener Dienst, Brücke, Portale), Weg als Satz | `DownloaderPanel` | 5 | `verify:download` | offen |
-| D02 | Extraktoren: AniWorld und Hoster, YouTube-progressiv, HLS zusammensetzen | `api/*.js`, `studio.ts` | 1 | `verify:extractors`, `:resolve` | offen |
+| D02 | Extraktoren: AniWorld und Hoster, YouTube-progressiv, HLS zusammensetzen | `api/*.js`, `studio.ts` | 1 | `verify:extractors`, `:resolve` | **teils nativ ✔** — AniWorld/SerienStream (Staffel, Film, Folge, Online-Prüfung), VOE, Filemoon, Vidmoly, Doodstream, Streamtape, Vidoza, Packer, HLS-Listen und -Laden; offen: YouTube, Podcast, Bilibili, Spotify, Drive-Links, 9anime, AnimeKaizen, MVFlix, yt-dlp |
 | D03 | Listen und Playlists, Folgenwähler, Staffeln laden | `download.ts`, `EpisodePicker` | 5 | `verify:download` | offen |
 | D04 | Direkt auf die Festplatte (kein RAM), Fortschritt, Pause, Abbruch, Wiederaufnahme | `downloader.mjs`, `backgroundDownload.ts` | 1 | Test | offen |
 | D05 | Hintergrund: Minibar, Wachhalten, Gong, Auto-Resume | `backgroundDownload.ts` | 5 | Klicktest | offen |
@@ -100,7 +100,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | G06 | Weg über Drive, eigener STUN/TURN-Server, Fähigkeiten (`caps`) | `deviceServers.ts` | 6 | `verify:devices` | offen |
 | H01 | Handy spiegeln: ADB über USB, scrcpy-Server 3.3.3, H.264, Maus, Tasten | `phoneMirror.ts` | 6 | **gegen ein echtes Handy** | offen |
 | H02 | UHID-Tastatur, Ton des Handys, Bildschirmfoto, eigenes Fenster | `hidKeyboard.ts`, `phoneAudio.ts` | 6 | `verify:hid`, echtes Handy | offen |
-| GD1 | Google-Anmeldung (Systembrowser, PKCE), Token verschlüsselt, Trennen | `googleDrive.mjs` | 1 | `verify:drive`, `:google-token` | offen |
+| GD1 | Google-Anmeldung (Systembrowser, PKCE), Token verschlüsselt, Trennen | `googleDrive.mjs` | 1 | `verify:drive`, `:google-token` | **nativ ✔** (gegen nachgebautes Google; nie gegen das echte; Windows: Anmeldeinfo-Verschlüsselung gebaut, auf Windows noch nicht gelaufen) |
 | GD2 | Ordner „Sondra“ in Drive, Hochladen (5 MB / 8-MB-Stücke), Projekte, Merkliste | `googleDrive.ts` | 1 | `verify:drive` | offen |
 
 ## Werkzeuge
@@ -140,8 +140,8 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 
 | ID | Funktion | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- |
-| N01 | Neue Folgen automatisch laden, je Serie wählbar, feste Zahl auf Vorrat | 0/1 | Testdateien der Website | Regel getestet, Dienst offen |
-| N02 | Speichergrenze: gesehene Folgen in den Papierkorb, nie eine ungesehene | 0/1 | `sondra-core` Tests | Regel getestet, Dienst offen |
-| N03 | Zeitfenster, nur am Netzteil, nur ohne getaktete Verbindung, Bandbreitengrenze | 0/1 | `sondra-core` Tests | Regel getestet, Dienst offen |
-| N04 | Rechner wach halten (aus, beim Laden, immer), Herunterfahren nach dem Laden | 0/1 | Test auf Windows | Regel getestet, Dienst offen |
-| N05 | Dienst im Tray, startet mit Windows | 1 | Test auf Windows | offen |
+| N01 | Neue Folgen automatisch laden, je Serie wählbar, feste Zahl auf Vorrat | 0/1 | Testdateien der Website | **nativ ✔** (`sondra-dienst laufen`; gegen nachgebaute Seiten) |
+| N02 | Speichergrenze: gesehene Folgen in den Papierkorb, nie eine ungesehene | 0/1 | `sondra-core` Tests | **nativ ✔** (Papierkorb: `trash`-Paket, auf Windows in der CI) |
+| N03 | Zeitfenster, nur am Netzteil, nur ohne getaktete Verbindung, Bandbreitengrenze | 0/1 | `sondra-core` Tests | **nativ ✔** (Papierkorb: `trash`-Paket, auf Windows in der CI) |
+| N04 | Rechner wach halten (aus, beim Laden, immer), Herunterfahren nach dem Laden | 0/1 | Test auf Windows | **nativ ✔** — Wachhalten und Herunterfahren (60 s zum Zurücknehmen); Windows-Aufrufe in der CI geprüft, echter Schlaf nicht |
+| N05 | Dienst im Tray, startet mit Windows | 1 | Test auf Windows | **in Arbeit** — Autostart (HKCU Run) und eine Instanz je Ordner da; Tray und Benachrichtigungen offen |

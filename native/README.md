@@ -7,10 +7,13 @@ keine Webseite im Fenster mehr, sondern eine Oberfläche, die direkt auf der
 Grafikkarte gezeichnet wird (GPUI, das Framework hinter dem Zed-Editor), und
 Medienverarbeitung mit dem echten FFmpeg statt der WebAssembly-Fassung.
 
-**Stand: Fundament.** Gebaut sind der Kern (`sondra-core`) und die Logik einer
-Runde des Hintergrunddienstes (`sondra-daemon`: suchen, aufräumen, laden), beides
-gegen nachgebaute Außenwelt getestet. Es gibt noch kein Fenster, kein Programm,
-das läuft, und kein Setup. Die Electron-App und die
+**Stand: der Hintergrunddienst ist da, als Programm für die Befehlszeile.** Gebaut sind
+der Kern (`sondra-core`), die Runde (`sondra-daemon`: suchen, aufräumen, laden),
+Google Drive (`sondra-drive`), die Seiten (`sondra-extract`: AniWorld und seine sechs Hoster), das
+Laden in eine Datei (`sondra-download`: direkt und HLS, Bandbreitengrenze, Fortsetzen) und das
+Programm `sondra-dienst` (`sondra-service`), alles gegen nachgebaute Außenwelt getestet; die
+Bedienungshilfen für GPUI (`sondra-a11y`) sind auf echtem Windows über UI Automation
+abgefragt. Es gibt noch kein Fenster der App, kein Tray und kein Setup. Die Electron-App und die
 Website laufen unverändert weiter, bis das native Sondra sie Stück für Stück
 ersetzt — nichts davon wird abgeschaltet, bevor das Neue es besser kann.
 
@@ -32,6 +35,12 @@ native/
                   (Library, Checker, Fetcher, Trash, Host)
   sondra-a11y/    Bedienungshilfen für GPUI: Baum aus Rolle, Name, Lage und Fokus je Bild,
                   Anbindung an Windows UI Automation (AccessKit)
+  sondra-drive/   Google Drive: Anmeldung (Systembrowser, PKCE), lesender Client, die Merkliste
+  sondra-extract/ die Seiten: AniWorld/SerienStream, VOE, Filemoon, Vidmoly, Doodstream,
+                  Streamtape, Vidoza, HLS-Listen; `testing` = nachgebaute Seiten für Tests
+  sondra-download/ einen aufgelösten Strom in eine Datei laden (direkt, HLS, FFmpeg-Zusammenbau)
+  sondra-service/ `sondra-dienst`: Suchen und Laden verdrahtet, Windows-Teile (Papierkorb,
+                  Netzteil, getaktet, Wachhalten, Autostart), Schleife, Protokoll
   vendor/xattr/   xattr 0.2.3 mit einer Zeile Patch, damit GPUI unter Linux baut
   probes/         Machbarkeitsproben der Welle 0b
 ```
@@ -44,10 +53,12 @@ Geplant, in dieser Reihenfolge:
 2. **`sondra-daemon`**: *die Runde ist da* (`round::run_round`: neue Folgen suchen
    und melden, bei Speichergrenze gesehene Folgen in den Papierkorb, laden, solange
    Fenster, Netzteil und Verbindung es erlauben — vor jeder Datei neu geprüft; was
-   geladen ist, steht nach jedem Schritt auf der Platte). **Noch zu bauen, hinter
-   denselben Traits:** Google-Anmeldung (Systembrowser, Loopback, PKCE, derselbe
-   Client „Desktop-App“) und Drive lesen, die Seiten (Extraktoren für AniWorld und
-   yt-dlp), der Papierkorb von Windows, Tray, Autostart, Rechner wach halten.
+   geladen ist, steht nach jedem Schritt auf der Platte). **Hinter denselben Traits
+   gebaut:** Google-Anmeldung und Drive lesen (`sondra-drive`), die Seiten
+   (`sondra-extract`), das Laden (`sondra-download`), Papierkorb, Netzteil,
+   getaktete Verbindung, Wachhalten, Autostart (`sondra-service`). **Noch offen:**
+   yt-dlp als Programm und die übrigen Seiten (YouTube, Podcast, Bilibili, Spotify,
+   9anime, AnimeKaizen, MVFlix), Tray, Benachrichtigungen, die Einstellungsseite.
 3. **`sondra-media`**: natives FFmpeg als Prozess; Umwandeln zuerst.
 4. **`sondra-app`**: das Fenster in GPUI, Werkzeug für Werkzeug in der
    Reihenfolge, in der sie benutzt werden (Start, Merkliste, Ordner, Player, …).

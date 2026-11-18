@@ -110,6 +110,15 @@ Papierkorb legt. Das, was Sie sich zuerst gewünscht haben.
   einem echten Rechner ohne Absturz.
 - **Offen vorab:** AniWorld lässt Rechenzentren nicht durch; geprüft wird gegen
   nachgebaute Seiten, nie echt — das gilt weiter.
+- **Stand (18.11.2026):** gebaut und getestet — Google-Anmeldung und Drive-Client
+  (`sondra-drive`), AniWorld/SerienStream samt VOE, Filemoon, Vidmoly, Doodstream,
+  Streamtape, Vidoza, Packer und HLS-Listen (`sondra-extract`), Laden in eine Datei mit
+  Fortsetzen, Bandbreitengrenze und FFmpeg-Zusammenbau (`sondra-download`), Papierkorb,
+  Netzteil, getaktete Verbindung, Wachhalten, Autostart, Einzel-Instanz und das Programm
+  `sondra-dienst` (`sondra-service`). **Offen in Welle 1:** yt-dlp als Programm und die
+  übrigen Seiten (YouTube, Podcast, Bilibili, Spotify, 9anime, AnimeKaizen, MVFlix),
+  Tray, Benachrichtigungen, die Einstellungsseite (erste GPUI-Oberfläche, gehört mit der
+  Welle 3 zusammen), ein Lauf über Nacht auf einem echten Rechner.
 
 ### Welle 2 — Der Medienkern (ohne Oberfläche)
 **Was Sie danach haben:** `sondra-media`, ein Befehl, der alles kann, was die
