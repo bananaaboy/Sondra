@@ -1,17 +1,19 @@
 /**
- * The phone's window, in two forms.
+ * The phone, in the page and — on a button — in a window of its own.
  *
- * Floating over the page: a small window with its title bar, pulled around by
- * the bar and resized at its corner — but it lives in the browser's page, so
- * the page's edge is its edge. And as a window of its own: a real window of the
- * operating system, which can stand anywhere on the desktop, on another
- * screen, beside the browser, with its own title bar, size and place. The
- * button in the title bar opens it; closing it brings the phone back into the
- * page.
+ * In the page it is part of the tab, like any other block: the picture, the
+ * phone's buttons beside it, a title with the few things to do with it. It does
+ * not float and cannot be pulled around: the page's edge would be its edge, and
+ * a window that moves only up and down is worse than none. The button
+ * „In einem eigenen Fenster öffnen“ puts it where it can stand anywhere: a real
+ * window of the operating system — a Picture-in-Picture window in Chrome and
+ * Edge (a window with a title bar and nothing else: no address bar, no tabs),
+ * a plain window in the Windows app. Closing that window brings the phone back
+ * into the page.
  *
  * Either way the picture is one canvas, created once by the page and moved
  * between the two (the decoder draws on that very canvas). Keys go to the
- * phone while the window has the focus — it takes the focus itself when the
+ * phone while the picture has the focus — it takes the focus itself when the
  * picture starts and when the pointer comes over it, so using it is all it
  * takes to connect keyboard and mouse. Ctrl+Alt+Esc hands the keyboard back.
  */
@@ -26,51 +28,20 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 
+import { IN_DESKTOP_APP } from '../../../lib/desktop'
 import { isHidKey } from '../../../lib/hidKeyboard'
 import type { MirrorSession, PhoneKey } from '../../../lib/phoneMirror'
 import { ToolIcon } from '../../panelMeta'
 
-const STORE = 'sondra:spiegeln:fenster'
-const TITLE_BAR = 44
 const RAIL = 44
 const PAD = 8
-const MIN_HEIGHT = 240
-/** The name of the separate window: opening it again reuses it. */
+/** The name of the separate window when it is a plain one: opening it again reuses it. */
 const OWN_WINDOW = 'sondra-handy'
-
-interface Geometry {
-  x: number
-  y: number
-  /** The picture's height in pixels; its width follows from the phone's shape. */
-  h: number
-}
-
-function remembered(): Geometry | null {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORE) ?? 'null')
-    if (saved && [saved.x, saved.y, saved.h].every((value) => typeof value === 'number' && Number.isFinite(value))) return saved
-  } catch {
-    /* only a preference */
-  }
-  return null
-}
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), Math.max(low, high))
 
-/** The window's width: the picture's, the rail beside it and the paddings. */
-const widthFor = (height: number, aspect: number) => Math.round(height * aspect) + RAIL + PAD * 3
-
-/** Keeps the title bar within reach: at least 80 px of the window stay on screen, and the bar never leaves the top. */
-function keepInside(geometry: Geometry, aspect: number): Geometry {
-  const h = clamp(geometry.h, MIN_HEIGHT, window.innerHeight - TITLE_BAR - 64)
-  const width = widthFor(h, aspect)
-  return { h, x: clamp(geometry.x, 80 - width, window.innerWidth - 80), y: clamp(geometry.y, 0, window.innerHeight - TITLE_BAR) }
-}
-
-function initial(aspect: number): Geometry {
-  const h = clamp(Math.round(window.innerHeight * 0.62), 360, 640)
-  return keepInside({ h, x: window.innerWidth - widthFor(h, aspect) - 32, y: 112 }, aspect)
-}
+/** How high the picture stands in the page: most of the screen, never less than a phone's worth. */
+const pictureHeight = () => clamp(window.innerHeight - 300, 320, 760)
 
 /* -- icons: the project's own stroke set ------------------------------------------------------- */
 
@@ -291,9 +262,9 @@ function PhoneBody({ canvas, session, keyboard, audio, muted, onMuted, onShot, o
   )
 }
 
-/* -- the window ------------------------------------------------------------------------------- */
+/* -- the view ---------------------------------------------------------------------------------- */
 
-export interface MirrorWindowProps {
+export interface MirrorViewProps {
   /** The one canvas the picture is drawn on; made by the page. */
   canvas: HTMLCanvasElement
   session: MirrorSession | null
@@ -306,20 +277,22 @@ export interface MirrorWindowProps {
   onMuted: (muted: boolean) => void
   onStop: () => void
   onShot: () => void
-  /** Bumped by the page to bring the window back to its first place. */
-  recenter: number
-  /** Bumped by the page to open the phone in a window of its own. */
-  popOut: number
   /** Told when the phone is in a window of its own and when it is back. */
   onOwnWindow: (open: boolean) => void
 }
 
+type PictureInPicture = { requestWindow(options?: { width?: number; height?: number }): Promise<Window> }
+
 /** A copy of the page's look for a new window: the same sheets, the same theme. */
-function dress(win: Window): HTMLElement {
+function dress(win: Window, fresh: boolean): HTMLElement {
   const doc = win.document
-  doc.open()
-  doc.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>')
-  doc.close()
+  // A plain window starts as „about:blank“ without a doctype; a Picture-in-Picture
+  // window is a finished empty page already.
+  if (!fresh) {
+    doc.open()
+    doc.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>')
+    doc.close()
+  }
   const base = doc.createElement('base')
   base.href = document.baseURI
   doc.head.appendChild(base)
@@ -333,77 +306,68 @@ function dress(win: Window): HTMLElement {
   return root
 }
 
-export function MirrorWindow({ canvas, session, name, shape, keyboard, audio, muted, onMuted, onStop, onShot, recenter, popOut, onOwnWindow }: MirrorWindowProps) {
+export function MirrorView({ canvas, session, name, shape, keyboard, audio, muted, onMuted, onStop, onShot, onOwnWindow }: MirrorViewProps) {
   const aspect = shape.width / shape.height
-  const [geometry, setGeometry] = useState<Geometry>(() => keepInside(remembered() ?? initial(aspect), aspect))
+  const [height, setHeight] = useState(pictureHeight)
   const [own, setOwn] = useState<{ win: Window; root: HTMLElement } | null>(null)
   const [note, setNote] = useState('')
-  const floatHost = useRef<HTMLDivElement | null>(null)
+  const [pageHost, setPageHost] = useState<HTMLDivElement | null>(null)
   const [ownHost, setOwnHost] = useState<HTMLDivElement | null>(null)
   const visible = Boolean(session)
 
-  const place = useCallback(
-    (next: Geometry) => {
-      const kept = keepInside(next, aspect)
-      setGeometry(kept)
-      try {
-        localStorage.setItem(STORE, JSON.stringify(kept))
-      } catch {
-        /* only a preference */
-      }
-    },
-    [aspect],
-  )
-
-  // The phone turned, or the window of the browser changed: the picture's shape
-  // and the screen's size both change what is a place the window may stand in.
   useLayoutEffect(() => {
-    setGeometry((before) => keepInside(before, aspect))
-    const onResize = () => setGeometry((before) => keepInside(before, aspect))
+    const onResize = () => setHeight(pictureHeight())
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [aspect])
+  }, [])
 
-  useEffect(() => {
-    if (recenter) place(initial(aspect))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recenter])
-
-  // The canvas stands in the page's window or in the window of its own.
+  // The canvas stands in the page or in the window of its own.
   useLayoutEffect(() => {
-    const target = own ? ownHost : floatHost.current
+    const target = own ? ownHost : pageHost
     if (target && canvas.parentNode !== target) target.appendChild(canvas)
-  }, [canvas, own, ownHost, visible])
+  }, [canvas, own, ownHost, pageHost, visible])
 
   /* -- a window of its own ------------------------------------------------------------------- */
 
-  const open = useCallback(() => {
+  const open = useCallback(async () => {
     if (own) {
       own.win.focus()
       return
     }
-    const height = clamp(window.screen.availHeight - 160, 420, 820)
-    const width = Math.round(height * aspect) + RAIL + PAD * 3
-    const left = Math.max(0, window.screen.availWidth - width - 60)
-    const win = window.open('', OWN_WINDOW, `popup=yes,width=${width},height=${height + 80},left=${left},top=40`)
+    const room = clamp(window.screen.availHeight - 200, 420, 780)
+    const width = Math.round(room * aspect) + RAIL + PAD * 3
+    const tall = room + 64
+    let win: Window | null = null
+    let fresh = false
+    // Chrome and Edge: Picture-in-Picture for pages is a window with a title bar and
+    // nothing else, which can be put anywhere on the desktop. The app (no address bar
+    // in its windows anyway) and older browsers get a plain window.
+    const pip = (window as unknown as { documentPictureInPicture?: PictureInPicture }).documentPictureInPicture
+    if (pip && !IN_DESKTOP_APP) {
+      try {
+        win = await pip.requestWindow({ width, height: tall })
+        fresh = true
+      } catch {
+        win = null
+      }
+    }
+    if (!win) {
+      win = window.open('', OWN_WINDOW, `popup=yes,width=${width},height=${tall + 40},left=${Math.max(0, window.screen.availWidth - width - 60)},top=40`)
+    }
     if (!win) {
       // Not a failure of ours: the browser's own block on a window nobody asked for.
       setNote('Der Browser hat das neue Fenster blockiert. Erlauben Sie Pop-ups für diese Seite und versuchen Sie es noch einmal.')
       window.setTimeout(() => setNote(''), 8000)
       return
     }
-    const root = dress(win)
-    win.document.title = name ? `Handy ${name}` : 'Handy'
-    win.addEventListener('pagehide', () => setOwn((current) => (current?.win === win ? null : current)))
-    win.focus()
-    setOwn({ win, root })
+    const opened = win
+    const root = dress(opened, fresh)
+    opened.document.title = name ? `Handy ${name}` : 'Handy'
+    opened.addEventListener('pagehide', () => setOwn((current) => (current?.win === opened ? null : current)))
+    opened.focus()
+    setOwn({ win: opened, root })
     onOwnWindow(true)
   }, [aspect, name, onOwnWindow, own])
-
-  useEffect(() => {
-    if (popOut) open()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [popOut])
 
   // Back in the page: the window was closed.
   useEffect(() => {
@@ -422,34 +386,7 @@ export function MirrorWindow({ canvas, session, name, shape, keyboard, audio, mu
     return () => window.removeEventListener('pagehide', close)
   }, [own])
 
-  /* -- pulling and resizing the floating window ---------------------------------------------- */
-
-  const drag = useRef<{ kind: 'move' | 'size'; px: number; py: number; from: Geometry } | null>(null)
-  const begin = (kind: 'move' | 'size') => (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.button !== 0) return
-    event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    drag.current = { kind, px: event.clientX, py: event.clientY, from: geometry }
-  }
-  const move = (event: ReactPointerEvent<HTMLElement>) => {
-    const current = drag.current
-    if (!current) return
-    const dx = event.clientX - current.px
-    const dy = event.clientY - current.py
-    setGeometry(
-      keepInside(
-        current.kind === 'move' ? { ...current.from, x: current.from.x + dx, y: current.from.y + dy } : { ...current.from, h: current.from.h + Math.max(dy, dx / aspect) },
-        aspect,
-      ),
-    )
-  }
-  const end = () => {
-    if (!drag.current) return
-    drag.current = null
-    place(geometry)
-  }
-
-  const width = widthFor(geometry.h, aspect)
+  const width = Math.round(height * aspect) + RAIL + PAD * 3
   const common = { canvas, session, keyboard, audio, muted, onMuted, onShot, onStop, aspect, note }
 
   return (
@@ -463,52 +400,46 @@ export function MirrorWindow({ canvas, session, name, shape, keyboard, audio, mu
           )
         : null}
 
-      <div
-        role="group"
-        aria-label={name ? `Handy ${name}` : 'Handy'}
-        style={{ left: geometry.x, top: geometry.y, width }}
-        className={`${visible && !own ? 'fixed' : 'hidden'} z-40 flex flex-col rounded-card bg-raised elevate-lift ring-1 ring-inset ring-line`}
-      >
-        {/* Title bar: the handle. Its buttons are not part of it. */}
-        <div
-          onPointerDown={begin('move')}
-          onPointerMove={move}
-          onPointerUp={end}
-          onPointerCancel={end}
-          style={{ height: TITLE_BAR }}
-          className="flex shrink-0 cursor-grab touch-none select-none items-center gap-[8px] border-b border-line pl-[12px] pr-[6px] active:cursor-grabbing"
+      {visible ? (
+        <section
+          aria-label={name ? `Handy ${name}` : 'Handy'}
+          style={{ width: own ? undefined : width }}
+          className="flex min-w-0 max-w-full flex-col self-start rounded-card bg-panel-soft ring-1 ring-inset ring-line/70"
         >
-          <span className="text-ink">
-            <ToolIcon>{ICON.phone}</ToolIcon>
-          </span>
-          <span className="min-w-0 flex-1 truncate text-small font-semibold text-ink">{name || 'Handy'}</span>
-          <span onPointerDown={(event) => event.stopPropagation()} className="flex items-center gap-[2px]">
-            {audio !== 'unavailable' && audio !== 'off' ? (
-              <IconButton label={muted ? 'Ton einschalten' : 'Ton ausschalten'} icon={muted ? 'mute' : 'sound'} onClick={() => onMuted(!muted)} />
-            ) : null}
-            <IconButton label="Bildschirmfoto speichern" icon="camera" onClick={onShot} />
-            <IconButton label="In einem eigenen Fenster öffnen" icon="out" onClick={open} />
-            <IconButton label="Beenden" icon="close" onClick={onStop} />
-          </span>
-        </div>
-
-        <PhoneBody {...common} own={false} size={{ width: Math.round(geometry.h * aspect), height: geometry.h }} host={(element) => (floatHost.current = element)} />
-
-        {/* The corner that makes the window larger or smaller. */}
-        <span
-          role="separator"
-          aria-label="Größe ändern"
-          onPointerDown={begin('size')}
-          onPointerMove={move}
-          onPointerUp={end}
-          onPointerCancel={end}
-          className="absolute bottom-0 right-0 h-[18px] w-[18px] cursor-nwse-resize touch-none"
-        >
-          <svg viewBox="0 0 18 18" className="h-full w-full text-muted" fill="none" aria-hidden>
-            <path d="M16 6L6 16M16 11l-5 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-          </svg>
-        </span>
-      </div>
+          <div className="flex h-[44px] shrink-0 items-center gap-[8px] border-b border-line pl-[12px] pr-[6px]">
+            <span className="text-ink">
+              <ToolIcon>{ICON.phone}</ToolIcon>
+            </span>
+            <span className="min-w-0 flex-1 truncate text-small font-semibold text-ink">{name || 'Handy'}</span>
+            {own ? null : (
+              <span className="flex items-center gap-[2px]">
+                {audio !== 'unavailable' && audio !== 'off' ? (
+                  <IconButton label={muted ? 'Ton einschalten' : 'Ton ausschalten'} icon={muted ? 'mute' : 'sound'} onClick={() => onMuted(!muted)} />
+                ) : null}
+                <IconButton label="Bildschirmfoto speichern" icon="camera" onClick={onShot} />
+                <IconButton label="In einem eigenen Fenster öffnen" icon="out" onClick={() => void open()} />
+                <IconButton label="Beenden" icon="close" onClick={onStop} />
+              </span>
+            )}
+          </div>
+          {own ? (
+            <div className="flex flex-col items-start gap-[12px] p-[16px]">
+              <p className="max-w-[40ch] text-small leading-[1.55] text-prose">
+                Das Handy steht in einem eigenen Fenster. Schließen Sie es, bringt das Handy zurück in diese Seite.
+              </p>
+              <button
+                type="button"
+                onClick={() => own.win.close()}
+                className="press rounded-nav bg-raised px-[12px] py-[8px] text-small font-medium text-ink ring-1 ring-inset ring-rule hover:bg-panel-soft"
+              >
+                Zurück in die Seite
+              </button>
+            </div>
+          ) : (
+            <PhoneBody {...common} own={false} size={{ width: Math.round(height * aspect), height }} host={setPageHost} />
+          )}
+        </section>
+      ) : null}
     </>
   )
 }
