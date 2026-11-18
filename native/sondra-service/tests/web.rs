@@ -255,3 +255,40 @@ fn walk(dir: &Path) -> Vec<String> {
     }
     out
 }
+
+#[test]
+fn the_configured_fetcher_reads_the_folder_when_it_fetches() {
+    use sondra_service::runner::{save_config, state_path};
+    let _ = state_path;
+    let settings = tempfile::tempdir().unwrap();
+    let folder = tempfile::tempdir().unwrap();
+    let media = media_server(bytes(33_000));
+    let voe = voe_page(&format!("{media}/film.mp4"), "x");
+    let make = move || {
+        Pages::new(&[
+            (
+                "https://aniworld.to/anime/stream/one-piece/staffel-1/episode-1",
+                EPISODE,
+            ),
+            ("https://voe.example/e/sample", &voe),
+        ])
+        .redirect(
+            "https://aniworld.to/redirect/1",
+            "https://voe.example/e/sample",
+        )
+    };
+    let mut fetcher = sondra_service::ConfiguredFetcher::new(settings.path().to_owned(), make);
+    fetcher.allow_private = true;
+
+    // Nothing chosen: nothing is fetched, and it says why.
+    let err = fetcher.fetch(&want(), None).unwrap_err();
+    assert!(err.contains("kein Ordner gewählt"), "{err}");
+
+    // Chosen after the service started: it applies to the next episode.
+    let mut config = sondra_core::config::Config::default();
+    config.folder = Some(folder.path().display().to_string());
+    save_config(settings.path(), &config).unwrap();
+    let got = fetcher.fetch(&want(), None).expect("a file");
+    assert!(got.path.starts_with(folder.path()));
+    assert_eq!(got.size, 33_000);
+}

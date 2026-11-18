@@ -5476,6 +5476,7 @@ dependencies = [
  "sondra-core",
  "sondra-daemon",
  "sondra-download",
+ "sondra-drive",
  "sondra-extract",
  "tempfile",
  "tiny_http",

@@ -11,6 +11,8 @@ sondra-core = { path = "../sondra-core" }
 sondra-daemon = { path = "../sondra-daemon" }
 sondra-extract = { path = "../sondra-extract" }
 sondra-download = { path = "../sondra-download" }
+serde_json.workspace = true
+sondra-drive = { path = "../sondra-drive" }
 url = "2"
 tempfile = "3"
 # The Recycle Bin on Windows (and the trash of other desktops, for development).
@@ -28,5 +30,8 @@ windows = { version = "0.62", features = [
 
 [dev-dependencies]
 tiny_http = "0.12"
-serde_json.workspace = true
 sondra-extract = { path = "../sondra-extract", features = ["testing"] }
+
+[[bin]]
+name = "sondra-dienst"
+path = "src/main.rs"

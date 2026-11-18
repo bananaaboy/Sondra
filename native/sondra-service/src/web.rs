@@ -134,3 +134,41 @@ impl<F: Fetch> Fetcher for WebFetcher<F> {
         Err(last)
     }
 }
+
+/// Fetches with what is chosen *now*: the folder is read from the settings for every episode, so a
+/// change applies without restarting the service. Without a folder nothing is fetched.
+pub struct ConfiguredFetcher<F: Fetch> {
+    pub dir: PathBuf,
+    make: Box<dyn Fn() -> F + Send + Sync>,
+    pub ffmpeg: Option<PathBuf>,
+    pub cancel: Cancel,
+    pub allow_private: bool,
+}
+
+impl<F: Fetch> ConfiguredFetcher<F> {
+    pub fn new(dir: PathBuf, make: impl Fn() -> F + Send + Sync + 'static) -> Self {
+        Self {
+            dir,
+            make: Box::new(make),
+            ffmpeg: None,
+            cancel: Cancel::new(),
+            allow_private: false,
+        }
+    }
+}
+
+impl<F: Fetch> Fetcher for ConfiguredFetcher<F> {
+    fn fetch(&self, want: &Want, bandwidth_kib: Option<u32>) -> Result<FetchedFile, String> {
+        let config = crate::runner::load_config(&self.dir).map_err(|e| e.to_string())?;
+        let folder = config
+            .folder
+            .filter(|f| !f.trim().is_empty())
+            .ok_or_else(|| "Es ist noch kein Ordner gewählt, in den geladen wird.".to_owned())?;
+        let mut fetcher = WebFetcher::new((self.make)(), PathBuf::from(folder));
+        fetcher.language = config.language;
+        fetcher.ffmpeg = self.ffmpeg.clone();
+        fetcher.cancel = self.cancel.clone();
+        fetcher.allow_private = self.allow_private;
+        fetcher.fetch(want, bandwidth_kib)
+    }
+}

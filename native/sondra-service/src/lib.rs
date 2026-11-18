@@ -4,8 +4,10 @@
 //! (`sondra-download`) into the ports of `sondra-daemon`.
 
 mod platform;
+pub mod runner;
 mod web;
 
 pub use platform::{autostart, AwakeGuard, SystemHost, SystemTrash};
 
-pub use web::{episode_url, season_folder, WebChecker, WebFetcher};
+pub use runner::InstanceLock;
+pub use web::{episode_url, season_folder, ConfiguredFetcher, WebChecker, WebFetcher};
