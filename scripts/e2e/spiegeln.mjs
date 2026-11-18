@@ -94,6 +94,156 @@ const hideUsb = () => Object.defineProperty(Navigator.prototype, 'usb', { get: (
   await context.close()
 }
 
+
+/* -- the window, with a phone of our own ---------------------------------------------------------
+ * There is no ADB device here, so the page is given a stand-in for the connection (the page's own
+ * seam for tests): it paints a picture and writes down what the window sends. That checks the
+ * window, the mouse and the keyboard; the real connection is not touched. */
+const fakePhone = () => {
+  window.__log = []
+  const log = (entry) => window.__log.push(entry)
+  window.__sondraMirrorTest = async ({ canvas, onStep }) => {
+    onStep('select')
+    canvas.width = 360
+    canvas.height = 640
+    const g = canvas.getContext('2d')
+    const wall = g.createLinearGradient(0, 0, 360, 640)
+    wall.addColorStop(0, '#264653'); wall.addColorStop(1, '#e9c46a')
+    g.fillStyle = wall; g.fillRect(0, 0, 360, 640)
+    g.fillStyle = '#fff'; g.font = '600 56px sans-serif'; g.fillText('9:41', 28, 150)
+    g.font = '20px sans-serif'; g.fillText('Mittwoch, 18. November', 30, 184)
+    const colors = ['#e76f51', '#2a9d8f', '#f4a261', '#8ecae6', '#b5838d', '#6d597a', '#90be6d', '#f9c74f']
+    for (let i = 0; i < 16; i += 1) { g.fillStyle = colors[i % 8]; g.beginPath(); g.roundRect(30 + (i % 4) * 82, 250 + Math.floor(i / 4) * 92, 60, 60, 16); g.fill() }
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.roundRect(24, 560, 312, 70, 24); g.fill()
+    const listeners = {}
+    return {
+      deviceName: 'Pixel 8', size: { width: 360, height: 640 }, keyboard: 'uhid', audio: 'on',
+      onSize() {}, onKeyboard() {}, onAudio() {}, closed: new Promise(() => {}),
+      setMuted: (m) => log(['mute', m]),
+      sendKey: async (e) => log(['key', e.code, e.down ? 'down' : 'up']),
+      releaseKeys: async () => log(['release']),
+      key: async (k) => log(['button', k]),
+      openNotifications: async () => log(['notifications']),
+      touch: async (kind, x, y) => log(['touch', kind, Math.round(x * 100), Math.round(y * 100)]),
+      scroll: async () => log(['scroll']),
+      screenshot: async () => undefined,
+      stop: async () => log(['stop']),
+    }
+  }
+}
+{
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', colorScheme: 'dark' })
+  await context.addInitScript(mockUsb)
+  await context.addInitScript(fakePhone)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (e) => { if (!harmless(e)) errors.push(String(e)) })
+  await page.goto(`${BASE}#spiegeln`)
+  await page.getByRole('heading', { name: 'Handy spiegeln' }).waitFor({ timeout: 15000 })
+  const win = page.getByRole('group', { name: 'Handy Pixel 8' })
+  check('Fenster: vor dem Verbinden nicht da', (await win.count()) === 0 || !(await win.isVisible()))
+  await page.getByRole('button', { name: 'Handy verbinden' }).click()
+  await win.waitFor({ timeout: 10000 })
+  await page.waitForTimeout(400)
+  const log = () => page.evaluate(() => window.__log)
+  const box0 = await win.boundingBox()
+  check('Fenster: steht im Bild, rechts oben', box0.x > 600 && box0.y >= 0 && box0.x + box0.width <= 1440 && box0.y + box0.height <= 900, JSON.stringify(box0))
+  check('Fenster: hat den Fokus, Tastatur ist verbunden', (await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Handy Pixel 8' && (await page.getByText(/Tastatur verbunden/).count()) === 1)
+  await page.screenshot({ path: OUT + 'spiegeln-fenster.png' })
+
+  // keyboard: the first key already goes to the phone
+  await page.keyboard.press('KeyA')
+  await page.keyboard.down('Shift'); await page.keyboard.press('KeyZ'); await page.keyboard.up('Shift')
+  await page.keyboard.press('ArrowLeft')
+  let entries = await log()
+  const keys = entries.filter((e) => e[0] === 'key').map((e) => e.slice(1).join(':'))
+  check('Tastatur: A, Umschalt+Z und Pfeil gehen als Tasten ans Handy', ['KeyA:down', 'KeyA:up', 'ShiftLeft:down', 'KeyZ:down', 'KeyZ:up', 'ShiftLeft:up', 'ArrowLeft:down', 'ArrowLeft:up'].every((k) => keys.includes(k)), keys.join(' '))
+  await page.keyboard.press('Control+Alt+Escape')
+  const before = (await log()).filter((e) => e[0] === 'key').length
+  await page.keyboard.press('KeyB')
+  entries = await log()
+  check('Tastatur: Strg+Alt+Esc gibt sie zurück, danach geht B nicht mehr ans Handy', entries.filter((e) => e[0] === 'key').length === before && entries.some((e) => e[0] === 'release') && (await page.getByText(/Ins Fenster klicken/).count()) === 1)
+
+  // mouse: left, right, middle, wheel
+  const canvas = win.locator('canvas')
+  const cb = await canvas.boundingBox()
+  await page.mouse.click(cb.x + cb.width / 2, cb.y + cb.height / 4)
+  await page.mouse.click(cb.x + 20, cb.y + 20, { button: 'right' })
+  await page.mouse.click(cb.x + 20, cb.y + 20, { button: 'middle' })
+  await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2)
+  await page.mouse.wheel(0, 200)
+  await page.waitForTimeout(200)
+  entries = await log()
+  const touches = entries.filter((e) => e[0] === 'touch')
+  check('Maus: Klick ist Tippen in der Mitte, oben', touches.length >= 2 && touches[0][1] === 'down' && Math.abs(touches[0][2] - 50) <= 2 && Math.abs(touches[0][3] - 25) <= 2, JSON.stringify(touches.slice(0, 2)))
+  check('Maus: Rechtsklick ist Zurück, Mittelklick ist Start', entries.some((e) => e[0] === 'button' && e[1] === 'back') && entries.some((e) => e[0] === 'button' && e[1] === 'home'))
+  check('Maus: Mausrad scrollt', entries.some((e) => e[0] === 'scroll'))
+  check('Maus: Klick ins Fenster holt die Tastatur zurück', (await page.getByText(/Tastatur verbunden/).count()) === 1)
+
+  // buttons of the phone
+  await win.getByRole('button', { name: 'Lauter' }).click()
+  await win.getByRole('button', { name: 'Benachrichtigungen' }).click()
+  await win.getByRole('button', { name: 'Ton ausschalten' }).click()
+  entries = await log()
+  check('Knöpfe: Lauter, Benachrichtigungen, Ton aus', entries.some((e) => e[0] === 'button' && e[1] === 'volumeUp') && entries.some((e) => e[0] === 'notifications') && entries.some((e) => e[0] === 'mute' && e[1] === true))
+
+  // pull the window by its title bar
+  const bar = win.locator('div.cursor-grab')
+  const bb = await bar.boundingBox()
+  await page.mouse.move(bb.x + 60, bb.y + 20)
+  await page.mouse.down()
+  await page.mouse.move(bb.x - 140, bb.y + 160, { steps: 8 })
+  await page.mouse.up()
+  const box1 = await win.boundingBox()
+  check('Ziehen: die Titelleiste trägt das Fenster', Math.abs(box1.x - (box0.x - 200)) <= 3 && Math.abs(box1.y - (box0.y + 140)) <= 3, `${box0.x},${box0.y} → ${box1.x},${box1.y}`)
+  // …but never out of reach
+  await page.mouse.move(box1.x + 60, box1.y + 20)
+  await page.mouse.down()
+  await page.mouse.move(-2000, -2000, { steps: 4 })
+  await page.mouse.up()
+  const box2 = await win.boundingBox()
+  check('Ziehen: ein Rest des Fensters bleibt im Bild, die Leiste oben', box2.x + box2.width >= 80 && box2.y >= 0, JSON.stringify(box2))
+  await page.mouse.move(box2.x + 60, box2.y + 20)
+  await page.mouse.down()
+  await page.mouse.move(500, 160, { steps: 6 })
+  await page.mouse.up()
+
+  // larger at the corner
+  const box3 = await win.boundingBox()
+  const corner = win.getByRole('separator', { name: 'Größe ändern' })
+  const cr = await corner.boundingBox()
+  await page.mouse.move(cr.x + 9, cr.y + 9)
+  await page.mouse.down()
+  await page.mouse.move(cr.x + 9 + 40, cr.y + 9 + 80, { steps: 6 })
+  await page.mouse.up()
+  const box4 = await win.boundingBox()
+  check('Größe: die Ecke macht das Fenster grösser, das Bild bleibt in seiner Form', box4.height > box3.height + 40 && box4.width > box3.width, `${box3.width}x${box3.height} → ${box4.width}x${box4.height}`)
+  const cb4 = await canvas.boundingBox()
+  check('Größe: das Bild behält 9:16', Math.abs(cb4.width / cb4.height - 360 / 640) < 0.01, String(cb4.width / cb4.height))
+  await page.screenshot({ path: OUT + 'spiegeln-fenster-gezogen.png' })
+
+  // where it stands is remembered
+  const stored = await page.evaluate(() => localStorage.getItem('sondra:spiegeln:fenster'))
+  await page.reload()
+  await page.getByRole('heading', { name: 'Handy spiegeln' }).waitFor({ timeout: 15000 })
+  await page.getByRole('button', { name: 'Handy verbinden' }).click()
+  await win.waitFor({ timeout: 10000 })
+  await page.waitForTimeout(300)
+  const box5 = await win.boundingBox()
+  check('Fenster: Ort und Größe sind nach dem Neuladen wieder da', Boolean(stored) && Math.abs(box5.x - box4.x) <= 3 && Math.abs(box5.y - box4.y) <= 3 && Math.abs(box5.width - box4.width) <= 3, `${box4.x},${box4.y} / ${box5.x},${box5.y}`)
+
+  // back to the first place; and the end
+  await page.getByRole('button', { name: 'Fenster zurückholen' }).click()
+  await page.waitForTimeout(300)
+  const box6 = await win.boundingBox()
+  check('„Fenster zurückholen“ bringt es an den ersten Platz', box6.x > 600 && box6.y < 200, JSON.stringify(box6))
+  await page.getByRole('button', { name: 'Beenden' }).first().click()
+  await page.waitForTimeout(400)
+  check('Beenden: das Fenster geht, das Handy wird freigegeben', !(await win.isVisible()) && (await log()).some((e) => e[0] === 'stop'))
+  check('Fenster: keine Fehler', errors.length === 0, errors.join(' | '))
+  await context.close()
+}
+
 /* -- no WebUSB -------------------------------------------------------------------------------- */
 {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' })

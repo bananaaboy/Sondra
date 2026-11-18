@@ -27,7 +27,9 @@ import {
 } from '@yume-chan/scrcpy'
 import { WebCodecsVideoDecoder, WebGLVideoFrameRenderer } from '@yume-chan/scrcpy-decoder-webcodecs'
 
+import { HID_KEYBOARD_ID, HidKeyboard, KEYBOARD_REPORT_DESCRIPTOR } from './hidKeyboard'
 import { IN_ANDROID_APP } from './desktop'
+import { PhoneAudio, canPlayPhoneAudio } from './phoneAudio'
 import serverUrl from '../assets/scrcpy/scrcpy-server-v3.3.3.jar?url'
 
 /** The server's version: it aborts at once if the client names another. */
@@ -111,6 +113,21 @@ export interface MirrorSession {
   onSize(listener: (size: { width: number; height: number }) => void): void
   /** Resolves with a reason once the picture stops: unplugged, or the phone quit. */
   readonly closed: Promise<string>
+  /**
+   * How this computer's keyboard reaches the phone: `uhid` is a virtual USB
+   * keyboard on the phone (scrcpy's `--keyboard=uhid`), `sdk` injects text and
+   * key codes instead — the way when the phone refuses the virtual keyboard.
+   */
+  readonly keyboard: 'uhid' | 'sdk'
+  /** The phone's sound: playing here, off by the user's choice, or not available (before Android 11). */
+  readonly audio: 'on' | 'off' | 'unavailable'
+  onAudio(listener: (state: 'on' | 'off' | 'unavailable') => void): void
+  setMuted(muted: boolean): void
+  onKeyboard(listener: (mode: 'uhid' | 'sdk') => void): void
+  /** A key of this computer's keyboard, as the browser reports it. */
+  sendKey(event: { code: string; key: string; down: boolean; ctrl: boolean; alt: boolean; meta: boolean }): Promise<void>
+  /** Lets go of every held key — the window lost the focus. */
+  releaseKeys(): Promise<void>
   key(key: PhoneKey): Promise<void>
   openNotifications(): Promise<void>
   /** A position in the picture, 0 to 1 in each direction. */
@@ -123,6 +140,8 @@ export interface MirrorSession {
 export interface MirrorStart {
   canvas: HTMLCanvasElement
   quality: MirrorQuality
+  /** Whether to bring the phone's sound along. */
+  sound: boolean
   onStep: (step: MirrorStep) => void
   /** Told as soon as there is something to cancel with. */
   onAbort: (abort: () => void) => void
@@ -134,16 +153,28 @@ export interface MirrorStart {
  * Call it straight from a click: the browser lets a page open its device
  * picker only then, and the picker is the first thing this does.
  */
-export async function startMirror({ canvas, quality, onStep, onAbort }: MirrorStart): Promise<MirrorSession> {
+export async function startMirror({ canvas, quality, sound, onStep, onAbort }: MirrorStart): Promise<MirrorSession> {
   const manager = AdbDaemonWebUsbDeviceManager.BROWSER
   if (!manager) throw new MirrorError('unknown', 'WebUSB fehlt')
+  // Sound: the AudioContext has to be made from the click, i.e. before the
+  // first await; it is let go again if the phone has no sound to give.
+  let player: PhoneAudio | null = null
+  if (sound && canPlayPhoneAudio()) {
+    try {
+      player = new PhoneAudio()
+    } catch {
+      player = null
+    }
+  }
   let cancelled = false
   let device: AdbDaemonWebUsbDevice | undefined
   let adb: Adb | undefined
   let client: AdbScrcpyClient<AdbScrcpyOptions3_3_3<true>> | undefined
   let decoder: WebCodecsVideoDecoder | undefined
+  let options: AdbScrcpyOptions3_3_3<true> | undefined
 
   const release = async () => {
+    player?.close()
     try {
       decoder?.dispose()
     } catch {
@@ -200,22 +231,20 @@ export async function startMirror({ canvas, quality, onStep, onAbort }: MirrorSt
     )
 
     onStep('start')
-    client = await AdbScrcpyClient.start(
-      adb,
-      DefaultServerPath,
-      new AdbScrcpyOptions3_3_3({
-        audio: false,
-        control: true,
-        tunnelForward: true,
-        // "Flüssig" caps the longer edge so the phone's encoder and this
-        // computer's decoder have an easy time; "Scharf" is the phone's own size.
-        maxSize: quality === 'smooth' ? 1280 : 0,
-        maxFps: 60,
-        videoBitRate: quality === 'smooth' ? 6_000_000 : 12_000_000,
-        videoCodec: 'h264',
-        clipboardAutosync: false,
-      }),
-    )
+    options = new AdbScrcpyOptions3_3_3({
+      audio: Boolean(player),
+      audioCodec: 'opus',
+      control: true,
+      tunnelForward: true,
+      // "Flüssig" caps the longer edge so the phone's encoder and this
+      // computer's decoder have an easy time; "Scharf" is the phone's own size.
+      maxSize: quality === 'smooth' ? 1280 : 0,
+      maxFps: 60,
+      videoBitRate: quality === 'smooth' ? 6_000_000 : 12_000_000,
+      videoCodec: 'h264',
+      clipboardAutosync: false,
+    })
+    client = await AdbScrcpyClient.start(adb, DefaultServerPath, options)
     const video = await client.videoStream
     decoder = new WebCodecsVideoDecoder({ codec: video.metadata.codec, renderer: new WebGLVideoFrameRenderer(canvas) })
   } catch (error) {
@@ -255,6 +284,80 @@ export async function startMirror({ canvas, quality, onStep, onAbort }: MirrorSt
   })
 
   const controller = live.client.controller
+
+  // The phone's sound: Android 11 and newer give it; older ones answer that
+  // there is none, and the page says so. The stream has to be read either way.
+  let audio: 'on' | 'off' | 'unavailable' = player ? 'on' : 'off'
+  const audioListeners = new Set<(state: 'on' | 'off' | 'unavailable') => void>()
+  const setAudio = (state: 'on' | 'off' | 'unavailable') => {
+    audio = state
+    for (const listener of audioListeners) listener(state)
+  }
+  void live.client.audioStream?.then(
+    (metadata) => {
+      if (metadata.type === 'success' && player) {
+        void player.play(metadata.codec.webCodecId, metadata.stream as never).catch(() => setAudio('unavailable'))
+      } else {
+        player?.close()
+        player = null
+        setAudio(metadata.type === 'errored' ? 'unavailable' : 'off')
+      }
+    },
+    () => setAudio('unavailable'),
+  )
+
+  // `--keyboard=uhid`: a virtual USB keyboard on the phone. Created once, when
+  // the picture starts, like scrcpy does; if the phone refuses (the server
+  // says so in its output), keys fall back to injected text and key codes.
+  const hid = new HidKeyboard()
+  let keyboard: 'uhid' | 'sdk' = 'uhid'
+  const keyboardListeners = new Set<(mode: 'uhid' | 'sdk') => void>()
+  const fallBack = () => {
+    if (keyboard === 'sdk') return
+    keyboard = 'sdk'
+    for (const listener of keyboardListeners) listener(keyboard)
+  }
+  try {
+    await controller?.uHidCreate({
+      id: HID_KEYBOARD_ID,
+      vendorId: 0,
+      productId: 0,
+      name: 'Sondra Tastatur',
+      data: KEYBOARD_REPORT_DESCRIPTOR,
+    })
+  } catch {
+    keyboard = 'sdk'
+  }
+  // What the phone's keyboard says back (the LEDs) is read and dropped: left
+  // unread it would stop the next message from the phone.
+  void options?.uHidOutput?.pipeTo(new WritableStream({ write() {} }) as never).catch(() => undefined)
+  // The server's own words: a refused UHID device is named there.
+  void live.client.output
+    .pipeTo(
+      new WritableStream<string>({
+        write(line) {
+          if (/uhid/i.test(line) && /(fail|error|could not|exception|denied|permission)/i.test(line)) fallBack()
+        },
+      }) as never,
+    )
+    .catch(() => undefined)
+
+  const sdkKeys: Record<string, number> = {
+    Enter: AndroidKeyCode.Enter,
+    NumpadEnter: AndroidKeyCode.Enter,
+    Backspace: AndroidKeyCode.Backspace,
+    Delete: AndroidKeyCode.Delete,
+    Tab: AndroidKeyCode.Tab,
+    Escape: AndroidKeyCode.Escape,
+    ArrowUp: AndroidKeyCode.ArrowUp,
+    ArrowDown: AndroidKeyCode.ArrowDown,
+    ArrowLeft: AndroidKeyCode.ArrowLeft,
+    ArrowRight: AndroidKeyCode.ArrowRight,
+    PageUp: AndroidKeyCode.PageUp,
+    PageDown: AndroidKeyCode.PageDown,
+    Home: AndroidKeyCode.Home,
+    End: AndroidKeyCode.End,
+  }
   const press = async (code: number) => {
     await controller?.injectKeyCode({ action: AndroidKeyEventAction.Down, keyCode: code as never, repeat: 0, metaState: 0 })
     await controller?.injectKeyCode({ action: AndroidKeyEventAction.Up, keyCode: code as never, repeat: 0, metaState: 0 })
@@ -273,6 +376,31 @@ export async function startMirror({ canvas, quality, onStep, onAbort }: MirrorSt
     },
     onSize: (listener) => void listeners.add(listener),
     closed,
+    get audio() {
+      return audio
+    },
+    onAudio: (listener) => void audioListeners.add(listener),
+    setMuted: (muted) => player?.setMuted(muted),
+    get keyboard() {
+      return keyboard
+    },
+    onKeyboard: (listener) => void keyboardListeners.add(listener),
+    async sendKey({ code, key, down, ctrl, alt, meta }) {
+      if (keyboard === 'uhid') {
+        const report = down ? hid.down(code) : hid.up(code)
+        if (report) await controller?.uHidInput({ id: HID_KEYBOARD_ID, data: report })
+        return
+      }
+      // The SDK way: only what a key press can mean without a virtual keyboard.
+      if (!down) return
+      const named = sdkKeys[code]
+      if (named !== undefined) await press(named)
+      else if (key.length === 1 && !ctrl && !alt && !meta) await controller?.injectText(key)
+    },
+    async releaseKeys() {
+      const report = hid.reset()
+      if (report && keyboard === 'uhid') await controller?.uHidInput({ id: HID_KEYBOARD_ID, data: report })
+    },
     async key(key) {
       if (key === 'back') {
         await controller?.backOrScreenOn(AndroidKeyEventAction.Down)
@@ -298,6 +426,11 @@ export async function startMirror({ canvas, quality, onStep, onAbort }: MirrorSt
     screenshot: () => live.decoder.snapshot(),
     async stop() {
       cancelled = true
+      try {
+        if (keyboard === 'uhid') await controller?.uHidDestroy(HID_KEYBOARD_ID)
+      } catch {
+        /* the phone may be unplugged */
+      }
       await release()
     },
   }

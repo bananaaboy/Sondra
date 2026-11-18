@@ -274,14 +274,39 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Szenario „spiegeln“. Der Drive-Nachbau der
   Szenarien (`scripts/e2e/lib.mjs`) versteht jetzt `addParents`/`removeParents` und
   Notizen beim Verschieben.
-- **Handy spiegeln** (`#spiegeln`, `PhoneMirrorPanel.tsx`, `lib/phoneMirror.ts`,
-  18.11.2026, „wie scrcpy, einfacher, im Tab, mit Buttons und Erklärung“): der
-  Bildschirm eines Android-Handys im Fenster, Klick = Tippen, Ziehen =
-  Wischen, Mausrad = Scrollen, dazu Zurück, Start, Übersicht, Lauter/Leiser,
-  Sperren, Benachrichtigungen, Bildschirmfoto. Oben fünf Schritte
+- **Handy spiegeln** (`#spiegeln`, `PhoneMirrorPanel.tsx`, `phone/MirrorWindow.tsx`,
+  `lib/phoneMirror.ts`, `lib/hidKeyboard.ts`, `lib/phoneAudio.ts`, 18.11.2026,
+  „wie scrcpy, einfacher, im Tab, mit Buttons und Erklärung“; am selben Tag neu
+  gestaltet: schöner, ein Fenster zum Ziehen, Tastatur und Maus von selbst,
+  `--keyboard=uhid`, Ton): der Bildschirm eines Android-Handys in einem
+  **schwebenden Fenster** (`fixed`, die eine Schattenstufe, gerundet: ein Ort
+  zum Ansehen) mit Titelleiste zum Ziehen, Ecke unten rechts zum Vergrössern
+  (das Bild behält seine Form), Ort und Grösse in `sondra:spiegeln:fenster`,
+  immer so gehalten, dass ein Rest und die Leiste erreichbar bleiben; „Fenster
+  zurückholen“ auf der Seite. Der Tab selbst: links fünf Schritte
   (Entwickleroptionen, USB-Debugging, Datenkabel, „Handy verbinden“,
-  „Zulassen“ am Handy), eine Auswahl „Flüssig/Scharf“, dahinter „Wenn es nicht
-  klappt“. **Wie:** WebUSB statt `adb`-Programm — Tango ADB
+  „Zulassen“; beim Verbinden werden sie abgehakt), rechts auf `panel-soft` eine
+  Zeichnung, der Knopf, „Ton übertragen“, „Flüssig/Scharf“; verbunden steht dort
+  die Belegung (Linksklick tippt, Rechtsklick Zurück, Mittelklick Start, Tasten)
+  und das Fenster schwebt an der Stelle der Karte. Dahinter „Wenn es nicht
+  klappt“. **Tastatur und Maus verbinden sich durch Benutzen:** das Fenster
+  nimmt den Fokus, wenn das Bild beginnt, beim Klick und wenn der Zeiger darüber
+  steht (ausser ein Feld hat ihn); solange es ihn hat, geht jede Taste ans Handy,
+  Strg+Alt+Esc gibt ihn zurück, beim Verlieren werden alle Tasten losgelassen.
+  **`--keyboard=uhid`** (`hidKeyboard.ts`): beim Start legt Sondra auf dem Handy
+  eine virtuelle USB-Tastatur an (Control-Nachricht UHID_CREATE, Gerät 1,
+  Boot-Tastatur-Beschreibung aus der USB-HID-Spezifikation) und schickt je
+  Taste einen Bericht (Umschalttasten, bis sechs Tasten, ErrorRollOver);
+  die Taste gilt nach `KeyboardEvent.code`, also nach Lage, das Layout wendet das
+  Handy an (Hinweis „y und z vertauscht“ steht in der Hilfe). Lehnt das Handy
+  UHID ab (die Ausgabe des Servers sagt es), gehen Zeichen und die wichtigsten
+  Tasten als eingegebener Text bzw. Tastencode weiter, und die Seite sagt es.
+  `npm run verify:hid`. **Ton** (`phoneAudio.ts`): der Server nimmt auf, was das
+  Handy abspielt (Android 11+, Opus), WebCodecs `AudioDecoder` und Web Audio
+  setzen es knapp vor die Uhr; was mehr als 0,4 s zu spät kommt, wird
+  verworfen. Der AudioContext entsteht im Klick. Das Handy ist währenddessen
+  stumm (so macht es scrcpy ohne `--audio-dup`); Stummschalter im Fenster,
+  Schalter vorher auf der Seite. **Wie:** WebUSB statt `adb`-Programm — Tango ADB
   (`@yume-chan/*`, MIT, exakt festgeschrieben) spricht ADB, der scrcpy-Server
   3.3.3 (Genymobile, Apache-2.0, 90 KB) liegt unverändert in
   `src/assets/scrcpy/` und kommt über Vite als `assets/…jar` mit; er wird nie
@@ -290,27 +315,26 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Verbindung ins temporäre Verzeichnis des Handys gelegt. Client und Server
   müssen dieselbe Version nennen: der Server bricht sonst sofort ab —
   `npm run verify:scrcpy` prüft Prüfsumme, Version, Festschreibung und die
-  Lizenztexte. Bild: H.264 über WebCodecs auf ein WebGL-Canvas, **ohne Ton**
-  und ohne Tastatureingabe (bewusst weggelassen, die Seite sagt es). Der
+  Lizenztexte. Bild: H.264 über WebCodecs auf ein WebGL-Canvas. Der
   ADB-Schlüssel liegt in IndexedDB („Tango“) in diesem Browser, nicht in
   `localStorage`; ohne ihn würde „Immer von diesem Computer zulassen“ nie
   halten. **Wo es geht:** Edge/Chrome am Computer und die Windows-App; nicht in
   Firefox/Safari (kein WebUSB) und nicht in der Android-App (`IN_ANDROID_APP`)
-  — dort steht ein Satz, kein toter Knopf. Das Chunk (140 KB) wird nicht im
-  Leerlauf vorgeholt. In Electron gibt es keine Geräteliste:
-  `select-usb-device` in `desktop/electron.mjs` nimmt ein einziges Handy, fragt
-  bei mehreren in einem Dialog und lehnt sonst ab; `setDevicePermissionHandler`
-  nur für die eigene Herkunft. **Nie gegen ein echtes Handy gelaufen** — das
-  Szenario „spiegeln“ prüft Reiter, Schritte, den Aufruf des Geräte-Dialogs,
-  das Schliessen des Dialogs und die Seite ohne WebUSB, nicht die Verbindung.
-  Auch der Electron-Teil ist ungeprüft (Syntax nur). Der Name im Reiter ist
-  nicht „scrcpy“: Apache-2.0 §6 erlaubt keine Markenverwendung; genannt wird
-  scrcpy als Herkunft, in der Anleitung und auf der Lizenzseite.
-  **Lizenzen:** Tango (MIT) und scrcpy (Apache-2.0) stehen auf
-  `public/lizenz.html` mit den vollständigen Texten (`public/lizenzen/`,
-  ebenso in `desktop/lizenzen/` für die Windows-App); bei jeder neuen Fassung
-  des Servers Datei, Prüfsumme (`phoneMirror.ts`, README) und Client
-  gemeinsam tauschen.
+  — dort steht ein Satz, kein toter Knopf. Das Chunk wird nicht im Leerlauf
+  vorgeholt. In Electron gibt es keine Geräteliste: `select-usb-device` in
+  `desktop/electron.mjs` nimmt ein einziges Handy, fragt bei mehreren in einem
+  Dialog und lehnt sonst ab; `setDevicePermissionHandler` nur für die eigene
+  Herkunft. **Nie gegen ein echtes Handy gelaufen** — auch UHID, Ton und der
+  Electron-Teil nicht (dort nur Syntax). **Die Naht für Tests:** `startMirror`
+  lässt sich durch `globalThis.__sondraMirrorTest` ersetzen; das Szenario
+  „spiegeln“ bringt damit ein Handy aus Stand-in-Bild und Protokoll mit und prüft
+  Fenster, Ziehen, Grösse, Merken, Maus (links/rechts/Mitte/Rad), Tasten und die
+  Rückgabe der Tastatur — nicht die Verbindung. Der Name im Reiter ist nicht
+  „scrcpy“: Apache-2.0 §6 erlaubt keine Markenverwendung; genannt wird scrcpy als
+  Herkunft. **Lizenzen:** Tango (MIT) und scrcpy (Apache-2.0) stehen auf
+  `public/lizenz.html` mit den vollständigen Texten (`public/lizenzen/`, ebenso
+  in `desktop/lizenzen/`); bei jeder neuen Fassung des Servers Datei,
+  Prüfsumme (`phoneMirror.ts`, README) und Client gemeinsam tauschen.
 - **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
   Dateimenü oder Doppelklick auf den Namen; die Endung bleibt neben dem
   Feld stehen, was Windows ablehnt (`\ / : * ? " < > |`, CON …), wird
