@@ -72,3 +72,25 @@ jobs:
             native/probes/gpui-window/summary.txt
             native/probes/gpui-window/out.txt
             native/probes/gpui-window/err.txt
+
+  # Can a Rust device talk to the web app's device code? The Rust side plays the
+  # sender (one ordered channel "sondra", 64 KiB pieces, held back while the
+  # buffer is full); the other side is real Chromium.
+  webrtc-interop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium
+      - uses: actions/cache@v4
+        with:
+          path: native/probes/webrtc-interop/target
+          key: probe-webrtc-${{ hashFiles('native/probes/webrtc-interop/Cargo.lock') }}
+      - run: cargo build --locked
+        working-directory: native/probes/webrtc-interop
+      - run: node native/probes/webrtc-interop/run.mjs
