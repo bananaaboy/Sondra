@@ -30,6 +30,10 @@ native/
   sondra-core/    Entscheidungen, ohne Fenster und ohne Netz — überall testbar
   sondra-daemon/  eine Runde des Hintergrunddienstes; alles Äußere hinter Traits
                   (Library, Checker, Fetcher, Trash, Host)
+  sondra-a11y/    Bedienungshilfen für GPUI: Baum aus Rolle, Name, Lage und Fokus je Bild,
+                  Anbindung an Windows UI Automation (AccessKit)
+  vendor/xattr/   xattr 0.2.3 mit einer Zeile Patch, damit GPUI unter Linux baut
+  probes/         Machbarkeitsproben der Welle 0b
 ```
 
 Geplant, in dieser Reihenfolge:
@@ -80,9 +84,10 @@ geändert, und der Kern muss mit.
 ## Entwickeln unter Linux
 
 GPUI 0.2.2 baut unter Linux nicht von selbst: `xattr` 0.2.3 nutzt `ENOATTR`,
-das `libc` 0.2.191 dort nicht mehr kennt. Unter Windows spielt das keine Rolle.
-Zum Entwickeln hier hilft ein lokaler Patch (`ENODATA` statt `ENOATTR` in
-`src/sys/mod.rs`) über `[patch.crates-io]`; der Fehler gehört in `xattr`.
+das `libc` 0.2.191 dort nicht mehr kennt. Unter Windows spielt das keine Rolle. Der
+Workspace trägt deshalb einen Patch (`vendor/xattr`, `[patch.crates-io]`); der Fehler
+gehört in `xattr`. Zum Linken der Tests braucht Linux die Entwicklungspakete
+`libxkbcommon-x11-dev libxcb1-dev libfontconfig-dev libfreetype-dev libwayland-dev`.
 
 ## Nicht geprüft
 

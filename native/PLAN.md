@@ -54,16 +54,31 @@ bevor weitergebaut wird.
 
 | Frage | Ergebnis |
 | --- | --- |
-| **Video im GPUI-Fenster** | **Die Fläche trägt es.** Auf Windows x64 und Arm zeigt GPUI pro Animationsbild ein neues 1080p-Bild (8 MB, BGRA): **54 und 52 Bilder pro Sekunde**, auf Läufern ohne Grafikkarte (nur „Hyper-V Video“, also Software). Auf echter Hardware ist mehr zu erwarten. **Nicht gemessen:** das Dekodieren im selben Prozess (natives FFmpeg dekodiert 1080p hier mit rund 15-facher Echtzeit), Bild-und-Ton-Gleichlauf, Vollbild, Untertitel über dem Bild, der Speicher bei zwei Stunden Wiedergabe. |
+| **Video im GPUI-Fenster** | **Die Fläche trägt es.** Auf Windows x64 und Arm zeigt GPUI pro Animationsbild ein neues 1080p-Bild (8 MB, BGRA): **52 bis 54 Bilder pro Sekunde** (ein zweiter Lauf auf x64 nur 39), auf Läufern ohne Grafikkarte (nur „Hyper-V Video“, also Software). Auf echter Hardware ist mehr zu erwarten. **Nicht gemessen:** das Dekodieren im selben Prozess (natives FFmpeg dekodiert 1080p hier mit rund 15-facher Echtzeit), Bild-und-Ton-Gleichlauf, Vollbild, Untertitel über dem Bild, der Speicher bei zwei Stunden Wiedergabe. |
+| **GPUI auf Windows (x64, Arm)** | **Läuft.** Das Fenster öffnet auf beiden, und das Bildschirmfoto zeigt es: der deutsche Text (Größe, Straße, Übung, ÄÖÜ äöü ß, „1 234,5 MB“) ist richtig gezeichnet, das 1080p-Testbild füllt die Fläche. Version festgeschrieben (`=0.2.2`); Bauen dauert ohne Zwischenspeicher rund 6 Minuten (x64), mit Zwischenspeicher 1 bis 2. Unter Linux baut GPUI nur mit dem Patch an `xattr` (`native/vendor/xattr`). |
+| **Bedienungshilfen** | Die Website hat Fokus, Beschriftungen und Screenreader-Namen. GPUI ist darin schwach. Das wäre ein echter Verlust. | Ein Fenster mit AccessKit; prüfen, was Windows-Sprecher davon sieht. |
+| **GPUI auf Windows (x64 und Arm)** | Das Framework ist jung und ändert sich oft. | Ein Fenster auf `windows-latest` und `windows-11-arm`, Bildschirmfoto als Artefakt, GPUI-Version fest eingefroren. |
+| **FFmpeg mitliefern** | x264 und andere Kodierer sind GPL; Größe und Lizenz des Pakets. | Ein FFmpeg-Build mit libopus, VP9, x264, libass und Hardware-Encoding; Lizenztext; Größe im Setup. |
+| **Geräte-Verbindung mit der Website** | Das Übertragungsprotokoll muss mit Website und Android kompatibel bleiben. | Ein Rust-Gerät schickt eine Datei an die Website über WebRTC (`webrtc-rs`). |
+
+Fällt eine Probe durch, kommt sie als Entscheidung zu Ihnen, mit den Alternativen,
+bevor weitergebaut wird.
+
+### Ergebnisse der Proben (18.11.2026)
+
+| Frage | Ergebnis |
+| --- | --- |
+| **Video im GPUI-Fenster** | **Die Fläche trägt es.** Auf Windows x64 und Arm zeigt GPUI pro Animationsbild ein neues 1080p-Bild (8 MB, BGRA): **52 bis 54 Bilder pro Sekunde** (ein zweiter Lauf auf x64 nur 39), auf Läufern ohne Grafikkarte (nur „Hyper-V Video“, also Software). Auf echter Hardware ist mehr zu erwarten. **Nicht gemessen:** das Dekodieren im selben Prozess (natives FFmpeg dekodiert 1080p hier mit rund 15-facher Echtzeit), Bild-und-Ton-Gleichlauf, Vollbild, Untertitel über dem Bild, der Speicher bei zwei Stunden Wiedergabe. |
 | **GPUI auf Windows (x64, Arm)** | **Läuft.** Das Fenster öffnet auf beiden, die Version ist auf `=0.2.2` festgeschrieben. Bauen dauert ohne Zwischenspeicher rund 6 Minuten (x64). Unter Linux baut GPUI nur mit einem lokalen Patch an `xattr` (siehe README). Ob der **deutsche Text** richtig gezeichnet wird, ist erst mit dem nachgereichten Bildschirmfoto belegt. |
-| **Bedienungshilfen** | **Fehlschlag.** GPUI 0.2.2 hat im Quelltext weder AccessKit noch UI Automation. Eine GPUI-Oberfläche ist für Screenreader unsichtbar. Nicht lösbar ohne eigene Arbeit am Framework oder ein anderes Framework. **Entscheidung offen** (`PARITY.md` R13). |
+| **Bedienungshilfen** | **Fehlschlag.** GPUI 0.2.2 hat im Quelltext weder AccessKit noch UI Automation. Eine GPUI-Oberfläche ist für Screenreader unsichtbar. **Entschieden (18.11.2026, Nutzer): GPUI wird erweitert** — von außen, als eigene Schicht `sondra-a11y`, ohne Abspaltung von GPUI. Stand und Prüfung: `PARITY.md` R13. |
 | **FFmpeg nativ** | **Die Abstürze der WebAssembly-Fassung sind weg.** libopus Stereo Komplexität 10, VP9, x264 `veryfast` und das Einbrennen von Untertiteln mit libass laufen mit dem echten FFmpeg 6.1.1 fehlerfrei. **Offen:** Größe und Lizenz eines mitgelieferten Windows-Builds (x264 ist GPL), nicht gemessen. |
 | **Geräte-Protokoll** | **Läuft.** Ein Rust-Gerät (`webrtc-rs`) als Sender, genau wie `devices.ts` (Kanal „sondra“, geordnet, 64-KiB-Stücke mit Flusskontrolle), echtes Chromium als Gegenstelle: 8 MiB ohne einen falschen Wert, Antwort kommt zurück, 6 von 6 Läufen (und in der CI). **Nicht geprüft:** über ein echtes Netz, die Gegenrichtung mit vielen Stücken, Wiederaufnahme, Android. |
 
 **Folgen für den Plan:** Video und Fenster sind machbar. Das Geräte-Protokoll kann
-nativ werden. Die einzige harte Frage, die der Plan nicht allein lösen kann, ist die
-der **Bedienungshilfen**: Bleibt GPUI, geht für Nutzer von Screenreadern etwas verloren,
-das die Website heute hat — und das ginge nur mit Ihrem ausdrücklichen Wort (Regel 4).
+nativ werden. Die harte Frage der **Bedienungshilfen** ist entschieden: GPUI bleibt und bekommt
+eine Anbindung an Windows UI Automation (`sondra-a11y`). Jede Steuerung der
+Oberfläche muss sich selbst in `accessible(...)` einhüllen; das gehört in das
+Tor jeder Welle ab 3.
 
 ## Die Wellen
 

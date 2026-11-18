@@ -497,7 +497,7 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern
   liest die Merkliste nur, nie zurückschreiben; nie eine ungesehene Folge
   löschen; nichts ist vorgewählt (keine Serie, kein Wachhalten, kein
-  Löschen). Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
+  Löschen). **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
   Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
   gestrichen, sobald etwas davon wegfällt. Nie auf echtem Windows gelaufen.
 - `npm run dev` · `npm run build` · `npm run typecheck`
