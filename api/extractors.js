@@ -373,8 +373,9 @@ export async function boundedFetch(url, options = {}, redirectCount = 0) {
       agent: isHttps ? httpsAgent : httpAgent,
       ...(!isIpv6Literal && !isLoopbackHost ? { family: 4 } : {}),
       localAddress: effectiveLocalAddr || undefined,
+      // Certificates are always checked: a network that inspects HTTPS is handled by trusting
+      // what the system trusts (`authorities`), never by switching the check off.
       ...(authorities ? { ca: authorities } : {}),
-      rejectUnauthorized: false,
       timeout: options.timeout ?? 25_000,
       signal: options.signal,
     }, (res) => {

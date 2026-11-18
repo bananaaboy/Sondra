@@ -454,6 +454,23 @@ check('Podcast: Episode 1 URL', parsedRss?.items?.[0]?.url, 'https://storage.exa
   }
 }
 
+// Certificates are always checked. A network that inspects HTTPS is handled by trusting what the
+// system trusts, never by switching the check off (it was off in 1.1.17 to 1.2.3 by mistake).
+{
+  const { readdirSync, readFileSync } = await import('node:fs')
+  const files = [
+    ...readdirSync(new URL('../api/', import.meta.url)).filter((f) => f.endsWith('.js')).map((f) => `api/${f}`),
+    ...readdirSync(new URL('../desktop/', import.meta.url)).filter((f) => f.endsWith('.mjs')).map((f) => `desktop/${f}`),
+  ]
+  const offenders = files.filter((f) => /rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED/.test(readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')))
+  if (offenders.length > 0) {
+    console.error(`FAIL  Zertifikatsprüfung ausgeschaltet in: ${offenders.join(', ')}`)
+    failures += 1
+  } else {
+    console.log('ok    Zertifikate werden überall geprüft (kein rejectUnauthorized: false)')
+  }
+}
+
 if (typeof server.closeAllConnections === 'function') {
   server.closeAllConnections()
 }
