@@ -20,7 +20,7 @@ use smallvec::smallvec;
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
-const RUN_FOR: Duration = Duration::from_secs(8);
+const RUN_FOR: Duration = Duration::from_secs(12);
 
 /// One moving test pattern, 1920 × 1080 BGRA.
 fn make_frame(tick: u32) -> Arc<RenderImage> {
