@@ -4,8 +4,8 @@
  *
  * What scrcpy does, without installing anything and with the explaining done
  * on the page: five steps to get a phone ready, one button to connect, then a
- * small window that can be pulled around. The technical side is
- * `lib/phoneMirror.ts`, the window is `phone/MirrorWindow.tsx`; this file is
+ * block of the tab, and on a button a window of its own. The technical side is
+ * `lib/phoneMirror.ts`, the view and the window of its own are `phone/MirrorView.tsx`; this file is
  * the page around them — the steps, the state of the connection, the help.
  */
 
@@ -22,7 +22,7 @@ import {
   type MirrorStep,
 } from '../../lib/phoneMirror'
 import { Button, Notice, Reveal, Select, Toggle } from '../ui/primitives'
-import { MirrorWindow } from './phone/MirrorWindow'
+import { MirrorView } from './phone/MirrorView'
 
 const SETTINGS_KEY = 'sondra:spiegeln'
 
@@ -224,8 +224,6 @@ export function PhoneMirrorPanel() {
   const [keyboard, setKeyboard] = useState<'uhid' | 'sdk'>('uhid')
   const [audio, setAudio] = useState<'on' | 'off' | 'unavailable'>('off')
   const [muted, setMuted] = useState(false)
-  const [recenter, setRecenter] = useState(0)
-  const [popOut, setPopOut] = useState(0)
   const [inOwnWindow, setInOwnWindow] = useState(false)
 
   // Leaving the tool lets go of the phone: the cable is the phone's, not ours.
@@ -318,7 +316,7 @@ export function PhoneMirrorPanel() {
         </div>
       ) : (
         <>
-          <div className="grid gap-[32px] lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)] lg:gap-[48px]">
+          <div className={`grid gap-[32px] lg:gap-[48px] ${running ? 'lg:grid-cols-[minmax(0,1fr)_auto]' : 'lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]'}`}>
             <div className="min-w-0">
               <h2 className="display-md mt-[8px] mb-[12px]">Handy spiegeln</h2>
               <p className="mb-[24px] max-w-[60ch] text-body leading-[1.55] text-prose">
@@ -333,8 +331,8 @@ export function PhoneMirrorPanel() {
                   </p>
                   <p className="mt-[8px] max-w-[56ch] text-small leading-[1.55] text-prose">
                     {inOwnWindow
-                      ? 'Das Handy steht in einem eigenen Fenster. Es lässt sich überall auf dem Bildschirm hinstellen, auch neben den Browser oder auf einen zweiten Bildschirm. Schließen Sie das Fenster, bringt das Handy zurück in diese Seite.'
-                      : 'Das Handy steht in einem Fenster über der Seite. Ziehen Sie es an der Titelleiste, die Größe ändern Sie an der Ecke unten rechts. Es bleibt aber in der Seite: wollen Sie es frei auf dem Bildschirm hinstellen, öffnen Sie es in einem eigenen Fenster.'}
+                      ? 'Das Handy steht in einem eigenen Fenster: Sie können es überall auf dem Bildschirm hinstellen, auch auf einen zweiten Bildschirm. Schließen Sie das Fenster, kommt das Handy zurück in diese Seite.'
+                      : 'Das Handy steht hier in der Seite. Soll es frei auf dem Bildschirm stehen, öffnen Sie es über das Symbol oben im Handy-Block in einem eigenen Fenster.'}
                   </p>
                   <dl className="mt-[16px] grid max-w-[560px] grid-cols-[minmax(0,180px)_1fr] gap-x-[16px] gap-y-[8px] border-t border-line pt-[16px] text-small">
                     {CONTROLS.map(([what, does]) => (
@@ -351,15 +349,7 @@ export function PhoneMirrorPanel() {
                     {audio === 'unavailable' ? ' Ton gibt es erst ab Android 11.' : ''}
                   </p>
                   <div className="mt-[20px] flex flex-wrap gap-[8px]">
-                    <Button size="sm" onClick={() => setPopOut((count) => count + 1)}>
-                      {inOwnWindow ? 'Eigenes Fenster nach vorn' : 'In eigenem Fenster öffnen'}
-                    </Button>
-                    {inOwnWindow ? null : (
-                      <Button variant="quiet" size="sm" onClick={() => setRecenter((count) => count + 1)}>
-                        Fenster zurückholen
-                      </Button>
-                    )}
-                    <Button variant="quiet" size="sm" onClick={() => void stop()}>
+                    <Button size="sm" onClick={() => void stop()}>
                       Beenden
                     </Button>
                   </div>
@@ -369,8 +359,25 @@ export function PhoneMirrorPanel() {
               )}
             </div>
 
-            {/* While the phone is connected its window floats where this stood. */}
-            {running ? null : (
+            {/* While the phone is connected it stands where this card stood. */}
+            {running ? (
+              <MirrorView
+                canvas={canvas}
+                session={sessionRef.current}
+                name={stage.name}
+                shape={shape}
+                keyboard={keyboard}
+                audio={audio}
+                muted={muted}
+                onMuted={(value) => {
+                  setMuted(value)
+                  sessionRef.current?.setMuted(value)
+                }}
+                onStop={() => void stop()}
+                onShot={() => void shoot()}
+                onOwnWindow={setInOwnWindow}
+              />
+            ) : (
             <aside className="flex min-w-0 flex-col gap-[20px] self-start rounded-card bg-panel-soft p-[24px] ring-1 ring-inset ring-line/70 lg:mt-[8px]">
               <Illustration />
               <div className="flex flex-col gap-[12px]">
@@ -426,26 +433,6 @@ export function PhoneMirrorPanel() {
             <Help />
           </Reveal>
 
-          {/* The window: always in the page, so the canvas is there when the
-              picture starts, and shown only while there is one. */}
-          <MirrorWindow
-            canvas={canvas}
-            session={running ? sessionRef.current : null}
-            name={stage.kind === 'running' ? stage.name : ''}
-            shape={shape}
-            keyboard={keyboard}
-            audio={audio}
-            muted={muted}
-            onMuted={(value) => {
-              setMuted(value)
-              sessionRef.current?.setMuted(value)
-            }}
-            onStop={() => void stop()}
-            onShot={() => void shoot()}
-            recenter={recenter}
-            popOut={popOut}
-            onOwnWindow={setInOwnWindow}
-          />
         </>
       )}
     </div>

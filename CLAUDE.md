@@ -274,31 +274,34 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Szenario „spiegeln“. Der Drive-Nachbau der
   Szenarien (`scripts/e2e/lib.mjs`) versteht jetzt `addParents`/`removeParents` und
   Notizen beim Verschieben.
-- **Handy spiegeln** (`#spiegeln`, `PhoneMirrorPanel.tsx`, `phone/MirrorWindow.tsx`,
+- **Handy spiegeln** (`#spiegeln`, `PhoneMirrorPanel.tsx`, `phone/MirrorView.tsx`,
   `lib/phoneMirror.ts`, `lib/hidKeyboard.ts`, `lib/phoneAudio.ts`, 18.11.2026,
   „wie scrcpy, einfacher, im Tab, mit Buttons und Erklärung“; am selben Tag neu
-  gestaltet: schöner, ein Fenster zum Ziehen, Tastatur und Maus von selbst,
-  `--keyboard=uhid`, Ton): der Bildschirm eines Android-Handys in einem
-  **schwebenden Fenster** (`fixed`, die eine Schattenstufe, gerundet: ein Ort
-  zum Ansehen) mit Titelleiste zum Ziehen, Ecke unten rechts zum Vergrössern
-  (das Bild behält seine Form), Ort und Grösse in `sondra:spiegeln:fenster`,
-  immer so gehalten, dass ein Rest und die Leiste erreichbar bleiben; „Fenster
-  zurückholen“ auf der Seite. **Das Fenster in der Seite hört am Rand der Seite
-  auf** („komplett frei beweglich, keine Grenze im Browser“, 18.11.2026) — dafür
-  gibt es **„In einem eigenen Fenster öffnen“** (Knopf in der Titelleiste und auf
-  der Seite): ein echtes Fenster des Betriebssystems (`window.open('', 'sondra-handy',
-  'popup=yes…')`), das überall auf dem Bildschirm stehen kann, auch auf einem
-  zweiten, mit eigener Grösse (das Bild füllt es in seiner Form), Taskleiste und
-  Titelleiste. Die Seite füllt das leere Fenster selbst: Schriften und
-  Thema werden kopiert (`dress`), der Inhalt ist ein React-Portal. **Das Bild ist
-  ein einziges Canvas**, vom Tab einmal gemacht (der Decoder zeichnet darauf) und
-  zwischen Seitenfenster und eigenem Fenster nur umgehängt; Schliessen des eigenen
-  Fensters bringt das Handy zurück in die Seite, Beenden oder Verlassen des Tabs
-  schliesst es. Blockiert der Browser das Fenster, sagt die Seite es. In der
-  Windows-App erlaubt `setWindowOpenHandler` in `desktop/electron.mjs` genau dieses
-  eine leere Fenster (Name `sondra-handy`); sonst bleibt alles verweigert.
-  (Document Picture-in-Picture wurde erwogen: immer obenauf und winzig, in Electron
-  ungewiss.) Der Tab selbst: links fünf Schritte
+  gestaltet: schöner, Tastatur und Maus von selbst, `--keyboard=uhid`, Ton, und ein
+  Fenster, das frei stehen kann): der Bildschirm eines Android-Handys. **In der
+  Seite ist er ein Block des Tabs** (rechts neben den Hinweisen, `panel-soft`,
+  Titelzeile mit Ton, Bildschirmfoto, „In einem eigenen Fenster öffnen“, Beenden;
+  das Bild bis zu 760 px hoch, in seiner Form) — **nicht schwebend und nicht
+  ziehbar**: ein Fenster in der Seite endet am Rand der Seite und liess sich nur
+  hoch und runter bewegen („geht nur hoch oder runter auf der Website“, so
+  entfernt am 18.11.2026). **Frei stehen kann das Handy erst auf den Knopf**
+  „In einem eigenen Fenster öffnen“: ein echtes Fenster des Betriebssystems,
+  überall auf dem Bildschirm, auch auf einem zweiten, mit eigener Grösse (das Bild
+  füllt es in seiner Form). In Chrome und Edge ist es ein **Picture-in-Picture-Fenster**
+  für Seiten (`documentPictureInPicture.requestWindow`): Titelleiste und nichts
+  sonst — **keine Adressleiste** (ein `window.open`-Fenster zeigte „about:blank“ und
+  dazu eine Adresszeile, die sich nicht ausblenden lässt); in der Windows-App und in
+  Browsern ohne diese Schnittstelle ein einfaches Fenster (`window.open('',
+  'sondra-handy', 'popup=yes…')`, in der App ohne Adressleiste; dort erlaubt
+  `setWindowOpenHandler` in `desktop/electron.mjs` genau dieses eine leere Fenster).
+  Die Seite füllt das leere Fenster selbst: Schriften und Thema werden kopiert
+  (`dress`), der Inhalt ist ein React-Portal. **Das Bild ist ein einziges Canvas**,
+  vom Tab einmal gemacht (der Decoder zeichnet darauf) und zwischen Seite und
+  Fenster nur umgehängt; in der Seite steht währenddessen „Das Handy steht in einem
+  eigenen Fenster“ mit „Zurück in die Seite“. Schliessen des Fensters bringt das
+  Handy zurück, Beenden oder Verlassen des Tabs schliesst es. Blockiert der Browser
+  ein einfaches Fenster, sagt die Seite es. Beide Fensterarten prüft das Szenario
+  „spiegeln“ (Chromium 153 hat die Schnittstelle, auch kopflos). Der Tab selbst: links fünf Schritte
   (Entwickleroptionen, USB-Debugging, Datenkabel, „Handy verbinden“,
   „Zulassen“; beim Verbinden werden sie abgehakt), rechts auf `panel-soft` eine
   Zeichnung, der Knopf, „Ton übertragen“, „Flüssig/Scharf“; verbunden steht dort
