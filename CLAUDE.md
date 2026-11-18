@@ -283,7 +283,22 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   zum Ansehen) mit Titelleiste zum Ziehen, Ecke unten rechts zum Vergrössern
   (das Bild behält seine Form), Ort und Grösse in `sondra:spiegeln:fenster`,
   immer so gehalten, dass ein Rest und die Leiste erreichbar bleiben; „Fenster
-  zurückholen“ auf der Seite. Der Tab selbst: links fünf Schritte
+  zurückholen“ auf der Seite. **Das Fenster in der Seite hört am Rand der Seite
+  auf** („komplett frei beweglich, keine Grenze im Browser“, 18.11.2026) — dafür
+  gibt es **„In einem eigenen Fenster öffnen“** (Knopf in der Titelleiste und auf
+  der Seite): ein echtes Fenster des Betriebssystems (`window.open('', 'sondra-handy',
+  'popup=yes…')`), das überall auf dem Bildschirm stehen kann, auch auf einem
+  zweiten, mit eigener Grösse (das Bild füllt es in seiner Form), Taskleiste und
+  Titelleiste. Die Seite füllt das leere Fenster selbst: Schriften und
+  Thema werden kopiert (`dress`), der Inhalt ist ein React-Portal. **Das Bild ist
+  ein einziges Canvas**, vom Tab einmal gemacht (der Decoder zeichnet darauf) und
+  zwischen Seitenfenster und eigenem Fenster nur umgehängt; Schliessen des eigenen
+  Fensters bringt das Handy zurück in die Seite, Beenden oder Verlassen des Tabs
+  schliesst es. Blockiert der Browser das Fenster, sagt die Seite es. In der
+  Windows-App erlaubt `setWindowOpenHandler` in `desktop/electron.mjs` genau dieses
+  eine leere Fenster (Name `sondra-handy`); sonst bleibt alles verweigert.
+  (Document Picture-in-Picture wurde erwogen: immer obenauf und winzig, in Electron
+  ungewiss.) Der Tab selbst: links fünf Schritte
   (Entwickleroptionen, USB-Debugging, Datenkabel, „Handy verbinden“,
   „Zulassen“; beim Verbinden werden sie abgehakt), rechts auf `panel-soft` eine
   Zeichnung, der Knopf, „Ton übertragen“, „Flüssig/Scharf“; verbunden steht dort

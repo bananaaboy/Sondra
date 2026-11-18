@@ -426,7 +426,12 @@ process.on('unhandledRejection', (failure) => log(`Unbehandelt (Promise): ${fail
 
 /** Links to anywhere but Sondra itself open in the default browser. */
 function keepInside(contents, origin) {
-  contents.setWindowOpenHandler(({ url }) => {
+  contents.setWindowOpenHandler(({ url, frameName }) => {
+    // The phone mirror's own window (tab „Handy spiegeln“): an empty page of
+    // Sondra's, filled by the opener. Nothing else is opened inside the app.
+    if (frameName === 'sondra-handy' && (url === '' || url === 'about:blank')) {
+      return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, minWidth: 220, minHeight: 360, title: 'Handy' } }
+    }
     if (/^https?:/i.test(url) && !url.startsWith(origin)) void shell.openExternal(url)
     return { action: 'deny' }
   })

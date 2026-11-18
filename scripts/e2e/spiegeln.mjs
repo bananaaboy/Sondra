@@ -148,7 +148,7 @@ const fakePhone = () => {
   const log = () => page.evaluate(() => window.__log)
   const box0 = await win.boundingBox()
   check('Fenster: steht im Bild, rechts oben', box0.x > 600 && box0.y >= 0 && box0.x + box0.width <= 1440 && box0.y + box0.height <= 900, JSON.stringify(box0))
-  check('Fenster: hat den Fokus, Tastatur ist verbunden', (await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Handy Pixel 8' && (await page.getByText(/Tastatur verbunden/).count()) === 1)
+  check('Fenster: hat den Fokus, Tastatur ist verbunden', (await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Handy' && (await page.getByText(/Tastatur verbunden/).count()) === 1)
   await page.screenshot({ path: OUT + 'spiegeln-fenster.png' })
 
   // keyboard: the first key already goes to the phone
@@ -231,6 +231,47 @@ const fakePhone = () => {
   await page.waitForTimeout(300)
   const box5 = await win.boundingBox()
   check('Fenster: Ort und Größe sind nach dem Neuladen wieder da', Boolean(stored) && Math.abs(box5.x - box4.x) <= 3 && Math.abs(box5.y - box4.y) <= 3 && Math.abs(box5.width - box4.width) <= 3, `${box4.x},${box4.y} / ${box5.x},${box5.y}`)
+
+
+  // a window of its own: a real window of the browser, away from the page's edge
+  await page.getByRole('button', { name: 'Fenster zurückholen' }).click()
+  const popupAsked = context.waitForEvent('page', { timeout: 10000 }).catch(() => null)
+  await win.getByRole('button', { name: 'In einem eigenen Fenster öffnen' }).click()
+  const popup = await popupAsked
+  check('Eigenes Fenster: das Handy öffnet sich in einem zweiten Fenster', Boolean(popup))
+  if (popup) {
+    await popup.waitForSelector('canvas', { timeout: 10000 })
+    await popup.waitForTimeout(500)
+    check('Eigenes Fenster: das Bild ist dort, nicht mehr in der Seite', (await popup.locator('canvas').count()) === 1 && (await win.locator('canvas').count()) === 0 && !(await win.isVisible()))
+    const look = await popup.evaluate(() => {
+      const rail = document.querySelector('button[aria-label="Zurück"]')
+      const box = rail?.getBoundingClientRect()
+      return { rail: box ? Math.round(box.width) : 0, bg: getComputedStyle(document.body).backgroundColor, dark: document.documentElement.getAttribute('data-theme') }
+    })
+    check('Eigenes Fenster: die Seite hat ihr Aussehen mitgenommen (Knöpfe 36 px)', look.rail === 36, JSON.stringify(look))
+    await popup.screenshot({ path: OUT + 'spiegeln-eigenes-fenster.png' })
+    const sizeBefore = await popup.locator('canvas').boundingBox()
+    await popup.setViewportSize({ width: 500, height: 620 })
+    await popup.waitForFunction((was) => Math.abs(document.querySelector('canvas').getBoundingClientRect().height - was) > 20, sizeBefore.height, { timeout: 8000 }).catch(() => undefined)
+    await popup.waitForTimeout(300)
+    const sizeAfter = await popup.locator('canvas').boundingBox()
+    check('Eigenes Fenster: das Bild folgt der Größe des Fensters, in seiner Form', sizeAfter.width !== sizeBefore.width && Math.abs(sizeAfter.width / sizeAfter.height - 360 / 640) < 0.02, `${sizeBefore.width}x${sizeBefore.height} → ${sizeAfter.width}x${sizeAfter.height}`)
+    const count = async (kind, what) => (await log()).filter((e) => e[0] === kind && (what === undefined || e[1] === what)).length
+    const before2 = await count('key')
+    const backs = await count('button', 'back')
+    const ups = await count('button', 'volumeUp')
+    const pc = await popup.locator('canvas').boundingBox()
+    await popup.mouse.click(pc.x + pc.width / 2, pc.y + pc.height / 2)
+    await popup.keyboard.press('KeyQ')
+    await popup.mouse.click(pc.x + 10, pc.y + 10, { button: 'right' })
+    entries = await log()
+    check('Eigenes Fenster: Tastatur und Maus gehen von dort ans Handy', entries.filter((e) => e[0] === 'key').length >= before2 + 2 && entries.some((e) => e[0] === 'key' && e[1] === 'KeyQ' && e[2] === 'down') && (await count('button', 'back')) === backs + 1, JSON.stringify({ keys: entries.filter((e) => e[0] === 'key').length, before2, backs, nowBacks: await count('button', 'back'), tail: entries.slice(-4) }))
+    await popup.getByRole('button', { name: 'Lauter' }).click()
+    check('Eigenes Fenster: die Knöpfe des Handys sind da', (await count('button', 'volumeUp')) === ups + 1)
+    await popup.close()
+    await page.waitForTimeout(500)
+    check('Eigenes Fenster: schließen holt das Handy zurück in die Seite', (await win.isVisible()) && (await win.locator('canvas').count()) === 1)
+  }
 
   // back to the first place; and the end
   await page.getByRole('button', { name: 'Fenster zurückholen' }).click()

@@ -9,7 +9,7 @@
  * the page around them — the steps, the state of the connection, the help.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { saveBytes } from '../../lib/download'
 import {
@@ -211,7 +211,9 @@ const testStarter = (): Starter | undefined => (globalThis as { __sondraMirrorTe
 
 export function PhoneMirrorPanel() {
   const support = useRef(mirrorSupport()).current
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  // One canvas for the whole life of the page: the decoder draws on it, and the
+  // window — in the page or of its own — only holds it.
+  const canvas = useMemo(() => document.createElement('canvas'), [])
   const sessionRef = useRef<MirrorSession | null>(null)
   const abortRef = useRef<(() => void) | null>(null)
   const [stage, setStage] = useState<Stage>({ kind: 'idle' })
@@ -223,6 +225,8 @@ export function PhoneMirrorPanel() {
   const [audio, setAudio] = useState<'on' | 'off' | 'unavailable'>('off')
   const [muted, setMuted] = useState(false)
   const [recenter, setRecenter] = useState(0)
+  const [popOut, setPopOut] = useState(0)
+  const [inOwnWindow, setInOwnWindow] = useState(false)
 
   // Leaving the tool lets go of the phone: the cable is the phone's, not ours.
   useEffect(
@@ -246,8 +250,6 @@ export function PhoneMirrorPanel() {
   }
 
   const connect = async () => {
-    const canvas = canvasRef.current
-    if (!canvas) return
     setFailure(null)
     setEnded(null)
     setStage({ kind: 'working', step: 'select' })
@@ -330,7 +332,9 @@ export function PhoneMirrorPanel() {
                     Verbunden mit {stage.name}
                   </p>
                   <p className="mt-[8px] max-w-[56ch] text-small leading-[1.55] text-prose">
-                    Das Handy steht in einem Fenster über der Seite. Ziehen Sie es an der Titelleiste, die Größe ändern Sie an der Ecke unten rechts.
+                    {inOwnWindow
+                      ? 'Das Handy steht in einem eigenen Fenster. Es lässt sich überall auf dem Bildschirm hinstellen, auch neben den Browser oder auf einen zweiten Bildschirm. Schließen Sie das Fenster, bringt das Handy zurück in diese Seite.'
+                      : 'Das Handy steht in einem Fenster über der Seite. Ziehen Sie es an der Titelleiste, die Größe ändern Sie an der Ecke unten rechts. Es bleibt aber in der Seite: wollen Sie es frei auf dem Bildschirm hinstellen, öffnen Sie es in einem eigenen Fenster.'}
                   </p>
                   <dl className="mt-[16px] grid max-w-[560px] grid-cols-[minmax(0,180px)_1fr] gap-x-[16px] gap-y-[8px] border-t border-line pt-[16px] text-small">
                     {CONTROLS.map(([what, does]) => (
@@ -347,10 +351,15 @@ export function PhoneMirrorPanel() {
                     {audio === 'unavailable' ? ' Ton gibt es erst ab Android 11.' : ''}
                   </p>
                   <div className="mt-[20px] flex flex-wrap gap-[8px]">
-                    <Button variant="quiet" size="sm" onClick={() => setRecenter((count) => count + 1)}>
-                      Fenster zurückholen
+                    <Button size="sm" onClick={() => setPopOut((count) => count + 1)}>
+                      {inOwnWindow ? 'Eigenes Fenster nach vorn' : 'In eigenem Fenster öffnen'}
                     </Button>
-                    <Button size="sm" onClick={() => void stop()}>
+                    {inOwnWindow ? null : (
+                      <Button variant="quiet" size="sm" onClick={() => setRecenter((count) => count + 1)}>
+                        Fenster zurückholen
+                      </Button>
+                    )}
+                    <Button variant="quiet" size="sm" onClick={() => void stop()}>
                       Beenden
                     </Button>
                   </div>
@@ -420,7 +429,7 @@ export function PhoneMirrorPanel() {
           {/* The window: always in the page, so the canvas is there when the
               picture starts, and shown only while there is one. */}
           <MirrorWindow
-            canvasRef={canvasRef}
+            canvas={canvas}
             session={running ? sessionRef.current : null}
             name={stage.kind === 'running' ? stage.name : ''}
             shape={shape}
@@ -434,6 +443,8 @@ export function PhoneMirrorPanel() {
             onStop={() => void stop()}
             onShot={() => void shoot()}
             recenter={recenter}
+            popOut={popOut}
+            onOwnWindow={setInOwnWindow}
           />
         </>
       )}
