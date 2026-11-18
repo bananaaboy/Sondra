@@ -5,6 +5,7 @@
 //! extractors are played through against stand-in pages, the way the JavaScript ones are.
 
 pub mod aniworld;
+pub mod episode;
 pub mod fetch;
 pub mod hosters;
 pub mod packer;

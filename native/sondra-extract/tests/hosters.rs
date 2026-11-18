@@ -6,26 +6,6 @@ use common::Pages;
 use sondra_extract::hosters::*;
 use sondra_extract::voe::extract_voe;
 
-/// The same encoder as the JavaScript test's `createVoePayload`, written independently of the
-/// decoder it tests.
-fn voe_payload(title: &str, source: &str) -> String {
-    use base64::engine::general_purpose::STANDARD;
-    use base64::Engine;
-    let rot13 = |s: &str| sondra_extract::stream::rot13(s);
-    let json = format!(r#"{{"title":"{title}","source":"{source}"}}"#);
-    let s5: String = STANDARD.encode(json.as_bytes()).chars().rev().collect();
-    let s4: Vec<u8> = s5.chars().map(|c| (c as u8) + 3).collect();
-    let s3 = STANDARD.encode(&s4);
-    let s2 = format!(
-        "{}@${}^^{}*~{}",
-        &s3[..8],
-        &s3[8..16],
-        &s3[16..24],
-        &s3[24..]
-    );
-    rot13(&s2)
-}
-
 #[test]
 fn recognises_voe_and_its_clones() {
     assert!(is_voe_url("https://voe.sx/e/2ldxarskbpp2"));
@@ -42,7 +22,7 @@ fn recognises_voe_and_its_clones() {
 
 #[test]
 fn voe_decodes_the_scrambled_payload() {
-    let encoded = voe_payload(
+    let encoded = common::voe_payload(
         "One Piece - Episode 1",
         "https://delivery.voe.example/hls/master.m3u8",
     );
@@ -60,7 +40,7 @@ fn voe_decodes_the_scrambled_payload() {
 
 #[test]
 fn voe_follows_a_redirect_stub_and_reads_the_payload_variable() {
-    let encoded = voe_payload("Folge", "https://cdn.example/a.m3u8");
+    let encoded = common::voe_payload("Folge", "https://cdn.example/a.m3u8");
     let stub = r#"<script>window.location.href = '/real/page';</script>"#;
     let real = format!(r#"<title>Titel - VOE Sx</title><script>var wc0 = '{encoded}';</script>"#);
     let pages = Pages::new(&[
