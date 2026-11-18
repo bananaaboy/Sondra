@@ -26,7 +26,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | R10 | Sitzung bleibt auf dem Gerät, „Letzte Sitzung wiederherstellen“ | `sessionStore`, `RestoreOffer` | 3 | Klicktest | offen |
 | R11 | Adresse je Werkzeug (`#umwandeln` …) als Startparameter | `usePanelRoute` | 3 | Test | offen |
 | R12 | „Was ist neu“, Versionsmarke, Hinweis nach Update | `WhatsNew`, `changelog.json` | 8 | `verify:changelog` | offen |
-| R13 | Bedienungshilfen: Fokus, Namen für Screenreader, Tastaturbedienung | überall | 0b/3 | Probe, Tastaturtest | **Entscheidung** |
+| R13 | Bedienungshilfen: Fokus, Namen für Screenreader, Tastaturbedienung | überall | 0b/3 | GPUI 0.2.2 hat nichts davon (Quelltext geprüft, 18.11.2026) — Entscheidung: GPUI mit Verlust, GPUI erweitern, oder anderes Framework mit AccessKit | **Entscheidung** |
 
 ## Merkliste
 
