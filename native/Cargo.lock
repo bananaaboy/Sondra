@@ -5469,6 +5469,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sondra-media"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "sondra-service"
 version = "0.1.0"
 dependencies = [
