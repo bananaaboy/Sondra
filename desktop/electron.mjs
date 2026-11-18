@@ -658,30 +658,51 @@ async function open() {
   keepInside(window.webContents, origin)
 
   // Phone mirroring (tab „Handy spiegeln“) talks to the phone over WebUSB.
-  // Electron has no device picker of its own: it asks here, which phone. One
-  // candidate is taken; several are put to the user in a plain dialog; none
-  // is a refusal. Nothing is picked on the page's behalf, and only for
-  // Sondra's own page.
-  window.webContents.session.setDevicePermissionHandler((details) => details.deviceType === 'usb' && Boolean(details.origin?.startsWith(origin)))
-  window.webContents.on('select-usb-device', (event, details, callback) => {
+  // Electron has no device picker of its own: it asks here, which phone. The
+  // event is the *session's*, not the window's — on the window nothing listens,
+  // Electron then cancels the request at once, and the page says „Kein Handy
+  // gewählt“ without ever showing a choice. The user always chooses, also with
+  // one phone: nothing is picked on the page's behalf, and only for Sondra's
+  // own page.
+  const mirrorSession = window.webContents.session
+  mirrorSession.setDevicePermissionHandler((details) => details.deviceType === 'usb' && Boolean(details.origin?.startsWith(origin)))
+  mirrorSession.on('select-usb-device', (event, details, callback) => {
     event.preventDefault()
     const devices = details.deviceList ?? []
     void (async () => {
       try {
-        if (!details.frame?.url?.startsWith(origin) || devices.length === 0) return callback('')
-        if (devices.length === 1) return callback(devices[0].deviceId)
-        const names = devices.map((device, index) => `${device.productName || device.manufacturerName || 'Handy'} (${index + 1})`)
+        if (details.frame && !details.frame.url.startsWith(origin)) return callback()
+        if (devices.length === 0) {
+          await dialog.showMessageBox(window, {
+            type: 'info',
+            message: 'Es wurde kein Handy gefunden.',
+            detail:
+              'Schalten Sie am Handy „USB-Debugging“ ein, verbinden Sie es mit einem Datenkabel und entsperren Sie es. ' +
+              'Läuft auf diesem Rechner adb oder Android Studio, beenden Sie es: es kann nur ein Programm zugleich auf das Handy zugreifen.',
+            buttons: ['OK'],
+            noLink: true,
+          })
+          return callback()
+        }
+        const names = devices.map((device) => {
+          const name = device.productName || device.manufacturerName || 'Handy'
+          const tail = device.serialNumber ? ` · …${String(device.serialNumber).slice(-4)}` : ''
+          return `${name}${tail}`
+        })
         const { response } = await dialog.showMessageBox(window, {
           type: 'question',
           message: 'Welches Handy soll gespiegelt werden?',
+          detail: 'Das Handy muss entsperrt sein und „USB-Debugging“ eingeschaltet haben.',
           buttons: [...names, 'Abbrechen'],
           cancelId: names.length,
+          defaultId: 0,
           noLink: true,
         })
-        callback(response < devices.length ? devices[response].deviceId : '')
+        if (response < devices.length) callback(devices[response].deviceId)
+        else callback()
       } catch (failure) {
         log(`USB-Auswahl: ${failure?.message ?? failure}`)
-        callback('')
+        callback()
       }
     })()
   })

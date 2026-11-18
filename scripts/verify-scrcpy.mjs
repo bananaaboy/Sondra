@@ -40,4 +40,11 @@ const page = fs.readFileSync('public/lizenz.html', 'utf8')
 check('Die Lizenzseite nennt scrcpy und Tango und verlinkt die Texte', page.includes('scrcpy') && page.includes('Tango ADB') && page.includes('lizenzen/scrcpy-Apache-2.0.txt') && page.includes('lizenzen/tango-MIT.txt'))
 check('Die Anleitung nennt scrcpy nicht als Namen des Reiters', !/label: 'scrcpy/i.test(fs.readFileSync('src/components/panelMeta.tsx', 'utf8')))
 
+// In the Windows app Electron asks the *session* which phone: a listener on the
+// window's webContents never hears the event, Electron cancels at once, and the
+// page says "Kein Handy gewählt" without a choice (seen 18.11.2026).
+const electron = fs.readFileSync('desktop/electron.mjs', 'utf8')
+check('Windows-App: „select-usb-device“ hängt an der Session, nicht am Fenster', /[sS]ession\.on\('select-usb-device'/.test(electron) && !/webContents\.on\('select-usb-device'/.test(electron))
+check('Windows-App: die Auswahl fragt immer, auch bei einem Handy', electron.includes('Welches Handy soll gespiegelt werden?') && !/devices\.length === 1\) return callback/.test(electron))
+
 process.exit(failed ? 1 : 0)
