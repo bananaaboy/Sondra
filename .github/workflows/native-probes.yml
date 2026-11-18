@@ -1,0 +1,74 @@
+# Welle 0b of the native plan (`native/PLAN.md`): can GPUI open a window on
+# Windows, draw German text, and show 1080p frames fast enough for a player?
+# Runs on x64 and on Arm, takes a real screenshot, and keeps the numbers.
+# Not part of the ordinary checks: only when the probes change, or by hand.
+
+name: Native probes
+
+on:
+  push:
+    branches: [main]
+    paths: ['native/probes/**', '.github/workflows/native-probes.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gpui-window:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: native/probes/gpui-window
+    steps:
+      - uses: actions/checkout@v5
+      - name: Rust, if the runner has none
+        working-directory: .
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'aarch64' } else { 'x86_64' }
+            Invoke-WebRequest "https://win.rustup.rs/$arch" -OutFile rustup-init.exe
+            ./rustup-init.exe -y --default-toolchain stable --profile minimal
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+      - uses: actions/cache@v4
+        with:
+          path: native/probes/gpui-window/target
+          key: probe-gpui-${{ matrix.runner }}-${{ hashFiles('native/probes/gpui-window/Cargo.lock') }}
+      - name: Build
+        run: |
+          rustc --version
+          cargo build --release --locked
+      - name: Run, screenshot in the middle, keep the numbers
+        run: |
+          $gpu = (Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name }) -join '; '
+          "machine: $env:PROCESSOR_ARCHITECTURE, display adapter: $gpu" | Tee-Object -FilePath summary.txt
+          $p = Start-Process -FilePath "$PWD\target\release\probe-gpui-window.exe" -WorkingDirectory $PWD -PassThru `
+            -RedirectStandardOutput out.txt -RedirectStandardError err.txt
+          Start-Sleep -Seconds 4
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$PWD\screen.png")
+          if (-not $p.WaitForExit(40000)) { $p.Kill(); "the window did not close by itself" | Tee-Object -Append -FilePath summary.txt }
+          "exit code: $($p.ExitCode)" | Tee-Object -Append -FilePath summary.txt
+          if (Test-Path probe-result.txt) { Get-Content probe-result.txt | Tee-Object -Append -FilePath summary.txt }
+          else { "no probe-result.txt: the window never ran its frames"; Get-Content err.txt -ErrorAction SilentlyContinue }
+          Get-Content summary.txt >> $env:GITHUB_STEP_SUMMARY
+          if (-not (Test-Path probe-result.txt)) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-gpui-${{ matrix.runner }}
+          path: |
+            native/probes/gpui-window/screen.png
+            native/probes/gpui-window/summary.txt
+            native/probes/gpui-window/out.txt
+            native/probes/gpui-window/err.txt

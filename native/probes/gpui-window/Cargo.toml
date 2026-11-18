@@ -1,0 +1,14 @@
+[package]
+name = "probe-gpui-window"
+description = "Probe: does GPUI open a window on Windows, draw German text, and how fast can video frames be shown?"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Not part of the native workspace: GPUI is large, and this is a probe.
+[workspace]
+
+[dependencies]
+gpui = "=0.2.2"
+image = { version = "0.25.1", default-features = false }
+smallvec = "1"

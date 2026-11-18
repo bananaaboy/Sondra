@@ -33,3 +33,4 @@ desktop/.site/
 
 # Rust build output of the native client (native/)
 native/target
+native/**/target
