@@ -86,7 +86,7 @@ const saved = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('son
   // The series page: one way forward.
   await page.getByText('Frieren').first().click()
   await page.getByRole('button', { name: 'Folge 2 gesehen' }).waitFor()
-  check('Serienseite: „Folge 2 gesehen“ und „Bearbeiten“, der Rest hinter „Mehr“', (await page.getByRole('button', { name: 'Bearbeiten' }).count()) === 1 && (await page.getByRole('button', { name: 'Online prüfen' }).count()) === 0 && (await page.getByRole('button', { name: 'Empfehlen' }).count()) === 0)
+  check('Serienseite: „Folge 2 gesehen“ und „Bearbeiten“, der Rest hinter „Mehr“', (await page.locator('#studio').getByRole('button', { name: 'Bearbeiten' }).count()) === 1 && (await page.getByRole('button', { name: 'Online prüfen' }).count()) === 0 && (await page.getByRole('button', { name: 'Empfehlen' }).count()) === 0)
   await page.getByRole('button', { name: 'Mehr', exact: true }).click()
   check('…„Empfehlen“ steht im Menü', (await page.getByText('Empfehlen').count()) === 1)
   await page.screenshot({ path: `${OUT}serien-serie.png` })

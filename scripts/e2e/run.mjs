@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '../..')
-const ALL = ['geraete', 'ordner', 'ordner-handy', 'ordner-zuletzt', 'bewegung', 'pausieren', 'abspielen', 'merkliste', 'serien']
+const ALL = ['geraete', 'ordner', 'ordner-handy', 'ordner-zuletzt', 'bewegung', 'pausieren', 'abspielen', 'merkliste', 'serien', 'spiegeln']
 const wanted = process.argv.slice(2)
 const names = wanted.length ? wanted : ALL
 

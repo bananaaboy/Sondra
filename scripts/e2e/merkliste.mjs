@@ -93,7 +93,7 @@ await rec.getByRole('button', { name: 'Schliessen', exact: true }).last().click(
 
 // The whole list: what is chosen by default, the ways to hand it over.
 await page.keyboard.press('Escape')
-await page.getByRole('button', { name: 'Merkliste', exact: true }).click()
+await page.locator('#studio').getByRole('button', { name: 'Merkliste', exact: true }).click()
 await fromMore(page, 'Liste teilen')
 const share = page.getByRole('dialog')
 await share.waitFor()

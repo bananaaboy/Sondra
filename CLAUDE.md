@@ -258,9 +258,59 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Dateien liegen danach in Drive im Staffel-Ordner. **Die Reiter folgen den
   Aufgaben** (`PANELS` in `panelMeta.tsx`): Start, Merkliste, Ordner,
   Abspielen, Herunterladen, Geräte, dann die Werkzeuge — bei knapper Breite
-  stehen die Werkzeuge hinter „Mehr“, nicht die Aufgaben. Der Drive-Nachbau der
+  stehen die Werkzeuge hinter „Mehr“, nicht die Aufgaben. **Die Werkzeuge
+  stehen in drei Gruppen** (18.11.2026, „zu viele Tabs … alle noch haben, aber
+  anders umgesetzt“; `TAB_ENTRIES` in `panelMeta.tsx`): Bearbeiten (Umwandeln,
+  Video, Bilder, Untertitel), Ton (Ton, Mischen, Spuren trennen, Lautstärke,
+  Zerschneiden, Tonart), Aufnehmen (Bildschirm, Handy spiegeln, Mikrofon) —
+  je ein Knopf mit Menü, neun Einträge in der Zeile statt neunzehn. Der Knopf
+  einer Gruppe nennt das gewählte Werkzeug („Ton · Mischen“), der Strich
+  gleitet darunter. Die Zeile ist ein `nav` mit Knöpfen und `aria-current`, kein
+  `tablist` (ein Tab, der ein Menü öffnet, ist kein Tab); Pfeile bewegen den
+  Fokus, Enter öffnet, Escape schliesst und gibt den Fokus zurück. „Mehr“
+  bleibt als Rückfall auf dem Handy, mit den Gruppen als Überschriften;
+  `PANELS` und `TAB_ENTRIES` müssen dieselbe Reihenfolge haben (im
+  Entwicklungsmodus geprüft), sonst stimmen Pfeil- und Wischrichtung nicht.
+  Szenario „spiegeln“. Der Drive-Nachbau der
   Szenarien (`scripts/e2e/lib.mjs`) versteht jetzt `addParents`/`removeParents` und
   Notizen beim Verschieben.
+- **Handy spiegeln** (`#spiegeln`, `PhoneMirrorPanel.tsx`, `lib/phoneMirror.ts`,
+  18.11.2026, „wie scrcpy, einfacher, im Tab, mit Buttons und Erklärung“): der
+  Bildschirm eines Android-Handys im Fenster, Klick = Tippen, Ziehen =
+  Wischen, Mausrad = Scrollen, dazu Zurück, Start, Übersicht, Lauter/Leiser,
+  Sperren, Benachrichtigungen, Bildschirmfoto. Oben fünf Schritte
+  (Entwickleroptionen, USB-Debugging, Datenkabel, „Handy verbinden“,
+  „Zulassen“ am Handy), eine Auswahl „Flüssig/Scharf“, dahinter „Wenn es nicht
+  klappt“. **Wie:** WebUSB statt `adb`-Programm — Tango ADB
+  (`@yume-chan/*`, MIT, exakt festgeschrieben) spricht ADB, der scrcpy-Server
+  3.3.3 (Genymobile, Apache-2.0, 90 KB) liegt unverändert in
+  `src/assets/scrcpy/` und kommt über Vite als `assets/…jar` mit; er wird nie
+  aus dem Netz geholt („kein Anbieter fest verdrahtet“, und offline geht es
+  so auch), vor dem Aufspielen per SHA-256 geprüft und nur für die Dauer der
+  Verbindung ins temporäre Verzeichnis des Handys gelegt. Client und Server
+  müssen dieselbe Version nennen: der Server bricht sonst sofort ab —
+  `npm run verify:scrcpy` prüft Prüfsumme, Version, Festschreibung und die
+  Lizenztexte. Bild: H.264 über WebCodecs auf ein WebGL-Canvas, **ohne Ton**
+  und ohne Tastatureingabe (bewusst weggelassen, die Seite sagt es). Der
+  ADB-Schlüssel liegt in IndexedDB („Tango“) in diesem Browser, nicht in
+  `localStorage`; ohne ihn würde „Immer von diesem Computer zulassen“ nie
+  halten. **Wo es geht:** Edge/Chrome am Computer und die Windows-App; nicht in
+  Firefox/Safari (kein WebUSB) und nicht in der Android-App (`IN_ANDROID_APP`)
+  — dort steht ein Satz, kein toter Knopf. Das Chunk (140 KB) wird nicht im
+  Leerlauf vorgeholt. In Electron gibt es keine Geräteliste:
+  `select-usb-device` in `desktop/electron.mjs` nimmt ein einziges Handy, fragt
+  bei mehreren in einem Dialog und lehnt sonst ab; `setDevicePermissionHandler`
+  nur für die eigene Herkunft. **Nie gegen ein echtes Handy gelaufen** — das
+  Szenario „spiegeln“ prüft Reiter, Schritte, den Aufruf des Geräte-Dialogs,
+  das Schliessen des Dialogs und die Seite ohne WebUSB, nicht die Verbindung.
+  Auch der Electron-Teil ist ungeprüft (Syntax nur). Der Name im Reiter ist
+  nicht „scrcpy“: Apache-2.0 §6 erlaubt keine Markenverwendung; genannt wird
+  scrcpy als Herkunft, in der Anleitung und auf der Lizenzseite.
+  **Lizenzen:** Tango (MIT) und scrcpy (Apache-2.0) stehen auf
+  `public/lizenz.html` mit den vollständigen Texten (`public/lizenzen/`,
+  ebenso in `desktop/lizenzen/` für die Windows-App); bei jeder neuen Fassung
+  des Servers Datei, Prüfsumme (`phoneMirror.ts`, README) und Client
+  gemeinsam tauschen.
 - **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
   Dateimenü oder Doppelklick auf den Namen; die Endung bleibt neben dem
   Feld stehen, was Windows ablehnt (`\ / : * ? " < > |`, CON …), wird

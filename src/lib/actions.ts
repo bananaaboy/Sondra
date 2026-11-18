@@ -102,6 +102,16 @@ export const ACTIONS: ToolAction[] = [
     keywords: ['bildschirm', 'screen', 'recording', 'aufnahme', 'aufnehmen', 'screencast', 'tutorial', 'anleitung', 'fenster', 'capture', 'obs'],
   },
 
+  {
+    id: 'phone-mirror',
+    panel: 'phone',
+    group: 'video',
+    label: 'Handy spiegeln',
+    hint: 'Den Bildschirm Ihres Android-Handys hier zeigen und bedienen',
+    kinds: [],
+    keywords: ['handy', 'smartphone', 'android', 'spiegeln', 'mirror', 'scrcpy', 'usb', 'bildschirm', 'telefon', 'adb', 'cast'],
+  },
+
   /* -- the microphone -------------------------------------------------------- */
   {
     id: 'mic-test',

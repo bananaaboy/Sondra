@@ -15,9 +15,9 @@ for (const [label, viewport, reduced] of [['desktop', { width: 1440, height: 900
   const op = await page.$$eval('button[id^="v-"]', (els) => els.slice(0, 12).map((e) => getComputedStyle(e).opacity))
   check(`${label}: Kacheln sichtbar nach Ankunft`, op.every((o) => o === '1'), op.join(','))
   // Tab rule glides
-  const tabs = page.locator('[role="tab"]')
+  const tabs = page.locator('[data-tab]')
   const n = await tabs.count()
-  const rule = page.locator('[role="tablist"] > span[aria-hidden]')
+  const rule = page.locator('[data-tabrule]')
   const before = await rule.evaluate((e) => getComputedStyle(e).transform)
   const target = tabs.nth(Math.min(3, n - 1))
   await target.click()

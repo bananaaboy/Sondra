@@ -87,13 +87,6 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M2.6 5.4h9.2m0 0L9.4 3.1m2.4 2.3L9.4 7.7M13.4 10.6H4.2m0 0l2.4-2.3m-2.4 2.3l2.4 2.3" />,
   },
   {
-    id: 'audio',
-    slug: 'ton',
-    label: 'Ton',
-    summary: 'Schneiden, einfügen, Filter, Rauschen, Hall, Tonhöhe, Tempo',
-    icon: <path d="M1.8 8h1.8l1.6-4.6 2.4 9.2 2-6.2 1.2 3.4h3" />,
-  },
-  {
     id: 'video',
     slug: 'video',
     label: 'Video',
@@ -106,6 +99,20 @@ export const PANELS: PanelMeta[] = [
     label: 'Bilder',
     summary: 'Skalieren, zuschneiden, umwandeln, viele auf einmal',
     icon: <path d="M2 3.2h12v9.6H2zM2 10l3.4-3.2 3 2.8 2.2-2 3.4 3.2M5.6 6.2a.9.9 0 100-1.8.9.9 0 000 1.8z" />,
+  },
+  {
+    id: 'subtitles',
+    slug: 'untertitel',
+    label: 'Untertitel',
+    summary: 'Gesprochenes als Text, SRT-Datei oder direkt im Video',
+    icon: <path d="M2 3.4h12v9.2H2zM4.4 8.2h3.2M9 8.2h2.6M4.4 10.4h1.8M7.6 10.4h4" />,
+  },
+  {
+    id: 'audio',
+    slug: 'ton',
+    label: 'Ton',
+    summary: 'Schneiden, einfügen, Filter, Rauschen, Hall, Tonhöhe, Tempo',
+    icon: <path d="M1.8 8h1.8l1.6-4.6 2.4 9.2 2-6.2 1.2 3.4h3" />,
   },
   {
     id: 'mix',
@@ -143,18 +150,18 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M6 11.6V3.4l7-1.2v8.2M6 11.6a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0zM13 10.4a1.8 1.8 0 11-3.6 0 1.8 1.8 0 013.6 0z" />,
   },
   {
-    id: 'subtitles',
-    slug: 'untertitel',
-    label: 'Untertitel',
-    summary: 'Gesprochenes als Text, SRT-Datei oder direkt im Video',
-    icon: <path d="M2 3.4h12v9.2H2zM4.4 8.2h3.2M9 8.2h2.6M4.4 10.4h1.8M7.6 10.4h4" />,
-  },
-  {
     id: 'screen',
     slug: 'bildschirm',
     label: 'Bildschirm',
     summary: 'Bildschirm oder ein Fenster mit Ton als Video aufnehmen',
     icon: <path d="M1.8 2.8h12.4v8.4H1.8zM5.6 13.6h4.8M8 11.2v2.4M8 8.4a1.4 1.4 0 100-2.8 1.4 1.4 0 000 2.8z" />,
+  },
+  {
+    id: 'phone',
+    slug: 'spiegeln',
+    label: 'Handy spiegeln',
+    summary: 'Den Bildschirm Ihres Android-Handys hier zeigen und mit der Maus bedienen',
+    icon: <path d="M5 1.8h6a1 1 0 011 1v10.4a1 1 0 01-1 1H5a1 1 0 01-1-1V2.8a1 1 0 011-1zM7 12h2" />,
   },
   {
     id: 'mic',
@@ -164,6 +171,54 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M8 2.2a2 2 0 012 2v3.6a2 2 0 01-4 0V4.2a2 2 0 012-2zM4.2 7.6a3.8 3.8 0 007.6 0M8 11.4v2.4M5.8 13.8h4.4" />,
   },
 ]
+
+/**
+ * What the tab bar shows: a tool on its own, or a group of tools behind one
+ * button. Eighteen tabs in a row ended in „Mehr“ on every laptop; the tasks
+ * people come for stay single, and the editing tools stand in three groups
+ * by what they work on. Nothing is dropped — every tool keeps its address and
+ * its place in `PANELS`, which stays in the order of this list (checked
+ * below), so arrow keys and the slide direction keep meaning the same.
+ */
+export type TabEntry =
+  | { type: 'panel'; panel: PanelMeta }
+  | { type: 'group'; id: string; label: string; panels: PanelMeta[] }
+
+const byId = new Map(PANELS.map((panel) => [panel.id, panel]))
+const single = (id: PanelId): TabEntry => ({ type: 'panel', panel: byId.get(id)! })
+const group = (id: string, label: string, ids: PanelId[]): TabEntry => ({
+  type: 'group',
+  id,
+  label,
+  panels: ids.map((member) => byId.get(member)!),
+})
+
+export const TAB_ENTRIES: TabEntry[] = [
+  single('start'),
+  single('merkliste'),
+  single('folder'),
+  single('player'),
+  single('downloader'),
+  single('devices'),
+  group('bearbeiten', 'Bearbeiten', ['converter', 'video', 'images', 'subtitles']),
+  group('ton', 'Ton', ['audio', 'mix', 'stems', 'normalize', 'sampler', 'harmony']),
+  group('aufnehmen', 'Aufnehmen', ['screen', 'phone', 'mic']),
+]
+
+/** The entry a tool stands in. */
+export function entryOf(id: PanelId): number {
+  return Math.max(
+    0,
+    TAB_ENTRIES.findIndex((entry) => (entry.type === 'panel' ? entry.panel.id === id : entry.panels.some((panel) => panel.id === id))),
+  )
+}
+
+if (import.meta.env.DEV) {
+  const flat = TAB_ENTRIES.flatMap((entry) => (entry.type === 'panel' ? [entry.panel] : entry.panels)).map((panel) => panel.id)
+  if (flat.join() !== PANELS.map((panel) => panel.id).join()) {
+    throw new Error('panelMeta: TAB_ENTRIES und PANELS haben nicht dieselbe Reihenfolge')
+  }
+}
 
 export function ToolIcon({ children }: { children: ReactNode }) {
   return (

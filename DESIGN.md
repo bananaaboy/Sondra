@@ -1112,7 +1112,8 @@ mehr Herkunft. Jede Bewegung hat genau eine Bedeutung:
 - **Werkzeugwechsel** — das Werkzeug kommt von der Seite, auf der sein Reiter
   steht (±20 px, `--enter-x`), und der Strich unter den Reitern gleitet in
   `--dur-slow` vom alten zum neuen: beide sagen, wohin es ging. Ein Element,
-  aus einem Pixel skaliert — nie eine Breite, die neu gesetzt wird.
+  aus einem Pixel skaliert — nie eine Breite, die neu gesetzt wird. Der Strich steht unter dem Knopf der Gruppe, die das Werkzeug enthält
+  („Ton · Mischen“); die Gruppen öffnen ihr Menü mit `drop`.
 - `drop` — ein Menü klappt aus dem Knopf, der es rief (von oben verankert).
 - `dock` — was am unteren Rand schwebt (Leisten, Annahme-Karte,
   Auswahlleiste), kommt von diesem Rand.

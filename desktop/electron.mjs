@@ -652,6 +652,35 @@ async function open() {
   if (!window) return // closed while starting
   keepInside(window.webContents, origin)
 
+  // Phone mirroring (tab „Handy spiegeln“) talks to the phone over WebUSB.
+  // Electron has no device picker of its own: it asks here, which phone. One
+  // candidate is taken; several are put to the user in a plain dialog; none
+  // is a refusal. Nothing is picked on the page's behalf, and only for
+  // Sondra's own page.
+  window.webContents.session.setDevicePermissionHandler((details) => details.deviceType === 'usb' && Boolean(details.origin?.startsWith(origin)))
+  window.webContents.on('select-usb-device', (event, details, callback) => {
+    event.preventDefault()
+    const devices = details.deviceList ?? []
+    void (async () => {
+      try {
+        if (!details.frame?.url?.startsWith(origin) || devices.length === 0) return callback('')
+        if (devices.length === 1) return callback(devices[0].deviceId)
+        const names = devices.map((device, index) => `${device.productName || device.manufacturerName || 'Handy'} (${index + 1})`)
+        const { response } = await dialog.showMessageBox(window, {
+          type: 'question',
+          message: 'Welches Handy soll gespiegelt werden?',
+          buttons: [...names, 'Abbrechen'],
+          cancelId: names.length,
+          noLink: true,
+        })
+        callback(response < devices.length ? devices[response].deviceId : '')
+      } catch (failure) {
+        log(`USB-Auswahl: ${failure?.message ?? failure}`)
+        callback('')
+      }
+    })()
+  })
+
   const contents = window.webContents
   contents.on('did-fail-load', (_event, code, description, failedUrl, isMainFrame) => {
     log(`Laden fehlgeschlagen: ${code} ${description} · ${failedUrl}${isMainFrame ? ' (Seite)' : ''}`)
