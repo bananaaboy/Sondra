@@ -61,12 +61,20 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path run | Out-Null
+          $env:RUST_BACKTRACE = '1'
           $exe = (Resolve-Path native/target/release/examples/demo.exe).Path
-          $p = Start-Process -FilePath $exe -WorkingDirectory (Resolve-Path run).Path -PassThru
+          $p = Start-Process -FilePath $exe -WorkingDirectory (Resolve-Path run).Path -PassThru -RedirectStandardOutput demo-out.txt -RedirectStandardError demo-err.txt
           Start-Sleep -Seconds 4
+          if ($p.HasExited) {
+            "the demo ended by itself after less than 4 seconds, exit code $($p.ExitCode)" | Tee-Object -FilePath uia.txt
+            Get-Content demo-out.txt, demo-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath uia.txt
+            exit 1
+          }
           $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-a11y/uia-check.ps1 -ProcessId $p.Id -WorkDir (Resolve-Path run).Path 2>&1
           $code = $LASTEXITCODE
           $out | Tee-Object -FilePath uia.txt
+          if ($p.HasExited) { "the demo had ended by the end of the check, exit code $($p.ExitCode)" | Tee-Object -Append -FilePath uia.txt }
+          Get-Content demo-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath uia.txt
           Get-Content uia.txt | Out-String | Add-Content $env:GITHUB_STEP_SUMMARY
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
           exit $code
