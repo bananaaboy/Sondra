@@ -56,6 +56,8 @@ jobs:
         with:
           path: native/target
           key: native-uia-${{ hashFiles('native/Cargo.lock') }}
+          # A failed check must not throw away nine minutes of build.
+          save-always: true
       - run: cargo build --release --locked --example demo -p sondra-a11y --manifest-path native/Cargo.toml
       - name: Start the demo window and ask it through UI Automation
         shell: pwsh
