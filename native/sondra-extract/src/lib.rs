@@ -11,5 +11,7 @@ pub mod hls;
 pub mod hosters;
 pub mod packer;
 pub mod stream;
+#[cfg(feature = "testing")]
+pub mod testing;
 pub mod text;
 pub mod voe;

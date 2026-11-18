@@ -47,6 +47,12 @@ pub struct Config {
     pub check_every_minutes: u32,
     /// Shut the computer down once nothing is left to fetch. Off unless chosen.
     pub shutdown_when_done: bool,
+    /// Where fetched episodes go, as `<folder>/<series>/Staffel n`. Nothing is fetched until one is
+    /// chosen.
+    pub folder: Option<String>,
+    /// The language to prefer (`"ger_sub"`, `"ger_dub"`, `"eng_sub"`); empty takes what the site offers
+    /// first.
+    pub language: String,
 }
 
 impl Default for Config {
@@ -62,6 +68,8 @@ impl Default for Config {
             bandwidth_kib: None,
             check_every_minutes: 180,
             shutdown_when_done: false,
+            folder: None,
+            language: String::new(),
         }
     }
 }

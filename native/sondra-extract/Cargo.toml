@@ -18,3 +18,10 @@ url = "2"
 # Certificates are always checked; the system's store is used so that a school or
 # company network that inspects HTTPS works the way the rest of the computer does.
 ureq = { version = "3", features = ["platform-verifier"] }
+
+[features]
+# Stand-in sites (`testing::Pages`) for the tests of crates that build on this one.
+testing = []
+
+[dev-dependencies]
+sondra-extract = { path = ".", features = ["testing"] }

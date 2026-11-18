@@ -1,0 +1,20 @@
+[package]
+name = "sondra-service"
+description = "The background service: the pieces that talk to the sites, and (later) the program that runs rounds."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sondra-core = { path = "../sondra-core" }
+sondra-daemon = { path = "../sondra-daemon" }
+sondra-extract = { path = "../sondra-extract" }
+sondra-download = { path = "../sondra-download" }
+url = "2"
+tempfile = "3"
+
+[dev-dependencies]
+tiny_http = "0.12"
+serde_json.workspace = true
+sondra-extract = { path = "../sondra-extract", features = ["testing"] }

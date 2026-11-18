@@ -5411,8 +5411,23 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sondra-extract",
  "thiserror 2.0.21",
  "ureq",
+ "url",
+]
+
+[[package]]
+name = "sondra-service"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sondra-core",
+ "sondra-daemon",
+ "sondra-download",
+ "sondra-extract",
+ "tempfile",
+ "tiny_http",
  "url",
 ]
 
