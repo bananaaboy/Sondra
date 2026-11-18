@@ -2,6 +2,15 @@
   "_": "Was in jeder Version dazukam — für Menschen, nicht für Entwickler. Die neueste zuerst. Neue Version: oben einen Eintrag mit der Version aus package.json anlegen; der Release-Workflow bricht ab, wenn er fehlt, und nimmt ihn als Notizen des GitHub-Release.",
   "versions": [
     {
+      "version": "1.2.3",
+      "date": "2026-11-18",
+      "items": [
+        "Die Reiterleiste ist kürzer: neun Einträge statt neunzehn. Start, Merkliste, Ordner, Abspielen, Herunterladen und Geräte stehen wie bisher einzeln, die Werkzeuge in drei Gruppen — Bearbeiten, Ton und Aufnehmen. Der Knopf einer Gruppe nennt das gewählte Werkzeug („Ton · Mischen“). Kein Werkzeug ist weggefallen, jedes hat seine Adresse behalten.",
+        "Neu: „Handy spiegeln“ zeigt den Bildschirm Ihres Android-Handys auf dem Computer. Sie klicken, wischen und scrollen mit der Maus und haben Knöpfe für Zurück, Start, Übersicht, Lautstärke, Sperren, Benachrichtigungen und Bildschirmfoto. Die Seite erklärt in fünf Schritten, wie das Handy vorbereitet wird, und sagt bei Problemen, woran es liegt. Das Bild läuft nur über das USB-Kabel, nichts wird hochgeladen; es funktioniert in Edge und Chrome und in der Windows-App, ohne Ton und ohne Tastatureingabe.",
+        "Handy spiegeln nutzt scrcpy von Genymobile (Apache-2.0) und Tango ADB (MIT); beide stehen mit ihren Lizenztexten auf der Seite „Lizenz“."
+      ]
+    },
+    {
       "version": "1.2.2",
       "date": "2026-11-14",
       "items": [

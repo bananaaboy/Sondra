@@ -72,7 +72,7 @@ check('…und der nächste holt sie zurück', await up())
 await page.getByRole('button', { name: /^Pause/ }).tap()
 await page.waitForTimeout(300)
 check('Ein Knopf in der Leiste lässt sich treffen: Pause', await page.evaluate(() => document.querySelector('.sondra-player video').paused))
-await page.getByRole('button', { name: /^Abspielen/ }).tap()
+await page.locator('.sondra-player').getByRole('button', { name: /^Abspielen/ }).tap()
 await page.waitForFunction(() => !document.querySelector('.sondra-player video').paused, null, { timeout: 5000 })
 await page.waitForTimeout(400)
 

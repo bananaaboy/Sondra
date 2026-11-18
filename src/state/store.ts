@@ -70,6 +70,7 @@ export type PanelId =
   | 'mic'
   | 'subtitles'
   | 'screen'
+  | 'phone'
   | 'mix'
   | 'player'
 

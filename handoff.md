@@ -1,13 +1,26 @@
-# Handoff: Sondra (v1.2.2)
+# Handoff: Sondra (v1.2.3)
 
-**Datum:** 14. November 2026  
+**Datum:** 18. November 2026  
 **Projektpfad:** `C:\Users\lizge.navajeetharan\Documents\PGM\Sondra`  
-**Aktueller Branch:** `main` (Release-Commit von v1.2.2, synchronisiert mit `origin/main`)  
+**Aktueller Branch:** `main` (Release-Commit von v1.2.3, synchronisiert mit `origin/main`)  
 **Status:** Alle 17 Verifikationstests (`npm run verify`) und `npm run typecheck` bestanden (Code 0).
 
 ---
 
-## 1. Übersicht der Meilensteine bis Version 1.2.2
+## 1. Übersicht der Meilensteine bis Version 1.2.3
+
+### Version 1.2.3 (18.11.2026, seit 1.2.2):
+- **Reiterleiste gruppiert:** neun Einträge statt neunzehn (`TAB_ENTRIES` in `panelMeta.tsx`:
+  Bearbeiten, Ton, Aufnehmen als Menü-Knöpfe, „Mehr“ nur noch Rückfall auf dem Handy). `nav` mit
+  Knöpfen und `aria-current` statt `tablist`; die Szenarien greifen über `[data-tab]` und
+  `[data-tabrule]`, Knöpfe im Werkzeug über `#studio`.
+- **Handy spiegeln** (`#spiegeln`, `PhoneMirrorPanel.tsx`, `lib/phoneMirror.ts`): WebUSB-ADB mit
+  Tango (MIT) und dem unveränderten scrcpy-Server 3.3.3 (Apache-2.0, `src/assets/scrcpy/`).
+  Lizenztexte auf `lizenz.html` und in `desktop/lizenzen`; `npm run verify:scrcpy`. **Nie gegen
+  ein echtes Handy gelaufen**, auch der Electron-Teil (`select-usb-device`) ist ungeprüft.
+- Szenario „spiegeln“. „geraete“ ist in einer Umgebung ohne Netz rot („Öffnen“ öffnet example.org
+  nicht), auch ohne diese Änderungen.
+
 
 ### Version 1.2.2 (14.11.2026, seit 1.2.1):
 - **Serien ohne Arbeit** (grösste Priorität: einfach für jeden): „Serie hinzufügen“ als ein Feld

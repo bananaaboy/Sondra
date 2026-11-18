@@ -34,6 +34,7 @@ const TOOLS = {
   mic: () => import('./panels/MicPanel').then((m) => ({ default: m.MicPanel })),
   subtitles: () => import('./panels/SubtitlesPanel').then((m) => ({ default: m.SubtitlesPanel })),
   screen: () => import('./panels/ScreenPanel').then((m) => ({ default: m.ScreenPanel })),
+  phone: () => import('./panels/PhoneMirrorPanel').then((m) => ({ default: m.PhoneMirrorPanel })),
   mix: () => import('./panels/MixPanel').then((m) => ({ default: m.MixPanel })),
   player: () => import('./panels/PlayerPanel').then((m) => ({ default: m.PlayerPanel })),
 } satisfies Record<string, () => Promise<{ default: ComponentType<{ theme: ResolvedTheme }> | ComponentType<{ hidden?: boolean }> | ComponentType }>>
@@ -53,6 +54,7 @@ const HarmonyPanel = lazy(TOOLS.harmony)
 const MicPanel = lazy(TOOLS.mic)
 const SubtitlesPanel = lazy(TOOLS.subtitles)
 const ScreenPanel = lazy(TOOLS.screen)
+const PhoneMirrorPanel = lazy(TOOLS.phone)
 const MixPanel = lazy(TOOLS.mix)
 const PlayerPanel = lazy(TOOLS.player)
 
@@ -60,7 +62,12 @@ const PlayerPanel = lazy(TOOLS.player)
 function usePrefetchTools() {
   useEffect(() => {
     if (FETCH_LIGHT) return
-    const load = () => Object.values(TOOLS).forEach((get) => void get().catch(() => undefined))
+    // Not the phone mirror: it is the one tool with a large library of its own
+    // (USB, ADB, a video decoder), used rarely and on one kind of desktop.
+    const load = () =>
+      Object.entries(TOOLS).forEach(([id, get]) => {
+        if (id !== 'phone') void get().catch(() => undefined)
+      })
     let idle: number | null = null
     const timer = window.setTimeout(() => {
       if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(load, { timeout: 4000 })
@@ -361,6 +368,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     panel === 'audio' ||
     panel === 'mic' ||
     panel === 'screen' ||
+    panel === 'phone' ||
     panel === 'mix' ||
     panel === 'player'
 
@@ -398,6 +406,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
                 {panel === 'subtitles' ? <SubtitlesPanel /> : null}
                 {panel === 'screen' ? <ScreenPanel /> : null}
                 {panel === 'mix' ? <MixPanel /> : null}
+                {panel === 'phone' ? <PhoneMirrorPanel /> : null}
               </Suspense>
             </ErrorBoundary>
           )}
