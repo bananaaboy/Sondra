@@ -7,6 +7,7 @@
 pub mod aniworld;
 pub mod episode;
 pub mod fetch;
+pub mod hls;
 pub mod hosters;
 pub mod packer;
 pub mod stream;

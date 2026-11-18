@@ -5371,6 +5371,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sondra-download"
+version = "0.1.0"
+dependencies = [
+ "sondra-daemon",
+ "sondra-extract",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tiny_http",
+ "ureq",
+ "url",
+]
+
+[[package]]
 name = "sondra-drive"
 version = "0.1.0"
 dependencies = [
