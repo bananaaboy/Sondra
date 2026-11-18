@@ -497,7 +497,7 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern
   liest die Merkliste nur, nie zurückschreiben; nie eine ungesehene Folge
   löschen; nichts ist vorgewählt (keine Serie, kein Wachhalten, kein
-  Löschen). Plan und Aufbau: `native/README.md`. Die Electron-App und die
+  Löschen). Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
   Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
   gestrichen, sobald etwas davon wegfällt. Nie auf echtem Windows gelaufen.
 - `npm run dev` · `npm run build` · `npm run typecheck`

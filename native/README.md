@@ -1,5 +1,7 @@
 # Sondra nativ
 
+Der Plan in Wellen steht in `PLAN.md`, die Liste aller Funktionen in `PARITY.md`.
+
 Der Umbau von Sondra von Electron auf Rust, wie ihn Discord ankündigt hat:
 keine Webseite im Fenster mehr, sondern eine Oberfläche, die direkt auf der
 Grafikkarte gezeichnet wird (GPUI, das Framework hinter dem Zed-Editor), und
