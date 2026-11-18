@@ -8,9 +8,9 @@ name: Native
 on:
   push:
     branches: [main]
-    paths: ['native/**', 'scripts/make-native-fixture.mts', 'src/lib/sqlite.ts', '.github/workflows/native.yml']
+    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', '.github/workflows/native.yml']
   pull_request:
-    paths: ['native/**', 'scripts/make-native-fixture.mts', 'src/lib/sqlite.ts', '.github/workflows/native.yml']
+    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', '.github/workflows/native.yml']
   workflow_dispatch:
 
 permissions:
@@ -36,6 +36,18 @@ jobs:
         run: |
           npm run native:fixture
           git diff --exit-code -- native/sondra-core/tests/fixtures
+      - name: The converter's commands are what the web app builds today
+        shell: bash
+        run: |
+          npm run native:golden
+          git diff --exit-code -- native/sondra-media/tests/golden
+      # The tests of the media and download crates run the real FFmpeg (and skip, saying so, without it).
+      - name: FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg --no-progress -y
       - name: Libraries GPUI links against on Linux
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-x11-dev libxcb1-dev libfontconfig-dev libfreetype-dev libwayland-dev
