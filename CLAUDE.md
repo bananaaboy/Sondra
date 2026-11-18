@@ -340,9 +340,12 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Firefox/Safari (kein WebUSB) und nicht in der Android-App (`IN_ANDROID_APP`)
   — dort steht ein Satz, kein toter Knopf. Das Chunk wird nicht im Leerlauf
   vorgeholt. In Electron gibt es keine Geräteliste: `select-usb-device` in
-  `desktop/electron.mjs` nimmt ein einziges Handy, fragt bei mehreren in einem
-  Dialog und lehnt sonst ab; `setDevicePermissionHandler` nur für die eigene
-  Herkunft. **Nie gegen ein echtes Handy gelaufen** — auch UHID, Ton und der
+  `desktop/electron.mjs` fragt **immer** in einem Dialog, welches Handy (auch bei
+  einem; ohne Handy sagt er, woran es liegen kann); `setDevicePermissionHandler`
+  nur für die eigene Herkunft. **Das Ereignis gehört der Session**
+  (`session.on('select-usb-device')`), nicht dem Fenster: am `webContents` hörte
+  niemand zu, Electron brach die Anfrage sofort ab, und die Seite sagte „Kein Handy
+  gewählt“, ohne je eine Wahl zu zeigen (18.11.2026; `verify:scrcpy` prüft es). **Nie gegen ein echtes Handy gelaufen** — auch UHID, Ton und der
   Electron-Teil nicht (dort nur Syntax). **Die Naht für Tests:** `startMirror`
   lässt sich durch `globalThis.__sondraMirrorTest` ersetzen; das Szenario
   „spiegeln“ bringt damit ein Handy aus Stand-in-Bild und Protokoll mit und prüft
