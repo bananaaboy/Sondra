@@ -27,6 +27,7 @@
     "verify:intro": "esbuild scripts/verify-intro.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-intro.mjs && node node_modules/.verify-intro.mjs",
     "verify:folder": "esbuild scripts/verify-folder.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-folder.mjs && node node_modules/.verify-folder.mjs",
     "verify:drive": "esbuild scripts/verify-drive.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-drive.mjs && node node_modules/.verify-drive.mjs",
+    "native:fixture": "esbuild scripts/make-native-fixture.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.make-native-fixture.mjs && node node_modules/.make-native-fixture.mjs",
     "verify:merkliste": "esbuild scripts/verify-merkliste-features.mts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.verify-merkliste.mjs && node node_modules/.verify-merkliste.mjs",
     "dl": "node scripts/dl.mjs",
     "ytdlp": "node public/sondra-ytdlp.mjs",

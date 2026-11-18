@@ -483,6 +483,20 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
 
 ## Betrieb
 
+- **Sondra nativ** (`native/`, 18.11.2026, Entscheidung des Nutzers: „komplett
+  wechseln wie Discord“ — Electron raus, Rust und GPUI rein, FFmpeg nativ):
+  ein Rust-Workspace neben der bestehenden App, kein Ersatz über Nacht.
+  **Stand: nur der Kern** (`sondra-core`: die geteilte Merkliste lesen — SQLite
+  und altes JSON —, entscheiden was geladen wird, was bei einer Speichergrenze
+  weg darf, wann geladen werden darf; 18 Tests). Kein Fenster, kein Dienst.
+  Die Testdateien schreibt der Serializer der Website
+  (`npm run native:fixture`), der Workflow „Native“ prüft sie auf Windows und
+  Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern
+  liest die Merkliste nur, nie zurückschreiben; nie eine ungesehene Folge
+  löschen; nichts ist vorgewählt (keine Serie, kein Wachhalten, kein
+  Löschen). Plan und Aufbau: `native/README.md`. Die Electron-App und die
+  Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
+  gestrichen, sobald etwas davon wegfällt. Nie auf echtem Windows gelaufen.
 - `npm run dev` · `npm run build` · `npm run typecheck`
 - Offline: `public/coi-serviceworker.js` hält nach einem Besuch alle Dateien
   aus `offline.json` (ein Vite-Plugin schreibt die Liste beim Build) und

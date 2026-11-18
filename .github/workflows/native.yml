@@ -1,0 +1,43 @@
+# The native client (`native/`): the Rust core is tested on the systems it
+# will run on. The fixtures it reads are written by the web app's own
+# serializer, so a change to the file format that is not carried over here
+# fails this check instead of a user's Drive.
+
+name: Native
+
+on:
+  push:
+    branches: [main]
+    paths: ['native/**', 'scripts/make-native-fixture.mts', 'src/lib/sqlite.ts', '.github/workflows/native.yml']
+  pull_request:
+    paths: ['native/**', 'scripts/make-native-fixture.mts', 'src/lib/sqlite.ts', '.github/workflows/native.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: The fixtures are what the web app writes today
+        shell: bash
+        run: |
+          npm run native:fixture
+          git diff --exit-code -- native/sondra-core/tests/fixtures
+      - uses: actions/cache@v4
+        with:
+          path: native/target
+          key: native-${{ matrix.os }}-${{ hashFiles('native/Cargo.lock') }}
+      - run: cargo test --manifest-path native/Cargo.toml --locked

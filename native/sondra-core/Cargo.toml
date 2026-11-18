@@ -1,0 +1,15 @@
+[package]
+name = "sondra-core"
+description = "Sondra's native core: the shared Merkliste, what to fetch next, what to delete."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+# Reads the Merkliste database Drive holds. Bundled: no system SQLite on Windows.
+rusqlite = { version = "0.37", features = ["bundled"] }
+tempfile = "3"

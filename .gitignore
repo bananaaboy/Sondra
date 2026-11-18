@@ -30,3 +30,6 @@ desktop/node_modules/
 desktop/.stage/
 desktop/.build/
 desktop/.site/
+
+# Rust build output of the native client (native/)
+native/target
