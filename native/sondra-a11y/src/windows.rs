@@ -35,11 +35,23 @@ impl ActionHandler for Forward {
     }
 }
 
-pub(crate) fn attach(window: &mut Window, cx: &mut App) {
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn IsWindowVisible(hwnd: *mut c_void) -> i32;
+}
+
+/// Hooks the window up. `false` when it could not be: AccessKit subclasses the window
+/// procedure and insists on doing so before the window is first shown, so a window that is
+/// already visible is left alone instead of panicking.
+pub(crate) fn attach(window: &mut Window, cx: &mut App) -> bool {
     let hwnd = match window.window_handle().map(|handle| handle.as_raw()) {
         Ok(RawWindowHandle::Win32(handle)) => HWND(handle.hwnd.get() as *mut c_void),
-        _ => return,
+        _ => return false,
     };
+    // SAFETY: a plain query on a window handle of this thread.
+    if unsafe { IsWindowVisible(hwnd.0) } != 0 {
+        return false;
+    }
 
     let (sender, receiver) = async_channel::unbounded();
     let latest: Rc<RefCell<Option<TreeUpdate>>> = Rc::default();
@@ -71,4 +83,5 @@ pub(crate) fn attach(window: &mut Window, cx: &mut App) {
             }
         })
         .detach();
+    true
 }

@@ -138,10 +138,14 @@ fn main() {
                     title: Some("Sondra Bedienungshilfen".into()),
                     ..Default::default()
                 }),
+                // Hidden until the accessibility bridge is on the window (see `attach`).
+                show: false,
                 ..Default::default()
             },
             |window, cx| {
-                attach(window, cx);
+                let attached = attach(window, cx);
+                eprintln!("accessibility bridge attached: {attached}");
+                window.activate_window();
                 cx.new(|cx| Demo {
                     play: cx.focus_handle(),
                     search: cx.focus_handle(),

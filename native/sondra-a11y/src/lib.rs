@@ -35,12 +35,20 @@ use gpui::{App, Window};
 
 /// Connects this window to the platform's accessibility API.
 ///
-/// Call it once per window, after it is created and before the first frame, from
-/// the code that owns the window. On a platform without a bridge yet it does
-/// nothing; [`attach_sink`] is the hook for testing and for other platforms.
-pub fn attach(window: &mut Window, cx: &mut App) {
+/// Call it once per window, from the code that owns the window, while it is being
+/// created. **On Windows the window must not have been shown yet:** open it with
+/// `WindowOptions { show: false, .. }`, call `attach` in the opening closure, then
+/// `window.activate_window()` to show it. Returns whether the window is now connected;
+/// on a platform without a bridge yet it does nothing and returns `false` ([`attach_sink`] is the
+/// hook for testing and for other platforms).
+pub fn attach(window: &mut Window, cx: &mut App) -> bool {
     #[cfg(windows)]
-    windows::attach(window, cx);
+    {
+        windows::attach(window, cx)
+    }
     #[cfg(not(windows))]
-    let _ = (window, cx);
+    {
+        let _ = (window, cx);
+        false
+    }
 }
