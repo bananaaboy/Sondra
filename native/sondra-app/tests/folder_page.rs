@@ -469,6 +469,15 @@ fn the_series_on_the_list_continue_from_where_they_stand_and_play_the_unseen_one
     w.press(Role::Button, "Frieren: Staffel 1 · Folge 1 abspielen");
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv"]);
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Folder, cx));
+    w.draw();
+    // The series page offers the same way forward, from the folder.
+    w.press(Role::Button, "Ansehen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
+    assert!(w.tree().find(Role::Button, "Folge 1 gesehen").is_some());
+    w.press(Role::Button, "Folge 1 abspielen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv"]);
 }
 
 #[gpui::test]

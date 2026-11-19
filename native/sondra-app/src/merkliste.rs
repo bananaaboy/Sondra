@@ -938,12 +938,23 @@ impl Shell {
         }
 
         let mut actions = div().flex().flex_wrap().items_center().gap(px(8.));
+        // The best way forward there is: from the folder the Ordner page has read, when the next episode lies in it.
+        let from_folder = self.continue_here().into_iter().find(|s| s.item == item.id);
+        if let Some(here) = &from_folder {
+            let unit = if here.next.season == 0 { "Film" } else { "Folge" };
+            let (me, id) = (me.clone(), item.id.clone());
+            actions = actions.child(ui.button("naechste-abspielen", format!("{unit} {} abspielen", here.next.episode)).primary().on_click(move |_, app| {
+                let id = id.clone();
+                me.update(app, |shell, cx| shell.continue_play(&id, cx))
+            }));
+        }
         if !done && item.episode.is_some_and(|e| e != 0) {
             let unit = if item.season == 0 { "Film" } else { "Folge" };
             let at = item.episode.unwrap_or(0);
             let me = me.clone();
             let id = item.id.clone();
-            actions = actions.child(ui.button("naechste-gesehen", format!("{unit} {at} gesehen")).primary().on_click(move |_, app| {
+            let button = ui.button("naechste-gesehen", format!("{unit} {at} gesehen"));
+            actions = actions.child((if from_folder.is_some() { button } else { button.primary() }).on_click(move |_, app| {
                 let id = id.clone();
                 Self::merk_do(&me, app, move |m| m.advance(&id))
             }));
