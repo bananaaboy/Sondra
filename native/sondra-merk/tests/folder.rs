@@ -330,3 +330,75 @@ fn the_page_sets_files_into_series_as_the_web_page_does() {
     theirs.sort_by_key(|v| v[0].as_str().unwrap().to_string());
     assert_eq!(key_of, theirs);
 }
+
+#[test]
+fn copies_are_found_and_the_original_is_kept_as_the_web_app_does() {
+    use sondra_merk::duplicates::*;
+    use std::io::Cursor;
+    let g = golden();
+    let d = &g["dup"];
+    for c in d["names"].as_array().unwrap() {
+        assert_eq!(
+            looks_like_copy(c["n"].as_str().unwrap()),
+            c["copy"].as_bool().unwrap(),
+            "{}",
+            c["n"]
+        );
+    }
+    let files: Vec<FolderFile> = d["files"].as_array().unwrap().iter().map(file).collect();
+    assert_eq!(paths(&keep_first(&files[..3])), strings(&d["keepFirst"]));
+    // Compared by what the golden says a file is: the same rule as the web's stand-in key.
+    let key = |f: &FolderFile| -> std::io::Result<String> {
+        if f.name.contains("Unlesbar") {
+            return Err(std::io::Error::other("nicht lesbar"));
+        }
+        let stem = regex::Regex::new(r"(?i) \(\d+\)| - Kopie| copy")
+            .unwrap()
+            .replace(&f.name, "")
+            .into_owned();
+        let stem = regex::Regex::new(r"\.[^.]+$")
+            .unwrap()
+            .replace(&stem, "")
+            .into_owned();
+        Ok(format!("g:{}:{stem}", f.size))
+    };
+    let mut seen = 0;
+    let report = find_duplicates(&files, key, |done, total| {
+        seen = done;
+        assert!(done <= total);
+        true
+    })
+    .unwrap();
+    assert_eq!(seen, report.read);
+    let theirs = &d["report"];
+    let groups: Vec<Value> = report
+        .groups
+        .iter()
+        .map(|g| json!({"size": g.size, "files": paths(&g.files), "whole": g.whole}))
+        .collect();
+    assert_eq!(Value::Array(groups), theirs["groups"]);
+    assert_eq!(report.read as i64, theirs["read"].as_i64().unwrap());
+    assert_eq!(report.spare as i64, theirs["spare"].as_i64().unwrap());
+    assert_eq!(paths(&copies_of(&report)), strings(&theirs["copies"]));
+    // Asked to stop, it stops.
+    assert!(find_duplicates(&files, |_| Ok("g:x".into()), |_, _| false).is_none());
+
+    // The real keys: SHA-256 whole up to 32 MB, 32 slices of 64 KB above it.
+    let small: Vec<u8> = (0..1000u32).map(|i| ((i * 7) & 0xff) as u8).collect();
+    let big: Vec<u8> = (0..33u32 * 1024 * 1024)
+        .map(|i| ((i * 31 + (i >> 8) * 7 + (i >> 16)) & 0xff) as u8)
+        .collect();
+    let keys = d["contentKeys"].as_array().unwrap();
+    assert_eq!(
+        content_key(&mut Cursor::new(&small)).unwrap(),
+        keys[0]["key"].as_str().unwrap()
+    );
+    assert_eq!(
+        content_key(&mut Cursor::new(&big[..32 * 1024 * 1024])).unwrap(),
+        keys[1]["key"].as_str().unwrap()
+    );
+    assert_eq!(
+        content_key(&mut Cursor::new(&big)).unwrap(),
+        keys[2]["key"].as_str().unwrap()
+    );
+}

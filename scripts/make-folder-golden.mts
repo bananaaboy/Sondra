@@ -28,6 +28,7 @@ import {
   type KindFilter,
   type SortKey,
 } from '../src/lib/folder'
+import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy } from '../src/lib/duplicates'
 import { createMerkItem, type SavedLinkItem } from '../src/lib/merkliste'
 import { kindFromMime } from '../src/state/store'
 
@@ -142,7 +143,47 @@ const frieren = (folderEpisodes(files, items).get('fr') ?? [])
 const queues = [[1, 1], [1, 4], [1, 9], [2, 1], [9, 9]].map(([s, e]) => ({ s, e, queue: playQueue(frieren, s, e).map((x) => x.file.path) }))
 const grouped = groupBySeries(files, items)
 
+/* Doubles ------------------------------------------------------------------------------------- */
+
+const copyNames = ['Film.mp4', 'Film (1).mp4', 'Film (12).mp4', 'Film - Kopie.mp4', 'Film Kopie.mp4', 'Film_copy.mkv', 'Film copy 2.mp4', 'Film - Copy (3).mp4', 'Film duplikat.mp4', 'Film-DUPLIKAT 4', 'Kopie.mp4', 'Copy of Film.mp4', 'Film (1).mp4.bak', 'Film(1)', 'Dateiohne', 'Film (a).mp4', ' Film (2) .mp4']
+const dupFiles: FolderFile[] = [
+  file('A/Film.mp4', 1000), file('B/Film (1).mp4', 1000), file('C/Film - Kopie.mp4', 1000),
+  file('A/Lied.mp3', 500), file('B/Lied.mp3', 500), file('B/Anderes.mp3', 500),
+  file('Z/Gross.mkv', 9_000_000), file('Y/Gross copy.mkv', 9_000_000), file('X/Gross.mkv', 9_000_000),
+  file('A/Leer1.txt', 0), file('B/Leer2.txt', 0),
+  file('A/Einzel.bin', 77),
+  file('A/Unlesbar.bin', 10), file('B/Unlesbar.bin', 10),
+  file('D/Gleich.png', 20), file('E/Gleich.png', 20),
+]
+dupFiles[1].modified = dupFiles[0].modified + 5
+dupFiles[2].modified = dupFiles[0].modified - 5
+dupFiles[7].modified = dupFiles[6].modified
+dupFiles[8].modified = dupFiles[6].modified
+dupFiles[15].modified = dupFiles[14].modified
+dupFiles[15].path = 'E/Gleich.png'
+const dupKey = async (f: FolderFile) => {
+  if (f.name.includes('Unlesbar')) throw new Error('nicht lesbar')
+  return `g:${f.size}:${f.name.replace(/ \(\d+\)| - Kopie| copy/i, '').replace(/\.[^.]+$/, '')}`
+}
+const dupReport = await findDuplicates(dupFiles, { key: dupKey })
+const big = new Uint8Array(33 * 1024 * 1024)
+for (let i = 0; i < big.length; i += 1) big[i] = (i * 31 + (i >> 8) * 7 + (i >> 16)) & 0xff
+const small = Uint8Array.from({ length: 1000 }, (_, i) => (i * 7) & 0xff)
+const contentKeys = [
+  { size: small.length, key: await contentKey(new Blob([small])) },
+  { size: 32 * 1024 * 1024, key: await contentKey(new Blob([big.subarray(0, 32 * 1024 * 1024)])) },
+  { size: big.length, key: await contentKey(new Blob([big])) },
+]
+const dupOut = {
+  names: copyNames.map((n) => ({ n, copy: looksLikeCopy(n) })),
+  files: dupFiles,
+  report: { groups: dupReport.groups.map((g) => ({ size: g.size, files: g.files.map((f) => f.path), whole: g.whole })), read: dupReport.read, spare: dupReport.spare, copies: copiesOf(dupReport).map((f) => f.path) },
+  keepFirst: paths(keepFirst(dupFiles.slice(0, 3))),
+  contentKeys,
+}
+
 const out = {
+  dup: dupOut,
   items,
   files,
   dirs,

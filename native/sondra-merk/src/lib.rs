@@ -3,6 +3,7 @@
 //! there and the other way round; neither side ever makes the list worse than it was.
 
 pub mod cover;
+pub mod duplicates;
 pub mod folder;
 pub mod importer;
 pub mod matching;

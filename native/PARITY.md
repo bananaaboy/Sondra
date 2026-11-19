@@ -60,7 +60,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | O04 | Papierkorb von Sondra (verschieben, rückgängig, ansehen, endgültig löschen) | `FolderBin`, `folder.ts` | 4 | `verify:folder` | offen |
 | O05 | Untertitel im Ordner: Datei mit gleichem Namen, sonst Whisper erzeugt `Name.srt` | `autoSubtitles`, `FolderSubtitles` | 4 | Test | offen |
 | O06 | Weiterschauen, „Nach Serie“, „Ungesehen“, „Neu“, Merkliste spielt aus dem Ordner | `folderLibrary.ts` | 4 | `verify:folder` | offen |
-| O07 | Doppelte finden (Größe, Hash, 32 Stellen) | `duplicates.ts` | 4 | `verify:folder` | offen |
+| O07 | Doppelte finden (Größe, Hash, 32 Stellen) | `duplicates.ts` | 4 | `sondra-merk::duplicates`: Kopiermarken, Behalten-zuerst, Gruppen, die echten SHA-256-Schlüssel (ganz und an 32 Stellen, 33-MB-Datei) wie die Website; Oberfläche offen | **Logik nativ ✔**, Oberfläche offen |
 | O08 | Ansicht je Ordner, zuletzt geöffnete Ordner, gemerkter Ordner | `folderMemory.ts` | 4 | Szenario „ordner-zuletzt“ | offen |
 | O09 | Ordner aus Drive, Löschen in Drive, In Staffel einordnen, „Einordnen“ mit einem Klick | `driveClient.ts`, `SeasonFiling` | 4 | Szenario „serien“ | offen |
 | O10 | Bedienung mit dem Finger (Tipp, langes Drücken, Blatt) | `FolderPanel` | 4 | Entscheidung, ob Touch gebraucht wird | **Entscheidung** |
