@@ -1,0 +1,173 @@
+/**
+ * Writes the table the native folder logic (`native/sondra-merk`, `folder.rs`) is tested against: a made-up
+ * folder of a hundred and fifty files, read, sorted, filtered, selected and set into series by the web
+ * app's own code. The Rust side must give the same, file for file.
+ *
+ *   npm run native:golden
+ */
+import { mkdirSync, writeFileSync } from 'node:fs'
+
+import {
+  clickSelect,
+  crumbs,
+  findNewSeries,
+  folderEpisodes,
+  folderSeries,
+  groupBySeries,
+  hintOf,
+  hintProperties,
+  listing,
+  matchFile,
+  playQueue,
+  seasonPath,
+  seriesFolderName,
+  seriesToMerkItem,
+  sortFiles,
+  unfiledEpisodes,
+  type FolderFile,
+  type KindFilter,
+  type SortKey,
+} from '../src/lib/folder'
+import { createMerkItem, type SavedLinkItem } from '../src/lib/merkliste'
+import { kindFromMime } from '../src/state/store'
+
+const outDir = 'native/sondra-merk/tests/golden'
+mkdirSync(outDir, { recursive: true })
+
+const T = 1_700_000_000_000
+const mk = (raw: Record<string, unknown>) => createMerkItem({ updatedAt: T, ...raw } as Partial<SavedLinkItem>)
+const items = [
+  mk({ id: 'fr', title: 'Frieren', status: 'watching', season: 1, episode: 4, seasons: [{ number: 1, episodes: 28, watched: [1, 2, 3] }, { number: 2, episodes: null, watched: [] }] }),
+  mk({ id: 'dk', title: 'Dark', status: 'watching', season: 2, episode: 1, seasons: [{ number: 1, episodes: 10, watched: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] }, { number: 2, episodes: 8, watched: [] }, { number: 0, episodes: 1, watched: [] }] }),
+  mk({ id: 'mp', title: 'Mob Psycho 100', status: 'paused', seasons: [{ number: 1, episodes: 12, watched: [1] }] }),
+  mk({ id: 'op', title: 'One Piece', status: 'later', seasons: [{ number: 1, episodes: null, watched: [] }] }),
+  mk({ id: 'fin', title: 'Fertig Serie', status: 'done', seasons: [{ number: 1, episodes: 2, watched: [1, 2] }] }),
+]
+
+let nextModified = T
+const file = (path: string, size: number, kind?: string, drive?: FolderFile['drive']): FolderFile => {
+  const at = path.lastIndexOf('/')
+  const name = path.slice(at + 1)
+  nextModified += 60_000 * ((path.length * 7) % 13)
+  return { path, name, dir: at >= 0 ? path.slice(0, at) : '', size, modified: nextModified, kind: (kind ?? kindFromMime('', name)) as FolderFile['kind'], ...(drive ? { drive } : {}) }
+}
+
+const files: FolderFile[] = []
+for (let e = 1; e <= 12; e += 1) {
+  const n = String(e).padStart(2, '0')
+  files.push(file(`Anime/Frieren/Staffel 1/Frieren S01E${n}.mkv`, 400_000_000 + e * 1000))
+  files.push(file(`Anime/Dark/Dark.S02E${n}.GERMAN.1080p.mkv`, 800_000_000 + e))
+  files.push(file(`Anime/Mob Psycho 100/Mob Psycho 100 - ${n} (1080p).mkv`, 300_000_000))
+}
+files.push(file('Anime/Frieren/Staffel 1/Frieren S01E03 (1).mkv', 100)) // a copy, smaller
+files.push(file('Anime/Frieren/Staffel 1/Frieren S01E05 Kopie.mkv', 900_000_000)) // a copy, larger
+files.push(file('Anime/Frieren/Staffel 2/Frieren S02E01.mkv', 1))
+files.push(file('Anime/Frieren/Staffel 2/Frieren S02E02.mkv', 2))
+for (let e = 1; e <= 5; e += 1) files.push(file(`Neu/Neue Serie - ${String(e).padStart(2, '0')}.mkv`, 10 * e))
+for (let e = 1; e <= 3; e += 1) files.push(file(`Neu/Andere Serie S01E0${e}.mp4`, 10 * e))
+files.push(file('Neu/Ocean 11.mkv', 77))
+files.push(file('Neu/Fertig Serie S01E01.mkv', 5))
+files.push(file('Musik/2 Ton.mp3', 4_000_000))
+files.push(file('Musik/10 Ton.mp3', 4_000_001))
+files.push(file('Musik/1 Ton.mp3', 4_000_002))
+files.push(file('Musik/Café.flac', 30_000_000))
+files.push(file('Musik/cafe noir.flac', 31_000_000))
+files.push(file('Musik/Zebra.wav', 9_000_000))
+files.push(file('Musik/zebra live.WAV', 9_000_001))
+for (let i = 0; i < 20; i += 1) files.push(file(`Fotos/2026/IMG_${String(i * 37 + 1).padStart(4, '0')}.jpg`, 3_000_000 + i))
+files.push(file('Fotos/Urlaub Ärger.PNG', 2_000_000))
+files.push(file('Dokumente/Buch.pdf', 1_000_000))
+files.push(file('Dokumente/Untertitel Frieren S01E01.srt', 40_000))
+files.push(file('Dokumente/archiv.zip', 5_000_000))
+files.push(file('Dokumente/ohne Endung', 10))
+files.push(file('Dokumente/mp4', 10))
+files.push(file('Lies mich.txt', 100))
+files.push(file('Film.mp4', 2_000_000_000))
+// Drive: with a note, in a series folder without a note, and loose.
+files.push(file('Serien/Frieren/Staffel 1/Episode 09.mkv', 50, undefined, { id: 'd1', mime: 'video/x-matroska', parent: 'p1', hint: { series: 'fr', season: 1, episode: 9 } }))
+files.push(file('Serien/Frieren/Staffel 2/folge 04.mkv', 51, undefined, { id: 'd2', mime: 'video/x-matroska', parent: 'p2' }))
+files.push(file('Serien/Frieren/Staffel 3/Nur 0007.mkv', 51, undefined, { id: 'd3', mime: 'video/x-matroska', parent: 'p2' }))
+files.push(file('Serien/Dark/Filme/Der Film Teil 12345.mkv', 51, undefined, { id: 'd4', mime: 'video/x-matroska', parent: 'p3' }))
+files.push(file('Serien/Unbekannt/Staffel 1/Sache 03.mkv', 51, undefined, { id: 'd5', mime: 'video/x-matroska', parent: 'p4' }))
+files.push(file('Lose/Frieren - 14.mkv', 52, undefined, { id: 'd6', mime: 'video/x-matroska', parent: 'p5' }))
+files.push(file('Lose/Dark S02E03.mkv', 52, undefined, { id: 'd7', mime: 'video/x-matroska', parent: 'p5' }))
+files.push(file('Lose/Dark S02E01.mkv', 52, undefined, { id: 'd8', mime: 'video/x-matroska', parent: 'p5' }))
+files.push(file('Lose/Frieren - 15.mkv', 52, undefined, { id: 'd9', mime: 'video/x-matroska', parent: 'p5' }))
+files.push(file('Lose/Mob Psycho 100 - 05.mkv', 52, undefined, { id: 'd10', mime: 'video/x-matroska', parent: 'p5' }))
+files.push(file('Lose/Foto.jpg', 52, undefined, { id: 'd11', mime: 'image/jpeg', parent: 'p5' }))
+
+const dirs = [...new Set(['', ...files.map((f) => f.dir).flatMap((dir) => dir.split('/').filter(Boolean).map((_, i, parts) => parts.slice(0, i + 1).join('/')))])].sort()
+const scan = { name: 'Test', files, dirs, truncated: false }
+
+const paths = (list: FolderFile[]) => list.map((f) => f.path)
+const sorts: SortKey[] = ['name', 'modified', 'size', 'kind']
+const filters: KindFilter[] = ['alle', 'video', 'audio', 'image', 'andere']
+const listings = []
+for (const dir of ['', 'Anime', 'Anime/Frieren', 'Musik', 'Fotos', 'Gibt es nicht']) {
+  for (const deep of [false, true]) {
+    for (const query of ['', 'cafe', 'ÄRGER', 'frieren', '  S01  ', 'zzz']) {
+      for (const [sort, descending, filter] of [['name', false, 'alle'], ['modified', true, 'video'], ['size', false, 'audio'], ['kind', true, 'andere'], ['name', true, 'image']] as [SortKey, boolean, KindFilter][]) {
+        const l = listing(scan as never, { dir, deep, filter, query, sort, descending })
+        listings.push({ dir, deep, query, sort, descending, filter, files: paths(l.files), dirs: l.dirs.map((d) => [d.path, d.name, d.count, d.size]), counts: l.counts })
+      }
+    }
+  }
+}
+const sortedAll = sorts.flatMap((sort) => [false, true].map((descending) => ({ sort, descending, paths: paths(sortFiles(files, sort, descending)) })))
+
+const order = paths(sortFiles(files.filter((f) => f.dir === 'Musik'), 'name', false))
+const clicks: { toggle: boolean; range: boolean; path: string }[] = [
+  { toggle: false, range: false, path: order[2] }, { toggle: true, range: false, path: order[4] }, { toggle: false, range: true, path: order[0] },
+  { toggle: true, range: true, path: order[6] }, { toggle: true, range: false, path: order[2] }, { toggle: false, range: true, path: 'nicht da' }, { toggle: false, range: false, path: order[1] },
+]
+let selected = new Set<string>()
+let anchor: string | null = null
+const selecting = clicks.map((c) => {
+  const r = clickSelect(selected, order, anchor, c.path, { toggle: c.toggle, range: c.range })
+  selected = r.selected
+  anchor = r.anchor
+  return { ...c, selected: [...selected].sort(), anchor }
+})
+
+const matches = files.map((f) => {
+  const m = matchFile(f, items)
+  return { path: f.path, match: m && { item: m.item.id, season: m.season, episode: m.episode } }
+})
+const found = findNewSeries(files, items)
+const foundIgnored = findNewSeries(files, items, new Set([found[0]?.key ?? 'x']))
+const unfiled = unfiledEpisodes(files, items)
+const episodesBySeries = [...folderEpisodes(files, items)].map(([id, list]) => ({ id, episodes: list.map((e) => [e.file.path, e.season, e.episode, e.seen]) }))
+const series = folderSeries(files, items).map((s) => ({ item: s.item.id, episodes: s.episodes.map((e) => e.file.path), next: [s.next.file.path, s.next.season, s.next.episode], queue: s.queue.map((e) => e.file.path) }))
+const frieren = (folderEpisodes(files, items).get('fr') ?? [])
+const queues = [[1, 1], [1, 4], [1, 9], [2, 1], [9, 9]].map(([s, e]) => ({ s, e, queue: playQueue(frieren, s, e).map((x) => x.file.path) }))
+const grouped = groupBySeries(files, items)
+
+const out = {
+  items,
+  files,
+  dirs,
+  kinds: [['video/mp4', 'x'], ['audio/flac', 'x'], ['image/png', 'x'], ['text/plain', 'x.bin'], ['application/pdf', 'x'], ['application/zip', 'x'], ['application/x-tar', 'x'], ['', 'film.MKV'], ['', 'mp4'], ['', 'ohne'], ['', 'a.b.c.srt'], ['application/octet-stream', 'x.7z'], ['', '']].map(([mime, name]) => ({ mime, name, kind: kindFromMime(mime, name) })),
+  names: ['Frieren', 'A/B\\C', '  viel   Platz  ', '', '///', 'Ünï'].map((t) => ({ t, folder: seriesFolderName(t), path: seasonPath(t, 0), path2: seasonPath(t, 3) })),
+  hints: [{ sondraSerie: 'fr', sondraStaffel: '2', sondraFolge: '5' }, { sondraSerie: 'fr', sondraStaffel: '0', sondraFolge: '1' }, { sondraSerie: '', sondraStaffel: '1', sondraFolge: '1' }, { sondraSerie: 'fr', sondraStaffel: '-1', sondraFolge: '1' }, { sondraSerie: 'fr', sondraStaffel: '1', sondraFolge: '0' }, { sondraSerie: 'fr', sondraStaffel: '1.5', sondraFolge: '1' }, { sondraSerie: 'fr', sondraStaffel: 'x', sondraFolge: '1' }, { sondraSerie: 'fr', sondraStaffel: '', sondraFolge: '3' }, {}].map((p) => ({ p, hint: hintOf(p) ?? null })),
+  hintProps: hintProperties({ series: 'fr', season: 2, episode: 5 }),
+  listings,
+  sortedAll,
+  crumbs: ['', 'Anime', 'Anime/Frieren/Staffel 1'].map((dir) => ({ dir, crumbs: crumbs('Test', dir) })),
+  selecting: { order, steps: selecting },
+  matches,
+  found: found.map((s) => ({ ...s, item: seriesToMerkItem(s) })),
+  foundIgnored: foundIgnored.map((s) => s.key),
+  unfiled: unfiled.map((u) => ({ item: u.item.id, season: u.season, files: u.files.map((f) => [f.file.path, f.episode]) })),
+  episodesBySeries,
+  series,
+  queues,
+  grouped: {
+    groups: grouped.groups.map((g) => ({ key: g.key, files: paths(g.files), here: g.here, seenHere: g.seenHere, seen: g.seen, total: g.total })),
+    rest: paths(grouped.rest),
+    ordered: paths(grouped.ordered),
+    episodes: [...grouped.episodes].map(([p, e]) => [p, e.season, e.episode, e.seen]),
+    keyOf: [...grouped.keyOf],
+  },
+}
+writeFileSync(`${outDir}/folder.json`, JSON.stringify(out) + '\n')
+console.log(`Ordner: ${files.length} Dateien, ${listings.length} Ansichten, ${found.length} neue Serien`)

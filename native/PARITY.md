@@ -48,14 +48,14 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | M14 | Discord-Status über die lokale Pipe | `discord.mjs` | 4 | `verify:discord` | offen |
 | M15 | Neue Folgen melden (alle 3 Stunden, Benachrichtigung, Klick öffnet die Serie) | `newEpisodes.ts` | 1 | `verify:extractors`, `:resolve` | offen |
 | M16 | AniList und MAL: Fortschritt abgleichen | `anilist.ts` | 4 | Test | offen |
-| M17 | Ordner erkennt Serien (zwei Folgen genügen), „Auf die Merkliste“ | `folder.ts` | 4 | `verify:folder` | offen |
+| M17 | Ordner erkennt Serien (zwei Folgen genügen), „Auf die Merkliste“ | `folder.ts` | 4 | `sondra-merk::folder::find_new_series` und `series_to_merk_item` gegen die Website | **Logik nativ ✔**, Oberfläche offen |
 
 ## Ordner
 
 | ID | Funktion | Bestand | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- | --- |
-| O01 | Dateien eines Ordners als Kacheln oder Liste, Vorschaubilder, lange Ordner in Seiten | `FolderPanel`, `thumbnails` | 4 | Szenario „ordner“ | offen |
-| O02 | Art, Suche (auch Unterordner), natürliche Sortierung, Tiefe | `folder.ts` | 4 | `verify:folder` | offen |
+| O01 | Dateien eines Ordners als Kacheln oder Liste, Vorschaubilder, lange Ordner in Seiten | `FolderPanel`, `thumbnails` | 4 | `sondra-merk::folder`: Ansichten (360), Sortierung (natürlich, wie die Website), Auswahl, Kinds gegen die Website; Einlesen von der Platte, Kacheln, Vorschaubilder, Seiten offen | in Arbeit |
+| O02 | Art, Suche (auch Unterordner), natürliche Sortierung, Tiefe | `folder.ts` | 4 | `sondra-merk::folder` gegen die Website (golden): Art, Suche ohne Akzente, natürliche Sortierung, Tiefe, Unterordner-Summen | **Logik nativ ✔**, Oberfläche offen |
 | O03 | Auswählen wie im Dateimanager, Abspielen, In die Sitzung, ZIP, In Drive, Löschen | `FolderPanel` | 4 | Szenario „ordner“ | offen |
 | O04 | Papierkorb von Sondra (verschieben, rückgängig, ansehen, endgültig löschen) | `FolderBin`, `folder.ts` | 4 | `verify:folder` | offen |
 | O05 | Untertitel im Ordner: Datei mit gleichem Namen, sonst Whisper erzeugt `Name.srt` | `autoSubtitles`, `FolderSubtitles` | 4 | Test | offen |

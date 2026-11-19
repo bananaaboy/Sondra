@@ -292,7 +292,7 @@ pub const SORT_OPTIONS: [(Sort, &str); 6] = [
 ];
 
 /// A letter as the German collation sees it at the base level: no case, no accents, ß as ss.
-fn base_chars(text: &str) -> Vec<char> {
+pub(crate) fn base_chars(text: &str) -> Vec<char> {
     let mut out = Vec::new();
     for ch in text.nfd() {
         if ('\u{300}'..='\u{36f}').contains(&ch) {
@@ -310,7 +310,7 @@ fn base_chars(text: &str) -> Vec<char> {
 }
 
 /// Spaces and signs first, then digits, then letters — the order of the collation's root.
-fn class_of(ch: char) -> u8 {
+pub(crate) fn class_of(ch: char) -> u8 {
     if ch.is_alphabetic() {
         2
     } else if ch.is_numeric() {
@@ -318,6 +318,42 @@ fn class_of(ch: char) -> u8 {
     } else {
         0
     }
+}
+
+/// `Intl.Collator('de', { numeric: true, sensitivity: 'base' })`: as `compare_de`, but a run of digits is
+/// a number — „2“ before „10“, „01“ the same as „1“. The order a folder is read in.
+pub fn compare_numeric(a: &str, b: &str) -> Ordering {
+    let (x, y) = (base_chars(a), base_chars(b));
+    let (mut i, mut j) = (0, 0);
+    while i < x.len() && j < y.len() {
+        if x[i].is_ascii_digit() && y[j].is_ascii_digit() {
+            let (si, sj) = (i, j);
+            while i < x.len() && x[i].is_ascii_digit() {
+                i += 1;
+            }
+            while j < y.len() && y[j].is_ascii_digit() {
+                j += 1;
+            }
+            let trim = |run: &[char]| -> String {
+                let text: String = run.iter().collect();
+                let t = text.trim_start_matches('0');
+                t.to_string()
+            };
+            let (da, db) = (trim(&x[si..i]), trim(&y[sj..j]));
+            let order = da.len().cmp(&db.len()).then(da.cmp(&db));
+            if order != Ordering::Equal {
+                return order;
+            }
+        } else {
+            let order = class_of(x[i]).cmp(&class_of(y[j])).then(x[i].cmp(&y[j]));
+            if order != Ordering::Equal {
+                return order;
+            }
+            i += 1;
+            j += 1;
+        }
+    }
+    (x.len() - i).cmp(&(y.len() - j))
 }
 
 /// `localeCompare(b, 'de', { sensitivity: 'base' })`, as near as a few lines get: case and accents do not
