@@ -554,3 +554,32 @@ export function searchActions(query: string, kind?: AssetKind): ToolAction[] {
 
   return scored.sort((a, b) => b.score - a.score).map((entry) => entry.action)
 }
+
+/** The groups a visitor filters by on the start page. „Hereinholen" is the way in above. */
+export const START_FILTERS: ToolGroup[] = ['ton', 'video', 'bild', 'musik']
+
+/** The order within a group: the common jobs first, the rest as the list keeps them. */
+export const PRIORITY_GRID_IDS = [
+  'audio-cut',
+  'audio-noise',
+  'transcript',
+  'mic-test',
+  'mix-duck',
+  'convert-audio',
+  'audio-gain',
+  'audio-silence',
+  'audio-clipboard',
+  'audio-filter',
+  'audio-dynamics',
+  'audio-fade',
+  'audio-reverse',
+]
+
+/** The tiles of the start page: each group in its order. */
+export function startGroups(): { group: ToolGroup; actions: ToolAction[] }[] {
+  const rank = new Map(PRIORITY_GRID_IDS.map((id, index) => [id, index]))
+  return START_FILTERS.map((group) => ({
+    group,
+    actions: ACTIONS.filter((action) => action.group === group).sort((a, b) => (rank.get(a.id) ?? 999) - (rank.get(b.id) ?? 999)),
+  }))
+}

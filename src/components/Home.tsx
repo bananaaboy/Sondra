@@ -19,7 +19,7 @@ import type { ReactNode } from 'react'
 import { useShallow } from 'zustand/shallow'
 
 import { useFilePicker, useIngestFiles, useProjectPicker } from '../hooks/useIngest'
-import { ACTIONS, GROUP_LABEL, actionsFor, searchActions, type ToolAction, type ToolGroup } from '../lib/actions'
+import { GROUP_LABEL, START_FILTERS as FILTERS, actionsFor, searchActions, startGroups, type ToolAction, type ToolGroup } from '../lib/actions'
 import { formatBytes, formatDuration } from '../lib/format'
 import { requestOpenSeries, seasonsOf, useMerkliste } from '../lib/merkliste'
 import { stagger } from '../lib/motion'
@@ -61,26 +61,6 @@ const ACTION_ICONS: Partial<Record<string, ReactNode>> = {
 }
 
 const iconFor = (action: ToolAction): ReactNode => ACTION_ICONS[action.id] ?? ICONS[action.panel]
-
-/** The groups a visitor filters by. „Hereinholen" is the way in above. */
-const FILTERS: ToolGroup[] = ['ton', 'video', 'bild', 'musik']
-
-/** The order within a group: the common jobs first, the rest as the list keeps them. */
-const PRIORITY_GRID_IDS = [
-  'audio-cut',
-  'audio-noise',
-  'transcript',
-  'mic-test',
-  'mix-duck',
-  'convert-audio',
-  'audio-gain',
-  'audio-silence',
-  'audio-clipboard',
-  'audio-filter',
-  'audio-dynamics',
-  'audio-fade',
-  'audio-reverse',
-]
 
 /**
  * One tool, as a tile.
@@ -463,13 +443,7 @@ export function Home() {
   const searching = query.trim().length > 0
 
   // Each group in its order: the common jobs first.
-  const groups = useMemo(() => {
-    const rank = new Map(PRIORITY_GRID_IDS.map((id, index) => [id, index]))
-    return FILTERS.map((group) => ({
-      group,
-      actions: ACTIONS.filter((action) => action.group === group).sort((a, b) => (rank.get(a.id) ?? 999) - (rank.get(b.id) ?? 999)),
-    }))
-  }, [])
+  const groups = useMemo(() => startGroups(), [])
   const matches = useMemo(() => (searching ? searchActions(query) : []), [query, searching])
 
   // Through `useShallow` and a `useMemo`, not `new Set(...)` inside the

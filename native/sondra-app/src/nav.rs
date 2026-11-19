@@ -196,6 +196,10 @@ impl Panel {
             .find(|m| m.panel == self)
             .expect("every panel has a row in PANELS")
     }
+    /// The tool a web `PanelId` names.
+    pub fn from_id(id: &str) -> Option<Panel> {
+        PANELS.iter().find(|m| m.id == id).map(|m| m.panel)
+    }
     pub fn label(self) -> &'static str {
         self.meta().label
     }

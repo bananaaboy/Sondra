@@ -19,18 +19,18 @@ pub struct Ui {
     pub c: Colors,
 }
 
-type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
+pub(crate) type Handler = Rc<dyn Fn(&mut Window, &mut App)>;
 
-fn eid(text: String) -> ElementId {
+pub(crate) fn eid(text: String) -> ElementId {
     ElementId::Name(text.into())
 }
 
-fn key_id(id: &SharedString, part: &str) -> ElementId {
+pub(crate) fn key_id(id: &SharedString, part: &str) -> ElementId {
     ElementId::Name(format!("{id}-{part}").into())
 }
 
 /// A 2 px ring in ink with a 2 px gap to the control — never the system's blue.
-fn focus_ring(c: &Colors) -> Vec<BoxShadow> {
+pub(crate) fn focus_ring(c: &Colors) -> Vec<BoxShadow> {
     vec![
         BoxShadow {
             color: c.ink.into(),
@@ -48,7 +48,7 @@ fn focus_ring(c: &Colors) -> Vec<BoxShadow> {
 }
 
 /// Click, and Enter or Space on the focused control, as in every other program.
-fn press(visual: Stateful<Div>, handler: Option<Handler>) -> Stateful<Div> {
+pub(crate) fn press(visual: Stateful<Div>, handler: Option<Handler>) -> Stateful<Div> {
     let Some(handler) = handler else {
         return visual;
     };
