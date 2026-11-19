@@ -174,9 +174,16 @@ Startseite mit Kacheln, hell und dunkel, die Schriften, die Bewegung.
   Oberfläche steht die **erste Seite der Merkliste** (`sondra-app/src/merkliste.rs`): Zeilen mit Stand,
   Balken, Rest und „+1“, Abschnitte je Stand, Pillen, Suche ab sechs Einträgen, „Serie hinzufügen“, die
   leere Liste als Weg statt Formular; sie liest und schreibt dieselbe SQLite-Datei, die die Website liest
-  (`store.rs`, eine fremde Datei wird nie überschrieben). **Offen:** Serienseite, Poster-Ansicht mit
-  Covern, Bearbeiten, Entfernen mit „Rückgängig“, „Mehr“-Menü, Planer und Statistik als Seiten, Teilen
-  als Fenster, die Ordnerseite, Abgleich mit Drive im laufenden Betrieb, AniList/MAL, Anytype, Discord.
+  (`store.rs`, eine fremde Datei wird nie überschrieben), dazu die **Serienseite** (Staffeln, Folgen
+  abhaken, Länge, Stand, Entfernen mit „Rückgängig“), Poster und Liste, „Mehr“ mit den Ordnungen, und die
+  **Ordnerseite** (`folder_page.rs`: einen Ordner von der Platte lesen, Art, Suche, Ordnung, Unterordner,
+  Auswählen wie im Dateimanager, Löschen nach Rückfrage in **Sondras Papierkorb** mit „Rückgängig“ und
+  Fenster, die Ansicht je Ordner). Neu in `sondra-ui`: der **Dialog** (Dunkelfläche, Escape, Tab bleibt
+  darin, kommt von unten). **Offen:** Poster mit Covern und Ausschnitt, „Wie weit sind Sie?“ beim
+  Hinzufügen, Planer und Statistik als Seiten, Teilen als Fenster, Kacheln und Vorschaubilder im Ordner,
+  Abspielen aus dem Ordner (wartet auf den Player), Drive-Ordner, Abgleich mit Drive im laufenden
+  Betrieb, AniList/MAL, Anytype, Discord; der Dialog macht die Seite dahinter für Screenreader noch
+  nicht unzugänglich (der Tab bleibt darin, das Lesen nicht).
 - **Tor:** `verify:merkliste`, `:anytype`, `:discord`, `:folder`, `:drive` als
   Rust-Tests; ein Hin und Her der Liste zwischen Website und nativem Sondra, in
   beide Richtungen, mit Entfernen und gleichzeitigen Änderungen — die Liste in

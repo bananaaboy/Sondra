@@ -13,7 +13,11 @@ Google Drive (`sondra-drive`), die Seiten (`sondra-extract`: AniWorld und seine 
 Laden in eine Datei (`sondra-download`: direkt und HLS, Bandbreitengrenze, Fortsetzen) und das
 Programm `sondra-dienst` (`sondra-service`), alles gegen nachgebaute Außenwelt getestet; die
 Bedienungshilfen für GPUI (`sondra-a11y`) sind auf echtem Windows über UI Automation
-abgefragt. Es gibt noch kein Fenster der App, kein Tray und kein Setup. Die Electron-App und die
+abgefragt. Seit Welle 3/4 gibt es auch **ein Fenster** (`sondra`): Kopfzeile, Reiter, Startseite,
+die **Merkliste** (Poster und Liste, Serienseite, +1, Entfernen mit Rückgängig; liest und schreibt
+dieselbe SQLite-Datei wie die Website) und der **Ordner** (eine Platte lesen, filtern, auswählen,
+in Sondras Papierkorb legen) — beide auf echtem Windows durch UI Automation geprüft. Noch kein
+Tray, kein Player, keine Werkzeuge, kein Setup. Die Electron-App und die
 Website laufen unverändert weiter, bis das native Sondra sie Stück für Stück
 ersetzt — nichts davon wird abgeschaltet, bevor das Neue es besser kann.
 
@@ -47,8 +51,9 @@ native/
                   Chip, Reiter, Kachel, Menü, Hinweis, Textfeld), alle mit Namen und Rolle
   sondra-app/     das Fenster `sondra`: Kopfzeile, Reiterleiste (Gruppen, „Mehr“), Startseite;
                   Reiter und Kacheln kommen als Daten aus dem Code der Website
-  sondra-merk/    die Merkliste: Eintrag, Einlesen aus allen Formen, Fortschritt und Teile, Zusammenführen
-                  zweier Listen — mit den Zahlen der Website verglichen (`tests/golden`)
+  sondra-merk/    die Merkliste und der Ordner als Logik: Eintrag, Einlesen aus allen Formen, Fortschritt
+                  und Teile, Zusammenführen, Teilen, Planer, Dateinamen → Folge, Ordneransichten, Doppelte,
+                  Papierkorb auf der Platte, Ordner lesen — mit den Zahlen der Website verglichen
   vendor/xattr/   xattr 0.2.3 mit einer Zeile Patch, damit GPUI unter Linux baut
   probes/         Machbarkeitsproben der Welle 0b
 ```
