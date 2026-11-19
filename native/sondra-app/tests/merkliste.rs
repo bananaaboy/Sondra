@@ -15,6 +15,9 @@ use sondra_merk::normalize::{normalize, Context as Ids};
 use sondra_merk::sqlite::{read_shared, write_sqlite, Snapshot as Stored};
 use sondra_ui::{bind_keys, fonts};
 
+/// `SONDRA_DOWNLOADS` is process-wide: tests that point it somewhere run one at a time.
+static DOWNLOADS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 type Seen = Rc<RefCell<Vec<Rc<Snapshot>>>>;
 
 struct Window<'a> {
@@ -416,6 +419,7 @@ fn the_statistics_window_gives_the_numbers_and_a_year_looked_back_on(cx: &mut Te
 
 #[gpui::test]
 fn the_list_is_exported_and_a_file_read_in_without_doubling_and_taken_back(cx: &mut TestAppContext) {
+    let _guard = DOWNLOADS.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("aus");
     std::env::set_var("SONDRA_DOWNLOADS", &out);
@@ -543,6 +547,7 @@ fn suchen_asks_anilist_only_when_pressed_and_adds_the_series_with_its_length(cx:
 
 #[gpui::test]
 fn the_list_is_shared_as_a_link_that_opens_again_as_text_as_a_qr_code_and_as_a_file(cx: &mut TestAppContext) {
+    let _guard = DOWNLOADS.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let out = dir.path().join("teilen");
     std::env::set_var("SONDRA_DOWNLOADS", &out);
