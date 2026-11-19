@@ -14,6 +14,7 @@ import { istft, magnitudeOf, stft } from '../src/lib/fft'
 import { detectAutoChop16, detectOnsets } from '../src/lib/onsets'
 import { beatGrid, estimateTempo, snapToZeroCrossing } from '../src/lib/tempo'
 import { chromagram, estimateTuning } from '../src/lib/chroma'
+import { decodePrint, encodePrint, fingerprint, locate, longestShared, PRINT_FPS, PRINT_RATE, slice } from '../src/lib/introPrint'
 import { estimateChords, estimateKey } from '../src/lib/key'
 import { chordsToMidiNotes, writeMidi } from '../src/lib/midi'
 import { DEFAULT_SEGMENTATION, midiName, segmentNotes, trackPitch } from '../src/lib/pitch'
@@ -334,4 +335,112 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
     )}\n`,
   )
   console.log(`Harmonie: ${keys.map((k) => k.key.label).join(', ')} · ${notes.length} Noten · MIDI ${midi.length} Bytes`)
+}
+
+/* -- Vorspann am Ton: die Folgen aus verify-intro, mit denselben Zahlen ------------------------- */
+
+{
+  const RATE = PRINT_RATE
+  const seconds = (n: number) => Math.round(n * RATE)
+  function random(seed: number) {
+    let state = seed >>> 0 || 1
+    return () => {
+      state ^= state << 13
+      state ^= state >>> 17
+      state ^= state << 5
+      return (state >>> 0) / 4294967296
+    }
+  }
+  function music(length: number, seed: number, gain = 0.3): Float32Array {
+    const rand = random(seed)
+    const out = new Float32Array(seconds(length))
+    let at = 0
+    while (at < out.length) {
+      const span = seconds(0.25 + rand() * 0.25)
+      const root = 110 * 2 ** (Math.floor(rand() * 24) / 12)
+      const notes = [root, root * 1.26, root * 1.5, root * 2]
+      for (let i = 0; i < span && at + i < out.length; i += 1) {
+        const t = i / RATE
+        let v = 0
+        for (const f of notes) v += Math.sin(2 * Math.PI * f * t) + 0.3 * Math.sin(4 * Math.PI * f * t)
+        const beat = i < seconds(0.03) ? (rand() * 2 - 1) * 1.5 : 0
+        out[at + i] = gain * (v / 6 + beat) * Math.exp(-t * 2)
+      }
+      at += span
+    }
+    return out
+  }
+  function talk(length: number, seed: number, gain = 0.25): Float32Array {
+    const rand = random(seed)
+    const out = new Float32Array(seconds(length))
+    let last = 0
+    for (let i = 0; i < out.length; i += 1) {
+      const syllable = Math.max(0, Math.sin((2 * Math.PI * i) / seconds(0.21 + ((i / seconds(1.3)) % 1) * 0.1)))
+      last = 0.85 * last + 0.15 * (rand() * 2 - 1)
+      out[i] = gain * last * syllable * 3
+    }
+    return out
+  }
+  const join = (...parts: Float32Array[]) => {
+    const out = new Float32Array(parts.reduce((sum, part) => sum + part.length, 0))
+    let at = 0
+    for (const part of parts) {
+      out.set(part, at)
+      at += part.length
+    }
+    return out
+  }
+  const mix = (a: Float32Array, b: Float32Array, gainB = 1) => {
+    const out = Float32Array.from(a)
+    for (let i = 0; i < Math.min(a.length, b.length); i += 1) out[i] += b[i] * gainB
+    return out
+  }
+  const noisy = (signal: Float32Array, level: number, seed: number, gain = 1) => {
+    const rand = random(seed)
+    return signal.map((v) => v * gain + (rand() * 2 - 1) * level)
+  }
+  const silence = (length: number) => new Float32Array(seconds(length))
+  const head = (signal: Float32Array) => signal.subarray(0, seconds(480))
+  const opening = music(89, 7)
+  const bgm = music(60, 99, 0.12)
+  const episodes = {
+    a: join(talk(37.37, 2), opening, mix(talk(400, 3), bgm, 1)),
+    b: noisy(join(silence(0.4), opening, mix(talk(400, 4), bgm, 1)), 0.01, 5, 0.6),
+    c: noisy(join(talk(123.45, 6), opening, talk(300, 8)), 0.02, 9, 0.8),
+    d: join(talk(200, 10), music(200, 11)),
+  }
+  const a = fingerprint(head(episodes.a))
+  const b = fingerprint(head(episodes.b))
+  const shared = longestShared(a, b)!
+  const kept = slice(a, shared.a, shared.frames)
+  const text = encodePrint(kept)
+  const c = fingerprint(head(episodes.c))
+  const d = fingerprint(head(episodes.d))
+  const found = locate(decodePrint(text)!, c)
+  const silentE = fingerprint(head(join(silence(30), talk(300, 20))))
+  const silentF = fingerprint(head(join(silence(30), talk(300, 21))))
+  // The way the player hears it: 16-bit, as FFmpeg decodes it.
+  const pcm = (signal: Float32Array) => Int16Array.from(head(signal), (v) => Math.max(-32767, Math.min(32767, Math.round(v * 32767))))
+  const learnedShared = longestShared(fingerprint(pcm(episodes.a)), fingerprint(pcm(episodes.b)))
+  const picks = [0, 1, 2, 100, 500, 1000, 2000, 3000, 4000, 4700]
+  writeFileSync(
+    `${outDir}/intro.json`,
+    `${JSON.stringify(
+      {
+        frames: a.bits.length,
+        words: picks.map((i) => ({ i, bits: a.bits[i], quiet: a.quiet[i] })),
+        quietCount: a.quiet.reduce((n, q) => n + q, 0),
+        shared,
+        text,
+        found,
+        foundInD: locate(decodePrint(text)!, d),
+        silentShared: longestShared(silentE, silentF),
+        learnedShared,
+        fps: PRINT_FPS,
+      },
+      null,
+      1,
+    )}\n`,
+  )
+  console.log(`Vorspann: ${shared.frames / PRINT_FPS} s bei ${shared.a / PRINT_FPS} / ${shared.b / PRINT_FPS}, wiedergefunden bei ${found?.at}`)
 }

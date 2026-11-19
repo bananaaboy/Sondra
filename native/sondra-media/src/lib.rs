@@ -9,6 +9,7 @@
 //! * [`audio`] — the planar float audio the tools hold.
 //! * [`onsets`], [`tempo`] — spectral-flux onsets, tempo by autocorrelation, beat grids (`onsets.ts`, `tempo.ts`).
 //! * [`chroma`], [`key`], [`pitch`], [`midi`] — pitch classes, key and chords, YIN notes, the MIDI file.
+//! * [`intro`] — the opening of a series, found by ear (`introPrint.ts`).
 //! * [`loudness`] — EBU R128 / BS.1770: measuring and moving to a target (`src/lib/loudness.ts`).
 //! * [`run`] — a whole conversion: a file in, a file out (`src/lib/convertRun.ts`).
 //!
@@ -22,6 +23,7 @@ pub mod chroma;
 pub mod convert;
 pub mod ffmpeg;
 pub mod fft;
+pub mod intro;
 pub mod key;
 pub mod loudness;
 pub mod midi;
