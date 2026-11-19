@@ -100,6 +100,25 @@ impl Shell {
         }
     }
 
+    /// Opens what was handed to the program (files dropped on it, „Öffnen mit Sondra“, the command line): a
+    /// folder goes to the Ordner page, films and songs are played, anything else waits on the start page.
+    pub fn open_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        if let [only] = paths.as_slice() {
+            if only.is_dir() {
+                self.go(Panel::Folder, cx);
+                self.open_folder(only.clone(), cx);
+                return;
+            }
+        }
+        let playable = paths.iter().any(|p| p.file_name().is_some_and(|n| sondra_player::player_kind(&n.to_string_lossy(), "").is_some()));
+        if playable {
+            self.go(Panel::Player, cx);
+            self.play_files(paths, cx);
+        } else if !paths.is_empty() {
+            self.take_files(paths, cx);
+        }
+    }
+
     /// Gives the player the settings and the places it remembered.
     pub fn open_player_memory(&mut self, store: crate::store::FileStore, cx: &mut Context<Self>) {
         self.player.remember_from(store);

@@ -219,6 +219,7 @@ jobs:
           path: native/target
           key: native-app-${{ hashFiles('native/Cargo.lock') }}
           save-always: true
+      - run: choco install ffmpeg --no-progress -y
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
       - name: Start the app, photograph it and drive it through UI Automation
         shell: pwsh
@@ -265,6 +266,25 @@ jobs:
           Get-Content app-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath app.txt
           Get-Content app.txt | Select-String -Pattern '^(ok|FAIL|all checks|[0-9]+ check)' | ForEach-Object { $_.Line } | Add-Content $env:GITHUB_STEP_SUMMARY
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          # The same program, started with a film on its command line (what „Öffnen mit Sondra“ does): the
+          # player opens by itself and the film plays.
+          $film = Join-Path $env:RUNNER_TEMP 'film.mp4'
+          ffmpeg -v error -y -f lavfi -i testsrc2=size=640x360:rate=25 -f lavfi -i sine=frequency=440 -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -shortest $film
+          $p2 = Start-Process -FilePath $exe -ArgumentList ('"' + $film + '"') -PassThru -RedirectStandardOutput player-out.txt -RedirectStandardError player-err.txt
+          Start-Sleep -Seconds 4
+          $p2.Refresh()
+          [Win.Native]::ShowWindow($p2.MainWindowHandle, 9) | Out-Null
+          [Win.Native]::MoveWindow($p2.MainWindowHandle, 0, 0, 1024, 740, $true) | Out-Null
+          [Win.Native]::SetForegroundWindow($p2.MainWindowHandle) | Out-Null
+          Start-Sleep -Seconds 2
+          $out2 = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-app/uia-player.ps1 -ProcessId $p2.Id -ShotDir $PWD 2>&1
+          $code2 = $LASTEXITCODE
+          $out2 | Tee-Object -FilePath player.txt
+          Get-Content player-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath player.txt
+          '--- the player' | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content player.txt | Select-String -Pattern '^(ok|FAIL|all checks|[0-9]+ check)' | ForEach-Object { $_.Line } | Add-Content $env:GITHUB_STEP_SUMMARY
+          if (-not $p2.HasExited) { Stop-Process -Id $p2.Id -Force }
+          if ($code -eq 0) { $code = $code2 }
           exit $code
       - uses: actions/upload-artifact@v4
         if: always()
@@ -275,4 +295,6 @@ jobs:
             app-merkliste.png
             app-ordner.png
             app-menu.png
+            app-player.png
+            player.txt
             app.txt
