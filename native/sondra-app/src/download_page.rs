@@ -33,6 +33,8 @@ pub enum Found {
     Episode(Episode),
     /// An address of a file or a stream itself.
     Direct(StreamInfo),
+    /// A portal Sondra has no extractor for, loaded by yt-dlp.
+    Portal(String),
 }
 
 pub struct Job {
@@ -72,6 +74,40 @@ pub struct DownloadState {
     pub chime: bool,
     /// What the window's title and the system were last told, so they are told only when it changes.
     pub told: Option<(bool, String)>,
+    /// Where Sondra's own copy of yt-dlp lives.
+    pub ytdlp_dir: PathBuf,
+    /// Where it is fetched from, when the person says so; a test points this at a server of its own.
+    pub ytdlp_releases: String,
+    /// Whether yt-dlp is also looked for outside Sondra's own folder (WinGet, the path); tests say no.
+    pub ytdlp_system: bool,
+    /// An address nothing could be found behind while yt-dlp is not there: the offer to fetch it.
+    pub offer_tool: Option<String>,
+    /// yt-dlp is being fetched.
+    pub installing: bool,
+}
+
+/// The address's host, for a title when nothing else names it.
+fn host_of(address: &str) -> String {
+    url::Url::parse(address).ok().and_then(|u| u.host_str().map(|h| h.trim_start_matches("www.").to_string())).unwrap_or_else(|| "Portal".into())
+}
+
+/// What an address is when Sondra has no source of its own for it: a portal for yt-dlp if that is
+/// there, otherwise the reason — and whether fetching yt-dlp could help.
+fn find_or_portal(fetch: &dyn Fetch, address: &str, language: &str, ytdlp_dir: &std::path::Path, system: bool) -> Result<Found, (String, bool)> {
+    match find(fetch, address, language) {
+        Ok(found) => Ok(found),
+        Err(error) => {
+            let is_address = url::Url::parse(address.trim()).ok().is_some_and(|u| matches!(u.scheme(), "http" | "https"));
+            if !is_address {
+                return Err((error, false));
+            }
+            if sondra_download::ytdlp::locate(ytdlp_dir, system).is_some() {
+                Ok(Found::Portal(address.trim().to_string()))
+            } else {
+                Err((error, true))
+            }
+        }
+    }
 }
 
 /// An address that is a file or a stream itself rather than a page.
@@ -112,11 +148,40 @@ fn found_title(found: &Found) -> String {
         Found::Episode(ep) if !ep.series_title.is_empty() => format!("{} · {}", ep.series_title, ep.title),
         Found::Episode(ep) => ep.title.clone(),
         Found::Direct(s) => s.title.clone(),
+        Found::Portal(address) => format!("Video von {}", host_of(address)),
     }
 }
 
 fn clean(name: &str) -> String {
     sondra_download::name::safe_stem(name)
+}
+
+/// Loads a portal's address with yt-dlp; a yt-dlp that is out of date is updated once and tried again.
+fn load_with_ytdlp(address: &str, tool_dir: &std::path::Path, system: bool, dir: &std::path::Path, cancel: &Cancel, progress: &Arc<Mutex<Progress>>) -> Result<(PathBuf, u64), String> {
+    use sondra_download::ytdlp;
+    let Some(mut tool) = ytdlp::locate(tool_dir, system) else { return Err(ytdlp::YtdlpError::Missing.to_string()) };
+    if ytdlp::is_stale(tool_dir) {
+        ytdlp::update(tool_dir);
+    }
+    let mut updated = false;
+    loop {
+        let heard = progress.clone();
+        match ytdlp::download(&tool, address, dir, None, cancel, &mut |p| *heard.lock().expect("lock") = p) {
+            Ok(file) => return Ok((file.path, file.size)),
+            Err(ytdlp::YtdlpError::Cancelled) => return Err("Abgebrochen.".into()),
+            Err(error) if error.outdated() && !updated => {
+                updated = true;
+                if !ytdlp::update(tool_dir) {
+                    return Err(error.to_string());
+                }
+                match ytdlp::locate(tool_dir, system) {
+                    Some(newer) => tool = newer,
+                    None => return Err(error.to_string()),
+                }
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    }
 }
 
 impl DownloadState {
@@ -144,6 +209,11 @@ impl DownloadState {
             failed: Vec::new(),
             chime: crate::store::FileStore::at_default("Herunterladen.json").is_none_or(|store| sondra_merk::folder_memory::Store::get_item(&store, "gong").as_deref() != Some("aus")),
             told: None,
+            ytdlp_dir: crate::store::data_dir().unwrap_or_default(),
+            ytdlp_releases: sondra_download::ytdlp::RELEASES.to_string(),
+            ytdlp_system: true,
+            offer_tool: None,
+            installing: false,
         }
     }
 }
@@ -154,6 +224,17 @@ impl Shell {
         self.download.fetch = fetch;
         self.download.allow_private = allow_private;
         self.download.folder = folder;
+        // A test never depends on what is installed on this machine.
+        self.download.ytdlp_dir = self.download.folder.join(".ytdlp-test");
+        self.download.ytdlp_system = false;
+    }
+
+    /// For tests: where yt-dlp is looked for and fetched from — Sondra's own folder only, and a server of
+    /// the test's own.
+    pub fn download_ytdlp_with(&mut self, dir: PathBuf, releases: String) {
+        self.download.ytdlp_dir = dir;
+        self.download.ytdlp_releases = releases;
+        self.download.ytdlp_system = false;
     }
 
     /// For tests: puts an address in the field.
@@ -169,16 +250,17 @@ impl Shell {
         }
         let text = d.input.read(cx).text().to_string();
         let addresses = sondra_download::addresses::extract_addresses(&text);
-        let (factory, language) = (d.fetch.clone(), d.language.clone());
+        let (factory, language, ytdlp_dir, system) = (d.fetch.clone(), d.language.clone(), d.ytdlp_dir.clone(), d.ytdlp_system);
         d.finding = true;
         d.error = None;
+        d.offer_tool = None;
         d.found = None;
         d.queue.clear();
         d.failed.clear();
         if addresses.len() > 1 {
             Self::in_background(
                 cx,
-                move || addresses.into_iter().map(|a| (a.clone(), find(factory().as_ref(), &a, &language))).collect::<Vec<_>>(),
+                move || addresses.into_iter().map(|a| (a.clone(), find_or_portal(factory().as_ref(), &a, &language, &ytdlp_dir, system).map_err(|(e, _)| e))).collect::<Vec<_>>(),
                 |shell, answers, cx| {
                     let d = &mut shell.download;
                     d.finding = false;
@@ -200,13 +282,20 @@ impl Shell {
         let address = if addresses.len() == 1 { addresses.into_iter().next().unwrap_or_default() } else { text };
         Self::in_background(
             cx,
-            move || find(factory().as_ref(), &address, &language),
-            |shell, answer, cx| {
+            {
+                let address = address.clone();
+                move || find_or_portal(factory().as_ref(), &address, &language, &ytdlp_dir, system)
+            },
+            move |shell, answer, cx| {
                 let d = &mut shell.download;
                 d.finding = false;
                 match answer {
                     Ok(found) => d.found = Some(found),
-                    Err(error) => d.error = Some(error),
+                    Err((error, can_fetch)) => {
+                        d.error = Some(error);
+                        // Fetching yt-dlp is offered, never done by itself.
+                        d.offer_tool = can_fetch.then(|| address.trim().to_string());
+                    }
                 }
                 cx.notify();
             },
@@ -281,6 +370,7 @@ impl Shell {
         }
         let (streams, title, dir): (Vec<StreamInfo>, String, PathBuf) = match &found {
             Found::Direct(stream) => (vec![stream.clone()], stream.title.clone(), d.folder.clone()),
+            Found::Portal(_) => (Vec::new(), found_title(&found), d.folder.clone()),
             Found::Episode(ep) => (
                 ep.streams.iter().map(|s: &ResolvedStream| StreamInfo { title: ep.title.clone(), url: s.url.clone(), is_hls: s.is_hls, referer: s.referer.clone(), hoster: s.provider.clone() }).collect(),
                 ep.title.clone(),
@@ -293,9 +383,16 @@ impl Shell {
         d.error = None;
         let allow_private = d.allow_private;
         let stem = title.clone();
+        let portal = match &found {
+            Found::Portal(address) => Some((address.clone(), d.ytdlp_dir.clone(), d.ytdlp_system)),
+            _ => None,
+        };
         Self::in_background(
             cx,
             move || -> Result<(PathBuf, u64), String> {
+                if let Some((address, tool_dir, system)) = portal {
+                    return load_with_ytdlp(&address, &tool_dir, system, &dir, &cancel, &progress);
+                }
                 let mut last = String::from("Keine Quelle ließ sich laden.");
                 for stream in &streams {
                     let mut downloader = Downloader::new(None, cancel.clone());
@@ -338,6 +435,35 @@ impl Shell {
                 let d = &shell.download;
                 if d.job.is_none() && !d.running_queue && d.error.is_none() && d.chime && !d.done.is_empty() {
                     crate::system::play_chime();
+                }
+                cx.notify();
+            },
+        );
+        cx.notify();
+    }
+
+    /// Fetches yt-dlp — only on the person's click — and then goes on with the address it was wanted for.
+    pub(crate) fn install_ytdlp(&mut self, cx: &mut Context<Self>) {
+        let d = &mut self.download;
+        let Some(address) = d.offer_tool.clone() else { return };
+        if d.installing {
+            return;
+        }
+        d.installing = true;
+        d.error = None;
+        let (dir, releases) = (d.ytdlp_dir.clone(), d.ytdlp_releases.clone());
+        Self::in_background(
+            cx,
+            move || sondra_download::ytdlp::install(&dir, &releases, &Cancel::new()).map_err(|e| e.to_string()),
+            move |shell, answer, cx| {
+                let d = &mut shell.download;
+                d.installing = false;
+                match answer {
+                    Ok(_) => {
+                        d.offer_tool = None;
+                        d.found = Some(Found::Portal(address));
+                    }
+                    Err(error) => d.error = Some(error),
                 }
                 cx.notify();
             },
@@ -421,6 +547,23 @@ impl Shell {
             );
         }
 
+        // Nothing found, yt-dlp not there: the offer to fetch it.
+        if let Some(address) = d.offer_tool.as_ref().filter(|_| d.found.is_none()) {
+            let me_install = me.clone();
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .p(px(16.))
+                    .rounded(px(sondra_ui::radius::CARD))
+                    .bg(c.panel_cool)
+                    .child(ui.subheading(format!("Mehr Seiten laden: {}", host_of(address))))
+                    .child(ui.prose("Mit yt-dlp, einem freien Programm, lassen sich viele weitere Seiten laden. Sondra holt es nur auf Ihren Klick von yt-dlp selbst (rund 18 MB) und prüft es gegen die veröffentlichte Prüfsumme. Danach läuft es auf diesem Computer; die Adresse geht an die Seite, bei der das Video liegt."))
+                    .child(div().flex().child(ui.button("ytdlp-laden", if d.installing { "Lädt yt-dlp …" } else { "yt-dlp laden" }).primary().disabled(d.installing).on_click(move |_, app| me_install.update(app, |shell, cx| shell.install_ytdlp(cx))))),
+            );
+        }
+
         // What was found.
         if let Some(found) = d.found.as_ref().filter(|_| !d.running_queue) {
             let (title, facts): (String, Vec<String>) = match found {
@@ -433,6 +576,7 @@ impl Shell {
                     (if ep.series_title.is_empty() { ep.title.clone() } else { format!("{} · {}", ep.series_title, ep.title) }, facts)
                 }
                 Found::Direct(s) => (s.title.clone(), vec![if s.is_hls { "Stream (HLS)".to_string() } else { "Datei".to_string() }, s.hoster.clone()]),
+                Found::Portal(address) => (found_title(found), vec!["Über yt-dlp".to_string(), host_of(address)]),
             };
             let mut card = div().flex().flex_col().gap(px(10.)).p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.subheading(title)).child(ui.prose(facts.join(" · ")));
             if let Found::Episode(ep) = found {

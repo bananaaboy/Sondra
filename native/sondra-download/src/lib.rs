@@ -16,6 +16,7 @@
 mod http;
 pub mod addresses;
 pub mod name;
+pub mod ytdlp;
 mod throttle;
 
 use std::fs;

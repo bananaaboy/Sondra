@@ -506,9 +506,13 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   USB über `nusb`), außerdem „Liste empfangen“, „Was ist neu“, schwebende Karten,
   Einzel-Instanz, Gong und Wachhalten beim Laden. **Noch nicht:** Tray, Benachrichtigungen,
   Bildschirm aufnehmen, die Zeitleiste des Video-Editors, die Klavierrolle und das Ziehen der
-  Schnitte, Tonhöhe und Tempo im Ton-Editor, Anytype, yt-dlp, Playlists, Setup/Store, Updates,
+  Schnitte, Tonhöhe und Tempo im Ton-Editor, Anytype, Playlists, Setup/Store, Updates,
   Datenübernahme; Player-Einstellungen, Größen, Bild-in-Bild; ein eigenes Fenster für das Handy.
   Kein Fenster hat ein echter Mensch gesehen; die Bildschirmfotos der CI sind die einzige Sicht.
+  **yt-dlp** (19.11.2026, `sondra-download::ytdlp`): Adressen ohne eigene Quelle laufen über yt-dlp, wenn es da ist
+  (eigene Kopie, WinGet, PATH); sonst steht auf der Herunterladen-Seite das Angebot „yt-dlp laden“ — geholt wird es nur auf
+  den Klick, von yt-dlps Releases, gegen die veröffentlichte SHA-256 (passt sie nicht, bleibt nichts liegen); nie
+  `--no-check-certificates`. Geprüft gegen ein Stand-in (`fake-ytdlp`), nie gegen das echte yt-dlp.
   **Nichts davon ist an einem echten Handy oder mit echter Tonkarte gelaufen** — das Handy
   wird gegen ein nachgebautes Handy geprüft (`sondra_mirror::fake`).
   Die Testdateien schreibt der Serializer der Website

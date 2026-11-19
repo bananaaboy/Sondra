@@ -47,3 +47,9 @@ accesskit = "0.25"
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Power", "Win32_UI_WindowsAndMessaging"] }
 raw-window-handle = "0.6"
+
+# The stand-in for yt-dlp that the page tests run (the source is sondra-download's); not part of the app.
+[[bin]]
+name = "fake-ytdlp"
+path = "../sondra-download/tests/support/fake_ytdlp.rs"
+test = false
