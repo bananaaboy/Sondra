@@ -10,6 +10,9 @@ use serde_json::{json, Value};
 use url::Url;
 
 use crate::client::{as_file, quote, DriveClient, DriveFile, TokenSource, FILE_FIELDS, FOLDER_TYPE};
+use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use crate::DriveError;
 
 /// More than this is not a record or a message; it goes the resumable way, which is not here.
@@ -177,4 +180,126 @@ pub fn notes_query(key: &str, value: &str) -> String {
         quote(key),
         quote(value)
     )
+}
+
+/// A piece of a resumable upload; Drive wants a multiple of 256 KiB.
+pub const CHUNK: u64 = 8 * 1024 * 1024;
+
+/// How a file got into Drive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Put {
+    /// A new file.
+    Made(DriveFile),
+    /// A file of that name stood there and was written new (the folder and the notes stay).
+    Replaced(DriveFile),
+    /// A file of that name and size stood there already: nothing was sent.
+    Same(DriveFile),
+}
+
+/// What to do when the name is taken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// Nothing is sent when a file of that name and size is there; otherwise it is written new.
+    SkipSame,
+    /// Always written new.
+    Replace,
+}
+
+fn next_byte(range: Option<&str>) -> Option<u64> {
+    // `bytes=0-12345`: Drive has the first 12346.
+    let end = range?.rsplit('-').next()?.trim().parse::<u64>().ok()?;
+    Some(end + 1)
+}
+
+impl<T: TokenSource> DriveClient<T> {
+    /// A file into a folder of Drive: one request up to five megabytes, above that a resumable upload in pieces of eight,
+    /// picked up again where Drive says it stands after a hiccup (`driveClient.ts`, `put`). `progress` gets (sent, total)
+    /// and `cancel` stops it. A file of that name and size is not sent again (`Mode::SkipSame`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn put_file(&self, parent: &str, name: &str, path: &Path, mime: &str, notes: &BTreeMap<String, String>, mode: Mode, cancel: &AtomicBool, mut progress: impl FnMut(u64, u64)) -> Result<Put, DriveError> {
+        let size = std::fs::metadata(path).map_err(|e| DriveError::Failed(format!("{}: {e}", path.display())))?.len();
+        let existing = self.find_file(parent, name)?;
+        if let (Some(found), Mode::SkipSame) = (&existing, mode) {
+            if found.size == Some(size) {
+                progress(size, size);
+                return Ok(Put::Same(found.clone()));
+            }
+        }
+        progress(0, size);
+        let file = if size <= SMALL_LIMIT as u64 {
+            let data = std::fs::read(path).map_err(|e| DriveError::Failed(format!("{}: {e}", path.display())))?;
+            match &existing {
+                Some(found) => self.rewrite(&found.id, &data, mime)?,
+                None => self.create(parent, name, &data, mime, notes)?,
+            }
+        } else {
+            self.resumable(parent, name, path, size, mime, notes, existing.as_ref(), cancel, &mut progress)?
+        };
+        progress(size, size);
+        Ok(if existing.is_some() { Put::Replaced(file) } else { Put::Made(file) })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn resumable(&self, parent: &str, name: &str, path: &Path, size: u64, mime: &str, notes: &BTreeMap<String, String>, existing: Option<&DriveFile>, cancel: &AtomicBool, progress: &mut impl FnMut(u64, u64)) -> Result<DriveFile, DriveError> {
+        let base = upload_base(self.api());
+        let (method, url, meta) = match existing {
+            Some(found) => ("PATCH", format!("{base}/files/{}?uploadType=resumable&fields={FILE_FIELDS}", found.id), json!({})),
+            None => {
+                let mut meta = json!({"name": name, "parents": [parent], "mimeType": mime});
+                if !notes.is_empty() {
+                    meta["appProperties"] = json!(notes);
+                }
+                ("POST", format!("{base}/files?uploadType=resumable&fields={FILE_FIELDS}"), meta)
+            }
+        };
+        let opened = self.raw(method, &url, &[("Content-Type", "application/json; charset=UTF-8".into()), ("X-Upload-Content-Type", mime.to_owned()), ("X-Upload-Content-Length", size.to_string())], meta.to_string().as_bytes())?;
+        if !(200..300).contains(&opened.status) {
+            return Err(DriveError::Failed(format!("{} {}", opened.status, opened.text.chars().take(160).collect::<String>())));
+        }
+        let session = opened.location.ok_or_else(|| DriveError::Failed("Drive nannte keine Upload-Adresse".into()))?;
+        let mut file = std::fs::File::open(path).map_err(|e| DriveError::Failed(format!("{}: {e}", path.display())))?;
+        let (mut offset, mut tries) = (0u64, 0u32);
+        let mut piece = Vec::new();
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(DriveError::Cancelled);
+            }
+            let end = (offset + CHUNK).min(size);
+            piece.clear();
+            file.seek(SeekFrom::Start(offset)).map_err(|e| DriveError::Failed(e.to_string()))?;
+            (&mut file).take(end - offset).read_to_end(&mut piece).map_err(|e| DriveError::Failed(e.to_string()))?;
+            let sent = self.raw("PUT", &session, &[("Content-Range", format!("bytes {offset}-{}/{size}", end - 1))], &piece);
+            let answer = match sent {
+                Ok(r) if r.status == 200 || r.status == 201 => return Ok(as_file(&serde_json::from_str(&r.text).map_err(|e| DriveError::Failed(e.to_string()))?)),
+                Ok(r) if r.status == 308 => {
+                    // Drive says how far it got; no Range at all means nothing of this piece.
+                    offset = next_byte(r.range.as_deref()).unwrap_or(0);
+                    tries = 0;
+                    progress(offset, size);
+                    continue;
+                }
+                Ok(r) if r.status == 404 || r.status == 410 => return Err(DriveError::Failed("Die Upload-Sitzung ist abgelaufen".into())),
+                Ok(r) if matches!(r.status, 429 | 500..=599) => Some(r),
+                Ok(r) => return Err(DriveError::Failed(format!("{} {}", r.status, r.text.chars().take(160).collect::<String>()))),
+                Err(DriveError::Offline(_)) => None,
+                Err(e) => return Err(e),
+            };
+            let _ = answer;
+            // Dropped, or a hiccup of the server: ask where it stands, then go on from there.
+            tries += 1;
+            if tries > 4 {
+                return Err(DriveError::Offline("Upload abgebrochen".into()));
+            }
+            std::thread::sleep(self.pause() * 2u32.pow(tries - 1));
+            if let Ok(status) = self.raw("PUT", &session, &[("Content-Range", format!("bytes */{size}"))], &[]) {
+                if status.status == 200 || status.status == 201 {
+                    return Ok(as_file(&serde_json::from_str(&status.text).map_err(|e| DriveError::Failed(e.to_string()))?));
+                }
+                if status.status == 308 {
+                    offset = next_byte(status.range.as_deref()).unwrap_or(0);
+                    progress(offset, size);
+                }
+            }
+        }
+    }
 }

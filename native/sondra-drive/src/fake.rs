@@ -25,12 +25,26 @@ pub struct Entry {
     pub modified: u64,
 }
 
+/// A resumable upload that is under way: what it is to become and what has come so far.
+pub struct Upload {
+    /// A file to write new content into, or none for a new one.
+    pub target: Option<String>,
+    pub meta: Value,
+    pub total: u64,
+    pub data: Vec<u8>,
+}
+
 #[derive(Default)]
 pub struct State {
     pub entries: HashMap<String, Entry>,
     pub clock: u64,
     next: u32,
     pub requests: u32,
+    pub uploads: HashMap<String, Upload>,
+    /// The pieces of resumable uploads that arrived: (first byte, last byte), in order.
+    pub pieces: Vec<(u64, u64)>,
+    /// The next this many pieces are answered with a 503 and not kept (a hiccup of the server).
+    pub hiccups: u32,
 }
 
 #[derive(Clone)]
@@ -141,6 +155,14 @@ fn view(id: &str, e: &Entry) -> Value {
     })
 }
 
+fn reply_with(request: tiny_http::Request, status: u16, body: Vec<u8>, headers: &[(&str, String)]) {
+    let mut response = tiny_http::Response::from_data(body).with_status_code(status);
+    for (name, value) in headers {
+        response = response.with_header(tiny_http::Header::from_bytes(name.as_bytes(), value.as_bytes()).unwrap());
+    }
+    let _ = request.respond(response);
+}
+
 fn reply(request: tiny_http::Request, status: u16, body: Vec<u8>, kind: &str) {
     let header = tiny_http::Header::from_bytes("Content-Type", kind).unwrap();
     let _ = request.respond(
@@ -148,6 +170,10 @@ fn reply(request: tiny_http::Request, status: u16, body: Vec<u8>, kind: &str) {
             .with_status_code(status)
             .with_header(header),
     );
+}
+
+fn header_of(headers: &[(String, String)], name: &str) -> Option<String> {
+    headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.clone())
 }
 
 fn handle(mut request: tiny_http::Request, shared: &Arc<Mutex<State>>) {
@@ -163,6 +189,7 @@ fn handle(mut request: tiny_http::Request, shared: &Arc<Mutex<State>>) {
         .find(|h| h.field.equiv("Content-Type"))
         .map(|h| h.value.as_str().to_owned())
         .unwrap_or_default();
+    let headers: Vec<(String, String)> = request.headers().iter().map(|h| (h.field.to_string(), h.value.as_str().to_owned())).collect();
     let mut body = Vec::new();
     let _ = request.as_reader().read_to_end(&mut body);
     if !authorized {
@@ -179,6 +206,69 @@ fn handle(mut request: tiny_http::Request, shared: &Arc<Mutex<State>>) {
         reply(request, 200, value.to_string().into_bytes(), "application/json")
     };
     let id_of = |tail: &str| tail.trim_start_matches('/').to_owned();
+
+    // A resumable upload: opened with a POST (or a PATCH of a file that is there) that answers with where to send the pieces.
+    if params.get("uploadType").map(String::as_str) == Some("resumable") && (method == "POST" || method == "PATCH") && path.starts_with("/upload/drive/v3/files") {
+        let total = header_of(&headers, "X-Upload-Content-Length").and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let target = (method == "PATCH").then(|| id_of(&path["/upload/drive/v3/files".len()..]));
+        if let Some(t) = &target {
+            if !state.entries.contains_key(t) {
+                return reply(request, 404, b"{}".to_vec(), "application/json");
+            }
+        }
+        state.next += 1;
+        let upload = format!("u{}", state.next);
+        let meta: Value = serde_json::from_slice(&body).unwrap_or_default();
+        state.uploads.insert(upload.clone(), Upload { target, meta, total, data: Vec::new() });
+        let host = header_of(&headers, "Host").unwrap_or_default();
+        return reply_with(request, 200, b"{}".to_vec(), &[("Location", format!("http://{host}/upload/session/{upload}")), ("Content-Type", "application/json".into())]);
+    }
+    if method == "PUT" && path.starts_with("/upload/session/") {
+        let upload = id_of(&path["/upload/session/".len()..]);
+        if state.hiccups > 0 && header_of(&headers, "Content-Range").is_some_and(|r| !r.starts_with("bytes */")) {
+            state.hiccups -= 1;
+            return reply(request, 503, b"{}".to_vec(), "application/json");
+        }
+        let Some(session) = state.uploads.get_mut(&upload) else { return reply(request, 404, b"{}".to_vec(), "application/json") };
+        let range = header_of(&headers, "Content-Range").unwrap_or_default();
+        let have = session.data.len() as u64;
+        let progress = |have: u64| if have == 0 { vec![] } else { vec![("Range", format!("bytes=0-{}", have - 1))] };
+        if range.starts_with("bytes */") {
+            return reply_with(request, 308, vec![], &progress(have));
+        }
+        let first = range.strip_prefix("bytes ").and_then(|r| r.split('-').next()).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        if first != have {
+            // A piece that does not follow on: Drive says where it stands.
+            return reply_with(request, 308, vec![], &progress(have));
+        }
+        session.data.extend_from_slice(&body);
+        let now_have = session.data.len() as u64;
+        let last = now_have.saturating_sub(1);
+        state.pieces.push((first, last));
+        let session = state.uploads.get(&upload).unwrap();
+        if now_have < session.total {
+            return reply_with(request, 308, vec![], &progress(now_have));
+        }
+        let session = state.uploads.remove(&upload).unwrap();
+        let shown = match session.target {
+            Some(id) => {
+                let entry = state.entries.get_mut(&id).unwrap();
+                entry.data = session.data;
+                entry.modified = now;
+                view(&id, entry)
+            }
+            None => {
+                state.next += 1;
+                let id = format!("f{}", state.next);
+                let notes = session.meta["appProperties"].as_object().map(|o| o.iter().filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_owned()))).collect()).unwrap_or_default();
+                let entry = Entry { name: session.meta["name"].as_str().unwrap_or_default().into(), parent: session.meta["parents"][0].as_str().unwrap_or("root").into(), folder: false, data: session.data, notes, created: now, modified: now };
+                let shown = view(&id, &entry);
+                state.entries.insert(id, entry);
+                shown
+            }
+        };
+        return json_reply(request, shown);
+    }
 
     match (method.as_str(), path.as_str()) {
         ("GET", "/drive/v3/files") => {

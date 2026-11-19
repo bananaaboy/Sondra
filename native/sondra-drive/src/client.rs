@@ -57,9 +57,31 @@ pub fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
+/// What a request that must not be judged says: the status as it is (308 is a good answer to a piece of an upload), the
+/// two headers an upload reads, and the text.
+#[derive(Debug, Clone)]
+pub(crate) struct Raw {
+    pub status: u16,
+    pub location: Option<String>,
+    pub range: Option<String>,
+    pub text: String,
+}
+
+/// An agent for the pieces of an upload: a piece may take minutes on a slow line, and a 308 is no redirect.
+fn upload_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(10 * 60)))
+        .http_status_as_error(false)
+        .max_redirects(0)
+        .max_redirects_will_error(false)
+        .build()
+        .into()
+}
+
 pub struct DriveClient<T: TokenSource> {
     tokens: T,
     http: ureq::Agent,
+    pieces: ureq::Agent,
     api: String,
     backoff: Duration,
 }
@@ -69,6 +91,7 @@ impl<T: TokenSource> DriveClient<T> {
         Self {
             tokens,
             http: agent(),
+            pieces: upload_agent(),
             api: api.into(),
             backoff: Duration::from_millis(500),
         }
@@ -140,6 +163,35 @@ impl<T: TokenSource> DriveClient<T> {
                 }
             }
         }
+    }
+
+    /// One request with the token whose answer is not judged: a refused token is renewed once, everything else is
+    /// handed back with its status. `Err` only when the line itself fails.
+    pub(crate) fn raw(&self, method: &str, url: &str, headers: &[(&str, String)], body: &[u8]) -> Result<Raw, DriveError> {
+        let mut refused = false;
+        loop {
+            let token = self.tokens.token(refused)?;
+            let mut request = ureq::http::Request::builder().method(method).uri(url).header("Authorization", format!("Bearer {token}"));
+            for (name, value) in headers {
+                request = request.header(*name, value);
+            }
+            let request = request.body(body.to_vec()).map_err(|e| DriveError::Failed(e.to_string()))?;
+            let mut response = self.pieces.run(request).map_err(|e| DriveError::Offline(e.to_string()))?;
+            let status = response.status().as_u16();
+            if status == 401 && !refused {
+                refused = true;
+                continue;
+            }
+            let header = |name: &str| response.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
+            let (location, range) = (header("location"), header("range"));
+            let text = response.body_mut().read_to_string().unwrap_or_default();
+            return Ok(Raw { status, location, range, text });
+        }
+    }
+
+    /// How long to wait before asking again after a hiccup.
+    pub(crate) fn pause(&self) -> Duration {
+        self.backoff
     }
 
     pub(crate) fn api(&self) -> &str {

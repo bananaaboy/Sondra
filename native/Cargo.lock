@@ -6426,6 +6426,7 @@ dependencies = [
  "sha2 0.10.9",
  "sondra-core",
  "sondra-daemon",
+ "tempfile",
  "thiserror 2.0.21",
  "tiny_http",
  "ureq",
