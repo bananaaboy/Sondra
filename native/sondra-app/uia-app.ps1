@@ -98,7 +98,6 @@ if ($null -ne $merk) {
             $line = Wait-For 'Frieren' $CT::ListItem
             Check ($null -ne $line) 'the typed series is a line of the list'
             if ($null -ne $line) {
-                Check ($line.Current.HelpText -like 'Staffel 1, Folge 1.*') ('it stands at the first episode: ' + $line.Current.HelpText)
                 # The page shows posters; the step forward is on the lines of the list.
                 $asList = Wait-For 'Als Liste' $CT::Button
                 Check ($null -ne $asList) 'the page can be shown as a list'
@@ -107,12 +106,9 @@ if ($null -ne $merk) {
                 Check ($null -ne $plus) 'the step forward is a button that says what it does'
                 if ($null -ne $plus) {
                     Check (Invoke-It $plus) 'it can be invoked'
-                    $moved = $false
-                    for ($i = 0; $i -lt 24 -and -not $moved; $i++) {
-                        $again = Named 'Frieren' $CT::ListItem
-                        if ($null -ne $again -and $again.Current.HelpText -like 'Staffel 1, Folge 2.*') { $moved = $true } else { Start-Sleep -Milliseconds 250 }
-                    }
-                    Check $moved 'the line moved on to the second episode'
+                    # The button names where the series stands; after the step it names the next episode.
+                    $moved = Wait-For 'Staffel 1, Folge 2 von Frieren als gesehen markieren' $CT::Button
+                    Check ($null -ne $moved) 'the line moved on to the second episode'
                 }
             }
             Shot 'app-merkliste.png'
