@@ -5,6 +5,7 @@
 //!   (`npm run native:golden`), so the command is the same one.
 //! * [`presets`] — the templates of the converter (`src/lib/convertPresets.ts`).
 //! * [`ffmpeg`] — running FFmpeg: locating it, progress, cancelling, probing.
+//! * [`loudness`] — EBU R128 / BS.1770: measuring and moving to a target (`src/lib/loudness.ts`).
 //! * [`run`] — a whole conversion: a file in, a file out (`src/lib/convertRun.ts`).
 //!
 //! What changes from the browser: no memory limit (a file is read from where it lies), no crash of
@@ -14,6 +15,7 @@
 
 pub mod convert;
 pub mod ffmpeg;
+pub mod loudness;
 pub mod presets;
 pub mod run;
 

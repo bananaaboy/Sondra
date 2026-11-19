@@ -1,0 +1,162 @@
+{
+ "loudness": [
+  {
+   "name": "stereo-1k-minus14",
+   "report": {
+    "integratedLufs": -13.993299456119585,
+    "loudnessRangeLu": 2.0515145138233493e-11,
+    "momentaryMaxLufs": -13.993295564009168,
+    "shortTermMaxLufs": -13.993295564030548,
+    "samplePeakDbfs": -13.999999827421785,
+    "truePeakDbtp": -13.999999827421785,
+    "durationSeconds": 8
+   }
+  },
+  {
+   "name": "mono-1k-0",
+   "report": {
+    "integratedLufs": -3.0035995923476597,
+    "loudnessRangeLu": 1.5786039142540176e-11,
+    "momentaryMaxLufs": -3.0035957002642006,
+    "shortTermMaxLufs": -3.0035957002658273,
+    "samplePeakDbfs": 0,
+    "truePeakDbtp": 0,
+    "durationSeconds": 8
+   }
+  },
+  {
+   "name": "padded",
+   "report": {
+    "integratedLufs": -23.075493778784672,
+    "loudnessRangeLu": 5.228683666641789,
+    "momentaryMaxLufs": -22.993295582786036,
+    "shortTermMaxLufs": -22.99329558280176,
+    "samplePeakDbfs": -23.000000432125567,
+    "truePeakDbtp": -23.000000432125567,
+    "durationSeconds": 24
+   }
+  },
+  {
+   "name": "inter-sample",
+   "report": {
+    "integratedLufs": -5.7663049465157235,
+    "loudnessRangeLu": 0,
+    "momentaryMaxLufs": -5.6792361124883515,
+    "shortTermMaxLufs": null,
+    "samplePeakDbfs": -9.030900018572105,
+    "truePeakDbtp": -6.02270419924153,
+    "durationSeconds": 1
+   }
+  },
+  {
+   "name": "constant",
+   "report": {
+    "integratedLufs": -32.297470249918035,
+    "loudnessRangeLu": 0,
+    "momentaryMaxLufs": -32.297470249918035,
+    "shortTermMaxLufs": null,
+    "samplePeakDbfs": -6.020599913279624,
+    "truePeakDbtp": -4.9399144382519315,
+    "durationSeconds": 1
+   }
+  },
+  {
+   "name": "music",
+   "report": {
+    "integratedLufs": -8.856812427326448,
+    "loudnessRangeLu": 1.538325022920617e-12,
+    "momentaryMaxLufs": -8.85466690254226,
+    "shortTermMaxLufs": -8.856644484374236,
+    "samplePeakDbfs": -7.958800044010912,
+    "truePeakDbtp": -7.958798712842522,
+    "durationSeconds": 6
+   }
+  },
+  {
+   "name": "swell",
+   "report": {
+    "integratedLufs": -14.100525231531492,
+    "loudnessRangeLu": 1.15048198709135,
+    "momentaryMaxLufs": -12.141264479501876,
+    "shortTermMaxLufs": -13.56904269692801,
+    "samplePeakDbfs": -10.458911242084882,
+    "truePeakDbtp": -6.347846291134804,
+    "durationSeconds": 20
+   }
+  },
+  {
+   "name": "silence",
+   "report": {
+    "integratedLufs": null,
+    "loudnessRangeLu": 0,
+    "momentaryMaxLufs": null,
+    "shortTermMaxLufs": null,
+    "samplePeakDbfs": null,
+    "truePeakDbtp": null,
+    "durationSeconds": 2
+   }
+  }
+ ],
+ "plans": [
+  {
+   "targetLufs": -23,
+   "useLimiter": false,
+   "requestedDb": -14.143187572673552,
+   "appliedDb": -14.143187572673552,
+   "reducedByCeiling": false,
+   "limiterEngaged": false,
+   "predictedPeakDbtp": -22.101985980975773,
+   "afterIntegrated": -23.000000019670043
+  },
+  {
+   "targetLufs": -23,
+   "useLimiter": true,
+   "requestedDb": -14.143187572673552,
+   "appliedDb": -14.143187572673552,
+   "reducedByCeiling": false,
+   "limiterEngaged": false,
+   "predictedPeakDbtp": -22.101985980975773,
+   "afterIntegrated": -23.000000019670043
+  },
+  {
+   "targetLufs": -16,
+   "useLimiter": false,
+   "requestedDb": -7.143187572673552,
+   "appliedDb": -7.143187572673552,
+   "reducedByCeiling": false,
+   "limiterEngaged": false,
+   "predictedPeakDbtp": -15.101986050130677,
+   "afterIntegrated": -16.00000002979488
+  },
+  {
+   "targetLufs": -16,
+   "useLimiter": true,
+   "requestedDb": -7.143187572673552,
+   "appliedDb": -7.143187572673552,
+   "reducedByCeiling": false,
+   "limiterEngaged": false,
+   "predictedPeakDbtp": -15.101986050130677,
+   "afterIntegrated": -16.00000002979488
+  },
+  {
+   "targetLufs": -9,
+   "useLimiter": false,
+   "requestedDb": -0.1431875726735523,
+   "appliedDb": -0.1431875726735523,
+   "reducedByCeiling": false,
+   "limiterEngaged": false,
+   "predictedPeakDbtp": -8.101985962293213,
+   "afterIntegrated": -9.000000024141915
+  },
+  {
+   "targetLufs": -9,
+   "useLimiter": true,
+   "requestedDb": -0.1431875726735523,
+   "appliedDb": -0.1431875726735523,
+   "reducedByCeiling": false,
+   "limiterEngaged": false,
+   "predictedPeakDbtp": -8.101985962293213,
+   "afterIntegrated": -9.000000024141915
+  }
+ ]
+}

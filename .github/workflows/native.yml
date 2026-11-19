@@ -8,9 +8,9 @@ name: Native
 on:
   push:
     branches: [main]
-    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', '.github/workflows/native.yml']
+    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', 'src/lib/loudness.ts', '.github/workflows/native.yml']
   pull_request:
-    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', '.github/workflows/native.yml']
+    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', 'src/lib/loudness.ts', '.github/workflows/native.yml']
   workflow_dispatch:
 
 permissions:
