@@ -7,6 +7,7 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 
+import { freeName, safeFileName, splitPath } from '../src/lib/deviceTransfer'
 import { canonical, checkRecord, cleanName, deviceIdOf, makeKeys, openMessage, pickDevices, sealMessage, signRecord, uniqueName } from '../src/lib/deviceIdentity'
 
 const outDir = 'native/sondra-devices/tests/golden'
@@ -78,8 +79,33 @@ const names = [
 
 const ids = await Promise.all([laptop, phone, intruder].map(async (k) => ({ jwk: k.publicJwk, id: await deviceIdOf(k.publicJwk) })))
 
+const fileNames = ['Film.mp4', 'a<b>c:d"e/f\\g|h?i*j', '..', '  . leer .  ', 'x'.repeat(250), '', 'Ordner\u0001Name\u007f.txt', ' Folge 1.mkv ', 'CON', 'ü ö ß 日本.mp3', '.versteckt', 'ende.']
+const paths: (string | undefined)[] = ['Anime/Staffel 1/Folge 1.mkv', 'Folge.mkv', '../../etc/passwd', '/etc/hosts', 'C:\\Windows\\x.txt', undefined, '', '//./..//', `${Array.from({ length: 20 }, (_, n) => `d${n}`).join('/')}/datei.txt`, 'a/b/..', 'a/./b', ' a / b ', 'nur/ordner/']
+const taken = [['Film.mp4'], ['Film.mp4', 'Film (2).mp4', 'Film (3).mp4'], ['.versteckt', '.versteckt (2)'], ['ohne-endung', 'ohne-endung (2)'], ['a.tar.gz']]
+const transfer = {
+  safe: fileNames.map((name) => ({ name, safe: safeFileName(name) })),
+  paths: paths.map((path) => ({ path: path ?? null, split: splitPath(path, 'Ersatz.txt') })),
+  free: [
+    ...taken.map((list, i) => ({ name: ['Film.mp4', 'Film.mp4', '.versteckt', 'ohne-endung', 'a.tar.gz'][i], taken: list, free: freeName(['Film.mp4', 'Film.mp4', '.versteckt', 'ohne-endung', 'a.tar.gz'][i], (c) => list.includes(c)) })),
+    { name: 'frei.txt', taken: [], free: freeName('frei.txt', () => false) },
+  ],
+  controls: [
+    { t: 'start', files: [{ name: 'a.mkv', size: 1234, mime: 'video/x-matroska', path: 'Anime/a.mkv' }, { name: 'b.txt', size: 0, mime: 'text/plain' }] },
+    { t: 'ready' },
+    { t: 'ready', done: [0, 2], from: { 1: 65536, 3: 4194304 } },
+    { t: 'file', i: 1 },
+    { t: 'file', i: 2, at: 65536 },
+    { t: 'end', i: 1 },
+    { t: 'done' },
+    { t: 'ack', bytes: 4194304 },
+    { t: 'saved', places: ['Downloads/Sondra/a.mkv', 'Ordner/b (2).txt'] },
+    { t: 'cancel' },
+    { t: 'error', message: 'Kein Platz „mehr“' },
+  ].map((c) => ({ value: c, text: JSON.stringify(c) })),
+}
+
 writeFileSync(
   `${outDir}/devices.json`,
-  `${JSON.stringify({ now, ids, records, believed, picked: picked.map((r) => ({ id: r.id, seen: r.seen })), devices: devices.map((d) => d.id), messages: opened, canon, names, laptopId: laptopRecord.id, phoneId: phoneRecord.id }, null, 1)}\n`,
+  `${JSON.stringify({ now, ids, records, believed, picked: picked.map((r) => ({ id: r.id, seen: r.seen })), devices: devices.map((d) => d.id), messages: opened, canon, names, transfer, laptopId: laptopRecord.id, phoneId: phoneRecord.id }, null, 1)}\n`,
 )
 console.log(`Geräte: ${believed.filter((b) => b.ok).length} Einträge geglaubt, ${believed.filter((b) => !b.ok).length} abgelehnt, ${opened.length} Nachrichten`)

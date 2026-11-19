@@ -151,3 +151,31 @@ fn leaves_records_and_messages_for_the_web_app_to_read() {
     });
     std::fs::write(dir.join("devices.json"), serde_json::to_string_pretty(&out).unwrap()).unwrap();
 }
+
+#[test]
+fn file_names_paths_and_the_wire_messages_are_the_web_apps() {
+    use sondra_devices::transfer::*;
+    let g = golden();
+    let t = &g["transfer"];
+    for case in t["safe"].as_array().unwrap() {
+        assert_eq!(safe_file_name(case["name"].as_str().unwrap()), case["safe"].as_str().unwrap(), "{:?}", case["name"]);
+    }
+    for case in t["paths"].as_array().unwrap() {
+        let (dir, name) = split_path(case["path"].as_str(), "Ersatz.txt");
+        assert_eq!(dir, case["split"]["dir"].as_str().unwrap(), "{:?}", case["path"]);
+        assert_eq!(name, case["split"]["name"].as_str().unwrap(), "{:?}", case["path"]);
+    }
+    for case in t["free"].as_array().unwrap() {
+        let taken: Vec<String> = case["taken"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+        assert_eq!(free_name(case["name"].as_str().unwrap(), &|c| taken.iter().any(|t| t == c)), case["free"].as_str().unwrap(), "{:?}", case["name"]);
+    }
+    // Every message the web app writes is read, and written back as the same JSON.
+    for case in t["controls"].as_array().unwrap() {
+        let text = case["text"].as_str().unwrap();
+        let control = Control::from_text(text).unwrap_or_else(|| panic!("{text}"));
+        let again: Value = serde_json::from_str(&control.to_text()).unwrap();
+        assert_eq!(again, case["value"], "{text}");
+    }
+    assert!(Control::from_text("nope").is_none());
+    assert!(Control::from_text("{\"t\":\"unbekannt\"}").is_none());
+}

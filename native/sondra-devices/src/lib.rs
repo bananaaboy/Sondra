@@ -8,4 +8,5 @@
 //! owner fails its signature, is ignored, and its owner writes it again on its next round.
 
 pub mod identity;
+pub mod transfer;
 pub use identity::*;
