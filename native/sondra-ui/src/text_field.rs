@@ -48,6 +48,8 @@ actions!(
 );
 
 /// The key bindings of every field. Call once at start.
+const DOT: &str = "•";
+
 pub fn bind_keys(cx: &mut App) {
     const CONTEXT: Option<&str> = Some("SondraTextField");
     cx.bind_keys([
@@ -111,6 +113,8 @@ pub struct TextField {
     scroll_x: Pixels,
     is_selecting: bool,
     max_chars: Option<usize>,
+    /// A password: shown as dots, not copied, not told to a screen reader.
+    secret: bool,
 }
 
 impl EventEmitter<FieldEvent> for TextField {}
@@ -137,12 +141,45 @@ impl TextField {
             scroll_x: px(0.),
             is_selecting: false,
             max_chars: None,
+            secret: false,
         }
     }
 
     pub fn placeholder(mut self, text: impl Into<SharedString>) -> Self {
         self.placeholder = text.into();
         self
+    }
+
+    /// Shows the text as dots and keeps it out of the clipboard and the screen reader.
+    pub fn secret(mut self) -> Self {
+        self.secret = true;
+        self
+    }
+
+    /// What is drawn: the text, or one dot for each character of it.
+    fn shown(&self) -> SharedString {
+        if self.secret {
+            SharedString::from(DOT.repeat(self.content.chars().count()))
+        } else {
+            self.content.clone()
+        }
+    }
+
+    /// A byte offset of the text as one of what is drawn.
+    fn to_shown(&self, offset: usize) -> usize {
+        if self.secret {
+            self.content[..offset.min(self.content.len())].chars().count() * DOT.len()
+        } else {
+            offset
+        }
+    }
+
+    /// A byte offset of what is drawn as one of the text.
+    fn from_shown(&self, shown: usize) -> usize {
+        if !self.secret {
+            return shown;
+        }
+        self.content.char_indices().nth(shown / DOT.len()).map_or(self.content.len(), |(i, _)| i)
     }
 
     pub fn max_chars(mut self, max: usize) -> Self {
@@ -331,7 +368,7 @@ impl TextField {
     }
 
     fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.selected_range.is_empty() {
+        if !self.selected_range.is_empty() && !self.secret {
             cx.write_to_clipboard(ClipboardItem::new_string(
                 self.content[self.selected_range.clone()].to_string(),
             ));
@@ -339,7 +376,7 @@ impl TextField {
     }
 
     fn cut(&mut self, _: &Cut, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.selected_range.is_empty() {
+        if !self.selected_range.is_empty() && !self.secret {
             cx.write_to_clipboard(ClipboardItem::new_string(
                 self.content[self.selected_range.clone()].to_string(),
             ));
@@ -365,7 +402,7 @@ impl TextField {
         else {
             return 0;
         };
-        line.closest_index_for_x(position.x - bounds.left() + self.scroll_x)
+        self.from_shown(line.closest_index_for_x(position.x - bounds.left() + self.scroll_x))
     }
 
     fn on_mouse_down(
@@ -552,11 +589,11 @@ impl EntityInputHandler for TextField {
         let range = self.range_from_utf16(&range_utf16);
         Some(Bounds::from_corners(
             point(
-                bounds.left() + line.x_for_index(range.start) - self.scroll_x,
+                bounds.left() + line.x_for_index(self.to_shown(range.start)) - self.scroll_x,
                 bounds.top(),
             ),
             point(
-                bounds.left() + line.x_for_index(range.end) - self.scroll_x,
+                bounds.left() + line.x_for_index(self.to_shown(range.end)) - self.scroll_x,
                 bounds.bottom(),
             ),
         ))
@@ -570,7 +607,7 @@ impl EntityInputHandler for TextField {
     ) -> Option<usize> {
         let local = self.last_bounds?.localize(&point)?;
         let line = self.last_layout.as_ref()?;
-        let utf8 = line.index_for_x(point.x - local.x + self.scroll_x)?;
+        let utf8 = self.from_shown(line.index_for_x(point.x - local.x + self.scroll_x)?);
         Some(self.offset_to_utf16(utf8))
     }
 }
@@ -636,7 +673,7 @@ impl Element for TextElement {
         let (display, color) = if field.content.is_empty() {
             (field.placeholder.clone(), colors.faint)
         } else {
-            (field.content.clone(), colors.prose)
+            (field.shown(), colors.prose)
         };
 
         let run = TextRun {
@@ -648,7 +685,7 @@ impl Element for TextElement {
             strikethrough: None,
         };
         let runs = match field.marked_range.as_ref() {
-            Some(marked) if !field.content.is_empty() => [
+            Some(marked) if !field.content.is_empty() && !field.secret => [
                 TextRun {
                     len: marked.start,
                     ..run.clone()
@@ -678,7 +715,7 @@ impl Element for TextElement {
             .shape_line(display, font_size, &runs, None);
 
         // Keep the cursor in view: scroll just far enough, never past the end of the text.
-        let cursor_x = line.x_for_index(field.cursor_offset());
+        let cursor_x = line.x_for_index(field.to_shown(field.cursor_offset()));
         let mut scroll_x = field.scroll_x;
         if cursor_x - scroll_x > bounds.size.width - px(2.) {
             scroll_x = cursor_x - bounds.size.width + px(2.);
@@ -694,11 +731,11 @@ impl Element for TextElement {
             fill(
                 Bounds::from_corners(
                     point(
-                        bounds.left() + line.x_for_index(field.selected_range.start) - scroll_x,
+                        bounds.left() + line.x_for_index(field.to_shown(field.selected_range.start)) - scroll_x,
                         bounds.top(),
                     ),
                     point(
-                        bounds.left() + line.x_for_index(field.selected_range.end) - scroll_x,
+                        bounds.left() + line.x_for_index(field.to_shown(field.selected_range.end)) - scroll_x,
                         bounds.bottom(),
                     ),
                 ),
@@ -767,7 +804,7 @@ impl Render for TextField {
         let focused = self.focus_handle.is_focused(window);
         let entity = cx.entity();
         let name = self.label.clone();
-        let value = self.content.clone();
+        let value = if self.secret { SharedString::default() } else { self.content.clone() };
         let focus = self.focus_handle.clone();
 
         let field = div()
@@ -814,7 +851,7 @@ impl Render for TextField {
 
         accessible(
             ElementId::Name(format!("textfeld-{}", self.label).into()),
-            Role::TextInput,
+            if self.secret { Role::PasswordInput } else { Role::TextInput },
             field,
         )
         .label(name)

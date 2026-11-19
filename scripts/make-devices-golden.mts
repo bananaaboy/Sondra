@@ -8,6 +8,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 import { freeName, safeFileName, splitPath } from '../src/lib/deviceTransfer'
+import { iceServersFor, serverProblem } from '../src/lib/deviceServers'
 import { canonical, checkRecord, cleanName, deviceIdOf, makeKeys, openMessage, pickDevices, sealMessage, signRecord, uniqueName } from '../src/lib/deviceIdentity'
 
 const outDir = 'native/sondra-devices/tests/golden'
@@ -109,3 +110,19 @@ writeFileSync(
   `${JSON.stringify({ now, ids, records, believed, picked: picked.map((r) => ({ id: r.id, seen: r.seen })), devices: devices.map((d) => d.id), messages: opened, canon, names, transfer, laptopId: laptopRecord.id, phoneId: phoneRecord.id }, null, 1)}\n`,
 )
 console.log(`Geräte: ${believed.filter((b) => b.ok).length} Einträge geglaubt, ${believed.filter((b) => !b.ok).length} abgelehnt, ${opened.length} Nachrichten`)
+
+{
+  const addresses = ['', '   ', 'stun:beispiel.de:3478', 'STUN:Beispiel.de', 'stuns:[::1]:5349', 'stun:', 'stun::3478', 'stun:host name', 'stun:host?transport=udp', 'turn:beispiel.de:3478', 'turns:beispiel.de:5349?transport=tcp', 'http://beispiel.de', 'stun:' + 'a'.repeat(250), 'stun:äö.de', 'turn:host:3478/pfad', ' turn:host ']
+  const problems = addresses.flatMap((address) => (['stun', 'turn'] as const).map((kind) => ({ address, kind, problem: serverProblem(address, kind) })))
+  const settings = [
+    { stun: '', turn: '', user: '', password: '' },
+    { stun: 'stun:a.de:3478', turn: '', user: '', password: '' },
+    { stun: 'stun:a.de:3478', turn: 'turn:b.de:3478', user: 'mia', password: 'geheim' },
+    { stun: 'turn:falsch', turn: 'stun:falsch', user: 'x', password: 'y' },
+    { stun: ' stun:a.de ', turn: ' turns:b.de:5349 ', user: 'mia', password: '' },
+    { stun: '', turn: 'turn:b.de', user: '', password: 'ohne Nutzer' },
+  ]
+  const ice = settings.map((s) => ({ settings: s, servers: iceServersFor(s) }))
+  writeFileSync(`${outDir}/servers.json`, `${JSON.stringify({ problems, ice }, null, 1)}\n`)
+  console.log('Server: ' + problems.length + ' Adressen, ' + ice.length + ' Einstellungen')
+}

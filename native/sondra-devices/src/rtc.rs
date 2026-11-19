@@ -52,9 +52,15 @@ pub struct IceServer {
     pub credential: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+/// Asked for at every connection: the servers the person has put in by now.
+pub type LiveServers = Arc<dyn Fn() -> Vec<IceServer> + Send + Sync>;
+
+#[derive(Clone, Default)]
 pub struct Config {
     pub servers: Vec<IceServer>,
+    /// When set, this is asked at every connection instead of `servers`, so a server put in while the
+    /// program runs is used by the next connection.
+    pub live: Option<LiveServers>,
     /// Also offer the loopback address: for two programs on one computer, in tests.
     pub loopback: bool,
 }
@@ -62,7 +68,9 @@ pub struct Config {
 fn configuration(config: &Config) -> RTCConfiguration {
     RTCConfiguration {
         ice_servers: config
-            .servers
+            .live
+            .as_ref()
+            .map_or_else(|| config.servers.clone(), |live| live())
             .iter()
             .map(|s| RTCIceServer {
                 urls: vec![s.urls.clone()],

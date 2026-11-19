@@ -46,7 +46,7 @@ fn bytes(size: usize) -> Vec<u8> {
 }
 
 fn config() -> Config {
-    Config { servers: vec![], loopback: true }
+    Config { servers: vec![], live: None, loopback: true }
 }
 
 /// Two connected lines: what the offer and the answer carry through Drive, here passed by hand.

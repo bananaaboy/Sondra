@@ -13,5 +13,6 @@ pub mod identity;
 pub mod own;
 pub mod registry;
 pub mod rtc;
+pub mod servers;
 pub mod transfer;
 pub use identity::*;

@@ -13,6 +13,7 @@ use gpui::{div, prelude::*, px, AnyElement, Context, Entity, PathPromptOptions};
 use sondra_devices::engine::{now_ms, Engine, Note, State, Status, Transfer, FOLDER_FILES_MAX, TEXT_MAX};
 use sondra_devices::files::{files_to_send, folder_sinks, folder_to_send};
 use sondra_devices::registry::is_online;
+use sondra_devices::servers::ServerSettings;
 use sondra_devices::short_id;
 use sondra_ui::{radius, size, FieldEvent, NoticeKind, TextField, Ui};
 
@@ -32,6 +33,10 @@ pub struct Setup {
     pub start: Arc<dyn Fn() -> Result<Engine, String> + Send + Sync>,
     /// Forgets this device's identity (the next connection makes a new one).
     pub forget: Arc<dyn Fn() + Send + Sync>,
+    /// The server the person put in for other networks; every new connection asks it again.
+    pub servers: Arc<std::sync::Mutex<ServerSettings>>,
+    /// Keeps the addresses (never the password) where the next start finds them.
+    pub keep_servers: Arc<dyn Fn(&ServerSettings) + Send + Sync>,
 }
 
 pub struct DevicesState {
@@ -52,6 +57,8 @@ pub struct DevicesState {
     pub receive_dir: PathBuf,
     pub memory: Option<FileStore>,
     pub problem: Option<String>,
+    /// „Eigener Server für andere Netze“: the fields and whether they are open.
+    pub servers: crate::devices_servers::ServersUi,
 }
 
 const KEY_ON: &str = "sondra:geraete:an";
@@ -86,6 +93,7 @@ impl DevicesState {
             receive_dir: crate::store::downloads_dir(),
             memory: None,
             problem: None,
+            servers: crate::devices_servers::ServersUi::new(cx, colors),
         }
     }
 }
@@ -443,6 +451,7 @@ impl Shell {
                 .child(ui.prose("Das andere Gerät fragt, bevor es etwas annimmt. Hier landen angenommene Dateien im Ordner unten; Ordner behalten ihre Unterordner. Sind die Geräte nicht im selben Netz, findet sich kein direkter Weg."))
                 .child(div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.hint("Ordner:")).child(ui.value(d.receive_dir.display().to_string()))),
         );
+        page = page.child(self.own_server_block(ui, cx));
         let forget = {
             let me = me.clone();
             ui.button("geraet-vergessen", "Dieses Gerät ganz vergessen").small().on_click(move |_, app| me.update(app, |shell, cx| shell.devices_forget(cx)))

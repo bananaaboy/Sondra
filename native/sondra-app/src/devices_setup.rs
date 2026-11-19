@@ -7,7 +7,8 @@ use std::sync::Arc;
 use sondra_devices::engine::{now_ms, Engine, OnOwnChange, Timing};
 use sondra_devices::own::Own;
 use sondra_devices::registry::Hardware;
-use sondra_devices::rtc::{Config, IceServer};
+use sondra_devices::rtc::Config;
+use sondra_devices::servers::{ice_servers_for, ServerSettings};
 use sondra_drive::keystore::{FileKeyStore, KeyStore};
 use sondra_drive::{Account, ClientCredentials, DriveClient, Endpoints};
 
@@ -30,10 +31,19 @@ fn default_name() -> &'static str {
     "PC"
 }
 
-/// The ICE servers the person put in, if any: none are built in, so a stranger's server never sees an
-/// address. (The page for them is still to come; the file is read as the web app's settings are.)
-fn servers() -> Vec<IceServer> {
-    Vec::new()
+/// The addresses of the server the person put in, kept in the data folder (the web app keeps them in
+/// `localStorage`, `sondra:geraete:server`). The password is never written.
+fn load_servers() -> ServerSettings {
+    let stored = crate::store::FileStore::at_default("Geraete.json").and_then(|s| sondra_merk::folder_memory::Store::get_item(&s, "server")).and_then(|j| serde_json::from_str::<serde_json::Value>(&j).ok());
+    let text = |key: &str| stored.as_ref().and_then(|v| v[key].as_str()).unwrap_or("").to_owned();
+    ServerSettings { stun: text("stun"), turn: text("turn"), user: text("user"), password: String::new() }
+}
+
+fn save_servers(settings: &ServerSettings) {
+    if let Some(mut store) = crate::store::FileStore::at_default("Geraete.json") {
+        let value = if settings.stun.is_empty() && settings.turn.is_empty() && settings.user.is_empty() { String::new() } else { serde_json::json!({ "stun": settings.stun, "turn": settings.turn, "user": settings.user }).to_string() };
+        sondra_merk::folder_memory::Store::set_item(&mut store, "server", value);
+    }
 }
 
 /// A setup on this computer, or `None` where there is no folder to keep anything in.
@@ -48,6 +58,8 @@ pub fn production() -> Option<Setup> {
     let identity = Arc::new(FileKeyStore::new(dir.join("geraet-schluessel.bin")));
     let (a1, a2, a3) = (account.clone(), account.clone(), account);
     let (i1, i2) = (identity.clone(), identity);
+    let servers = Arc::new(std::sync::Mutex::new(load_servers()));
+    let live = servers.clone();
     Some(Setup {
         configured,
         signed_in: Arc::new(move || a1.connected()),
@@ -71,12 +83,14 @@ pub fn production() -> Option<Setup> {
                 &own.name,
                 own.created,
                 Hardware { kind: "windows".into(), platform: "Windows-App".into(), caps: vec!["folder".into(), "text".into()] },
-                Config { servers: servers(), loopback: false },
+                Config { servers: Vec::new(), live: Some({ let live = live.clone(); Arc::new(move || ice_servers_for(&live.lock().expect("lock"))) }), loopback: false },
                 Timing::default(),
                 own.decided,
                 Some(keep),
             ))
         }),
         forget: Arc::new(move || i2.clear()),
+        servers,
+        keep_servers: Arc::new(save_servers),
     })
 }

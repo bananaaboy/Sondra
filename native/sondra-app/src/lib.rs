@@ -8,6 +8,7 @@ pub mod convert_page;
 pub mod download_page;
 pub mod covers;
 pub mod devices_page;
+pub mod devices_servers;
 pub mod devices_setup;
 pub mod discord;
 pub mod floating;

@@ -54,7 +54,7 @@ fn device(drive: &FakeDrive, name: &str, created: f64) -> Engine {
         name,
         created,
         Hardware { kind: "windows".into(), platform: "Windows-App".into(), caps: vec!["folder".into(), "text".into()] },
-        Config { servers: vec![], loopback: true },
+        Config { servers: vec![], live: None, loopback: true },
         Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150) },
         false,
         None,

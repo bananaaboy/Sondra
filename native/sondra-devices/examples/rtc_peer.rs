@@ -60,7 +60,7 @@ fn main() {
     let dir = PathBuf::from(std::env::args().nth(1).expect("a directory"));
     let mode = std::env::args().nth(2).expect("send or receive");
     // Chromium run by the script hides nothing; the loopback address is for two programs on one computer.
-    let config = Config { servers: vec![], loopback: true };
+    let config = Config { servers: vec![], live: None, loopback: true };
     if mode == "send" {
         let (initiator, offer) = Initiator::offer(&config).expect("an offer");
         std::fs::write(dir.join("offer.sdp"), offer).unwrap();

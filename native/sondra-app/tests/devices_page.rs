@@ -38,7 +38,7 @@ fn engine(drive: &FakeDrive, name: &str, created: f64) -> Engine {
         name,
         created,
         Hardware { kind: "android".into(), platform: "Android-App".into(), caps: vec!["folder".into(), "text".into()] },
-        Config { servers: vec![], loopback: true },
+        Config { servers: vec![], live: None, loopback: true },
         Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150) },
         false,
         None,
@@ -53,6 +53,8 @@ fn setup(drive: &FakeDrive) -> Setup {
         sign_in: Arc::new(|| Ok(())),
         start: Arc::new(move || Ok(engine(&drive, "Laptop", now_ms() - 5.0 * 86_400_000.0))),
         forget: Arc::new(|| {}),
+        servers: Default::default(),
+        keep_servers: Arc::new(|_| {}),
     }
 }
 
@@ -214,4 +216,51 @@ fn where_no_google_client_is_set_up_the_page_says_so_and_offers_nothing(cx: &mut
     let w = open(cx, s, tmp.path(), tmp.path());
     assert!(w.said("nicht eingerichtet"));
     assert!(w.tree().find(Role::Button, "Dieses Gerät verbinden").is_none());
+}
+
+#[gpui::test]
+fn an_own_server_is_put_in_checked_and_used_by_the_next_connection_without_showing_the_password(cx: &mut TestAppContext) {
+    let drive = FakeDrive::start();
+    let tmp = tempfile::tempdir().unwrap();
+    let kept: Arc<std::sync::Mutex<Vec<sondra_devices::servers::ServerSettings>>> = Arc::default();
+    let mut s = setup(&drive);
+    let (servers, record) = (s.servers.clone(), kept.clone());
+    s.keep_servers = Arc::new(move |settings| record.lock().unwrap().push(settings.clone()));
+    let mut w = open(cx, s, tmp.path(), tmp.path());
+    w.press(Role::Button, "Dieses Gerät verbinden");
+    w.wait("connected", 30, |w| w.tree().find(Role::Heading, "Ihre anderen Geräte").is_some());
+
+    // Closed until asked for; nothing is built in.
+    assert!(w.tree().find(Role::TextInput, "STUN-Server").is_none());
+    assert!(servers.lock().unwrap().stun.is_empty() && servers.lock().unwrap().turn.is_empty());
+    w.press(Role::Button, "Eigener Server für andere Netze");
+
+    let type_into = |w: &mut Window<'_>, role: Role, label: &str, text: &str| {
+        let field = w.tree().find(role, label).unwrap_or_else(|| panic!("{label}: {:?}", w.labels())).id;
+        w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: field, data: None }, window, cx));
+        w.cx.simulate_input(text);
+        w.draw();
+    };
+    type_into(&mut w, Role::TextInput, "STUN-Server", "http://beispiel.de");
+    assert!(w.said("Sie beginnt mit „stun:“"), "{:?}", w.labels());
+    assert!(w.tree().find(Role::Button, "Übernehmen").is_some());
+
+    // A right one, and a relay with a login.
+    w.shell.update(w.cx, |shell, cx| shell.devices_servers_fill("stun:beispiel.de:3478", cx));
+    w.draw();
+    type_into(&mut w, Role::TextInput, "TURN-Server (Relay)", "turn:beispiel.de:3478");
+    type_into(&mut w, Role::TextInput, "Benutzername", "mia");
+    type_into(&mut w, Role::PasswordInput, "Passwort", "geheim");
+    let password = w.tree().find(Role::PasswordInput, "Passwort").unwrap().clone();
+    assert!(password.value.as_ref().is_none_or(|v| AsRef::<str>::as_ref(v).is_empty()), "the password is not told to a screen reader");
+
+    w.press(Role::Button, "Übernehmen");
+    let now = servers.lock().unwrap().clone();
+    assert_eq!((now.stun.as_str(), now.turn.as_str(), now.user.as_str(), now.password.as_str()), ("stun:beispiel.de:3478", "turn:beispiel.de:3478", "mia", "geheim"));
+    assert_eq!(sondra_devices::servers::ice_servers_for(&now).len(), 2, "the next connection is made with both");
+    assert_eq!(kept.lock().unwrap().len(), 1, "the addresses are kept for the next start");
+    assert!(w.said("gilt für die nächste Verbindung"));
+
+    w.press(Role::Button, "Leeren");
+    assert!(servers.lock().unwrap().stun.is_empty() && servers.lock().unwrap().password.is_empty());
 }
