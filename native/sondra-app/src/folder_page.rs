@@ -8,7 +8,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use gpui::{div, prelude::*, px, AnyElement, App, Context, Entity, FocusHandle, PathPromptOptions, SharedString};
+use gpui::{div, prelude::*, px, AnyElement, App, Context, ElementId, Entity, FocusHandle, PathPromptOptions, SharedString};
+use sondra_a11y::{accessible, Role};
 use serde_json::{json, Map, Value};
 use sondra_merk::bin::{bin_files, count_bin, erase_files, erase_from_bin, list_bin, restore_binned, restore_from_bin, BinItem, Binned, BIN_NAME};
 use sondra_merk::folder::{click_select, crumbs, listing, without_files, AssetKind, FolderFile, FolderScan, KindFilter, ListingOptions, SortKey};
@@ -622,7 +623,7 @@ impl Shell {
                 tile: tiles.then_some(TILE_W),
                 selected,
                 body: if tiles {
-                    let picture = self.tile_picture(c, file);
+                    let picture = self.tile_picture(c, file, &me);
                     let mut under = div().flex().flex_col().gap(px(2.)).child(div().font_family(family::VALUE).text_color(c.ink).truncate().child(file.name.clone())).child(div().text_size(px(size::SMALL)).text_color(c.prose).truncate().child(facts));
                     if !place.is_empty() {
                         under = under.child(div().text_size(px(size::SMALL)).text_color(c.muted).truncate().child(place.clone()));
@@ -691,7 +692,7 @@ impl Shell {
 
     /// The picture of a tile: the file's own small picture when there is one, otherwise what kind of file it is;
     /// the length of a film or a song in a corner.
-    fn tile_picture(&self, colors: sondra_ui::Colors, file: &FolderFile) -> AnyElement {
+    fn tile_picture(&self, colors: sondra_ui::Colors, file: &FolderFile, me: &Entity<Shell>) -> AnyElement {
         let mut frame = div().relative().w(px(TILE_W - 8.)).h(px(TILE_H)).flex_none().overflow_hidden().rounded(px(sondra_ui::radius::NAV)).bg(colors.panel_mid).flex().items_center().justify_center();
         let mut seconds = None;
         let mut shown = false;
@@ -712,6 +713,49 @@ impl Shell {
         }
         if let Some(seconds) = seconds {
             frame = frame.child(div().absolute().right(px(6.)).bottom(px(6.)).px(px(6.)).py(px(1.)).rounded(px(sondra_ui::radius::PILL)).bg(colors.ink).text_color(colors.canvas).font_family(family::VALUE).text_size(px(size::MICRO)).child(crate::thumbs::clock(seconds)));
+        }
+        // ▶ on a film or a song of this computer: plays that one file, as a tap on the tile does on the website.
+        if let (Some(root), None, true) = (&self.folder.root, &file.drive, matches!(file.kind, AssetKind::Video | AssetKind::Audio)) {
+            let path = root.join(file.path.replace('/', std::path::MAIN_SEPARATOR_STR));
+            let (me, name) = (me.clone(), file.name.clone());
+            let play = {
+                let (me, path) = (me.clone(), path.clone());
+                move |app: &mut App| {
+                    let path = path.clone();
+                    me.update(app, move |shell, cx| {
+                        shell.go(crate::nav::Panel::Player, cx);
+                        shell.play_files(vec![path], cx);
+                    })
+                }
+            };
+            let again = play.clone();
+            frame = frame.child(
+                accessible(
+                    ElementId::Name(format!("abspielen-{}", file.path).into()),
+                    Role::Button,
+                    div()
+                        .id(ElementId::Name(format!("abspielen-bild-{}", file.path).into()))
+                        .absolute()
+                        .left(px(6.))
+                        .bottom(px(6.))
+                        .w(px(28.))
+                        .h(px(28.))
+                        .rounded(px(sondra_ui::radius::PILL))
+                        .bg(colors.ink)
+                        .text_color(colors.canvas)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .on_click(move |_, _, app| {
+                            app.stop_propagation();
+                            play(app);
+                        })
+                        .child("▶"),
+                )
+                .label(format!("{name} abspielen"))
+                .on_activate(move |_, app| again(app)),
+            );
         }
         frame.into_any_element()
     }

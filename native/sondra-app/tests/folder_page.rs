@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use accesskit::{Action, ActionRequest, TreeId};
-use gpui::{point, px, size, AvailableSpace, Entity, TestAppContext, VisualTestContext};
+use gpui::{point, px, size, AvailableSpace, Entity, Modifiers, MouseButton, TestAppContext, VisualTestContext};
 use sondra_a11y::{attach_sink, run_action, Role, Snapshot};
 use sondra_app::nav::Panel;
 use sondra_app::shell::Shell;
@@ -478,6 +478,29 @@ fn the_series_on_the_list_continue_from_where_they_stand_and_play_the_unseen_one
     w.press(Role::Button, "Folge 1 abspielen");
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv"]);
+}
+
+#[gpui::test]
+fn a_tile_of_a_film_has_a_play_button_that_plays_just_that_one(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Filme");
+    for (n, name) in ["a.mkv", "b.mkv", "notizen.txt"].iter().enumerate() {
+        put(&root, name, 100 + n * 10);
+    }
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    assert!(w.tree().find(Role::Button, "b.mkv abspielen").is_some());
+    assert!(w.tree().find(Role::Button, "notizen.txt abspielen").is_none(), "a note has nothing to play");
+    // A real click on the button: it plays, and the tile under it is not chosen by the same click.
+    let b = w.tree().find(Role::Button, "b.mkv abspielen").unwrap().bounds;
+    let at = point(b.origin.x + b.size.width / 2.0, b.origin.y + b.size.height / 2.0);
+    w.cx.simulate_mouse_down(at, MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_up(at, MouseButton::Left, Modifiers::default());
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["b.mkv"]);
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Folder, cx));
+    w.draw();
+    assert!(!w.tree().nodes.iter().any(|n| n.description.as_ref().is_some_and(|d| d.starts_with("Ausgewählt"))), "nothing was chosen");
 }
 
 #[gpui::test]
