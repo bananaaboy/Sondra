@@ -339,7 +339,13 @@ impl Shell {
             let mut rows = div().flex().flex_col();
             for (n, made) in s.made.iter().enumerate() {
                 let (name, says, path) = match &made.result {
-                    Ok((path, bytes)) => (path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default(), format!("{} · {}", path.display(), size_text(*bytes)), Some(path.clone())),
+                    Ok((path, bytes)) => {
+                        let drive_note = match self.drive_saves.get(path) {
+                            Some(crate::drive_hub::Line::Failed(why)) => format!(" · Drive: {why}"),
+                            _ => String::new(),
+                        };
+                        (path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default(), format!("{} · {}{drive_note}", path.display(), size_text(*bytes)), Some(path.clone()))
+                    }
                     Err(message) => (made.from.clone(), format!("Nicht umgewandelt: {message}"), None),
                 };
                 let mut actions = div().flex().gap(px(8.));
@@ -354,6 +360,23 @@ impl Shell {
                                 shell.go(Panel::Player, cx);
                                 shell.play_files(vec![p], cx);
                             })
+                        }));
+                    }
+                    if self.drive.as_ref().is_some_and(|d| d.configured) {
+                        let save = me.clone();
+                        let target = path.clone();
+                        let state = self.drive_saves.get(&path);
+                        let (label, busy_now) = match &state {
+                            Some(crate::drive_hub::Line::Busy(Some(f))) => (format!("Drive {} %", (f * 100.0).round() as i32), true),
+                            Some(crate::drive_hub::Line::Busy(None)) => ("Drive …".to_string(), true),
+                            Some(crate::drive_hub::Line::Done) => ("In Drive gespeichert".to_string(), false),
+                            Some(crate::drive_hub::Line::Already) => ("Schon in Drive".to_string(), false),
+                            Some(crate::drive_hub::Line::Failed(_)) => ("Erneut versuchen".to_string(), false),
+                            None => ("In Drive".to_string(), false),
+                        };
+                        actions = actions.child(ui.button(format!("fertig-drive-{n}"), label).small().disabled(busy_now).accessible_name(format!("{name} in Drive speichern")).on_click(move |_, app| {
+                            let p = target.clone();
+                            save.update(app, |shell, cx| shell.save_to_drive(p, cx))
                         }));
                     }
                     actions = actions.child(ui.button(format!("fertig-zeigen-{n}"), "Im Ordner zeigen").small().accessible_name(format!("{name} im Ordner zeigen")).on_click(move |_, app| {

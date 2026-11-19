@@ -91,6 +91,9 @@ pub struct Shell {
     pub(crate) discord: crate::discord::DiscordState,
     pub(crate) news_rounds: crate::new_episodes::NewEpisodes,
     pub update: crate::updater_ui::Updates,
+    /// Google Drive for the saves of results; `None` where nothing can be kept.
+    pub drive: Option<crate::drive_hub::Drive>,
+    pub drive_saves: crate::drive_hub::Saves,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
@@ -182,6 +185,8 @@ impl Shell {
             discord: crate::discord::DiscordState::default(),
             news_rounds: crate::new_episodes::NewEpisodes::default(),
             update: crate::updater_ui::Updates::default(),
+            drive: crate::drive_hub::Drive::production(),
+            drive_saves: crate::drive_hub::Saves::default(),
             convert_watch: None,
             pending_focus: None,
             whats_new_open: false,

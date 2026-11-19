@@ -105,6 +105,34 @@ fn files_are_converted_one_after_the_other_and_offered_in_a_list(cx: &mut TestAp
     assert_eq!(names, ["eins.mp3", "zwei.mp3"], "both, named after their sources, in the folder chosen");
     assert!(w.tree().find(Role::ListItem, "eins.mp3").is_some());
     assert!(w.tree().find(Role::Button, "eins.mp3 abspielen").is_some());
+    // „In Drive“: the file goes into Sondra/Dateien/Ton, and the same again is „Schon in Drive“.
+    let fake = sondra_drive::fake::FakeDrive::start();
+    w.shell.update(w.cx, |shell, _| {
+        shell.set_drive_for_test(sondra_app::drive_hub::Drive {
+            api: fake.api(),
+            tokens: std::sync::Arc::new(sondra_drive::fake::Always),
+            configured: true,
+            connected: std::sync::Arc::new(|| true),
+            sign_in: std::sync::Arc::new(|| Ok(())),
+        })
+    });
+    w.draw();
+    w.press(Role::Button, "eins.mp3 in Drive speichern");
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if fake.files_named("eins.mp3").len() == 1 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(fake.files_named("eins.mp3").len(), 1, "the file is in Drive");
+    {
+        let state = fake.state.lock().unwrap();
+        let entry = state.entries.values().find(|e| e.name == "eins.mp3").unwrap();
+        let parent = state.entries.get(&entry.parent).unwrap();
+        assert_eq!(parent.name, "Ton", "in the folder for sound");
+    }
     // Two results: one ZIP of them, beside them, and the same again does not replace it.
     w.press(Role::Button, "Alle als ZIP speichern");
     for _ in 0..200 {

@@ -6,6 +6,7 @@ pub mod audio_page;
 pub mod clip_player;
 pub mod convert_page;
 pub mod download_page;
+pub mod drive_hub;
 pub mod covers;
 pub mod crop_ui;
 pub mod cut_drag;
