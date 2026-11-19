@@ -81,18 +81,14 @@ where
     }
     let total = delay + duration;
     element
-        .with_animation(
-            id,
-            Animation::new(total),
-            move |element, elapsed| {
-                let t = progress(elapsed, total, delay, duration);
-                element
-                    .relative()
-                    .left(px(from.0 * (1.0 - t)))
-                    .top(px(from.1 * (1.0 - t)))
-                    .opacity(t)
-            },
-        )
+        .with_animation(id, Animation::new(total), move |element, elapsed| {
+            let t = progress(elapsed, total, delay, duration);
+            element
+                .relative()
+                .left(px(from.0 * (1.0 - t)))
+                .top(px(from.1 * (1.0 - t)))
+                .opacity(t)
+        })
         .into_any_element()
 }
 

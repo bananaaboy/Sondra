@@ -226,15 +226,26 @@ impl Shell {
             let entry = ENTRIES[i];
             let selected = i == chosen;
             let me = me.clone();
-            let tab = ui
+            let mut tab = ui
                 .tab(format!("reiter-{}", entry.id()), label_of(i), selected)
-                .focus_handle(self.tab_focus[i].clone())
-                .on_click(move |_, app| {
-                    me.update(app, |shell, cx| match entry {
-                        Entry::Single(p) => shell.go(p, cx),
-                        Entry::Group { .. } => shell.toggle_menu(Menu::Entry(i), cx),
-                    });
+                .focus_handle(self.tab_focus[i].clone());
+            if let Entry::Group { label, panels, .. } = entry {
+                // The little arrow is for the eye; the reader gets the name and what the button does.
+                let name = if selected {
+                    format!("{label} · {}", self.panel.label())
+                } else {
+                    label.to_string()
+                };
+                tab = tab
+                    .accessible_name(name)
+                    .note(format!("Menü mit {} Werkzeugen", panels.len()));
+            }
+            let tab = tab.on_click(move |_, app| {
+                me.update(app, |shell, cx| match entry {
+                    Entry::Single(p) => shell.go(p, cx),
+                    Entry::Group { .. } => shell.toggle_menu(Menu::Entry(i), cx),
                 });
+            });
             let mut cell = div().relative().child(tab);
             if self.menu == Some(Menu::Entry(i)) {
                 cell = cell.child(self.popover(ui, Menu::Entry(i), cx));
@@ -245,6 +256,8 @@ impl Shell {
             let me = me.clone();
             let more = ui
                 .tab("reiter-mehr", "Mehr ▾", fit.hidden.contains(&chosen))
+                .accessible_name("Mehr")
+                .note("Menü mit den weiteren Werkzeugen")
                 .focus_handle(self.tab_focus[ENTRIES.len()].clone())
                 .on_click(move |_, app| {
                     me.update(app, |shell, cx| shell.toggle_menu(Menu::More, cx));
@@ -385,6 +398,7 @@ impl Shell {
                     .flex()
                     .flex_col()
                     .gap(px(8.))
+                    .w_full()
                     .max_w(px(34. * size::BODY))
                     .child(ui.display("Ton, Video und Bilder bearbeiten"))
                     .child(
@@ -638,7 +652,7 @@ impl Shell {
             .flex_col()
             .gap(px(10.))
             .child(ui.subheading("Filme und Serien"))
-            .child(self.grid(ui, tiles, cols.min(4)))
+            .child(self.grid(ui, tiles, if cols >= 3 { 4 } else { 2 }))
             .into_any_element()
     }
 

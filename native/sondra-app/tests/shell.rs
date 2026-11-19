@@ -96,10 +96,18 @@ fn the_start_page_has_its_headings_its_tabs_and_its_tiles(cx: &mut TestAppContex
             .is_some(),
         "the row of tabs is navigation"
     );
-    assert_eq!(
-        tree.find(Role::Button, "Start").unwrap().selected,
-        Some(true)
+    assert!(
+        said(&tree, Role::Button, "Start").starts_with("Geöffnet"),
+        "the chosen tab says so in words (a selectable item is not invocable in UI Automation)"
     );
+    assert!(
+        tree.find(Role::Button, "Start")
+            .unwrap()
+            .default_action
+            .is_some(),
+        "and it can be pressed"
+    );
+    assert!(said(&tree, Role::Button, "Ton").contains("Menü mit 6 Werkzeugen"));
     for tab in [
         "Merkliste",
         "Ordner",
@@ -119,7 +127,7 @@ fn the_start_page_has_its_headings_its_tabs_and_its_tiles(cx: &mut TestAppContex
 fn a_group_tab_opens_its_menu_and_a_choice_goes_there(cx: &mut TestAppContext) {
     let mut w = open(cx, 1280.);
     assert!(w.tree().find(Role::Menu, "Ton").is_none());
-    w.press(Role::Button, "Ton ▾", 1280.);
+    w.press(Role::Button, "Ton", 1280.);
     let tree = w.tree();
     assert!(
         tree.find(Role::Menu, "Ton").is_some(),
@@ -143,13 +151,10 @@ fn a_group_tab_opens_its_menu_and_a_choice_goes_there(cx: &mut TestAppContext) {
         "a choice shuts the menu"
     );
     assert!(
-        tree.find(Role::Button, "Ton · Mischen ▾").is_some(),
+        tree.find(Role::Button, "Ton · Mischen").is_some(),
         "the group names the tool chosen in it"
     );
-    assert_eq!(
-        tree.find(Role::Button, "Ton · Mischen ▾").unwrap().selected,
-        Some(true)
-    );
+    assert!(said(&tree, Role::Button, "Ton · Mischen").starts_with("Geöffnet"));
     assert!(tree.find(Role::Heading, "Mischen").is_some());
     assert!(
         tree.find(Role::Status, "Dieses Werkzeug gibt es in der neuen App noch nicht. In der Windows-App und auf der Website funktioniert es wie gewohnt.").is_some(),
@@ -160,7 +165,7 @@ fn a_group_tab_opens_its_menu_and_a_choice_goes_there(cx: &mut TestAppContext) {
 #[gpui::test]
 fn escape_shuts_a_menu(cx: &mut TestAppContext) {
     let mut w = open(cx, 1280.);
-    w.press(Role::Button, "Bearbeiten ▾", 1280.);
+    w.press(Role::Button, "Bearbeiten", 1280.);
     assert!(w.tree().find(Role::Menu, "Bearbeiten").is_some());
     w.cx.simulate_keystrokes("escape");
     w.draw(1280.);
@@ -172,7 +177,7 @@ fn what_does_not_fit_stands_behind_more_and_nothing_is_lost(cx: &mut TestAppCont
     let mut w = open(cx, 700.);
     let tree = w.tree();
     assert!(
-        tree.find(Role::Button, "Mehr ▾").is_some(),
+        tree.find(Role::Button, "Mehr").is_some(),
         "a narrow window has „Mehr“"
     );
     assert!(
@@ -180,10 +185,10 @@ fn what_does_not_fit_stands_behind_more_and_nothing_is_lost(cx: &mut TestAppCont
         "the tasks stay in the row"
     );
     assert!(
-        tree.find(Role::Button, "Aufnehmen ▾").is_none(),
+        tree.find(Role::Button, "Aufnehmen").is_none(),
         "the tools went behind it"
     );
-    w.press(Role::Button, "Mehr ▾", 700.);
+    w.press(Role::Button, "Mehr", 700.);
     let tree = w.tree();
     assert!(tree.find(Role::Menu, "Weitere Werkzeuge").is_some());
     assert!(
@@ -196,11 +201,11 @@ fn what_does_not_fit_stands_behind_more_and_nothing_is_lost(cx: &mut TestAppCont
 #[gpui::test]
 fn the_chosen_tool_is_always_in_the_row(cx: &mut TestAppContext) {
     let mut w = open(cx, 700.);
-    w.press(Role::Button, "Mehr ▾", 700.);
+    w.press(Role::Button, "Mehr", 700.);
     w.press(Role::MenuItem, "Mikrofon", 700.);
     let tree = w.tree();
     assert!(
-        tree.find(Role::Button, "Aufnehmen · Mikrofon ▾").is_some(),
+        tree.find(Role::Button, "Aufnehmen · Mikrofon").is_some(),
         "even in a narrow window the chosen group stays in the row"
     );
 }
@@ -250,6 +255,12 @@ fn the_rest_of_a_group_unfolds_and_the_search_finds_by_what_people_type(cx: &mut
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Folder);
 }
 
+fn said(tree: &Snapshot, role: Role, label: &str) -> String {
+    tree.find(role, label)
+        .and_then(|n| n.description.as_ref().map(|d| d.to_string()))
+        .unwrap_or_default()
+}
+
 fn focused(tree: &Snapshot) -> String {
     tree.nodes
         .iter()
@@ -261,7 +272,7 @@ fn focused(tree: &Snapshot) -> String {
 #[gpui::test]
 fn escape_gives_the_focus_back_to_the_tab_that_opened_the_menu(cx: &mut TestAppContext) {
     let mut w = open(cx, 1280.);
-    w.press(Role::Button, "Ton ▾", 1280.);
+    w.press(Role::Button, "Ton", 1280.);
     assert_eq!(
         focused(&w.tree()),
         "Ton",
@@ -272,17 +283,17 @@ fn escape_gives_the_focus_back_to_the_tab_that_opened_the_menu(cx: &mut TestAppC
     assert!(w.tree().find(Role::Menu, "Ton").is_none());
     assert_eq!(
         focused(&w.tree()),
-        "Ton ▾",
+        "Ton",
         "the tab that opened it has the focus again"
     );
     // Left and Right walk the row.
     w.cx.simulate_keystrokes("right");
     w.draw(1280.);
-    assert_eq!(focused(&w.tree()), "Aufnehmen ▾");
+    assert_eq!(focused(&w.tree()), "Aufnehmen");
     w.cx.simulate_keystrokes("left");
     w.cx.simulate_keystrokes("left");
     w.draw(1280.);
-    assert_eq!(focused(&w.tree()), "Bearbeiten ▾");
+    assert_eq!(focused(&w.tree()), "Bearbeiten");
     w.cx.simulate_keystrokes("enter");
     w.draw(1280.);
     assert!(

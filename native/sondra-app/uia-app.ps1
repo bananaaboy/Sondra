@@ -71,7 +71,7 @@ foreach ($tab in @('Start', 'Merkliste', 'Ordner', 'Abspielen', 'Herunterladen')
 }
 
 # A group of tabs is a menu: open it, find its tools, choose one.
-$group = Named 'Ton *' $CT::Button
+$group = Named 'Ton' $CT::Button
 Check ($null -ne $group) 'the group Ton is in the row'
 if ($null -ne $group) {
     Check (Invoke-It $group) 'it can be invoked'
@@ -84,7 +84,7 @@ if ($null -ne $group) {
         Check (Invoke-It $mix) 'a menu item can be invoked'
         $heading = Wait-For 'Mischen' $CT::Text
         Check ($null -ne $heading) 'the tool opened: its heading is on the page'
-        Check ($null -ne (Wait-For 'Ton * Mischen*' $CT::Button)) 'the group names the tool chosen in it'
+        Check ($null -ne (Wait-For 'Ton * Mischen' $CT::Button)) 'the group names the tool chosen in it'
         Check (Wait-Gone 'Spuren trennen' $CT::MenuItem) 'the menu shut by the choice'
     }
 }
@@ -104,7 +104,7 @@ if ($null -ne $field) {
 }
 
 # A menu shuts with Escape.
-$bearbeiten = Named 'Bearbeiten *' $CT::Button
+$bearbeiten = Named 'Bearbeiten' $CT::Button
 if ($null -ne $bearbeiten) {
     [void](Invoke-It $bearbeiten)
     $item = Wait-For 'Umwandeln' $CT::MenuItem
@@ -115,7 +115,7 @@ if ($null -ne $bearbeiten) {
 }
 
 # Leave a menu open for the picture.
-$group = Named 'Ton *' $CT::Button
+$group = Named 'Ton' $CT::Button
 if ($null -ne $group) { [void](Invoke-It $group) }
 Start-Sleep -Seconds 1
 

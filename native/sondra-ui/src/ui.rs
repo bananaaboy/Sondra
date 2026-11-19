@@ -359,9 +359,21 @@ pub struct Tab {
     on_click: Option<Handler>,
     /// A handle the screen owns, so it can give the focus back to this tab when a menu shuts.
     focus: Option<FocusHandle>,
+    /// What a screen reader says, when the text on the tab is not it (a small arrow on a group).
+    name: Option<SharedString>,
+    /// A line a screen reader adds to the name.
+    note: Option<SharedString>,
 }
 
 impl Tab {
+    pub fn accessible_name(mut self, name: impl Into<SharedString>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+    pub fn note(mut self, note: impl Into<SharedString>) -> Self {
+        self.note = Some(note.into());
+        self
+    }
     pub fn focus_handle(mut self, handle: FocusHandle) -> Self {
         self.focus = Some(handle);
         self
@@ -410,10 +422,21 @@ impl RenderOnce for Tab {
             self.on_click.clone(),
         );
 
+        // The chosen tab is said in words, not as „selected“: a selectable item is not invocable in UI
+        // Automation, and a tab here is navigation — pressing it goes there.
+        let mut note = self.note.map(|n| n.to_string());
+        if self.selected {
+            note = Some(match note {
+                Some(n) => format!("Geöffnet. {n}"),
+                None => "Geöffnet".into(),
+            });
+        }
         let mut node = accessible(self.id.clone(), Role::Button, visual)
-            .label(self.label)
-            .selected(self.selected)
+            .label(self.name.unwrap_or(self.label))
             .focus(&focus);
+        if let Some(note) = note {
+            node = node.description(note);
+        }
         if let Some(handler) = self.on_click {
             node = node.on_activate(move |window, cx| handler(window, cx));
         }
@@ -527,6 +550,8 @@ impl Ui {
             selected,
             on_click: None,
             focus: None,
+            name: None,
+            note: None,
         }
     }
 

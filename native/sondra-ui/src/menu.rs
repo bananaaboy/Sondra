@@ -112,12 +112,17 @@ impl RenderOnce for MenuItem {
                 _ => {}
             }
         });
+        // The chosen one is said in words (a selectable item is not invocable in UI Automation).
+        let description = match (self.selected, self.hint.clone()) {
+            (true, Some(hint)) => Some(format!("Geöffnet. {hint}")),
+            (true, None) => Some("Geöffnet".to_string()),
+            (false, hint) => hint.map(|h| h.to_string()),
+        };
         let mut node = accessible(self.id.clone(), Role::MenuItem, visual)
             .label(self.label.clone())
-            .selected(self.selected)
             .focus(&focus);
-        if let Some(hint) = self.hint {
-            node = node.description(hint);
+        if let Some(description) = description {
+            node = node.description(description);
         }
         if let Some(handler) = self.on_click {
             node = node.on_activate(move |window, cx| handler(window, cx));

@@ -124,15 +124,16 @@ fn every_component_has_a_role_and_a_name(cx: &mut TestAppContext) {
         snap.find(Role::Button, "Video").unwrap().toggled,
         Some(false)
     );
+    let said = |label: &str| {
+        snap.find(Role::Button, label)
+            .and_then(|n| n.description.as_ref().map(|d| d.to_string()))
+    };
     assert_eq!(
-        snap.find(Role::Button, "Start").unwrap().selected,
-        Some(true),
-        "the chosen tab says so"
+        said("Start").as_deref(),
+        Some("Geöffnet"),
+        "the chosen tab says so in words: a selectable item is not invocable in UI Automation"
     );
-    assert_eq!(
-        snap.find(Role::Button, "Ordner").unwrap().selected,
-        Some(false)
-    );
+    assert_eq!(said("Ordner"), None);
 
     let tile = snap
         .find(Role::Button, "Umwandeln")
