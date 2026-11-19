@@ -1,147 +1,1461 @@
-# Funktionsliste: was Sondra heute kann und was davon nativ ist
+# Sondra
 
-Die Liste, an der „kein Funktionsverlust“ gemessen wird (siehe `PLAN.md`). Quelle
-sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
+Deutschsprachiges Medienstudio, das im Browser rechnet. Vite 7 · React 19 ·
+TypeScript · Tailwind v4 · zustand. Oberflächentexte sind **Deutsch**,
+Codekommentare **Englisch**.
 
-- **Stand:** `offen` · `in Arbeit` · `nativ ✔` (die Prüfung läuft) ·
-  `Entscheidung` (kann oder soll nicht 1:1 nachgebaut werden — wird nur mit dem
-  Wort des Nutzers gestrichen).
-- **Welle** nach `PLAN.md`. **Prüfung:** was die Zeile belegt; ein Skript der
-  Website (`verify:…`) heißt, die Rust-Fassung bekommt dieselben Eingaben.
-- Fehlt etwas, kommt eine Zeile dazu. Die Liste ist nie „fertig“, nur leer.
+Wer das Produkt sucht — Publikum, Hauptaufgabe, die gesetzten Einschränkungen
+und die gemessenen Grenzen, die Versprechen begrenzen — findet es in
+[PRODUCT.md](PRODUCT.md). Diese Datei hier hält die gestalterischen
+Entscheidungen, und zwar als einzige: zwei Regeldateien driften auseinander und
+ziehen spätere Arbeit in verschiedene Richtungen.
 
-## Rahmen und Start
+## Design
 
-| ID | Funktion | Bestand | Welle | Prüfung | Stand |
-| --- | --- | --- | --- | --- | --- |
-| R01 | Kopfzeile: Dateimenü, Sitzung hinter dem Dateinamen, Drive-Knopf, Versionsmarke | `AppShell`, `GoogleDrive` | 3 | Bildschirmfotos | offen |
-| R02 | Reiterleiste: 6 einzelne, 3 Gruppen, „Mehr“ bei Platzmangel, Pfeiltasten | `PanelTabs`, `panelMeta` | 3 | Tabellen gegen `panelMeta.tsx` (golden); Klicktests im GPUI-Fenster (Gruppenmenü, Mehr, gewähltes bleibt, Escape); Job `app` über UI Automation. **Pfeiltasten zwischen den Reitern und Bewegung fehlen noch** | in Arbeit |
-| R03 | Startseite: Einstieg, „Datei auswählen“, „Von Adresse laden“, Filme und Serien, Werkzeug-Kacheln mit Filter | `Home` | 3 | die 50 Kacheln und die Suche sind die der Website (golden, gleiche Treffer in gleicher Reihenfolge); Tests im GPUI-Fenster; Bildschirmfoto aus Job `app`. **Kacheln ohne Symbole (ein Buchstabe), „Projekt laden“, Sitzungsdateien und „Heute weiterschauen“ fehlen** | in Arbeit |
-| R04 | „Heute weiterschauen“ auf der Startseite | `Home` | 4 | Szenario „serien“ | **nativ ✔** — Startseite: bis zu drei Serien „Am Schauen“, zuletzt geöffnet zuerst, als Zeile mit Cover, Stand und „Weiter →“; ein Klick öffnet die Serie. Nichts im Weg, wenn nichts geschaut wird. |
-| R05 | Hell und dunkel, Farben und Radien nach `DESIGN.md`, Kontrast nach APCA | `ThemeToggle` | 3 | `sondra-ui/tests/contrast.rs`: APCA in Hell und Dunkel auf dem Grund, auf dem jedes Ding wirklich steht (Fliesstext ≥ 75, sekundär ≥ 60, Überschriften ≥ 45, Nicht-Text ≥ 15); `tests/theme.rs`: der Schalter der Kopfzeile stellt jedes Feld jeder Seite um | **nativ ✔** — das Thema wird beim Start nach dem System gewählt, der Schalter wechselt es; vor dieser Änderung blieben elf Felder (Umwandeln, Geräte, Befehlspalette, Empfangen …) in den Farben des alten Themas. Nicht gemerkt für den nächsten Start, kein Mitgehen beim Wechsel des Systems zur Laufzeit |
-| R06 | Schriften Public Sans, Courier Prime, Cormorant | `index.css` | 3 | Bildschirmfotos der CI | **nativ ✔** — alle drei mit dem Programm gebündelt (`sondra-ui/fonts`, `fonts::load`) |
-| R07 | Bewegung: Reiterstrich, Werkzeug von der Seite, gestaffelte Listen, Menüs, Dialoge, ruhige Bewegung | `DESIGN.md` „Motion“ | 3 | `sondra-ui/tests/motion.rs` (Kurven: Anfang, Ende, nie zurück; ruhige Bewegung schaltet ab) | **teils nativ ✔** — Werkzeug kommt von der Seite seines Reiters (`slide_from`), Listen gestaffelt, Kurven und „ruhige Bewegung“ (`motion::set_reduced`); Strich unter den Reitern und Menü-/Dialog-Ein- und Ausgang nicht Zug um Zug geprüft |
-| R08 | Tastenkürzel, Übersicht mit „?“, Befehlspalette | `ShortcutHelp`, `CommandPalette` | 3 | Klicktest | **nativ ✔** — Strg/⌘ + K: Befehlspalette mit der Suche der Startseite (Enter nimmt den ersten Treffer, Klick jeden), „?“: Übersicht der Tasten dieses Programms nach Orten (nicht in einem Feld); `palette.rs`, getestet mit den echten Tasten |
-| R09 | Dateien ablegen und auswählen, Sitzung (Dateien, Umbenennen, Reihenfolge) | `FileDrop`, `useIngest` | 3 | Klicktest | offen |
-| R10 | Sitzung bleibt auf dem Gerät, „Letzte Sitzung wiederherstellen“ | `sessionStore`, `RestoreOffer` | 3 | Klicktest | offen |
-| R11 | Adresse je Werkzeug (`#umwandeln` …) als Startparameter | `usePanelRoute` | 3 | Test | offen |
-| R12 | „Was ist neu“, Versionsmarke, Hinweis nach Update | `WhatsNew`, `changelog.json` | 8 | `verify:changelog` | **nativ ✔** — die Versionsmarke neben dem Namen öffnet „Was ist neu“ aus derselben `src/changelog.json` (eingebaut), „Diese Fassung“ markiert; nach einem Update einmal die Zeile „Neu in …“ (`gesehene-version` in `Einstellungen.json`), ein erster Besuch bekommt sie nicht. Die Version ist die aus `package.json`, eine Zahl für alle. |
-| R13 | Bedienungshilfen: Rolle, Name, Lage, Fokus und Aktivieren für Screenreader, Tastaturbedienung | überall | 0b/3 | `sondra-a11y`: 7 Tests im GPUI-Testfenster; Windows-Anbindung wird in der CI über UI Automation abgefragt (Job `uia`); **echter Screenreader (NVDA, Sprecher) noch nie** | in Arbeit |
+**Die gestalterischen Entscheidungen stehen in [DESIGN.md](DESIGN.md).** Eine
+massgebliche Datei je Sache — Produktwahrheit in `PRODUCT.md`, visuelle Welt in
+`DESIGN.md`, Betrieb hier. Zwei Kopien derselben Regel driften auseinander, und
+die veraltete gewinnt dann den nächsten Edit.
 
-## Merkliste
+Am 20.9.2026 wurde die visuelle Welt mit Impeccable **ersetzt**, nicht
+aufpoliert. Nur die Farben waren gesetzt; Typografie, Aufbau, Raster und
+Formensprache sind neu: ein ruhiges, flaches Blatt — keine Kästen, kein
+Schatten; getrennt wird mit Linie und Luft. Am 23.9.2026 kamen auf Wunsch die
+Rundungen dazu (Blöcke 16 px, Bedienelemente 10 px, Pillen), zusammen mit
+einer neu aufgebauten Startseite.
 
-| ID | Funktion | Bestand | Welle | Prüfung | Stand |
-| --- | --- | --- | --- | --- | --- |
-| M01 | Liste lesen aus Drive (SQLite und JSON) | `merkliste.ts`, `sqlite.ts` | 0 | Testdateien der Website | **nativ ✔** |
-| M02 | Serie hinzufügen mit einem Feld; „Wie weit sind Sie?“; „Mehr Angaben“ | `AddDialog` | 4 | `sondra-app/tests/merkliste.rs`, UIA „Serie eintippen“ auf Windows | **teilweise nativ ✔** (ein Feld, Enter; „Wie weit sind Sie?“ und „Mehr Angaben“ offen) — „Wie weit sind Sie?“ nativ ✔ (ganz neu oder weiter mit Folge n); offen: Suchen (AniList), „Mehr Angaben“ |
-| M03 | Staffeln, Teile, Filme, Folgenzahlen, Gesehenes, „Stand“ rückt weiter (`settle`) | `merkliste.ts` | 4 | `sondra-merk`: 57 Einträge aus ungewöhnlichen Formen, Fortschritt, Teile, Abhaken, `settle` — dieselben Zahlen wie die Website (golden) | **Logik nativ ✔**, Oberfläche offen |
-| M04 | Cover mit Ausschnitt und Zoom, Pyramide beim Verkleinern | `CoverImage` | 4 | Bildvergleich | **nativ ✔ (Kachel und Liste)** — `covers`: der Ausschnitt wie in `drawCover` (Mitte, Fokus, Zoom, nie über den Rand), Halbierungen, dann Lanczos auf das Mass der Kachel (doppelte Punkte für ein scharfes Bild), im Hintergrund, einmal je Mass; Adressen im Netz und Daten-URLs; Bilder aus Dateien reisen nicht in der Liste (Website-Regel) und bleiben auf dem Gerät, in der nativen App also ohne Bild; offen: der Ausschnitts-Editor, Bilder auf der Serienseite und für Staffeln |
-| M05 | Stände (Am Schauen, Später, Pausiert, Fertig, Abgebrochen), Filter | `MerklistePanel` | 4 | `sondra-merk::view` (Filter, Abschnitte, Zähler) und `sondra-app/tests/merkliste.rs` im echten Fenster; UIA auf Windows | **teilweise nativ ✔** (Liste, Pillen, Suche ab sechs; Tags und „nur offene“ als Logik, noch ohne Knopf) |
-| M06 | Ansicht als Poster oder Liste, Sortierungen | `MerklistePanel` | 4 | Liste ✔ (`merk_row`); Poster-Ansicht und Sortierung nur als Logik (`Sort`) | offen |
-| M07 | Serienseite: abspielen, gesehen, bearbeiten, „Mehr“ | `MerklistePanel` | 4 | `sondra-app/tests/merkliste.rs`: Seite einer Serie (Staffeln, Folgen abhaken, Umschalt, Länge, Stand, Entfernen mit Rückgängig); „Abspielen“ und „Mehr“-Inhalte offen | **teilweise nativ ✔** (gesehen, Bearbeiten des Stands, entfernen; abspielen mit dem Player) |
-| M08 | „Bis wohin?“ Planer, Ziel merken, Tempo aus dem Verlauf | `watchPlan`, `WatchPlanner` | 4 | `sondra-merk`: über 500 Pläne (Ziele × Optionen), Tempo, Ziel, Beschriftungen gegen die Website, in Europe/Zurich über die Zeitumstellungen (golden) | **Logik nativ ✔**, Oberfläche offen — Oberfläche nativ ✔: Block „Bis wohin?“ auf der Serienseite (Ziele Ende Staffel / Ganze Serie, Tempo, ohne Vorspann, Tempo am Tag mit Datum, eigenes Tempo); offen: Ziel merken, Datum wählen, „Genauer rechnen“ |
-| M09 | Statistiken und Rückblick, Verlauf, Würfeln | `MerklisteRecap` | 4 | `sondra-merk`: Statistik, Sortierungen (deutsche Ordnung wie im Browser), Rückblick, Würfel-Auswahl, Plan bis zum Ende, Swiss-Zahlen — gegen die Website | **Logik nativ ✔**, Oberfläche offen — Fenster „Statistik und Rückblick“ nativ ✔ (Zahlen, Jahr wählen, Monatsbalken, Spitzenreiter); offen: Verlauf, Würfeln, Bild zum Teilen — **Verlauf** (Rückgängig je Folge, letzte 50) und **Zufällige Serie würfeln** („Was soll ich schauen?“, nie dieselbe Serie zweimal hintereinander, wenn eine andere übrig ist) als Fenster unter „Mehr“ nativ ✔ |
-| M10 | Teilen: Link, Text, QR, Datei, Bilder im Link, Teile; Empfangen und Vergleichen | `merkShare`, `shareCover`, `qr` | 4 | `sondra-merk`: Packen Byte für Byte wie die Website, Links/Dateien/Teile/Text/Vergleich gegen sie, und die Website öffnet, was nativ geschrieben wird (CI). **Offen:** QR-Code zeichnen, Bildchen aus Covern herstellen (klein/gross), Oberfläche | in Arbeit — Fenster „Teilen …“ nativ ✔ (Stände wählen, mit/ohne Stand, ein Link oder Teile, als Text kopieren, QR-Code mit Teilen, Datei `.sondra-liste`; Link öffnet wieder gelesen); **Empfangen nativ ✔** (Fenster „Liste empfangen …“ im Mehr-Menü: Link oder Teil einfügen, `.sondra-liste` öffnen, „Beide haben n · nur bei Ihnen n · nur bei Mia n“, Neues einzeln oder alle, „Wie dort“ / „Als Später“, Bildchen kommen als Titelbild mit; Teile warten zwei Tage in `Teile.json`); „Empfehlen“ auf der Serienseite nativ ✔; offen: Bilder aus Covern für den eigenen Link herstellen, Öffnen von Dateien/Links von außen (Dateizuordnung) |
-| M11 | Export und Einlesen (JSON, MAL, AniList), Zusammenführen, Rückgängig | `merkliste.ts` | 4 | `sondra-merk`: Einlesen aus SQLite, JSON, MAL-XML und AniList-JSON in allen Formen (mit den Sätzen der Fehler), `merge_merkliste`, Tags, Verlauf — gegen die Website; **offen:** Rückgängig, Oberfläche | in Arbeit — Oberfläche nativ ✔: „Mehr“ → Exportieren (SQLite in Downloads/Sondra) und Einlesen … (SQLite, JSON, MAL, AniList; zusammenführen, nichts doppelt, Zurücknehmen) |
-| M12 | Zusammenführen mit Drive (`mergeShared`), Entfernen bleibt entfernt | `merkliste.ts`, `googleDrive.ts` | 4 | `sondra-merk`: `merge_shared`, `take_shared`, `travelling`, `shared_key` gegen die Website (5 Abgleiche mit Entfernungen, Bildern von Dateien, gleichen Namen); **noch nicht gegen das echte Drive** | **nativ ✔** — „Mehr → Über Google Drive abgleichen“ (`merk_drive.rs`, aus bis zur Wahl, meldet bei Bedarf an): `Sondra/Merkliste/Sondra-Merkliste.sqlite` (die ältere `….json` wird mitgelesen und als SQLite neu geschrieben), Runde nach jeder Änderung (nach einem Takt Ruhe), alle 3 Minuten und eine Minute nach einem Fehler; geschrieben nur, wenn die Datei nicht schon genau das hält (als Werte verglichen, der Stand der Datei bleibt erhalten); eine Datei, die keine Merkliste ist, wird nie überschrieben; `sondra-app/tests/merk_drive.rs` gegen das nachgebaute Drive. Nie gegen das echte Drive gelaufen; „beim Zurückkommen ans Fenster“ fehlt |
-| M13 | Abgleich mit Anytype (v1 und v2, Space, Seite „Sondra · Merkliste“) | `anytype.mjs`, `anytype.ts` | 4 | `sondra-anytype` (nachgebautes Anytype, 10 Tests; Gegenprobe mit der Seite der Website: `tests/golden/page.json`), `tests/anytype_window.rs` | fertig — „Mehr → Anytype …“: Code, Space, Seite, Laden/Zusammenführen, Abgleich nach jeder Änderung und alle 3 Minuten, Trennen; nie gegen ein echtes Anytype gelaufen |
-| M14 | Discord-Status über die lokale Pipe | `discord.mjs` | 4 | `verify:discord` | **nativ ✔** — `sondra-discord` (Handshake, READY, eine Meldung je Änderung, kein Echo auf Discords Antworten, Rahmen in Stücken, Ausschalten leert den Status und schliesst, neu suchen alle 30 s; Windows-Pipe über `PeekNamedPipe`) gegen einen nachgebauten Discord; in der App: „Mehr → In Discord zeigen“, aus bis zur Wahl, Wiedergabe / Serie / Merkliste wie auf der Website; mit echtem Discord nie gelaufen |
-| M15 | Neue Folgen melden (alle 3 Stunden, Benachrichtigung, Klick öffnet die Serie) | `newEpisodes.ts` | 1 | `verify:extractors`, `:resolve` | **nativ ✔ im Fenster** — `sondra-app::new_episodes`: eine Minute nach dem Start, dann alle drei Stunden jede Serie „Am Schauen“ mit AniWorld-Adresse, mit Pause dazwischen; die erste Prüfung merkt sich nur den Stand, jede Folge wird einmal gemeldet (`NeueFolgen.json`), eine Prüfung ändert `updated_at` nicht, Schalter unter „Mehr“; die Meldung ist eine Karte im Fenster mit „Ansehen“ (öffnet die Serie) — gegen nachgebaute Seiten geprüft. `has_new` und „Neu auf AniWorld: …“ mit „Auf die Merkliste nehmen“ auf der Serienseite (`online_news`/`take_online_news` gegen die Website, alle Fälle). Offen: die Benachrichtigung des Systems bei verdecktem oder minimiertem Fenster (Windows-Toast) |
-| M16 | AniList und MAL: Fortschritt abgleichen | `anilist.ts` | 4 | Test | offen — Suchen im Hinzufügen-Feld nativ ✔ (AniList, nur auf Druck, mit Bild und Folgenzahl); der Abgleich des Fortschritts (Token) offen |
-| M17 | Ordner erkennt Serien (zwei Folgen genügen), „Auf die Merkliste“ | `folder.ts` | 4 | `sondra-merk::folder::find_new_series` und `series_to_merk_item` gegen die Website | **Logik nativ ✔**, Oberfläche offen — **Oberfläche nativ ✔**: „Eine Serie erkannt“ / „n Serien erkannt“ auf der Ordnerseite mit „Auf die Merkliste“, „Alle auf die Merkliste“, „Nicht fragen“ (nach Titel gemerkt) und „Ansehen“ |
+Der erste Wurf nahm die Messhaltung zu wörtlich und setzte die Oberfläche in
+die Sprache eines Eichscheins: „Prüfgegenstand", „Verfügbare Verfahren", eine
+Klauselnummer auf jeder Überschrift, ein leeres Formular als Einstieg. Noch am
+selben Tag zurückgebaut, nachdem der Nutzer es gesehen hatte. Die Lehre steht
+hier, weil sie jeden weiteren Edit betrifft: **das Messen gehört in die Art,
+wie Zahlen berichtet werden, nicht in die Wörter auf der Tür.**
 
-## Ordner
+Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
 
-| ID | Funktion | Bestand | Welle | Prüfung | Stand |
-| --- | --- | --- | --- | --- | --- |
-| O01 | Dateien eines Ordners als Kacheln oder Liste, Vorschaubilder, lange Ordner in Seiten | `FolderPanel`, `thumbnails` | 4 | `sondra-merk::folder` (Ansichten, 360) und `scan` (echte Ordner auf der Platte); `sondra-app/tests/folder_page.rs`; UIA auf Windows; **Kacheln mit Vorschaubildern nativ ✔** — Kacheln sind wie auf der Website die erste Ansicht, „Liste“ daneben (je Ordner gemerkt); das Bild: ein Film zeigt ein Bild bei etwa 15 % (FFmpeg, `sondra-media::thumbnail`), ein Bild sich selbst, Länge in der Ecke bei Film und Ton; höchstens zwei zugleich, in der Reihenfolge der Kacheln; Drive ohne Bilder wie dort | **nativ ✔** (Kacheln, Liste, 240 je Seite) |
-| O02 | Art, Suche (auch Unterordner), natürliche Sortierung, Tiefe | `folder.ts` | 4 | `sondra-merk::folder` gegen die Website (golden): Art, Suche ohne Akzente, natürliche Sortierung, Tiefe, Unterordner-Summen | **Logik nativ ✔**, Oberfläche offen |
-| O03 | Auswählen wie im Dateimanager, Abspielen, In die Sitzung, ZIP, In Drive, Löschen | `FolderPanel` | 4 | `sondra-app/tests/folder_page.rs`: Auswählen (Klick, Strg, Umschalt), Löschen nach Rückfrage; Abspielen ✔, Als ZIP ✔ (`sondra-media::zip`: die Bytes der Website, aus den Dateien auf der Platte geschrieben, Unterordner bleiben, nie über ein ZIP; Dateien in Drive nicht), In die Sitzung, In Drive offen | **teilweise nativ ✔** — Abspielen der Auswahl (in der Reihenfolge der Liste, der Player übernimmt) nativ ✔; offen: In die Sitzung, Als ZIP, In Drive |
-| O04 | Papierkorb von Sondra (verschieben, rückgängig, ansehen, endgültig löschen) | `FolderBin`, `folder.ts` | 4 | `sondra-merk::bin` (verschieben, Notiz, zurücklegen ohne Überschreiben, ansehen, endgültig; eine Notiz aus dem Ordner heraus wird nie befolgt) und die Fenster in `folder_page.rs`; UIA mit echten Dateien auf Windows | **nativ ✔** |
-| O05 | Untertitel im Ordner: Datei mit gleichem Namen, sonst Whisper erzeugt `Name.srt` | `autoSubtitles`, `FolderSubtitles` | 4 | `sondra-merk::subtitles` (welche Datei gehört zum Film, wie heisst die erzeugte) gegen die Website; Whisper offen | **Namen nativ ✔**, Rest offen |
-| O06 | Weiterschauen, „Nach Serie“, „Ungesehen“, „Neu“, Merkliste spielt aus dem Ordner | `folderLibrary.ts` | 4 | `verify:folder` | **teils nativ ✔** — „Weiterschauen“ (bis zu drei Serien der Merkliste mit der nächsten Folge im Ordner, ein Knopf spielt sie und die ungesehenen danach; `folder_series`/`play_queue` gegen die Website) nativ ✔; „Ungesehen“ (Merkliste-Gesehenes ausblenden, je Ordner gemerkt) und „Neu“ (seit dem letzten Besuch) nativ ✔; „Nach Serie“ (Folgen je Serie und Staffel unter einer Überschrift mit „n hier · m von k gesehen“ und einer Linie für das Gesehene, danach „Weitere Dateien“; `group_by_series` gegen die Website, je Ordner gemerkt) nativ ✔; ▶ auf der Kachel eines Films oder Titels (spielt genau diese Datei) nativ ✔ |
-| O07 | Doppelte finden (Größe, Hash, 32 Stellen) | `duplicates.ts` | 4 | `sondra-merk::duplicates`: Kopiermarken, Behalten-zuerst, Gruppen, die echten SHA-256-Schlüssel (ganz und an 32 Stellen, 33-MB-Datei) wie die Website; Oberfläche offen | **nativ ✔** — „Doppelte finden“ auf der Ordnerseite: Fortschritt mit Abbrechen, Ergebnis (Kopien, Gruppen, Grösse), „Gruppen zeigen“, „Kopien auswählen“ (wählt, löscht nie) |
-| O08 | Ansicht je Ordner, zuletzt geöffnete Ordner, gemerkter Ordner | `folderMemory.ts` | 4 | `sondra-merk::folder_memory` (9 Abläufe) gegen `folderMemory.ts`; `FileStore` und der angebotene letzte Ordner in `folder_page.rs`; „Neu seit dem letzten Besuch“ und „zuletzt geöffnet“ offen | **teilweise nativ ✔** |
-| O09 | Ordner aus Drive, Löschen in Drive, In Staffel einordnen, „Einordnen“ mit einem Klick | `driveClient.ts`, `SeasonFiling` | 4 | Szenario „serien“ | **teils nativ ✔** — „Aus Google Drive“ (Ordner „Sondra“ mit allen Unterordnern, nur was Sondra anlegte; `sondra-drive::tree`, Notizen der Folgen als Hinweis), Abspielen (die Datei wird in die Ablage des Programms geholt und dort behalten), Löschen in Drives Papierkorb (30 Tage, „Endgültig löschen“ gibt es dort nicht); „Einordnen“ mit einem Klick ✔ („n Folgen liegen noch lose“ → `Serien/<Titel>/Staffel n`, Notiz Serie/Staffel/Folge, nichts umbenannt; `sondra-drive::move_file`); offen: das Fenster „In Staffel einordnen“ für alles andere, Vorschaubilder gibt es dort wie auf der Website nicht |
-| O10 | Bedienung mit dem Finger (Tipp, langes Drücken, Blatt) | `FolderPanel` | 4 | Entscheidung, ob Touch gebraucht wird | **Entscheidung** |
+- **Keine Karten, kein Schatten auf dem Blatt — aber gerundet.** Abschnitte
+  trennt eine Linie und Luft. Rundung nur über die Tokens: `rounded-card`
+  (16 px) für Blöcke, Kacheln, Popover; `rounded-nav` (10 px) für Knöpfe und
+  Felder; `rounded-pill` für Filter, Schalter, Punkte. „Keine Angst vor
+  Radius" war die ausdrückliche Ansage. Ausnahme, ebenso gewünscht:
+  Zeitflächen — Zeitleiste, Wellenformen, Klavierrolle, Editorbühne — bleiben
+  eckig. Die eine Schattenstufe gehört dem, was wirklich
+  über dem Blatt schwebt: Editor-Platte, Popover, Ablage-Overlay, die
+  kleinen Leisten unten und die Karte der Geräte.
+- **Klartext, kein Amtston.** Überschriften heissen, was sie sind —
+  „Werkzeuge", nicht „Verfügbare Verfahren". Sie-Form und nüchterner Ton
+  bleiben; Behördendeutsch war nie dasselbe wie Sachlichkeit.
+- **Werkzeuge sind Kacheln.** Die rund vierzig Werkzeuge stehen als Kachelfeld,
+  nach Gruppen geordnet und über ein Feld filterbar — ausdrücklich so
+  gewünscht. Eine getönte Fläche gibt der Kachel ihre Kante, kein Rahmen und
+  kein Schatten. Zweispaltig ab der kleinsten Breite. Die Reiterleiste steht
+  auch auf der Startseite, auf jeder Breite (Wunsch vom 23.10.2026: „im
+  Startmenü kann man die Navbar nicht sehen“); unterhalb `sm` war sie dort
+  ausgeblendet, weil sie abgeschnitten wurde — seit „Mehr“ wird nichts mehr
+  abgeschnitten. **Die Startseite seit dem 28.10.2026** („sie ist sehr
+  cluttered“; vorher zwei Kästen, Plakette „100 % lokal & privat“, drei
+  Bildkarten und 45 gleich schwere Kacheln am Stück, 4 300 px auf dem
+  Handy): ein getönter Einstieg (Überschrift, ein Satz in Sie-Form, „Datei
+  auswählen“, „Von Adresse laden“; der ganze Block nimmt eine Datei an),
+  „Filme und Serien“ (Merkliste mit „Weiter: …“, Abspielen, Ordner,
+  Herunterladen), dann „Werkzeuge“ je Gruppe unter ihrer Überschrift, zwei
+  Reihen sichtbar, der Rest hinter „Noch n Werkzeuge für …“; eine
+  Gruppenpille zeigt die Gruppe ganz, die Suche alles. Kacheln auf
+  `panel-soft`, Hinweis höchstens zwei Zeilen. Kein Windows-Block mehr unten
+  — die Kopfzeile hat „App herunterladen“, und in der Android-App warb er
+  für Windows.
+- **Die Spalte wächst mit dem Schreibtisch, aber nicht endlos.** `shell` geht
+  in Stufen von 1280 auf 1840 px; das Kachelraster von 2 über 3 und 4 auf 5
+  Spalten. Mehr Fläche heisst mehr sichtbare Kacheln, nicht breitere — und ein
+  Formularfeld oder ein Suchfeld wächst gar nicht mit. Die Editorbühne wächst
+  stattdessen in die **Höhe** (`clamp(460px, 58vh, 760px)`), weil auf einem
+  hohen Monitor die Leere unter ihr das eigentliche Problem war.
+- **Eine Leiste, nicht drei.** Kopfzeile, Sitzungsleiste und Reiter-Kasten
+  standen übereinander, dazu rechts in jedem Werkzeug eine Sitzungsspalte mit
+  fünfzehn Knöpfen — „mega cluttered". Jetzt: Kopfzeile mit Dateimenü, Reiter
+  als ihre zweite Zeile, die Sitzung einen Klick hinter dem Dateinamen. Keine
+  ausgegrauten Knöpfe für Fälle, die gerade nicht bestehen; sie erscheinen mit
+  ihrer Voraussetzung. Auf kleinen Breiten kürzt sich der Text, nicht die
+  Aussage (der Download-Knopf sagt „App"). Ausblenden über einen Wrapper, nicht mit
+  `hidden` auf einem `Button`: dessen eigenes `inline-flex` gewinnt. **Reiter,
+  die nicht in die Zeile passen, stehen hinter „Mehr“** (`PanelTabs`,
+  gemessen, der gewählte immer sichtbar) — nie abgeschnitten, nie seitlich
+  zu wischen; vorher endete die Zeile auf jedem Laptop in „Miki…“.
+- **Nichts steht vor der Seite.** FFmpeg lädt im Hintergrund, nie hinter einem
+  Ladebildschirm. Ein Werkzeug, das wartet, zeigt das Warten bei sich. Jedes
+  Werkzeug ist ein eigener Chunk (`React.lazy` in `Dashboard.tsx`) und wird
+  erst beim Öffnen geholt, der Rest im Leerlauf; ein neues Panel gehört in
+  `TOOLS` dort, nicht als statischer Import. **Auf einem Telefon wird nichts
+  vorgeholt** (`FETCH_LIGHT` in `lib/desktop.ts`: Android, iPhone/iPad oder
+  „Daten sparen“): weder der FFmpeg-Kern (32 MB WebAssembly, bei jedem Start
+  der Android-App übersetzt) noch die vierzig Werkzeuge — das war der
+  Hauptgrund, dass die App „mega schlecht“ lief. Player und Herunterladen
+  werden erst beim ersten Öffnen eingehängt und bleiben dann (Film und
+  Download laufen hinter anderen Werkzeugen weiter); vorher kosteten sie
+  jeden Besuch 800 KB Skript. Die Merkliste schreibt bei jeder Änderung
+  sofort ihr JSON und die SQLite-Kopie erst 1,5 s später oder beim Verlassen
+  (`sondra:sqlite_db_stale` sagt dem nächsten Start, dass das JSON neuer
+  ist) — ein „+1“ kostete ein Telefon sonst 150 ms.
+- **Ordner** (`#ordner`, `FolderPanel.tsx`, `lib/folder.ts`, 1.1.12): die
+  Dateien eines Ordners auf diesem Gerät als Kacheln (Vorschaubild aus dem
+  Video bei ~15 %, Bild verkleinert beim Dekodieren, Dauer; `lib/thumbnails.ts`,
+  zwei gleichzeitig, nur für Kacheln auf dem Schirm) oder als Liste; Art,
+  Suche (auch in Unterordnern, ohne Akzente), Sortierung natürlich („2“ vor
+  „10“), Unterordner zum Hineingehen oder alles darunter. Auswählen wie im
+  Dateimanager (`clickSelect`: Klick, Strg/⌘, Umschalt; Pfeile, Leertaste,
+  Strg+A, Escape), dann Abspielen (`sendToPlayer`, die Liste wird ersetzt),
+  In die Sitzung, Als ZIP, In Drive, Löschen nach Rückfrage. Edge, Chrome und
+  die App bekommen den Ordner selbst (File System Access): gemerkt in
+  IndexedDB (`sondra-ordner`), beim nächsten Mal nur angeboten („„Anime“
+  wieder öffnen“), nie still gelesen; Löschen fragt einmal nach Schreibrecht.
+  **Löschen geht zuerst in einen Papierkorb von Sondra** (30.10.2026,
+  `binFiles`/`restoreBinned` in `lib/folder.ts`): der Ordner `Sondra-Papierkorb`
+  oben im gewählten Ordner — das Betriebssystem hat für einen Ordner, den
+  der Browser freigibt, keinen —, die Dateien wandern dorthin
+  (`FileSystemFileHandle.move`, wo der Browser es kann, sonst bis 256 MB
+  kopiert und erst danach das Original entfernt; ein grösserer Film wird
+  gemeldet und bleibt liegen). „Rückgängig“ steht gleich bei der Meldung und
+  legt jede Datei in ihren Ordner zurück, ohne eine inzwischen belegte
+  Datei zu überschreiben (Nummer statt dessen); „Endgültig löschen“ bleibt
+  im Dialog daneben. Der Papierkorb-Ordner steht nicht in der Liste
+  (`SKIPPED`). **Den Papierkorb sieht man** (30.10.2026, „ich sehe papierkorb
+  nicht“; `FolderBin.tsx`): „Papierkorb (n)“ rechts in der Leiste der Seite
+  und „Papierkorb ansehen“ bei der Meldung nach dem Löschen öffnen ein
+  Fenster mit allem, was darin liegt — Name, woher, wann —, zum Zurücklegen
+  oder, nach einer zweiten Frage, endgültig Löschen. Woher es kam, steht in
+  `.sondra-papierkorb.json` im Papierkorb (Punkt: der Scan überspringt sie;
+  Hilfe, keine Pflicht — ohne sie geht eine Datei nach oben in den Ordner);
+  ein Ordner, den es inzwischen nicht mehr gibt, wird neu angelegt, `..` in
+  einer Notiz nie befolgt. In Drive zeigt dasselbe Fenster Drives eigenen
+  Papierkorb (`trashed = true`, `drive.file` zeigt nur, was Sondra anlegte;
+  `untrash`, `remove`). Firefox/Safari: `webkitdirectory`, einmal
+  eingelesen, ohne Löschen — die Seite sagt das. Die Kachel bekommt den Fokus
+  nur, wenn er schon in der Liste ist; vorher nahm die erste ihn beim
+  Ankommen und scrollte dorthin. **Lange Ordner** (30.10.2026): 240 Dateien je Seite, und „Weitere … zeigen“
+  drückt sich selbst, sobald es 900 px vor dem Bildschirm steht
+  (`IntersectionObserver`) — ein Ordner ist eine Liste zum Scrollen, nicht
+  eine zum Durchklicken. Was nicht im Bild ist, wird weder berechnet noch
+  gezeichnet (`cv-tile`, `cv-row` = `content-visibility: auto`, Grösse
+  `auto` gemerkt): die Knoten bleiben, deshalb sieht Strg+A jede Datei,
+  Umschalt-Bereiche und Pfeiltasten auch. Eine echte Fenster-Liste
+  (nur die sichtbaren Knoten) wurde erwogen und gelassen: sie müsste Fokus,
+  Bereichsauswahl und die Vorschaubilder neu erfinden. Szenario „ordner“ mit
+  3 000 Dateien.
+  **Untertitel im Ordner** (30.10.2026, `lib/autoSubtitles.ts`,
+  `lib/subtitleFiles.ts`, `FolderSubtitles.tsx`): eine `.srt`/`.vtt` mit dem
+  Namen des Films im selben Ordner (auch `Name.de.srt`) geht beim
+  Abspielen aus dem Ordner von selbst mit in den Player (`playFiles`). Gibt es
+  keine, hört das Sprachmodell des Browsers die Datei ab („Untertitel
+  erzeugen“ unter der Auswahl: FFmpeg liest den Ton über WORKERFS als
+  16-kHz-Mono, dann Whisper wie im Untertitel-Werkzeug, dieselben
+  Einstellungen `sondra:sprache`/`sondra:sprachmodell`) und schreibt `Name.srt`
+  neben den Film — ohne Schreibrecht als Download. **Nie eine Online-Suche:**
+  eine Untertitel-Datenbank wäre ein fest verdrahteter Anbieter, dem gesagt
+  wird, was man schaut. Das Fenster sagt vorher, dass das Modell einmalig von
+  Hugging Face kommt und der Ton das Gerät nicht verlässt.
+  **Weiterschauen:** Folgen von Serien der
+  Merkliste im Ordner (`folderSeries`) — gesehen markiert, die nächste (der
+  Stand, sonst die nach der zuletzt gesehenen) mit dem Rest dahinter in den
+  Player. **Die Merkliste spielt aus dem Ordner** (`lib/folderLibrary.ts`:
+  ein Ordner für beide Seiten, `useFolder`, `folderEpisodes`, `playQueue`):
+  eine Pille über der Liste („„Anime“ · 3 Serien darin“, sonst „Ordner mit
+  Folgen wählen“), ▶ auf der Kachel, „Folge n abspielen“ vor „Folge n
+  laden“ auf der Serie samt „Im Ordner: Staffel 1: 1–3“, im Staffel-Fenster
+  ein Strich unter jeder Folge, die daliegt, und „Aus dem Ordner abspielen“.
+  Der gemerkte Ordner wird beim Öffnen der Merkliste nur dann von selbst
+  gelesen, wenn der Browser die Erlaubnis noch hält (nur Namen, Grössen,
+  Daten), sonst steht er als Pille zum Klicken da. Der Serienname auf der
+  Ordner-Karte öffnet die Serie in der Merkliste. **Doppelte finden** (`lib/duplicates.ts`): nur gleich grosse Dateien
+  werden gelesen, bis 32 MB ganz (SHA-256), darüber an 32 Stellen; behalten
+  wird die ohne „(1)“/„Kopie“, sonst die älteste. `npm run verify:folder`.
+  **Der Ordner mit dem Finger** (8.11.2026, Version 1.2.1, „den Tab Ordner
+  verbessern“; `FileItem`, `FolderSheet` in `FolderPanel.tsx`): erkannt wird
+  der Finger an `pointerType === 'touch'`, nicht an der Breite — ein Tablet
+  mit Maus bleibt ein Mauspult. Ein **Tipp spielt ab**, **langes Drücken**
+  (450 ms, weiter als 10 px Bewegung bricht es ab) **wählt aus**, und der Tipp,
+  der das lange Drücken beendet, spielt nichts; ist etwas gewählt, wählt jeder
+  Tipp weiter, und die Auswahlleiste unten (Zahl, Abspielen, die übrigen
+  Handlungen — sie umbricht auf dem Handy) ist die Bedienung dafür. Das Kontextmenü des Browsers ist für den Finger
+  aus, `event.detail < 2` verhindert, dass der zweite Tipp eines Doppeltipps
+  nachspielt. Auf dem Handy steht **eine Zeile**: Suche und „Ansicht“ (der
+  Knopf zählt, was vom Üblichen abweicht); Art, Ordnung, Ansicht, die anderen
+  Ordner und „Zuletzt geöffnet“ liegen in einem Blatt von unten (`sheet`
+  Bewegung, Escape und Tipp daneben schliessen, der Fokus bleibt darin und
+  kehrt zurück), aktive Filter stehen als Marken daneben, der Papierkorb ist
+  ein Chip, und die Hinweise (Drive: „nur was Sondra anlegte“) sind
+  eingeklappt, „Mehr“ klappt sie auf. Ab `sm` bleibt alles in der Leiste.
+  **„Weiterschauen“ gab es schon** (`ContinueRow`); es wurde nur zur flachen
+  Zeile (72 px) mit Serie, Staffel und Folge. **Folgen unter ihrer Serie**
+  (`groupBySeries` in `lib/folder.ts`, „Nach Serie“): Überschrift mit
+  Serienname (öffnet sie in der Merkliste) und Staffel, „5 hier · 2 von 12
+  gesehen“ und einer 3-px-Linie für das Gesehene hier; Folgen nach Nummer
+  (`episodeMatch`), was zu keiner Serie der Merkliste passt, kommt danach
+  unter „Weitere Dateien“. Am Schauen zuerst, Staffeln aufsteigend, Staffel 0
+  (Filme) zuletzt. Pille **„Ungesehen“** zeigt nur, was die Merkliste noch
+  nicht abgehakt hat (Dateien ohne Serie bleiben), **„Neu“** nur, was seit dem
+  letzten Besuch dieses Ordners hinzukam. **Die Ansicht gehört dem Ordner**
+  (`lib/folderMemory.ts`): Art, Sortierung, Ansicht, Tiefe, „Nach Serie“ und
+  „Ungesehen“ je Ordner (`sondra:ordner:je`, höchstens 40; Drive als
+  `drive:<Name>`), der zuletzt benutzte Satz (`sondra:ordner`) ist die Vorgabe
+  für einen neuen Ordner. Der Zeitpunkt des vorigen Besuchs
+  (`sondra:ordner:besuch`) bleibt für die Sitzung stabil (`lastVisit`, Map im
+  Modul) — sonst wäre „Neu“ nach dem Einlesen leer. **Zuletzt geöffnete
+  Ordner** (`mergeRecent`, IndexedDB `sondra-ordner`, Schlüssel `liste`, fünf,
+  der gerade offene zuerst, gleiche Ordner per `isSameEntry` zusammen, sonst
+  per Name): am Schreibtisch „Zuletzt“ als Menü in der Leiste, auf der
+  leeren Seite eine Taste je Ordner („„Musik“ öffnen“), auf dem Handy im
+  Blatt; auch sie werden nie still gelesen, nur angeboten. **Der Ordner-Tab
+  liest den gemerkten Ordner genau einmal von selbst** (`triedHandle`,
+  `triedDrive`): ein Ordner, der inzwischen fehlt, ließ die Wirkung vorher
+  ohne Ende neu lesen. Szenarien „ordner-handy“ (390 × 844, Touch) und
+  „ordner-zuletzt“ (echte Ordner im Dateisystem der Seite). Das Verhalten
+  des Fingers ist in einem simulierten Chromium (`hasTouch`, CDP-Touch)
+  geprüft, nicht auf einem echten Telefon.
+- **Serien ohne Arbeit** (14.11.2026, „alles ist mega kompliziert … so simpel und
+  benutzerfreundlich wie möglich, dass jeder damit klarkommt“ — die grösste
+  Priorität): man tut drei Dinge — eine Serie finden oder hinzufügen, schauen,
+  sehen wie weit man ist. **„Serie hinzufügen“ ist ein Feld** (`AddDialog`,
+  Name oder Adresse, Enter): dazu nur „Wie weit sind Sie?“ (ganz neu, oder
+  schon angefangen mit der nächsten Folge). Die Länge einer Serie wird nie
+  verlangt oder geraten — `countsUnknown` ist die Vorgabe, die Folgenzahl
+  kommt aus AniWorld/AniList, wenn man „Suchen“ drückt (fragt AniList; nie von
+  selbst, „kein Anbieter fest verdrahtet“) oder später auf der Serienseite.
+  Staffeln, Filme, Cover, Tags und Status liegen hinter „Mehr Angaben“
+  (die alte Form, unverändert). Der Fokus gehört dem Feld: `Dialog` setzt ihn
+  auf sein erstes Bedienelement, deshalb holt ihn `AddDialog` nach 80 ms
+  zurück. **Der Ordner legt Serien an** (`findNewSeries`, `seriesToMerkItem`
+  in `lib/folder.ts`, `NewSeriesOffer` in `FolderPanel.tsx`): was die
+  Dateinamen als Serie verraten (`guessEpisode`) und die Merkliste nicht
+  kennt, steht oben als „2 Serien erkannt“ mit „Auf die Merkliste“ je Serie
+  oder „Alle“ — **zwei Folgen genügen**, ein einzelnes „Ocean's 11“ ist ein
+  Film —, „Nicht fragen“ merkt den Titel (`sondra:ordner:ignoriert`). Die
+  Serie beginnt bei der ersten Folge dort, Länge unbekannt; danach sagt die
+  Zeile „steht jetzt auf der Merkliste · Ansehen“. **Die Kopfzeile der
+  Merkliste hat drei Dinge** (Suche ab sechs Einträgen, „Serie hinzufügen“,
+  „Mehr“); Verlauf, Würfeln, Statistiken, Teilen, Ansicht, Ordnung und — in
+  der App — „Neue Folgen melden“ und Discord stehen im Menü `MoreMenu`
+  (schliesst bei Klick daneben und Escape; eine Wahl darin lässt es offen,
+  eine Handlung schliesst es über `data-closes`). **Die Serienseite hat einen
+  Weg nach vorn:** „Folge n abspielen“ (aus dem Ordner, sonst als Stream,
+  sonst nur „gesehen“), „Folge n gesehen“, „Bearbeiten“; Laden, Nächste
+  Folgen laden, Online suchen und Empfehlen hinter „Mehr“. **Die leere
+  Merkliste führt:** „Ordner mit Serien wählen“ oder „Eine Serie eintippen“,
+  kein Formular. **Die Startseite** hat „Heute weiterschauen“ (`ContinueTiles`
+  in `Home.tsx`): die drei zuletzt geschauten Serien als Kachel mit Poster
+  und der Folge, ein Klick öffnet die Serie. Szenario „serien“, Prüfung
+  `findNewSeries` in `npm run verify:folder`. Auf einem Entwicklungsrechner stürzte Chromium am 14.11.2026 ab (SIGTRAP), sobald die
+  Ordnerseite einen Ordner aus dem Dateisystem der Seite (OPFS) las — auch mit dem Stand
+  von vor dieser Änderung; die Ursache ist nicht geklärt. Das Szenario „serien“
+  benutzt deshalb einen Ordner im Speicher (wie „ordner“); „ordner-zuletzt“ liest
+  noch OPFS und lief dort nicht. **Einordnen ohne Fenster** (`unfiledEpisodes` in
+  `lib/folder.ts`, `FilingOffer` in `FolderPanel.tsx`): in einem Drive-Ordner
+  steht oben „3 Folgen liegen noch lose“ mit „Einordnen“ — was die Merkliste am
+  Namen kennt und noch keine Notiz trägt und nicht schon in
+  „Serien/Titel/Staffel n“ liegt, geht mit einem Klick durch `fileIntoSeason`
+  (je Serie und Staffel, mit der Folge als Notiz, nichts umbenannt). Was kein
+  Titel der Liste trifft, bleibt liegen; das Fenster „In Staffel einordnen“
+  bleibt in der Auswahlleiste für alles andere. Es gibt kein „Rückgängig“: die
+  Dateien liegen danach in Drive im Staffel-Ordner. **Die Reiter folgen den
+  Aufgaben** (`PANELS` in `panelMeta.tsx`): Start, Merkliste, Ordner,
+  Abspielen, Herunterladen, Geräte, dann die Werkzeuge — bei knapper Breite
+  stehen die Werkzeuge hinter „Mehr“, nicht die Aufgaben. **Die Werkzeuge
+  stehen in drei Gruppen** (18.11.2026, „zu viele Tabs … alle noch haben, aber
+  anders umgesetzt“; `TAB_ENTRIES` in `panelMeta.tsx`): Bearbeiten (Umwandeln,
+  Video, Bilder, Untertitel), Ton (Ton, Mischen, Spuren trennen, Lautstärke,
+  Zerschneiden, Tonart), Aufnehmen (Bildschirm, Handy spiegeln, Mikrofon) —
+  je ein Knopf mit Menü, neun Einträge in der Zeile statt neunzehn. Der Knopf
+  einer Gruppe nennt das gewählte Werkzeug („Ton · Mischen“), der Strich
+  gleitet darunter. Die Zeile ist ein `nav` mit Knöpfen und `aria-current`, kein
+  `tablist` (ein Tab, der ein Menü öffnet, ist kein Tab); Pfeile bewegen den
+  Fokus, Enter öffnet, Escape schliesst und gibt den Fokus zurück. „Mehr“
+  bleibt als Rückfall auf dem Handy, mit den Gruppen als Überschriften;
+  `PANELS` und `TAB_ENTRIES` müssen dieselbe Reihenfolge haben (im
+  Entwicklungsmodus geprüft), sonst stimmen Pfeil- und Wischrichtung nicht.
+  Szenario „spiegeln“. Der Drive-Nachbau der
+  Szenarien (`scripts/e2e/lib.mjs`) versteht jetzt `addParents`/`removeParents` und
+  Notizen beim Verschieben.
+- **Handy spiegeln** (`#spiegeln`, `PhoneMirrorPanel.tsx`, `phone/MirrorView.tsx`,
+  `lib/phoneMirror.ts`, `lib/hidKeyboard.ts`, `lib/phoneAudio.ts`, 18.11.2026,
+  „wie scrcpy, einfacher, im Tab, mit Buttons und Erklärung“; am selben Tag neu
+  gestaltet: schöner, Tastatur und Maus von selbst, `--keyboard=uhid`, Ton, und ein
+  Fenster, das frei stehen kann): der Bildschirm eines Android-Handys. **In der
+  Seite ist er ein Block des Tabs** (rechts neben den Hinweisen, `panel-soft`,
+  Titelzeile mit Ton, Bildschirmfoto, „In einem eigenen Fenster öffnen“, Beenden;
+  das Bild bis zu 760 px hoch, in seiner Form) — **nicht schwebend und nicht
+  ziehbar**: ein Fenster in der Seite endet am Rand der Seite und liess sich nur
+  hoch und runter bewegen („geht nur hoch oder runter auf der Website“, so
+  entfernt am 18.11.2026). **Frei stehen kann das Handy erst auf den Knopf**
+  „In einem eigenen Fenster öffnen“: ein echtes Fenster des Betriebssystems,
+  überall auf dem Bildschirm, auch auf einem zweiten, mit eigener Grösse (das Bild
+  füllt es in seiner Form). In Chrome und Edge ist es ein **Picture-in-Picture-Fenster**
+  für Seiten (`documentPictureInPicture.requestWindow`): Titelleiste und nichts
+  sonst — **keine Adressleiste** (ein `window.open`-Fenster zeigte „about:blank“ und
+  dazu eine Adresszeile, die sich nicht ausblenden lässt); in der Windows-App und in
+  Browsern ohne diese Schnittstelle ein einfaches Fenster (`window.open('',
+  'sondra-handy', 'popup=yes…')`, in der App ohne Adressleiste; dort erlaubt
+  `setWindowOpenHandler` in `desktop/electron.mjs` genau dieses eine leere Fenster).
+  Die Seite füllt das leere Fenster selbst: Schriften und Thema werden kopiert
+  (`dress`), der Inhalt ist ein React-Portal. **Das Bild ist ein einziges Canvas**,
+  vom Tab einmal gemacht (der Decoder zeichnet darauf) und zwischen Seite und
+  Fenster nur umgehängt; in der Seite steht währenddessen „Das Handy steht in einem
+  eigenen Fenster“ mit „Zurück in die Seite“. Schliessen des Fensters bringt das
+  Handy zurück, Beenden oder Verlassen des Tabs schliesst es. Blockiert der Browser
+  ein einfaches Fenster, sagt die Seite es. Beide Fensterarten prüft das Szenario
+  „spiegeln“ (Chromium 153 hat die Schnittstelle, auch kopflos). Der Tab selbst: links fünf Schritte
+  (Entwickleroptionen, USB-Debugging, Datenkabel, „Handy verbinden“,
+  „Zulassen“; beim Verbinden werden sie abgehakt), rechts auf `panel-soft` eine
+  Zeichnung, der Knopf, „Ton übertragen“, „Flüssig/Scharf“; verbunden steht dort
+  die Belegung (Linksklick tippt, Rechtsklick Zurück, Mittelklick Start, Tasten)
+  und das Fenster schwebt an der Stelle der Karte. Dahinter „Wenn es nicht
+  klappt“. **Tastatur und Maus verbinden sich durch Benutzen:** das Fenster
+  nimmt den Fokus, wenn das Bild beginnt, beim Klick und wenn der Zeiger darüber
+  steht (ausser ein Feld hat ihn); solange es ihn hat, geht jede Taste ans Handy,
+  Strg+Alt+Esc gibt ihn zurück, beim Verlieren werden alle Tasten losgelassen.
+  **`--keyboard=uhid`** (`hidKeyboard.ts`): beim Start legt Sondra auf dem Handy
+  eine virtuelle USB-Tastatur an (Control-Nachricht UHID_CREATE, Gerät 1,
+  Boot-Tastatur-Beschreibung aus der USB-HID-Spezifikation) und schickt je
+  Taste einen Bericht (Umschalttasten, bis sechs Tasten, ErrorRollOver);
+  die Taste gilt nach `KeyboardEvent.code`, also nach Lage, das Layout wendet das
+  Handy an (Hinweis „y und z vertauscht“ steht in der Hilfe). Lehnt das Handy
+  UHID ab (die Ausgabe des Servers sagt es), gehen Zeichen und die wichtigsten
+  Tasten als eingegebener Text bzw. Tastencode weiter, und die Seite sagt es.
+  `npm run verify:hid`. **Ton** (`phoneAudio.ts`): der Server nimmt auf, was das
+  Handy abspielt (Android 11+, Opus), WebCodecs `AudioDecoder` und Web Audio
+  setzen es knapp vor die Uhr; was mehr als 0,4 s zu spät kommt, wird
+  verworfen. Der AudioContext entsteht im Klick. Das Handy ist währenddessen
+  stumm (so macht es scrcpy ohne `--audio-dup`); Stummschalter im Fenster,
+  Schalter vorher auf der Seite. **Wie:** WebUSB statt `adb`-Programm — Tango ADB
+  (`@yume-chan/*`, MIT, exakt festgeschrieben) spricht ADB, der scrcpy-Server
+  3.3.3 (Genymobile, Apache-2.0, 90 KB) liegt unverändert in
+  `src/assets/scrcpy/` und kommt über Vite als `assets/…jar` mit; er wird nie
+  aus dem Netz geholt („kein Anbieter fest verdrahtet“, und offline geht es
+  so auch), vor dem Aufspielen per SHA-256 geprüft und nur für die Dauer der
+  Verbindung ins temporäre Verzeichnis des Handys gelegt. Client und Server
+  müssen dieselbe Version nennen: der Server bricht sonst sofort ab —
+  `npm run verify:scrcpy` prüft Prüfsumme, Version, Festschreibung und die
+  Lizenztexte. Bild: H.264 über WebCodecs auf ein WebGL-Canvas. Der
+  ADB-Schlüssel liegt in IndexedDB („Tango“) in diesem Browser, nicht in
+  `localStorage`; ohne ihn würde „Immer von diesem Computer zulassen“ nie
+  halten. **Wo es geht:** Edge/Chrome am Computer und die Windows-App; nicht in
+  Firefox/Safari (kein WebUSB) und nicht in der Android-App (`IN_ANDROID_APP`)
+  — dort steht ein Satz, kein toter Knopf. Das Chunk wird nicht im Leerlauf
+  vorgeholt. In Electron gibt es keine Geräteliste: `select-usb-device` in
+  `desktop/electron.mjs` fragt **immer** in einem Dialog, welches Handy (auch bei
+  einem; ohne Handy sagt er, woran es liegen kann); `setDevicePermissionHandler`
+  nur für die eigene Herkunft. **Das Ereignis gehört der Session**
+  (`session.on('select-usb-device')`), nicht dem Fenster: am `webContents` hörte
+  niemand zu, Electron brach die Anfrage sofort ab, und die Seite sagte „Kein Handy
+  gewählt“, ohne je eine Wahl zu zeigen (18.11.2026; `verify:scrcpy` prüft es). **Nie gegen ein echtes Handy gelaufen** — auch UHID, Ton und der
+  Electron-Teil nicht (dort nur Syntax). **Die Naht für Tests:** `startMirror`
+  lässt sich durch `globalThis.__sondraMirrorTest` ersetzen; das Szenario
+  „spiegeln“ bringt damit ein Handy aus Stand-in-Bild und Protokoll mit und prüft
+  Fenster, Ziehen, Grösse, Merken, Maus (links/rechts/Mitte/Rad), Tasten und die
+  Rückgabe der Tastatur — nicht die Verbindung. Der Name im Reiter ist nicht
+  „scrcpy“: Apache-2.0 §6 erlaubt keine Markenverwendung; genannt wird scrcpy als
+  Herkunft. **Lizenzen:** Tango (MIT) und scrcpy (Apache-2.0) stehen auf
+  `public/lizenz.html` mit den vollständigen Texten (`public/lizenzen/`, ebenso
+  in `desktop/lizenzen/`); bei jeder neuen Fassung des Servers Datei,
+  Prüfsumme (`phoneMirror.ts`, README) und Client gemeinsam tauschen.
+- **Dateien der Sitzung lassen sich umbenennen** (1.1.11): Stift im
+  Dateimenü oder Doppelklick auf den Namen; die Endung bleibt neben dem
+  Feld stehen, was Windows ablehnt (`\ / : * ? " < > |`, CON …), wird
+  gesagt statt still ersetzt (`renamedFile` in `lib/format.ts`). Die
+  behaltene Sitzung schreibt dafür nur den Datensatz um die gespeicherte
+  Datei neu — vorher gingen ein neuer Name und eine neue Reihenfolge bei
+  einem Neustart verloren, weil nur geänderte Bytes geschrieben wurden.
+- **Die Sitzung bleibt auf dem Gerät,** auf ausdrücklichen Wunsch vom
+  24.9.2026 (`lib/sessionStore.ts`, IndexedDB). Beim Start wird die letzte
+  angeboten („Letzte Sitzung: Wiederherstellen / Verwerfen“), nie still
+  geladen. Der Schalter „Sitzung auf diesem Gerät behalten“ im Dateimenü
+  löscht beim Abschalten alles — die alte Regel „Schliessen ist die
+  Löschtaste“ für geteilte Rechner. Dekodierter Ton wird nicht gespeichert.
+- **Der Einstieg zeigt die nächste Handlung,** nicht den Zustand der leeren
+  Sitzung. Ohne Datei steht dort, was die Seite kann und der Knopf, der sie
+  startet — kein Formular mit leeren Feldern.
+- **Zwei Schriften, semantisch getrennt.** Public Sans setzt die Oberfläche,
+  Courier Prime das, was die Maschine eingetragen hat — Messwerte,
+  Dateinamen, Timecodes. Nie Mono als Kostüm für „technisch". Cormorant lebt
+  für genau ein Wort weiter: die Wortmarke ist eine bindende Zusage.
+- **`panel-cool` ist für genau eine Aussage da:** hier läuft etwas nicht
+  lokal. Seit dem 23.9. trägt sie die fette Warnung im Downloader
+  („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte), seit dem
+  22.10. dazu den einen Satz im Fenster „Google Drive“ („Was Sie in Drive
+  speichern, verlässt dieses Gerät …“), seit dem 28.10. den Satz zum Weg über
+  Drive unter „Geräte“ — dieselbe Aussage, sonst nichts. Den Lokal-Chip
+  in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
+  Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
+  „App herunterladen" mit dem Fenster „Sondra als App“ (bis 860 px; neu
+  am 28.10.2026, „app herunterladen teil ist auch nicht gut designed“ —
+  vorher sechs Kacheln in vier Grössen unter einer 76-px-Wortmarke, Android
+  als Fussnotenzeile): zwei Reiter, **Windows** und **Android**, der des
+  Geräts in der Hand zuerst (`ON_ANDROID`). Je Reiter ein Weg in Tinte
+  (`MainWay`: Setup bzw. APK, Fakten in Courier) und daneben der
+  zweitbeste auf `panel-soft` — der Microsoft Store bzw. „So installieren
+  Sie sie“ in drei, vier Schritten. Darunter bei Windows die übrigen Wege
+  als Zeilen zwischen Linien (`OtherWay`): „Website als App“
+  (Edge/Chrome-Installation über `lib/install.ts`, der einzige Weg, den die
+  intelligente App-Steuerung nicht blockiert, solange das Setup unsigniert
+  ist), „Portabel“ (die .exe ohne Installation) und das Setup für den
+  anderen Prozessor. Die Store-Kachel ist ein Link auf den Eintrag
+  (`MICROSOFT_STORE` in `lib/desktop.ts`, Store-ID 9P0JXR5GNSMG, live seit
+  1.10.2026); ohne ihn trüge sie „Bald verfügbar" sichtbar auf der Fläche. In der App selbst entfällt der Knopf. Die Palette hat kein Rot, und sie braucht keins. **In der App gilt die
+  Prämisse der Warnung nicht:** dort startet `desktop/downloader.mjs` einen
+  eigenen yt-dlp-Dienst auf 127.0.0.1:9000, und statt der Warnung steht ein
+  ruhiger Block auf `panel-soft`, der den Haftungssatz wörtlich behält. Der
+  Dienst hat keine eigenen Extraktoren (anders als das Brücken-Skript), holt
+  yt-dlp nur nach Nachfrage und antwortet nur Sondra: der App-Seite und
+  sondra.lizge.ch.
+- **Der Downloader hat einen Weg für Portale: das Feld oben.** Es fragt einen
+  verbundenen Dienst zuerst und übernimmt dessen Einstellungen. Wird die Seite
+  lokal ausgeliefert (App, Brücke), ist der Schalter für externe Downloader von
+  Anfang an an. Kein Spiegel-Hinweis, der nach einer Weile aufpoppt.
+- **Was gerechnet wurde, wird als Schritt mit Werten berichtet.** Das
+  Mikrofon-Werkzeug zeigt nach dem Einstellen jede Stufe (Hochpass, Brummen,
+  Rauschminderung, Gate, Kompressor, Lautheit) mit den Zahlen, die sie benutzt
+  hat, und vorher/nachher zum Umschalten. Ein Mikrofon wird roh geöffnet und
+  beim Verlassen des Werkzeugs freigegeben.
+- **Was automatisch gewählt wird, wird gesagt, nicht gefragt.** Der
+  Downloader nannte den Weg automatisch und stellte daneben drei Knöpfe zur
+  Handauswahl. Jetzt steht der gewählte Weg als Satz da, die Handauswahl ist
+  ein Klick dahinter. Weggenommen wird dabei nichts.
+- **Ton und Zerschneiden sind Studios.** Ton im Editorrahmen
+  (`EditorShell`, acht Werkzeuge in der Schiene, je eines im Inspektor) auf
+  der Tonbühne (`editor/SoundStage.tsx`: Stage-Schwarz, Zeitlineal,
+  Transport darunter, Leertaste spielt). Zerschneiden in zwei Rahmen:
+  Schneiden (sechs Verfahren in `lib/chop.ts`, der Plan steht vorher auf
+  der Welle, ein gezogener Bereich lässt sich allein schneiden) über Bühne
+  und Transport; darunter Pads und Pattern als ein Rack — jede Zeile beginnt
+  mit dem Pad — mit Reiter-Spalte. Keine gestapelten Karten mehr — „mega
+  cluttered" war der Befund.
+- **Der Downloader zeigt alle Wege offen** („Weitere Wege", drei Kacheln),
+  und die Brücken-Anleitung fragt, ob Node.js (bei cobalt auch Git) schon da
+  ist. Nach `winget install` liest PowerShell den PATH neu ein, sonst kennt
+  dasselbe Fenster `node` nicht.
+- **Einstellen heisst hören.** Im Ton-Editor ist jeder Effekt ein Schalter,
+  ein Regler schaltet ihn ein, und die Wiedergabe läuft durch dieselbe Kette,
+  die „Übernehmen" offline rendert. Blenden stehen in der Welle selbst bzw.
+  als Rampe da, bevor sie gerechnet sind. Im Zerschneiden wird ein gezogener Bereich erst
+  auf Bestätigung ein Pad.
+- **Zustand ist eine Marke am Rand,** kein Kasten: `Notice` annotiert mit
+  `●` und `!`, statt den Hinweis einzurahmen.
+- **Untertitel laufen mit Whisper im Browser** (`workers/transcribe.worker.ts`,
+  transformers.js). Das Modell kommt beim ersten Gebrauch von Hugging Face und
+  wird dort gesagt, wo es passiert; die ONNX-Laufzeit ist mitgebaut, nicht vom
+  CDN. `onnxruntime-node` und `sharp` sind über `overrides` durch leere Pakete
+  in `stubs/` ersetzt — die Browser-Fassung braucht sie nie, und ihr
+  Installationsskript scheitert in Umgebungen ohne freien Download.
+  Eingebrannt wird mit im Browser gezeichneten Bildern je Untertitel, nicht
+  mit libass: das stürzt in diesem FFmpeg-Build ab. x264 immer mit
+  `-preset medium`; `veryfast` stürzt ebenso ab.
+- **Jedes Werkzeug hat eine Adresse.** `#umwandeln`, `#tonart`,
+  `#spuren-trennen` — die Slugs stehen in `panelMeta.tsx`, das Routing in
+  `usePanelRoute`. Der Start ist die blanke Wurzel. Ein neues Panel ohne Slug
+  ist unfertig. Ein `popstate`, das beim selben Werkzeug bleibt (zurück von
+  einer Serie zur Merkliste), setzt keine Marke „kommt aus der Adresse“ —
+  sonst schrieb der nächste Reiterklick die Adresse nicht, und Neuladen
+  öffnete das falsche Werkzeug. Und wer die Marke setzt, findet die Adresse
+  meist schon richtig vor: dann wird sie dort auch gelöscht, sonst blieb
+  nach einer eingetippten Adresse oder einem Link der nächste Wechsel —
+  etwa „Folge abspielen“ aus der Merkliste — ohne Adresse.
+- **`muted` auf einer Tönung ist der Fallstrick dieser Welt.** Auf
+  `panel-mid` mass er sich im dunklen Thema dreimal bei Lc 59.3, Boden ist 60.
+  Auf getöntem Grund gehört Sekundärtext auf `prose` oder die Tönung auf
+  `panel-soft` — aber erst messen, dann setzen.
+- **Kontrast wird gemessen, nicht geschätzt.** APCA: Fliesstext ≥ Lc 75,
+  sekundär ≥ 60, Überschriften ≥ 45, Nicht-Text ≥ 15. Eine Palettenänderung
+  ist erst fertig, wenn sie durch die Zahlen gelaufen ist — und eine getönte
+  Fläche verschiebt den Grund, auf dem gemessen wurde.
+- **Bewegung sagt, woher etwas kommt** (29.10.2026: „es hat überall viel zu
+  wenig Animationen“). Der Strich unter den Reitern gleitet, ein Werkzeug
+  kommt von der Seite seines Reiters, Listen kommen gestaffelt
+  (`rise-list`), Menüs klappen aus ihrem Knopf (`drop`), Leisten kommen vom
+  unteren Rand (`dock`), Blätter fahren auf dem Handy hoch (`sheet`),
+  Dialoge haben Ein- und Ausgang (global auf `dialog`, keine eigene
+  Animation daneben), hell/dunkel blendet über. Eintritte füllen
+  `backwards`. Liste und Gründe: DESIGN.md, „Motion“.
+- **Keine Eyebrows.** Ausnahmslos gebannt, auch als Platzhalter. Eine
+  Überschrift trägt sich selbst. Versalien gibt es nur im `Badge`.
+- **Kein Bauteil ohne Fehler-, Leer-, Lade-, Fokus- und Deaktiviert-Zustand.**
 
-## Abspielen und Herunterladen
+Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
+`.claude/skills/impeccable/`; der Richtungsvertrag mit dem Seed-Key steht in
+`.impeccable/surfaces/src-app-tsx.md`.
 
-| ID | Funktion | Bestand | Welle | Prüfung | Stand |
-| --- | --- | --- | --- | --- | --- |
-| P01 | Wiedergabe von Video und Musik, Steuerung auf dem Bild, Verlauf, Ausblenden | `PlayerPanel` | 5 | `sondra-playback` (echte Dateien, echtes FFmpeg: Uhr, Bild wartet auf den Ton, Pause, Sprung, Tempo, Ende), `sondra-app/tests/player_page.rs`, UIA mit einem Film auf Windows; **Steuerung auf dem Bild und Ausblenden offen** (die Leiste steht unter der Bühne) | **teilweise nativ ✔** |
-| P02 | Einstellungen: Qualität, Tempo, Untertitel, Tonspur, Bild, Ton (bis 300 %, Nachtmodus), Wiedergabe | `SettingsMenu` | 5 | Tempo, Lautstärke, Stumm, Wiederholen/Automatisch weiter (Logik `sondra-player::Settings` gegen die Website); Tonspur-Wahl, Untertitel (Datei neben dem Film, eingebaute Textspuren, Schriftgrösse, Grund) im Fenster „Ton und Untertitel“ (Test mit echtem Film); Fenster „Bild und Ton“: Einpassen/Füllen/Strecken, Helligkeit, Kontrast, Sättigung, Spiegeln (FFmpeg-Filter, am echten Bild gemessen), Verstärkung bis 300 %, Nachtmodus (Kompressor mit den Werten der Website), Entzerrer (fünf Bänder ±12 dB, fünf Voreinstellungen, FFmpeg `bass`/`equalizer`/`treble` + Begrenzer, am echten Ton gemessen), Karaoke (Stimme in der Mitte weg, Bass und Höhen bleiben, wie `audioKaraoke.ts`; am echten Ton gemessen); Qualität (Original, 480p, 360p … unter der Höhe des Films; das Bild kommt kleiner zum Fenster, der Film läuft weiter; je Film, der nächste ist wieder wie er ist); Bild-Untertitel offen | **teilweise nativ ✔** |
-| P03 | Größen: neben der Liste, Kino, fensterfüllend, Vollbild, Bild-in-Bild | `PlayerPanel` | 5 | Test mit dem Fenster der CI: Normal, Kino (T), Fenster füllen (W, Esc), Vollbild (F; das Fenster wird einmal gefragt, verlässt es den Vollbildmodus von selbst, folgt die Größe), Steuerung über dem Bild blendet nach 4 s aus (Maus oder Taste holt sie, Mauszeiger weg); Bild-in-Bild offen | **teilweise nativ ✔** |
-| P04 | Vorspann überspringen (fest und am Ton erkannt), Nächste Folge | `player.ts`, `introPrint` | 5 | `sondra-player`: Wann „Vorspann überspringen“ und „Nächste Folge“ angeboten werden (gegen die Website); Erkennung am Ton `sondra-media::intro`; Knöpfe im Player offen | **Logik nativ ✔** |
-| P05 | Schlaf-Timer, Lesezeichen, Weiter bei, Kapitel kopieren | `player.ts` | 5 | `sondra-player`: Schlaf-Timer-Fade, Lesezeichen (säubern, hinzufügen, Nachbarn, Kapitel), Stelle je Datei (die letzten fünfzig) gegen die Website; „Weiter bei“ im Player ✔; Lesezeichen und Schlaf-Timer als Oberfläche offen | **teilweise nativ ✔** |
-| P06 | Abhaken in der Merkliste ab 90 % | `episodeMatch`, `MerklisteTick` | 5 | Test: Name → Serie/Staffel/Folge, ab 90 % abgehakt, nur in derselben Datei, „Rückgängig“ | **nativ ✔** |
-| P07 | Fremde Formate abspielen (umpacken, Ton wandeln, klein neu rechnen) | `playable.ts` | 5 | Test mit AVI (MPEG-4/MP3) und MKV (H.264/AC-3) gegen echten FFmpeg: spielt, ohne Vorschau — das natives FFmpeg braucht kein Umpacken | **nativ ✔** |
-| P08 | Streamen aus Drive mit Bereichsanfragen | `driveClient.ts` | 5 | Szenario „drive“ | **nativ ✔** — Abspielen aus Drive öffnet den Film dort, wo er liegt (`sondra-drive::stream`: ein kleiner Dienst auf 127.0.0.1 mit einem Geheimnis in der Adresse, der FFmpegs Bereichsanfragen mit Bereichen aus Drive beantwortet, das Token bleibt im Programm; Drive, das einen Bereich mit der ganzen Datei beantwortet, wird abgefangen); die Liste behält den Namen (`sondra_playback::register_source`), nur FFmpeg bekommt die Adresse; ein Film aus früherer Zeit im Ordner „Drive-Ablage“ wird so gespielt, wie er da liegt. Getestet gegen das nachgebaute Drive und mit dem echten FFmpeg (Index am Ende der MP4, Sprung); nie gegen das echte Drive gelaufen |
-| P09 | „Beim Minimieren pausieren“ | `pauseOnMinimize.ts` | 5 | Test: aus, bis der Schalter an ist (Fenster „Bild und Ton“, gleicher Schlüssel wie die Website); dann hält ein minimiertes Fenster (Windows: `IsIconic`, zweimal je Sekunde gefragt) an und fängt nicht von selbst wieder an — das Minimieren selbst nur in der CI auf Windows geprüft, nie von Hand | **nativ ✔** (Windows-Teil ungeprüft) |
-| P10 | Film läuft hinter anderen Werkzeugen weiter, kleine Leiste | `Dashboard` | 5 | Test: der Film läuft hinter anderen Werkzeugen weiter, die kleine Leiste (Name, Stelle, Pause, „Zum Player“) steht unten rechts | **nativ ✔** |
-| P11 | Visualizer für Musik | `PlayerPanel` | 5 | Bildschirmfoto | **nativ ✔** — Balken, Welle und Ring auf der Bühne eines Titels (die Formen der Website, aus dem, was gerade gehört wird: `Spectrum` wie der `AnalyserNode`, Blackman, Glättung 0,8, −100 bis −30 dB), in Ruhe auf dem Boden; im Fenster „Bild und Ton“ ein- und ausschaltbar |
-| D01 | Downloader: Wege (eigener Dienst, Brücke, Portale), Weg als Satz | `DownloaderPanel` | 5 | `verify:download` | **teils nativ ✔** — Adresse → Quelle (Folge, Datei, Stream) → Laden; Portale über yt-dlp (siehe D02); offen: Weg-Wahl von Hand, Brücke, Zertifikatspeicher-Hinweis |
-| D02 | Extraktoren: AniWorld und Hoster, YouTube-progressiv, HLS zusammensetzen | `api/*.js`, `studio.ts` | 1 | `verify:extractors`, `:resolve` | **teils nativ ✔** — AniWorld/SerienStream (Staffel, Film, Folge, Online-Prüfung), VOE, Filemoon, Vidmoly, Doodstream, Streamtape, Vidoza, Packer, HLS-Listen und -Laden; **yt-dlp nativ ✔** (`sondra-download::ytdlp`: suchen — eigene Kopie, WinGet, PATH —, nur auf Klick laden und gegen die veröffentlichte SHA-256 prüfen, Fortschritt, Abbruch tötet den Prozess, Listen (`--flat-playlist`: jedes Video eine Quelle der Liste, „Alle laden“), Fehlersätze wie `downloader.mjs`, bei „veraltet“ einmal `-U` und neu; ohne `--no-check-certificates`); offen: eigene Extraktoren für Podcast, Bilibili, Spotify, Drive-Links, 9anime, AnimeKaizen, MVFlix |
-| D03 | Listen und Playlists, Folgenwähler, Staffeln laden | `download.ts`, `EpisodePicker` | 5 | `verify:download` | **Adressliste nativ ✔** — `sondra-download::addresses` (`extractAddresses` Zeichen für Zeichen gegen 15 Texte: Komma, Semikolon, Zeilen, Anführungszeichen, Klammern, Punkt am Satzende, Doppelte); mehrere eingefügte Adressen werden einzeln gesucht, als „n Quellen gefunden“ gezeigt, mit „Alle laden“ der Reihe nach geladen (ein Fehler hält die übrigen nicht auf, jede gescheiterte Adresse steht mit Grund da). Offen: Playlist-Auffalten, Folgenwähler, Staffeln laden. |
-| D04 | Direkt auf die Festplatte (kein RAM), Fortschritt, Pause, Abbruch, Wiederaufnahme | `downloader.mjs`, `backgroundDownload.ts` | 1 | Test | offen |
-| D05 | Hintergrund: Minibar, Wachhalten, Gong, Auto-Resume | `backgroundDownload.ts` | 5 | Klicktest | **teils nativ ✔** — Gong (`sondra-audio::chime`, Hüllkurve und Töne wie auf der Website, Schalter „Ton, wenn fertig“, vorgewählt an), Bildschirm und System bleiben wach (`SetThreadExecutionState`, nur Windows, nur in der CI übersetzt), Fortschritt im Fenstertitel. Schwebende Karte auf jeder anderen Seite (Fortschritt, Rate, „Zum Herunterladen“, „Abbrechen“; `floating.rs`) nativ ✔. Offen: Fortschritt in der Taskleiste. |
-| D06 | Direkt in Google Drive speichern; „In Drive“ bei jedem Ergebnis | `DriveSaveButton` | 5 | `verify:drive` | **Kern nativ ✔** — `sondra-drive::write::put_file`: bis 5 MB eine Anfrage, darüber fortsetzbar in 8-MB-Stücken (nach einem 503 fragt es, wo Drive steht, und macht dort weiter; Abbruch hinterlässt keine halbe Datei), gleiche Datei (Name und Größe) nicht noch einmal, geänderte wird in dieselbe Datei geschrieben; gegen den Nachbau geprüft. „In Drive“ an den Ergebnissen von Umwandeln, Bilder, Video, Mischen, Lautstärke, Bildschirm, Herunterladen und Tonart ✔ (Anmeldung im Systembrowser beim Klick, Ordner nach Art, Zustand am Knopf: Prozent, gespeichert, schon da, erneut versuchen; nur wo ein Google-Client eingebaut ist). Drive-Knopf in der Kopfzeile ✔ („Drive anmelden“ öffnet den Browser, danach ruhig; Fehler mit Grund). „In Drive“ auch an Untertitel, Mikrofon, Ton bearbeiten, Zerschneiden und Spuren trennen ✔ |
-| D07 | Warnung „läuft nicht lokal“ (im Dienst-Fall der ruhige Block) | `DownloaderPanel` | 5 | Bildschirmfoto | offen |
+## Betrieb
 
-## Geräte, Handy, Drive
-
-| ID | Funktion | Bestand | Welle | Prüfung | Stand |
-| --- | --- | --- | --- | --- | --- |
-| G01 | Gerätekennung aus dem öffentlichen Schlüssel, signierte Einträge, Fälschungen abgelehnt | `deviceIdentity.ts` | 6 | `verify:devices` | **nativ ✔** — `sondra-devices` (ECDSA P-256 mit `p256`): Kanonische JSON, Kennung, Namen, signierte Einträge und Nachrichten, Fälschungen, Wiederholung, Alter; Einträge und Nachrichten der Website (echtes WebCrypto) werden geglaubt, Fälschungen nicht; was die Crate schreibt, glaubt die Website (`npm run verify:native-devices` in der CI); der private Schlüssel wird noch nirgends geschützt abgelegt (Windows: Anmeldeinfo-Versiegelung folgt mit der Seite) |
-| G02 | Post über Drive, Namen eindeutig, Wiedererkennen nach Neuinstallation | `devices.ts` | 6 | `verify:devices` | **Unterbau nativ ✔** — `sondra-devices::registry` gegen ein nachgebautes Drive (`sondra-drive::fake`): eigener signierter Eintrag in `Sondra/Geräte` (Wiederschreiben, wenn etwas anderes darin steht), Liste mit Vergessen nach 60 Tagen, Namensstreit (der spätere Eintrag gibt nach), „Das war dieses Gerät“ / Nein, Entfernen nur für nicht offene, Post (`sondraAn`/`sondraVon`, einmal gelesen und gelöscht, Fälschungen gelöscht und nicht zugestellt, unbekannter Absender nach frischer Liste), Aufräumen nach einem Tag; schreibender Drive-Client (`sondra-drive::write`). Offen: Rundenablauf im Programm, Oberfläche | **Seite nativ ✔ (Kern)** — `sondra-app::devices_page`: Verbinden (nur auf Klick, Anmeldung bei Google im Systembrowser), dieses Gerät mit Umbenennen/Trennen/„ganz vergessen“, die anderen mit Dateien, Ordner, Text senden, Entfernen, „Das war dieses Gerät“; Anfragen mit Annehmen/Ablehnen (nichts ohne Ja), Text- und Linkkarten (Link nur auf Klick), Übertragungen mit Fortschritt und Abbrechen; Kennung und Namen liegen geschützt in `geraet-schluessel.bin`. Getestet mit zwei Geräten über das Drive-Nachbau und eine echte Leitung. Offen: schwebende Anfrage auf jeder Seite, Ziehen von Dateien auf ein Gerät, Wahl des Zielordners, Fortsetzen, Weg über Drive, eigener STUN/TURN, „Abspielen auf anderem Gerät“, Google-Client im Build (`SONDRA_GOOGLE_CLIENT_ID/SECRET`)
-| G03 | Direkte Übertragung (WebRTC), Flusskontrolle, Annehmen und Ablehnen | `deviceTransfer.ts` | 6 | Austausch mit der Website | **nativ ✔, Leitung geprüft** (Anfrage kommt auch als schwebende Karte auf jeder anderen Seite, im Test mit Annehmen dort) — `sondra-devices::transfer`: Absender und Empfänger über eine `Wire`-Schnittstelle (Nachrichten `start`/`ready`/`file`/`end`/`done`/`ack`/`saved`/`cancel`/`error` als dasselbe JSON, Stücke zu 64 KB, Quittung alle 4 MB, höchstens 16 MB voraus), mit zwei Warteschlangen im Speicher gegen die Szenarien der Website geprüft (ganz und in Reihenfolge, langsamer Empfänger hält den Absender zurück, Abbruch von beiden Seiten); der Datenkanal (WebRTC, `webrtc-rs`) fehlt noch | — Leitung: `sondra-devices::rtc` (webrtc-rs 0.14, Datenkanal „sondra“, geordnet, Angebot/Antwort mit Kandidaten, kein Server ohne Eintrag, `RtcWire` als `Wire`); echte Verbindung im Prozess (12 MB, abgebrochener Absender) und gegen die Website: `npm run verify:native-rtc` lässt in echtem Chromium den Übertragungscode der Website (`deviceTransfer.ts`) 20 MB an das native Gerät und von ihm empfangen. `vendor/webrtc` ist angepasst (Empfangspuffer 256 KiB statt 65 535 Byte: die Website schickt 64-KiB-Stücke, die der Kanal sonst abbrach). Offen: Annehmen/Ablehnen-Oberfläche, Zielordner
-| G04 | Ordner senden, Fortsetzen nach Abbruch, drei Übertragungen zugleich | `deviceTransfer.ts` | 6 | Szenario „geraete“ | **Fortsetzen und Pfade nativ ✔ (ohne Leitung)** — Fortsetzen nach gekappter Leitung: der Empfänger hält ganze und halbe Dateien (`Piece`, „noch wie hinterlassen“), der Absender schickt nur den Rest, ein verändertes Stück beginnt von vorn; Ordnerpfade bereinigt (`split_path`, kein `..`, acht Ebenen), freier Name; „Ordner senden“ in der Oberfläche und drei Übertragungen zugleich offen |
-| G05 | Text und Links senden; auf anderem Gerät abspielen | `devices.ts` | 6 | Szenario „geraete“ | offen |
-| G06 | Weg über Drive, eigener STUN/TURN-Server, Fähigkeiten (`caps`) | `deviceServers.ts` | 6 | `verify:devices` | **teils nativ ✔** — „Eigener Server für andere Netze“ (`sondra-devices::servers`: Adressen prüfen und die Server einer Verbindung bauen, Wort für Wort gegen `deviceServers.ts`; Seite mit STUN, TURN, Benutzer, Passwort **verdeckt** (`TextField::secret`: Punkte, nicht in die Zwischenablage, nicht an den Screenreader), Adressen in `Geraete.json`, das Passwort nie; jede neue Verbindung fragt die Server neu); Fähigkeiten (`caps`) schon im signierten Eintrag. Offen: der Weg über Drive bei „Kein direkter Weg“ |
-| H01 | Handy spiegeln: ADB über USB, scrcpy-Server 3.3.3, H.264, Maus, Tasten | `phoneMirror.ts` | 6 | **gegen ein echtes Handy** | **nativ ✔ gegen ein nachgebautes Handy, nie an einem echten** — `sondra-mirror`: ADB-Protokoll (Anmeldung mit Signatur, „Zulassen“, Aufspielen per sync, Shell, Ströme), Schlüssel, Steuernachrichten, Serverargumente und Tastaturberichte **Byte für Byte gegen die Tango-/scrcpy-Bibliothek der Website** (`npm run native:golden`: 41 Nachrichten, 31 Berichte, öffentlicher Schlüssel und Signaturen); Bild über FFmpeg mit der Grösse aus dem Parametersatz (Drehen startet neu), geprüft mit echten Strömen; das Kabel über `nusb` (nur die Auswahl der Schnittstelle ist ohne Handy prüfbar); Seite mit den fünf Schritten, Verbinden, Bild, Maus (Links tippt, Rechts zurück, Mitte Start, Rad), Tasten und dem Ende. Offen: ein eigenes Fenster (Bild-in-Bild) und die Prüfung an einem echten Handy — unter Windows braucht es denselben ADB-Treiber (WinUSB) wie WebUSB |
-| H02 | UHID-Tastatur, Ton des Handys, Bildschirmfoto, eigenes Fenster | `hidKeyboard.ts`, `phoneAudio.ts` | 6 | `verify:hid`, echtes Handy | **teils nativ ✔** — virtuelle USB-Tastatur (Bericht für Bericht gegen `hidKeyboard.ts`, mit Rückfall auf Text und Tasten, wenn das Handy sie ablehnt), Ton (Opus in Ogg über FFmpeg, was über 0,4 s zu spät kommt, wird verworfen, Stumm), Bildschirmfoto als PNG; offen: das Fenster, das frei stehen kann |
-| GD1 | Google-Anmeldung (Systembrowser, PKCE), Token verschlüsselt, Trennen | `googleDrive.mjs` | 1 | `verify:drive`, `:google-token` | **nativ ✔** (gegen nachgebautes Google; nie gegen das echte; Windows: Anmeldeinfo-Verschlüsselung gebaut, auf Windows noch nicht gelaufen) |
-| GD2 | Ordner „Sondra“ in Drive, Hochladen (5 MB / 8-MB-Stücke), Projekte, Merkliste | `googleDrive.ts` | 1 | `verify:drive` | **teils nativ ✔** — Hochladen (`put_file`: 5 MB in einer Anfrage, darüber in 8-MB-Stücken mit Wiederaufnahme, gleiche Datei nicht noch einmal), Ordner nach Art, Merkliste (M12), „In Drive“ bei Ergebnissen; offen: Projekte (es gibt keine Sitzung), die Warteschlange mit Fortschritt in der Kopfzeile |
-
-## Werkzeuge
-
-| ID | Funktion | Bestand | Welle | Prüfung | Stand |
-| --- | --- | --- | --- | --- | --- |
-| W01 | Umwandeln: alle Formate, Vorlagen (WhatsApp, Reel, Hörbuch, E-Mail), eigene Vorlagen, Stapel, ZIP | `ConverterPanel`, `convert.ts` | 2/7a | `verify:convert` | **Kern nativ ✔** (`sondra-media`: alle Formate und Vorlagen mit dem echten FFmpeg, Befehle gleich der Website; Stapel und die Oberfläche nativ ✔; eigene Vorlagen nativ ✔ (die Einstellungen unter einem Namen ohne den Schnitt, im Datenordner in der Form der Website, mit ✕ wieder weg); ZIP nativ ✔ (alle Ergebnisse in ein ZIP daneben, nie über ein altes)) |
-| W02 | Lautstärke: Lautheit messen und angleichen, Stapel | `NormalizePanel`, `loudness.ts` | 2/7a | `verify:loudness` | **Kern nativ ✔** (Messung und Verstärkung wie die Website auf 8 Signalen und 6 Plänen; das Rechnen der Datei und die Oberfläche offen) |
-| W03 | Bilder: skalieren, zuschneiden, umwandeln, viele auf einmal | `ImagePanel`, `image.ts` | 2/7a | Bildvergleich | **Kern und Seite nativ ✔, Ausschnitt gezogen (acht Griffe, Mitte, neu aufziehen, Seitenverhältnis; `crop_ui` + `crop_drag`)** — `sondra-media::image_ops` (Reihenfolge und Rechnung der Website, Ausschnitt in Bruchteilen, mitdrehen und mitspiegeln; FFmpeg-Filter statt Canvas: Helligkeit, Kontrast, Sättigung, Weichzeichnen, Schärfen als 3×3-Faltung), Seite „Bilder“ (Bühne aus derselben Kette wie die Datei, Werkzeuge Ausschnitt nach Seitenverhältnis, Drehen, Größe, Farbe, Schärfe, Speichern als WebP/JPEG/PNG, viele auf einmal); offen: freier Ausschnitt mit Griffen, ZIP für viele, Größe der Datei vorab messen, EXIF-Drehung gegen die Website |
-| W04 | Untertitel: Whisper, TXT/SRT/VTT, als Spur oder eingebrannt | `SubtitlesPanel`, `transcribe.ts` | 2/7a | Test | **nativ ✔ (mit echtem Modell und echter Stimme geprüft)** — `sondra-speech` (whisper.cpp über `whisper-rs`; Modelle „Schnell“ = base, „Genauer“ = small, quantisiert, einmalig von Hugging Face und nur auf Knopfdruck, Fortschritt, Abbruch, nichts Halbes bleibt liegen), Fenster von etwa einer halben Minute an der leisesten Stelle, Sprache wählbar oder automatisch; Untertitel-Zeilen, SRT, WebVTT und Text Zeichen für Zeichen wie `transcribe.ts` (`cues.json`); Seite: Datei, Modell, Sprache, laufende Anzeige der gehörten Zeilen, Speichern als SRT/VTT/Text neben die Datei, als Spur im Film (mov_text/srt) und eingebrannt (FFmpeg-Filter `subtitles`, wo dieser FFmpeg libass hat). Der Test hört die Beispielstimme von whisper.cpp ab (CI: Linux). Offen: Einbrennen mit den Platten der Website (abgerundete Schrift) statt libass, Modellwahl für den Player (`Untertitel erzeugen` im Ordner), GPU
-| W05 | Video-Editor: schneiden, drehen, Farbe, Blenden, Tempo, Ton; große Dateien | `VideoPanel`, `video.ts` | 2/7c | Szenario | **Kern nativ ✔, Seite mit Zeitleiste (ohne Wellenform)** — `sondra-media::video_ops`: 26 Befehlszeilen Argument für Argument gegen `video.ts` (Schnitt als Kopie oder Filter, Drehen, Ausschnitt, Größe, Farbe, Looks, Blenden, Tempo in Stufen, Rückwärts, WebM/VP8, GIF, WebP, Ton herausziehen, Standbild, Ton unterlegen), Seite „Video bearbeiten“ (Standbild-Bühne mit den Änderungen, Schnitt an der Stelle setzen, Werkzeuge, Fortschritt mit Abbrechen, neben das Original schreiben); **Zeitleiste nativ ✔**: ganze Länge, was bleibt hell, die Stelle, an jedem Ende ein Griff zum Ziehen (die Enden bleiben auseinander, das Standbild kommt erst beim Loslassen), per Maus; offen: Abspielen der Vorschau mit den Änderungen, Wellenform; **Ausschnitt ziehen nativ ✔** (die Bühne zeigt das Bild ganz mit dem Rechteck darauf, nach dem Werkzeug das Ergebnis; Regeln `sondra-media::crop_drag`, 924 Züge gegen `dragRect` der Website) |
-| W06 | Ton-Editor: Studio, acht Werkzeuge, Filter, Rauschen, Hall, Tonhöhe, Tempo, Blenden | `AudioEditorPanel`, `effects.ts` | 2/7b | Test, Hörprobe | **Kern nativ ✔** — `sondra-media::effects`: Hoch-/Tiefpass (24 dB), Klang (Bässe/Höhen), Kompressor mit Ausgleich und Zahlen, Rauschprofil und -minderung, Echo, Nachhall (eigener Raum, Faltung über FFT; der Raum und die Mischung wie im Browser, die Faltung selbst nicht Bit für Bit), Bereiche (Kopieren, Einfügen, Stille, Verdoppeln, Stumm, Ein-/Ausblenden, Kanäle) — alle Zahlen gegen `effects.ts` (`effects.json`). Offen: Bühne, Wellenform, Wiedergabe durch die Kette, Rückgängig, Seite | **Seite nativ ✔ (Kern)** — `audio_page.rs`: Datei lesen (FFmpeg), Welle mit Auswahl durch Ziehen, Anhören (Auswahl oder alles, über die Soundkarte), Schnitt (Ausschneiden, Kopieren, Einfügen, Verdoppeln, Stumm, Stille einfügen/entfernen), Pegel (Verstärken, Normalisieren, Blenden), Klang (Hoch-/Tiefpass, Bässe/Höhen, Kompressor), Säubern (Rauschen lernen und entfernen, Gleichspannung), Raum (Echo, Hall), Ausgabe (Kanäle, Abtastrate, WAV/FLAC/MP3 neben die Datei), Verlauf mit Rückgängig/Wiederholen (24 Schritte); Rechnen im Hintergrund. `edit.rs` Zahl für Zahl gegen `edit.ts` (`edit.json`). **Rückwärts drehen und Bittiefe nativ ✔** (WAV-Bytes bei 16, 24 und 32 bit Byte für Byte gegen `encodeWav`, `wav.json`). **Klicks entfernen nativ ✔** (`declick.rs`, die Vorhersage-Reparatur der Website: dieselben Stellen und Werte auf einem Signal mit bekannten Schäden, alle drei Stärken, `declick.json`; Werkzeug Säubern → „Klicks entfernen“, ganze Datei, „Nichts gefunden“ als Satz). **Tonhöhe und Tempo nativ ✔** (`timestretch.rs`, der Phasenvocoder der Website, Längen genau und Samples auf 2·10⁻³ gegen `timestretch.ts`; Werkzeug „Tonhöhe und Tempo“: ±1 bis ±12 Halbtöne ohne Längenänderung, Tempo 0,5× bis 2× ohne Tonhöhenänderung, auf die Auswahl oder alles). Offen: Klicks entfernen, Anhängen einer zweiten Aufnahme, Tempo klopfen, Ein-Klick-Sprachverbesserung (KI), Regler statt Stufen, Live-Hören durch die Kette, Tastenkürzel, Ablegen einer Datei auf die Seite
-| W07 | Mischen: Stimme und Musik, Ducking | `MixPanel`, `duck.ts` | 2/7b | Test | **nativ ✔** — `sondra-media::duck` Zahl für Zahl gegen `duck.ts` (vier Fälle: Schwelle, Sprache, Verstärkung je 10 ms, Abtastwerte, Spitze und Abzug), Seite „Stimme und Musik mischen“ (Einstellungen als Stufen, neu gemischt bei jeder Änderung, Pegel von Stimme und Musik, WAV 24 Bit, Einzelspuren in einen Ordner, unter ein Video legen); Hörprobe in der Mischseite offen (Abspielen im Player nach dem Speichern) |
-| W08 | Spuren trennen (Gesang, Schlagzeug, Bass) | `StemsPanel`, `separation.ts` | 2/7b | Test | **nativ ✔ (Zahl für Zahl gegen `separation.ts`)** — `sondra-media::separation` (STFT, Masken, Segmente mit Überlappung, Instrumental) gegen eine Golden-Datei, Seite „Spuren trennen“: Lied wählen, Ausgewogen/Gesang/Rhythmus, Fortschritt je Segment, jede Spur und das Instrumental einzeln anhören, alle als WAV in einen Ordner neben dem Lied. Offen: Feinjustierung der Einzelwerte, ZIP. |
-| W09 | Tonart, Tempo, Akkorde, Melodie als MIDI | `HarmonyPanel`, `key.ts`, `midi.ts` | 2/7b | `verify:harmony`, `:tempo` | **nativ ✔** — Seite „Tonart und Akkorde“ (Datei wählen, Akkordfenster, Melodie verfolgen mit Klarheit, kürzester Note und Raster; Tonart, Camelot, Tempo, Akkorde, Melodie; MIDI für Akkorde, Melodie oder beides neben die Quelle); Test mit echtem FFmpeg und gesynthetem Akkord und Tonleiter |
-| W10 | Zerschneiden: sechs Verfahren, Pads, Pattern, Klavierrolle | `SamplerPanel`, `chop.ts`, `pattern.ts` | 7c | Test, Hörprobe | **Planer nativ ✔** — `sondra-media::chop` (Spektralfluss einmal je Datei, sechs Verfahren, Bereich, Vorlauf, Nulldurchgang, Zusammenlegen zu kurzer Teile, Deckel 128) gegen `chop.ts` auf 19 Plänen eines Schlagzeug-Stücks; Pads, Pattern, Klavierrolle und die Seite offen | **Seite nativ ✔ (ohne Klavierrolle)** — `sampler_page.rs`: sechs Verfahren mit ihren Einstellungen (der Plan ist `chop.rs`), Welle mit Schnitten und Auswahl des Pads, je Pad Anhören, Spielart, Klang (Sample, Warm, 808, E-Piano, Pluck, Lead), Tonhöhe, Pegel, Lage, Anschwellen/Ausklingen, Rückwärts; Schritt-Raster (16/32, Tempo, Swing, Start-Beat, Choke); Beat anhören; Ausgabe: Pads als WAV, Beat als WAV und MIDI (`pattern.rs`: Treffer, Zeiten und MIDI-Bytes Byte für Byte wie `pattern.ts`, die Stimmen selbst gerechnet), CUE und Audacity-Marken (`cue.rs`). Schnitte auf der Welle ziehen nativ ✔ (ein Schnitt zwischen zwei Pads zieht beide mit, nie unter 15 ms; Kanten an Lücken und die äußeren einzeln). Pads per Tastatur ✔ (1234 QWER ASDF YXCV, ein Pad nach dem anderen — nicht übereinander). Offen: Klavierrolle, mehrere Pads zugleich, MIDI-Controller, Transponieren mit Längenerhalt (Phasenvocoder), Reaper-Marken in der Oberfläche, Normalisieren und Blende an den Kanten
-| W11 | Mikrofon: Test, Geräte, Kalibrierung, Kette mit Zahlen, Vorher/Nachher | `MicPanel`, `micCalibrate.ts` | 7b | Test | **Kern und Seite nativ ✔** — `sondra-media::mic` (Messung, Brummerkennung, Hochpass, Kerbfilter, Rauschminderung, Gate, Kompressor, Lautheit, die Sätze der Schritte und der Hinweise) Zahl für Zahl und Wort für Wort gegen `micCalibrate.ts` (`mic.json`, fünf Zwecke); `sondra-audio::input` (Eingang über cpal, Pegel); Seite: einschalten, Gerät wählen, Pegel mit Übersteuerungswarnung, Zweck, zwei Aufnahmen, Ergebnis mit Schritten, Vorher/Nachher anhören (im Player), WAV speichern, auf eine Aufnahme anwenden. Mit einem Mikrofon aus Zahlen getestet, nie mit einem echten. Offen: Ausgabegerät wählen, Probe in die Sitzung, „Sprache verbessern“ per KI |
-| W12 | Bildschirm aufnehmen (mit Ton des Rechners, Fenster oder Schirm) | `ScreenPanel`, `screenRecord.ts` | 7b | Test | **nativ ✔ (Aufnahme mit Testbild geprüft, nicht am echten Bildschirm)** — `sondra-media::capture`: FFmpeg greift das Bild (Windows: `gdigrab`, ganz oder ein Fenster nach Titel), gerade Seitenlängen, schnelles x264; der Ton (Rechner über WASAPI-Loopback, Mikrofon) wird von der App genommen und beim Beenden zu einer MP4 gefügt, zwei Spuren gemischt; Seite mit Bildschirm/Fenster, Ton, 30/60 Bilder, Zeit, Beenden, Abspielen. Offen: Pause (FFmpegs Grabber lässt sich nicht anhalten), mehrere Bildschirme zur Wahl |
-| W13 | Lokale KI: Modelle laden, Fortschritt, Hugging Face nur auf Hinweis | `localAi.ts`, `onnx.ts` | 2 | Test | offen |
-
-## Windows-Teil, Betrieb, Verteilung
-
-| ID | Funktion | Bestand | Welle | Prüfung | Stand |
-| --- | --- | --- | --- | --- | --- |
-| B01 | Installer für alle Benutzer, Eintrag in Apps & Features, stille Installation | `installer.nsh` | 8 | Workflow | **Programmseite nativ ✔** (`.sondra-liste` auf der Befehlszeile öffnet das Fenster „Liste empfangen“, Filme und Ton den Player, Ordner die Ordnerseite, alles auch vom zweiten Start); offen: Eintrag in der Registry und Logo (Installer); **Setup nativ (NSIS, `native/installer/sondra.nsi`, gebaut und in der CI installiert):** für alle Benutzer, Programm und FFmpeg daneben, Lizenztexte, Startmenü, Eintrag in Apps & Features samt stiller Deinstallation, `.sondra-liste` gehört Sondra, „Öffnen mit“ für Medien ohne eine Endung zu übernehmen; die CI startet das installierte Programm mit einem Film und nur dem mitgelieferten FFmpeg und deinstalliert wieder. Offen: Programm-Symbol, Signatur |
-| B02 | Portabel (Daten daneben, anderer Port, keine Registrierung) | `build-desktop.mjs` | 8 | Workflow | **nativ ✔ (ZIP)** — `Sondra-Nativ-Portabel.zip`: Programm, FFmpeg, Lizenzen und eine Marke `portable.txt`; mit der Marke liegen die Daten in `Sondra-Daten` daneben (nicht schreibbar: der übliche Ort), kein Eintrag in der Registry, keine Selbstaktualisierung; die CI entpackt, startet und prüft den Datenordner; das Einzel-Instanz-Schloss liegt im Datenordner, die Portable stört das installierte Programm nicht |
-| B03 | Microsoft-Store-Paket (MSIX), Store-Fassung ohne eigenen Updater | `build-desktop.mjs --store` | 8 | Workflow | offen |
-| B04 | Arm64 | Workflow | 8 | Workflow | offen |
-| B05 | Automatische Updates (`latest.yml`, Fortschritt, „Auf x.y.z aktualisieren“) | `updater.mjs`, `AppUpdate` | 8 | Workflow | **teils nativ ✔** — `updater.rs`/`updater_ui.rs`: 20 s nach dem Start und alle 6 Stunden `latest-nativ.yml` lesen (dasselbe flache YAML wie `latest.yml`, die Datei für den eigenen Prozessor), eine neuere Fassung im Hintergrund laden und gegen die SHA-512 prüfen (eine falsche Datei wird gelöscht und nie gestartet; Abbruch räumt auf), dann Karte „Sondra x ist bereit“ mit „Jetzt aktualisieren“/„Später“ und im Fenster „Was ist neu“ die Zeile mit „Nach Updates suchen“; das Setup läuft still (`/S /relaunch`, Windows fragt um Erlaubnis, danach öffnet sich Sondra wieder). Nur im installierten Programm (`Deinstallieren.exe` daneben) oder mit `SONDRA_UPDATE_FEED`. Geprüft gegen eine Stand-in-Seite (Lesen, neuere/gleiche/ältere Fassung, Prüfsumme, Fälschung, Abbruch, Karte, Später, Installieren, stille Fehler). Der Workflow „Native“ schreibt `latest-nativ.yml` neben das Setup (Artefakt); **offen:** die Datei ins Release legen (erst auf Ihr Wort), Fortschrittsbalken, unterschriebene Dateien |
-| B06 | „Öffnen mit Sondra“, Dateiendungen `.sondra` und `.sondra-liste` mit Logo | `installer.nsh` | 8 | Workflow | offen |
-| B07 | Einzel-Instanz, zweiter Start reicht Dateien weiter | `electron.mjs` | 1/8 | Test | **nativ ✔** — `sondra-app::instance`: der erste Start lauscht nur auf 127.0.0.1 an einem selbst gewählten Port und legt Port und Geheimnis in `Instanz.json` im Datenordner; ein zweiter Start reicht Dateien und Ordner weiter (auch ohne Dateien: das Fenster kommt nach vorn) und beendet sich; wer das Geheimnis nicht kennt (eine Webseite, die Text an den Port schickt) wird nicht gehört, eine übrig gebliebene Datei sperrt keinen neuen Start. Test mit zwei Starts und einem Fremden. |
-| B08 | Offline: alles nach dem ersten Besuch | `coi-serviceworker.js` | 8 | Test | offen |
-| B09 | Datenschutz, Lizenzen (FFmpeg, scrcpy, Tango, Modelle), Changelog | `public/` | 8 | `verify:scrcpy` u. a. | **teils nativ ✔** — Changelog („Was ist neu“, dieselbe Datei) und Fenster „Lizenzen“ (Bausteine mit Lizenz und Herkunft, die Texte MIT, Apache-2.0 des scrcpy-Servers und GPL-2.0 für FFmpeg-Fassungen mit x264); offen: Datenschutzerklärung im Fenster, Lizenzen im Installer |
-| B10 | Daten der Electron-App übernehmen (Sitzung, Einstellungen, Lesezeichen) | `localStorage`, IndexedDB | 8 | Test mit echten Daten | **teilweise** — die Merkliste geht über „Exportieren“ in der Electron-App und „Einlesen …“ in der nativen (JSON, MAL, AniList; Zusammenführen und Rückgängig wie dort, `sondra-merk`); offen: Sitzung, Weiter-bei-Stellen, Lesezeichen, Einstellungen (liegen in `localStorage` von Chromium) |
-
-## Neu im nativen Sondra (kein Bestand)
-
-| ID | Funktion | Welle | Prüfung | Stand |
-| --- | --- | --- | --- | --- |
-| N01 | Neue Folgen automatisch laden, je Serie wählbar, feste Zahl auf Vorrat | 0/1 | Testdateien der Website | **nativ ✔** (`sondra-dienst laufen`; gegen nachgebaute Seiten) |
-| N02 | Speichergrenze: gesehene Folgen in den Papierkorb, nie eine ungesehene | 0/1 | `sondra-core` Tests | **nativ ✔** (Papierkorb: `trash`-Paket, auf Windows in der CI) |
-| N03 | Zeitfenster, nur am Netzteil, nur ohne getaktete Verbindung, Bandbreitengrenze | 0/1 | `sondra-core` Tests | **nativ ✔** (Papierkorb: `trash`-Paket, auf Windows in der CI) |
-| N04 | Rechner wach halten (aus, beim Laden, immer), Herunterfahren nach dem Laden | 0/1 | Test auf Windows | **nativ ✔** — Wachhalten und Herunterfahren (60 s zum Zurücknehmen); Windows-Aufrufe in der CI geprüft, echter Schlaf nicht |
-| N05 | Dienst im Tray, startet mit Windows | 1 | Test auf Windows | **in Arbeit** — Autostart (HKCU Run) und eine Instanz je Ordner da; Tray und Benachrichtigungen offen |
+- **Sondra nativ** (`native/`, 18.11.2026, Entscheidung des Nutzers: „komplett
+  wechseln wie Discord“ — Electron raus, Rust und GPUI rein, FFmpeg nativ):
+  ein Rust-Workspace neben der bestehenden App, kein Ersatz über Nacht.
+  **Stand (19.11.2026):** der Dienst als Programm für die Befehlszeile (`sondra-core`,
+  `-daemon`, `-drive`, `-extract`, `-download`, `-service`, alles gegen nachgebaute Außenwelt) **und
+  ein Fenster** (`sondra-app`, Programm `sondra`): Kopfzeile, Reiter, Startseite, **Merkliste**
+  (Poster/Liste, Serienseite, +1, Entfernen mit Rückgängig; liest und schreibt dieselbe SQLite-Datei
+  wie die Website, eine fremde Datei wird nie überschrieben), **Ordner** (Platte lesen, Art/Suche/
+  Ordnung, Auswählen, Löschen nach Rückfrage in „Sondra-Papierkorb“ mit Fenster), **Abspielen**
+  (`sondra-playback`: FFmpeg in zwei Kindprogrammen, der gehörte Ton ist die Uhr; `sondra-audio`;
+  hakt ab 90 % ab, Vorspann/Nächste Folge, Untertitel) und **Herunterladen** (Adresse → Quelle →
+  Laden, Datei oder Folgenseite). Die Logik der Merkliste, des Ordners und des Players steht in
+  `sondra-merk` und `sondra-player` und ist gegen den Code der Website geprüft (`npm run
+  native:golden`); die Seiten sind in GPUIs Testfenster und auf echtem Windows über UI Automation
+  geprüft (CI „Native“: Jobs `app`, `uia`, `gallery`, `video`). **Stand 19.11.2026
+  abends:** dazu nativ die Seiten **Geräte** (Drive-Post, WebRTC mit der Website, Ordner,
+  Fortsetzen), **Umwandeln, Lautstärke, Bilder, Mischen, Tonart, Video, Untertitel
+  (Whisper, `sondra-speech`), Ton bearbeiten, Mikrofon, Zerschneiden, Spuren trennen**
+  und **Handy spiegeln** (`sondra-mirror`: ADB, scrcpy-Protokoll, Schlüssel, Steuernachrichten
+  und Tastaturberichte Byte für Byte gegen die Bibliotheken der Website; Bild und Ton über FFmpeg;
+  USB über `nusb`), außerdem „Liste empfangen“, „Was ist neu“, schwebende Karten,
+  Einzel-Instanz, Gong und Wachhalten beim Laden. **Noch nicht:** Tray, Benachrichtigungen
+  des Systems (die Karte „Neue Folge“ im Fenster gibt es: `new_episodes.rs`), die Zeitleiste des
+  Video-Editors (inzwischen da: Zeitleiste mit Ziehen, Ausschnitt ziehen), das Ziehen der
+  Schnitte (inzwischen da, ebenso die Klavierrolle), Store; Bild-in-Bild; ein eigenes Fenster für das Handy. **Setup**
+  (`native/installer/sondra.nsi`, NSIS, für alle Benutzer, FFmpeg daneben, Apps & Features, `.sondra-liste`, Öffnen mit)
+  installiert, startet mit einem Film und deinstalliert sich in der CI (Lauf 76 grün, 19.11.2026), mit Symbol in der .exe.
+  **Player nativ:** Entzerrer (fünf Bänder, Voreinstellungen), Karaoke, Qualität, Visualizer (Balken, Welle, Ring) und
+  alle Einstellungen der Website bis auf Bild-in-Bild; **Ordner:** Nach Serie, Ungesehen, Neu, ▶ auf der Kachel, Als ZIP.
+  **Zerschneiden:** Schnitte auf der Welle ziehen. **Umwandeln:** eigene Vorlagen (Format der Website), Alle als ZIP
+  (`sondra-media::zip` schreibt dieselben Bytes wie `zip.ts`). **Aktualisierung** (`updater.rs`): `latest-nativ.yml`
+  lesen, Setup laden und gegen SHA-512 prüfen, Karte „Sondra x ist bereit“, stilles Setup mit `/relaunch`; der Workflow
+  „Native“ schreibt die Datei neben das Setup (Artefakt), ins Release kommt sie erst auf Ihr Wort.
+  Kein Fenster hat ein echter Mensch gesehen; die Bildschirmfotos der CI sind die einzige Sicht.
+  **Stand 19.11.2026 nachmittags:** dazu nativ **Neue Folgen melden** (`new_episodes.rs`: Prüfrunde, Karte im
+  Fenster, „Neu auf AniWorld“ auf der Serienseite), Verlauf und Würfeln in der Merkliste, **Klicks entfernen**,
+  Rückwärts drehen und Bittiefe im Ton-Editor, **eigener STUN/TURN-Server** (Passwort verdeckt: `TextField::secret`).
+  **yt-dlp** (19.11.2026, `sondra-download::ytdlp`): Adressen ohne eigene Quelle laufen über yt-dlp, wenn es da ist
+  (eigene Kopie, WinGet, PATH); sonst steht auf der Herunterladen-Seite das Angebot „yt-dlp laden“ — geholt wird es nur auf
+  den Klick, von yt-dlps Releases, gegen die veröffentlichte SHA-256 (passt sie nicht, bleibt nichts liegen); nie
+  `--no-check-certificates`. Geprüft gegen ein Stand-in (`fake-ytdlp`), nie gegen das echte yt-dlp.
+  **Nichts davon ist an einem echten Handy oder mit echter Tonkarte gelaufen** — das Handy
+  wird gegen ein nachgebautes Handy geprüft (`sondra_mirror::fake`).
+  Die Testdateien schreibt der Serializer der Website
+  (`npm run native:fixture`), der Workflow „Native“ prüft sie auf Windows und
+  Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern
+  liest die Merkliste nur, nie zurückschreiben; nie eine ungesehene Folge
+  löschen; nichts ist vorgewählt (keine Serie, kein Wachhalten, kein
+  Löschen). **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
+  Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
+  gestrichen, sobald etwas davon wegfällt. Auf Windows nur in der CI gelaufen
+  (windows-latest), nie auf dem Rechner eines Menschen. Der Dienst-Kern schreibt die Liste nicht; das Fenster
+  schreibt sie (`sondra-app/src/store.rs`) im selben Format wie die Website.
+- `npm run dev` · `npm run build` · `npm run typecheck`
+- Offline: `public/coi-serviceworker.js` hält nach einem Besuch alle Dateien
+  aus `offline.json` (ein Vite-Plugin schreibt die Liste beim Build) und
+  löscht, was frühere Fassungen im Cache liessen. WebAssembly-Kerne nur bei
+  Gebrauch.
+- **Browser-Szenarien** (`npm run build && npm run verify:e2e`, `scripts/e2e/`,
+  Workflow „Browser“): zwei Geräte, die sich Dateien schicken (direkt, über
+  Drive, Ablehnen, Fälschungen, Neuinstallation, Text und Links, Abspielen
+  auf dem anderen Gerät, Ordner in beide Richtungen, drei Übertragungen auf
+  einmal, Fortsetzen nach einer gekappten Leitung), der Ordner „Sondra“ in
+  Drive samt Löschen, die Bewegung (Reiterstrich, Dialoge, Menüs, ruhige
+  Bewegung), „Beim Minimieren pausieren“ und der Player auf dem Handy (Tippen,
+  Doppeltippen, Steuerung ein- und ausblenden), der Ordner auf dem Handy (Tippen,
+  langes Drücken, Blatt, Gruppen, Ansicht je Ordner), die zuletzt geöffneten
+  Ordner und der Weg zu einer Serie (ein Feld, Ordner erkennt, „Mehr“,
+  Startseite). Drive läuft als Nachbildung im Prozess des Tests
+  (`scripts/e2e/lib.mjs`), `run.mjs` startet `dev-service` selbst. Jedes
+  Szenario ist ein eigener Prozess; neue Funktionen bekommen dort ihr
+  Szenario, nicht nur eine Prüfung unter Node.
+- `npm run dev:service` serviert `dist/` zusammen mit den Funktionen unter
+  `api/`, was `vite preview` nicht kann — nötig, um den Downloader lokal
+  durchzuspielen.
+- **„Öffnen mit Sondra“**: `desktop/installer.nsh` trägt Sondra nur unter
+  `OpenWithProgids` ein, nie als Standard (der Workflow prüft das). Dateien
+  aus der Befehlszeile oder vom zweiten Start reicht `electron.mjs` über
+  `server.mjs` (`/geoeffnet/<token>`, einmal abrufbar) an die Seite.
+- **Microsoft Store als MSIX** (`npm run build:desktop -- --store`, im
+  Workflow bei jedem Lauf: gebaut, mit Wegwerf-Zertifikat installiert,
+  gestartet, Artefakt „Sondra-Store-MSIX“). Das unsignierte Setup lehnt der
+  Store ab (Richtlinie 10.2.9), das MSIX signiert er selbst. Die Identität aus
+  Partner Center steht in den Repository-Variablen `STORE_IDENTITY_NAME`,
+  `STORE_PUBLISHER`, `STORE_PUBLISHER_NAME` (als Variable oder Secret; und `STORE_DISPLAY_NAME`, sonst
+  „Sondra Studio“); ohne sie entstehen Testwerte. In der Store-Fassung
+  (`process.windowsStore`) sind der eigene Updater und das Nachladen von
+  yt-dlp aus: der Store aktualisiert selbst und erlaubt kein nachgeladenes
+  Programm (10.2.2). yt-dlp wird dort nur benutzt, wenn es schon da ist
+  (`winget install yt-dlp.yt-dlp`), und die Fehlermeldung sagt genau das.
+  Kacheln macht `scripts/store-tiles.mjs` aus `icon-512.png`.
+- **Video-Editor: grosse Dateien und fremde Formate.** Eine gewählte Datei
+  bleibt als `asset.source` (der File) an der Sitzung; die Vorschau spielt
+  direkt von dort, und FFmpeg liest sie über WORKERFS
+  (`runFfmpegOnDisk`, `probeDisk`), statt sie erst in den Speicher zu
+  kopieren. Spielt der Browser die Datei nicht (AVI, MPEG-4, H.265 in
+  Firefox) oder ohne Ton (AC-3/DTS im MKV), macht `lib/playable.ts` eine
+  Vorschau: umpacken, nur den Ton wandeln, oder klein neu rechnen — so wenig
+  wie nötig, mit Fortschritt auf der Bühne und „Ohne Vorschau weiter".
+  Geschnitten wird immer das Original. **libopus stürzt in Stereo ab
+  Komplexität 5 ab** (gemessen am 14.10.2026, auch unter Node; der Tab
+  stirbt) — bis 4 läuft es bei jeder Bitrate. Jede Opus-Kodierung geht
+  deshalb über `opusArgs` in `lib/convert.ts` (`-compression_level 4`).
+  **VP9 kommt in diesem Build nie an** (einfädig Absturz, mehrfädig Hänger);
+  WebM ist VP8 (`vp8Args`). Für Vorschauen weiter Vorbis oder AAC.
+- **Umwandeln muss eine Datei liefern** (`lib/convertRun.ts`): gewählte
+  Dateien liest FFmpeg über WORKERFS statt sie zu kopieren; stürzt der
+  mehrfädige Kern ab oder schweigt er 90 s, folgt ein zweiter Versuch auf dem
+  einfädigen (`loadFfmpeg({ singleThread: true })`, `FfmpegCrash`). Was
+  dann noch scheitert, steht als Satz da, FFmpegs Zeilen einen Klick
+  dahinter. `npm run verify:convert` schickt jedes Format mit den üblichen
+  Einstellungen durch den echten Kern, jeden Lauf in eigenem Prozess — ein
+  Absturz dort beendet den Prozess wie sonst den Tab. **Vorlagen**
+  (`lib/convertPresets.ts`, 21.10.2026): „Für WhatsApp“, „Instagram Reel“,
+  „Hörbuch“, „Klein für E-Mail“ als Pillen unter dem Format, je mit dem, was
+  sie für ein Video und — wo sinnvoll — für einen Ton bedeuten; eigene
+  Vorlagen sind die Einstellungen unter einem Namen im `localStorage`
+  (`sondra:umwandeln:vorlagen`). Reel braucht `videoFrame: 'vertical'`
+  (1080 × 1920, eingepasst mit Rändern, nie beschnitten). Die Bildrate steht
+  deshalb für jedes Videoformat da, nicht nur für GIF. `verify:convert`
+  schickt jede Vorlage durch den echten Kern.
+- **Abspielen** (`PlayerPanel.tsx`, `lib/player.ts`): der Media Player,
+  nur zum Ansehen und Anhören. Dateien werden nie in die Sitzung gelesen,
+  sondern über eine Object-URL auf dem File abgespielt; solange das Werkzeug
+  offen ist, gehören fallengelassene Dateien ihm (`claimDrops`, in
+  `useGlobalIngest`). Eine .srt/.vtt mit gleichem Namen wird Untertitel.
+  Fremde Formate über dieselbe Vorschau wie im Video-Editor (`playable.ts`),
+  hier bis 720p; neu rechnen nur auf Klick, weil es so lange dauert wie der
+  Film. „Weiter bei“ und Lautstärke bleiben im `localStorage` dieses Geräts.
+  Seit dem 2.10.2026 ein Player wie die bekannten: Steuerung über dem Bild
+  auf einem Verlauf, blendet sich beim Abspielen aus (Maus nach 4 s, Finger
+  nach 7 s). **Auf dem Handy** (8.11.2026, „alles wird zu schnell
+  ausgeblendet, du kannst im Video nichts machen“): ein Tipp ins Bild
+  entscheidet nach dem Stand beim Aufsetzen des Fingers (`shownAtTouchRef`),
+  nicht nach dem, was der Druck selbst geweckt hat — vorher holte
+  `pointerdown` die Leiste und `touchend` blendete sie sofort wieder aus; war
+  sie oben, geht sie erst nach dem Doppeltipp-Fenster weg (320 ms), damit
+  „zehn Sekunden vor“ nicht flackert. Der Verlauf über dem Bild ist nur Farbe
+  und fängt keinen Tipp ab (`pointer-events-none`, nur die Steuerung selbst
+  nimmt Tipps an); auf einem Handy-Bild lag er vorher über fast der ganzen
+  Fläche. Szenario „abspielen“ (390 × 844, Touch, `film.webm`); alles Einstellbare
+  hinter dem Zahnrad (`player/SettingsMenu.tsx`): Qualität (kleinere Fassung
+  per FFmpeg, der Film läuft weiter), Tempo, Untertitel samt Grösse und
+  Hintergrund, Tonspur, Bild (Einpassen/Füllen, Helligkeit, Kontrast,
+  Sättigung, Spiegeln), Ton (Verstärkung bis 300 %, Nachtmodus über Web
+  Audio), Wiedergabe (weiter, wiederholen, Sprungweite). Vier Grössen: neben
+  der Liste, Kinomodus (T), fensterfüllend (W, Esc) und Vollbild (F). Der
+  Rahmen ist gerundet — ein Ort zum Ansehen, keine Messfläche —, die eine
+  Farbe darauf ist `stage-accent`. Fensterfüllend braucht `:root.player-fill`,
+  sonst hält die Einblende-Animation des Panels das `fixed` gefangen.
+  **Der Player hängt nicht im Panel mit `key`** (`Dashboard.tsx`): der
+  `key={panel}`, der die Einblendung neu startet, baute ihn bei jedem
+  Werkzeugwechsel ab — der Film stand still, und die kleine Leiste „läuft
+  weiter“ erschien nie. Der Visualizer gehört der Musik (nur dann läuft der
+  Ton durch Web Audio dafür), das Menü fällt unter den Rahmen, wenn der
+  niedriger als 400 px ist. WAV (PCM 8/16/24 bit, 32 bit Float) spielt der
+  Browser selbst — `browserPlaysAudio` kannte PCM nicht, und jede WAV ging
+  erst durch FFmpeg.
+  **Vorspann überspringen** (1.1.10): über einer Folge (Video, ab 4 Min.) in
+  den ersten sechs Minuten — einem Drittel einer kurzen — ein Knopf, der um
+  die Länge des Vorspanns springt (S); im Abspann, den letzten 2:30 oder
+  einem Achtel, „Nächste Folge“ (N). Die Regeln stehen als reine Funktionen
+  in `lib/player.ts` (`openingOffered`, `nextOffered`). Die Länge gehört der
+  Serie auf der Merkliste (`opening`, reist mit nach Anytype), sonst
+  `settings.opening`, 1:30. **Schlaf-Timer**: 15, 30, 60 Minuten oder Ende
+  des Titels, nicht gespeichert; die letzten zehn Sekunden wird es leiser
+  (`sleepFade`), dann angehalten und die eingestellte Lautstärke zurück.
+  „Ende des Titels“ hält an, statt „Automatisch weiter“ zu folgen.
+  **Vorspann am Ton** (1.1.11, `lib/introPrint.ts`, `lib/introDetect.ts`,
+  `workers/intro.worker.ts`): zwei Folgen einer Serie der Merkliste werden
+  verglichen — die ersten acht Minuten per FFmpeg (WORKERFS) als 8 kHz mono,
+  daraus ein Fingerabdruck nach Haitsma/Kalker (10 Frames/s, 33 Bänder
+  300–2000 Hz, Fenster 2048 — mit 1024 stimmten versetzte Folgen nur zu
+  gut der Hälfte überein), und das längste Stück, das beide teilen, ist der
+  Vorspann. Gereiht nach übereinstimmenden Frames, nicht nach Länge; leise
+  Frames zählen nie (zwei Folgen, die mit Stille beginnen, teilen keinen
+  Vorspann); die Enden werden nachgeschnitten, bis drei Sekunden und dann
+  eine Sekunde daneben dicht übereinstimmen — sonst hing Musik, die danach
+  unter anderem Dialog wiederkommt, eine Sekunde dran. Bis zu vier Abdrücke
+  je Serie (`intros`, eine neue Staffel bringt oft einen neuen Vorspann),
+  reisen mit der Merkliste. In jeder Folge wird der Vorspann im Hintergrund
+  gesucht und je Datei behalten (`sondra:abspielen:vorspann`); dann steht
+  „Vorspann überspringen“ genau während er läuft und springt an sein Ende,
+  auch nach einem Cold Open. Solange gesucht wird, kein Knopf; nicht
+  gefunden: die feste Länge wie bisher. Zahnrad → Vorspann.
+  **Lesezeichen** (1.1.11): B setzt eins, Umschalt + ←/→ springen,
+  Striche auf der Zeitleiste, Liste im Zahnrad mit Namen und „Als Kapitel
+  kopieren“ (YouTube-Format, beginnt bei 0:00). Je Datei nach Name und
+  Grösse in `sondra:abspielen:marken`, wie „Weiter bei“.
+- **Beim Minimieren pausieren** (30.10.2026, Wunsch: „beim minimieren vom
+  fenster alles was am abspielen ist zu pausieren“; `lib/pauseOnMinimize.ts`):
+  aus, bis der Schalter unter Zahnrad → Wiedergabe an ist (gemerkt in
+  `sondra:pausieren-beim-minimieren`). Hält an, was in Sondra spielt —
+  Player, Ton-Editor, Sampler, Sequenzer, Vorschauen — und fängt beim
+  Zurückkommen nicht von selbst wieder an. Medienelemente findet nur
+  `play()` selbst (`new Audio()` der Wellenform steht in keinem DOM), also
+  wird es einmal umhüllt; was über Web Audio spielt, meldet sich mit
+  `registerPauser`. Ein Film im Bild-in-Bild bleibt. Die Windows-App sagt
+  Minimieren selbst (`onWindowState`, 1.1.23); sonst, im Browser und in der
+  Android-App, gilt die verborgene Seite — also auch der Wechsel zu einem
+  anderen Tab, und der Schalter sagt das.
+- **Bildschirm aufnehmen** (`lib/screenRecord.ts`): Im Browser fragt der
+  Browser. Electron hat keinen eigenen Dialog — die Seite holt die Quellen
+  über das Preload (`captureSources`, `desktopCapturer`), der Nutzer wählt,
+  `pickCaptureSource` merkt sich die Wahl, und der
+  `setDisplayMediaRequestHandler` in `electron.mjs` gibt genau diese Quelle
+  heraus; ohne Wahl lehnt er ab. Ton des Rechners ist Loopback (ganzer
+  Rechner). MediaRecorder-WebM wird mit FFmpeg per Stream-Kopie nachgearbeitet,
+  sonst fehlen Dauer und Index.
+- **Portabel** (`Sondra-Portable[-arm64]-<Version>.exe`, im Release auch als
+  `Sondra-Portable.exe`): electron-builders Ziel „portable“, gebaut aus
+  demselben entpackten App-Ordner wie das Setup (`--prepackaged`), nicht ein
+  zweites Mal gepackt. Der Starter entpackt bei jedem Start in einen
+  temporären Ordner und sagt über `PORTABLE_EXECUTABLE_DIR`, wo die .exe
+  liegt. Die Daten liegen in `Sondra-Daten` daneben (`app.setPath` vor dem
+  Single-Instance-Lock; nicht schreibbar → `%APPDATA%\Sondra Portabel`),
+  der Port ist 47198 statt 47199 — sonst nähme sie neben der installierten
+  App einen zufälligen und damit bei jedem Start eine leere Merkliste. Keine
+  Registrierung (`registerSondraProjectIcon` aus). Sie ersetzt sich nicht
+  selbst: der Updater liest nur `latest.yml` und bietet die neue Datei an
+  (`available`, `download`). `latest.yml` nennt weiter nur das Setup; das
+  Build-Skript stellt sie wieder her, falls der Portable-Lauf sie anfasst.
+  Der Workflow startet sie zweimal aus einem eigenen Ordner und prüft
+  Datenordner und Port.
+- **Arm64**: `npm run build:desktop -- --arm64` (und `--store --arm64`). Der
+  Workflow baut x64 auf `windows-latest` und arm64 auf `windows-11-arm`, beide
+  mit denselben Prüfungen; der Release-Job legt beide Setups ins Release und
+  führt die `latest.yml` zusammen (`scripts/merge-update-info.mjs`, x64
+  zuerst — electron-updater nimmt die Datei mit der eigenen Architektur im
+  Namen, sonst die erste).
+- `npm run build:desktop` baut die Windows-App (Electron, NSIS-Setup nach
+  `release/`); vorher einmal `npm ci --prefix desktop`. Quelle in `desktop/`,
+  Electron steht bewusst nur in `desktop/package.json`. `release/` wird nicht
+  eingecheckt.
+- **Die App aktualisiert sich selbst** (`desktop/updater.mjs`,
+  electron-updater, GitHub-Releases von `bananaaboy/Sondra`). Sie liest
+  `latest.yml` aus dem neuesten Release; der Desktop-Workflow lädt die Datei
+  mit dem Setup hoch und bricht ab, wenn sie fehlt. Ein Release ohne
+  `latest.yml` ist für installierte Apps unsichtbar. In der App sitzt an der
+  Stelle von „App herunterladen" der Update-Knopf (`AppUpdate.tsx`, über
+  `desktop/preload.cjs`): „Nach Updates suchen", Fortschritt beim Laden,
+  „Auf x.y.z aktualisieren", wenn es bereit ist; nicht gedrängt, beim
+  Schliessen wird ohnehin installiert. Scheitert es, steht „Update nicht
+  möglich" sichtbar da, mit „Setup laden" daneben — nie nur im Tooltip.
+  `nsis.packElevateHelper` bleibt gesetzt: nur dann steht
+  `isAdminRightsRequired` in `latest.yml`, und das Update geht bei der
+  Installation für alle Benutzer direkt über elevate.exe. Alles, was der
+  Updater sagt, steht in `sondra.log`. Neue Version: `version`
+  in `package.json` und `desktop/package.json` erhöhen, **oben in
+  `src/changelog.json` einen Eintrag anlegen**, dann den Workflow mit
+  „release“ starten.
+- **Was ist neu** (`src/changelog.json`, `WhatsNew.tsx`, 28.10.2026,
+  Wunsch: „auf allen Plattformen einen Release-Log, wo steht, was in jeder
+  Version dazugekommen ist“): eine Liste für Website, beide Apps und die
+  GitHub-Release-Notizen — für Menschen geschrieben, nicht als Commit-Log.
+  Geöffnet über die Versionsmarke neben dem Namen und die Fusszeile; nach
+  einem Update einmal eine Zeile unter der Kopfzeile („Neu in 1.1.20 …“,
+  `sondra:gesehene-version`), ein erster Besuch bekommt sie nicht.
+  `verify:changelog` (in `verify`) bricht ab, wenn die Version aus
+  `package.json` nicht oben steht; der Release-Schritt setzt den Eintrag
+  als „Neu in x“ vor die Notizen (in PowerShell gelesen — Nodes Ausgabe
+  verbog die Codepage die Umlaute).
+- Umgebungsvariablen der Bereitstellung:
+  - `SONDRA_SECRET` — signiert die Adressen, die der Proxy weiterreicht.
+  - `SONDRA_PROVIDER_URL` — ein cobalt-kompatibler Anbieter. Ist einer
+    hinterlegt, wird er zuerst gefragt und liefert volle Auflösung und die
+    Portale, für die es hier keinen Extraktor gibt. Ohne ihn bleibt YouTube auf
+    der progressiven Spur (in der Regel 360p).
+  - `SONDRA_PROVIDER_KEY` — dessen `Api-Key`, falls verlangt.
+  - `VITE_GOOGLE_CLIENT_ID` — der OAuth-Client „Webanwendung“ für Google
+    Drive, beim Build gelesen. Ohne ihn bietet die Website Drive nicht an.
+  - `GOOGLE_CLIENT_SECRET` — dessen Secret, **nur für `api/google-token.js`**.
+    Damit bleibt die Anmeldung auf der Website; ohne es gilt sie eine Stunde.
+    Rotieren: bei Google ein zweites Secret anlegen, hier eintragen, neu
+    bereitstellen, das alte löschen — niemand muss sich neu anmelden.
+  - **Kein Server-Secret gelangt in die Seite.** Was der Browser-Code hält,
+    steht im JavaScript jedes Besuchers, „Secret“ in Vercel hin oder her: so
+    lag das Google-Secret am 22.10.2026 offen im Bundle (`define` und
+    `envPrefix: ['VITE_', 'GOOGLE_', 'VERCEL_']`). Der Build bricht jetzt ab,
+    wenn eines dieser Secrets in einer Datei stünde (`noServerSecrets` in
+    `vite.config.ts`).
+- **Hintergrund-Downloads & Floating Minibar (1.1.19):** In `Dashboard.tsx`
+  wird `DownloaderPanel` mit `hidden={panel !== 'downloader'}` dauerhaft im
+  DOM gehalten — aktive Downloads brechen bei einem Wechsel in andere Werkzeuge
+  (Player, Editor, Merkliste) nicht mehr ab. Sobald ein Download läuft und ein
+  anderes Werkzeug aktiv ist, erscheint unten rechts eine schwebende Minibar
+  mit Live-Fortschrittsbalken, Download-Rate (MB/s), verbleibender Zeit,
+  Titel sowie Pause- und Abbruchknöpfen. Ein Klick fokussiert den Downloader.
+- **Screen Wake-Lock & Power Save Blocker (`lib/backgroundDownload.ts`, 1.1.19):**
+  Hält Bildschirm und Betriebssystem während aktiver Downloads oder Wiedergabe
+  wach (Screen Wake Lock API im Browser, `powerSaveBlocker` in Electron).
+  Bei Verbindungsabbrüchen greift ein automatisches Auto-Resume.
+- **Fertigstellungs-Gong (`lib/backgroundDownload.ts`, 1.1.19):** Bei
+  abgeschlossenem Download erklingt ein dezenter zweistimmiger Sinusklang
+  (659,25 Hz & 880 Hz) über die Web Audio API.
+- **Zero-RAM Direct-to-Disk (1.1.18):** In der Desktop-App schreibt
+  `desktop/downloader.mjs` bzw. `/api/direct-save` Datenströme via Node
+  `fs.createWriteStream` direkt in den Serien-Zielordner der Festplatte,
+  ohne Zwischenspeicherung im Browser-Heap (0 MB zusätzlicher RAM-Verbrauch).
+- **Herunterladen: Erkennen, Zusammensetzen, Laden** (16.10.2026). Adressen
+  liest `extractAddresses` (`lib/download.ts`) aus jedem Text — Komma,
+  Semikolon, Zeilen, Anführungszeichen, Punkt am Satzende; ins einzeilige
+  Feld kommen sie mit „, " getrennt. HLS (`.m3u8`, auch als `audio/mpegurl`)
+  geht durch `/api/stream`: der Dienst schreibt die Playlist um, jede
+  Adresse darin bekommt ein eigenes Token, und die Seite setzt die Segmente
+  (samt getrennter Tonspur, samt `EXT-X-BYTERANGE`) mit FFmpeg per
+  Stream-Kopie zu einer MP4 zusammen (`downloadHls` in `lib/studio.ts`);
+  verschlüsselte Streams bleiben abgelehnt. Einträge einer Liste haben eine
+  feste `id`, nicht ihre Position — eine Playlist, die sich auffaltet,
+  verschob sonst alle Zeilen danach. `boundedFetch` prüft Zertifikate
+  immer; hinter einem Schul- oder Firmenproxy hilft der Zertifikatspeicher
+  des Systems (`tls.getCACertificates('system')`), nie `rejectUnauthorized:
+  false`. `npm run verify:download` prüft das ohne Netz.
+- **Abspielen hakt in der Merkliste ab** (`lib/episodeMatch.ts`,
+  `player/MerklisteTick.tsx`): aus dem Dateinamen Serie, Staffel und Folge
+  („S01E13“, „1x13“, „Titel - 13“, „Staffel 1 Folge 13“), der längste
+  passende Titel der Liste gewinnt; ohne Staffel im Namen die eine Staffel,
+  die, bei der der Eintrag steht, oder durchgezählt. Ab 90 % wird genau diese
+  Folge abgehakt (`seenEpisode`, nie andere, nie wieder ab), der Stand rückt
+  über `settle`; unter dem Bild steht es mit „Rückgängig“, abschaltbar im
+  Zahnrad („In der Merkliste abhaken“). **Abgehakt wird nur, was in derselben
+  Datei unter 90 % lief** (`armed` in `MerklisteTick`): beim Wechsel zur
+  nächsten Datei kommt der Name einen Render vor der zurückgesetzten Uhr an,
+  und mit „Automatisch weiter“ war jede Folge abgehakt, sobald sie begann.
+  Eine Serie von aussen öffnen: `requestOpenSeries` + Reiter wechseln.
+- **Neue Folgen melden** (nur in der App, `lib/newEpisodes.ts`): eine Minute
+  nach dem Start, dann alle drei Stunden, jede Serie „Am Schauen“ mit
+  AniWorld-Adresse nacheinander über das eigene `/api/resolve`. Gemeldet wird
+  über eine Windows-Benachrichtigung nur, was seit der letzten Prüfung
+  dazukam — die erste merkt sich nur den Stand —, jede Folge einmal; ein
+  Klick holt das Fenster nach vorn (`sondra:focus`) und öffnet die Serie.
+  **Eine Online-Prüfung ist keine Änderung:** `checkOnlineUpdates` setzt
+  `updatedAt` nicht mehr, sonst gewann die ältere Fassung dieses Rechners
+  beim Abgleich mit Anytype über Folgen, die anderswo abgehakt wurden.
+  **`/api/resolve` liest Optionen aus dem geparsten `body`,** nie aus
+  `request.body?.…`: der Server der App (und `dev:service`) reicht den Körper
+  als Text weiter, Vercel als Objekt. So lief in der App die Prüfung nie,
+  und Sprache und Netzwerkadapter fehlten beim Auflösen. Eine Prüfung löst
+  nie eine Folge auf; geht sie nicht, heisst die Antwort `status: 'unknown'`,
+  und „Online prüfen“ sagt es in einem Satz. AniWorld steht hinter
+  DDoS-Guard und lässt Rechenzentren nicht durch — geprüft wird gegen
+  nachgebaute Seiten (`verify:extractors`, `verify:resolve`). Gezählt werden
+  nur Links auf die eigene Serie (`/stream/<slug>/staffel-n`); jeder
+  Staffel-Link und `data-season-id` machten die „Staffel 21“ einer fremden
+  Serie zur neuesten. **Neu ist, was die Liste nicht kennt** (`onlineNews`):
+  eine fehlende Staffel oder Folgen über die bekannte Zahl hinaus — im
+  Rückstand sein ist nichts Neues. „Auf die Merkliste nehmen“
+  (`takeOnlineNews`) ergänzt Staffel oder Zahl, bei geteilten Staffeln den
+  letzten Teil, und lässt den Stand über `settle` auf der ersten ungesehenen
+  Folge; vorher sprang „Zur neuen Folge springen“ über Ungesehenes hinweg.
+- **Discord** (nur in der App, aus bis zum Schalter in der Merkliste,
+  `desktop/discord.mjs`): spricht Discords lokale Pipe direkt. Gesendet wird
+  erst nach `READY` und dann einmal je Änderung — vorher löste jede Antwort
+  Discords einen neuen Rahmen aus, rund 50 000 je Sekunde. Rahmen, die die
+  Pipe in Stücken liefert, werden gesammelt, bis sie ganz sind. Ausschalten
+  schliesst die Pipe; Discord nimmt den Status dann selbst weg. `npm run
+  verify:discord` spielt das gegen eine nachgebaute Pipe durch.
+- **Merkliste** (`#merkliste`, `MerklistePanel.tsx`, Daten in
+  `lib/merkliste.ts`): ein Speicher für den Tab und „Merken“ im
+  Herunterladen (`useMerkliste`, `localStorage` `sondra:saved_links`,
+  Projektdatei unter `merkliste`). „Folge n laden“ legt den Eintrag mit
+  `requestLookup` ab und wechselt den Tab; das Herunterladen nimmt ihn beim
+  Öffnen (`takePendingLookup`). Covers aus Dateien werden als JPEG
+  verkleinert, weil sie im `localStorage` liegen.
+  **Gezählt wird nie über das Ende hinaus:** gesehene Folgen jenseits der
+  bekannten Anzahl fallen weg (`cleanWatched`), und jede Änderung am
+  Gesehenen setzt den Stand über `settle` auf die erste ungesehene Folge —
+  ab der Staffel, dann die folgenden, dann Lücken davor; ist alles gesehen,
+  wird der Eintrag „Fertig“. Vorher ging der Stand einfach eins weiter, und
+  „Alle gesehen“ liess eine Staffel mit 39 Folgen auf „Folge 40“ stehen
+  („40/39“). **Teile** (`MerkSeason.parts`) sind Abschnitte einer Staffel,
+  keine eigenen Staffeln: die Folgen zählen durch, `episodes` der Staffel
+  ist die Summe der Teile (`withParts`), Gesehenes und Stand bleiben an der
+  Staffel; `partsOf`/`partProgress` leiten je Teil Bereich und Fortschritt
+  ab. Ein offener Teil ohne Gesehenes wird beim Auflösen einfach
+  weggenommen. Kacheln sind 2:3 (Filmposter) oder je Serie 5:7 (Manga,
+  `tileFormat`, `TILE_FORMATS`); Vorschau und Staffel-Fenster folgen dem
+  Format, der Ausschnitt bleibt gültig. Der Ausschnitt eines Covers liegt
+  als `coverFrame` (x, y in %, Zoom 1–3) neben jedem Cover — an der Serie,
+  der Staffel und dem Teil — und wird von `CoverImage` überall gleich
+  gezeichnet (der Editor dafür, `FrameEditor`, ist ein `block`: als
+  Inline-Span in einem Wrapper mass er 0 × 0, und kein Bild liess sich
+  ziehen): auf einen Canvas in Gerätepixeln (ResizeObserver mit
+  `device-pixel-content-box`; weicht der Wert von CSS × `devicePixelRatio`
+  ab, gilt das Produkt), aus einer Pyramide von Halbierungen (`halve`), nie
+  als `<img>`, das der Browser in einem Schritt verkleinert — das sah
+  überschärft aus. Covers aus Dateien: längere Seite 720 px, ebenso in
+  Halbschritten, als WebP 0.9 (sonst JPEG 0.92).
+  Statistik und ihr Bild in den Grüntönen der Palette (`ink`, `faint`,
+  `rule`): Tailwinds Amber und Slate lagen im dunklen Thema bei Lc 0 bis 17,
+  „Fertig“ war unsichtbar. Felder in den Fenstern stehen in `Group`, einer
+  benannten Gruppe — die Beschriftung allein nannte für Screenreader nichts.
+  Export als `Sondra-Merkliste-<Datum>.json`
+  (`exportMerkliste`), Einlesen führt zusammen (`mergeMerkliste`: dieselbe
+  Serie per `id` oder Name, die zuletzt geänderte Seite gewinnt) und lässt
+  sich zurücknehmen.
+  **„Bis wohin?“** (25.10.2026, Wunsch: „wie viel man schauen muss, um an
+  einen selbst gewählten Punkt zu kommen“; `lib/watchPlan.ts`,
+  `WatchPlanner.tsx`): auf der Seite einer Serie, ab `xl` rechts neben
+  Kopf und Staffeln (eigene Spalte — als Rasterzeile gestreckt, schob
+  „Genauer rechnen“ die Staffeln nach unten), darunter sonst. Ziel ist
+  Staffel + Folge oder „Ende Staffel n“ / „Ganze Serie“; gezählt wird ab
+  dem Stand, Gesehenes nicht (Lücken davor auch nicht), mit den Längen der
+  Serie samt Ausnahmen, Filme nach den Staffeln. Eine Staffel ohne
+  Folgenzahl auf dem Weg wird genannt („mind.“), nie geraten. Darunter die
+  Rechnung in Worten („21 Folgen à 24 Min., ohne Vorspann (1:30) — statt
+  …“), dann „Bei [2] [am Tag | pro Woche] → Tag“ (heute zählt als erster
+  Tag) und „Bis zum [Datum] → so viel am Tag“. Das eigene Tempo kommt aus
+  dem Verlauf (`recentPace`: vier Wochen, mindestens eine Woche geteilt,
+  damit ein Abend keine Gewohnheit wird) und ist die Vorgabe. „Genauer
+  rechnen“: von vorn, Vorspann überspringen (am Ton erkannt, an der Serie
+  oder wie im Player), Tempo 1–2× (Vorgabe aus dem Player). Tempo und
+  Optionen bleiben im `localStorage` (`sondra:merkliste:rechner`). **Ziel
+  merken** legt `goal` an die Serie (`{season, episode, by?, setAt,
+  count}`, reist mit der Liste): die Serie sagt dann „Ziel: … — noch 6
+  Folgen, 2 am Tag reichen · 1 vor dem Plan“ (gegen ein gleichmässiges
+  Tempo seit dem Setzen), das Poster „Ziel · noch 6“. Die alte Zeile
+  „1/Tag: fertig … · 2/Tag: …“ ist darin aufgegangen.
+  **Teilen, nur lesend** (30.10.2026, `lib/merkShare.ts`, `lib/shareCover.ts`,
+  `lib/qr.ts`, `MerklisteShare.tsx`; am selben Tag neu gemacht: „bei merkliste
+  teilen braucht es einen effektiveren weg“, „ohne server und ohne apis“,
+  „bilder auch im link“): die Liste steht im Link selbst, nichts wird
+  hochgeladen, kein Dienst gefragt — wer den Link hat, sieht sie. **Gewählt
+  wird, was mitgeht:** Am Schauen ist vorgewählt, Pillen je Stand und Häkchen je
+  Serie; „Empfehlen“ auf der Seite einer Serie öffnet dasselbe Fenster mit
+  genau ihr. Mit Titel, Stand, Bewertung und Fortschritt (abschaltbar),
+  **nie** mit den Adressen der Folgen oder Notizen. **Bilder im Link:** je
+  Serie ein eigenes kleines Bild, der Ausschnitt der Kachel (`coverFrame`)
+  in ihrer Form (2:3 oder 5:7), in drei Grössen — „Winzig“ (6 × 9 Pixel,
+  Helligkeit 4 bit, Farbe 4 bit je 3 × 3 Pixel, 33 Byte, glatt vergrössert ein
+  Verlauf der Farben), „Klein“ (40 × 60, WebP, JPEG wo der Browser kein WebP schreibt),
+  „Gross“ (96 × 144); aus einem Bild im Eintrag oder einer Adresse, die
+  CORS erlaubt (sonst bleibt die Serie ohne Bild, das Fenster sagt es).
+  Beim Lesen wird ein Bild nur geglaubt, wenn es nach den ersten Bytes
+  eines ist (RIFF/WEBP, FFD8FF, oder genau 34 Byte „winzig“) und höchstens
+  24 KB wiegt; es wird als `<img>` gezeigt, nie als etwas anderes.
+  **Das Format** ist binär (Fassung 2) und in Spalten, damit der Link so kurz
+  bleibt wie er kann („halte die links so klein wie möglich“): erst alle Titel
+  (ein Block, mit Zeilenumbruch getrennt), dann je Eintrag ein Byte Flags
+  (Staffel, Folge, gesehen weichen vom Üblichen ab, Bild, Manga, Stand), dann je
+  eins Bewertung, dann nur die Zahlen, die nicht das Übliche sind — Staffel 1,
+  Folge 1, nichts gesehen kostet nur sein Flag, und ohne Fortschritt fehlen die
+  drei überall —, zuletzt die Bilder; deflate-raw, URL-sicher. Der Hash heisst
+  `#g=` (sechs Zeichen weniger als `#geteilt=`, das weiter aufgeht), ein Teil
+  trägt einen Namen aus vier Zeichen. Das Fenster zeigt, was die Bilder
+  kosten („ohne Bilder: ein Link, 135 Zeichen“). Gemessen an dreissig
+  Serien: 568 Zeichen ohne Bilder, 2 124 mit „winzig“ — ein Bild ist rund 52
+  Zeichen. Nicht gemacht: ein grösseres Alphabet als Base 64 (rund 5 % kürzer,
+  aber `)` `'` `,` `.` am Ende eines Links verwirren die Erkennung in Chats),
+  und ein Wörterbuch für deflate (`CompressionStream` kennt keines). Links der
+  ersten Fassung (JSON) gehen weiter auf. **Eine lange Liste kommt in Teilen:** ein Link bis 2 000
+  Zeichen (Signal und manche Messenger schneiden darüber), sonst
+  `#g=<name>.<n>.<von>.<Daten>`, höchstens 40; der Name ist ein Hash der
+  Daten, damit Teile zweier Listen sich nie mischen. Wer sie öffnet, sieht
+  „Teil 2 von 3 ist da“; die Teile liegen zwei Tage im `localStorage`
+  (`sondra:geteilt:teile`) und setzen sich in jeder Reihenfolge zusammen, ein
+  Link in einer schon offenen Seite (`hashchange`, gelesen aus `event.newURL`,
+  weil das Routing die Adresse schon umgeschrieben haben kann) zählt wie ein
+  neuer Tab. **Vier Wege nach draussen:** Link (oder die Links, einzeln
+  oder alle auf einmal), „Als Text kopieren“ (`Frieren – S1E12 – 4/5`, eine
+  Zeile je Serie, darunter der Link — auch für wen kein Sondra hat),
+  **QR-Code** (`qrcode-generator`, Byte-Modus, Stufe L: er wird vom
+  Bildschirm gelesen; Links für Codes höchstens 1 100 Zeichen, mehrere Codes
+  nacheinander mit Zurück/Weiter; schwarz auf weiss in jedem Thema; die
+  Kamera des anderen Telefons öffnet den Link — Sondra braucht keinen
+  Lesevorgang), und die **Datei** `Sondra-Merkliste-<Datum>.sondra-liste`
+  („SLST“ und dieselben Bytes), für was auch als Teile zu viel wäre. Ausserhalb
+  des Browsers wird sie wie jede Datei geöffnet — `ingest` in `useIngest.tsx`
+  schickt sie an `offerSharedFile`, nicht in die Sitzung —; Windows-Setup
+  (`installer.nsh`: die Endung gehört Sondra allein, also Standard), Android
+  (VIEW auf `content://` mit Namen `*.sondra-liste`, `Bridge.takeOpened` nimmt
+  jede URI), die installierte Web-App (`file_handlers` mit Logo,
+  `share_target`) und das MSIX des Stores (`fileAssociations`, im Lauf des
+  Workflows gebaut, installiert und gestartet). Das Logo trägt die Endung
+  wie `.sondra`: `DefaultIcon` auf die .exe in `installer.nsh` und, für
+  die App ohne Setup-Rechte, in `registerSondraProjectIcon()`. **Empfangen**
+  stellt beide Listen nebeneinander (`compareShared`): „Beide haben 5 ·
+  nur bei Ihnen 12 · nur bei Mia 8“; die 8 stehen als Häkchen mit Bild,
+  „Alle/Keine“, „wie dort“ oder „als Später“ (`entryFromShared`: dann ohne
+  Stand, Bewertung und Folge), die gemeinsamen unter „Schon auf Ihrer Liste“.
+  Gelesen wird nur Klartext: Obergrenzen (500 Einträge, 16 MB entpackt — eine
+  Bombe wird abgebrochen —, Datei höchstens 12 MB), jedes Feld geprüft,
+  Steuerzeichen raus. Die Adresse wird beim Laden gelesen, bevor das Routing
+  sie umschreibt (`SHARED_AT_LOAD`). `verify:merkliste`, Szenario
+  „merkliste“ (Empfehlen mit Bild, Text, QR, Datei, Teile in umgekehrter
+  Reihenfolge, alter Link). Die QR-Codes wurden mit zwei Lesern gegengeprüft
+  (jsQR, ZXing): jeder Code von Stufe 1 bis 40 liess sich von mindestens
+  einem lesen, jsQR scheitert für sich an Stufe 23.
+  **Rückblick** (30.10.2026, `lib/recap.ts`, `MerklisteRecap.tsx` in den
+  Statistiken): ein Jahr aus den Daten, die jede abgehakte Folge trägt
+  (`history`: `advance` und der Player-Haken schreiben sie) — Folgen,
+  Sehzeit aus der Länge jeder Folge, stärkster Monat, längste Serie von Tagen,
+  die fünf meistgeschauten Serien, zwölf Balken. Eine Folge, die zweimal
+  abgehakt wurde, zählt einmal. Was vor dem ersten Datum abgehakt wurde, hat
+  keines und zählt nicht; die Seite sagt, seit wann Daten da sind, statt
+  ein Jahr zu behaupten. `verify:merkliste`, Szenario „merkliste“.
+  **Stände** sind fünf: Am Schauen, Später, Pausiert, Fertig, Abgebrochen
+  (Filterpillen nur für Stände mit Einträgen). Etwas neu Gesehenes nimmt
+  eine pausierte oder abgebrochene Serie wieder auf (`settle` vergleicht
+  die Zahl des Gesehenen), eine geänderte Folgenzahl nicht. MAL „On-Hold“/
+  „Dropped“ und AniList „PAUSED“/„DROPPED“ kommen so an statt als „Später“.
+  **Als Liste** neben „Als Poster“ (`sondra:merkliste:ansicht`): je Serie
+  eine Zeile mit kleinem Poster, Stand, Balken mit Zähler, „noch 6 · 2 Std.
+  24 Min.“ und +1 — `li` bekommt `max-w-none`, sonst greift die 34em-Regel.
+  Sortierung „Am wenigsten übrig“ (Restzeit, Unbekanntes zuletzt).
+  `CoverImage` liegt in `components/CoverImage.tsx`, damit „In Staffel
+  einordnen“ Poster zeichnet, ohne die Merkliste zu laden.
+- **Merkliste in Anytype** (nur in der App): `desktop/anytype.mjs` spricht im
+  Hauptprozess mit Anytypes lokaler API (`127.0.0.1:31009`, `Anytype-Version:
+  2025-11-08`), koppelt über den vierstelligen Code (`/v1/auth/challenges`,
+  `/v1/auth/api_keys`) und legt den Schlüssel mit `safeStorage` verschlüsselt in
+  `userData` ab; die Seite sieht ihn nie, sie schickt über
+  `sondraApp.anytype(action, …)` eine Aktion nach der anderen. **Seit Anytype
+  0.51.6 kann ein Schlüssel an gewählte Spaces gebunden sein,** und `/v1` lehnt
+  ihn ab (403 `v1_not_available_for_scoped_keys`, „…carries a space grant, which
+  /v1 cannot honor“). Die erste solche Ablehnung schaltet die Verbindung auf
+  `/v2` (`api: 'v2'` in `anytype.json`, neu bestimmt bei jeder Kopplung); ein
+  Schlüssel für alle Spaces bleibt auf `/v1`, wo er immer lief. `/v2` hat kein
+  „ganze Seite ersetzen“: Schreiben liest `?outline=true`, löscht jeden obersten
+  Block (`delete_block`, `recursive`) und fügt den Text als
+  `insert_blocks`-Markdown an — höchstens 512 Ops je PATCH, 256 Blöcke je Op,
+  deshalb `markdownRuns` (zählt jede Zeile, schneidet nur vor einem neuen
+  obersten Block). Ein Space ausserhalb der Freigabe heisst `not-granted`. Im
+  Browser geht es nicht: Anytypes API sendet keine CORS-Kopfzeilen
+  (anytype-heart, `core/api/server`), und die Merkliste sagt das in einem Satz
+  statt eines toten Knopfs. In Anytype liegt eine Seite „Sondra · Merkliste“: oben
+  lesbar, unten ein Datenblock (Base64 im Codeblock, damit Anytypes
+  Markdown-Umbau ihn nicht verbiegt). Ein Abgleich (`syncMerkliste` in
+  `lib/anytype.ts`) liest, führt zusammen (`mergeShared`: je Serie gewinnt die
+  zuletzt geänderte Seite, Entferntes bleibt entfernt über
+  `sondra:merkliste_removed`, Covers aus Dateien bleiben auf ihrem Gerät) und
+  schreibt nur, wenn Anytype nicht schon genau das hält — verglichen mit der
+  Seite, nicht mit dem zuletzt Geschriebenen. Läuft beim Öffnen des Tabs und
+  2,5 s nach jeder Änderung. **Was bewusst zurückkommt, gilt als jetzt
+  geändert** — „Rückgängig“ nach dem Entfernen (`restoreMerkItem`), eine
+  eingelesene Datei (`importMerkliste`), das Zurücknehmen davon
+  (`revertImport`). Die Seite in Anytype kennt die Entfernung noch, und eine
+  Entfernung schlägt jede ältere Änderung: vorher meldete das Einlesen
+  „3 neu“, und der nächste Abgleich nahm die drei wieder weg. Eine Entfernung,
+  die eine spätere Änderung überholt hat, fällt aus der Liste. Anytypes
+  Export lässt die Sprache am Codeblock weg; gelesen wird deshalb ab
+  „## Sondra-Daten“. Steht dort ein Block, den Sondra nicht lesen kann, wird
+  die Seite nie überschrieben (`unreadable`). **Verbinden lädt die Liste aus
+  Anytype** (`loadFromAnytype`, Wunsch vom 21.10.2026: „soll die Daten von
+  Anytype laden, ausser man sagt spezifisch nicht“): sie ersetzt die Liste
+  dieses Geräts, Covers aus Dateien bleiben, die bisherige lässt sich danach
+  mit einem Klick dazunehmen (`importMerkliste`); „Nicht laden — beide
+  Listen zusammenführen“ ist die ausdrückliche Ausnahme. Hält die Seite noch
+  keine Liste, schreibt der erste Abgleich diese hin. **Antworten von
+  Anytype:** nur 401 heisst „Schlüssel zurückgezogen“ und löscht ihn; 403
+  ist ein Space mit Leserechten (`forbidden`, der Schlüssel bleibt — vorher
+  warf das die Kopplung weg und der Space-Schritt fragte wieder nach dem
+  Code); 404 und 410 heissen „Seite fehlt“, die nächste Runde legt sie neu
+  an. Jeder Fehler steht mit Anytypes Grund (`detail`) in `sondra.log` und
+  klein im Fenster, mit „Erneut“ daneben. Die Liste gehört allein
+  `lib/merkliste.ts`; das Herunterladen hält keine eigene Kopie im Projekt.
+  `npm run verify:anytype` spielt das gegen eine nachgebaute Anytype-API durch.
+  **Nativ** (19.11.2026, `native/sondra-anytype`, `anytype_window.rs`): dieselben Dialekte, Fehlercodes und dieselbe
+  Seite (die Gegenprobe `tests/golden/page.json` kommt aus `merklisteToMarkdown` der Website), Schlüssel wie Drives
+  Token (DPAPI), „Mehr → Anytype …“; Abgleich nach jeder Änderung (nach einem Takt Ruhe) und alle drei Minuten, ein
+  fehlgeschlagener erst eine Minute später wieder; was während einer Runde hier geändert wird, wird zusammengeführt,
+  nicht ersetzt. Nie gegen ein echtes Anytype gelaufen.
+  **Datenübernahme nativ** (`sondra-electron`, `old_app.rs`): die Startseite bietet einmal an, was die Windows-App in
+  Chromiums `localStorage` (LevelDB) hinterlassen hat zu übernehmen; die Merkliste wird zusammengeführt (zurücknehmbar),
+  Einstellungen kommen nur dazu, wo hier nichts steht; nie gegen die echte Datenbank der Windows-App geprüft.
+  **Geräte: der Weg über Drive nativ** (`sondra-devices::engine`, „Über Drive senden“ erst nach „Kein direkter Weg“, nie
+  von selbst).
+  **Streamen aus Drive nativ** (`sondra-drive::stream`, `sondra_playback::register_source`): der Film wird in Bereichen
+  gelesen, nicht erst ganz geholt (Dienst auf 127.0.0.1 mit Geheimnis in der Adresse; das Token bleibt im Programm).
+  **„Merkliste über Drive“ nativ** (`merk_drive.rs`): dieselbe Runde wie `syncMerklisteWithDrive` (lesen, `merge_shared`,
+  zurückschreiben nur wenn die Datei nicht schon genau das hält), Schalter unter „Mehr“ aus bis zur Wahl.
+- **Google Drive** (22.10.2026, `lib/googleDrive.ts`, `lib/driveClient.ts`,
+  `GoogleDrive.tsx`): auf Wunsch alles geordnet in einen Ordner „Sondra“ im
+  eigenen Drive — `Projekte`, `Dateien/{Ton,Video,Bilder,Andere}`,
+  `Heruntergeladen`, `Merkliste`. Nur Scope `drive.file`: Sondra sieht nur,
+  was es selbst ablegte. Die Seite schickt die Dateien selbst zu Google (bis
+  5 MB multipart, darüber resumable in 8-MB-Stücken direkt vom File; ein
+  308 ohne sichtbares `Range` gilt als ganz angekommen), nie über `api/`.
+  Ein Upload nach dem anderen; Projekte und die Merkliste ersetzen
+  gleichnamige als neue Version, Dateien mit gleichem Namen und gleicher
+  Grösse werden nicht noch einmal geschickt. **Anmelden im Browser:** Popup
+  zu Google, zurück auf `public/google-drive.html`, das Token geht über
+  einen BroadcastChannel an den Tab — nicht über `window.opener`, den COOP
+  same-origin auf dem Weg über Google kappt. Das Token lebt nur im
+  Arbeitsspeicher, eine Stunde; danach warten Uploads, und die Kopfzeile
+  sagt wieder „Drive anmelden“ (ein Klick, das Popup muss im Klick aufgehen).
+  **Anmeldung, die bleibt** (`api/google-token.js`, wenn dort
+  `GOOGLE_CLIENT_SECRET` steht und die Client-ID die der Seite ist — die
+  Seite fragt beim Laden per GET): Google schickt einen Code statt des
+  Tokens (`access_type=offline`, `prompt=consent`), die Funktion tauscht ihn
+  mit dem Secret und legt den Refresh-Token in ein Cookie `sondra_drive`
+  (HttpOnly, Secure, SameSite=Strict, Pfad nur die Funktion, 180 Tage);
+  die Seite bekommt nur das Token für die Stunde und holt das nächste mit
+  `refresh`, beim Laden ohne Klick. Ohne das Secret ist das Cookie wertlos.
+  „Trennen“ ruft `signout` (bei Google zurückgezogen, Cookie weg). Secret
+  und Refresh-Token einer früheren Fassung im `localStorage` löscht
+  `readSettings` beim Laden. `npm run verify:google-token`.
+  **In der App** (`desktop/googleDrive.mjs`): Google lässt keinen
+  eingebetteten Browser anmelden, also Systembrowser und Loopback mit PKCE
+  auf einem freien Port, nur für die eine Antwort; der Refresh-Token liegt
+  mit `safeStorage` in `userData`, die Seite bekommt über
+  `sondraApp.drive('token')` je ein Access-Token. „Trennen“ zieht bei
+  Google zurück. Die Knöpfe stehen erst da, wenn ein Client eingerichtet
+  ist. **Der Drive-Knopf in der Kopfzeile steht immer da** (`DriveButton`,
+  Wunsch vom 22.10.2026: „im Header kein Drive anmelden Button“ — vorher
+  erschien er nur während einer Übertragung): ohne Verbindung „Drive
+  anmelden“, und der Klick meldet an, während das Fenster daneben Ordner und
+  den Satz „verlässt dieses Gerät“ zeigt; verbunden ein ruhiges „Drive“, beim
+  Senden Prozent, „Fehler“, kurz „fertig“. Rechts vom Dateimenü, weil dessen
+  Ankunftshinweis nach links aufgeht. Platz dafür: „App herunterladen“ heisst
+  unter `lg` „App“, die Versionsmarke weicht unter 420 px (die Fusszeile
+  nennt sie), unter 360 px stehen Drive und App nur als Symbol mit Namen
+  für Screenreader, und Knöpfe schrumpfen nicht (`shrink-0`) — vorher wurde
+  der Theme-Knopf auf 14 px gequetscht.
+  **Direkt in Drive, ohne Sitzung** (Wunsch vom 23.10.2026: „sachen direkt
+  auf die drive speichern … ohne auf die sitzung zu bringen“): „In Drive“
+  (`DriveSaveButton`, `saveResultToDrive`) neben „Speichern“ bei jedem
+  Ergebnis — Umwandeln, Video, Bilder, Lautstärke, Untertitel (SRT),
+  Mikrofon, Mischen, Bildschirm, Herunterladen —, in den Ordner nach Art;
+  meldet Warten, Prozent, „In Drive gespeichert“, „Schon in Drive“ und
+  „erneut versuchen“ am Knopf selbst, meldet ohne Verbindung an. Eine WAV
+  aus dekodiertem Ton wird erst beim Klick gerechnet. Herunterladen kennt
+  dazu „Direkt in Google Drive speichern (ohne Sitzung)“ als Verhalten; ohne
+  eingerichtetes Drive gilt dort wieder die Sitzung.
+  Einrichtung: ein Google-Cloud-Projekt mit der Drive API, Zustimmungs-
+  bildschirm mit `drive.file`, darin zwei OAuth-Clients — „Webanwendung“
+  (JavaScript-Ursprung der Website, Weiterleitung `…/google-drive.html`;
+  ID als `VITE_GOOGLE_CLIENT_ID` in Vercel) und „Desktop-App“ (ID und Secret
+  als Repository-Variable `GOOGLE_CLIENT_ID` und Secret
+  `GOOGLE_CLIENT_SECRET`; `build-desktop.mjs` backt sie in den
+  Hauptprozess). Beide im selben Projekt, sonst sieht die App nicht, was die
+  Website ablegte. `npm run verify:drive` spielt Client und App-Anmeldung
+  gegen nachgebaute Google-Endpunkte durch.
+  **Merkliste über Drive** (Wunsch vom 22.10.2026: „eine json file auf
+  drive … als Alternative für Anytype“): der Schalter „Merkliste über Drive
+  abgleichen“ macht `Sondra/Merkliste/Sondra-Merkliste.json` zur Liste, die
+  alle Geräte desselben Kontos teilen, auch die Website. Eine Runde
+  (`syncMerklisteWithDrive`) wie bei Anytype: lesen, `mergeShared`,
+  zurückschreiben nur, wenn die Datei nicht schon genau das hält
+  (`sharedKey`, verglichen mit der Datei, nicht mit dem zuletzt
+  Geschriebenen); eine Datei, die keine Merkliste ist, wird nie
+  überschrieben (`unreadable`). Die Datei trägt Einträge wie sie reisen
+  (`travelling`, Covers aus Dateien bleiben auf dem Gerät) und die
+  Entfernungen; `readMerklisteFile` liest sie wie jeden Export, auch die
+  alte Sicherung ohne Entfernungen. Runden beim Verbinden, beim Start der
+  App, beim Öffnen der Merkliste, 2,5 s nach jeder Änderung und beim
+  Zurückkommen ans Fenster (höchstens jede Minute); nie zwei gleichzeitig.
+  Was eine Runde selbst einsetzt, startet keine neue (`applying`). Nichts
+  davon geht durch die Upload-Schlange: die Kopfzeile meldet keine
+  Merkliste. Auf der Website ohne Token wartet es still; die Merkliste sagt
+  „dafür bei Google anmelden“ mit Knopf. Ohne Anmeldung zuvor sagt die
+  Merkliste „Über Google Drive abgleichen“ — Schalter an, Anmeldung im
+  selben Klick. Erstes Verbinden führt zusammen statt zu ersetzen.
+  **Ordner aus Drive** (Wunsch: „ordner soll den vom drive laden, so dass
+  man von dort aus die Sachen schauen kann, dann soll es die Merkliste
+  aktualisieren“): auf der Seite „Ordner“ „Aus Google Drive“ — der Ordner
+  „Sondra“ (`tree` in `driveClient.ts`, Unterordner, Seiten mit
+  `nextPageToken`), als `FolderScan` mit `source: 'drive'`; ein Eintrag hat
+  dann `drive: { id, mime }` statt `file`. Mehr sieht Sondra in Drive mit
+  `drive.file` nicht, und die Seite sagt das. Keine Vorschaubilder (hiesse,
+  jeden Film zu holen), kein „Doppelte finden“; „In die
+  Sitzung“ und ZIP holen die Dateien zuerst (`fileHere`). Gemerkt wird die
+  Quelle (`sondra:ordner:quelle`), und die Merkliste liest Drive von selbst
+  wieder ein, sobald angemeldet, sonst „Google Drive einbeziehen“.
+  **Löschen in Drive** (Wunsch vom 29.10.2026: „Sachen im Sondra Ordner
+  löschen können“): „Löschen …“ steht auch dort, nur geht es in den
+  Papierkorb von Drive (`trash` in `driveClient.ts`, PATCH `trashed: true`;
+  `trashDriveFiles`), und Dialog und Knopf sagen das („In den Papierkorb“,
+  30 Tage wiederherstellbar). Eine Datei, die schon fehlt, gilt als
+  gelöscht. **Keine Vorschau neben der Liste** (29.10.2026: „Vorschau im
+  Tab Ordner braucht es nicht“): `FolderInlinePreview` und das grosse
+  Vorschau-Fenster sind weg, die Kacheln haben die ganze Breite — auch mit
+  einer gewählten Datei, die vorher eine Spalte kostete.
+  **In Staffel einordnen** (Wunsch vom 22.10.2026: Folgen auswählen, einer
+  Serie und Staffel zuweisen, „dann wird ein Ordner erstellt vom Anime und
+  die ausgewählten Episoden sind im Ordner in einem anderen Ordner mit der
+  ausgewählten Staffel“; `SeasonFiling.tsx`): in der Auswahlleiste eines
+  Drive-Ordners. Serie aus der Merkliste (Pillen, vorgeschlagen nach dem,
+  was die Dateien schon sind oder heissen — „Episode 01“ schlägt nichts
+  vor) oder ein neuer Name, der dann auf die Merkliste kommt; Staffel als
+  Zahl (0 = Filme); je Datei die Folge, vorbelegt aus dem Namen, sonst
+  weitergezählt. **Neu gestaltet am 25.10.2026** („design das Menü
+  besser“): links, was herauskommt — Poster, Staffel, der Zielordner als
+  kleiner Baum mit „+ 5 Folgen“ —, rechts Serie (Poster-Pillen), Staffel
+  (Pillen der bekannten, „Neu: Staffel 3“, Zähler) mit einem Streifen der
+  Folgen (gefüllt: kommt dazu, getönt: gesehen) und die Dateien: Häkchen
+  zum Auslassen, Nummer als Zähler, darunter woher sie kommt („schon
+  eingeordnet“, „Nummer aus dem Namen“, „weitergezählt — bitte prüfen“).
+  Doppelte Nummern und Folgen über das Ende der Staffel stehen an der
+  Zeile; „Der Reihe nach nummerieren“ und „Wie erkannt“. Vorher bekam ein
+  Bonus-Clip still „Folge 1“ neben S02E01. `fileIntoSeason` legt `Sondra/Serien/<Titel>/Staffel n`
+  an (`folderAt`, vorhandene Ordner werden benutzt) und verschiebt jede
+  Datei dorthin (`move`: `addParents`/`removeParents`), mit
+  `appProperties` `sondraSerie`/`sondraStaffel`/`sondraFolge` — für andere
+  Apps unsichtbar, für Website und App im selben Google-Projekt dieselben.
+  Umbenannt wird nichts. Erkannt wird eine Datei deshalb zuerst an dieser
+  Notiz (`matchHint`), dann am Ordner (`Serien/<Titel>/Staffel n`, auch
+  von Hand dorthin gelegt), zuletzt am Namen (`matchFile`). Der Player
+  bekommt die Notiz mit (`RemoteMedia.hint`), damit `MerklisteTick` auch
+  „Episode 01.mkv“ abhakt. Danach liest die Seite Drive neu und zeigt den
+  Staffel-Ordner. **Ein Ordner öffnet mit einem Klick, eine Datei mit
+  zweien:** der zweite Klick eines Doppelklicks auf einen Ordner traf, was
+  an seine Stelle rückte, und ein Film lief los. Klicks mit `detail ≥ 2`
+  bis 600 ms nach dem Wechsel zählen nicht; ein eigener erster Klick hebt
+  das auf.
+  **Abspielen aus Drive**: der Player bekommt `RemoteMedia` statt eines
+  Files (`sendToPlayer`), `source` bleibt leer. Gestreamt über den Service
+  Worker: `drive-media/<id>?size=…&type=…` auf dieser Herkunft, der Worker
+  holt die Bereiche mit `Range` und `Authorization` von Drive und setzt
+  `Content-Range` selbst zusammen (welche Kopfzeilen der Browser von Google
+  durchlässt, spielt so keine Rolle). Ein `<video>` kann Drive kein Token
+  schicken, und ein Token in der Adresse landete in Protokollen: der Worker
+  fragt die Seite per `MessageChannel` (`drive-token-wanted`) und hält es
+  nur im Speicher; nach einem 401 fragt er einmal neu. Ob der Worker das
+  kann, sagt ein `drive-ping` — ein Worker älterer Fassung nicht. Ohne
+  Worker wird die Datei ganz geholt (Fortschritt auf der Bühne) und als
+  Blob gespielt. FFmpeg (Vorschau, Qualität, Vorspann am Ton) gilt nur für
+  Dateien auf dem Gerät. Fehlt auf der Website die Anmeldung, sagt die
+  Bühne „Drive anmelden“ und versucht es danach erneut. Was zu Ende geschaut
+  wird, hakt `MerklisteTick` ab wie sonst, und die Runde trägt es nach
+  Drive. Getestet mit `PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1`, sonst
+  erreichen die Anfragen des Workers in Playwright die Nachbildung nicht.
+- **Geräte** (`#geraete`, `DevicesPanel.tsx`, `lib/devices.ts`,
+  `lib/deviceIdentity.ts`, `lib/deviceTransfer.ts`; 28.10.2026, Wunsch:
+  „verschiedene Geräte verbinden und seamless Daten tauschen“, dazu: „die
+  Geräte, wo registriert sind, unique und nicht überschreibbar von anderen
+  Geräten“): Geräte desselben Google-Kontos finden sich über Drive, die
+  Dateien gehen direkt (WebRTC-Datenkanal, DTLS). Opt-in über „Dieses
+  Gerät verbinden“ (`sondra:geraete:an`). **Eindeutig und nicht
+  überschreibbar:** jedes Gerät erzeugt beim ersten Verbinden ein
+  ECDSA-P-256-Paar, der private Schlüssel ist nicht auslesbar
+  (`extractable: false`) und liegt in IndexedDB `sondra-geraet`; die
+  Kennung ist der SHA-256 des öffentlichen Schlüssels (20 Zeichen
+  Crockford-Base32) — wählen kann man sie nicht, nur verdienen. Jeder
+  Eintrag in `Sondra/Geräte/Gerät-<Kennung>.json` ist signiert; Drive kennt
+  innerhalb eines Kontos keine feineren Rechte, also gilt: was nicht
+  sauber signiert ist oder dessen Kennung nicht zum Schlüssel passt, wird
+  von allen ignoriert (`checkRecord`, `pickDevices`), und der Besitzer
+  schreibt seinen Eintrag in der nächsten Runde neu und löscht Kopien unter
+  seiner Kennung. Jedes Gerät schreibt nur seine eigene Datei. Namen sind
+  eindeutig (`uniqueName`: „Laptop 2“); wer einen Namen später nahm als
+  ein anderes Gerät (`created`), benennt sich selbst um, nie das andere.
+  **Post:** `Sondra/Geräte/Post`, je Nachricht eine Datei mit
+  `appProperties` `sondraAn`/`sondraVon`, signiert, höchstens 15 Min. alt,
+  nur einmal (`openMessage`); gelesen alle 4 s (im Hintergrund 15 s), der
+  Empfänger löscht jede an ihn. Liste alle 30 s, eigener Eintrag alle
+  2 Min. („offen“ = in den letzten 3 Min. gesehen). **Ablauf:** Angebot
+  mit SDP und Dateiliste → das andere Gerät fragt („Annehmen“/„Ablehnen“,
+  auch als schwebende Karte auf jeder Seite, `DeviceInbox`) → Antwort →
+  Datenkanal. Protokoll in `deviceTransfer.ts` (64-KB-Stücke, der
+  Empfänger bestätigt alle 4 MB, der Sender ist höchstens 16 MB voraus —
+  sonst hielte ein langsames Telefon den Film im Speicher). **Kein
+  STUN-Server** („kein Anbieter fest verdrahtet“): direkt geht es im
+  selben Netz; sonst „Kein direkter Weg“ und — erst auf Klick, auf
+  `panel-cool` gesagt — über Drive (`Sondra/Geräte/Übergabe`, nach dem
+  Empfang gelöscht; geholt wird nur, was die Notiz `sondraUebergabe` genau
+  dieser Übertragung trägt). **Ablage:** Android-App über `openSave`
+  (save-begin/chunk/end in 1-MB-Stücken nach Downloads/Sondra), Chromium
+  in einen beim ersten Mal gewählten Ordner (`showDirectoryPicker`, Handle
+  in IndexedDB), sonst über `saveBytes`. „An Gerät“ steht neben jedem „In
+  Drive“ (`DeviceSendButton` in `DriveSaveButton`). `npm run
+  verify:devices` (Kennung, Fälschung, Wiederholung, Namen, Flusskontrolle,
+  Abbruch); zwei Geräte samt nachgebautem Drive wurden mit Playwright
+  durchgespielt (direkt, über Drive, beide Richtungen, Manipulation).
+  **Ein IndexedDB-Fehler in `idb` wird zur Ablehnung:** ein Wert, der sich
+  nicht speichern lässt, warf im Callback, und das Annehmen hing für immer.
+  **Wiedererkennen** (29.10.2026: „nach einem Update oder Reinstall nicht
+  mehr erkannt“): Schlüssel und Kennung hängen an der Herkunft, und zu der
+  gehört der Port. `desktop/server.mjs` nahm bei belegtem 47199 sofort
+  einen zufälligen — nach einem Update, solange der alte Prozess noch
+  auslief, war die App ein neues Gerät mit leerer Merkliste. Jetzt: bis 16 ×
+  250 ms warten, dann der gemerkte Ersatz aus `port.json` im Datenordner,
+  erst dann ein freier, der dort gemerkt wird. Nach einer Neuinstallation
+  (oder gelöschten Websitedaten) ist der Schlüssel unwiederbringlich weg —
+  „nicht überschreibbar“ heisst genau das. Deshalb fragt `FormerHint`:
+  Einträge, die nicht offen sind, dieselbe Art und Plattform haben, vor
+  diesem angelegt und höchstens 14 Tage vor ihm zuletzt gesehen wurden,
+  stehen mit „Das war dieses Gerät“ (`adoptFormer`: alter Eintrag gelöscht,
+  sein Name übernommen) und „Nein, das ist ein anderes Gerät“ (`decided`,
+  nie wieder gefragt). „Entfernen“ gibt es nur für Geräte, die nicht offen
+  sind; ein lebendes schreibt seinen Eintrag ohnehin neu.
+  **Zuverlässig** („funktioniert all 3–5 mal“): ein hartes Aus nach 15 s
+  traf auf Post, die im Hintergrund nur alle 15 s gelesen wurde, und auf
+  3 s Sammeln der Wege. Jetzt liest die Post jede 1,2 s, solange eine
+  Übertragung auf Antwort wartet (nicht beim Fragen), und 400 ms nach jedem
+  eigenen Angebot; gesammelt wird bis 8 s; nach 25 s (Sender) bzw. 45 s
+  (Empfänger) steht „Kein direkter Weg“ samt Drive-Angebot da, aber die
+  Verbindung wartet weiter bis drei Minuten und übernimmt, wenn sie doch
+  aufgeht (`waitOpen`). Android hört `.local`-Namen nur mit
+  `WifiManager.MulticastLock` (`multicast` in `Bridge.java`, Erlaubnis
+  `CHANGE_WIFI_MULTICAST_STATE`, nach 120 s von selbst frei); Electron
+  nennt seine Adresse im Netz direkt (`WebRtcHideLocalIpsWithMdns` aus),
+  weil Windows-mDNS oft gesperrt ist. Beides wirkt erst mit einer neuen
+  App-Fassung.
+  **Was ein Gerät kann, steht in seinem Eintrag** (30.10.2026, `caps` im
+  signierten Eintrag, `can()`): `text`, `play`, `folder`, `resume`. Eine
+  ältere Fassung übergeht eine Nachricht, die sie nicht kennt, ohne
+  Antwort — der Absender würde ewig warten —, also bietet er das Neue nur
+  Geräten an, die es in `caps` nennen, und die Seite sagt bei den anderen,
+  woran es liegt („Dort läuft eine ältere Version …“). Ein Eintrag ohne
+  `caps` gilt weiter (die Unterschrift deckt jedes Feld, das da steht); die
+  Liste lässt sich nicht nachträglich ändern. Eine neue Fähigkeit gehört
+  hier und in `ownCaps()`, nie nur in die Oberfläche.
+  **Ein Server in anderen Netzen** (30.10.2026, `lib/deviceServers.ts`,
+  `OwnServer` auf der Seite „Geräte“, gefaltet): ein Feld für STUN und eins
+  für TURN, leer, nichts eingetragen und nichts eingebaut — „kein Anbieter fest
+  verdrahtet“ gilt weiter, denn ein fremder Server sähe jede Adresse. Die
+  Adressen (`stun:`/`stuns:`, `turn:`/`turns:`, sonst abgelehnt) liegen im
+  `localStorage`; **das TURN-Passwort nie** — es bleibt im Speicher der
+  Seite und wird nach dem Schliessen neu gefragt. Die Verbindung nimmt
+  `currentIceServers()`; der Server und die Relay-Adressen reisen in der
+  Beschreibung durch Drive. Die Karte steht auf `panel-cool`: hier läuft etwas
+  nicht lokal.
+  **Text und Links** (`sendText`, Nachricht `text`, Karte `NoteRow`): bis
+  4 000 Zeichen, nichts öffnet sich von selbst, als Link gilt nur ein
+  einzelnes `http`/`https`. **Auf anderem Gerät abspielen** (`play`):
+  Filme im Ordner „Sondra“ in Drive — nur Namen und Drive-Kennungen gehen
+  (`playOnDevice`), das andere Gerät fragt, dann streamt es selbst; ein
+  einzelner Film von diesem Gerät bis 2 GB geht als Übertragung mit
+  `play: true` und startet nach der Ankunft im Player, ohne gespeichert zu
+  werden (`playTarget`: Blöcke zu 32 MB). **Ordner senden** (`folder`):
+  `FileInfo.path`, höchstens 300 Dateien je Übertragung; beim Empfang
+  bereinigt `splitPath` jeden Teil (kein `..`, kein absoluter Anfang, acht
+  Ebenen), Chromium legt Unterordner im gewählten Ordner an, die
+  Android-App über `save-begin` mit `dir` unter `Downloads/Sondra/…`
+  (eine App vor 1.1.23 speichert flach), sonst wird der Pfad Teil des
+  Namens. „An Geräte senden“ unter einer Auswahl im Ordner: mehrere Geräte
+  auf einmal, je eine Übertragung; **zwei senden zugleich** (`takeSlot`), die
+  anderen warten auf ihrem offenen Kanal und sagen es. **Fortsetzen**
+  (`resume`, `Kept`/`Piece` in `deviceTransfer.ts`): reisst die Leitung ab,
+  schreibt der Empfänger zu Ende, was schon in der Warteschlange war, und
+  hält die fertigen Dateien und das Stück der angefangenen (`suspend`:
+  Ordner-Zugriff schliesst die Datei und öffnet sie mit
+  `keepExistingData` wieder, der Browser-Speicher behält seine Teile);
+  „Fortsetzen“ beim Sender bietet die Datei noch einmal an, der Empfänger
+  nimmt genau diese Übertragung von selbst an (er hat zu diesen Dateien
+  schon ja gesagt), meldet in `ready` was er hat (`done`, `from`), und der
+  Sender schickt nur den Rest. Ein Stück, das nicht mehr stimmt
+  (`intact`), beginnt von vorn — nie wird Falsches angehängt. **Das neue
+  Angebot darf nie verloren gehen:** kommt es, bevor der Empfänger den Abbruch
+  bemerkt hat (eine Leitung, die ohne Wort starb, zeigt sich spät, und die
+  Warteschlange schreibt erst zu Ende), wird es gehalten (`heldOffers`), die
+  alte Leitung geschlossen (`lineOf`) und das Angebot aufgenommen, sobald der
+  Abbruch eingetragen ist (`releaseHeld`). Vorher verwarf `handle` es, und der
+  Sender wartete ewig auf eine Antwort — in der CI gesehen, im Szenario
+  „geraete“ nachgestellt: das Laptop erfährt den Abbruch dort 15 s später. Die
+  Android-App kann das nicht (ihre Ablage schreibt in einem Zug), also
+  nennt sie `resume` nicht. Ein Senden auf einem geschlossenen Kanal heisst
+  `closed`, nicht „Datei nicht lesbar“.
+- **Android-App** (`android/`, Wunsch vom 22.10.2026: „eine Android-App,
+  die über Google Drive läuft statt Anytype“; am 23.10.: „es soll wirklich
+  wie eine App sein, nicht Webapp“): eine eigene App um die Website, Paket
+  `ch.lizge.sondra`, Java, keine Bibliothek für Web-Apps. `MainActivity`
+  hält ein WebView auf `https://sondra.lizge.ch` (Start auf der Startseite wie die Website, seit 28.10.2026; vorher `#merkliste`),
+  zwischen den Systemleisten (Insets als Abstand, Tastatur eingeschlossen),
+  Startbild über die SplashScreen-API, bis die Seite gezeichnet hat; nur die
+  eigene Adresse bleibt drin, alles andere und neue Fenster gehen an den
+  Browser. Zurück-Taste geht in der Seite zurück. **Die erste Fassung (TWA,
+  Chrome mit Adressleiste bis zur Schlüssel-Freigabe) war dem Nutzer zu sehr
+  Website**; dazu stürzte sie ab, weil `ManageDataLauncherActivity` im
+  Manifest fehlte — Build und lint merkten es nicht.
+  **Was die Seite nicht kann, macht die App** (`Bridge.java`): ein Objekt
+  `SondraNative` (androidx.webkit `addWebMessageListener`, nur für die
+  eigene Herkunft und den Hauptframe), JSON mit `id` und `type`, die Antwort
+  mit derselben `id`; die Seite spricht es über `lib/android.ts`
+  (`ANDROID_BRIDGE`, `IN_ANDROID_APP`; dazu `SondraAndroid/<Version>` im
+  User-Agent). `sign-in`: die Anmeldung bei Google Drive ist **die der
+  Website** (`signInWeb`, Client „Webanwendung“, Code an
+  `api/google-token`, Cookie im WebView, `CookieManager.flush()` beim
+  Pausieren), nur öffnet die App sie im Browser (Custom Tab, androidx.browser)
+  statt im Popup — Google lässt sie im WebView nicht zu. Der `state` trägt
+  die Marke `app.`; daran erkennt `google-drive.html`, dass die Antwort der
+  App gehört, und schickt sie als `intent://angemeldet?…#Intent;scheme=
+  ch.lizge.sondra;package=ch.lizge.sondra;end` (nur dieses Paket; Knopf
+  „Zurück zu Sondra“, falls der Browser einen Tipp will). Die App hält die
+  Antwort, sagt der Seite `sign-in`, die holt sie mit `sign-in-result`; kommt
+  Sondra ohne Antwort nach vorn, `sign-in-closed` (nach 1,5 s). Wurde die App
+  unterwegs beendet, nimmt die neue Seite die Antwort (`resumeAppSignIn`, der
+  `state` liegt dafür kurz in `sondra:drive:anmeldung`). Eine App, die
+  `sign-in` nicht kennt, heisst `app-outdated`. **Zwei Fassungen davor gingen
+  nicht:** die Google Play-Dienste (`AuthorizationClient`) verlangten einen
+  OAuth-Client „Android“ mit dem SHA-1 des Schlüssels, der fehlte und sich mit
+  dem Debug-Schlüssel bei jedem Lauf änderte; danach Loopback wie in der
+  Windows-App — dort wartet die App im Hintergrund auf Googles Antwort, und
+  Android hält Apps im Hintergrund an. Jetzt steckt nichts von Google in der
+  App (der Workflow bricht ab, stünde ein `GOCSPX-` darin), und die Seite ist
+  dieselbe wie im Browser. `save-*`: `saveBytes` gibt in der App die Datei in
+  Stücken (1 MB, Base64) an `Saver.java`, nach `Downloads/Sondra` (ab
+  Android 10 MediaStore, davor mit Speicher-Erlaubnis) — ein WebView kann
+  `blob:` nicht speichern; alle Downloads gehen über `saveBytes`.
+  `opened`: Teilen und „Öffnen mit“ (Video, Ton) — die App bedient jede
+  Datei einmal unter `/__app/opened/<token>` (`shouldInterceptRequest`,
+  auch für die Anfragen des Service Workers, der diesen Pfad durchlässt),
+  die Seite holt sie, Filme und Ton gehen in den Player (`sendToPlayer`,
+  `#abspielen`), anderes in die Sitzung. `theme`: die Seite meldet hell
+  oder dunkel, die Systemleisten folgen. Dateiauswahl über Androids
+  Auswahl (auch `webkitdirectory`: ein ganzer Ordner, rekursiv), Mikrofon
+  mit Laufzeit-Erlaubnis, Vollbild-Video (`onShowCustomView`), offline beim
+  ersten Start eine eigene Seite mit „Erneut versuchen“, ein beendeter
+  WebView-Prozess baut das WebView neu statt die App zu beenden.
+  Kurzbefehle (Merkliste/Ordner/Abspielen) gehen über `ShortcutActivity`:
+  Android startet sie mit `CLEAR_TASK`, direkt auf `MainActivity` schlossen
+  sie eine laufende Sondra; so wechselt nur der Hash. Version und versionCode
+  (`a·10000 + b·100 + c`) aus der `package.json` der Website. AGP 8.13, SDK
+  36 (min 24), R8 an (rund 210 KB). `/.well-known/assetlinks.json` schreibt die
+  Seite beim Build aus `ANDROID_CERT_SHA256` (Vercel; Komma-Liste): dann
+  öffnen Links auf sondra.lizge.ch ohne Rückfrage in der App. Workflow
+  „Android“: baut APK und AAB, lint, prüft Paket, Version, Startaktivität und
+  Signatur und dass kein Google-Secret drin ist, nennt SHA-256 (für Vercel)
+  in der Zusammenfassung, **startet die APK auf einem Android-14-Emulator**
+  (`android/launch-check.sh`: Symbol, die Seite spricht mit der App,
+  Kurzbefehl, Link, Teilen, der Weg zurück von Google, Neustart —
+  kein Absturz, die richtige Adresse; Bildschirmfotos als Artefakt
+  „Sondra-Android-Bilder“); Schlüssel aus `ANDROID_KEYSTORE_BASE64`/
+  `ANDROID_KEYSTORE_PASSWORD`, sonst Debug-Schlüssel (dann kein Release:
+  keine spätere Fassung liesse sich darüber installieren). **Der Schlüssel
+  entsteht nie in einem Lauf:** das Repository ist öffentlich, seine
+  Artefakte lädt jeder mit einem GitHub-Konto — „new_key“, das ihn einen Tag
+  als Artefakt hielt, ist deshalb weg (README, „Android-Schlüssel“).
+  **Teil des offiziellen Release** (Wunsch vom 23.10.2026): der Workflow
+  „Desktop“ ruft „Android“ als `workflow_call` auf (eigene Prüfungen samt
+  Emulator) und legt `Sondra-Android[-<Version>].apk` mit den Setups ins
+  Release; signiert der Debug-Schlüssel oder passt die Version nicht, bricht
+  das Release ab. „release“ in „Android“ allein hängt die APK an ein
+  bestehendes Release. Die Website verlinkt sie (`ANDROID_APK`,
+  `releases/latest/download/Sondra-Android.apk`): in „App herunterladen“
+  der Reiter „Android“, auf einem Android-Telefon der erste.
+  **Herunterladen in der App** (28.10.2026, Wunsch: „eine Möglichkeit wie
+  auf Desktop zu downloaden“; `YtDlp.java`, `panels/DeviceDownload.tsx`):
+  youtubedl-android 0.18.1 bringt yt-dlp samt Python und FFmpeg mit
+  (arm64-v8a, armeabi-v7a, x86_64; `extractNativeLibs` und
+  `useLegacyPackaging`, sonst findet die Bibliothek ihre Binärdateien
+  nicht), beim ersten Gebrauch entpackt, yt-dlp einmal pro Woche
+  aktualisiert. Brücke: `ytdlp-info`, `ytdlp-download` (sofort `{job}`,
+  Fortschritt als Ereignis `ytdlp`, auch in einer Benachrichtigung),
+  `ytdlp-cancel`; die fertige Datei kommt über MediaStore nach
+  Downloads/Sondra. Im Downloader geht in der App jede Portal-Adresse
+  dorthin (`forDevice`), AniWorld und seine Hoster weiter über Sondras
+  eigene Extraktoren; eine ältere App antwortet `rejected`, dann gilt der
+  Weg der Website. Die Aufträge leben im Modul, nicht im Panel — wer das
+  Werkzeug verlässt, sieht sie beim Zurückkommen.
+  **Updates der App** (`Updater.java`, ab 1.1.20): die App holt die APK
+  selbst (`update-download`, Fortschritt in der Kopfzeile) und öffnet dann
+  Androids Installer („1.1.21 installieren“). Vorher stand dort ein Link,
+  und Chrome hielt die APK bei 99 %, bis jemand im Browser „Trotzdem
+  herunterladen“ bestätigte — vom Nutzer am 28.10.2026 so erlebt. Eine App
+  vor 1.1.20 kennt `update-state` nicht (`rejected`); dann vergleicht
+  `AppUpdate` die Version im User-Agent mit der der Seite und bietet die
+  APK über den Browser an, mit genau diesem Hinweis. Die universelle APK ist
+  seit yt-dlp rund 150 MB (Python und FFmpeg für drei Architekturen).
+  **Eine APK je Prozessor** (30.10.2026, `splits { abi }` in
+  `build.gradle.kts`, nur mit `-PsplitApks`: Gradle baut kein AAB im selben
+  Lauf wie mehrere APKs — „Please disable building multiple APKs when
+  building an Android app bundle“ —, der Workflow baut deshalb erst Lint und
+  AAB, dann die APKs; ohne die Eigenschaft, also lokal, entsteht eine APK mit
+  allen drei Prozessoren): neben der universellen `Sondra-Android.apk` liegen im
+  Release `Sondra-Android-arm64-v8a.apk`, `-armeabi-v7a.apk` und `-x86_64.apk`,
+  alle mit derselben `versionCode` und demselben Schlüssel, deshalb ersetzt
+  jede jede andere. Die x86-Bibliotheken der Abhängigkeiten sind ausgeschlossen
+  (`packaging.jniLibs.excludes`), das AAB teilt Google Play selbst. Der
+  Workflow „Android“ prüft jede einzelne (Paket, Version, derselbe Schlüssel
+  wie die universelle, kein `GOCSPX-`, nur Bibliotheken des eigenen
+  Prozessors) und nennt die Grössen in der Zusammenfassung; der Emulator
+  installiert die zum eigenen Prozessor (`launch-check.sh`, x86_64).
+  `Updater.java` nimmt `Sondra-Android-<erster Eintrag in SUPPORTED_ABIS>.apk`,
+  sonst `Sondra-Android.apk`, sonst irgendeine APK; Apps vor dieser Fassung
+  nehmen weiter `Sondra-Android.apk` und merken nichts. Die Website verlinkt
+  weiter die universelle (`ANDROID_APK`): sie weiss nicht, welcher Prozessor
+  im Telefon steckt, und ein 32-Bit-Telefon mit einer 64-Bit-APK bekäme
+  „App nicht installiert“.
+  Icons: `npm run android:icons` (Vektor-Vordergrund aus den Balken des
+  Zeichens, auch für das Startbild; PNGs mit den Helfern aus
+  `store-tiles.mjs`). Lokal bauen: Android SDK mit `platforms;android-36`,
+  dann `cd android && ./gradlew assembleRelease`.
+- **Kein Anbieter wird fest verdrahtet.** Eine fremde Instanz im Code würde
+  jede eingegebene Adresse an Dritte schicken, die niemand ausgesucht hat.
