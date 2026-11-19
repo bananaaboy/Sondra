@@ -58,7 +58,7 @@ jobs:
         run: choco install ffmpeg --no-progress -y
       - name: Libraries GPUI links against on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-dev libxcb1-dev libfontconfig-dev libfreetype-dev libwayland-dev
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-dev libxcb1-dev libfontconfig-dev libfreetype-dev libwayland-dev libasound2-dev
       - uses: actions/cache@v4
         with:
           path: native/target
