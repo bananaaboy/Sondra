@@ -1,0 +1,216 @@
+//! The Ordner page in GPUI's test window, on real folders on disk: reading, kinds, search, order, going
+//! into a folder, choosing files the way a file manager does, and what the page remembers.
+
+use std::cell::RefCell;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+
+use accesskit::{Action, ActionRequest, TreeId};
+use gpui::{point, px, size, AvailableSpace, Entity, TestAppContext, VisualTestContext};
+use sondra_a11y::{attach_sink, run_action, Role, Snapshot};
+use sondra_app::nav::Panel;
+use sondra_app::shell::Shell;
+use sondra_app::store::FileStore;
+use sondra_ui::{bind_keys, fonts};
+
+type Seen = Rc<RefCell<Vec<Rc<Snapshot>>>>;
+
+struct Window<'a> {
+    cx: &'a mut VisualTestContext,
+    shell: Entity<Shell>,
+    seen: Seen,
+}
+
+const WIDTH: f32 = 1280.;
+
+fn put(root: &Path, path: &str, bytes: usize) {
+    let full = root.join(path);
+    fs::create_dir_all(full.parent().unwrap()).unwrap();
+    fs::write(full, vec![0u8; bytes]).unwrap();
+}
+
+fn folder(parent: &Path) -> PathBuf {
+    let root = parent.join("Anime");
+    put(&root, "Frieren/Staffel 1/Frieren S01E01.mkv", 3000);
+    put(&root, "Frieren/Staffel 1/Frieren S01E02.mkv", 2000);
+    put(&root, "Frieren/Staffel 1/Frieren S01E10.mkv", 1000);
+    put(&root, "Musik/lied.flac", 500);
+    put(&root, "poster.png", 700);
+    put(&root, "film.mp4", 9000);
+    put(&root, "notizen.txt", 3);
+    put(&root, ".versteckt.mkv", 1);
+    root
+}
+
+fn open<'a>(cx: &'a mut TestAppContext, data: &Path) -> Window<'a> {
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let data = data.to_path_buf();
+    let (shell, cx) = cx.add_window_view(move |window, cx| {
+        let mut shell = Shell::new(window, cx);
+        shell.open_ordner_memory(FileStore::open(data.join("Ordner.json")), cx);
+        shell
+    });
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    cx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    cx.simulate_resize(size(px(WIDTH), px(900.)));
+    let mut w = Window { cx, shell, seen };
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Folder, cx));
+    w.draw();
+    w
+}
+
+impl Window<'_> {
+    fn draw(&mut self) {
+        let view = self.shell.clone();
+        self.cx.draw(
+            point(px(0.), px(0.)),
+            size(AvailableSpace::Definite(px(WIDTH)), AvailableSpace::Definite(px(900.))),
+            move |_, _| view,
+        );
+    }
+    fn tree(&self) -> Rc<Snapshot> {
+        self.seen.borrow().last().expect("a frame").clone()
+    }
+    fn press(&mut self, role: Role, label: &str) {
+        let id = self.tree().find(role, label).unwrap_or_else(|| panic!("{label} is on the screen")).id;
+        self.cx.update(|window, cx| {
+            run_action(ActionRequest { action: Action::Click, target_tree: TreeId::ROOT, target_node: id, data: None }, window, cx)
+        });
+        self.draw();
+    }
+    /// Reads the folder the way the app does, and waits for it.
+    fn read(&mut self, path: &Path) {
+        let path = path.to_path_buf();
+        self.shell.update(self.cx, |shell, cx| shell.open_folder(path, cx));
+        self.cx.run_until_parked();
+        self.draw();
+    }
+    fn files(&self) -> Vec<String> {
+        self.tree()
+            .nodes
+            .iter()
+            .filter(|n| n.role == Role::ListItem)
+            .filter_map(|n| n.label.as_ref().map(|l| l.to_string()))
+            .collect()
+    }
+}
+
+fn said(tree: &Snapshot, role: Role, label: &str) -> String {
+    tree.find(role, label).and_then(|n| n.description.as_ref().map(|d| d.to_string())).unwrap_or_default()
+}
+
+#[gpui::test]
+fn an_empty_page_offers_the_way_in_and_a_folder_is_read_into_lines(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    let mut w = open(cx, tmp.path());
+    assert!(w.tree().find(Role::Button, "Ordner wählen").is_some());
+    assert!(w.tree().find(Role::Heading, "Ihre Dateien, aus einem Ordner").is_some());
+
+    w.read(&root);
+    let tree = w.tree();
+    // The top of the folder: the three folders below it first, then its files, in natural order.
+    assert_eq!(w.files(), ["Frieren", "Musik", "film.mp4", "notizen.txt", "poster.png"]);
+    assert!(said(&tree, Role::ListItem, "Frieren").starts_with("Ordner. 3 Dateien, "), "{}", said(&tree, Role::ListItem, "Frieren"));
+    assert!(said(&tree, Role::ListItem, "film.mp4").starts_with("Video MP4 · 8.8 KB · "), "{}", said(&tree, Role::ListItem, "film.mp4"));
+    // The pills count what is in view; hidden files are not there.
+    assert!(tree.find(Role::Button, "Alle 3").is_some());
+    assert!(tree.find(Role::Button, "Video 1").is_some());
+    assert!(tree.find(Role::Button, "Bilder 1").is_some());
+    assert!(tree.find(Role::Button, "Andere 1").is_some());
+    assert!(tree.find(Role::Button, "Ton 0").is_none(), "a kind nobody has is no pill (the lied is one folder down)");
+}
+
+#[gpui::test]
+fn one_goes_into_a_folder_and_back_and_can_look_below_everything(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    w.press(Role::ListItem, "Frieren");
+    assert_eq!(w.files(), ["Staffel 1"]);
+    w.press(Role::ListItem, "Staffel 1");
+    assert_eq!(w.files(), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E10.mkv"], "2 before 10, as a person counts");
+    // The way back is a row of steps.
+    assert!(w.tree().find(Role::Button, "Anime").is_some());
+    assert!(w.tree().find(Role::Button, "Frieren").is_some());
+    w.press(Role::Button, "Anime");
+    assert!(w.files().contains(&"film.mp4".to_string()));
+
+    w.press(Role::Button, "Mit Unterordnern");
+    let all = w.files();
+    assert_eq!(all.len(), 7, "every file below, no folders: {all:?}");
+    assert!(all.contains(&"lied.flac".to_string()));
+    assert!(w.tree().find(Role::Button, "Ton 1").is_some());
+}
+
+#[gpui::test]
+fn kinds_order_and_search_narrow_the_lines(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    w.press(Role::Button, "Bilder 1");
+    assert_eq!(w.files(), ["Frieren", "Musik", "poster.png"], "folders stay: a kind narrows files, not the way down");
+    w.press(Role::Button, "Alle 3");
+    // The order: by size, then the same again turns it round.
+    w.press(Role::Button, "Ordnung: Grösse");
+    assert_eq!(w.files()[2..], ["notizen.txt", "poster.png", "film.mp4"]);
+    w.press(Role::Button, "Ordnung: Grösse, aufsteigend");
+    assert_eq!(w.files()[2..], ["film.mp4", "poster.png", "notizen.txt"]);
+    // A search looks below too.
+    let field = w.tree().find(Role::TextInput, "Dateinamen durchsuchen").unwrap().id;
+    w.cx.update(|window, cx| {
+        run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: field, data: None }, window, cx)
+    });
+    w.cx.simulate_input("s01e0");
+    w.draw();
+    assert_eq!(w.files(), ["Frieren S01E01.mkv", "Frieren S01E02.mkv"]);
+    assert!(said(&w.tree(), Role::ListItem, "Frieren S01E01.mkv").ends_with("in Frieren/Staffel 1"), "it says where each one is");
+}
+
+#[gpui::test]
+fn files_are_chosen_the_way_a_file_manager_does(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    w.press(Role::ListItem, "film.mp4");
+    assert!(said(&w.tree(), Role::ListItem, "film.mp4").starts_with("Ausgewählt."));
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "1 Datei ausgewählt")));
+    w.press(Role::ListItem, "poster.png");
+    assert!(!said(&w.tree(), Role::ListItem, "film.mp4").starts_with("Ausgewählt."), "a plain click chooses one");
+    w.press(Role::Button, "Auswahl aufheben");
+    assert!(!said(&w.tree(), Role::ListItem, "poster.png").starts_with("Ausgewählt."));
+    assert!(w.tree().find(Role::Button, "Auswahl aufheben").is_none());
+}
+
+#[gpui::test]
+fn what_was_set_on_a_folder_is_kept_and_the_folder_is_offered_the_next_time(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    {
+        let mut w = open(cx, tmp.path());
+        w.read(&root);
+        w.press(Role::Button, "Video 1");
+        w.press(Role::Button, "Ordnung: Grösse");
+        w.press(Role::Button, "Mit Unterordnern");
+    }
+    // A new start: the folder is offered, never read on its own; read again, it looks as it did.
+    let mut w = open(cx, tmp.path());
+    assert!(w.tree().find(Role::Button, "„Anime“ wieder öffnen").is_some());
+    assert!(w.files().is_empty(), "nothing is read until asked");
+    w.press(Role::Button, "„Anime“ wieder öffnen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert_eq!(w.tree().find(Role::Button, "Video 4").unwrap().toggled, Some(true), "the kind came back");
+    assert_eq!(w.tree().find(Role::Button, "Mit Unterordnern").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Ordnung: Grösse, aufsteigend").unwrap().toggled, Some(true));
+    assert_eq!(w.files(), ["Frieren S01E10.mkv", "Frieren S01E02.mkv", "Frieren S01E01.mkv", "film.mp4"]);
+}

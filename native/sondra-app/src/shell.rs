@@ -15,6 +15,7 @@ use sondra_ui::{family, motion, radius, size, FieldEvent, Mode, NoticeKind, Text
 
 use crate::actions::{self, Group};
 use crate::layout::{columns, shell_width, tab_width, GUTTER};
+use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
 use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
 
@@ -49,6 +50,8 @@ pub struct Shell {
     tab_focus: Vec<FocusHandle>,
     /// The Merkliste: the list, what narrows it, the lines being typed into.
     pub(crate) merk: MerkState,
+    /// The Ordner page: the folder read, what it shows, what is chosen.
+    pub(crate) folder: FolderState,
 }
 
 impl Shell {
@@ -68,6 +71,7 @@ impl Shell {
         })
         .detach();
         let merk = MerkState::new(cx, colors);
+        let folder = FolderState::new(cx, colors);
         Self {
             mode,
             panel: Panel::Start,
@@ -85,7 +89,14 @@ impl Shell {
                 .map(|_| cx.focus_handle().tab_stop(true))
                 .collect(),
             merk,
+            folder,
         }
+    }
+
+    /// Gives the Ordner page what it remembered the last time.
+    pub fn open_ordner_memory(&mut self, store: crate::store::FileStore, cx: &mut Context<Self>) {
+        self.folder.remember_from(store);
+        cx.notify();
     }
 
     /// Reads the Merkliste from this store and keeps writing to it.
@@ -150,6 +161,7 @@ impl Shell {
             .update(cx, |field, cx| field.set_colors(colors, cx));
         self.merk.search.update(cx, |field, cx| field.set_colors(colors, cx));
         self.merk.add.update(cx, |field, cx| field.set_colors(colors, cx));
+        self.folder.search.update(cx, |field, cx| field.set_colors(colors, cx));
         cx.notify();
     }
 
@@ -701,6 +713,8 @@ impl Render for Shell {
             self.start(ui, cols, cx)
         } else if self.panel == Panel::Merkliste {
             self.merkliste(ui, cx)
+        } else if self.panel == Panel::Folder {
+            self.folder_page(ui, cx)
         } else {
             self.unfinished(ui, self.panel)
         };

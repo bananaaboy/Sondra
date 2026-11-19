@@ -32,6 +32,9 @@ fn main() {
                     if let Some(store) = sondra_app::store::MerkStore::default_location() {
                         shell.open_merkliste(store, cx);
                     }
+                    if let Some(store) = sondra_app::store::FileStore::default_location() {
+                        shell.open_ordner_memory(store, cx);
+                    }
                     shell
                 })
             },

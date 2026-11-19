@@ -68,7 +68,8 @@ impl MerkStore {
     }
 }
 
-fn data_dir() -> Option<PathBuf> {
+/// Sondra's data folder on this computer.
+pub fn data_dir() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("SONDRA_DATA") {
         return Some(PathBuf::from(dir));
     }
@@ -79,4 +80,44 @@ fn data_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local").join("share")))
         .map(|d| d.join("sondra"))
+}
+
+/// What the Ordner page remembers (`sondra-merk::folder_memory`), kept in one small JSON file: names to
+/// text, the way `localStorage` keeps them on the web. Only a convenience — a file that cannot be read or
+/// written just means the page forgets.
+pub struct FileStore {
+    path: PathBuf,
+    map: std::collections::BTreeMap<String, String>,
+}
+
+impl FileStore {
+    pub fn open(path: impl Into<PathBuf>) -> FileStore {
+        let path = path.into();
+        let map = std::fs::read(&path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default();
+        FileStore { path, map }
+    }
+
+    pub fn default_location() -> Option<FileStore> {
+        Some(FileStore::open(data_dir()?.join("Ordner.json")))
+    }
+}
+
+impl sondra_merk::folder_memory::Store for FileStore {
+    fn get_item(&self, key: &str) -> Option<String> {
+        self.map.get(key).cloned()
+    }
+
+    fn set_item(&mut self, key: &str, value: String) {
+        self.map.insert(key.to_string(), value);
+        if let Some(dir) = self.path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let staged = self.path.with_extension("json.neu");
+        if serde_json::to_vec(&self.map).ok().is_some_and(|bytes| std::fs::write(&staged, bytes).is_ok()) {
+            let _ = std::fs::rename(&staged, &self.path);
+        }
+    }
 }
