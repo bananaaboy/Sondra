@@ -34,7 +34,7 @@ pub fn is_minimized(window: &gpui::Window) -> bool {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
         use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::IsIconic;
-        if let Ok(handle) = window.window_handle() {
+        if let Ok(handle) = HasWindowHandle::window_handle(window) {
             if let RawWindowHandle::Win32(h) = handle.as_raw() {
                 // SAFETY: the handle is of a window that is open for as long as this call runs.
                 return unsafe { IsIconic(HWND(h.hwnd.get() as *mut _)) }.as_bool();
