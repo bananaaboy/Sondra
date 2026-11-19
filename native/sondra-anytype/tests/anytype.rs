@@ -69,7 +69,13 @@ fn connecting_and_choosing_a_space() {
     assert_eq!(link.pair(&challenge, "0000").unwrap_err().kind, Kind::WrongCode);
     assert_eq!(link.pair(&challenge, "12").unwrap_err().kind, Kind::Rejected);
     link.pair(&challenge, CODE).unwrap();
-    assert_eq!(std::fs::read_to_string(dir.path().join("anytype-schluessel.bin")).unwrap(), KEY);
+    // On Windows the key is sealed with the account's own key; elsewhere it is a file only its owner can read.
+    let kept = std::fs::read(dir.path().join("anytype-schluessel.bin")).unwrap();
+    if cfg!(windows) {
+        assert!(!kept.windows(KEY.len()).any(|w| w == KEY.as_bytes()), "not in the clear");
+    } else {
+        assert_eq!(kept, KEY.as_bytes());
+    }
 
     let spaces = link.spaces().unwrap();
     assert_eq!(spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Privat", "Familie"]);
