@@ -53,3 +53,7 @@ raw-window-handle = "0.6"
 name = "fake-ytdlp"
 path = "../sondra-download/tests/support/fake_ytdlp.rs"
 test = false
+
+# The program's icon, put into the .exe on Windows (`sondra.rc`).
+[build-dependencies]
+embed-resource = "3"
