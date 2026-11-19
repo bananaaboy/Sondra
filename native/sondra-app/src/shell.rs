@@ -1057,6 +1057,14 @@ impl Render for Shell {
                         app.stop_propagation();
                         return;
                     }
+                    // „Zerschneiden“: sixteen keys play sixteen pads, 1 2 3 4 / Q W E R / A S D F / Y X C V.
+                    if !(m.control || m.alt || m.platform || m.shift) && me.read(app).panel == Panel::Sampler {
+                        let key = event.keystroke.key.clone();
+                        if me.update(app, |shell, cx| shell.sampler_key(&key, cx)) {
+                            app.stop_propagation();
+                            return;
+                        }
+                    }
                     if !(m.control || m.alt || m.platform || m.shift) && me.read(app).panel == Panel::Player {
                         let key = event.keystroke.key.clone();
                         if me.update(app, |shell, cx| {

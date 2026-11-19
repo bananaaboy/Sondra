@@ -172,6 +172,31 @@ fn a_cut_is_dragged_on_the_waveform_and_both_pads_follow_and_a_press_elsewhere_c
 }
 
 #[gpui::test]
+fn sixteen_keys_play_sixteen_pads_and_a_key_with_no_pad_is_not_taken(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Break.wav"));
+    w.press(Role::Button, "Verfahren Gleiche Teile");
+    w.press(Role::Button, "Teile 4");
+    assert_eq!(w.pads(), 4);
+    // 1 2 3 4 are the first row; Q is the fifth pad — there is none yet.
+    assert!(!w.shell.update(w.cx, |shell, cx| shell.sampler_key("q", cx)), "no fifth pad: the key is not taken");
+    assert!(!w.shell.update(w.cx, |shell, cx| shell.sampler_key("ö", cx)), "no pad sits on that key");
+    assert!(w.shell.update(w.cx, |shell, cx| shell.sampler_key("3", cx)));
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_selected()), 2);
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_is_playing()));
+    // Another key plays at once, and the same key plays again (it is no switch).
+    assert!(w.shell.update(w.cx, |shell, cx| shell.sampler_key("1", cx)));
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_selected()), 0);
+    assert!(w.shell.update(w.cx, |shell, cx| shell.sampler_key("1", cx)));
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_is_playing()), "the same key again plays again");
+    // Sixteen pads: the keys reach the last row (Y X C V on a German keyboard).
+    w.press(Role::Button, "Teile 16");
+    assert_eq!(w.pads(), 16);
+    assert!(w.shell.update(w.cx, |shell, cx| shell.sampler_key("v", cx)));
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_selected()), 15);
+}
+
+#[gpui::test]
 fn a_beat_is_laid_heard_and_written_as_sound_and_as_midi(cx: &mut TestAppContext) {
     let tmp = tempfile::tempdir().unwrap();
     let mut w = open(cx, tmp.path().join("Break.wav"));

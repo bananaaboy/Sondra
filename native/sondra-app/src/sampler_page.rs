@@ -232,7 +232,7 @@ impl Shell {
         self.sampler.player.take().is_some()
     }
 
-    /// One pad, played once by itself.
+    /// One pad, played once by itself; the same button stops it.
     pub fn sampler_hear_pad(&mut self, index: usize, cx: &mut Context<Self>) {
         if self.sampler_stop() {
             cx.notify();
@@ -240,8 +240,14 @@ impl Shell {
                 return;
             }
         }
+        self.sampler_play_pad(index, cx);
+    }
+
+    /// One pad, played now, whatever was sounding.
+    fn sampler_play_pad(&mut self, index: usize, cx: &mut Context<Self>) {
         let (Some(audio), Some(pad)) = (self.sampler.audio.clone(), self.sampler.pads.get(index).cloned()) else { return };
         self.sampler.selected = index;
+        self.sampler_stop();
         let rate = audio.sample_rate;
         let length = ((pad.end - pad.start) / 2f64.powf(pad.semitones / 12.0)).max(0.05) + 0.2;
         let mut bed = Bed::new(rate, (length * f64::from(rate)).ceil() as usize);
@@ -250,6 +256,17 @@ impl Shell {
         self.sampler.player = Some(ClipPlayer::start(&heard, 0.0, heard.seconds()));
         self.sampler_ticker(cx);
         cx.notify();
+    }
+
+    /// A key of the keyboard: the pad that sits on it plays (and is chosen). Returns whether the key was one of them.
+    pub fn sampler_key(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
+        const PAD_KEYS: [&str; 16] = ["1", "2", "3", "4", "q", "w", "e", "r", "a", "s", "d", "f", "y", "x", "c", "v"];
+        let Some(index) = PAD_KEYS.iter().position(|k| *k == key.to_lowercase()) else { return false };
+        if self.sampler.audio.is_none() || index >= self.sampler.pads.len() {
+            return false;
+        }
+        self.sampler_play_pad(index, cx);
+        true
     }
 
     /// The beat, played from the start; the same button stops it.
