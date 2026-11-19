@@ -366,3 +366,50 @@ fn a_series_with_a_cover_gets_its_picture_on_the_shelf_and_in_the_list(cx: &mut 
     w.draw();
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_asked()), 2);
 }
+
+#[gpui::test]
+fn the_planner_says_how_much_there_is_to_watch_to_a_chosen_point_and_when_it_is_done(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.press(Role::ListItem, "Frieren");
+    assert!(w.tree().find(Role::Heading, "Bis wohin?").is_some());
+    assert!(w.tree().find(Role::Heading, "Bis Staffel 1, Folge 12").is_none(), "nothing before a target is chosen");
+    w.press(Role::Button, "Ziel Ganze Serie");
+    // Stand: episode 4 of 12 → 9 episodes to watch.
+    let tree = w.tree();
+    let said: Vec<String> = ["9 Folgen"].iter().map(|s| s.to_string()).collect();
+    let found = said.iter().all(|s| tree.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with(s.as_str()))));
+    assert!(found, "nine episodes are left to watch: {:?}", tree.nodes.iter().filter_map(|n| n.label.as_ref().map(|l| l.to_string())).filter(|l| l.contains("Folge") || l.contains("Bis")).collect::<Vec<_>>());
+    // A pace gives a day.
+    w.press(Role::Button, "3 am Tag");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Fertig "))));
+    // The end of the season, from the last episode, is reached: nothing to watch.
+    w.press(Role::Button, "Ziel Ende Staffel 1");
+    w.press(Role::Button, "Planer Tempo 2×");
+    assert_eq!(w.tree().find(Role::Button, "Planer Tempo 2×").unwrap().toggled, Some(true));
+}
+
+#[gpui::test]
+fn the_statistics_window_gives_the_numbers_and_a_year_looked_back_on(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ids = Ids::system();
+    use chrono::TimeZone as _;
+    let at = |month: u32, day: u32| chrono::Local.with_ymd_and_hms(2025, month, day, 20, 0, 0).unwrap().timestamp_millis();
+    let history: Vec<_> = [(1, at(3, 1)), (2, at(3, 2)), (3, at(3, 3)), (4, at(7, 9))].iter().map(|(e, t)| json!({ "id": format!("h{e}"), "season": 1, "episode": e, "at": t })).collect();
+    let stored = Stored {
+        items: vec![normalize(&json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 5, "history": history,
+            "seasons": [{ "number": 1, "episodes": 12, "watched": [1, 2, 3, 4] }] }), &mut ids)],
+        ..Default::default()
+    };
+    let mut w = open(cx, Some(&stored), dir.path());
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Statistik und Rückblick");
+    let tree = w.tree();
+    assert!(tree.find(Role::Dialog, "Statistik und Rückblick").is_some());
+    assert!(tree.find(Role::Button, "Rückblick 2025").is_some());
+    assert!(tree.find(Role::Heading, "Rückblick 2025").is_some());
+    assert!(tree.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("4 Folgen"))), "four episodes that year");
+    assert!(tree.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Stärkster Monat: März mit 3"))));
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Dialog, "Statistik und Rückblick").is_none());
+}

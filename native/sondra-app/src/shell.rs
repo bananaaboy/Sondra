@@ -846,7 +846,7 @@ impl Render for Shell {
             motion::BASE,
         ).into_any_element() };
 
-        let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else { None };
+        let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx) } else { None };
         // A film that goes on behind another tool says so, and can be stopped from here.
         let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
         let header = div()

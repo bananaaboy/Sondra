@@ -53,6 +53,11 @@ pub struct MerkState {
     pub add: Entity<TextField>,
     /// The pictures of the covers, made at the size they are shown.
     pub covers: SharedCovers,
+    /// What is chosen in „Bis wohin?“ for the series whose page is open.
+    pub planner: Option<crate::planner::PlannerState>,
+    /// The window with the numbers and the year looked back on.
+    pub stats_open: bool,
+    pub recap_year: Option<i32>,
 }
 
 impl MerkState {
@@ -90,6 +95,9 @@ impl MerkState {
             search,
             add,
             covers: SharedCovers::default(),
+            planner: None,
+            stats_open: false,
+            recap_year: None,
         }
     }
 
@@ -417,6 +425,14 @@ impl Shell {
                         .into_any_element(),
                 );
             }
+            items.push(ui.hint("Auswertung"));
+            {
+                let me = me.clone();
+                items.push(ui.menu_item("statistik-oeffnen", "Statistik und Rückblick", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {
+                    m.stats_open = true;
+                    m.more = false;
+                })).into_any_element());
+            }
             let pop = ui.popover("menue-merkliste-mehr", "Mehr", items);
             let away = me.clone();
             holder = holder.child(
@@ -702,6 +718,9 @@ impl Shell {
             .child(stands)
             .child(actions);
 
+        if let Some(planner) = self.planner_block(ui, item, cx) {
+            page = page.child(planner);
+        }
         for season in seasons_of(item) {
             page = page.child(self.season_block(ui, item, &season, cx));
         }
