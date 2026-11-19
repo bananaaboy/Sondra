@@ -197,6 +197,18 @@ Startseite mit Kacheln, hell und dunkel, die Schriften, die Bewegung.
   „Beim Minimieren pausieren“, Visualizer.
 - Herunterladen (3 600 + 1 300 Zeilen): Wege, Portale, Listen, Folgenwähler,
   Minibar, Wachhalten, Gong, Wiederaufnahme.
+- **Stand 19.11.2026:** Die Frage „Film im Fenster“ ist beantwortet, soweit sie sich hier beantworten lässt:
+  FFmpeg entschlüsselt Bild und Ton in zwei Kindprogrammen (`sondra-playback`), **der Ton ist die Uhr**
+  (`sondra-audio`: Warteschlange, Lautstärke, Pause, Uhr der wirklich gehörten Zeit; ohne Tonkarte ein
+  stummer Ersatz mit derselben Zeit), das Bild wartet auf sie und wird verworfen, wenn sie vorbei ist;
+  Sprung, Tempo, Tonspur, Pause und Ende sind mit echten Dateien geprüft. Das Bild kommt als `RenderImage`
+  ins Fenster (`img`), die Messung dafür steht in der CI (`videoprobe`, Artefakt „video“: 720p30 in
+  Echtzeit und 1080p so schnell es geht). Die Seite „Abspielen“ steht (Bühne, Leiste, Liste, Untertitel
+  neben dem Film, die Stelle wird gemerkt); Regeln, Einstellungen, Lesezeichen und Untertitel-Zeilen
+  stehen in `sondra-player` gegen die Website. **Offen:** Steuerung über dem Bild mit Ausblenden, die
+  Einstellungen als Menü, Größen (Kino, fensterfüllend, Vollbild), Bild-in-Bild, Vorspann-Knöpfe,
+  Lesezeichen und Schlaf-Timer als Oberfläche, Abhaken in der Merkliste, fremde Formate, Drive-Streaming,
+  Visualizer, das Herunterladen als Ganzes.
 - **Tor:** Wiedergabe jedes Formats aus `verify:convert` und der Szenarien
   „abspielen“; `verify:download`; ein langer Film mit Vorspringen und
   Untertiteln, von Ihnen angesehen.

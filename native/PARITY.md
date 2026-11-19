@@ -69,11 +69,11 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 
 | ID | Funktion | Bestand | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- | --- |
-| P01 | Wiedergabe von Video und Musik, Steuerung auf dem Bild, Verlauf, Ausblenden | `PlayerPanel` | 5 | Szenario „abspielen“ | offen |
-| P02 | Einstellungen: Qualität, Tempo, Untertitel, Tonspur, Bild, Ton (bis 300 %, Nachtmodus), Wiedergabe | `SettingsMenu` | 5 | Test | offen |
+| P01 | Wiedergabe von Video und Musik, Steuerung auf dem Bild, Verlauf, Ausblenden | `PlayerPanel` | 5 | `sondra-playback` (echte Dateien, echtes FFmpeg: Uhr, Bild wartet auf den Ton, Pause, Sprung, Tempo, Ende), `sondra-app/tests/player_page.rs`, UIA mit einem Film auf Windows; **Steuerung auf dem Bild und Ausblenden offen** (die Leiste steht unter der Bühne) | **teilweise nativ ✔** |
+| P02 | Einstellungen: Qualität, Tempo, Untertitel, Tonspur, Bild, Ton (bis 300 %, Nachtmodus), Wiedergabe | `SettingsMenu` | 5 | Tempo, Lautstärke, Stumm, Wiederholen/Automatisch weiter (Logik `sondra-player::Settings` gegen die Website); Qualität, Untertitel-Auswahl, Tonspur-Wahl, Bild, Nachtmodus, Verstärkung offen | **teilweise nativ ✔** |
 | P03 | Größen: neben der Liste, Kino, fensterfüllend, Vollbild, Bild-in-Bild | `PlayerPanel` | 5 | Test | offen |
-| P04 | Vorspann überspringen (fest und am Ton erkannt), Nächste Folge | `player.ts`, `introPrint` | 5 | `verify:intro` | offen |
-| P05 | Schlaf-Timer, Lesezeichen, Weiter bei, Kapitel kopieren | `player.ts` | 5 | `verify:merkliste` | offen |
+| P04 | Vorspann überspringen (fest und am Ton erkannt), Nächste Folge | `player.ts`, `introPrint` | 5 | `sondra-player`: Wann „Vorspann überspringen“ und „Nächste Folge“ angeboten werden (gegen die Website); Erkennung am Ton `sondra-media::intro`; Knöpfe im Player offen | **Logik nativ ✔** |
+| P05 | Schlaf-Timer, Lesezeichen, Weiter bei, Kapitel kopieren | `player.ts` | 5 | `sondra-player`: Schlaf-Timer-Fade, Lesezeichen (säubern, hinzufügen, Nachbarn, Kapitel), Stelle je Datei (die letzten fünfzig) gegen die Website; „Weiter bei“ im Player ✔; Lesezeichen und Schlaf-Timer als Oberfläche offen | **teilweise nativ ✔** |
 | P06 | Abhaken in der Merkliste ab 90 % | `episodeMatch`, `MerklisteTick` | 5 | `verify:merkliste` | offen |
 | P07 | Fremde Formate abspielen (umpacken, Ton wandeln, klein neu rechnen) | `playable.ts` | 5 | `verify:convert` | offen |
 | P08 | Streamen aus Drive mit Bereichsanfragen | `driveClient.ts` | 5 | Szenario „drive“ | offen |
