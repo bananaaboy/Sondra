@@ -102,3 +102,48 @@ jobs:
         with:
           name: uia-result
           path: uia.txt
+
+  # The look, photographed: the components in light and dark side by side, on a real Windows desktop.
+  gallery:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: native/target
+          key: native-ui-${{ hashFiles('native/Cargo.lock') }}
+          save-always: true
+      - run: cargo build --release --locked --example gallery -p sondra-ui --manifest-path native/Cargo.toml
+      - name: Start the gallery and take a screenshot
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path native/target/release/examples/gallery.exe).Path
+          $p = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput gallery-out.txt -RedirectStandardError gallery-err.txt
+          Start-Sleep -Seconds 4
+          (New-Object -ComObject Shell.Application).MinimizeAll()
+          Add-Type -Namespace Win -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h2, bool r);'
+          $p.Refresh()
+          "window: $($p.MainWindowHandle) '$($p.MainWindowTitle)', exited: $($p.HasExited)" | Tee-Object -FilePath gallery.txt
+          if ($p.MainWindowHandle -ne 0) {
+            [Win.Native]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+            [Win.Native]::MoveWindow($p.MainWindowHandle, 0, 0, 1120, 900, $true) | Out-Null
+            [Win.Native]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+          }
+          Start-Sleep -Seconds 3
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          "screen: $($b.Width)x$($b.Height)" | Tee-Object -Append -FilePath gallery.txt
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$PWD\gallery.png")
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Get-Content gallery-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath gallery.txt
+          Get-Content gallery.txt >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gallery
+          path: |
+            gallery.png
+            gallery.txt

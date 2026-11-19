@@ -5498,6 +5498,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sondra-ui"
+version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "gpui",
+ "sondra-a11y",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
