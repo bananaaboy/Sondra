@@ -99,6 +99,10 @@ if ($null -ne $merk) {
             Check ($null -ne $line) 'the typed series is a line of the list'
             if ($null -ne $line) {
                 Check ($line.Current.HelpText -like 'Staffel 1, Folge 1.*') ('it stands at the first episode: ' + $line.Current.HelpText)
+                # The page shows posters; the step forward is on the lines of the list.
+                $asList = Wait-For 'Als Liste' $CT::Button
+                Check ($null -ne $asList) 'the page can be shown as a list'
+                if ($null -ne $asList) { [void](Invoke-It $asList) }
                 $plus = Wait-For 'Staffel 1, Folge 1 von Frieren als gesehen markieren' $CT::Button
                 Check ($null -ne $plus) 'the step forward is a button that says what it does'
                 if ($null -ne $plus) {
