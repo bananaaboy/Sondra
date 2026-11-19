@@ -5,7 +5,7 @@
 pub fn prefers_reduced_motion() -> bool {
     #[cfg(windows)]
     {
-        use windows::Win32::Foundation::BOOL;
+        use windows::core::BOOL;
         use windows::Win32::UI::WindowsAndMessaging::{
             SystemParametersInfoW, SPI_GETCLIENTAREAANIMATION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
         };
