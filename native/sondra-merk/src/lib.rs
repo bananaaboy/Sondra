@@ -20,5 +20,6 @@ pub mod sqlite;
 pub mod stats;
 pub mod subtitles;
 pub mod urlinfo;
+pub mod view;
 
 pub use model::*;
