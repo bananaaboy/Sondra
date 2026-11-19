@@ -16,6 +16,11 @@ on:
 permissions:
   contents: read
 
+# A newer push makes an older run of the same branch pointless; the last state is what counts.
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   core:
     strategy:
