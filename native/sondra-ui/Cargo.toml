@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 gpui = "=0.2.2"
 sondra-a11y = { path = "../sondra-a11y" }
+unicode-segmentation = "1"
 
 [dev-dependencies]
 accesskit = "0.25"

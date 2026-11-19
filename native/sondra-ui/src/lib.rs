@@ -3,8 +3,10 @@
 //! screen reader (`sondra-a11y`) — a control without a name and a role is not finished.
 
 pub mod fonts;
+pub mod text_field;
 pub mod theme;
 pub mod ui;
 
+pub use text_field::{bind_keys, FieldEvent, TextField};
 pub use theme::{family, radius, size, Colors, Mode, DARK, LIGHT};
 pub use ui::{Button, Chip, Notice, NoticeKind, Tab, Tile, Ui};

@@ -5504,6 +5504,7 @@ dependencies = [
  "accesskit",
  "gpui",
  "sondra-a11y",
+ "unicode-segmentation",
 ]
 
 [[package]]
