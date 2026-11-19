@@ -143,19 +143,19 @@ fn a_group_tab_opens_its_menu_and_a_choice_goes_there(cx: &mut TestAppContext) {
     ] {
         assert!(tree.find(Role::MenuItem, tool).is_some(), "{tool}");
     }
-    w.press(Role::MenuItem, "Mischen", 1280.);
-    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Mix);
+    w.press(Role::MenuItem, "Spuren trennen", 1280.);
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Stems);
     let tree = w.tree();
     assert!(
         tree.find(Role::Menu, "Ton").is_none(),
         "a choice shuts the menu"
     );
     assert!(
-        tree.find(Role::Button, "Ton · Mischen").is_some(),
+        tree.find(Role::Button, "Ton · Spuren trennen").is_some(),
         "the group names the tool chosen in it"
     );
-    assert!(said(&tree, Role::Button, "Ton · Mischen").starts_with("Geöffnet"));
-    assert!(tree.find(Role::Heading, "Mischen").is_some());
+    assert!(said(&tree, Role::Button, "Ton · Spuren trennen").starts_with("Geöffnet"));
+    assert!(tree.find(Role::Heading, "Spuren trennen").is_some());
     assert!(
         tree.find(Role::Status, "Dieses Werkzeug gibt es in der neuen App noch nicht. In der Windows-App und auf der Website funktioniert es wie gewohnt.").is_some(),
         "a tool that is not built says so"

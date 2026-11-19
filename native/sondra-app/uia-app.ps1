@@ -171,17 +171,18 @@ $group = Named 'Ton' $CT::Button
 Check ($null -ne $group) 'the group Ton is in the row'
 if ($null -ne $group) {
     Check (Invoke-It $group) 'it can be invoked'
-    $mix = Wait-For 'Mischen' $CT::MenuItem
-    Check ($null -ne $mix) 'its menu appeared, with Mischen as a menu item'
-    foreach ($tool in @('Spuren trennen', 'Lautst*rke', 'Zerschneiden', 'Tonart')) {
+    # (A tool that is not built yet, so that its page says so; Mischen has a page of its own now.)
+    $mix = Wait-For 'Spuren trennen' $CT::MenuItem
+    Check ($null -ne $mix) 'its menu appeared, with Spuren trennen as a menu item'
+    foreach ($tool in @('Mischen', 'Lautst*rke', 'Zerschneiden', 'Tonart')) {
         Check ($null -ne (Named $tool $CT::MenuItem)) "the menu holds $tool"
     }
     if ($null -ne $mix) {
         Check (Invoke-It $mix) 'a menu item can be invoked'
-        $heading = Wait-For 'Mischen' $CT::Text
+        $heading = Wait-For 'Spuren trennen' $CT::Text
         Check ($null -ne $heading) 'the tool opened: its heading is on the page'
-        Check ($null -ne (Wait-For 'Ton * Mischen' $CT::Button)) 'the group names the tool chosen in it'
-        Check (Wait-Gone 'Spuren trennen' $CT::MenuItem) 'the menu shut by the choice'
+        Check ($null -ne (Wait-For 'Ton * Spuren trennen' $CT::Button)) 'the group names the tool chosen in it'
+        Check (Wait-Gone 'Mischen' $CT::MenuItem) 'the menu shut by the choice'
     }
 }
 
