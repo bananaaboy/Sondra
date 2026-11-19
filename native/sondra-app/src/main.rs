@@ -54,6 +54,7 @@ fn main() {
                     if let (Some(setup), Some(store)) = (sondra_app::devices_setup::production(), sondra_app::store::FileStore::at_default("Geraete.json")) {
                         shell.open_devices(setup, store, cx);
                     }
+                    shell.look_for_old_app(cx);
                     // Files and folders on the command line: „Öffnen mit Sondra“ and a drop on the program.
                     if !given.is_empty() {
                         shell.open_paths(given.clone(), cx);

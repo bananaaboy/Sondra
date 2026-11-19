@@ -43,6 +43,7 @@ pub mod video_page;
 pub mod zip_ui;
 pub mod visualizer;
 pub mod normalize_page;
+pub mod old_app;
 pub mod player_page;
 pub mod sampler_page;
 pub mod shell;

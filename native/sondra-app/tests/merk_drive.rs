@@ -19,6 +19,9 @@ use sondra_merk::normalize::{normalize, Context as Ids};
 use sondra_merk::sqlite::{read_shared, write_sqlite, Snapshot as Stored};
 use sondra_ui::{bind_keys, fonts};
 
+/// `SONDRA_DATA` is process-wide: the tests that point it somewhere run one at a time.
+static DATA: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 type Seen = Rc<RefCell<Vec<Rc<Snapshot>>>>;
 const WIDTH: f32 = 1280.;
 
@@ -102,6 +105,7 @@ fn in_drive(fake: &FakeDrive) -> Vec<(String, Option<i64>)> {
 
 #[gpui::test]
 fn the_list_goes_through_drive_both_ways_once_chosen(cx: &mut TestAppContext) {
+    let _one_at_a_time = DATA.lock().unwrap_or_else(|e| e.into_inner());
     // The switch is a file of the program's own; keep this test's away from the real one.
     let data = tempfile::tempdir().unwrap();
     std::env::set_var("SONDRA_DATA", data.path());
@@ -143,6 +147,7 @@ fn the_list_goes_through_drive_both_ways_once_chosen(cx: &mut TestAppContext) {
 
 #[gpui::test]
 fn a_file_that_is_no_merkliste_is_never_written_over(cx: &mut TestAppContext) {
+    let _one_at_a_time = DATA.lock().unwrap_or_else(|e| e.into_inner());
     let data = tempfile::tempdir().unwrap();
     std::env::set_var("SONDRA_DATA", data.path());
     let fake = FakeDrive::start();

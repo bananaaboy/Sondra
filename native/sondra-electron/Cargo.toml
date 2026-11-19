@@ -1,0 +1,16 @@
+[package]
+name = "sondra-electron"
+description = "What the Windows app (Electron) left on this computer: its Chromium localStorage read from the LevelDB files, so a person's Merkliste and settings can be taken over."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+base64 = "0.22"
+# Pure Rust, no C compiler: reads Chromium's localStorage database (snappy-compressed tables included).
+rusty-leveldb = "3"
+tempfile = "3"
+
+[dev-dependencies]

@@ -92,6 +92,7 @@ pub struct Shell {
     pub(crate) news_rounds: crate::new_episodes::NewEpisodes,
     pub(crate) anytype: crate::anytype_window::AnytypeState,
     pub(crate) merk_drive: crate::merk_drive::MerkDrive,
+    pub(crate) old_app: crate::old_app::OldApp,
     pub update: crate::updater_ui::Updates,
     pub palette: crate::palette::Palette,
     /// Google Drive for the saves of results; `None` where nothing can be kept.
@@ -196,6 +197,7 @@ impl Shell {
             news_rounds: crate::new_episodes::NewEpisodes::default(),
             anytype: crate::anytype_window::AnytypeState::new(cx, colors),
             merk_drive: crate::merk_drive::MerkDrive::load(),
+            old_app: Default::default(),
             update: crate::updater_ui::Updates::default(),
             palette,
             drive: crate::drive_hub::Drive::production(),
@@ -943,6 +945,7 @@ impl Shell {
             .flex_col()
             .gap(px(36.))
             .child(self.way_in(ui, cx))
+            .children(self.old_app_offer(ui, cx))
             .children(self.continue_watching(ui, cx))
             .child(self.media(ui, cols, cx))
             .child(self.tools(ui, cols, cx))
@@ -1053,7 +1056,7 @@ impl Render for Shell {
             motion::BASE,
         ).into_any_element() };
 
-        let overlay = if self.palette.open || self.palette.help { self.palette_overlay(ui, cx) } else if self.licenses_open { self.licenses_overlay(ui, cx) } else if self.whats_new_open { self.whats_new_overlay(ui, cx) } else if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.anytype_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)).or_else(|| self.history_overlay(ui, cx)).or_else(|| self.dice_overlay(ui, cx)) } else { None };
+        let overlay = if self.palette.open || self.palette.help { self.palette_overlay(ui, cx) } else if self.panel == Panel::Start && self.old_app.open { self.old_app_overlay(ui, cx) } else if self.licenses_open { self.licenses_overlay(ui, cx) } else if self.whats_new_open { self.whats_new_overlay(ui, cx) } else if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.anytype_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)).or_else(|| self.history_overlay(ui, cx)).or_else(|| self.dice_overlay(ui, cx)) } else { None };
         // A film that goes on behind another tool says so, and can be stopped from here.
         let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
         let floating = self.floating_cards(ui, cx);

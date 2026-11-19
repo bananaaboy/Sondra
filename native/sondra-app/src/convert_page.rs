@@ -57,6 +57,12 @@ impl ConvertState {
         ConvertState { files: Vec::new(), settings: Settings::default(), preset: None, own, name, store, folder: None, run: None, made: Vec::new(), zip: None, packing: false, error: None }
     }
 
+    /// Reads the own templates again (after a take-over wrote some).
+    pub fn reload_own(&mut self) {
+        self.store = crate::store::FileStore::at_default("Umwandeln.json");
+        self.own = self.store.as_ref().and_then(|s| s.get_item("vorlagen")).map(|j| parse_own(&j)).unwrap_or_default();
+    }
+
     fn keep_own(&mut self) {
         let json = own_json(&self.own);
         if let Some(store) = self.store.as_mut() {

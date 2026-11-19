@@ -16,6 +16,7 @@ sondra-a11y = { path = "../sondra-a11y" }
 sondra-ui = { path = "../sondra-ui" }
 sondra-merk = { path = "../sondra-merk" }
 sondra-anytype = { path = "../sondra-anytype" }
+sondra-electron = { path = "../sondra-electron" }
 tempfile = "3"
 sondra-media = { path = "../sondra-media" }
 sondra-player = { path = "../sondra-player" }
