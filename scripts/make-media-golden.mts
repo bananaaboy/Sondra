@@ -37,6 +37,7 @@ import {
   shelfEq,
 } from '../src/lib/effects'
 import { setChannels } from '../src/lib/edit'
+import { calibrate, PURPOSES, type MicPurpose } from '../src/lib/micCalibrate'
 import { DEFAULT_SEGMENTATION, midiName, segmentNotes, trackPitch } from '../src/lib/pitch'
 
 const outDir = 'native/sondra-media/tests/golden'
@@ -668,4 +669,51 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   }
   writeFileSync(`${outDir}/effects.json`, `${JSON.stringify(cases, null, 1)}\n`)
   console.log(`Effekte: Kompressor ${compressed.maxReductionDb.toFixed(1)} dB, Profil mit ${profile.length} Bändern`)
+}
+
+
+/* -- Mikrofon: messen, die Kette einstellen, die Zahlen sagen -------------------------------------- */
+
+{
+  const sr = 16000
+  const take = (seconds: number, voice: boolean, salt: number) => {
+    const out = new Float32Array(sr * seconds)
+    let state = 31337 + salt
+    for (let i = 0; i < out.length; i += 1) {
+      state = (Math.imul(state, 1103515245) + 12345) >>> 0
+      const noise = ((state >>> 8) / 2 ** 24) * 2 - 1
+      const t = i / sr
+      const talking = voice && ((t % 1.4) < 0.8 || (t > 3.1 && t < 3.6))
+      const tone = talking ? 0.3 * Math.sin(2 * Math.PI * 190 * t) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 3.1 * t)) + 0.08 * Math.sin(2 * Math.PI * 570 * t) : 0
+      out[i] = 0.006 * noise + 0.01 * Math.sin(2 * Math.PI * 50 * t) + 0.004 * Math.sin(2 * Math.PI * 100 * t) + tone
+    }
+    return out
+  }
+  const every = (a: Float32Array | number[], n: number) => Array.from(a).filter((_, i) => i % n === 0)
+  const noise = take(4, false, 1)
+  const speech = take(6, true, 2)
+  const other = { channels: [take(3, true, 3), take(3, true, 4)], sampleRate: sr }
+  const results = PURPOSES.map((p) => {
+    const r = calibrate(noise, speech, sr, p.id as MicPurpose)
+    const again = r.apply(other)
+    return {
+      purpose: p.id,
+      steps: r.steps,
+      before: r.before,
+      after: r.after,
+      advice: r.advice,
+      processed: { frames: r.processed.channels[0].length, samples: every(r.processed.channels[0], 211) },
+      applied: { channels: again.channels.length, frames: again.channels[0].length, left: every(again.channels[0], 97), right: every(again.channels[1], 97) },
+    }
+  })
+  const quiet = (() => {
+    try {
+      calibrate(noise, new Float32Array(sr * 3), sr, 'podcast')
+      return ''
+    } catch (error) {
+      return (error as Error).message
+    }
+  })()
+  writeFileSync(`${outDir}/mic.json`, `${JSON.stringify({ rate: sr, results, quiet }, null, 1)}\n`)
+  console.log(`Mikrofon: ${results.map((r) => `${r.purpose} ${r.after.lufs.toFixed(1)} LUFS`).join(', ')}`)
 }

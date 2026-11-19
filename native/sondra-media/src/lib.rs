@@ -35,6 +35,7 @@ pub mod intro;
 pub mod key;
 pub mod loudness;
 pub mod midi;
+pub mod mic;
 pub mod onsets;
 pub mod pitch;
 pub mod presets;
