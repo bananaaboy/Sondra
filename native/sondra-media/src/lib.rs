@@ -11,6 +11,7 @@
 //! * [`chroma`], [`key`], [`pitch`], [`midi`] — pitch classes, key and chords, YIN notes, the MIDI file.
 //! * [`intro`] — the opening of a series, found by ear (`introPrint.ts`).
 //! * [`loudness`] — EBU R128 / BS.1770: measuring and moving to a target (`src/lib/loudness.ts`).
+//! * [`image_ops`] — pictures: turn, crop, scale, colour, write as WebP, JPEG or PNG (`image.ts`).
 //! * [`run`] — a whole conversion: a file in, a file out (`src/lib/convertRun.ts`).
 //!
 //! What changes from the browser: no memory limit (a file is read from where it lies), no crash of
@@ -23,6 +24,7 @@ pub mod chroma;
 pub mod convert;
 pub mod ffmpeg;
 pub mod fft;
+pub mod image_ops;
 pub mod intro;
 pub mod key;
 pub mod loudness;
