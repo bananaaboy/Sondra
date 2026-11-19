@@ -496,11 +496,26 @@ fn picture_and_sound_have_their_window_and_what_is_chosen_is_kept_and_taken_back
     w.press(Role::Button, "Spiegeln");
     w.press(Role::Button, "Nachtmodus: Leises lauter, Lautes leiser");
     assert_eq!(w.tree().find(Role::Button, "Nachtmodus: Leises lauter, Lautes leiser").unwrap().toggled, Some(true));
+    // The equalizer: a preset sets the five bands and switches it on.
+    // As in the web player it is on from the start, flat.
+    assert_eq!(w.tree().find(Role::Button, "Entzerrer an").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Entzerrer: Flat").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Entzerrer an");
+    assert_eq!(w.tree().find(Role::Button, "Entzerrer an").unwrap().toggled, Some(false));
+    w.press(Role::Button, "Entzerrer: Bass Boost");
+    assert_eq!(w.tree().find(Role::Button, "Entzerrer: Bass Boost").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Entzerrer an").unwrap().toggled, Some(true));
+    let bass = w.tree().find(Role::Slider, "Bässe (80 Hz)").unwrap().value.clone().unwrap();
+    assert_eq!(bass.as_ref(), "+6 dB");
+    let mids = w.tree().find(Role::Slider, "Mitten (1000 Hz)").unwrap().value.clone().unwrap();
+    assert_eq!(mids.as_ref(), "0 dB");
     // The film goes on through all the restarts.
     w.watch(0.8);
     assert!(w.position() > 0.5, "{}", w.position());
     // Everything back.
     w.press(Role::Button, "Zurücksetzen");
+    assert_eq!(w.tree().find(Role::Button, "Entzerrer: Flat").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Slider, "Bässe (80 Hz)").unwrap().value.clone().unwrap().as_ref(), "0 dB");
     assert_eq!(w.tree().find(Role::Button, "Helligkeit 100 %").unwrap().toggled, Some(true));
     assert_eq!(w.tree().find(Role::Button, "Bildpassung Einpassen").unwrap().toggled, Some(true));
     assert_eq!(w.tree().find(Role::Button, "Verstärkung 100 %").unwrap().toggled, Some(true));

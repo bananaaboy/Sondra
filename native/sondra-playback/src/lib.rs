@@ -132,6 +132,7 @@ struct Settings {
     audio_track: usize,
     boost: f32,
     night: bool,
+    equalizer: Equalizer,
     picture: Picture,
 }
 
@@ -165,6 +166,55 @@ pub fn picture_filters(picture: &Picture) -> Vec<String> {
     if picture.mirror {
         filters.push("hflip".to_string());
     }
+    filters
+}
+
+/// The five-band equalizer of the web player (`lib/audio/equalizer.ts`): a low shelf at 80 Hz, peaks at 300 Hz, 1 kHz
+/// and 3.5 kHz (Q 1), a high shelf at 10 kHz, then a soft limiter so boosted bands do not clip. Gains in dB,
+/// −12 to +12.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Equalizer {
+    pub on: bool,
+    pub gains: [f64; 5],
+}
+
+impl Default for Equalizer {
+    fn default() -> Self {
+        Equalizer { on: false, gains: [0.0; 5] }
+    }
+}
+
+/// The bands: name, centre in Hz.
+pub const EQ_BANDS: [(&str, f64); 5] = [("Bässe", 80.0), ("Tiefmitten", 300.0), ("Mitten", 1000.0), ("Präsenz", 3500.0), ("Höhen", 10000.0)];
+
+/// The presets of the web player's equalizer: name and the five gains.
+pub const EQ_PRESETS: [(&str, [f64; 5]); 5] = [
+    ("Flat", [0.0, 0.0, 0.0, 0.0, 0.0]),
+    ("Bass Boost", [6.0, 3.0, 0.0, 1.0, 2.0]),
+    ("Vocal Clarity", [-2.0, -1.0, 2.5, 4.5, 2.0]),
+    ("Elektronisch", [5.0, 2.0, -1.5, 2.0, 4.5]),
+    ("Höhen-Boost", [-1.0, 0.0, 1.0, 3.5, 6.0]),
+];
+
+/// The FFmpeg filters for the equalizer: nothing while it is off or every band is flat.
+pub fn equalizer_filters(eq: &Equalizer) -> Vec<String> {
+    let g = eq.gains.map(|v| v.clamp(-12.0, 12.0));
+    if !eq.on || g.iter().all(|v| v.abs() < 1e-9) {
+        return Vec::new();
+    }
+    let mut filters = Vec::new();
+    let mut add = |gain: f64, filter: String| {
+        if gain.abs() > 1e-9 {
+            filters.push(filter);
+        }
+    };
+    add(g[0], format!("bass=f=80:g={}", g[0]));
+    add(g[1], format!("equalizer=f=300:t=q:w=1:g={}", g[1]));
+    add(g[2], format!("equalizer=f=1000:t=q:w=1:g={}", g[2]));
+    add(g[3], format!("equalizer=f=3500:t=q:w=1:g={}", g[3]));
+    add(g[4], format!("treble=f=10000:g={}", g[4]));
+    // Master limiter: −0.5 dBFS, fast attack (3 ms), release 100 ms.
+    filters.push("alimiter=limit=0.944:attack=3:release=100:level=0".to_string());
     filters
 }
 
@@ -239,7 +289,7 @@ impl Playback {
             output,
             shared,
             size,
-            settings: Settings { rate: 1.0, volume: 1.0, muted: false, audio_track: 0, boost: 1.0, night: false, picture: Picture::default() },
+            settings: Settings { rate: 1.0, volume: 1.0, muted: false, audio_track: 0, boost: 1.0, night: false, equalizer: Equalizer::default(), picture: Picture::default() },
             run: Run { children: Vec::new(), frames: Arc::new(Frames::new()), video_done: Arc::default(), audio_done: Arc::default(), stop: Arc::default() },
             started_at: 0.0,
             timer: Timer::default(),
@@ -331,6 +381,7 @@ impl Playback {
                 }
                 filters.push(format!("atempo={left}"));
             }
+            filters.extend(equalizer_filters(&self.settings.equalizer));
             if self.settings.night {
                 filters.push(NIGHT_FILTER.to_string());
             }
@@ -424,6 +475,17 @@ impl Playback {
         }
         let at = self.position();
         self.settings.night = on;
+        self.restart(at)
+    }
+
+    /// The equalizer needs the sound made again, from where it is.
+    pub fn set_equalizer(&mut self, eq: Equalizer) -> Result<(), PlaybackError> {
+        let (before, after) = (equalizer_filters(&self.settings.equalizer), equalizer_filters(&eq));
+        self.settings.equalizer = eq;
+        if before == after {
+            return Ok(());
+        }
+        let at = self.position();
         self.restart(at)
     }
 

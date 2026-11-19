@@ -94,6 +94,11 @@ impl PlayerSize {
 pub const CONTROLS_SHOWN: std::time::Duration = std::time::Duration::from_secs(4);
 
 /// The picture settings the playback understands.
+/// The equalizer a settings value asks for.
+fn equalizer_of(s: &sondra_player::Settings) -> sondra_playback::Equalizer {
+    sondra_playback::Equalizer { on: s.eq_enabled, gains: [s.eq_band1, s.eq_band2, s.eq_band3, s.eq_band4, s.eq_band5] }
+}
+
 fn picture_of(settings: &sondra_player::Settings) -> sondra_playback::Picture {
     sondra_playback::Picture { brightness: settings.brightness, contrast: settings.contrast, saturation: settings.saturation, mirror: settings.mirror }
 }
@@ -228,6 +233,7 @@ impl PlayerState {
                 }
                 playback.set_boost(self.settings.boost as f32);
                 let _ = playback.set_night(self.settings.night);
+                let _ = playback.set_equalizer(equalizer_of(&self.settings));
                 let _ = playback.set_picture(picture_of(&self.settings));
                 self.playback = Some(playback);
                 self.load_subtitles(&path);
@@ -332,10 +338,11 @@ impl PlayerState {
 
     /// Puts the picture and sound settings onto what plays.
     fn apply_look(&mut self) {
-        let (boost, night, picture) = (self.settings.boost as f32, self.settings.night, picture_of(&self.settings));
+        let (boost, night, picture, eq) = (self.settings.boost as f32, self.settings.night, picture_of(&self.settings), equalizer_of(&self.settings));
         if let Some(p) = self.playback.as_mut() {
             p.set_boost(boost);
             let _ = p.set_night(night);
+            let _ = p.set_equalizer(eq);
             let _ = p.set_picture(picture);
         }
         self.keep_settings();
@@ -1101,6 +1108,50 @@ impl Shell {
                     })),
                 ));
             }
+            // The equalizer: five bands and the presets of the web player.
+            {
+                let mut presets = div().flex().flex_wrap().gap(px(6.));
+                for (name, gains) in sondra_playback::EQ_PRESETS {
+                    let me = me.clone();
+                    let chosen = st.eq_preset == name;
+                    presets = presets.child(ui.chip(format!("eq-{name}"), name, chosen).accessible_name(format!("Entzerrer: {name}")).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        let s = &mut p.settings;
+                        [s.eq_band1, s.eq_band2, s.eq_band3, s.eq_band4, s.eq_band5] = gains;
+                        s.eq_preset = name.to_string();
+                        s.eq_enabled = true;
+                        p.apply_look();
+                    })));
+                }
+                let bands = [st.eq_band1, st.eq_band2, st.eq_band3, st.eq_band4, st.eq_band5];
+                let mut sliders = div().flex().flex_col().gap(px(8.));
+                for (n, ((label, hz), gain)) in sondra_playback::EQ_BANDS.iter().zip(bands).enumerate() {
+                    let me = me.clone();
+                    let shown = if gain.abs() < 1e-9 { "0 dB".to_string() } else { format!("{}{} dB", if gain > 0.0 { "+" } else { "−" }, format!("{}", gain.abs()).replace('.', ",")) };
+                    sliders = sliders.child(ui.slider(format!("eq-band-{}", n + 1), format!("{label} ({hz} Hz)"), ((gain + 12.0) / 24.0) as f32).step(0.5 / 24.0).says(shown).on_change(move |frac, _, app| Self::player_do(&me, app, move |p| {
+                        let gain = ((f64::from(frac) * 24.0 - 12.0) * 2.0).round() / 2.0;
+                        let s = &mut p.settings;
+                        match n {
+                            0 => s.eq_band1 = gain,
+                            1 => s.eq_band2 = gain,
+                            2 => s.eq_band3 = gain,
+                            3 => s.eq_band4 = gain,
+                            _ => s.eq_band5 = gain,
+                        }
+                        s.eq_preset = "Eigene".to_string();
+                        s.eq_enabled = true;
+                        p.apply_look();
+                    })));
+                }
+                let on = st.eq_enabled;
+                let toggle = {
+                    let me = me.clone();
+                    ui.chip("entzerrer-an", "Entzerrer an", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        p.settings.eq_enabled = !on;
+                        p.apply_look();
+                    }))
+                };
+                body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Entzerrer")).child(div().flex().flex_wrap().gap(px(6.)).child(toggle)).child(presets).child(sliders));
+            }
             {
                 let me = me.clone();
                 let on = p.pause_on_minimize;
@@ -1128,6 +1179,13 @@ impl Shell {
                         p.settings.boost = d.boost;
                         p.settings.night = d.night;
                         p.settings.fit = d.fit;
+                        p.settings.eq_band1 = d.eq_band1;
+                        p.settings.eq_band2 = d.eq_band2;
+                        p.settings.eq_band3 = d.eq_band3;
+                        p.settings.eq_band4 = d.eq_band4;
+                        p.settings.eq_band5 = d.eq_band5;
+                        p.settings.eq_preset = d.eq_preset.clone();
+                        p.settings.eq_enabled = d.eq_enabled;
                         p.apply_look();
                     })))
                     .action(ui.button("bild-schliessen", "Schliessen").primary().on_click(move |_, app| Self::player_do(&close, app, |p| p.look_open = false)))
