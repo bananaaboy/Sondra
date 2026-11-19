@@ -20,6 +20,23 @@ import { chromagram, estimateTuning } from '../src/lib/chroma'
 import { decodePrint, encodePrint, fingerprint, locate, longestShared, PRINT_FPS, PRINT_RATE, slice } from '../src/lib/introPrint'
 import { estimateChords, estimateKey } from '../src/lib/key'
 import { chordsToMidiNotes, writeMidi } from '../src/lib/midi'
+import {
+  compressAudio,
+  copyRange,
+  duplicateRange,
+  echo,
+  fadeRange,
+  highpassFilter,
+  insertAt,
+  insertSilence,
+  learnNoise,
+  lowpassFilter,
+  muteRange,
+  processRange,
+  removeNoise,
+  shelfEq,
+} from '../src/lib/effects'
+import { setChannels } from '../src/lib/edit'
 import { DEFAULT_SEGMENTATION, midiName, segmentNotes, trackPitch } from '../src/lib/pitch'
 
 const outDir = 'native/sondra-media/tests/golden'
@@ -593,4 +610,62 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   })
   writeFileSync(`${outDir}/chop.json`, `${JSON.stringify({ rate: sr, seconds, hitsAt, plans }, null, 1)}\n`)
   console.log(`Zerschneiden: ${plans.map((p) => `${p.name} ${p.slices.length}`).join(', ')}`)
+}
+
+
+/* -- Ton-Editor und Mikrofon: Filter, Dynamik, Rauschen, Echo, Bereiche ------------------------------ */
+
+{
+  const sr = 8000
+  // A voice-like tone with a hum and a hiss under it, from an integer generator; two channels, the second a little different.
+  const signal = (seconds: number, salt: number) => {
+    const out = new Float32Array(sr * seconds)
+    let state = 777 + salt
+    for (let i = 0; i < out.length; i += 1) {
+      state = (Math.imul(state, 1103515245) + 12345) >>> 0
+      const noise = ((state >>> 8) / 2 ** 24) * 2 - 1
+      const t = i / sr
+      const talking = t % 1.3 < 0.7
+      out[i] = 0.02 * noise + 0.08 * Math.sin(2 * Math.PI * 50 * t) + (talking ? 0.4 * Math.sin(2 * Math.PI * (200 + 20 * salt) * t) * (0.5 + 0.5 * Math.sin(2 * Math.PI * 2 * t)) : 0)
+    }
+    return out
+  }
+  const base = { channels: [signal(3, 0), signal(3, 1)], sampleRate: sr }
+  const every = (a: Float32Array | number[], n: number) => Array.from(a).filter((_, i) => i % n === 0)
+  const view = (audio: { channels: Float32Array[] }, n: number) => ({ channels: audio.channels.length, frames: audio.channels[0].length, left: every(audio.channels[0], n), right: every(audio.channels[audio.channels.length - 1], n) })
+  const compressed = compressAudio(base, -24, 4)
+  const compressedPlain = compressAudio(base, -30, 8, { attackMs: 2, releaseMs: 80, makeup: false })
+  const noiseOnly = { channels: [signal(2, 5).map((v, i) => (i < 0 ? v : 0.02 * Math.sin(i * 12.9898) * Math.cos(i * 0.37)))], sampleRate: sr }
+  const profile = learnNoise(noiseOnly)
+  const mono = { channels: [base.channels[0]], sampleRate: sr }
+  const reduced = removeNoise(mono, profile, 18)
+  const cases = {
+    rate: sr,
+    highpass: view(highpassFilter(base, 150), 97),
+    lowpass: view(lowpassFilter(base, 1500), 97),
+    lowpassHigh: view(lowpassFilter(base, 9000), 97),
+    shelf: view(shelfEq(base, 6, -4), 97),
+    shelfBass: view(shelfEq(base, -5, 0), 97),
+    compress: { ...view(compressed.audio, 97), maxReductionDb: compressed.maxReductionDb, makeupDb: compressed.makeupDb },
+    compressPlain: { ...view(compressedPlain.audio, 97), maxReductionDb: compressedPlain.maxReductionDb, makeupDb: compressedPlain.makeupDb },
+    profile: every(profile, 13),
+    profileLength: profile.length,
+    reduced: view(reduced, 89),
+    echoExtend: view(echo(base, 180, 0.5, 0.6, true), 101),
+    echoPlain: view(echo(base, 90, 0.8, 0.4, false), 101),
+    range: view(await processRange(base, 0.5, 2.0, (part) => highpassFilter(part, 400)), 97),
+    rangeMono: view(await processRange(base, 0.2, 1.1, (part) => setChannels(part, 1)), 97),
+    copy: view(copyRange(base, 0.4, 1.7), 53),
+    insert: view(insertAt(base, 1.0, copyRange(base, 0.2, 0.9)), 97),
+    insertMono: view(insertAt(base, 2.5, setChannels(copyRange(base, 0.2, 0.9), 1)), 97),
+    silence: view(insertSilence(base, 0.7, 0.35), 97),
+    duplicate: view(duplicateRange(base, 1.1, 1.9), 97),
+    mute: view(muteRange(base, 0.6, 1.4), 53),
+    fadeIn: view(fadeRange(base, 0.5, 1.5, 'in'), 53),
+    fadeOut: view(fadeRange(base, 1.0, 2.5, 'out'), 53),
+    toMono: view(setChannels(base, 1), 97),
+    toThree: view(setChannels(base, 3), 97),
+  }
+  writeFileSync(`${outDir}/effects.json`, `${JSON.stringify(cases, null, 1)}\n`)
+  console.log(`Effekte: Kompressor ${compressed.maxReductionDb.toFixed(1)} dB, Profil mit ${profile.length} Bändern`)
 }

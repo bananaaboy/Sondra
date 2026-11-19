@@ -27,6 +27,7 @@ pub mod chop;
 pub mod chroma;
 pub mod convert;
 pub mod duck;
+pub mod effects;
 pub mod ffmpeg;
 pub mod fft;
 pub mod image_ops;
