@@ -317,3 +317,63 @@ fn over_an_episode_the_opening_can_be_skipped_and_in_the_credits_the_next_is_off
     w.watch(0.3);
     assert!(w.tree().find(Role::ListItem, "Serie - 02.mp4").unwrap().description.as_ref().is_some_and(|d| d.contains("läuft")));
 }
+
+#[gpui::test]
+fn bookmarks_are_set_with_b_found_with_shift_arrows_listed_and_copied_as_chapters(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let path = film(tmp.path(), "film.mp4", 40);
+    let memory = tmp.path().join("Abspielen.json");
+    let mut w = open(cx);
+    let store = sondra_app::store::FileStore::open(&memory);
+    w.shell.update(w.cx, |shell, cx| shell.open_player_memory(store, cx));
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![path.clone()], cx));
+    w.watch(1.5);
+    let focus = |w: &mut Window| {
+        let id = w.tree().find(Role::Slider, "Stelle im Film").unwrap().id;
+        w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: id, data: None }, window, cx));
+    };
+    focus(&mut w);
+    w.cx.simulate_keystrokes("b");
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Lesezeichen (1)").is_some(), "one bookmark");
+    w.cx.simulate_keystrokes("b");
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Lesezeichen (1)").is_some(), "the same place twice is one bookmark");
+    // Jump on, set another, and go back by Shift+Left.
+    w.shell.update(w.cx, |shell, cx| {
+        shell.player_seek(20.0);
+        cx.notify();
+    });
+    w.watch(0.6);
+    focus(&mut w);
+    w.cx.simulate_keystrokes("b");
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Lesezeichen (2)").is_some());
+    w.cx.simulate_keystrokes("shift-left");
+    w.watch(0.5);
+    assert!(w.position() < 5.0, "back to the first bookmark: {}", w.position());
+    w.cx.simulate_keystrokes("shift-right");
+    w.watch(0.5);
+    assert!(w.position() >= 19.5, "and on to the second: {}", w.position());
+
+    // The list, and the chapters.
+    w.press(Role::Button, "Lesezeichen (2)");
+    assert!(w.tree().find(Role::Dialog, "Lesezeichen").is_some());
+    assert!(w.tree().find(Role::ListItem, "Lesezeichen 2").is_some());
+    w.press(Role::Button, "Als Kapitel kopieren");
+    let copied = w.cx.read_from_clipboard().and_then(|c| c.text()).unwrap_or_default();
+    let lines: Vec<&str> = copied.lines().collect();
+    assert_eq!(lines.len(), 3, "{copied}");
+    assert_eq!(lines[0], "0:00 Anfang", "a beginning is added when no bookmark is at 0:00");
+    assert!(lines[2].starts_with("0:2") && lines[2].ends_with("Kapitel 2"), "{copied}");
+    // Taken away, and kept for the file: a new start of the player finds the one that stayed.
+    w.press(Role::Button, "Lesezeichen 2 entfernen");
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Button, "Lesezeichen (1)").is_some());
+    drop(w);
+    let kept = std::fs::read_to_string(&memory).unwrap();
+    assert!(kept.contains("sondra:abspielen:marken") && kept.contains("film.mp4|"), "{kept}");
+}

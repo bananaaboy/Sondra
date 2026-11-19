@@ -123,6 +123,11 @@ impl RenderOnce for Slider {
             })
             .on_key_down(move |event, window, cx| {
                 let Some(change) = &key else { return };
+                // A key with Shift, Ctrl or Alt belongs to whoever asked for it further out (Shift+arrows).
+                let m = &event.keystroke.modifiers;
+                if m.shift || m.control || m.alt || m.platform {
+                    return;
+                }
                 let to = match event.keystroke.key.as_str() {
                     "left" | "down" => Some((current - step).max(0.0)),
                     "right" | "up" => Some((current + step).min(1.0)),

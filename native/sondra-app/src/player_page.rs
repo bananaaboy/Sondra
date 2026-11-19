@@ -6,12 +6,12 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui::{div, img, prelude::*, px, AnyElement, App, Context, Entity, ImageSource, ObjectFit, PathPromptOptions, RenderImage, SharedString, Window};
+use gpui::{div, img, prelude::*, px, AnyElement, App, ClipboardItem, Context, Entity, FocusHandle, ImageSource, ObjectFit, PathPromptOptions, RenderImage, SharedString, Window};
 use image::{Frame as ImageFrame, RgbaImage};
 use smallvec::smallvec;
 use sondra_media::Ffmpeg;
 use sondra_player::cues::{cues_at, parse_cues, Cue};
-use sondra_player::{clock, minutes_seconds, player_kind, rate_label, remember_place, remembered_place, stem_of, Kind, Repeat, Settings, RATES};
+use sondra_player::{chapters_text, clock, mark_name, marks_for, minutes_seconds, neighbour_mark, save_marks, with_mark, Mark, player_kind, rate_label, remember_place, remembered_place, stem_of, Kind, Repeat, Settings, RATES};
 use sondra_playback::{Playback, State};
 use sondra_ui::{family, size, NoticeKind, Ui};
 
@@ -22,6 +22,7 @@ use crate::store::FileStore;
 
 const SETTINGS_KEY: &str = "sondra:abspielen";
 const PLACES_KEY: &str = "sondra:abspielen:stellen";
+const MARKS_KEY: &str = "sondra:abspielen:marken";
 
 pub struct PlayerState {
     pub ffmpeg: Option<Ffmpeg>,
@@ -41,6 +42,12 @@ pub struct PlayerState {
     armed: Option<String>,
     /// What this file ticked off on the Merkliste, and the entry as it was before.
     pub ticked: Option<Ticked>,
+    /// The bookmarks of the file on the stage, in order of time.
+    pub marks: Vec<Mark>,
+    /// The window with the bookmarks is open.
+    pub marks_open: bool,
+    pub marks_first: FocusHandle,
+    pub marks_last: FocusHandle,
 }
 
 pub struct Ticked {
@@ -50,7 +57,7 @@ pub struct Ticked {
 }
 
 impl PlayerState {
-    pub fn new() -> PlayerState {
+    pub fn new(cx: &mut Context<Shell>) -> PlayerState {
         PlayerState {
             ffmpeg: Ffmpeg::locate(),
             playback: None,
@@ -64,6 +71,10 @@ impl PlayerState {
             saved_at: None,
             armed: None,
             ticked: None,
+            marks: Vec::new(),
+            marks_open: false,
+            marks_first: cx.focus_handle().tab_stop(true),
+            marks_last: cx.focus_handle().tab_stop(true),
         }
     }
 
@@ -112,6 +123,7 @@ impl PlayerState {
         self.index = index.min(self.queue.len().saturating_sub(1));
         self.error = None;
         self.cues.clear();
+        self.marks_open = false;
         self.playback = None;
         self.image = None;
         let Some(path) = self.current_path().cloned() else { return };
@@ -129,6 +141,7 @@ impl PlayerState {
                 }
                 self.playback = Some(playback);
                 self.load_subtitles(&path);
+                self.load_marks();
             }
             Err(e) => self.error = Some(e.to_string()),
         }
@@ -183,9 +196,56 @@ impl PlayerState {
             "up" => self.volume_by(0.05),
             "down" => self.volume_by(-0.05),
             "m" => self.toggle_mute(),
+            "b" => self.add_mark(),
             _ => return false,
         }
         true
+    }
+
+    fn file_key(&self) -> Option<(String, u64)> {
+        let path = self.current_path()?;
+        Some((path.file_name()?.to_string_lossy().into_owned(), std::fs::metadata(path).ok()?.len()))
+    }
+
+    fn load_marks(&mut self) {
+        use sondra_merk::folder_memory::Store;
+        self.marks.clear();
+        let (Some((name, size)), Some(store)) = (self.file_key(), self.memory.as_ref()) else { return };
+        self.marks = marks_for(store.get_item(MARKS_KEY).as_deref(), &name, size);
+    }
+
+    fn keep_marks(&mut self) {
+        use sondra_merk::folder_memory::Store;
+        let Some((name, size)) = self.file_key() else { return };
+        let next = self.memory.as_ref().map(|store| save_marks(store.get_item(MARKS_KEY).as_deref(), &name, size, &self.marks));
+        if let (Some(next), Some(store)) = (next, self.memory.as_mut()) {
+            store.set_item(MARKS_KEY, next);
+        }
+    }
+
+    /// A bookmark where the film is, unless one is there already (a second apart is the same place).
+    pub fn add_mark(&mut self) {
+        let Some(at) = self.playback.as_ref().map(|p| p.position()) else { return };
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+        let luck = format!("{:04x}", now % 0xffff);
+        let (marks, _) = with_mark(&self.marks, at, now, &luck);
+        self.marks = marks;
+        self.keep_marks();
+    }
+
+    /// The step to the next or previous bookmark (a step back lands on the one before, not the one just passed).
+    pub fn jump_mark(&mut self, forward: bool) {
+        let Some(time) = self.playback.as_ref().map(|p| p.position()) else { return };
+        if let Some(at) = neighbour_mark(&self.marks, time, forward).map(|m| m.at) {
+            if let Some(p) = self.playback.as_mut() {
+                let _ = p.seek(at);
+            }
+        }
+    }
+
+    pub fn remove_mark(&mut self, id: &str) {
+        self.marks.retain(|m| m.id != id);
+        self.keep_marks();
     }
 
     /// A subtitle file with the name of the film, beside it, goes with it.
@@ -243,12 +303,6 @@ impl PlayerState {
             self.keep_place(false);
         }
         self.playback.as_ref().is_some_and(|p| p.state() == State::Playing)
-    }
-}
-
-impl Default for PlayerState {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -540,7 +594,12 @@ impl Shell {
                     })
                 })
         };
-        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(mute).child(volume);
+        let marks_button = {
+            let me = me.clone();
+            let n = p.marks.len();
+            ui.button("lesezeichen", if n == 0 { "Lesezeichen".to_string() } else { format!("Lesezeichen ({n})") }).small().on_click(move |_, app| Self::player_do(&me, app, |p| p.marks_open = true))
+        };
+        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(marks_button).child(mute).child(volume);
         page = page
             .child(div().flex().items_baseline().justify_between().gap(px(12.)).child(ui.heading("Abspielen")).child({
                 let me = me.clone();
@@ -552,6 +611,73 @@ impl Shell {
             .child(seek)
             .child(div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(controls).child(bottom));
         page.child(self.player_queue(ui, cx)).into_any_element()
+    }
+
+    /// The window with the bookmarks of the file: each jumps there, can go, and all of them can be copied as
+    /// chapters for a description.
+    pub(crate) fn player_overlay(&self, ui: Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let p = &self.player;
+        if !p.marks_open {
+            return None;
+        }
+        let me = cx.entity();
+        let c = ui.c;
+        let mut list = div().flex().flex_col().max_h(px(280.));
+        if p.marks.is_empty() {
+            list = list.child(ui.prose("Noch keine Lesezeichen. Mit B setzen Sie eines dort, wo der Film gerade ist."));
+        }
+        for (n, mark) in p.marks.iter().enumerate() {
+            let (go, away) = (me.clone(), me.clone());
+            let (id, at) = (mark.id.clone(), mark.at);
+            let name = mark_name(&p.marks, n);
+            let says = format!("{} · {}", clock(mark.at), name);
+            list = list.child(Line {
+                colors: c,
+                id: format!("marke-{n}").into(),
+                name: name.clone().into(),
+                says: says.clone().into(),
+                first: n == 0,
+                tile: None,
+                selected: false,
+                body: vec![
+                    div().flex_1().min_w(px(0.)).child(ui.value(says)).into_any_element(),
+                    ui.button(format!("marke-weg-{n}"), "Entfernen").small().accessible_name(format!("{name} entfernen")).on_click(move |_, app| {
+                        let id = id.clone();
+                        Self::player_do(&away, app, move |p| p.remove_mark(&id))
+                    }).into_any_element(),
+                ],
+                on_open: std::rc::Rc::new(move |_, app| {
+                    Self::player_do(&go, app, move |p| {
+                        if let Some(pb) = p.playback.as_mut() {
+                            let _ = pb.seek(at);
+                        }
+                        p.marks_open = false;
+                    })
+                }),
+            });
+        }
+        let marks = p.marks.clone();
+        let copy_me = me.clone();
+        let close_me = me.clone();
+        let (first, last) = (p.marks_first.clone(), p.marks_last.clone());
+        Some(
+            ui.dialog("lesezeichen-fenster", "Lesezeichen")
+                .width(560.)
+                .child(list)
+                .action(
+                    ui.button("kapitel-kopieren", "Als Kapitel kopieren")
+                        .primary()
+                        .focus_handle(first.clone())
+                        .on_click(move |_, app| {
+                            app.write_to_clipboard(ClipboardItem::new_string(chapters_text(&marks)));
+                            let _ = &copy_me;
+                        }),
+                )
+                .action(ui.button("lesezeichen-schliessen", "Schliessen").focus_handle(last.clone()).on_click(move |_, app| Self::player_do(&close_me, app, |p| p.marks_open = false)))
+                .keeps_focus_between(first, last)
+                .on_close(move |_, app| Self::player_do(&me, app, |p| p.marks_open = false))
+                .into_any_element(),
+        )
     }
 
     /// What is queued; a click plays that one.

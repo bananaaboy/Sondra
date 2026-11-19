@@ -107,7 +107,7 @@ impl Shell {
                 .collect(),
             merk,
             folder,
-            player: PlayerState::new(),
+            player: PlayerState::new(cx),
             download,
             convert: ConvertState::new(),
             normalize: NormalizeState::new(),
@@ -802,7 +802,7 @@ impl Render for Shell {
             motion::BASE,
         );
 
-        let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else { None };
+        let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else { None };
         let header = div()
             .flex()
             .flex_col()
@@ -835,6 +835,15 @@ impl Render for Shell {
                     }
                     // The player's own keys, on its page: Space, the arrows, M — when nothing else took them.
                     let m = &event.keystroke.modifiers;
+                    if m.shift && !(m.control || m.alt || m.platform) && me.read(app).panel == Panel::Player && matches!(event.keystroke.key.as_str(), "left" | "right") {
+                        let forward = event.keystroke.key == "right";
+                        me.update(app, |shell, cx| {
+                            shell.player.jump_mark(forward);
+                            cx.notify();
+                        });
+                        app.stop_propagation();
+                        return;
+                    }
                     if !(m.control || m.alt || m.platform || m.shift) && me.read(app).panel == Panel::Player {
                         let key = event.keystroke.key.clone();
                         if me.update(app, |shell, cx| {
