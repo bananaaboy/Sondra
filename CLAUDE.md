@@ -486,16 +486,22 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
 - **Sondra nativ** (`native/`, 18.11.2026, Entscheidung des Nutzers: „komplett
   wechseln wie Discord“ — Electron raus, Rust und GPUI rein, FFmpeg nativ):
   ein Rust-Workspace neben der bestehenden App, kein Ersatz über Nacht.
-  **Stand: der Dienst als Programm für die Befehlszeile** (`sondra-core`: die geteilte
-  Merkliste lesen — SQLite und altes JSON —, entscheiden was geladen wird, was bei
-  einer Speichergrenze weg darf, wann geladen werden darf; `sondra-daemon`:
-  `run_round` sucht, räumt auf, lädt, alles Äußere hinter Traits; `sondra-drive`:
-  Anmeldung und lesender Client; `sondra-extract`: AniWorld und sechs Hoster,
-  HLS-Listen; `sondra-download`: Laden in eine Datei; `sondra-service`: das Programm
-  `sondra-dienst` mit Papierkorb, Netzteil, Wachhalten, Autostart — alles mit
-  nachgebauter Außenwelt getestet, nie gegen Google oder die echten Seiten). Kein
-  Fenster der App, kein Tray, keine Benachrichtigungen; yt-dlp und die übrigen
-  Seiten fehlen noch.
+  **Stand (19.11.2026):** der Dienst als Programm für die Befehlszeile (`sondra-core`,
+  `-daemon`, `-drive`, `-extract`, `-download`, `-service`, alles gegen nachgebaute Außenwelt) **und
+  ein Fenster** (`sondra-app`, Programm `sondra`): Kopfzeile, Reiter, Startseite, **Merkliste**
+  (Poster/Liste, Serienseite, +1, Entfernen mit Rückgängig; liest und schreibt dieselbe SQLite-Datei
+  wie die Website, eine fremde Datei wird nie überschrieben), **Ordner** (Platte lesen, Art/Suche/
+  Ordnung, Auswählen, Löschen nach Rückfrage in „Sondra-Papierkorb“ mit Fenster), **Abspielen**
+  (`sondra-playback`: FFmpeg in zwei Kindprogrammen, der gehörte Ton ist die Uhr; `sondra-audio`;
+  hakt ab 90 % ab, Vorspann/Nächste Folge, Untertitel) und **Herunterladen** (Adresse → Quelle →
+  Laden, Datei oder Folgenseite). Die Logik der Merkliste, des Ordners und des Players steht in
+  `sondra-merk` und `sondra-player` und ist gegen den Code der Website geprüft (`npm run
+  native:golden`); die Seiten sind in GPUIs Testfenster und auf echtem Windows über UI Automation
+  geprüft (CI „Native“: Jobs `app`, `uia`, `gallery`, `video`). **Noch nicht:** Tray,
+  Benachrichtigungen, Geräte, Handy spiegeln, die Werkzeuge (Umwandeln, Editoren …), Setup/Store,
+  Updates; Player-Einstellungen, Größen, Bild-in-Bild; yt-dlp. Kein Fenster hat ein echter Mensch
+  gesehen; die Bildschirmfotos der CI sind die einzige Sicht. Nichts davon ist auf einem echten
+  Handy oder mit echter Tonkarte gelaufen.
   Die Testdateien schreibt der Serializer der Website
   (`npm run native:fixture`), der Workflow „Native“ prüft sie auf Windows und
   Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern
