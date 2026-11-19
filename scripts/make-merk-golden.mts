@@ -40,12 +40,15 @@ process.env.TZ = 'Europe/Zurich'
 import { deriveLinkTitle, parseLinkEpisodeInfo } from '../src/lib/download'
 import {
   adoptRemovals,
+  allHistory,
+  allTags,
   calculateBingePlan,
   calculateMerklisteStats,
   caughtUp,
   createMerkItem,
   durationOfEpisode,
   formatWatchMinutes,
+  readMerklisteFile,
   itemProgress,
   itemRemainingMinutes,
   itemWatchedMinutes,
@@ -441,7 +444,77 @@ const recapCases = {
 const compareFull = titled.map((i) => i.title).concat(['apfel', 'Apfel', 'äpfel', 'Äpfel', 'apfel ', 'z', 'Z'])
 const fullOrder = [...compareFull].sort((a, b) => a.localeCompare(b, 'de'))
 
+/* Files read ------------------------------------------------------------------------------------ */
+
+const mal = `<?xml version="1.0" encoding="UTF-8" ?>
+<myanimelist><myinfo><user_name>x</user_name></myinfo>
+<anime><series_title><![CDATA[Frieren: Beyond Journey&#039;s End]]></series_title><series_episodes>28</series_episodes><my_watched_episodes>12</my_watched_episodes><my_score>9</my_score><my_status>Watching</my_status></anime>
+<anime><series_title>Dark &amp; Light</series_title><series_episodes>0</series_episodes><my_watched_episodes>5</my_watched_episodes><my_score>10</my_score><my_status><![CDATA[Completed]]></my_status></anime>
+<anime><series_title>Fertig Serie</series_title><series_episodes>12</series_episodes><my_watched_episodes>12</my_watched_episodes><my_score>1</my_score><my_status>fertig</my_status></anime>
+<anime><series_title>Mehr gesehen</series_title><series_episodes>12</series_episodes><my_watched_episodes>30</my_watched_episodes><my_score>0</my_score><my_status>On-Hold</my_status></anime>
+<anime><series_title>Abgebrochen</series_title><my_watched_episodes>2</my_watched_episodes><my_score>7</my_score><my_status>Dropped</my_status></anime>
+<anime><series_title>Plan</series_title><series_episodes>24</series_episodes><my_score>3</my_score><my_status>Plan to Watch</my_status></anime>
+<anime><series_title>   </series_title></anime>
+<anime><series_episodes>5</series_episodes></anime>
+<ANIME><SERIES_TITLE>Großbuchstaben</SERIES_TITLE></ANIME>
+</myanimelist>`
+const aniEntry = (extra: Record<string, unknown>) => ({ status: 'CURRENT', progress: 3, score: 8, media: { title: { userPreferred: 'Frieren', romaji: 'Sousou no Frieren' }, episodes: 28, coverImage: { large: 'https://a/l.jpg', medium: 'https://a/m.jpg' } }, ...extra })
+const aniEntries = [
+  aniEntry({}),
+  aniEntry({ status: 'completed', progress: 28, score: 0, scoreRaw: 90, media: { title: { english: 'Dark' }, episodes: 26, coverImage: { medium: 'https://a/m2.jpg' } } }),
+  aniEntry({ status: 'PAUSED', progress: 0, score: 5, media: { title: { romaji: 'Nur Romaji' }, episodes: null } }),
+  aniEntry({ status: 'DROPPED', progress: 7, score: 2.4, media: { title: 'Titel als Text' } }),
+  aniEntry({ status: 'PLANNING', progress: 99, score: 100, media: { title: { native: '日本語' }, episodes: 12 } }),
+  aniEntry({ status: null, progress: -4, score: 'x', media: {}, title: 'Titel am Eintrag' }),
+  aniEntry({ media: { title: {} } }),
+  { title: 'Ohne Media', progress: 1 },
+  null,
+  7,
+]
+const jsonItems = [{ id: 'j1', title: 'Aus JSON', updatedAt: T, status: 'done', seasons: [{ number: 1, episodes: 12, watched: [1, 2] }] }, null, 5, { id: 'j2', title: 'Zweite', updatedAt: T }]
+const sqliteFile = new Uint8Array((await import('node:fs')).readFileSync(`${outDir}/web.sqlite`))
+const fileInputs: [string, string | Uint8Array][] = [
+  ['mal', mal],
+  ['mal ohne Anime', '<myanimelist></myanimelist>'],
+  ['mal mit <anime> aber leer', '<anime></anime>'],
+  ['anilist array', JSON.stringify(aniEntries)],
+  ['anilist entries', JSON.stringify({ entries: aniEntries })],
+  ['anilist lists', JSON.stringify({ lists: [{ entries: aniEntries.slice(0, 3) }, { entries: aniEntries.slice(3) }, 7, null] })],
+  ['anilist leer', JSON.stringify({ lists: [] })],
+  ['export items', JSON.stringify({ kind: 'sondra-merkliste', version: 1, items: jsonItems })],
+  ['array', JSON.stringify(jsonItems)],
+  ['leeres Array', '[]'],
+  ['leeres Objekt', '{}'],
+  ['Objekt ohne items', JSON.stringify({ items: 5 })],
+  ['Text', 'das ist keine Liste'],
+  ['Zahl', '42'],
+  ['sqlite', sqliteFile],
+]
+const stripVolatile = (item: SavedLinkItem) => {
+  const { id: _id, updatedAt: _u, ...rest } = item
+  return rest
+}
+const fileCases = fileInputs.map(([name, input]) => {
+  try {
+    const result = readMerklisteFile(input)
+    return { name, input: typeof input === 'string' ? input : null, items: result.map(stripVolatile) }
+  } catch (error) {
+    return { name, input: typeof input === 'string' ? input : null, error: (error as Error).message }
+  }
+})
+const tagItems = [mk({ id: 't1', tags: ['Anime', 'liebling', ' Zebra ', 'anime', 'Äpfel'] }), mk({ id: 't2', tags: ['Anime', 'Comedy', '#x'] }), mk({ id: 't3' })]
+const historyItems = [
+  mk({ id: 'h1', history: [{ id: 'a', season: 1, episode: 1, at: 5 }, { id: 'b', season: 1, episode: 2, at: 9 }] }),
+  mk({ id: 'h2', history: [{ id: 'c', season: 2, episode: 1, at: 9 }, { id: 'd', season: 1, episode: 1, at: 1 }] }),
+]
+const filesOut = {
+  cases: fileCases,
+  tags: { items: tagItems.map((i) => ({ id: i.id, tags: i.tags })), result: allTags(tagItems) },
+  history: { items: historyItems.map((i) => ({ id: i.id, history: i.history })), result: allHistory(historyItems).map((h) => [h.item.id, h.entry.id]) },
+}
+
 const out = {
+  files: filesOut,
   plan: { cases: planCases, pace: paceCases, recent: recentCases, goals: goalCases, labels: labelCases, goalItem },
   recap: recapCases,
   fullOrder: { input: compareFull, sorted: fullOrder },

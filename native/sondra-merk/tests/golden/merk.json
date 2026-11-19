@@ -1,4 +1,1111 @@
 {
+ "files": {
+  "cases": [
+   {
+    "name": "mal",
+    "input": "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n<myanimelist><myinfo><user_name>x</user_name></myinfo>\n<anime><series_title><![CDATA[Frieren: Beyond Journey&#039;s End]]></series_title><series_episodes>28</series_episodes><my_watched_episodes>12</my_watched_episodes><my_score>9</my_score><my_status>Watching</my_status></anime>\n<anime><series_title>Dark &amp; Light</series_title><series_episodes>0</series_episodes><my_watched_episodes>5</my_watched_episodes><my_score>10</my_score><my_status><![CDATA[Completed]]></my_status></anime>\n<anime><series_title>Fertig Serie</series_title><series_episodes>12</series_episodes><my_watched_episodes>12</my_watched_episodes><my_score>1</my_score><my_status>fertig</my_status></anime>\n<anime><series_title>Mehr gesehen</series_title><series_episodes>12</series_episodes><my_watched_episodes>30</my_watched_episodes><my_score>0</my_score><my_status>On-Hold</my_status></anime>\n<anime><series_title>Abgebrochen</series_title><my_watched_episodes>2</my_watched_episodes><my_score>7</my_score><my_status>Dropped</my_status></anime>\n<anime><series_title>Plan</series_title><series_episodes>24</series_episodes><my_score>3</my_score><my_status>Plan to Watch</my_status></anime>\n<anime><series_title>   </series_title></anime>\n<anime><series_episodes>5</series_episodes></anime>\n<ANIME><SERIES_TITLE>Großbuchstaben</SERIES_TITLE></ANIME>\n</myanimelist>",
+    "items": [
+     {
+      "url": "",
+      "title": "Frieren: Beyond Journey's End",
+      "language": "auto",
+      "season": 1,
+      "episode": 13,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 28,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       }
+      ],
+      "rating": 5,
+      "tags": [
+       "MAL"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Dark & Light",
+      "language": "auto",
+      "season": 1,
+      "episode": 6,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "done",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5
+        ]
+       }
+      ],
+      "rating": 5,
+      "tags": [
+       "MAL"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Fertig Serie",
+      "language": "auto",
+      "season": 1,
+      "episode": 12,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "done",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       }
+      ],
+      "rating": 1,
+      "tags": [
+       "MAL"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Mehr gesehen",
+      "language": "auto",
+      "season": 1,
+      "episode": 12,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "paused",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       }
+      ],
+      "tags": [
+       "MAL"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Abgebrochen",
+      "language": "auto",
+      "season": 1,
+      "episode": 3,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "dropped",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ],
+      "rating": 4,
+      "tags": [
+       "MAL"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Plan",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "later",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 24,
+        "watched": []
+       }
+      ],
+      "rating": 2,
+      "tags": [
+       "MAL"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Großbuchstaben",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "tags": [
+       "MAL"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "mal ohne Anime",
+    "input": "<myanimelist></myanimelist>",
+    "error": "Die MyAnimeList-Exportdatei enthält keine Anime-Einträge."
+   },
+   {
+    "name": "mal mit <anime> aber leer",
+    "input": "<anime></anime>",
+    "error": "Die MyAnimeList-Exportdatei enthält keine Anime-Einträge."
+   },
+   {
+    "name": "anilist array",
+    "input": "[{\"status\":\"CURRENT\",\"progress\":3,\"score\":8,\"media\":{\"title\":{\"userPreferred\":\"Frieren\",\"romaji\":\"Sousou no Frieren\"},\"episodes\":28,\"coverImage\":{\"large\":\"https://a/l.jpg\",\"medium\":\"https://a/m.jpg\"}}},{\"status\":\"completed\",\"progress\":28,\"score\":0,\"media\":{\"title\":{\"english\":\"Dark\"},\"episodes\":26,\"coverImage\":{\"medium\":\"https://a/m2.jpg\"}},\"scoreRaw\":90},{\"status\":\"PAUSED\",\"progress\":0,\"score\":5,\"media\":{\"title\":{\"romaji\":\"Nur Romaji\"},\"episodes\":null}},{\"status\":\"DROPPED\",\"progress\":7,\"score\":2.4,\"media\":{\"title\":\"Titel als Text\"}},{\"status\":\"PLANNING\",\"progress\":99,\"score\":100,\"media\":{\"title\":{\"native\":\"日本語\"},\"episodes\":12}},{\"status\":null,\"progress\":-4,\"score\":\"x\",\"media\":{},\"title\":\"Titel am Eintrag\"},{\"status\":\"CURRENT\",\"progress\":3,\"score\":8,\"media\":{\"title\":{}}},{\"title\":\"Ohne Media\",\"progress\":1},null,7]",
+    "items": [
+     {
+      "url": "",
+      "title": "Ohne Namen",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Ohne Namen",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Ohne Namen",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Ohne Namen",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Ohne Namen",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Titel am Eintrag",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Ohne Namen",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Ohne Media",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     }
+    ]
+   },
+   {
+    "name": "anilist entries",
+    "input": "{\"entries\":[{\"status\":\"CURRENT\",\"progress\":3,\"score\":8,\"media\":{\"title\":{\"userPreferred\":\"Frieren\",\"romaji\":\"Sousou no Frieren\"},\"episodes\":28,\"coverImage\":{\"large\":\"https://a/l.jpg\",\"medium\":\"https://a/m.jpg\"}}},{\"status\":\"completed\",\"progress\":28,\"score\":0,\"media\":{\"title\":{\"english\":\"Dark\"},\"episodes\":26,\"coverImage\":{\"medium\":\"https://a/m2.jpg\"}},\"scoreRaw\":90},{\"status\":\"PAUSED\",\"progress\":0,\"score\":5,\"media\":{\"title\":{\"romaji\":\"Nur Romaji\"},\"episodes\":null}},{\"status\":\"DROPPED\",\"progress\":7,\"score\":2.4,\"media\":{\"title\":\"Titel als Text\"}},{\"status\":\"PLANNING\",\"progress\":99,\"score\":100,\"media\":{\"title\":{\"native\":\"日本語\"},\"episodes\":12}},{\"status\":null,\"progress\":-4,\"score\":\"x\",\"media\":{},\"title\":\"Titel am Eintrag\"},{\"status\":\"CURRENT\",\"progress\":3,\"score\":8,\"media\":{\"title\":{}}},{\"title\":\"Ohne Media\",\"progress\":1},null,7]}",
+    "items": [
+     {
+      "url": "",
+      "title": "Frieren",
+      "language": "auto",
+      "season": 1,
+      "episode": 4,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 28,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "cover": "https://a/l.jpg",
+      "rating": 4,
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Dark",
+      "language": "auto",
+      "season": 1,
+      "episode": 26,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "done",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 26,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12,
+         13,
+         14,
+         15,
+         16,
+         17,
+         18,
+         19,
+         20,
+         21,
+         22,
+         23,
+         24,
+         25,
+         26
+        ]
+       }
+      ],
+      "cover": "https://a/m2.jpg",
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Nur Romaji",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "paused",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "rating": 5,
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Titel als Text",
+      "language": "auto",
+      "season": 1,
+      "episode": 8,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "dropped",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7
+        ]
+       }
+      ],
+      "rating": 2,
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "日本語",
+      "language": "auto",
+      "season": 1,
+      "episode": 12,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "later",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       }
+      ],
+      "rating": 5,
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Titel am Eintrag",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Ohne Media",
+      "language": "auto",
+      "season": 1,
+      "episode": 2,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1
+        ]
+       }
+      ],
+      "tags": [
+       "AniList"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "anilist lists",
+    "input": "{\"lists\":[{\"entries\":[{\"status\":\"CURRENT\",\"progress\":3,\"score\":8,\"media\":{\"title\":{\"userPreferred\":\"Frieren\",\"romaji\":\"Sousou no Frieren\"},\"episodes\":28,\"coverImage\":{\"large\":\"https://a/l.jpg\",\"medium\":\"https://a/m.jpg\"}}},{\"status\":\"completed\",\"progress\":28,\"score\":0,\"media\":{\"title\":{\"english\":\"Dark\"},\"episodes\":26,\"coverImage\":{\"medium\":\"https://a/m2.jpg\"}},\"scoreRaw\":90},{\"status\":\"PAUSED\",\"progress\":0,\"score\":5,\"media\":{\"title\":{\"romaji\":\"Nur Romaji\"},\"episodes\":null}}]},{\"entries\":[{\"status\":\"DROPPED\",\"progress\":7,\"score\":2.4,\"media\":{\"title\":\"Titel als Text\"}},{\"status\":\"PLANNING\",\"progress\":99,\"score\":100,\"media\":{\"title\":{\"native\":\"日本語\"},\"episodes\":12}},{\"status\":null,\"progress\":-4,\"score\":\"x\",\"media\":{},\"title\":\"Titel am Eintrag\"},{\"status\":\"CURRENT\",\"progress\":3,\"score\":8,\"media\":{\"title\":{}}},{\"title\":\"Ohne Media\",\"progress\":1},null,7]},7,null]}",
+    "items": [
+     {
+      "url": "",
+      "title": "Frieren",
+      "language": "auto",
+      "season": 1,
+      "episode": 4,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 28,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "cover": "https://a/l.jpg",
+      "rating": 4,
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Dark",
+      "language": "auto",
+      "season": 1,
+      "episode": 26,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "done",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 26,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12,
+         13,
+         14,
+         15,
+         16,
+         17,
+         18,
+         19,
+         20,
+         21,
+         22,
+         23,
+         24,
+         25,
+         26
+        ]
+       }
+      ],
+      "cover": "https://a/m2.jpg",
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Nur Romaji",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "paused",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "rating": 5,
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Titel als Text",
+      "language": "auto",
+      "season": 1,
+      "episode": 8,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "dropped",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7
+        ]
+       }
+      ],
+      "rating": 2,
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "日本語",
+      "language": "auto",
+      "season": 1,
+      "episode": 12,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "later",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       }
+      ],
+      "rating": 5,
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Titel am Eintrag",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "tags": [
+       "AniList"
+      ]
+     },
+     {
+      "url": "",
+      "title": "Ohne Media",
+      "language": "auto",
+      "season": 1,
+      "episode": 2,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1
+        ]
+       }
+      ],
+      "tags": [
+       "AniList"
+      ]
+     }
+    ]
+   },
+   {
+    "name": "anilist leer",
+    "input": "{\"lists\":[]}",
+    "error": "In der Datei steht keine Merkliste."
+   },
+   {
+    "name": "export items",
+    "input": "{\"kind\":\"sondra-merkliste\",\"version\":1,\"items\":[{\"id\":\"j1\",\"title\":\"Aus JSON\",\"updatedAt\":1700000000000,\"status\":\"done\",\"seasons\":[{\"number\":1,\"episodes\":12,\"watched\":[1,2]}]},null,5,{\"id\":\"j2\",\"title\":\"Zweite\",\"updatedAt\":1700000000000}]}",
+    "items": [
+     {
+      "url": "",
+      "title": "Aus JSON",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "done",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ]
+     },
+     {
+      "url": "",
+      "title": "Zweite",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     }
+    ]
+   },
+   {
+    "name": "array",
+    "input": "[{\"id\":\"j1\",\"title\":\"Aus JSON\",\"updatedAt\":1700000000000,\"status\":\"done\",\"seasons\":[{\"number\":1,\"episodes\":12,\"watched\":[1,2]}]},null,5,{\"id\":\"j2\",\"title\":\"Zweite\",\"updatedAt\":1700000000000}]",
+    "items": [
+     {
+      "url": "",
+      "title": "Aus JSON",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "done",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ]
+     },
+     {
+      "url": "",
+      "title": "Zweite",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     }
+    ]
+   },
+   {
+    "name": "leeres Array",
+    "input": "[]",
+    "error": "Die Merkliste in der Datei ist leer."
+   },
+   {
+    "name": "leeres Objekt",
+    "input": "{}",
+    "error": "In der Datei steht keine Merkliste."
+   },
+   {
+    "name": "Objekt ohne items",
+    "input": "{\"items\":5}",
+    "error": "In der Datei steht keine Merkliste."
+   },
+   {
+    "name": "Text",
+    "input": "das ist keine Liste",
+    "error": "Die Datei ist keine Merkliste — sie lässt sich weder als SQLite noch als JSON lesen."
+   },
+   {
+    "name": "Zahl",
+    "input": "42",
+    "error": "In der Datei steht keine Merkliste."
+   },
+   {
+    "name": "sqlite",
+    "input": null,
+    "items": [
+     {
+      "url": "",
+      "title": " frieren ",
+      "language": "auto",
+      "season": 1,
+      "episode": 9,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Dark",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "cover": "sondra:lokal"
+     },
+     {
+      "url": "",
+      "title": "Same One",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "Only Here",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching",
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2
+        ],
+        "cover": "sondra:lokal",
+        "parts": [
+         {
+          "episodes": 6,
+          "cover": "sondra:lokal"
+         },
+         {
+          "episodes": 6
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "url": "",
+      "title": "Back Again",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     },
+     {
+      "url": "",
+      "title": "New There",
+      "language": "auto",
+      "season": 1,
+      "episode": 1,
+      "mode": "video",
+      "audioFormat": "mp3",
+      "videoPref": "untouched",
+      "audioPref": "high",
+      "autoTranscribe": false,
+      "status": "watching"
+     }
+    ]
+   }
+  ],
+  "tags": {
+   "items": [
+    {
+     "id": "t1",
+     "tags": [
+      "Anime",
+      "liebling",
+      "Zebra",
+      "anime",
+      "Äpfel"
+     ]
+    },
+    {
+     "id": "t2",
+     "tags": [
+      "Anime",
+      "Comedy",
+      "x"
+     ]
+    },
+    {
+     "id": "t3"
+    }
+   ],
+   "result": [
+    "Anime",
+    "anime",
+    "Äpfel",
+    "Comedy",
+    "liebling",
+    "x",
+    "Zebra"
+   ]
+  },
+  "history": {
+   "items": [
+    {
+     "id": "h1",
+     "history": [
+      {
+       "id": "a",
+       "season": 1,
+       "episode": 1,
+       "at": 5
+      },
+      {
+       "id": "b",
+       "season": 1,
+       "episode": 2,
+       "at": 9
+      }
+     ]
+    },
+    {
+     "id": "h2",
+     "history": [
+      {
+       "id": "c",
+       "season": 2,
+       "episode": 1,
+       "at": 9
+      },
+      {
+       "id": "d",
+       "season": 1,
+       "episode": 1,
+       "at": 1
+      }
+     ]
+    }
+   ],
+   "result": [
+    [
+     "h1",
+     "b"
+    ],
+    [
+     "h2",
+     "c"
+    ],
+    [
+     "h1",
+     "a"
+    ],
+    [
+     "h2",
+     "d"
+    ]
+   ]
+  }
+ },
  "plan": {
   "cases": [
    {
