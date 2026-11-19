@@ -118,6 +118,51 @@ if ($null -ne $merk) {
     Check (($file -ne '') -and (Test-Path $file) -and ((Get-Item $file).Length -gt 4096)) 'the list was written to its file'
 }
 
+# The Ordner: the folder of the last time is offered, read when asked, a file is chosen and put into the bin
+# of Sondra, and taken out again. Real files on a real disk.
+$demo = $env:SONDRA_DEMO
+$ordner = Named 'Ordner' $CT::Button
+if ($null -ne $ordner -and $demo) {
+    Check (Invoke-It $ordner) 'the tab Ordner can be invoked'
+    $again = Wait-For '*wieder *ffnen' $CT::Button
+    Check ($null -ne $again) 'the folder of the last time is offered, not read on its own'
+    if ($null -ne $again) {
+        [void](Invoke-It $again)
+        $film = Wait-For 'film.mp4' $CT::ListItem
+        Check ($null -ne $film) 'the folder is read: its files are lines of a list'
+        Check ($null -ne (Named 'Frieren' $CT::ListItem)) 'and a subfolder is one too'
+        Check ($null -eq (Named 'Frieren S01E01.mkv' $CT::ListItem)) 'what lies in a subfolder is not there yet'
+        if ($null -ne $film) {
+            [void](Invoke-It $film)
+            $chosen = Wait-For '1 Datei ausgew*' $CT::Text
+            Check ($null -ne $chosen) 'a file can be chosen, and the page says how many'
+            $del = Wait-For 'L*schen *' $CT::Button
+            Check ($null -ne $del) 'a way to delete is there once something is chosen'
+            if ($null -ne $del) {
+                [void](Invoke-It $del)
+                $ask = Wait-For 'Datei l*schen?' $null
+                Check ($null -ne $ask) 'deleting asks first'
+                Check (Test-Path (Join-Path $demo 'film.mp4')) 'and nothing has gone yet'
+                $bin = Wait-For 'In den Papierkorb' $CT::Button
+                Check ($null -ne $bin) 'the question offers the bin'
+                Shot 'app-ordner.png'
+                if ($null -ne $bin) {
+                    [void](Invoke-It $bin)
+                    Check ($null -ne (Wait-For '1 Datei in den Papierkorb gelegt.' $CT::Text)) 'the file went into the bin, and the page says so'
+                    Check ((-not (Test-Path (Join-Path $demo 'film.mp4'))) -and (Test-Path (Join-Path $demo 'Sondra-Papierkorb\film.mp4'))) 'on disk it lies in Sondras bin'
+                    $undo = Wait-For 'R*ckg*ngig' $CT::Button
+                    Check ($null -ne $undo) 'and there is a way back'
+                    if ($null -ne $undo) {
+                        [void](Invoke-It $undo)
+                        Check ($null -ne (Wait-For 'film.mp4' $CT::ListItem)) 'undone, the file is a line again'
+                        Check (Test-Path (Join-Path $demo 'film.mp4')) 'and lies where it did'
+                    }
+                }
+            }
+        }
+    }
+}
+
 # A group of tabs is a menu: open it, find its tools, choose one.
 $group = Named 'Ton' $CT::Button
 Check ($null -ne $group) 'the group Ton is in the row'

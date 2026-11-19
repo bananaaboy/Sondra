@@ -178,6 +178,14 @@ jobs:
           # The app starts on an empty data folder of its own: the Merkliste check types a series in.
           $env:SONDRA_DATA = Join-Path $env:RUNNER_TEMP 'sondra-daten'
           New-Item -ItemType Directory -Force -Path $env:SONDRA_DATA | Out-Null
+          # A folder of films for the Ordner check, offered to the app as the one of the last time.
+          $env:SONDRA_DEMO = Join-Path $env:RUNNER_TEMP 'Anime'
+          New-Item -ItemType Directory -Force -Path (Join-Path $env:SONDRA_DEMO 'Frieren\Staffel 1') | Out-Null
+          foreach ($f in @('film.mp4', 'poster.png', 'notizen.txt', 'Frieren\Staffel 1\Frieren S01E01.mkv')) {
+            [IO.File]::WriteAllBytes((Join-Path $env:SONDRA_DEMO $f), (New-Object byte[] 4096))
+          }
+          $remembered = @{ 'sondra:ordner:pfad' = $env:SONDRA_DEMO } | ConvertTo-Json
+          [IO.File]::WriteAllText((Join-Path $env:SONDRA_DATA 'Ordner.json'), $remembered, (New-Object System.Text.UTF8Encoding($false)))
           $p = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput app-out.txt -RedirectStandardError app-err.txt
           Start-Sleep -Seconds 4
           if ($p.HasExited) {
@@ -216,5 +224,6 @@ jobs:
           path: |
             app-start.png
             app-merkliste.png
+            app-ordner.png
             app-menu.png
             app.txt
