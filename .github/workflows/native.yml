@@ -83,6 +83,13 @@ jobs:
           npm run verify:native-sqlite
           npm run verify:native-share
           npm run verify:native-devices
+      # The data channel against the website's own transfer code in a real Chromium, both directions.
+      - name: A browser and the native device send each other 20 MB
+        if: runner.os == 'Linux'
+        run: |
+          npx playwright-core install --with-deps chromium
+          cargo build --manifest-path native/Cargo.toml --locked -p sondra-devices --example rtc_peer
+          E2E_CHROMIUM="$(node -e "console.log(require('playwright-core').chromium.executablePath())")" npm run verify:native-rtc
 
   # The accessibility bridge, asked the way a screen reader asks: through Windows
   # UI Automation, about a real window. Names, roles, places, activation, toggling, focus.
