@@ -44,6 +44,8 @@ pub enum Op {
     Pitch(f64),
     /// Plays this much faster (2 = twice as fast, half as long) and keeps the pitch.
     Tempo(f64),
+    /// Clicks and crackle out, over the whole file (`declick.ts`).
+    RemoveClicks(crate::declick::ClickStrength),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -189,6 +191,18 @@ impl Editor {
                     let part = crate::timestretch::stretch_audio(&effects::copy_range(&self.audio, from, to), 1.0 / tempo, 2048);
                     (label, effects::insert_at(&edit::cut_range(&self.audio, from, to), from, &part))
                 }
+            }
+            Op::RemoveClicks(strength) => {
+                let (fixed, repaired) = crate::declick::remove_clicks(&self.audio, strength);
+                if repaired == 0 {
+                    return Err("Nichts gefunden, was wie ein Klick aussieht.".into());
+                }
+                let how = match strength {
+                    crate::declick::ClickStrength::Soft => "sanft",
+                    crate::declick::ClickStrength::Medium => "mittel",
+                    crate::declick::ClickStrength::Strong => "stark",
+                };
+                (format!("Klicks entfernt ({how}) · {repaired} {}", if repaired == 1 { "Stelle ausgebessert" } else { "Stellen ausgebessert" }), fixed)
             }
             Op::Reverb { seconds: s, mix } => (format!("Hall {} s · {place}", seconds(s)), effects::process_range(&self.audio, from, to, |p| effects::reverb(&p, s, mix, true))),
             Op::Cut => {

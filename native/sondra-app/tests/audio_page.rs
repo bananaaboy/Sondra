@@ -30,13 +30,17 @@ fn tone(seconds: f64) -> AudioData {
 }
 
 fn open<'a>(cx: &'a mut TestAppContext, name: std::path::PathBuf) -> Window<'a> {
+    open_with(cx, name, tone(4.0))
+}
+
+fn open_with<'a>(cx: &'a mut TestAppContext, name: std::path::PathBuf, audio: AudioData) -> Window<'a> {
     cx.update(|cx| {
         fonts::load(cx);
         bind_keys(cx);
     });
     let (shell, cx) = cx.add_window_view(move |window, cx| {
         let mut shell = Shell::new(window, cx);
-        shell.audio_load(tone(4.0), name, cx);
+        shell.audio_load(audio, name, cx);
         shell
     });
     let seen: Seen = Rc::default();
@@ -196,4 +200,32 @@ fn the_pitch_moves_without_the_length_and_the_tempo_changes_the_length_without_t
     // The same pitch in half the time: as many crossings per second as before.
     let per_second = |s: &[f32], from: usize, to: usize| crossings(&s[from..to]) as f64 / ((to - from) as f64 / 8000.0);
     assert!((per_second(&fast, 2000, 14000) / per_second(&before, 2000, 30000) - 1.0).abs() < 0.1);
+}
+
+#[gpui::test]
+fn clicks_are_taken_out_over_the_whole_file_and_a_clean_file_says_there_was_nothing(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    // A quiet tone with three ticks in it.
+    let mut damaged = tone(4.0);
+    for channel in &mut damaged.channels {
+        for at in [5000usize, 12000, 20000] {
+            channel[at] += 0.9;
+        }
+    }
+    let mut w = open_with(cx, tmp.path().join("Platte.wav"), damaged);
+    w.press(Role::Button, "Werkzeug Säubern");
+    w.press(Role::Button, "Mittel");
+    w.settle();
+    let after = w.shell.read_with(w.cx, |s, _| s.audio_take().unwrap().channels[0].clone());
+    assert_eq!(after.len(), 32000);
+    let clean = tone(4.0).channels[0].clone();
+    for at in [5000usize, 12000, 20000] {
+        assert!((after[at] - clean[at]).abs() < 0.05, "the tick at {at} is filled with what the tone would have been: {} against {}", after[at], clean[at]);
+    }
+    assert!(w.said("Klicks entfernt (mittel) · 3 Stellen ausgebessert"), "{:?}", w.labels());
+
+    // The same again: nothing is left to find, and it says so instead of writing a step into the history.
+    w.press(Role::Button, "Mittel");
+    w.settle();
+    assert!(w.said("Nichts gefunden, was wie ein Klick aussieht."), "{:?}", w.labels());
 }

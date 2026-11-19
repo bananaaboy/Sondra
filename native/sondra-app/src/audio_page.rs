@@ -12,6 +12,7 @@ use gpui::{canvas, div, prelude::*, px, AnyElement, Bounds, Context, MouseButton
 use sondra_media::audio::{decode_file, write_wav_f32};
 use sondra_media::convert::Settings as ConvertSettings;
 use sondra_media::editor::{Editor, Op};
+use sondra_media::declick::ClickStrength;
 use sondra_media::{Cancel, Ffmpeg};
 use sondra_a11y::{accessible, Role};
 use sondra_ui::{radius, NoticeKind, Ui};
@@ -490,6 +491,8 @@ impl Shell {
                     .child(ui.prose("Wählen Sie eine Stelle, an der nur das Rauschen zu hören ist (mindestens eine Fünftelsekunde), und lassen Sie es lernen. Danach lässt es sich abziehen — in der Auswahl oder überall."))
                     .child(group("Rauschen", vec![learn.into_any_element()]))
                     .child(group("Rauschen entfernen, bis zu", [6.0, 12.0, 18.0].iter().map(|d| op(format!("rauschen-{d}"), format!("{} dB", db(*d).replace('−', "")), Op::RemoveNoise { max_cut_db: *d }).disabled(busy || !editor.has_noise_profile()).into_any_element()).collect()))
+                    .child(ui.prose("Klicks und Knackser: alte Platten, Kabelknacken, Schmatzen am Mikrofon. Schläge und Konsonanten bleiben. Gesucht wird in der ganzen Datei."))
+                    .child(group("Klicks entfernen", [("sanft", "Sanft", ClickStrength::Soft), ("mittel", "Mittel", ClickStrength::Medium), ("stark", "Stark", ClickStrength::Strong)].iter().map(|(id, label, strength)| op(format!("klicks-{id}"), label.to_string(), Op::RemoveClicks(*strength)).into_any_element()).collect()))
                     .child(group("Sonst", vec![op("gleichspannung".into(), "Gleichspannung entfernen".into(), Op::RemoveDc).into_any_element()]));
             }
             Tool::Room => {

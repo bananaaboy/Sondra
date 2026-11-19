@@ -22,6 +22,7 @@ import { estimateChords, estimateKey } from '../src/lib/key'
 import { chordsToMidiNotes, writeMidi } from '../src/lib/midi'
 import { extractAddresses } from '../src/lib/download'
 import { pitchShift, resampleByRatio, stretchAudio, timeStretch } from '../src/lib/timestretch'
+import { removeClicks, type ClickStrength } from '../src/lib/declick'
 import {
   compressAudio,
   copyRange,
@@ -926,4 +927,41 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
     `${JSON.stringify({ rate, n, stretches, shifts, half: { length: half.channels[0].length, left: every(half.channels[0], 61) }, resampled }, null, 1)}\n`,
   )
   console.log('Tonhöhe und Tempo: ' + stretches.length + ' Dehnungen, ' + shifts.length + ' Verschiebungen')
+}
+
+{
+  const dir = 'native/sondra-media/tests/golden'
+  const rate = 16000
+  const n = 12000
+  const left = new Float32Array(n)
+  const right = new Float32Array(n)
+  let seed = 11
+  for (let i = 0; i < n; i += 1) {
+    seed = (seed * 1664525 + 1013904223) >>> 0
+    const noise = (seed / 0xffffffff - 0.5) * 0.02
+    left[i] = 0.4 * Math.sin((2 * Math.PI * 220 * i) / rate) + 0.15 * Math.sin((2 * Math.PI * 1330 * i) / rate) + noise
+    right[i] = 0.3 * Math.sin((2 * Math.PI * 330 * i) / rate) + noise
+  }
+  // Damage: one sample, two, four, in the left channel; one in the right at another place; and a burst of
+  // eighty samples that is a drum, not damage, and must be left alone.
+  const spikes: [Float32Array, number, number[]][] = [
+    [left, 2000, [0.9]],
+    [left, 4000, [0.8, -0.7]],
+    [left, 6000, [0.7, -0.6, 0.8, -0.5]],
+    [right, 8000, [-0.9]],
+  ]
+  for (const [channel, at, values] of spikes) values.forEach((v, k) => { channel[at + k] += v })
+  for (let k = 0; k < 80; k += 1) left[10000 + k] += 0.6 * Math.sin(k * 0.9) * (1 - k / 80)
+  const audio = { channels: [left, right], sampleRate: rate }
+  const strengths = (['sanft', 'mittel', 'stark'] as ClickStrength[]).map((strength) => {
+    const r = removeClicks(audio, strength)
+    const changed = r.audio.channels.map((channel, c) => {
+      const out: [number, number][] = []
+      channel.forEach((v, i) => { if (v !== audio.channels[c][i]) out.push([i, v]) })
+      return out
+    })
+    return { strength, repaired: r.repaired, changed }
+  })
+  writeFileSync(`${dir}/declick.json`, `${JSON.stringify({ rate, n, strengths })}\n`)
+  console.log('Klicks entfernen: ' + strengths.map((x) => x.strength + ' ' + x.repaired).join(', '))
 }
