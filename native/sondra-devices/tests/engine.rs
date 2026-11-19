@@ -7,7 +7,7 @@ use std::io;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use sondra_devices::engine::{Engine, SinkMaker, State, Status, Timing};
+use sondra_devices::engine::{Engine, PlayItem, SinkMaker, State, Status, Timing};
 use sondra_devices::registry::Hardware;
 use sondra_devices::rtc::Config;
 use sondra_devices::transfer::{FileInfo, OutgoingFile, Piece, Sink};
@@ -142,6 +142,45 @@ fn a_text_arrives_as_a_note_and_a_link_is_only_marked() {
     assert_eq!(link.peer_name, "Laptop");
     b.dismiss_note(&link.id);
     wait("the note is gone", 5, || b.snapshot().notes.len() == 1);
+}
+
+#[test]
+fn films_in_drive_are_asked_to_be_played_by_name_and_id_only() {
+    let (_drive, a, b, _ida, idb) = pair();
+    let item = |id: &str, name: &str, mime: &str| PlayItem { id: id.into(), name: name.into(), size: 1234, mime: mime.into() };
+    a.play_on(&idb, vec![item("1AbC-dEf_9xYz", "Folge 1.mkv", "video/x-matroska"), item("2AbC-dEf_9xYz", "Notiz.txt", "text/plain"), item("3AbC-dEf_9xYz", "Folge 2.mkv", "")]);
+    wait("a request", 20, || !b.snapshot().notes.is_empty());
+    let note = b.snapshot().notes.remove(0);
+    // Only what plays is kept; the text file is dropped, the film without a type is known by its name.
+    assert_eq!(note.play.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["Folge 1.mkv", "Folge 2.mkv"]);
+    assert_eq!(note.text, "„Folge 1.mkv“ und 1 weitere");
+    assert_eq!(note.peer_name, "Laptop");
+    assert!(note.link.is_none());
+    // Nothing that cannot play, and no Drive id that is none, goes anywhere.
+    a.play_on(&idb, vec![item("4AbC-dEf_9xYz", "Notiz.txt", "text/plain")]);
+    a.play_on(&idb, vec![item("../../etc", "Film.mp4", "video/mp4")]);
+    a.send_text(&idb, "danach");
+    wait("the text", 20, || b.snapshot().notes.iter().any(|n| n.text == "danach"));
+    assert_eq!(b.snapshot().notes.len(), 2, "{:?}", b.snapshot().notes.iter().map(|n| &n.text).collect::<Vec<_>>());
+}
+
+#[test]
+fn one_film_goes_across_to_be_played_not_kept() {
+    let (_drive, a, b, _ida, idb) = pair();
+    let film = bytes(30_000);
+    a.send_to_play(&idb, outgoing("Film.mp4", None, film.clone()));
+    wait("B is asked", 20, || b.snapshot().transfers.iter().any(|t| t.state == State::Asking));
+    let asked = b.snapshot().transfers[0].clone();
+    assert!(asked.play, "the other side sees it is to be played");
+    assert!(a.snapshot().transfers[0].play);
+    let store: Store = Arc::default();
+    b.accept(&asked.id, sinks(store.clone()));
+    wait("both done", 40, || a.snapshot().transfers[0].state == State::Done && b.snapshot().transfers[0].state == State::Done);
+    assert!(store.lock().unwrap()["Film.mp4"] == film);
+    // Two files are never „to be played“, whatever the offer says.
+    a.send(&idb, vec![outgoing("a.mp4", None, bytes(100)), outgoing("b.mp4", None, bytes(100))]);
+    wait("asked again", 20, || b.snapshot().transfers.iter().filter(|t| t.state == State::Asking).count() == 1);
+    assert!(!b.snapshot().transfers.iter().find(|t| t.state == State::Asking).unwrap().play);
 }
 
 #[test]

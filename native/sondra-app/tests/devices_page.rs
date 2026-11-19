@@ -13,7 +13,7 @@ use sondra_app::devices_page::Setup;
 use sondra_app::nav::Panel;
 use sondra_app::shell::Shell;
 use sondra_app::store::FileStore;
-use sondra_devices::engine::{now_ms, Engine, State, Timing};
+use sondra_devices::engine::{now_ms, Engine, PlayItem, State, Timing};
 use sondra_devices::files::{files_to_send, folder_sinks};
 use sondra_devices::registry::Hardware;
 use sondra_devices::rtc::Config;
@@ -37,7 +37,7 @@ fn engine(drive: &FakeDrive, name: &str, created: f64) -> Engine {
         DeviceKeys::generate(),
         name,
         created,
-        Hardware { kind: "android".into(), platform: "Android-App".into(), caps: vec!["folder".into(), "text".into()] },
+        Hardware { kind: "android".into(), platform: "Android-App".into(), caps: vec!["folder".into(), "text".into(), "play".into()] },
         Config { servers: vec![], live: None, loopback: true, deaf: false },
         Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150), ..Timing::default() },
         false,
@@ -227,6 +227,79 @@ fn two_devices_meet_on_the_page_and_files_and_a_text_go_across(cx: &mut TestAppC
     w.press(Role::Button, "Trennen");
     assert!(w.shell.read_with(w.cx, |s, _| s.devices_snapshot().is_none()), "disconnected: no engine");
     assert!(w.tree().find(Role::Button, "Dieses Gerät verbinden").is_some());
+}
+
+#[gpui::test]
+fn a_device_asks_this_one_to_play_films_and_offers_one_to_be_played_not_kept(cx: &mut TestAppContext) {
+    let drive = FakeDrive::start();
+    let tmp = tempfile::tempdir().unwrap();
+    // The cache of what is played lies in the test's own folder, not in the person's.
+    std::env::set_var("SONDRA_DATA", tmp.path());
+    let mine = tmp.path().join("hier");
+    std::fs::create_dir_all(&mine).unwrap();
+    let mut w = open(cx, setup(&drive), tmp.path(), &mine);
+    let other = engine(&drive, "Handy", now_ms() - 86_400_000.0);
+    w.press(Role::Button, "Dieses Gerät verbinden");
+    w.wait("the other device is listed", 30, |w| w.tree().find(Role::Button, "Dateien an „Handy“ senden").is_some());
+    // The phone can play: the button is there.
+    assert!(w.tree().find(Role::Button, "Einen Film auf „Handy“ abspielen").is_some());
+    wait_engine("the other sees this one", 20, || !other.snapshot().devices.is_empty());
+    let mine_id = w.shell.read_with(w.cx, |s, _| s.devices_snapshot().unwrap().me.unwrap()["id"].as_str().unwrap().to_owned());
+
+    // A request to play films in Drive: asked first, nothing starts by itself.
+    other.play_on(&mine_id, vec![PlayItem { id: "1AbC-dEf_9xYz".into(), name: "Folge 1.mkv".into(), size: 5000, mime: "video/x-matroska".into() }]);
+    w.wait("the card asks", 30, |w| w.said("„Folge 1.mkv“ auf diesem Gerät abspielen?"));
+    assert!(w.said("Abspielen von „Handy“"));
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Devices);
+    // Here Drive is not set up, so the person is told instead of a film starting.
+    w.shell.update(w.cx, |shell, _| shell.drive = None);
+    w.press(Role::Button, "„Folge 1.mkv“ auf diesem Gerät abspielen");
+    w.wait("the answer", 10, |w| w.said("Drive ist hier nicht eingerichtet"));
+    assert!(!w.said("auf diesem Gerät abspielen?"), "the card is gone");
+
+    // One film across to be played: asked, said to be kept nowhere, then „Abspielen“ starts it.
+    let film = tmp.path().join("film.mp4");
+    std::fs::write(&film, vec![1u8; 40_000]).unwrap();
+    other.send_to_play(&mine_id, files_to_send(&[film]).unwrap().remove(0));
+    w.wait("this device is asked", 30, |w| w.tree().find(Role::Button, "„film.mp4“ annehmen").is_some());
+    assert!(w.said("zum Abspielen senden"));
+    w.press(Role::Button, "„film.mp4“ annehmen");
+    w.wait("it arrived", 40, |w| w.tree().find(Role::Button, "„film.mp4“ abspielen").is_some());
+    assert!(!mine.join("film.mp4").exists(), "it is not put in the folder for what arrives");
+    let kept = tmp.path().join("Drive-Ablage").join("Weitergegeben");
+    assert!(std::fs::read_dir(&kept).unwrap().next().is_some(), "it lies in the cache");
+    assert!(w.tree().find(Role::Button, "Im Ordner zeigen").is_none());
+    w.press(Role::Button, "„film.mp4“ abspielen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
+}
+
+#[gpui::test]
+fn the_chosen_films_of_a_drive_folder_can_be_asked_to_play_on_a_device_that_can(cx: &mut TestAppContext) {
+    use sondra_merk::folder::{AssetKind, DriveInfo, FolderFile, FolderScan};
+    let drive = FakeDrive::start();
+    let tmp = tempfile::tempdir().unwrap();
+    let mine = tmp.path().join("hier");
+    std::fs::create_dir_all(&mine).unwrap();
+    let mut w = open(cx, setup(&drive), tmp.path(), &mine);
+    let other = engine(&drive, "Handy", now_ms() - 86_400_000.0);
+    w.press(Role::Button, "Dieses Gerät verbinden");
+    w.wait("the other device is listed", 30, |w| w.tree().find(Role::Button, "Dateien an „Handy“ senden").is_some());
+    wait_engine("the other sees this one", 20, || !other.snapshot().devices.is_empty());
+    let film = |name: &str, id: &str, kind| FolderFile { path: name.into(), name: name.into(), dir: String::new(), size: 4000, modified: 0, kind, drive: Some(DriveInfo { id: id.into(), mime: "video/mp4".into(), parent: None, hint: None }) };
+    let scan = FolderScan { name: "Sondra".into(), files: vec![film("Folge 1.mp4", "1AbC-dEf_9xYz", AssetKind::Video), film("Notiz.txt", "2AbC-dEf_9xYz", AssetKind::Document)], dirs: vec![], truncated: false, drive: true };
+    w.shell.update(w.cx, |shell, cx| {
+        shell.folder_show_for_test(scan, &[], cx);
+        shell.go(Panel::Folder, cx);
+    });
+    w.draw();
+    // Nothing chosen, no button; a film chosen, one button for the phone.
+    assert!(w.tree().find(Role::Button, "Auf „Handy“ abspielen").is_none());
+    let scan = w.shell.read_with(w.cx, |s, _| s.folder_scan_for_test()).unwrap();
+    w.shell.update(w.cx, |shell, cx| shell.folder_show_for_test(scan, &["Folge 1.mp4"], cx));
+    w.draw();
+    w.press(Role::Button, "Auf „Handy“ abspielen");
+    wait_engine("the phone is asked", 30, || other.snapshot().notes.iter().any(|n| n.play.len() == 1 && n.play[0].id == "1AbC-dEf_9xYz"));
+    assert!(w.said("An „Handy“ gefragt"));
 }
 
 #[gpui::test]

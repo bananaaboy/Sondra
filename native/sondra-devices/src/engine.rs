@@ -33,6 +33,10 @@ use crate::transfer::{
 /// More than this in one transfer is sent in parts.
 pub const FOLDER_FILES_MAX: usize = 300;
 pub const TEXT_MAX: usize = 4000;
+/// The largest film one device plays from another's file by transfer; beyond it the file is sent and opened there.
+pub const PLAY_TRANSFER_MAX: u64 = 2 * 1024 * 1024 * 1024;
+/// How many films one request to play may name.
+pub const PLAY_ITEMS_MAX: usize = 100;
 /// An offer nobody answers expires after this long, as a message does.
 const OFFER_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// After the answer, how long the line may take to open.
@@ -91,6 +95,8 @@ pub struct Transfer {
     pub route: Route,
     /// The line has not opened for a while (the sender may go through Drive; the receiver is told, no more).
     pub no_direct: bool,
+    /// Offered to be played there, not kept: the receiver's button says „Abspielen“.
+    pub play: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +108,17 @@ pub struct Note {
     /// A single http(s) link in it, which the person may open; nothing opens by itself.
     pub link: Option<String>,
     pub at: f64,
+    /// Films in Drive another device asks to be played here (asked first, started by a click).
+    pub play: Vec<PlayItem>,
+}
+
+/// A film in Drive, named by its Drive id.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayItem {
+    pub id: String,
+    pub name: String,
+    pub size: u64,
+    pub mime: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -127,12 +144,13 @@ pub struct Snapshot {
 pub type SinkMaker = Arc<dyn Fn(&FileInfo, usize, Option<&Piece>) -> io::Result<Box<dyn Sink>> + Send + Sync>;
 
 enum Command {
-    Send { to: String, files: Vec<OutgoingFile> },
     Accept { id: String, sinks: SinkMaker },
     Decline(String),
     Cancel(String),
     Dismiss(String),
     Text { to: String, text: String },
+    Send { to: String, files: Vec<OutgoingFile>, play: bool },
+    PlayInDrive { to: String, items: Vec<PlayItem> },
     ViaDrive(String),
     DismissNote(String),
     Rename(String),
@@ -247,7 +265,16 @@ impl Engine {
 
     /// Offers files to another device; it says yes or no there.
     pub fn send(&self, to: &str, files: Vec<OutgoingFile>) {
-        self.command(Command::Send { to: to.to_owned(), files });
+        self.command(Command::Send { to: to.to_owned(), files, play: false });
+    }
+    /// Offers one film to be played there, not kept (up to 2 GB; the other device says yes first).
+    pub fn send_to_play(&self, to: &str, file: OutgoingFile) {
+        self.command(Command::Send { to: to.to_owned(), files: vec![file], play: true });
+    }
+    /// Asks a device to play films that lie in Drive: only their names and Drive ids go, that device streams
+    /// them itself with its own sign-in.
+    pub fn play_on(&self, to: &str, items: Vec<PlayItem>) {
+        self.command(Command::PlayInDrive { to: to.to_owned(), items });
     }
     pub fn accept(&self, id: &str, sinks: SinkMaker) {
         self.command(Command::Accept { id: id.to_owned(), sinks });
@@ -422,7 +449,28 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                     return;
                 }
                 let link = link_of(&text);
-                s.notes.insert(0, Note { id: m.transfer, from: m.from, peer_name, text, link, at: now_ms() });
+                s.notes.insert(0, Note { id: m.transfer, from: m.from, peer_name, text, link, at: now_ms(), play: vec![] });
+                s.notes.truncate(50);
+            }
+            "play" => {
+                let Some(raw) = m.body["items"].as_array() else { return };
+                if self.shared.lock().unwrap().notes.iter().any(|n| n.id == m.transfer) {
+                    return;
+                }
+                let items: Vec<PlayItem> = raw
+                    .iter()
+                    .take(PLAY_ITEMS_MAX)
+                    .filter_map(|item| {
+                        let id = item["id"].as_str().filter(|id| is_drive_id(id))?;
+                        let name = safe_file_name(item["name"].as_str().unwrap_or("Datei"));
+                        Some(PlayItem { id: id.to_owned(), name, size: item["size"].as_u64().unwrap_or(0), mime: item["type"].as_str().unwrap_or_default().to_owned() })
+                    })
+                    .filter(|item| is_playable(&item.mime, &item.name))
+                    .collect();
+                let Some(first) = items.first() else { return };
+                let text = if items.len() > 1 { format!("„{}“ und {} weitere", first.name, items.len() - 1) } else { format!("„{}“", first.name) };
+                let mut s = self.shared.lock().unwrap();
+                s.notes.insert(0, Note { id: m.transfer, from: m.from, peer_name, text, link: None, at: now_ms(), play: items });
                 s.notes.truncate(50);
             }
             "offer" => {
@@ -447,9 +495,11 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                     .collect();
                 self.offers.insert(m.transfer.clone(), sdp.to_owned());
                 let total = files.iter().map(|f| f.size).sum();
+                // One film, not too large: offered to be played, not kept.
+                let play = m.body["play"].as_bool() == Some(true) && files.len() == 1 && total <= PLAY_TRANSFER_MAX;
                 self.shared.lock().unwrap().transfers.insert(
                     0,
-                    Transfer { id: m.transfer, outgoing: false, peer: m.from, peer_name, files, total, done: 0, state: State::Asking, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false },
+                    Transfer { id: m.transfer, outgoing: false, peer: m.from, peer_name, files, total, done: 0, state: State::Asking, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false, play },
                 );
             }
             "drive" => {
@@ -586,12 +636,23 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 }
             }
             Command::ViaDrive(id) => self.send_via_drive(id, events),
-            Command::Send { to, files } => self.send(to, files, events),
+            Command::Send { to, files, play } => self.send(to, files, play, events),
+            Command::PlayInDrive { to, items } => self.play_in_drive(&to, items, events),
             Command::Accept { id, sinks } => self.accept(id, sinks, events),
         }
     }
 
-    fn send(&mut self, to: String, files: Vec<OutgoingFile>, events: &Sender<Event>) {
+    fn play_in_drive(&mut self, to: &str, items: Vec<PlayItem>, events: &Sender<Event>) {
+        let known = self.registry.devices.iter().any(|d| d["id"].as_str() == Some(to));
+        let items: Vec<&PlayItem> = items.iter().filter(|i| is_playable(&i.mime, &i.name)).take(PLAY_ITEMS_MAX).collect();
+        if !known || items.is_empty() {
+            return;
+        }
+        let body = json!({ "items": items.iter().map(|i| json!({ "id": i.id, "name": i.name, "size": i.size, "type": i.mime })).collect::<Vec<_>>() });
+        let _ = events_post(events, to, "play", &random_id(), body);
+    }
+
+    fn send(&mut self, to: String, files: Vec<OutgoingFile>, play: bool, events: &Sender<Event>) {
         if files.is_empty() || files.len() > FOLDER_FILES_MAX || !self.registry.devices.iter().any(|d| d["id"].as_str() == Some(to.as_str())) {
             return;
         }
@@ -601,7 +662,7 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
         let peer_name = self.name_of(&to);
         self.shared.lock().unwrap().transfers.insert(
             0,
-            Transfer { id: id.clone(), outgoing: true, peer: to.clone(), peer_name, files: infos.clone(), total, done: 0, state: State::Offering, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false },
+            Transfer { id: id.clone(), outgoing: true, peer: to.clone(), peer_name, files: infos.clone(), total, done: 0, state: State::Offering, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false, play },
         );
         let cancel = Arc::new(AtomicBool::new(false));
         let switched = Arc::new(AtomicBool::new(false));
@@ -627,7 +688,7 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 Ok(pair) => pair,
                 Err(e) => return fail(State::Failed, Some(e.to_string())),
             };
-            let _ = events.send(Event::Post { to: to.clone(), kind: "offer", transfer: id.clone(), body: json!({ "sdp": offer, "files": infos }) });
+            let _ = events.send(Event::Post { to: to.clone(), kind: "offer", transfer: id.clone(), body: if play { json!({ "sdp": offer, "files": infos, "play": true }) } else { json!({ "sdp": offer, "files": infos }) } });
             let answer = match answer_rx.recv_timeout(OFFER_TIMEOUT) {
                 Ok(Ok(sdp)) => sdp,
                 Ok(Err(state)) => return fail(state, None),
@@ -903,4 +964,18 @@ fn deaf_wait(cancel: &Arc<AtomicBool>, switched: &Arc<AtomicBool>) {
     while std::time::Instant::now() < until && !cancel.load(Ordering::SeqCst) && !switched.load(Ordering::SeqCst) {
         thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// A Drive file id, as the website takes it: word characters and dashes, 4 to 100 of them.
+pub fn is_drive_id(id: &str) -> bool {
+    (4..=100).contains(&id.len()) && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// Whether a film or a song can be played: by its type, or by its name's ending (the website's rule).
+pub fn is_playable(mime: &str, name: &str) -> bool {
+    if mime.starts_with("video/") || mime.starts_with("audio/") {
+        return true;
+    }
+    let lower = name.to_lowercase();
+    ["mp4", "m4v", "mkv", "webm", "mov", "avi", "mp3", "m4a", "aac", "flac", "ogg", "opus", "wav"].iter().any(|e| lower.ends_with(&format!(".{e}")))
 }

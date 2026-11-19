@@ -57,6 +57,8 @@ pub struct DevicesState {
     pub receive_dir: PathBuf,
     pub memory: Option<FileStore>,
     pub problem: Option<String>,
+    /// Where a film offered to be played is put while it comes: transfer id → file.
+    pub played: std::collections::HashMap<String, PathBuf>,
     /// „Eigener Server für andere Netze“: the fields and whether they are open.
     pub servers: crate::devices_servers::ServersUi,
 }
@@ -93,6 +95,7 @@ impl DevicesState {
             receive_dir: crate::store::downloads_dir(),
             memory: None,
             problem: None,
+            played: Default::default(),
             servers: crate::devices_servers::ServersUi::new(cx, colors),
         }
     }
@@ -130,6 +133,7 @@ pub(crate) fn say(t: &Transfer) -> String {
     let peer = &t.peer_name;
     match (t.state, t.outgoing) {
         (State::Offering, _) => format!("Fragt bei „{peer}“ an: {}", files_phrase(&t.files)),
+        (State::Asking, _) if t.play => format!("„{peer}“ möchte {} zum Abspielen senden ({}). Es wird nicht in Downloads gelegt.", files_phrase(&t.files), bytes(t.total)),
         (State::Asking, _) => format!("„{peer}“ möchte {} senden ({}).", files_phrase(&t.files), bytes(t.total)),
         (State::Connecting, _) => format!("Verbindet mit „{peer}“ …"),
         (State::Sending, _) => format!("Sendet {} an „{peer}“", files_phrase(&t.files)),
@@ -277,10 +281,113 @@ impl Shell {
     }
 
     pub fn devices_accept(&mut self, id: &str, cx: &mut Context<Self>) {
+        let playing = self.devices.engine.as_ref().and_then(|e| e.snapshot().transfers.into_iter().find(|t| t.id == id && t.play));
+        // A film offered to be played goes to the cache, in a folder of its own, not into Downloads.
+        let root = match &playing {
+            Some(t) if t.files.len() == 1 => {
+                let dir = crate::folder_drive::cache_dir().join("Weitergegeben").join(id);
+                self.devices.played.insert(id.to_owned(), dir.join(&t.files[0].name));
+                dir
+            }
+            _ => self.devices.receive_dir.clone(),
+        };
         if let Some(e) = &self.devices.engine {
-            e.accept(id, folder_sinks(self.devices.receive_dir.clone()));
+            e.accept(id, folder_sinks(root));
         }
         cx.notify();
+    }
+
+    /// Plays what another device offered to be played, once it has come.
+    pub fn devices_play_arrived(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(path) = self.devices.played.get(id).cloned().filter(|p| p.is_file()) else { return };
+        self.go(Panel::Player, cx);
+        self.play_files(vec![path], cx);
+    }
+
+    /// Offers one film to a device to be played there, not kept.
+    pub fn devices_send_to_play(&mut self, to: &str, path: PathBuf, cx: &mut Context<Self>) {
+        self.devices.problem = None;
+        let Some(engine) = &self.devices.engine else { return };
+        match files_to_send(&[path]) {
+            Ok(mut files) if files.len() == 1 && files[0].info.size <= sondra_devices::engine::PLAY_TRANSFER_MAX && sondra_devices::engine::is_playable(&files[0].info.mime, &files[0].info.name) => engine.send_to_play(to, files.remove(0)),
+            Ok(files) if files.len() == 1 && files[0].info.size > sondra_devices::engine::PLAY_TRANSFER_MAX => self.devices.problem = Some("Zum Abspielen geht eine Datei bis 2 GB; größere bitte senden und dort öffnen.".into()),
+            Ok(_) => self.devices.problem = Some("Das lässt sich nicht abspielen.".into()),
+            Err(e) => self.devices.problem = Some(format!("Das liess sich nicht lesen: {e}")),
+        }
+        cx.notify();
+    }
+
+    fn devices_pick_to_play(&mut self, to: String, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(mut paths))) = answer.await {
+                if let Some(path) = paths.pop() {
+                    this.update(cx, |shell, cx| shell.devices_send_to_play(&to, path, cx)).ok();
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// The chosen films of a Drive folder, as the request to play them elsewhere names them.
+    fn chosen_drive_films(&self) -> Vec<sondra_devices::engine::PlayItem> {
+        let Some(scan) = self.folder.scan.as_ref().filter(|s| s.drive) else { return vec![] };
+        scan.files
+            .iter()
+            .filter(|f| self.folder.selected.contains(&f.path) && matches!(f.kind, sondra_merk::folder::AssetKind::Video | sondra_merk::folder::AssetKind::Audio))
+            .filter_map(|f| f.drive.as_ref().map(|d| sondra_devices::engine::PlayItem { id: d.id.clone(), name: f.name.clone(), size: f.size, mime: d.mime.clone() }))
+            .take(sondra_devices::engine::PLAY_ITEMS_MAX)
+            .collect()
+    }
+
+    /// „Auf „Handy“ abspielen“ beside the chosen films of a Drive folder, one button for each device that is
+    /// open and can play; nothing where there is none.
+    pub(crate) fn play_on_device_buttons(&self, ui: &Ui, me: &Entity<Shell>) -> Vec<AnyElement> {
+        let Some(engine) = &self.devices.engine else { return vec![] };
+        if self.chosen_drive_films().is_empty() {
+            return vec![];
+        }
+        let now = now_ms();
+        engine
+            .snapshot()
+            .devices
+            .iter()
+            .filter(|d| is_online(d, now) && sondra_devices::identity::can(Some(d), "play"))
+            .map(|d| {
+                let (id, name) = (d["id"].as_str().unwrap_or_default().to_owned(), d["name"].as_str().unwrap_or_default().to_owned());
+                let me = me.clone();
+                ui.button(format!("auswahl-dort-{id}"), format!("Auf „{name}“ abspielen")).small().on_click({
+                    let name = name.clone();
+                    move |_, app| {
+                        let (id, name) = (id.clone(), name.clone());
+                        me.update(app, |shell, cx| shell.devices_play_selected_on(&id, &name, cx))
+                    }
+                }).into_any_element()
+            })
+            .collect()
+    }
+
+    /// Asks a device to play the chosen films of Drive; it is asked first, there.
+    pub fn devices_play_selected_on(&mut self, to: &str, name: &str, cx: &mut Context<Self>) {
+        let films = self.chosen_drive_films();
+        if films.is_empty() {
+            return;
+        }
+        if let Some(engine) = &self.devices.engine {
+            engine.play_on(to, films);
+            self.folder.notice = Some(format!("An „{name}“ gefragt — dort startet es mit „Abspielen“."));
+        }
+        cx.notify();
+    }
+
+    /// „Abspielen“ on the card of a request from another device: the films start here.
+    pub fn devices_play_note(&mut self, id: &str, cx: &mut Context<Self>) {
+        let Some(engine) = &self.devices.engine else { return };
+        let Some(note) = engine.snapshot().notes.into_iter().find(|n| n.id == id) else { return };
+        engine.dismiss_note(id);
+        if !note.play.is_empty() {
+            self.play_drive_films(note.play, cx);
+        }
     }
 
     /// Where what arrives is put (the person's choice later; the folder for Downloads until then).
@@ -466,6 +573,7 @@ fn note_card(ui: Ui, me: &Entity<Shell>, note: &Note) -> AnyElement {
     let c = ui.c;
     let id = note.id.clone();
     let me = me.clone();
+    let playing = !note.play.is_empty();
     let mut card = div()
         .flex()
         .flex_col()
@@ -473,14 +581,23 @@ fn note_card(ui: Ui, me: &Entity<Shell>, note: &Note) -> AnyElement {
         .p(px(16.))
         .rounded(px(radius::CARD))
         .bg(c.panel_soft)
-        .child(ui.title(format!("Text von „{}“", note.peer_name)))
-        .child(ui.value(note.text.clone()));
+        .child(ui.title(if playing { format!("Abspielen von „{}“", note.peer_name) } else { format!("Text von „{}“", note.peer_name) }))
+        .child(ui.value(if playing { format!("{} auf diesem Gerät abspielen?", note.text) } else { note.text.clone() }));
     let mut buttons = div().flex().flex_wrap().gap(px(8.));
+    if playing {
+        let (me, id) = (me.clone(), id.clone());
+        buttons = buttons.child(ui.button(format!("abspielen-{}", note.id), "Abspielen").small().primary().accessible_name(format!("{} auf diesem Gerät abspielen", note.text)).on_click(move |_, app| {
+            let id = id.clone();
+            me.update(app, |shell, cx| shell.devices_play_note(&id, cx))
+        }));
+    }
     if let Some(link) = note.link.clone() {
         buttons = buttons.child(ui.button(format!("link-{}", note.id), "Link öffnen").small().on_click(move |_, app| app.open_url(&link)));
     }
-    let text = note.text.clone();
-    buttons = buttons.child(ui.button(format!("kopieren-{}", note.id), "Kopieren").small().on_click(move |_, app| app.write_to_clipboard(gpui::ClipboardItem::new_string(text.clone()))));
+    if !playing {
+        let text = note.text.clone();
+        buttons = buttons.child(ui.button(format!("kopieren-{}", note.id), "Kopieren").small().on_click(move |_, app| app.write_to_clipboard(gpui::ClipboardItem::new_string(text.clone()))));
+    }
     buttons = buttons.child(ui.button(format!("schliessen-{}", note.id), "Schliessen").small().on_click(move |_, app| {
         let id = id.clone();
         me.update(app, |shell, cx| {
@@ -552,6 +669,13 @@ fn other_device(ui: Ui, me: &Entity<Shell>, state: &DevicesState, device: &serde
         buttons = buttons.child(ui.button(format!("ordner-{id}"), "Ordner senden").small().accessible_name(format!("Ordner an „{name}“ senden")).on_click(move |_, app| {
             let to = to.clone();
             me.update(app, |shell, cx| shell.devices_pick(to, true, cx))
+        }));
+    }
+    if can("play") {
+        let (me, to) = (me.clone(), id.clone());
+        buttons = buttons.child(ui.button(format!("abspielen-{id}"), "Film dort abspielen").small().accessible_name(format!("Einen Film auf „{name}“ abspielen")).on_click(move |_, app| {
+            let to = to.clone();
+            me.update(app, |shell, cx| shell.devices_pick_to_play(to, cx))
         }));
     }
     if can("text") {
@@ -671,7 +795,13 @@ fn transfer_row(ui: Ui, me: &Entity<Shell>, t: &Transfer, dir: &std::path::Path)
             })
         }));
     } else {
-        if t.state == State::Done && !t.outgoing {
+        if t.state == State::Done && !t.outgoing && t.play {
+            let (me, id) = (me.clone(), t.id.clone());
+            buttons = buttons.child(ui.button(format!("ankunft-abspielen-{}", t.id), "Abspielen").small().primary().accessible_name(format!("{} abspielen", files_phrase(&t.files))).on_click(move |_, app| {
+                let id = id.clone();
+                me.update(app, |shell, cx| shell.devices_play_arrived(&id, cx))
+            }));
+        } else if t.state == State::Done && !t.outgoing {
             let folder = dir.to_path_buf();
             let me = me.clone();
             buttons = buttons.child(ui.button(format!("zeigen-{}", t.id), "Im Ordner zeigen").small().on_click(move |_, app| {

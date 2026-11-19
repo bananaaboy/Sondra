@@ -111,7 +111,7 @@ impl Shell {
     /// Plays the chosen films and songs of Drive: each is fetched into the folder of this program (one that is there with
     /// the same size is kept), then the Player takes the list.
     pub(crate) fn play_selected_from_drive(&mut self, cx: &mut Context<Self>) {
-        let (Some(drive), Some(scan)) = (self.drive.clone(), self.folder.scan.clone()) else { return };
+        let (true, Some(scan)) = (self.drive.is_some(), self.folder.scan.clone()) else { return };
         let f = &self.folder;
         let options = ListingOptions { dir: f.dir.clone(), deep: f.prefs.deep, filter: f.prefs.filter, query: f.search.read(cx).text().to_string(), sort: f.prefs.sort, descending: f.prefs.descending };
         let wanted: Vec<FolderFile> = sondra_merk::folder::listing(&scan, &options)
@@ -124,8 +124,26 @@ impl Shell {
             cx.notify();
             return;
         }
+        let films = wanted
+            .into_iter()
+            .filter_map(|file| file.drive.as_ref().map(|d| sondra_devices::engine::PlayItem { id: d.id.clone(), name: file.name.clone(), size: file.size, mime: d.mime.clone() }))
+            .collect();
+        self.play_drive_films(films, cx);
+    }
+
+    /// Films that lie in Drive go to the Player: read from Drive where they lie, in ranges, so each starts at
+    /// once (signing in first when that is needed). What goes wrong is said on the Ordner page and on the
+    /// Geräte page, whichever the person is looking at.
+    pub(crate) fn play_drive_films(&mut self, films: Vec<sondra_devices::engine::PlayItem>, cx: &mut Context<Self>) {
+        let Some(drive) = self.drive.clone() else {
+            let why = "Drive ist hier nicht eingerichtet, der Film lässt sich nicht öffnen.".to_string();
+            self.folder.notice = Some(why.clone());
+            self.devices.problem = Some(why);
+            cx.notify();
+            return;
+        };
         self.folder.busy = true;
-        self.folder.notice = Some(if wanted.len() == 1 { "Der Film wird aus Drive geöffnet …".into() } else { format!("{} Dateien werden aus Drive geöffnet …", wanted.len()) });
+        self.folder.notice = Some(if films.len() == 1 { "Der Film wird aus Drive geöffnet …".into() } else { format!("{} Dateien werden aus Drive geöffnet …", films.len()) });
         cx.notify();
         let dir = cache_dir();
         Self::in_background(
@@ -136,20 +154,19 @@ impl Shell {
                 }
                 let stream = stream_for(&drive)?;
                 let mut paths = Vec::new();
-                for file in wanted {
-                    let Some(info) = file.drive.as_ref() else { continue };
-                    // The name in the list; a file kept from an earlier time is played as it is, anything else is
-                    // read from Drive where it lies, in ranges, so the film starts at once.
-                    let path = dir.join(format!("{}-{}", info.id, crate::drive_hub::safe_name(&file.name)));
-                    let kept = std::fs::metadata(&path).is_ok_and(|m| m.len() == file.size && file.size > 0);
+                for film in films {
+                    // A file kept from an earlier time is played as it is, anything else is read from Drive where
+                    // it lies, in ranges, so the film starts at once.
+                    let path = dir.join(format!("{}-{}", film.id, crate::drive_hub::safe_name(&film.name)));
+                    let kept = std::fs::metadata(&path).is_ok_and(|m| m.len() == film.size && film.size > 0);
                     if !kept {
-                        if file.size == 0 {
+                        if film.size == 0 {
                             // Without a size no range can be asked for.
                             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
                             let client = DriveClient::new(drive.tokens.clone(), drive.api.clone());
-                            client.download_to(&info.id, &path, &AtomicBool::new(false), |_, _| {}).map_err(|e| says(&e))?;
+                            client.download_to(&film.id, &path, &AtomicBool::new(false), |_, _| {}).map_err(|e| says(&e))?;
                         } else {
-                            sondra_playback::register_source(&path, &stream.url(&info.id, &file.name, file.size, &info.mime));
+                            sondra_playback::register_source(&path, &stream.url(&film.id, &film.name, film.size, &film.mime));
                         }
                     }
                     paths.push(path);
@@ -165,7 +182,8 @@ impl Shell {
                         shell.play_files(paths, cx);
                     }
                     Err(why) => {
-                        shell.folder.notice = Some(why);
+                        shell.folder.notice = Some(why.clone());
+                        shell.devices.problem = Some(why);
                         cx.notify();
                     }
                 }

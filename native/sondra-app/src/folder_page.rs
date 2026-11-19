@@ -536,6 +536,7 @@ impl Shell {
                         let me = me.clone();
                         ui.button("auswahl-loeschen", "Löschen …").small().on_click(move |_, app| me.update(app, |shell, cx| shell.ask_delete(cx)))
                     })
+                    .children(self.play_on_device_buttons(&ui, &me))
                     .child(ui.button("auswahl-aufheben", "Auswahl aufheben").small().on_click(move |_, app| {
                         Self::folder_do(&me, app, |f| {
                             f.selected.clear();
@@ -811,6 +812,17 @@ impl Shell {
     }
 
     /// For tests: is something being done to the folder (a ZIP being written, files being moved)?
+    /// For tests: a folder that was read, with some of its files chosen.
+    pub fn folder_show_for_test(&mut self, scan: FolderScan, chosen: &[&str], cx: &mut Context<Self>) {
+        self.folder.scan = Some(scan);
+        self.folder.selected = chosen.iter().map(|p| p.to_string()).collect();
+        cx.notify();
+    }
+
+    pub fn folder_scan_for_test(&self) -> Option<FolderScan> {
+        self.folder.scan.clone()
+    }
+
     pub fn folder_busy(&self) -> bool {
         self.folder.busy
     }
