@@ -10,7 +10,11 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
-use gpui::{div, img, prelude::*, px, AnyElement, Context, Entity, ImageSource, ObjectFit, PathPromptOptions, RenderImage};
+use std::cell::Cell;
+use std::rc::Rc;
+
+use gpui::{canvas, div, img, prelude::*, px, AnyElement, Bounds, Context, Entity, ImageSource, MouseButton, ObjectFit, PathPromptOptions, Pixels, RenderImage};
+use sondra_a11y::{accessible, Role};
 use image::{Frame as ImageFrame, RgbaImage};
 use smallvec::smallvec;
 use sondra_media::image_ops::{mirror_rect, rect_for_aspect, rotate_rect, Rect, ASPECTS};
@@ -66,11 +70,23 @@ pub struct VideoState {
     pub run: Option<VRun>,
     pub made: Vec<PathBuf>,
     pub error: Option<String>,
+    /// Where the timeline was drawn last, to turn a press into a place on it.
+    pub bounds: Rc<Cell<Bounds<Pixels>>>,
+    /// What a press on the timeline is moving.
+    pub drag: Option<TimelineDrag>,
+}
+
+/// What a press on the timeline grabbed: the place, or one end of what stays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimelineDrag {
+    Place,
+    Start,
+    End,
 }
 
 impl VideoState {
     pub fn new() -> VideoState {
-        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None }
+        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None }
     }
 }
 
@@ -321,6 +337,75 @@ impl Shell {
         self.video.frame.is_some()
     }
 
+    /// The second a place on the timeline stands for.
+    fn video_time_at(&self, x: Pixels) -> f64 {
+        let bounds = self.video.bounds.get();
+        let width: f32 = bounds.size.width.into();
+        if width <= 0.0 {
+            return 0.0;
+        }
+        let (left, x): (f32, f32) = (bounds.origin.x.into(), x.into());
+        ((x - left) / width).clamp(0.0, 1.0) as f64 * self.video.duration
+    }
+
+    /// A press on the timeline: an end of what stays when it is near one, else the place.
+    pub(crate) fn timeline_down(&mut self, x: Pixels, cx: &mut Context<Self>) {
+        let v = &self.video;
+        if v.duration <= 0.0 {
+            return;
+        }
+        let width: f32 = v.bounds.get().size.width.into();
+        let per_second = width / v.duration as f32;
+        let at = self.video_time_at(x);
+        let (start, end) = (v.ops.start, if v.ops.end > 0.0 { v.ops.end } else { v.duration });
+        // Ends are grabbed within eight pixels; when both are that near, the one the press is nearer to.
+        let near = |t: f64| ((t - at).abs() as f32 * per_second) <= 8.0;
+        let grab = match (near(start), near(end)) {
+            (true, true) => Some(if (at - start).abs() <= (at - end).abs() { TimelineDrag::Start } else { TimelineDrag::End }),
+            (true, false) => Some(TimelineDrag::Start),
+            (false, true) => Some(TimelineDrag::End),
+            (false, false) => None,
+        };
+        self.video.drag = Some(grab.unwrap_or(TimelineDrag::Place));
+        self.timeline_move(x, cx);
+    }
+
+    /// The press moves on: the place, or the end that was grabbed, kept apart by a little; the still waits for
+    /// the release, so a drag does not start an FFmpeg for every pixel.
+    pub(crate) fn timeline_move(&mut self, x: Pixels, cx: &mut Context<Self>) {
+        let Some(drag) = self.video.drag else { return };
+        let at = self.video_time_at(x);
+        let v = &mut self.video;
+        let gap = 0.1f64.min(v.duration / 2.0);
+        match drag {
+            TimelineDrag::Place => v.position = at.clamp(0.0, v.duration),
+            TimelineDrag::Start => {
+                let end = if v.ops.end > 0.0 { v.ops.end } else { v.duration };
+                v.ops.start = at.clamp(0.0, (end - gap).max(0.0));
+                v.position = v.ops.start;
+            }
+            TimelineDrag::End => {
+                let to = at.clamp(v.ops.start + gap, v.duration);
+                // The whole length is no end at all: 0 says „until the end“.
+                v.ops.end = if to >= v.duration - 1e-9 { 0.0 } else { to };
+                v.position = to;
+            }
+        }
+        v.made.clear();
+        cx.notify();
+    }
+
+    pub(crate) fn timeline_up(&mut self, cx: &mut Context<Self>) {
+        if self.video.drag.take().is_some() {
+            self.video_still(cx);
+        }
+    }
+
+    /// For tests: where the timeline was drawn.
+    pub fn video_timeline_bounds(&self) -> Bounds<Pixels> {
+        self.video.bounds.get()
+    }
+
     /// For tests: the place on the slider.
     pub fn video_set_position(&mut self, seconds: f64, cx: &mut Context<Self>) {
         self.video_patch(|v| v.position = seconds.clamp(0.0, v.duration), cx);
@@ -358,6 +443,38 @@ impl Shell {
         };
         let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let end = if ops.end > 0.0 { ops.end } else { v.duration };
+
+        // The timeline: the whole length, what stays lit, the place, and an end to take hold of on each side.
+        let total = v.duration.max(0.001);
+        let frac = |t: f64| (t / total).clamp(0.0, 1.0) as f32;
+        let measure = v.bounds.clone();
+        let mut track = div().relative().h(px(48.)).w_full().bg(c.stage).rounded(px(0.)).overflow_hidden();
+        track = track.child(canvas(move |b, _, _| measure.set(b), |_, _, _, _| {}).absolute().size_full());
+        track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(ops.start))).w(gpui::relative(frac(end) - frac(ops.start))).bg(c.stage_accent).opacity(0.35));
+        track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(ops.start))).w(px(4.)).bg(c.stage_accent));
+        track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(end))).ml(px(-4.)).w(px(4.)).bg(c.stage_accent));
+        track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(v.position))).w(px(2.)).bg(c.stage_ink));
+        let (down, drag, up) = (me.clone(), me.clone(), me.clone());
+        let timeline = div()
+            .id("zeitleiste")
+            .cursor_crosshair()
+            .on_mouse_down(MouseButton::Left, move |event, _, app| {
+                let x = event.position.x;
+                down.update(app, |shell, cx| shell.timeline_down(x, cx))
+            })
+            .on_mouse_move(move |event, _, app| {
+                if event.pressed_button == Some(MouseButton::Left) {
+                    let x = event.position.x;
+                    drag.update(app, |shell, cx| shell.timeline_move(x, cx))
+                }
+            })
+            .on_mouse_up(MouseButton::Left, move |_, _, app| up.update(app, |shell, cx| shell.timeline_up(cx)))
+            .on_mouse_up_out(MouseButton::Left, {
+                let up = me.clone();
+                move |_, _, app| up.update(app, |shell, cx| shell.timeline_up(cx))
+            })
+            .child(track);
+        let timeline = accessible("zeitleiste", Role::Group, timeline).label("Zeitleiste").value(format!("Stelle {}. Es bleibt {} bis {}.", clock(v.position), clock(ops.start), clock(end)));
         let kept = ((end - ops.start).max(0.0)) / ops.speed.max(0.01);
         let caption = div().flex().flex_wrap().items_baseline().gap(px(12.)).child(ui.value(name)).child(ui.hint(format!("{w} × {h} px · {} · Ergebnis {}", clock(v.duration), clock(kept))));
 
@@ -532,7 +649,7 @@ impl Shell {
                     })),
             );
         }
-        let stage_col = div().flex_1().min_w(px(360.)).flex().flex_col().gap(px(12.)).child(stage).child(seek).child(status);
+        let stage_col = div().flex_1().min_w(px(360.)).flex().flex_col().gap(px(12.)).child(stage).child(timeline).child(seek).child(status);
         let controls = div().w(px(380.)).flex_none().flex().flex_col().gap(px(16.)).child(rail).child(panel).child(reset);
         page.child(caption).child(div().flex().flex_wrap().items_start().gap(px(24.)).child(stage_col).child(controls)).into_any_element()
     }

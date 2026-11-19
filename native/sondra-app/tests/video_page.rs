@@ -134,3 +134,66 @@ fn a_video_is_cut_cropped_sped_up_and_written_its_sound_pulled_out_and_a_still_s
     assert_eq!(made.len(), 1);
     assert_eq!(made[0].extension().unwrap(), "gif");
 }
+
+#[gpui::test]
+fn the_timeline_moves_the_place_and_both_ends_of_what_stays(cx: &mut TestAppContext) {
+    use gpui::{Modifiers, MouseButton};
+    let Some(ff) = Ffmpeg::locate() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let film = tmp.path().join("film.mp4");
+    let out = Command::new(ff.program())
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10:duration=10", "-pix_fmt", "yuv420p"])
+        .arg(&film)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let (shell, vcx) = cx.add_window_view(|window, cx| Shell::new(window, cx));
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    vcx.simulate_resize(size(px(WIDTH), px(1000.)));
+    let mut w = Window { cx: vcx, shell, seen };
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Video, cx));
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.video_take(film.clone(), cx));
+    w.settle(20);
+
+    let b = w.cx.read_entity(&w.shell, |s, _| s.video_timeline_bounds());
+    assert!(f32::from(b.size.width) > 200.0, "the timeline was measured: {b:?}");
+    let at = |f: f32, dx: f32| point(b.origin.x + b.size.width * f + px(dx), b.origin.y + b.size.height / 2.0);
+
+    // A press in the middle moves the place, and only the place.
+    w.cx.simulate_mouse_down(at(0.25, 0.0), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.5, 0.0), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.5, 0.0), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let ops = w.cx.read_entity(&w.shell, |s, _| s.video_ops().clone());
+    assert_eq!((ops.start, ops.end), (0.0, 0.0), "nothing was cut by moving the place");
+    assert!(w.tree().nodes.iter().any(|n| n.value.as_ref().is_some_and(|v| v.contains("Stelle 0:05"))), "{:?}", w.tree().nodes.iter().filter_map(|n| n.value.clone()).collect::<Vec<_>>());
+
+    // The left end taken hold of and drawn in to 2 s, the right end to 8 s.
+    w.cx.simulate_mouse_down(at(0.0, 3.0), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.2, 0.0), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.2, 0.0), MouseButton::Left, Modifiers::default());
+    w.draw();
+    w.cx.simulate_mouse_down(at(1.0, -3.0), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.8, 0.0), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.8, 0.0), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let ops = w.cx.read_entity(&w.shell, |s, _| s.video_ops().clone());
+    assert!((ops.start - 2.0).abs() < 0.1 && (ops.end - 8.0).abs() < 0.1, "{} {}", ops.start, ops.end);
+    assert!(w.tree().nodes.iter().any(|n| n.value.as_ref().is_some_and(|v| v.contains("Es bleibt 0:02 bis 0:08"))));
+
+    // An end cannot be drawn past the other.
+    w.cx.simulate_mouse_down(at(0.8, 0.0), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.0, 0.0), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.0, 0.0), MouseButton::Left, Modifiers::default());
+    let ops = w.cx.read_entity(&w.shell, |s, _| s.video_ops().clone());
+    assert!(ops.end > ops.start, "{} {}", ops.start, ops.end);
+    w.settle(10);
+}
