@@ -2,7 +2,7 @@
 //! by the pauses — and the pads laid on a step grid to be heard, bounced to a WAV or written as MIDI. The
 //! plan is `sondra-media::chop` (the same as the web app's, number for number), the pads and the beat are
 //! `sondra-media::pattern`. Every pad can be heard alone; every setting of a pad is a step on a row of
-//! chips. Not here yet: the piano roll, dragging cut marks on the waveform, playing pads from a keyboard.
+//! chips, or — opened up — as a piano roll (`roll_ui.rs`).
 
 use std::cell::Cell;
 use std::path::PathBuf;
@@ -44,6 +44,8 @@ pub struct SamplerState {
     /// The cut the pointer holds while it is down on the waveform.
     cut: Option<crate::cut_drag::Grab>,
     ticking: bool,
+    /// The piano roll of a pad, when one is open.
+    pub roll: Option<crate::roll_ui::RollView>,
 }
 
 impl SamplerState {
@@ -68,6 +70,7 @@ impl SamplerState {
             bounds: Rc::new(Cell::new(Bounds::default())),
             cut: None,
             ticking: false,
+            roll: None,
         }
     }
 }
@@ -143,6 +146,7 @@ impl Shell {
         s.tempo = Some((tempo.bpm, tempo.confidence, tempo.offset_seconds));
         s.settings.bpm = tempo.bpm.round().max(40.0);
         s.pattern = Pattern::new(16, s.settings.bpm);
+        s.roll = None;
         s.audio = Some(audio);
         s.made.clear();
         s.said = None;
@@ -173,6 +177,9 @@ impl Shell {
         s.pattern.cells.retain(|id, _| ids.contains(id));
         s.pattern.notes.retain(|id, _| ids.contains(id));
         s.pattern.muted.retain(|id, _| ids.contains(id));
+        if s.roll.as_ref().is_some_and(|r| !s.pattern.notes.contains_key(&r.id)) {
+            s.roll = None;
+        }
         s.selected = s.selected.min(s.pads.len().saturating_sub(1));
         cx.notify();
     }
@@ -216,6 +223,9 @@ impl Shell {
                 let old = cells.clone();
                 *cells = (0..steps).map(|i| if i < before { old[i] } else { old.get(i % before.max(1)).copied().unwrap_or(false) }).collect();
             }
+            for notes in self.sampler.pattern.notes.values_mut() {
+                *notes = sondra_media::pattern::resize_notes(notes, before, steps);
+            }
         }
         cx.notify();
     }
@@ -225,6 +235,7 @@ impl Shell {
         let cells = starter_pattern(&self.sampler.pads, steps);
         self.sampler.pattern.cells = cells;
         self.sampler.pattern.notes.clear();
+        self.sampler.roll = None;
         cx.notify();
     }
 
@@ -245,7 +256,13 @@ impl Shell {
 
     /// One pad, played now, whatever was sounding.
     fn sampler_play_pad(&mut self, index: usize, cx: &mut Context<Self>) {
-        let (Some(audio), Some(pad)) = (self.sampler.audio.clone(), self.sampler.pads.get(index).cloned()) else { return };
+        self.sampler_audition(index, 0.0, cx);
+    }
+
+    /// One pad, played now a number of semitones above its own pitch (the keys of the piano roll).
+    pub(crate) fn sampler_audition(&mut self, index: usize, extra: f64, cx: &mut Context<Self>) {
+        let (Some(audio), Some(mut pad)) = (self.sampler.audio.clone(), self.sampler.pads.get(index).cloned()) else { return };
+        pad.semitones += extra;
         self.sampler.selected = index;
         self.sampler_stop();
         let rate = audio.sample_rate;
@@ -646,7 +663,11 @@ impl Shell {
                     .child(pad_chips("Lage", "lage", [(-1.0, "Links"), (-0.5, "Halb links"), (0.0, "Mitte"), (0.5, "Halb rechts"), (1.0, "Rechts")].iter().map(|(v, l)| (*v, l.to_string())).collect(), pad.pan, |p, v| p.pan = v))
                     .child(pad_chips("Anschwellen", "an", [0.0, 5.0, 20.0, 60.0].iter().map(|v| (*v, format!("{v} ms"))).collect(), pad.attack_ms, |p, v| p.attack_ms = v))
                     .child(pad_chips("Ausklingen", "aus", [0.0, 20.0, 80.0, 250.0].iter().map(|v| (*v, format!("{v} ms"))).collect(), pad.release_ms, |p, v| p.release_ms = v))
-                    .child(div().flex().child(rev)),
+                    .child(div().flex().flex_wrap().gap(px(8.)).child(rev).child({
+                        let (me, rolled) = (me.clone(), s.roll.as_ref().is_some_and(|r| r.id == pad.id));
+                        let index = s.selected;
+                        ui.button("klavierrolle", if rolled { "Klavierrolle ist offen" } else { "Klavierrolle" }).small().accessible_name(format!("Klavierrolle für Pad {}", index + 1)).disabled(rolled).on_click(move |_, app| me.update(app, |shell, cx| shell.sampler_roll_open(index, cx)))
+                    })),
             );
         }
 
@@ -656,11 +677,19 @@ impl Shell {
         for (row, pad) in s.pads.iter().enumerate() {
             let mut line = div().flex().items_center().gap(px(4.)).child(div().w(px(48.)).child(ui.hint(format!("Pad {}", row + 1))));
             let cells = pattern.cells.get(&pad.id);
+            let rolled = pattern.notes.get(&pad.id);
             for step in 0..pattern.steps {
-                let on = cells.and_then(|c| c.get(step)).copied().unwrap_or(false);
+                // A pad with a roll plays its notes: the steps show where they begin or last, and a press goes to the roll.
+                let on = match rolled {
+                    Some(notes) => notes.iter().any(|n| step >= n.step && step < n.step + n.length),
+                    None => cells.and_then(|c| c.get(step)).copied().unwrap_or(false),
+                };
                 let me = me.clone();
+                let is_rolled = rolled.is_some();
                 line = line.child(
-                    ui.chip(format!("schritt-{row}-{step}"), if on { "●" } else { "·" }, on).accessible_name(format!("Pad {} Schritt {}", row + 1, step + 1)).on_click(move |_, app| me.update(app, |shell, cx| shell.sampler_toggle_step(row, step, cx))),
+                    ui.chip(format!("schritt-{row}-{step}"), if on { "●" } else { "·" }, on).accessible_name(format!("Pad {} Schritt {}", row + 1, step + 1)).on_click(move |_, app| {
+                        me.update(app, |shell, cx| if is_rolled { shell.sampler_roll_open(row, cx) } else { shell.sampler_toggle_step(row, step, cx) })
+                    }),
                 );
             }
             grid = grid.child(line);
@@ -711,6 +740,9 @@ impl Shell {
             play_row = play_row.child(ui.button("beat-leeren", "Raster leeren").disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.sampler_pattern(|p| p.cells.clear(), cx))));
         }
         page = page.child(div().flex().flex_col().gap(px(12.)).child(ui.subheading("Beat")).child(bpm_chips).child(options).child(grid).child(play_row));
+        if let Some(roll) = self.roll_editor(ui, cx) {
+            page = page.child(roll);
+        }
 
         // What can be written.
         let mut out = div().flex().flex_wrap().gap(px(8.));

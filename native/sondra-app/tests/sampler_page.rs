@@ -53,7 +53,7 @@ fn open<'a>(cx: &'a mut TestAppContext, name: std::path::PathBuf) -> Window<'a> 
     let seen: Seen = Rc::default();
     let sink = seen.clone();
     cx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
-    cx.simulate_resize(size(px(WIDTH), px(2600.)));
+    cx.simulate_resize(size(px(WIDTH), px(3400.)));
     let mut w = Window { cx, shell, seen };
     w.draw();
     w.shell.update(w.cx, |shell, cx| shell.go(Panel::Sampler, cx));
@@ -64,7 +64,7 @@ fn open<'a>(cx: &'a mut TestAppContext, name: std::path::PathBuf) -> Window<'a> 
 impl Window<'_> {
     fn draw(&mut self) {
         let view = self.shell.clone();
-        self.cx.draw(point(px(0.), px(0.)), size(AvailableSpace::Definite(px(WIDTH)), AvailableSpace::Definite(px(2600.))), move |_, _| view);
+        self.cx.draw(point(px(0.), px(0.)), size(AvailableSpace::Definite(px(WIDTH)), AvailableSpace::Definite(px(3400.))), move |_, _| view);
     }
     fn tree(&self) -> Rc<Snapshot> {
         self.seen.borrow().last().expect("a frame").clone()
@@ -232,4 +232,87 @@ fn a_beat_is_laid_heard_and_written_as_sound_and_as_midi(cx: &mut TestAppContext
     assert_eq!(&midi[..4], b"MThd");
     let pads = std::fs::read_dir(tmp.path().join("Break (Pads)")).unwrap().count();
     assert!(pads >= 7, "{pads} pad files");
+}
+
+#[gpui::test]
+fn a_pads_piano_roll_sets_lengthens_moves_and_takes_away_notes_with_the_pointer(cx: &mut TestAppContext) {
+    use sondra_media::roll::{TOP};
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Break.wav"));
+    w.press(Role::Button, "Verfahren Gleiche Teile");
+    w.press(Role::Button, "Teile 4");
+    // Opening the roll: a pad with steps starts with a note at its own pitch for each of them.
+    w.press(Role::Button, "Pad 1 Schritt 3");
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().cells[&"p1".to_string()][2]));
+    w.press(Role::Button, "Klavierrolle für Pad 1");
+    let notes = w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes());
+    assert_eq!((notes.len(), notes[0].step, notes[0].length, notes[0].semitone), (1, 2, 1, 0.0));
+    assert!(w.tree().find(Role::Group, "Klavierrolle").is_some());
+    assert!(w.tree().find(Role::ListItem, "C4, Schritt 3, 1 lang").is_some());
+
+    let (grid, lane) = w.shell.read_with(w.cx, |s, _| s.sampler_roll_bounds()).unwrap();
+    let at = |step: usize, semitone: i32| point(grid.origin.x + grid.size.width * ((step as f32 + 0.5) / 16.0), grid.origin.y + px((TOP - semitone) as f32 * 22.0 + 11.0));
+    let down = |w: &mut Window<'_>, p| w.cx.simulate_mouse_down(p, MouseButton::Left, Modifiers::default());
+    let to = |w: &mut Window<'_>, p| w.cx.simulate_mouse_move(p, Some(MouseButton::Left), Modifiers::default());
+    let up = |w: &mut Window<'_>, p| {
+        w.cx.simulate_mouse_up(p, MouseButton::Left, Modifiers::default());
+        w.draw();
+    };
+
+    // A press on empty ground sets a note, as long as the last one (2), and a drag to step 8 lengthens it to 6.
+    down(&mut w, at(5, 3));
+    to(&mut w, at(8, 3));
+    up(&mut w, at(8, 3));
+    let notes = w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes());
+    assert_eq!(notes.len(), 2);
+    assert_eq!((notes[1].step, notes[1].length, notes[1].semitone), (5, 4, 3.0));
+    // The next note starts with that length.
+    down(&mut w, at(12, -2));
+    up(&mut w, at(12, -2));
+    let notes = w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes());
+    assert_eq!((notes[2].step, notes[2].length), (12, 4));
+
+    // A note is taken by its body and moved: two steps on and two keys up.
+    down(&mut w, at(6, 3));
+    to(&mut w, at(8, 5));
+    up(&mut w, at(8, 5));
+    let notes = w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes());
+    assert_eq!((notes[1].step, notes[1].semitone, notes[1].length), (7, 5.0, 4));
+
+    // A click on it, without a drag, takes it away.
+    down(&mut w, at(8, 5));
+    up(&mut w, at(8, 5));
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes().len()), 2);
+
+    // A chord is set with a stamp, and the notes are named for a screen reader.
+    w.press(Role::Button, "Beim Klicken setzen: Moll-Akkord");
+    down(&mut w, at(0, 0));
+    up(&mut w, at(0, 0));
+    let notes = w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes());
+    assert_eq!(notes.iter().filter(|n| n.step == 0).map(|n| n.semitone).collect::<Vec<_>>(), [0.0, 3.0, 7.0]);
+    assert!(w.tree().find(Role::ListItem, "D♯4, Schritt 1, 4 lang").is_some(), "{:?}", w.labels());
+
+    // The dynamics lane: the notes that sound in a step get the height.
+    let step_of_first = point(lane.origin.x + lane.size.width * (12.5 / 16.0), lane.origin.y + lane.size.height * 0.5);
+    w.cx.simulate_mouse_down(step_of_first, MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_up(step_of_first, MouseButton::Left, Modifiers::default());
+    w.draw();
+    let notes = w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes());
+    let last = notes.iter().find(|n| n.step == 12).unwrap();
+    assert!((last.velocity.unwrap() - 0.5).abs() < 0.02, "{last:?}");
+
+    // An octave up, then all notes gone.
+    w.press(Role::Button, "Eine Oktave höher");
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes()).iter().all(|n| n.semitone >= 0.0 || n.semitone == -2.0 + 12.0));
+    w.press(Role::Button, "Alle Noten löschen");
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes()).is_empty());
+
+    // Back to steps: every note's start is a step again, and the pad plays its steps.
+    down(&mut w, at(9, 1));
+    up(&mut w, at(9, 1));
+    w.press(Role::Button, "Noten zurück in Schritte wandeln");
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes().is_empty()));
+    let pattern = w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().clone());
+    assert!(!pattern.notes.contains_key("p1"));
+    assert!(pattern.cells["p1"][9] && pattern.cells["p1"].iter().filter(|c| **c).count() == 1);
 }

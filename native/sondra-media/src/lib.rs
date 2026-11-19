@@ -42,6 +42,7 @@ pub mod midi;
 pub mod mic;
 pub mod onsets;
 pub mod pattern;
+pub mod roll;
 pub mod pitch;
 pub mod presets;
 pub mod run;
