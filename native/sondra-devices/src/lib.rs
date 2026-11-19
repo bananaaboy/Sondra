@@ -8,7 +8,9 @@
 //! owner fails its signature, is ignored, and its owner writes it again on its next round.
 
 pub mod engine;
+pub mod files;
 pub mod identity;
+pub mod own;
 pub mod registry;
 pub mod rtc;
 pub mod transfer;

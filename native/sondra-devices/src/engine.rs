@@ -99,6 +99,7 @@ pub struct Snapshot {
     pub status: Status,
     pub me: Option<Value>,
     pub name: String,
+    pub decided: bool,
     pub devices: Vec<Value>,
     pub former: Vec<Value>,
     pub transfers: Vec<Transfer>,
@@ -171,6 +172,9 @@ struct Control {
     answer: Option<Sender<Result<String, State>>>,
 }
 
+/// Told when the name this device carries or the answer to „Das war dieses Gerät?“ changed: the app keeps it.
+pub type OnOwnChange = Arc<dyn Fn(&str, bool) + Send + Sync>;
+
 pub struct Engine {
     shared: Shared,
     commands: Sender<Command>,
@@ -187,12 +191,16 @@ impl Engine {
         hardware: Hardware,
         config: Config,
         timing: Timing,
+        decided: bool,
+        on_own_change: Option<OnOwnChange>,
     ) -> Engine {
-        let registry = Registry::new(client, keys, name, created, hardware);
+        let mut registry = Registry::new(client, keys, name, created, hardware);
+        registry.decided = decided;
         let shared: Shared = Arc::new(Mutex::new(Snapshot {
             status: Status::Joining,
             me: None,
             name: name.to_owned(),
+            decided,
             devices: vec![],
             former: vec![],
             transfers: vec![],
@@ -200,7 +208,7 @@ impl Engine {
         }));
         let (commands, inbox) = channel();
         let stop = Arc::new(AtomicBool::new(false));
-        let worker = Worker { registry, shared: shared.clone(), config, timing, controls: HashMap::new(), offers: HashMap::new(), stop: stop.clone() };
+        let worker = Worker { registry, shared: shared.clone(), config, timing, controls: HashMap::new(), offers: HashMap::new(), stop: stop.clone(), on_own_change, told: (name.to_owned(), decided) };
         let thread = thread::Builder::new().name("sondra-devices".into()).spawn(move || worker.run(inbox)).ok();
         Engine { shared, commands, stop, thread }
     }
@@ -276,6 +284,8 @@ struct Worker<T: TokenSource> {
     /// The offers this device was made and has not answered: the other side's description.
     offers: HashMap<String, String>,
     stop: Arc<AtomicBool>,
+    on_own_change: Option<OnOwnChange>,
+    told: (String, bool),
 }
 
 impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
@@ -316,12 +326,21 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
         }
     }
 
-    fn publish(&self) {
+    fn publish(&mut self) {
         let mut s = self.shared.lock().unwrap();
         s.me = self.registry.me.clone();
         s.name = self.registry.name.clone();
         s.devices = self.registry.devices.clone();
         s.former = self.registry.former.clone();
+        s.decided = self.registry.decided;
+        drop(s);
+        let now = (self.registry.name.clone(), self.registry.decided);
+        if now != self.told {
+            if let Some(tell) = &self.on_own_change {
+                tell(&now.0, now.1);
+            }
+            self.told = now;
+        }
     }
 
     fn round(&mut self, now: f64, events: &Sender<Event>) {
