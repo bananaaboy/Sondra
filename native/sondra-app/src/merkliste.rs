@@ -5,13 +5,13 @@
 
 use std::rc::Rc;
 
-use gpui::{div, prelude::*, px, AnyElement, App, Context, Entity, SharedString};
+use gpui::{deferred, div, prelude::*, px, AnyElement, App, Context, Entity, SharedString};
 use sondra_merk::list::{remove_item, restore_item, Taken};
 use sondra_merk::merge::Removed;
 use sondra_merk::normalize::{normalize, Context as Ids};
 use sondra_merk::progress::{caught_up, item_progress, season_name, season_progress, seasons_of, settle, toggle_watched, watched_up_to, with_season};
 use sondra_merk::rows::{left_label, stand_label};
-use sondra_merk::stats::Sort;
+use sondra_merk::stats::{Sort, SORT_OPTIONS};
 use sondra_merk::view::{counts, groups, Filter, STATUS_OPTIONS};
 use sondra_merk::{Item, Season, Status};
 use sondra_ui::{family, size, FieldEvent, NoticeKind, TextField, Ui};
@@ -37,6 +37,8 @@ pub struct MerkState {
     pub sort: Sort,
     /// Posters on a shelf, or one line a series.
     pub view: View,
+    /// The menu behind „Mehr“ is open.
+    pub more: bool,
     pub store: Option<MerkStore>,
     /// Why the list on disk was left alone, when it was.
     pub problem: Option<String>,
@@ -76,6 +78,7 @@ impl MerkState {
             filter: Filter::default(),
             sort: Sort::Recent,
             view: View::Poster,
+            more: false,
             store: None,
             problem: None,
             adding: false,
@@ -251,6 +254,9 @@ impl Shell {
                 Self::merk_do(&me, app, |m| m.adding = !m.adding)
             })
         });
+        if !state.items.is_empty() {
+            actions = actions.child(self.merk_more(ui, cx));
+        }
         head = head.child(actions);
 
         let mut page = div().flex().flex_col().gap(px(20.)).child(head);
@@ -354,6 +360,45 @@ impl Shell {
             );
         }
         page.into_any_element()
+    }
+
+    /// „Mehr“: the few things that are not on the page itself — for now the order of the series.
+    fn merk_more(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        let open = self.merk.more;
+        let button = {
+            let me = me.clone();
+            ui.button("merkliste-mehr", "Mehr").small().on_click(move |_, app| Self::merk_do(&me, app, |m| m.more = !m.more))
+        };
+        let mut holder = div().relative().child(button);
+        if open {
+            let mut items: Vec<AnyElement> = vec![ui.hint("Ordnung")];
+            for (sort, label) in SORT_OPTIONS {
+                let me = me.clone();
+                items.push(
+                    ui.menu_item(format!("ordnung-{label}"), label, self.merk.sort == sort)
+                        .on_click(move |_, app| Self::merk_do(&me, app, move |m| {
+                            m.sort = sort;
+                            m.more = false;
+                        }))
+                        .into_any_element(),
+                );
+            }
+            let pop = ui.popover("menue-merkliste-mehr", "Mehr", items);
+            let away = me.clone();
+            holder = holder.child(
+                deferred(
+                    div()
+                        .absolute()
+                        .top(px(40.))
+                        .right_0()
+                        .on_mouse_down_out(move |_, _, app| Self::merk_do(&away, app, |m| m.more = false))
+                        .child(pop),
+                )
+                .with_priority(10),
+            );
+        }
+        holder.into_any_element()
     }
 
     /// No list yet: what to do, not a form.

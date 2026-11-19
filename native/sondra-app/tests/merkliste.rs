@@ -280,3 +280,33 @@ fn the_page_opens_on_a_shelf_of_posters_and_a_poster_opens_its_series(cx: &mut T
     w.press(Role::Button, "Als Liste");
     assert!(w.tree().find(Role::Button, "Staffel 1, Folge 4 von Frieren als gesehen markieren").is_some());
 }
+
+#[gpui::test]
+fn the_order_of_the_series_is_chosen_behind_mehr(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(8)), dir.path());
+    // By recent activity, the entries that were changed last come first; by title they go A to Z.
+    let first_of = |w: &Window| -> Vec<String> { w.tree().nodes.iter().filter(|n| n.role == Role::ListItem).filter_map(|n| n.label.as_ref().map(|l| l.to_string())).collect() };
+    assert!(w.tree().find(Role::Menu, "Mehr").is_none());
+    w.press(Role::Button, "Mehr");
+    assert!(w.tree().find(Role::Menu, "Mehr").is_some());
+    for label in ["Zuletzt aktiv", "Titel (A–Z)", "Beste Bewertung (★)", "Höchster Fortschritt (%)", "Am wenigsten übrig", "Meiste Folgen"] {
+        assert!(w.tree().find(Role::MenuItem, label).is_some(), "{label}");
+    }
+    assert!(said(&w.tree(), Role::MenuItem, "Zuletzt aktiv").starts_with("Geöffnet"));
+    w.press(Role::MenuItem, "Titel (A–Z)");
+    assert!(w.tree().find(Role::Menu, "Mehr").is_none(), "a choice shuts the menu");
+    let later: Vec<String> = first_of(&w).into_iter().filter(|t| t.starts_with("Serie ")).collect();
+    let mut sorted = later.clone();
+    sorted.sort();
+    assert_eq!(later, sorted, "the series of one section stand A to Z");
+    w.press(Role::Button, "Mehr");
+    // The button keeps the focus it got from the click (or from Enter), and Escape reaches the window from it.
+    let button = w.tree().find(Role::Button, "Mehr").unwrap().id;
+    w.cx.update(|window, cx| {
+        run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: button, data: None }, window, cx)
+    });
+    w.cx.simulate_keystrokes("escape");
+    w.draw();
+    assert!(w.tree().find(Role::Menu, "Mehr").is_none(), "Escape shuts it");
+}

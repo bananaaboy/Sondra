@@ -758,6 +758,13 @@ impl Render for Shell {
                         app.stop_propagation();
                         return;
                     }
+                    if event.keystroke.key == "escape" && me.read(app).merk.more {
+                        me.update(app, |shell, cx| {
+                            shell.merk.more = false;
+                            cx.notify();
+                        });
+                        return;
+                    }
                     if event.keystroke.key == "escape" {
                         // Escape shuts the menu and gives the focus back to the tab that opened it.
                         let back = me.read(app).opener_focus();
