@@ -5,6 +5,7 @@
 pub mod fonts;
 pub mod icons;
 pub mod menu;
+pub mod motion;
 pub mod text_field;
 pub mod theme;
 pub mod ui;

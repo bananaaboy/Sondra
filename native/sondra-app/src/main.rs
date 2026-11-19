@@ -8,6 +8,7 @@ use sondra_ui::{bind_keys, fonts, Assets};
 fn main() {
     Application::new().with_assets(Assets).run(|cx: &mut App| {
         fonts::load(cx);
+        sondra_ui::motion::set_reduced(sondra_app::system::prefers_reduced_motion());
         bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1180.), px(860.)), cx);
         cx.open_window(

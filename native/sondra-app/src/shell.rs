@@ -8,10 +8,10 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     deferred, div, prelude::*, px, AnyElement, Context, Entity, ExternalPaths, FocusHandle,
-    KeyDownEvent, PathPromptOptions, Render, Window, WindowAppearance,
+    KeyDownEvent, PathPromptOptions, Render, SharedString, Window, WindowAppearance,
 };
 use sondra_a11y::{a11y_root, Role};
-use sondra_ui::{family, radius, size, FieldEvent, Mode, NoticeKind, TextField, Ui};
+use sondra_ui::{family, motion, radius, size, FieldEvent, Mode, NoticeKind, TextField, Ui};
 
 use crate::actions::{self, Group};
 use crate::layout::{columns, shell_width, tab_width, GUTTER};
@@ -285,7 +285,8 @@ impl Shell {
 
     fn floating(&self, popover: AnyElement, cx: &mut Context<Self>) -> AnyElement {
         let me = cx.entity();
-        // Above everything else, just under its tab; a press anywhere else shuts it.
+        // Above everything else, just under its tab, unfolding from it (`drop`); a press anywhere else
+        // shuts it.
         deferred(
             div()
                 .absolute()
@@ -294,7 +295,13 @@ impl Shell {
                 .on_mouse_down_out(move |_, _, app| {
                     me.update(app, |shell, cx| shell.close_menu(true, cx));
                 })
-                .child(popover),
+                .child(motion::enter(
+                    div().child(popover),
+                    "menue-auf",
+                    (0.0, -6.0),
+                    Duration::ZERO,
+                    motion::FAST,
+                )),
         )
         .with_priority(10)
         .into_any_element()
@@ -422,19 +429,37 @@ impl Shell {
         block.into_any_element()
     }
 
-    fn tile(&self, ui: Ui, action: &'static actions::Action, cx: &mut Context<Self>) -> AnyElement {
+    fn tile(
+        &self,
+        ui: Ui,
+        action: &'static actions::Action,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let me = cx.entity();
         let panel = action.panel;
-        ui.tile(
-            format!("kachel-{}", action.id),
-            action.label.clone(),
-            action.hint.clone(),
+        let tile = ui
+            .tile(
+                format!("kachel-{}", action.id),
+                action.label.clone(),
+                action.hint.clone(),
+            )
+            // The job's own mark, else the one of the tool it opens — as on the web.
+            .icon(
+                sondra_ui::action_icon(&action.id)
+                    .or_else(|| sondra_ui::panel_icon(panel.meta().id)),
+            )
+            .on_click(move |_, app| {
+                me.update(app, |shell, cx| shell.go(panel, cx));
+            });
+        // A list arrives as a list: the tiles follow one another, 30 ms apart.
+        motion::enter(
+            div().child(tile),
+            SharedString::from(format!("rise-{}", action.id)),
+            (0.0, 8.0),
+            motion::stagger(index),
+            motion::BASE,
         )
-        .symbol(action.label.chars().next().unwrap_or('·').to_string())
-        .on_click(move |_, app| {
-            me.update(app, |shell, cx| shell.go(panel, cx));
-        })
-        .into_any_element()
     }
 
     fn grid(&self, ui: Ui, tiles: Vec<AnyElement>, cols: usize) -> AnyElement {
@@ -518,7 +543,11 @@ impl Shell {
                     query.trim()
                 )));
             } else {
-                let tiles = found.iter().map(|a| self.tile(ui, a, cx)).collect();
+                let tiles = found
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| self.tile(ui, a, i, cx))
+                    .collect();
                 body = body.child(self.grid(ui, tiles, cols));
             }
         } else {
@@ -534,7 +563,11 @@ impl Shell {
                     (cols * 2).min(list.len())
                 };
                 let rest = list.len() - shown;
-                let tiles = list[..shown].iter().map(|a| self.tile(ui, a, cx)).collect();
+                let tiles = list[..shown]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| self.tile(ui, a, i, cx))
+                    .collect();
                 let mut section = div()
                     .flex()
                     .flex_col()
@@ -593,7 +626,7 @@ impl Shell {
             let me = cx.entity();
             let panel = *p;
             ui.tile(format!("aufgabe-{}", p.slug()), p.label(), p.meta().summary)
-                .symbol(p.label().chars().next().unwrap_or('·').to_string())
+                .icon(sondra_ui::panel_icon(p.meta().id))
                 .on_click(move |_, app| {
                     me.update(app, |shell, cx| shell.go(panel, cx));
                 })
@@ -642,8 +675,15 @@ impl Render for Shell {
         } else {
             self.unfinished(ui, self.panel)
         };
-        // A tool comes from the side of its tab: the direction is kept for the motion pass.
-        let _side = slide_from(self.from, self.panel);
+        // A tool comes from the side of its tab, ±20 px; the start page comes from below, a little.
+        let side = slide_from(self.from, self.panel) as f32;
+        let page = motion::enter(
+            div().w_full().child(page),
+            ("seite", self.panel.index()),
+            (20.0 * side, if side == 0.0 { 8.0 } else { 0.0 }),
+            Duration::ZERO,
+            motion::BASE,
+        );
 
         let header = div()
             .flex()
