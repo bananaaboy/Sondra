@@ -7,6 +7,8 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 
+process.env.TZ = 'Europe/Zurich'
+
 import {
   clickSelect,
   crumbs,
@@ -28,6 +30,7 @@ import {
   type KindFilter,
   type SortKey,
 } from '../src/lib/folder'
+import { formatBytes } from '../src/lib/format'
 import { episodeKindOf, leftLabel, positionLabel, standLabel } from '../src/lib/merkRows'
 import { subtitleNameFor, subtitlesBeside } from '../src/lib/subtitleFiles'
 import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy } from '../src/lib/duplicates'
@@ -229,7 +232,15 @@ const rows = {
     }
   })(),
 }
+const byteCases = [0, 1, 1023, 1024, 1025, 1280, 1536, 1792, 2048 + 51, 10 * 1024 - 1, 10 * 1024 + 51, 100 * 1024 - 1, 100 * 1024 + 512, 1024 ** 2 - 1, 1024 ** 2, 1.25 * 1024 ** 2, 1.35 * 1024 ** 2 + 1, 99.95 * 1024 ** 2, 100.5 * 1024 ** 2, 1024 ** 3, 1.5 * 1024 ** 3, 1024 ** 4, 5 * 1024 ** 4, 1500 * 1024 ** 4, 12345678901, 33 * 1024 ** 2, 7.5, -1, Number.NaN, Number.POSITIVE_INFINITY]
+for (let i = 0; i < 400; i++) byteCases.push(Math.floor(1.0713 ** i * 3 + i * 17))
+const formatting = {
+  bytes: byteCases.map((n) => ({ n: Number.isNaN(n) ? 'NaN' : n === Infinity ? 'Infinity' : n, text: formatBytes(n), text0: formatBytes(n, 0), text2: formatBytes(n, 2) })),
+  // The short date of the folder page, in Zurich time (summer and winter, midnight, new year, a leap day).
+  dates: [0, 1_700_000_000_000, 1_751_328_000_000, 1_735_689_599_000, 1_735_689_600_000, 1_709_164_800_000, 1_711_846_800_000, 1_698_534_000_000, 1_698_537_600_000, 2_000_000_000_000, 951_782_400_000, 4_102_444_800_000].map((ms) => ({ ms, text: new Date(ms).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit' }) })),
+}
 const out = {
+  formatting,
   rows,
   subtitles,
   dup: dupOut,

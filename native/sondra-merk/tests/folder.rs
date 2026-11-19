@@ -435,3 +435,25 @@ fn subtitles_are_found_beside_their_film_and_made_ones_are_named_like_the_web_ap
         assert_eq!(subtitle_name_for(case["name"].as_str().unwrap()), case["srt"].as_str().unwrap(), "named {}", case["name"]);
     }
 }
+
+#[test]
+fn sizes_and_dates_are_printed_the_way_the_web_app_prints_them() {
+    use sondra_merk::format::*;
+    let g = golden();
+    let bytes = g["formatting"]["bytes"].as_array().unwrap();
+    assert!(bytes.len() > 400);
+    for case in bytes {
+        let n = match &case["n"] {
+            Value::String(s) if s == "NaN" => f64::NAN,
+            Value::String(s) if s == "Infinity" => f64::INFINITY,
+            v => v.as_f64().unwrap(),
+        };
+        assert_eq!(format_bytes(n, 1), case["text"].as_str().unwrap(), "format_bytes({n})");
+        assert_eq!(format_bytes(n, 0), case["text0"].as_str().unwrap(), "format_bytes({n}, 0)");
+        assert_eq!(format_bytes(n, 2), case["text2"].as_str().unwrap(), "format_bytes({n}, 2)");
+    }
+    let zurich: chrono_tz::Tz = "Europe/Zurich".parse().unwrap();
+    for case in g["formatting"]["dates"].as_array().unwrap() {
+        assert_eq!(short_date(&zurich, case["ms"].as_i64().unwrap()), case["text"].as_str().unwrap(), "date {}", case["ms"]);
+    }
+}
