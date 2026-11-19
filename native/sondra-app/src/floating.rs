@@ -119,6 +119,11 @@ impl Shell {
             );
         }
 
+        // A newer version of Sondra is ready.
+        if let Some(card) = self.update_card(&ui, cx) {
+            stack.push(card);
+        }
+
         if stack.is_empty() {
             return None;
         }

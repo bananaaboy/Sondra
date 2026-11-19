@@ -70,6 +70,12 @@ impl Shell {
         cx.notify();
     }
 
+    /// Opens the window with the list of what is new (and the line about updates).
+    pub fn open_whats_new(&mut self, cx: &mut Context<Self>) {
+        self.whats_new_open = true;
+        cx.notify();
+    }
+
     /// For tests: whether the line „Neu in …“ stands under the header.
     pub fn news_line(&self) -> Option<String> {
         self.news.clone()
@@ -100,6 +106,9 @@ impl Shell {
         let c = ui.c;
         let now = app_version();
         let mut list = div().flex().flex_col();
+        if let Some(section) = self.update_section(&ui, cx) {
+            list = list.child(section);
+        }
         for (n, release) in releases().into_iter().enumerate() {
             let mut head = div().flex().flex_wrap().items_baseline().gap(px(10.)).child(ui.value(release.version.clone())).child(ui.hint(date_label(&release.date)));
             if release.version == now {

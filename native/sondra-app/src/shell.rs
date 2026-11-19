@@ -90,6 +90,7 @@ pub struct Shell {
     pub(crate) video: VideoState,
     pub(crate) discord: crate::discord::DiscordState,
     pub(crate) news_rounds: crate::new_episodes::NewEpisodes,
+    pub update: crate::updater_ui::Updates,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
@@ -122,6 +123,7 @@ impl Shell {
         let download = DownloadState::new(cx, colors);
         let devices = DevicesState::new(cx, colors);
         Self::start_new_episode_rounds(window, cx);
+        Self::start_update_rounds(window, cx);
         // Twice a second: is the window minimised? (A window nobody draws does not ask by itself.)
         cx.spawn_in(window, async move |this, cx| loop {
             cx.background_executor().timer(Duration::from_millis(500)).await;
@@ -172,6 +174,7 @@ impl Shell {
             video: VideoState::new(),
             discord: crate::discord::DiscordState::default(),
             news_rounds: crate::new_episodes::NewEpisodes::default(),
+            update: crate::updater_ui::Updates::default(),
             convert_watch: None,
             pending_focus: None,
             whats_new_open: false,

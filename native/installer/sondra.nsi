@@ -96,6 +96,18 @@ Function un.onInit
   SetRegView 64
 FunctionEnd
 
+; An update runs this setup silently with /relaunch (see `updater.rs`): once it is in place, Sondra opens again.
+!insertmacro GetParameters
+!insertmacro GetOptions
+Function .onInstSuccess
+  ${GetParameters} $0
+  ClearErrors
+  ${GetOptions} $0 "/relaunch" $1
+  ${IfNot} ${Errors}
+    Exec '"$INSTDIR\sondra.exe"'
+  ${EndIf}
+FunctionEnd
+
 Section "Sondra" SecMain
   SetShellVarContext all
   SetOutPath "$INSTDIR"

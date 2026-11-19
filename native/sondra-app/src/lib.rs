@@ -32,6 +32,8 @@ pub mod harmony_page;
 pub mod images_page;
 pub mod instance;
 pub mod mix_page;
+pub mod updater;
+pub mod updater_ui;
 pub mod video_page;
 pub mod visualizer;
 pub mod normalize_page;

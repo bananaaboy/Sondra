@@ -345,6 +345,14 @@ jobs:
           & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
           Check ($LASTEXITCODE -eq 0 -and (Test-Path $setup)) ("the setup is built: {0:N1} MB" -f ((Get-Item $setup).Length / 1MB))
 
+          # The page the installed program looks at for a newer version (`updater.rs`): the flat YAML
+          # electron-builder writes, with the setup's SHA-512 in base64. It goes beside the setup in a release.
+          $bytes = [IO.File]::ReadAllBytes($setup)
+          $sha = [Convert]::ToBase64String([Security.Cryptography.SHA512]::Create().ComputeHash($bytes))
+          $yaml = "version: $version`nfiles:`n  - url: Sondra-Nativ-Setup.exe`n    sha512: $sha`n    size: $($bytes.Length)`npath: Sondra-Nativ-Setup.exe`nsha512: $sha`nreleaseDate: '$((Get-Date).ToUniversalTime().ToString('o'))'`n"
+          [IO.File]::WriteAllText((Join-Path $PWD 'latest-nativ.yml'), $yaml, (New-Object Text.UTF8Encoding($false)))
+          Check ((Get-Content latest-nativ.yml -Raw) -match "version: $version") 'latest-nativ.yml names the version'
+
           $dir = 'C:\SondraNativTest'
           $i = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$dir" -Wait -PassThru
           Check ($i.ExitCode -eq 0) "the silent install ends well (exit code $($i.ExitCode))"
@@ -397,7 +405,9 @@ jobs:
         if: always()
         with:
           name: Sondra-Nativ-Setup
-          path: Sondra-Nativ-Setup.exe
+          path: |
+            Sondra-Nativ-Setup.exe
+            latest-nativ.yml
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
