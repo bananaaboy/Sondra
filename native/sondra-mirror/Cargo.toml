@@ -1,0 +1,13 @@
+[package]
+name = "sondra-mirror"
+description = "A phone's screen on this computer: the scrcpy server's protocol, a virtual keyboard, the ADB wire protocol over USB."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
