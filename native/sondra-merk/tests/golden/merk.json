@@ -1,4 +1,899 @@
 {
+ "matching": {
+  "items": [
+   {
+    "id": "m1",
+    "url": "",
+    "title": "Frieren",
+    "language": "auto",
+    "season": 1,
+    "episode": 3,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching",
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 28,
+      "watched": []
+     },
+     {
+      "number": 2,
+      "episodes": 10,
+      "watched": []
+     }
+    ]
+   },
+   {
+    "id": "m2",
+    "url": "",
+    "title": "Mob Psycho 100",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching",
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 12,
+      "watched": []
+     }
+    ]
+   },
+   {
+    "id": "m3",
+    "url": "",
+    "title": "Mob Psycho 100 II",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching",
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 12,
+      "watched": []
+     }
+    ]
+   },
+   {
+    "id": "m4",
+    "url": "",
+    "title": "Dark",
+    "language": "auto",
+    "season": 3,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching",
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 10,
+      "watched": []
+     },
+     {
+      "number": 2,
+      "episodes": 8,
+      "watched": []
+     },
+     {
+      "number": 3,
+      "episodes": 8,
+      "watched": [
+       1,
+       2
+      ]
+     }
+    ]
+   },
+   {
+    "id": "m5",
+    "url": "",
+    "title": "One Piece",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching",
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": null,
+      "watched": []
+     }
+    ]
+   },
+   {
+    "id": "m6",
+    "url": "",
+    "title": "Die Reise nach Übermorgen",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching",
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 5,
+      "watched": []
+     },
+     {
+      "number": 2,
+      "episodes": null,
+      "watched": []
+     }
+    ]
+   },
+   {
+    "id": "m7",
+    "url": "",
+    "title": "Show",
+    "language": "auto",
+    "season": 2,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching",
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 12,
+      "watched": []
+     },
+     {
+      "number": 2,
+      "episodes": null,
+      "watched": []
+     },
+     {
+      "number": 3,
+      "episodes": 12,
+      "watched": []
+     }
+    ]
+   },
+   {
+    "id": "m8",
+    "url": "",
+    "title": "A",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching"
+   },
+   {
+    "id": "m9",
+    "url": "",
+    "title": "Naruto Shippuden",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching"
+   },
+   {
+    "id": "m10",
+    "url": "",
+    "title": "Unicode Strasse",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching"
+   }
+  ],
+  "names": [
+   {
+    "name": "Frieren S01E13.mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": 1,
+     "episode": 13
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 13
+    }
+   },
+   {
+    "name": "Frieren.1x13.1080p.mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": 1,
+     "episode": 13
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 13
+    }
+   },
+   {
+    "name": "[Gruppe] Frieren - 13 (1080p).mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": null,
+     "episode": 13
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 13
+    }
+   },
+   {
+    "name": "Frieren Staffel 1 Folge 13.mp4",
+    "guess": {
+     "title": "Frieren",
+     "season": 1,
+     "episode": 13
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 13
+    }
+   },
+   {
+    "name": "Frieren Season 2 Episode 4.mp4",
+    "guess": {
+     "title": "Frieren",
+     "season": 2,
+     "episode": 4
+    },
+    "match": {
+     "item": "m1",
+     "season": 2,
+     "episode": 4
+    }
+   },
+   {
+    "name": "Frieren Episode 7.mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": null,
+     "episode": 7
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 7
+    }
+   },
+   {
+    "name": "Frieren Ep. 8.avi",
+    "guess": {
+     "title": "Frieren",
+     "season": null,
+     "episode": 8
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 8
+    }
+   },
+   {
+    "name": "Frieren Folge 9",
+    "guess": {
+     "title": "Frieren",
+     "season": null,
+     "episode": 9
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 9
+    }
+   },
+   {
+    "name": "Frieren - 14v2 [BD 1080p].mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": null,
+     "episode": 14
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 14
+    }
+   },
+   {
+    "name": "[SubGruppe][Frieren][05][1080p][HEVC].mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "Frieren - 05 (BD 1080p x265).mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": null,
+     "episode": 5
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 5
+    }
+   },
+   {
+    "name": "Frieren 13.mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": null,
+     "episode": 13
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 13
+    }
+   },
+   {
+    "name": "Frieren_S02E100.mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": 2,
+     "episode": 100
+    },
+    "match": null
+   },
+   {
+    "name": "Mob Psycho 100 II - 03.mkv",
+    "guess": {
+     "title": "Mob Psycho 100 II",
+     "season": null,
+     "episode": 3
+    },
+    "match": {
+     "item": "m3",
+     "season": 1,
+     "episode": 3
+    }
+   },
+   {
+    "name": "Mob Psycho 100 - 03.mkv",
+    "guess": {
+     "title": "Mob Psycho 100",
+     "season": null,
+     "episode": 3
+    },
+    "match": {
+     "item": "m3",
+     "season": 1,
+     "episode": 3
+    }
+   },
+   {
+    "name": "Mob.Psycho.100.S03E01.WEB.mkv",
+    "guess": {
+     "title": "Mob Psycho 100",
+     "season": 3,
+     "episode": 1
+    },
+    "match": {
+     "item": "m3",
+     "season": 3,
+     "episode": 1
+    }
+   },
+   {
+    "name": "Dark.S03E08.GERMAN.DL.1080p.mkv",
+    "guess": {
+     "title": "Dark",
+     "season": 3,
+     "episode": 8
+    },
+    "match": {
+     "item": "m4",
+     "season": 3,
+     "episode": 8
+    }
+   },
+   {
+    "name": "Der Film.mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "Film 2020.mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "Nur Titel",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "12.mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "S01E02.mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "A - 1.mkv",
+    "guess": {
+     "title": "A",
+     "season": null,
+     "episode": 1
+    },
+    "match": null
+   },
+   {
+    "name": " - 5.mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "Titel - 0.mkv",
+    "guess": {
+     "title": "Titel",
+     "season": null,
+     "episode": 0
+    },
+    "match": null
+   },
+   {
+    "name": "Titel S01E00.mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "One Piece - 1071 [1080p].mkv",
+    "guess": {
+     "title": "One Piece",
+     "season": null,
+     "episode": 1071
+    },
+    "match": {
+     "item": "m5",
+     "season": 1,
+     "episode": 1071
+    }
+   },
+   {
+    "name": "One Piece 1x1071.mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "Die Reise nach Übermorgen S02E03.mkv",
+    "guess": {
+     "title": "Die Reise nach Übermorgen",
+     "season": 2,
+     "episode": 3
+    },
+    "match": {
+     "item": "m6",
+     "season": 2,
+     "episode": 3
+    }
+   },
+   {
+    "name": "Naruto: Shippuden - 12.mkv",
+    "guess": {
+     "title": "Naruto: Shippuden",
+     "season": null,
+     "episode": 12
+    },
+    "match": {
+     "item": "m9",
+     "season": 1,
+     "episode": 12
+    }
+   },
+   {
+    "name": "Ünïcode Straße S1E1.mp4",
+    "guess": {
+     "title": "Ünïcode Straße",
+     "season": 1,
+     "episode": 1
+    },
+    "match": null
+   },
+   {
+    "name": "Frieren Staffel2 Ep3.mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": 2,
+     "episode": 3
+    },
+    "match": {
+     "item": "m1",
+     "season": 2,
+     "episode": 3
+    }
+   },
+   {
+    "name": "Frieren Staffel 2 - Folge 3.mkv",
+    "guess": {
+     "title": "Frieren",
+     "season": 2,
+     "episode": 3
+    },
+    "match": {
+     "item": "m1",
+     "season": 2,
+     "episode": 3
+    }
+   },
+   {
+    "name": "Frieren Staffel 2 irgendwas Folge 3.mkv",
+    "guess": {
+     "title": "Frieren Staffel 2 irgendwas",
+     "season": null,
+     "episode": 3
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 3
+    }
+   },
+   {
+    "name": "Frieren x265 - 01.mkv",
+    "guess": {
+     "title": "Frieren x265",
+     "season": null,
+     "episode": 1
+    },
+    "match": {
+     "item": "m1",
+     "season": 1,
+     "episode": 1
+    }
+   },
+   {
+    "name": "Serie.2020.S01E05.mkv",
+    "guess": {
+     "title": "Serie 2020",
+     "season": 1,
+     "episode": 5
+    },
+    "match": null
+   },
+   {
+    "name": "Show 1x01-1x02.mkv",
+    "guess": {
+     "title": "Show",
+     "season": 1,
+     "episode": 1
+    },
+    "match": {
+     "item": "m7",
+     "season": 1,
+     "episode": 1
+    }
+   },
+   {
+    "name": "Show - 105.mkv",
+    "guess": {
+     "title": "Show",
+     "season": null,
+     "episode": 105
+    },
+    "match": {
+     "item": "m7",
+     "season": 2,
+     "episode": 105
+    }
+   },
+   {
+    "name": "Show - 1234.mkv",
+    "guess": {
+     "title": "Show",
+     "season": null,
+     "episode": 1234
+    },
+    "match": {
+     "item": "m7",
+     "season": 2,
+     "episode": 1234
+    }
+   },
+   {
+    "name": "Show - 12345.mkv",
+    "guess": null,
+    "match": null
+   },
+   {
+    "name": "Anime Titel 99",
+    "guess": {
+     "title": "Anime Titel",
+     "season": null,
+     "episode": 99
+    },
+    "match": null
+   },
+   {
+    "name": "Test (720p) - 03.mkv",
+    "guess": {
+     "title": "Test",
+     "season": null,
+     "episode": 3
+    },
+    "match": null
+   },
+   {
+    "name": "Test (Kommentar) - 03.mkv",
+    "guess": {
+     "title": "Test (Kommentar)",
+     "season": null,
+     "episode": 3
+    },
+    "match": null
+   }
+  ],
+  "titles": [
+   {
+    "t": "Frieren: Beyond",
+    "n": "frieren beyond"
+   },
+   {
+    "t": "ÄÖÜ ß",
+    "n": "aou"
+   },
+   {
+    "t": "a--b__c",
+    "n": "a b c"
+   },
+   {
+    "t": "  ",
+    "n": ""
+   },
+   {
+    "t": "Ｆｕｌｌ",
+    "n": "full"
+   },
+   {
+    "t": "Ⅻ",
+    "n": "xii"
+   },
+   {
+    "t": "",
+    "n": ""
+   }
+  ],
+  "seen": [
+   {
+    "id": "m1",
+    "s": 1,
+    "e": 3,
+    "already": false,
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 28,
+      "watched": [
+       3
+      ]
+     },
+     {
+      "number": 2,
+      "episodes": 10,
+      "watched": []
+     }
+    ],
+    "season": 1,
+    "episode": 1,
+    "status": "watching",
+    "history": [
+     {
+      "season": 1,
+      "episode": 3
+     }
+    ]
+   },
+   {
+    "id": "m1",
+    "s": 2,
+    "e": 1,
+    "already": false,
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 28,
+      "watched": []
+     },
+     {
+      "number": 2,
+      "episodes": 10,
+      "watched": [
+       1
+      ]
+     }
+    ],
+    "season": 2,
+    "episode": 2,
+    "status": "watching",
+    "history": [
+     {
+      "season": 2,
+      "episode": 1
+     }
+    ]
+   },
+   {
+    "id": "m1",
+    "s": 4,
+    "e": 2,
+    "already": false,
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 28,
+      "watched": []
+     },
+     {
+      "number": 2,
+      "episodes": 10,
+      "watched": []
+     },
+     {
+      "number": 4,
+      "episodes": null,
+      "watched": [
+       2
+      ]
+     }
+    ],
+    "season": 4,
+    "episode": 1,
+    "status": "watching",
+    "history": [
+     {
+      "season": 4,
+      "episode": 2
+     }
+    ]
+   },
+   {
+    "id": "m4",
+    "s": 3,
+    "e": 3,
+    "already": false,
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 10,
+      "watched": []
+     },
+     {
+      "number": 2,
+      "episodes": 8,
+      "watched": []
+     },
+     {
+      "number": 3,
+      "episodes": 8,
+      "watched": [
+       1,
+       2,
+       3
+      ]
+     }
+    ],
+    "season": 3,
+    "episode": 4,
+    "status": "watching",
+    "history": [
+     {
+      "season": 3,
+      "episode": 3
+     }
+    ]
+   },
+   {
+    "id": "m5",
+    "s": 1,
+    "e": 5,
+    "already": false,
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": null,
+      "watched": [
+       5
+      ]
+     }
+    ],
+    "season": 1,
+    "episode": 1,
+    "status": "watching",
+    "history": [
+     {
+      "season": 1,
+      "episode": 5
+     }
+    ]
+   }
+  ],
+  "hints": [
+   {
+    "hint": {
+     "series": "m1",
+     "season": 2,
+     "episode": 4
+    },
+    "match": {
+     "item": "m1",
+     "season": 2,
+     "episode": 4
+    }
+   },
+   {
+    "hint": {
+     "series": "weg",
+     "season": 1,
+     "episode": 1
+    },
+    "match": null
+   },
+   {
+    "hint": null,
+    "match": null
+   }
+  ]
+ },
  "files": {
   "cases": [
    {

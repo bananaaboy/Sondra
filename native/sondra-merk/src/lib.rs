@@ -4,6 +4,7 @@
 
 pub mod cover;
 pub mod importer;
+pub mod matching;
 pub mod merge;
 pub mod model;
 pub mod normalize;

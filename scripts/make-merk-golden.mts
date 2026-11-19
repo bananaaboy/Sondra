@@ -32,6 +32,7 @@ import {
   type PlanPoint,
 } from '../src/lib/watchPlan'
 import { recapYears, recordedSince, yearRecap } from '../src/lib/recap'
+import { alreadySeen, guessEpisode, matchEpisode, matchHint, normalTitle, seenEpisode } from '../src/lib/episodeMatch'
 
 // The person's own days: the clocks change in the nights of 29 March and 25 October, and the numbers
 // must come out right across them. (The native side is tested in the same zone.)
@@ -513,7 +514,49 @@ const filesOut = {
   history: { items: historyItems.map((i) => ({ id: i.id, history: i.history })), result: allHistory(historyItems).map((h) => [h.item.id, h.entry.id]) },
 }
 
+/* File names and the list --------------------------------------------------------------------- */
+
+const names = [
+  'Frieren S01E13.mkv', 'Frieren.1x13.1080p.mkv', '[Gruppe] Frieren - 13 (1080p).mkv', 'Frieren Staffel 1 Folge 13.mp4',
+  'Frieren Season 2 Episode 4.mp4', 'Frieren Episode 7.mkv', 'Frieren Ep. 8.avi', 'Frieren Folge 9', 'Frieren - 14v2 [BD 1080p].mkv',
+  '[SubGruppe][Frieren][05][1080p][HEVC].mkv', 'Frieren - 05 (BD 1080p x265).mkv', 'Frieren 13.mkv', 'Frieren_S02E100.mkv',
+  'Mob Psycho 100 II - 03.mkv', 'Mob Psycho 100 - 03.mkv', 'Mob.Psycho.100.S03E01.WEB.mkv', 'Dark.S03E08.GERMAN.DL.1080p.mkv',
+  'Der Film.mkv', 'Film 2020.mkv', 'Nur Titel', '12.mkv', 'S01E02.mkv', 'A - 1.mkv', ' - 5.mkv', 'Titel - 0.mkv', 'Titel S01E00.mkv',
+  'One Piece - 1071 [1080p].mkv', 'One Piece 1x1071.mkv', 'Die Reise nach Übermorgen S02E03.mkv', 'Naruto: Shippuden - 12.mkv', 'Ünïcode Straße S1E1.mp4',
+  'Frieren Staffel2 Ep3.mkv', 'Frieren Staffel 2 - Folge 3.mkv', 'Frieren Staffel 2 irgendwas Folge 3.mkv', 'Frieren x265 - 01.mkv',
+  'Serie.2020.S01E05.mkv', 'Show 1x01-1x02.mkv', 'Show - 105.mkv', 'Show - 1234.mkv', 'Show - 12345.mkv', 'Anime Titel 99', 'Test (720p) - 03.mkv', 'Test (Kommentar) - 03.mkv',
+]
+const matchItems = [
+  mk({ id: 'm1', title: 'Frieren', season: 1, episode: 3, seasons: [{ number: 1, episodes: 28, watched: [] }, { number: 2, episodes: 10, watched: [] }] }),
+  mk({ id: 'm2', title: 'Mob Psycho 100', seasons: [{ number: 1, episodes: 12, watched: [] }] }),
+  mk({ id: 'm3', title: 'Mob Psycho 100 II', seasons: [{ number: 1, episodes: 12, watched: [] }] }),
+  mk({ id: 'm4', title: 'Dark', season: 3, episode: 1, seasons: [{ number: 1, episodes: 10, watched: [] }, { number: 2, episodes: 8, watched: [] }, { number: 3, episodes: 8, watched: [1, 2] }] }),
+  mk({ id: 'm5', title: 'One Piece', seasons: [{ number: 1, episodes: null, watched: [] }] }),
+  mk({ id: 'm6', title: 'Die Reise nach Übermorgen', seasons: [{ number: 1, episodes: 5, watched: [] }, { number: 2, episodes: null, watched: [] }] }),
+  mk({ id: 'm7', title: 'Show', season: 2, episode: 1, seasons: [{ number: 1, episodes: 12, watched: [] }, { number: 2, episodes: null, watched: [] }, { number: 3, episodes: 12, watched: [] }] }),
+  mk({ id: 'm8', title: 'A' }),
+  mk({ id: 'm9', title: 'Naruto Shippuden' }),
+  mk({ id: 'm10', title: 'Unicode Strasse' }),
+]
+const nameCases = names.map((name) => {
+  const m = matchEpisode(name, matchItems)
+  return { name, guess: guessEpisode(name), match: m && { item: m.item.id, season: m.season, episode: m.episode } }
+})
+const titleKeys = ['Frieren: Beyond', 'ÄÖÜ ß', 'a--b__c', '  ', 'Ｆｕｌｌ', 'Ⅻ', ''].map((t) => ({ t, n: normalTitle(t) }))
+const seenCases = [
+  { id: 'm1', s: 1, e: 3 }, { id: 'm1', s: 2, e: 1 }, { id: 'm1', s: 4, e: 2 }, { id: 'm4', s: 3, e: 3 }, { id: 'm5', s: 1, e: 5 },
+].map(({ id, s, e }) => {
+  const item = matchItems.find((i) => i.id === id) as SavedLinkItem
+  const r = seenEpisode(item, s, e)
+  return { id, s, e, already: alreadySeen({ item, season: s, episode: e }), seasons: r.seasons, season: r.season, episode: r.episode, status: r.status, history: (r.history ?? []).map((h) => ({ season: h.season, episode: h.episode })) }
+})
+const hintCases = [{ series: 'm1', season: 2, episode: 4 }, { series: 'weg', season: 1, episode: 1 }, undefined].map((hint) => {
+  const m = matchHint(hint, matchItems)
+  return { hint: hint ?? null, match: m && { item: m.item.id, season: m.season, episode: m.episode } }
+})
+
 const out = {
+  matching: { items: matchItems, names: nameCases, titles: titleKeys, seen: seenCases, hints: hintCases },
   files: filesOut,
   plan: { cases: planCases, pace: paceCases, recent: recentCases, goals: goalCases, labels: labelCases, goalItem },
   recap: recapCases,
