@@ -122,6 +122,13 @@ impl Shell {
         let folder = FolderState::new(cx, colors);
         let download = DownloadState::new(cx, colors);
         let devices = DevicesState::new(cx, colors);
+        let convert = ConvertState::new(cx, colors);
+        cx.subscribe(&convert.name, |shell, _, event: &FieldEvent, cx| match event {
+            FieldEvent::Changed => cx.notify(),
+            FieldEvent::Submitted => shell.convert_save_own(cx),
+            _ => {}
+        })
+        .detach();
         Self::start_new_episode_rounds(window, cx);
         Self::start_update_rounds(window, cx);
         // Twice a second: is the window minimised? (A window nobody draws does not ask by itself.)
@@ -166,7 +173,7 @@ impl Shell {
             stems: StemsState::new(),
             phone: PhoneState::new(cx),
             screen: ScreenState::new(),
-            convert: ConvertState::new(),
+            convert,
             normalize: NormalizeState::new(),
             harmony: HarmonyState::new(),
             images: ImagesState::new(),

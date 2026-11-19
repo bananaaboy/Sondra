@@ -8,9 +8,10 @@ use std::sync::{Arc, Mutex};
 
 use gpui::{div, prelude::*, px, AnyElement, Context, Entity, PathPromptOptions};
 use sondra_media::convert::{find_format, Kind, Settings, FORMATS};
-use sondra_media::presets::{built_in, preset_for};
+use sondra_media::presets::{built_in, new_own, own_json, parse_own, preset_for, Own};
 use sondra_media::{Cancel, Ffmpeg, Progress};
-use sondra_ui::{family, size, NoticeKind, Ui};
+use sondra_merk::folder_memory::Store;
+use sondra_ui::{family, size, NoticeKind, TextField, Ui};
 
 use crate::lines::Line;
 use crate::nav::Panel;
@@ -33,7 +34,12 @@ pub struct ConvertState {
     pub files: Vec<PathBuf>,
     pub settings: Settings,
     /// A template chosen (its id), over the settings.
-    pub preset: Option<&'static str>,
+    pub preset: Option<String>,
+    /// The settings kept under a name (`Umwandeln.json`, the website's list in the website's shape).
+    pub own: Vec<Own>,
+    /// The name a template is to get.
+    pub name: Entity<TextField>,
+    store: Option<crate::store::FileStore>,
     pub folder: Option<PathBuf>,
     pub run: Option<Run>,
     pub made: Vec<Made>,
@@ -41,8 +47,18 @@ pub struct ConvertState {
 }
 
 impl ConvertState {
-    pub fn new() -> ConvertState {
-        ConvertState { files: Vec::new(), settings: Settings::default(), preset: None, folder: None, run: None, made: Vec::new(), error: None }
+    pub fn new(cx: &mut Context<Shell>, colors: sondra_ui::Colors) -> ConvertState {
+        let store = crate::store::FileStore::at_default("Umwandeln.json");
+        let own = store.as_ref().and_then(|s| s.get_item("vorlagen")).map(|j| parse_own(&j)).unwrap_or_default();
+        let name = cx.new(|cx| TextField::new(cx, colors, "Name der Vorlage").placeholder("Name für diese Einstellungen").max_chars(40));
+        ConvertState { files: Vec::new(), settings: Settings::default(), preset: None, own, name, store, folder: None, run: None, made: Vec::new(), error: None }
+    }
+
+    fn keep_own(&mut self) {
+        let json = own_json(&self.own);
+        if let Some(store) = self.store.as_mut() {
+            store.set_item("vorlagen", json);
+        }
     }
 
     /// What kind of file the first of them is, for what a template sets.
@@ -60,21 +76,17 @@ impl ConvertState {
         self.preset = None;
     }
 
-    fn choose_preset(&mut self, id: &'static str) {
+    fn choose_preset(&mut self, id: &str) {
         let source = self.source_kind();
-        self.preset = Some(id);
-        if let Some(preset) = built_in().into_iter().find(|p| p.id == id) {
-            if let Some(partial) = preset_for(&preset, source) {
-                self.settings = Settings::default();
-                partial.apply(&mut self.settings);
-            }
+        self.preset = Some(id.to_string());
+        let partial = match built_in().into_iter().find(|p| p.id == id) {
+            Some(preset) => preset_for(&preset, source).cloned(),
+            None => self.own.iter().find(|o| o.id == id).and_then(|o| o.partial_for(source)).cloned(),
+        };
+        if let Some(partial) = partial {
+            self.settings = Settings::default();
+            partial.apply(&mut self.settings);
         }
-    }
-}
-
-impl Default for ConvertState {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -171,6 +183,24 @@ impl Shell {
         cx.notify();
     }
 
+    /// For tests: types a name for a template.
+    pub fn convert_name_for_test(&mut self, cx: &mut Context<Self>, text: &str) {
+        self.convert.name.update(cx, |field, cx| field.set_text(text.to_string(), cx));
+    }
+
+    /// Keeps the settings as they are now under the name in the field (without the trim, as the website does).
+    pub(crate) fn convert_save_own(&mut self, cx: &mut Context<Self>) {
+        let label = self.convert.name.read(cx).text().to_string();
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+        if let Some(own) = new_own(&label, &self.convert.settings, stamp) {
+            self.convert.preset = Some(own.id.clone());
+            self.convert.own.push(own);
+            self.convert.keep_own();
+            self.convert.name.update(cx, |field, cx| field.set_text("", cx));
+        }
+        cx.notify();
+    }
+
     /// The page.
     pub(crate) fn convert_page(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
         let me = cx.entity();
@@ -203,15 +233,46 @@ impl Shell {
         for preset in built_in() {
             let me = me.clone();
             let id = preset.id;
-            presets = presets.child(ui.chip(format!("vorlage-{id}"), preset.label, s.preset == Some(id)).accessible_name(format!("Vorlage {}: {}", preset.label, preset.hint)).on_click(move |_, app| Self::convert_do(&me, app, move |s| s.choose_preset(id))));
+            presets = presets.child(ui.chip(format!("vorlage-{id}"), preset.label, s.preset.as_deref() == Some(id)).accessible_name(format!("Vorlage {}: {}", preset.label, preset.hint)).on_click(move |_, app| Self::convert_do(&me, app, move |s| s.choose_preset(id))));
         }
+        // Templates of one's own: the settings under a name, and a way to take one away again.
+        for own in &s.own {
+            let (me, gone) = (me.clone(), me.clone());
+            let (id, drop_id) = (own.id.clone(), own.id.clone());
+            presets = presets.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(2.))
+                    .child(ui.chip(format!("vorlage-{}", own.id), own.label.clone(), s.preset.as_deref() == Some(own.id.as_str())).accessible_name(format!("Eigene Vorlage {}", own.label)).on_click(move |_, app| {
+                        let id = id.clone();
+                        Self::convert_do(&me, app, move |s| s.choose_preset(&id))
+                    }))
+                    .child(ui.button(format!("vorlage-weg-{}", own.id), "×").small().ghost().accessible_name(format!("Vorlage {} löschen", own.label)).on_click(move |_, app| {
+                        let id = drop_id.clone();
+                        Self::convert_do(&gone, app, move |s| {
+                            s.own.retain(|o| o.id != id);
+                            if s.preset.as_deref() == Some(id.as_str()) {
+                                s.preset = None;
+                            }
+                            s.keep_own();
+                        })
+                    })),
+            );
+        }
+        let can_save = !s.name.read(cx).text().trim().is_empty();
+        let save = {
+            let me = me.clone();
+            ui.button("vorlage-speichern", "Als Vorlage speichern").small().disabled(!can_save || busy).on_click(move |_, app| me.update(app, |shell, cx| shell.convert_save_own(cx)))
+        };
+        let own_row = div().flex().flex_wrap().items_center().gap(px(8.)).child(div().w(px(260.)).child(s.name.clone())).child(save);
         let mut formats = div().flex().flex_wrap().gap(px(6.));
         for format in FORMATS.iter() {
             let me = me.clone();
             let id = format.id;
             formats = formats.child(ui.chip(format!("format-{id}"), format.label, s.settings.format_id == id).accessible_name(format!("Format {}: {}", format.label, format.hint)).on_click(move |_, app| Self::convert_do(&me, app, move |s| s.choose_format(id))));
         }
-        page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Vorlage")).child(presets)).child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Format")).child(formats));
+        page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Vorlage")).child(presets).child(own_row)).child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Format")).child(formats));
         if let Some(format) = find_format(&s.settings.format_id) {
             page = page.child(ui.hint(format!("{}: {}", format.label, format.hint)));
         }

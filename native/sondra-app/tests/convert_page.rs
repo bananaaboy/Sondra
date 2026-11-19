@@ -112,6 +112,38 @@ fn files_are_converted_one_after_the_other_and_offered_in_a_list(cx: &mut TestAp
 }
 
 #[gpui::test]
+fn settings_can_be_kept_under_a_name_chosen_again_and_taken_away(cx: &mut TestAppContext) {
+    if Ffmpeg::locate().is_none() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    std::env::set_var("SONDRA_DATA", tmp.path().join("daten"));
+    let a = tone(tmp.path(), "eins.wav");
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.convert_take(vec![a], cx));
+    w.draw();
+    // No name, no button to press.
+    assert!(w.tree().find(Role::Button, "Als Vorlage speichern").unwrap().disabled);
+    w.press(Role::Button, "256 kbit/s");
+    w.shell.update(w.cx, |shell, cx| shell.convert_name_for_test(cx, "Für den Zug"));
+    w.draw();
+    w.press(Role::Button, "Als Vorlage speichern");
+    assert_eq!(w.tree().find(Role::Button, "Eigene Vorlage Für den Zug").unwrap().toggled, Some(true), "the new template is the chosen one");
+    // Something else is chosen, then the template brings its settings back.
+    w.press(Role::Button, "128 kbit/s");
+    assert_eq!(w.tree().find(Role::Button, "Eigene Vorlage Für den Zug").unwrap().toggled, Some(false));
+    w.press(Role::Button, "Eigene Vorlage Für den Zug");
+    assert_eq!(w.tree().find(Role::Button, "256 kbit/s").unwrap().toggled, Some(true), "256 kbit/s again");
+    // The list lies in the data folder in the website's shape (the next start reads it from there).
+    let kept = std::fs::read_to_string(tmp.path().join("daten").join("Umwandeln.json")).unwrap();
+    assert!(kept.contains("Für den Zug") && kept.contains("eigene-"), "{kept}");
+    w.press(Role::Button, "Vorlage Für den Zug löschen");
+    assert!(w.tree().find(Role::Button, "Eigene Vorlage Für den Zug").is_none());
+    let kept = std::fs::read_to_string(tmp.path().join("daten").join("Umwandeln.json")).unwrap();
+    assert!(!kept.contains("Für den Zug"));
+}
+
+#[gpui::test]
 fn what_cannot_be_converted_is_said_in_a_sentence_and_the_others_still_are(cx: &mut TestAppContext) {
     if Ffmpeg::locate().is_none() {
         return;
