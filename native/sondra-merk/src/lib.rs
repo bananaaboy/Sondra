@@ -5,7 +5,9 @@
 pub mod merge;
 pub mod model;
 pub mod normalize;
+pub mod plan;
 pub mod progress;
+pub mod recap;
 pub mod sqlite;
 pub mod stats;
 pub mod urlinfo;

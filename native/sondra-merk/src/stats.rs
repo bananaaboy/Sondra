@@ -333,6 +333,48 @@ pub fn compare_de(a: &str, b: &str) -> Ordering {
     x.len().cmp(&y.len())
 }
 
+/// `localeCompare(b, 'de')` with nothing said about sensitivity: the base letters first, then accents
+/// (a plain letter before an accented one), then case (lower before upper).
+pub fn compare_de_full(a: &str, b: &str) -> Ordering {
+    let base = compare_de(a, b);
+    if base != Ordering::Equal {
+        return base;
+    }
+    // Secondary level: compare the marks that follow each letter.
+    let marks = |text: &str| -> Vec<Vec<char>> {
+        let mut out: Vec<Vec<char>> = Vec::new();
+        for ch in text.nfd() {
+            if ('\u{300}'..='\u{36f}').contains(&ch) {
+                if let Some(last) = out.last_mut() {
+                    last.push(ch);
+                }
+            } else {
+                out.push(Vec::new());
+            }
+        }
+        out
+    };
+    let (ma, mb) = (marks(a), marks(b));
+    for (p, q) in ma.iter().zip(mb.iter()) {
+        let order = p.cmp(q);
+        if order != Ordering::Equal {
+            return order;
+        }
+    }
+    // Tertiary: lower case before upper case, letter by letter.
+    for (p, q) in a.chars().zip(b.chars()) {
+        if p != q {
+            if p.is_lowercase() && q.is_uppercase() {
+                return Ordering::Less;
+            }
+            if p.is_uppercase() && q.is_lowercase() {
+                return Ordering::Greater;
+            }
+        }
+    }
+    Ordering::Equal
+}
+
 fn fraction_for_sort(item: &Item) -> f64 {
     let p = item_progress(item);
     p.fraction.unwrap_or(if p.watched > 0 { 0.01 } else { 0.0 })

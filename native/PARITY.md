@@ -39,8 +39,8 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | M05 | Stände (Am Schauen, Später, Pausiert, Fertig, Abgebrochen), Filter | `MerklistePanel` | 4 | `verify:merkliste` | offen |
 | M06 | Ansicht als Poster oder Liste, Sortierungen | `MerklistePanel` | 4 | Szenario „merkliste“ | offen |
 | M07 | Serienseite: abspielen, gesehen, bearbeiten, „Mehr“ | `MerklistePanel` | 4 | Szenario „serien“ | offen |
-| M08 | „Bis wohin?“ Planer, Ziel merken, Tempo aus dem Verlauf | `watchPlan`, `WatchPlanner` | 4 | `verify:merkliste` | offen |
-| M09 | Statistiken und Rückblick, Verlauf, Würfeln | `MerklisteRecap` | 4 | `verify:merkliste` | offen |
+| M08 | „Bis wohin?“ Planer, Ziel merken, Tempo aus dem Verlauf | `watchPlan`, `WatchPlanner` | 4 | `sondra-merk`: über 500 Pläne (Ziele × Optionen), Tempo, Ziel, Beschriftungen gegen die Website, in Europe/Zurich über die Zeitumstellungen (golden) | **Logik nativ ✔**, Oberfläche offen |
+| M09 | Statistiken und Rückblick, Verlauf, Würfeln | `MerklisteRecap` | 4 | `sondra-merk`: Statistik, Sortierungen (deutsche Ordnung wie im Browser), Rückblick, Würfel-Auswahl, Plan bis zum Ende, Swiss-Zahlen — gegen die Website | **Logik nativ ✔**, Oberfläche offen |
 | M10 | Teilen: Link, Text, QR, Datei, Bilder im Link, Teile; Empfangen und Vergleichen | `merkShare`, `shareCover`, `qr` | 4 | `verify:merkliste` | offen |
 | M11 | Export und Einlesen (JSON, MAL, AniList), Zusammenführen, Rückgängig | `merkliste.ts` | 4 | `merge_merkliste` nativ (golden); MAL/AniList-Einlesen, Export und Rückgängig offen | in Arbeit |
 | M12 | Zusammenführen mit Drive (`mergeShared`), Entfernen bleibt entfernt | `merkliste.ts`, `googleDrive.ts` | 4 | `sondra-merk`: `merge_shared`, `take_shared`, `travelling`, `shared_key` gegen die Website (5 Abgleiche mit Entfernungen, Bildern von Dateien, gleichen Namen); **noch nicht gegen das echte Drive** | **Logik nativ ✔**, Anbindung offen |

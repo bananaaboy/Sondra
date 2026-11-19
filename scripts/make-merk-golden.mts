@@ -10,6 +10,32 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 import { deserializeSondraSqlite, serializeSondraSqlite } from '../src/lib/sqlite'
+import {
+  dayLabel,
+  dayText,
+  decimal,
+  finishAt,
+  goalState,
+  inLabel,
+  lastPoint,
+  lengthLabel,
+  openingOf,
+  paceFor,
+  paceSetting,
+  parseDay,
+  pointLabel,
+  recentPace,
+  seasonEnd,
+  standPoint,
+  watchPlan,
+  type PlanOptions,
+  type PlanPoint,
+} from '../src/lib/watchPlan'
+import { recapYears, recordedSince, yearRecap } from '../src/lib/recap'
+
+// The person's own days: the clocks change in the nights of 29 March and 25 October, and the numbers
+// must come out right across them. (The native side is tested in the same zone.)
+process.env.TZ = 'Europe/Zurich'
 
 import { deriveLinkTitle, parseLinkEpisodeInfo } from '../src/lib/download'
 import {
@@ -316,7 +342,109 @@ const dateLabels = Array.from({ length: 60 }, (_, i) => {
   return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate(), label: d.toLocaleDateString('de-CH', { weekday: 'short', day: 'numeric', month: 'short' }) }
 })
 
+/* The plan, pace, goals, the recap ------------------------------------------------------------ */
+
+const withSeasons = all.filter((i) => seasonsOf(i).length > 0)
+const optionSets: PlanOptions[] = [
+  { from: 'stand', speed: 1, skipOpening: 0 },
+  { from: 'start', speed: 1.5, skipOpening: 90 },
+  { from: 'stand', speed: 2, skipOpening: 300 },
+  { from: 'stand', speed: 7, skipOpening: 5000 },
+  { from: 'stand', speed: 0, skipOpening: 0 },
+]
+const planCases = withSeasons.map((item) => {
+  const targets: PlanPoint[] = [
+    standPoint(item),
+    ...(lastPoint(item) ? [lastPoint(item) as PlanPoint] : []),
+    ...(seasonEnd(item) ? [seasonEnd(item) as PlanPoint] : []),
+    { season: 2, episode: 5 },
+    { season: 0, episode: 1 },
+    { season: 1, episode: 1 },
+    { season: 3, episode: 20 },
+  ]
+  return {
+    id: item.id,
+    stand: standPoint(item),
+    last: lastPoint(item),
+    end: seasonEnd(item),
+    opening: [undefined, 120].map((f) => (f === undefined ? openingOf(item) : openingOf(item, f))),
+    plans: targets.flatMap((target) => optionSets.map((options, o) => ({ target, o, plan: watchPlan(item, target, options) }))),
+  }
+})
+
+const today = new Date(2026, 2, 27)
+const paceCases = {
+  today: dayText(today),
+  finish: [[0, 2, 'day'], [1, 2, 'day'], [5, 2, 'day'], [5, 1, 'week'], [13, 0.3, 'week'], [100, 3, 'day'], [7, 0, 'day'], [30, 5, 'week']].map(([n, r, u]) => {
+    const f = finishAt(n as number, r as number, u as 'day' | 'week', today)
+    return { n, r, u, days: f.days, date: dayText(f.date) }
+  }),
+  for: [['2026-03-27', 10, 240], ['2026-03-26', 10, 240], ['2026-04-05', 13, 312], ['2026-03-30', 0, 0], ['2027-01-01', 100, 2400]].map(([by, n, m]) => {
+    const p = paceFor(n as number, m as number, parseDay(by as string) as Date, today)
+    return { by, n, m, pace: p }
+  }),
+  parse: ['2026-11-14', '2026-02-30', '2026-13-45', '2026-00-10', '2026-1-1', 'x', '', '2026-11-14T00', '2026-12-31'].map((t) => {
+    const d = parseDay(t)
+    return { t, day: d ? dayText(d) : null }
+  }),
+  setting: [0.01, 0.1, 0.3, 0.5, 1, 1.4, 1.5, 2.5, 10].map((p) => ({ p, s: paceSetting(p) })),
+}
+const nowMs = new Date(2026, 5, 20, 21, 0).getTime()
+const paced = [
+  mk({ id: 'pc1', history: [3, 6, 9, 12].map((d, i) => ({ id: `h${i}`, season: 1, episode: i + 1, at: nowMs - d * 86_400_000 })) }),
+  mk({ id: 'pc2', history: [{ id: 'a', season: 1, episode: 1, at: nowMs - 1000 }] }),
+  mk({ id: 'pc3', history: [{ id: 'a', season: 1, episode: 1, at: nowMs - 2000 }, { id: 'b', season: 1, episode: 2, at: nowMs - 1000 }] }),
+  mk({ id: 'pc4', history: Array.from({ length: 30 }, (_, i) => ({ id: `x${i}`, season: 1, episode: i + 1, at: nowMs - i * 86_400_000 })) }),
+  mk({ id: 'pc5', history: [{ id: 'a', season: 1, episode: 1, at: nowMs - 40 * 86_400_000 }, { id: 'b', season: 1, episode: 2, at: nowMs - 10 * 86_400_000 }, { id: 'c', season: 1, episode: 3, at: nowMs + 5000 }] }),
+]
+const recentCases = paced.map((item) => ({ id: item.id, now: nowMs, pace: recentPace(item, nowMs), history: item.history }))
+
+const goalItem = mk({ id: 'gi', season: 1, episode: 4, seasons: [{ number: 1, episodes: 12, watched: [1, 2, 3] }, { number: 2, episodes: 12, watched: [] }] })
+const goalCases = [
+  { season: 1, episode: 12, by: '2026-04-10', setAt: new Date(2026, 2, 20).getTime(), count: 9 },
+  { season: 2, episode: 6, by: '2026-03-25', setAt: new Date(2026, 2, 1).getTime(), count: 10 },
+  { season: 2, episode: 6, setAt: new Date(2026, 2, 1).getTime() },
+  { season: 1, episode: 2, by: '2026-04-10', setAt: new Date(2026, 2, 1).getTime(), count: 3 },
+  { season: 2, episode: 12, by: '2026-03-27', setAt: new Date(2026, 2, 27).getTime(), count: 20 },
+  { season: 2, episode: 12, by: '2026-10-31', setAt: new Date(2026, 2, 28, 23, 30).getTime(), count: 20 },
+].map((goal) => ({ goal, state: goalState(goalItem, goal, { from: 'stand', speed: 1, skipOpening: 0 }, today) }))
+
+const labelCases = {
+  point: [[1, 1], [0, 2], [3, 12]].map(([s, e]) => ({ s, e, l: pointLabel({ season: s, episode: e }) })),
+  decimal: [[0, 1], [1.5, 1], [2, 1], [1234.56, 1], [0.04, 1], [0.05, 1], [-1.25, 1], [1234567.891, 2], [12, 0], [0.5, 0], [1.005, 2]].map(([v, d]) => ({ v, d, t: decimal(v, d) })),
+  length: [0, 1, 59, 60, 61, 119.5, 1439, 1440, 1441, 2880, 3000, 100000, -5].map((m) => ({ m, t: lengthLabel(m) })),
+  day: Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(2026, 2, 27 + [0, 1, 2, 3, 9, 40, 100, 300, 400, -1][i % 10] + i)
+    return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate(), t: dayLabel(d, today) }
+  }),
+  in: [0, 1, 2, 3, 13, 14, 20, 62, 63, 100, 400].map((n) => ({ n, t: inLabel(n) })),
+}
+
+const histo = (items: [string, number, number, number][]) => items.map(([id, s, e, at], i) => ({ id: `${id}${i}`, season: s, episode: e, at }))
+const at = (y: number, m: number, d: number, h = 20) => new Date(y, m - 1, d, h).getTime()
+const recapItems = [
+  mk({ id: 'rc1', title: 'Frieren', status: 'done', history: histo([['a', 1, 1, at(2026, 1, 3)], ['a', 1, 2, at(2026, 1, 4)], ['a', 1, 3, at(2026, 1, 5)], ['a', 1, 3, at(2026, 1, 6)], ['a', 1, 4, at(2026, 3, 28, 23)], ['a', 1, 5, at(2026, 3, 29, 0)], ['a', 1, 6, at(2026, 3, 30)], ['a', 1, 7, at(2025, 12, 31)]]) }),
+  mk({ id: 'rc2', title: 'äpfel', status: 'watching', history: histo([['b', 1, 1, at(2026, 10, 24)], ['b', 1, 2, at(2026, 10, 25, 1)], ['b', 1, 3, at(2026, 10, 26)], ['b', 1, 4, at(2026, 10, 26, 23)], ['b', 0, 1, at(2026, 2, 14)]]), filmDuration: 120 }),
+  mk({ id: 'rc3', title: 'Apfel', status: 'done', history: histo([['c', 1, 1, at(2026, 6, 1)], ['c', 1, 2, at(2026, 6, 1)], ['c', 1, 3, at(2027, 2, 1)]]) }),
+  mk({ id: 'rc4', title: 'apfel', status: 'watching', history: histo([['d', 1, 1, at(2026, 6, 2)], ['d', 1, 2, at(2026, 6, 2)], ['d', 1, 3, at(2026, 6, 3)]]) }),
+  mk({ id: 'rc5', title: 'Zebra', status: 'dropped', history: histo([['e', 1, 1, at(2026, 7, 7)], ['e', 1, 2, at(2026, 7, 8)], ['e', 1, 3, at(2026, 7, 9)], ['e', 1, 4, at(2026, 7, 10)], ['e', 1, 5, at(2026, 7, 11)], ['e', 1, 6, at(2026, 7, 12)]]) }),
+  mk({ id: 'rc6', title: 'Leer' }),
+]
+const recapCases = {
+  items: recapItems.map((i) => ({ id: i.id, title: i.title, status: i.status, filmDuration: i.filmDuration, history: i.history })),
+  years: recapYears(recapItems),
+  since: recordedSince(recapItems),
+  recaps: [2024, 2025, 2026, 2027].map((year) => ({ year, recap: yearRecap(recapItems, year) })),
+  empty: { years: recapYears([]), since: recordedSince([]), recap: yearRecap([], 2026) },
+}
+
+const compareFull = titled.map((i) => i.title).concat(['apfel', 'Apfel', 'äpfel', 'Äpfel', 'apfel ', 'z', 'Z'])
+const fullOrder = [...compareFull].sort((a, b) => a.localeCompare(b, 'de'))
+
 const out = {
+  plan: { cases: planCases, pace: paceCases, recent: recentCases, goals: goalCases, labels: labelCases, goalItem },
+  recap: recapCases,
+  fullOrder: { input: compareFull, sorted: fullOrder },
   stats: { cases: statCases, titled: titled.map((i) => i.title), minutes: minuteCases.map((m) => ({ m, t: formatWatchMinutes(m) })), durations: durationCases, plans, dates: dateLabels },
   sqlite,
   urls: urls.map((url) => ({ url, info: parseLinkEpisodeInfo(url), title: deriveLinkTitle(url) })),
