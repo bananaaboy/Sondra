@@ -481,6 +481,40 @@ fn the_series_on_the_list_continue_from_where_they_stand_and_play_the_unseen_one
 }
 
 #[gpui::test]
+fn episodes_stand_together_under_their_series_and_season_and_the_rest_after_them(cx: &mut TestAppContext) {
+    use sondra_merk::normalize::{normalize, Context as Ids};
+    use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Serien");
+    for (n, name) in ["Alpha S01E01.mkv", "Frieren S01E01.mkv", "Frieren S01E02.mkv", "notizen.txt"].iter().enumerate() {
+        put(&root, name, 100 + n * 10);
+    }
+    let mut ids = Ids::system();
+    let frieren = normalize(&serde_json::json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 2, "seasons": [{ "number": 1, "episodes": 12, "watched": [1] }] }), &mut ids);
+    let alpha = normalize(&serde_json::json!({ "id": "al", "title": "Alpha", "status": "later", "season": 1, "episode": 1, "seasons": [{ "number": 1, "episodes": null, "watched": [] }] }), &mut ids);
+    let list = tmp.path().join("Merkliste.sqlite");
+    fs::write(&list, write_sqlite(&Stored { items: vec![alpha, frieren], ..Default::default() }).unwrap()).unwrap();
+
+    let mut w = open(cx, tmp.path());
+    w.shell.update(w.cx, |shell, cx| shell.open_merkliste(sondra_app::store::MerkStore::at(list.clone()), cx));
+    w.read(&root);
+    let labels = |w: &Window| w.tree().nodes.iter().filter_map(|n| n.label.as_ref().map(|l| l.to_string())).collect::<Vec<_>>();
+    // The series being watched first, then the other; what the list does not know after them.
+    assert_eq!(w.files(), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Alpha S01E01.mkv", "notizen.txt"]);
+    let all = labels(&w);
+    assert!(all.iter().any(|l| l == "Frieren · Staffel 1"), "{all:?}");
+    assert!(all.iter().any(|l| l == "Alpha · Staffel 1"));
+    assert!(all.iter().any(|l| l == "Weitere Dateien"));
+    assert!(all.iter().any(|l| l == "2 hier · 1 von 12 gesehen"), "the season's length is said where it is known: {all:?}");
+    assert!(all.iter().any(|l| l == "1 hier · 0 gesehen"), "and not guessed where it is not");
+    // Off, and it is the order of the names again, without headings.
+    assert_eq!(w.tree().find(Role::Button, "Nach Serie ordnen").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Nach Serie ordnen");
+    assert_eq!(w.files(), ["Alpha S01E01.mkv", "Frieren S01E01.mkv", "Frieren S01E02.mkv", "notizen.txt"]);
+    assert!(!labels(&w).iter().any(|l| l == "Frieren · Staffel 1"));
+}
+
+#[gpui::test]
 fn what_the_list_has_seen_can_be_left_out_of_the_view(cx: &mut TestAppContext) {
     use sondra_merk::normalize::{normalize, Context as Ids};
     use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};

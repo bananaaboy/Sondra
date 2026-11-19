@@ -53,11 +53,13 @@ pub struct Prefs {
     pub tiles: bool,
     /// Hide what the Merkliste has seen.
     pub unseen: bool,
+    /// The episodes of one series and season together under their heading.
+    pub group: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { filter: KindFilter::All, sort: SortKey::Name, descending: false, deep: false, tiles: true, unseen: false }
+        Prefs { filter: KindFilter::All, sort: SortKey::Name, descending: false, deep: false, tiles: true, unseen: false, group: true }
     }
 }
 
@@ -65,7 +67,7 @@ impl Prefs {
     fn to_map(self) -> Map<String, Value> {
         let kind = FILTERS.iter().find(|(f, _, _)| *f == self.filter).map_or("alle", |(_, id, _)| id);
         let sort = SORTS.iter().find(|(s, _, _)| *s == self.sort).map_or("name", |(_, id, _)| id);
-        let Value::Object(map) = json!({ "kind": kind, "sort": sort, "descending": self.descending, "deep": self.deep, "view": if self.tiles { "kacheln" } else { "liste" }, "unseen": self.unseen }) else { unreachable!() };
+        let Value::Object(map) = json!({ "kind": kind, "sort": sort, "descending": self.descending, "deep": self.deep, "view": if self.tiles { "kacheln" } else { "liste" }, "unseen": self.unseen, "group": self.group }) else { unreachable!() };
         map
     }
 
@@ -78,6 +80,7 @@ impl Prefs {
             deep: map.get("deep").and_then(Value::as_bool).unwrap_or(false),
             tiles: text("view") != "liste",
             unseen: map.get("unseen").and_then(Value::as_bool).unwrap_or(false),
+            group: map.get("group").and_then(Value::as_bool).unwrap_or(true),
         }
     }
 }
@@ -356,6 +359,11 @@ impl Shell {
         if let (true, Some(since)) = (f.only_new, f.last_visit) {
             view.files.retain(|file| file.modified as f64 > since);
         }
+        // „Nach Serie“: the episodes of a series' season in a run, after them what the list does not know.
+        let grouped = (f.prefs.group && has_series).then(|| sondra_merk::folder::group_by_series(&view.files, &self.merk.items)).filter(|g| !g.groups.is_empty());
+        if let Some(g) = &grouped {
+            view.files = g.ordered.clone();
+        }
 
         // The head: where one is, and the ways to look.
         let mut steps = div().flex().flex_wrap().items_center().gap(px(6.));
@@ -446,6 +454,10 @@ impl Shell {
         if has_series || f.prefs.unseen {
             let me = me.clone();
             narrow = narrow.child(ui.chip("nur-ungesehen", "Ungesehen", f.prefs.unseen).accessible_name("Nur Ungesehenes zeigen").on_click(move |_, app| Self::folder_do(&me, app, |f| f.set_prefs(|p| p.unseen = !p.unseen))));
+        }
+        if has_series || !f.prefs.group {
+            let me = me.clone();
+            narrow = narrow.child(ui.chip("nach-serie", "Nach Serie", f.prefs.group).accessible_name("Nach Serie ordnen").on_click(move |_, app| Self::folder_do(&me, app, |f| f.set_prefs(|p| p.group = !p.group))));
         }
         if has_new || f.only_new {
             let me = me.clone();
@@ -572,7 +584,15 @@ impl Shell {
             first = false;
         }
         let total = view.files.len();
+        let mut last_key: Option<Option<String>> = None;
         for file in view.files.iter().take(f.shown) {
+            if let Some(g) = &grouped {
+                let key = g.key_of.get(&file.path).cloned();
+                if last_key.as_ref() != Some(&key) {
+                    rows = rows.child(self.series_head(&ui, g, key.as_deref()));
+                    last_key = Some(key);
+                }
+            }
             let me = me.clone();
             let path = file.path.clone();
             let order = order.clone();
@@ -643,6 +663,31 @@ impl Shell {
         page.into_any_element()
     }
 
+
+    /// The heading over one season's episodes: whose, how many are here and how far along — and over the files the
+    /// list does not know, „Weitere Dateien“.
+    fn series_head(&self, ui: &Ui, grouped: &sondra_merk::folder::Grouped, key: Option<&str>) -> AnyElement {
+        let c = ui.c;
+        let group = key.and_then(|k| grouped.groups.iter().find(|g| g.key == k));
+        let (title, meta) = match group {
+            Some(g) => {
+                let name = self.merk.items.iter().find(|i| i.id == g.item).map(|i| i.title.clone()).unwrap_or_default();
+                let meta = match g.total {
+                    Some(total) => format!("{} hier · {} von {} gesehen", g.here, g.seen, total),
+                    None => format!("{} hier · {} gesehen", g.here, g.seen),
+                };
+                (format!("{name} · {}", sondra_merk::folder::season_folder_name(g.season)), meta)
+            }
+            None => ("Weitere Dateien".to_string(), grouped.rest.len().to_string()),
+        };
+        let progress = group.map_or(0.0, |g| if g.here > 0 { g.seen_here as f32 / g.here as f32 } else { 0.0 });
+        let mut head = div().w_full().flex().flex_col().gap(px(6.)).pt(px(14.)).pb(px(4.));
+        head = head.child(div().flex().flex_wrap().items_baseline().justify_between().gap(px(12.)).child(ui.subheading(title)).child(ui.value(meta)));
+        if group.is_some() {
+            head = head.child(div().h(px(3.)).rounded(px(sondra_ui::radius::PILL)).bg(c.line).overflow_hidden().child(div().h_full().rounded(px(sondra_ui::radius::PILL)).bg(c.ink).w(gpui::relative(progress))));
+        }
+        head.into_any_element()
+    }
 
     /// The picture of a tile: the file's own small picture when there is one, otherwise what kind of file it is;
     /// the length of a film or a song in a corner.
