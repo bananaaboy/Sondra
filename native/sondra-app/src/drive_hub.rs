@@ -220,3 +220,42 @@ impl crate::shell::Shell {
         }
     }
 }
+
+impl crate::shell::Shell {
+    /// The button in the header: „Drive anmelden“ while signed out (the click opens the browser), a quiet „Drive“ once
+    /// signed in. Not there where no Google client is built in.
+    pub(crate) fn drive_header_button(&self, ui: &sondra_ui::Ui, cx: &mut gpui::Context<Self>) -> Option<sondra_ui::Button> {
+        let drive = self.drive.as_ref().filter(|d| d.configured)?;
+        let me = cx.entity();
+        let connected = (drive.connected)();
+        let label = if self.drive_signing {
+            "Drive: Anmeldung im Browser …"
+        } else if connected {
+            "Drive"
+        } else {
+            "Drive anmelden"
+        };
+        let name = if connected { "Google Drive ist verbunden".to_string() } else { self.drive_error.clone().map_or("Bei Google Drive anmelden".to_string(), |e| format!("Bei Google Drive anmelden. {e}")) };
+        Some(ui.button("drive-kopf", label).small().ghost().disabled(self.drive_signing || connected).accessible_name(name).on_click(move |_, app| me.update(app, |shell, cx| shell.drive_sign_in(cx))))
+    }
+
+    /// Signs in to Google through the system browser, away from the window.
+    pub fn drive_sign_in(&mut self, cx: &mut gpui::Context<Self>) {
+        let Some(drive) = self.drive.clone() else { return };
+        if self.drive_signing {
+            return;
+        }
+        self.drive_signing = true;
+        self.drive_error = None;
+        cx.notify();
+        Self::in_background(
+            cx,
+            move || (drive.sign_in)(),
+            |shell, result, cx| {
+                shell.drive_signing = false;
+                shell.drive_error = result.err();
+                cx.notify();
+            },
+        );
+    }
+}

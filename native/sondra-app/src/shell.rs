@@ -94,6 +94,9 @@ pub struct Shell {
     /// Google Drive for the saves of results; `None` where nothing can be kept.
     pub drive: Option<crate::drive_hub::Drive>,
     pub drive_saves: crate::drive_hub::Saves,
+    /// The sign-in to Drive is being waited for (the browser is open), or why it did not work.
+    pub drive_signing: bool,
+    pub drive_error: Option<String>,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
@@ -187,6 +190,8 @@ impl Shell {
             update: crate::updater_ui::Updates::default(),
             drive: crate::drive_hub::Drive::production(),
             drive_saves: crate::drive_hub::Saves::default(),
+            drive_signing: false,
+            drive_error: None,
             convert_watch: None,
             pending_focus: None,
             whats_new_open: false,
@@ -375,6 +380,7 @@ impl Shell {
                     .flex()
                     .items_center()
                     .gap(px(8.))
+                    .children(self.drive_header_button(&ui, cx))
                     .child({
                         let me = me.clone();
                         let version = crate::whats_new::app_version();
