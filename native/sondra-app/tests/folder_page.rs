@@ -367,3 +367,22 @@ fn the_files_are_tiles_with_a_picture_and_a_length_and_the_look_is_kept(cx: &mut
     let kept = fs::read_to_string(tmp.path().join("Ordner.json")).unwrap();
     assert!(kept.contains("liste"), "the look is kept: {kept}");
 }
+
+#[gpui::test]
+fn the_chosen_files_are_played_in_the_order_of_the_list_and_what_cannot_be_played_says_so(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    // A picture is nothing to play: the page says so and stays where it is.
+    w.press(Role::ListItem, "poster.png");
+    w.press(Role::Button, "Gewählte Dateien abspielen");
+    let said_it = w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("nichts, was sich abspielen lässt")));
+    assert!(said_it, "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Folder);
+    // A film: the Player opens with it.
+    w.press(Role::ListItem, "film.mp4");
+    w.press(Role::Button, "Gewählte Dateien abspielen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["film.mp4"]);
+}

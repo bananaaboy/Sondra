@@ -458,6 +458,10 @@ impl Shell {
                     .child(ui.prose(if f.selected.len() == 1 { "1 Datei ausgewählt".to_string() } else { format!("{} Dateien ausgewählt", f.selected.len()) }))
                     .child({
                         let me = me.clone();
+                        ui.button("auswahl-abspielen", "Abspielen").small().primary().accessible_name("Gewählte Dateien abspielen").on_click(move |_, app| me.update(app, |shell, cx| shell.play_selected(cx)))
+                    })
+                    .child({
+                        let me = me.clone();
                         ui.button("auswahl-loeschen", "Löschen …").small().on_click(move |_, app| me.update(app, |shell, cx| shell.ask_delete(cx)))
                     })
                     .child(ui.button("auswahl-aufheben", "Auswahl aufheben").small().on_click(move |_, app| {
@@ -631,6 +635,28 @@ impl Shell {
             this.update(cx, |shell, cx| then(shell, answer, cx)).ok();
         })
         .detach();
+    }
+
+    /// Plays the chosen files that can be played, in the order of the list; the Player takes over.
+    pub(crate) fn play_selected(&mut self, cx: &mut Context<Self>) {
+        let f = &self.folder;
+        let (Some(scan), Some(root)) = (&f.scan, f.root.clone()) else { return };
+        // In the order the list shows them, not the order the disk gave them.
+        let options = ListingOptions { dir: f.dir.clone(), deep: f.prefs.deep, filter: f.prefs.filter, query: f.search.read(cx).text().to_string(), sort: f.prefs.sort, descending: f.prefs.descending };
+        let shown = listing(scan, &options);
+        let files: Vec<PathBuf> = shown
+            .files
+            .iter()
+            .filter(|file| f.selected.contains(&file.path) && file.drive.is_none() && matches!(file.kind, AssetKind::Video | AssetKind::Audio))
+            .map(|file| root.join(file.path.replace('/', std::path::MAIN_SEPARATOR_STR)))
+            .collect();
+        if files.is_empty() {
+            self.folder.notice = Some("Unter den gewählten Dateien ist nichts, was sich abspielen lässt.".into());
+            cx.notify();
+            return;
+        }
+        self.go(crate::nav::Panel::Player, cx);
+        self.play_files(files, cx);
     }
 
     /// Asks whether the chosen files are to go.

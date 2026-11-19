@@ -595,6 +595,11 @@ impl Shell {
     }
 
     /// Where the film is, when one plays.
+    /// For tests: the names of the files in the list.
+    pub fn player_queue_names(&self) -> Vec<String> {
+        self.player.queue.iter().filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).collect()
+    }
+
     pub fn player_position(&self) -> Option<f64> {
         self.player.playback.as_ref().map(|p| p.position())
     }
