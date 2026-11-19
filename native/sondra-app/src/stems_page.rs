@@ -316,7 +316,7 @@ impl Shell {
             let me3 = me.clone();
             out = out.child(div().flex().child(ui.button("spuren-speichern", "Alle als WAV speichern").disabled(s.writing).on_click(move |_, app| me3.update(app, |shell, cx| shell.stems_save(cx)))));
             for path in &s.made {
-                out = out.child(ui.value(path.display().to_string()));
+                out = out.child(self.written_row(&ui, path, cx));
             }
             page = page.child(out);
         }

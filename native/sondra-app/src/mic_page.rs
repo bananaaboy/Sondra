@@ -420,13 +420,14 @@ impl Shell {
         }
 
         if let Some(done) = &m.result {
-            page = page.child(result_block(ui, &me, m, done));
+            let written: Vec<AnyElement> = m.made.iter().map(|path| self.written_row(&ui, path, cx)).collect();
+            page = page.child(result_block(ui, &me, m, done, written));
         }
         page.into_any_element()
     }
 }
 
-fn result_block(ui: Ui, me: &gpui::Entity<Shell>, m: &MicState, done: &Calibration) -> AnyElement {
+fn result_block(ui: Ui, me: &gpui::Entity<Shell>, m: &MicState, done: &Calibration, written: Vec<AnyElement>) -> AnyElement {
     let c = ui.c;
     let mut block = div().flex().flex_col().gap(px(18.));
     let row = |label: &str, value: String| div().flex().justify_between().gap(px(12.)).py(px(6.)).border_t_1().border_color(c.line).child(ui.prose(label.to_string())).child(ui.value(value));
@@ -469,8 +470,8 @@ fn result_block(ui: Ui, me: &gpui::Entity<Shell>, m: &MicState, done: &Calibrati
         buttons = buttons.child(ui.button("auf-aufnahme", if busy { "Verbessert …" } else { "Auf eine Aufnahme anwenden" }).disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.mic_choose_recording(cx))));
     }
     block = block.child(buttons);
-    for path in &m.made {
-        block = block.child(ui.value(path.display().to_string()));
+    for row in written {
+        block = block.child(row);
     }
     block.into_any_element()
 }

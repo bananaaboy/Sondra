@@ -726,7 +726,7 @@ impl Shell {
             .child(write("marken-audacity", "Schnittmarken für Audacity", |s, cx| s.sampler_export_marks("audacity", cx)));
         let mut written = div().flex().flex_col().gap(px(10.)).child(ui.subheading("Speichern")).child(out);
         for path in &s.made {
-            written = written.child(ui.value(path.display().to_string()));
+            written = written.child(self.written_row(&ui, path, cx));
         }
         page.child(written).into_any_element()
     }

@@ -259,3 +259,19 @@ impl crate::shell::Shell {
         );
     }
 }
+
+impl crate::shell::Shell {
+    /// A written file as a line: its path, and „In Drive“ beside it where Drive is set up (with the reason when it failed).
+    pub(crate) fn written_row(&self, ui: &sondra_ui::Ui, path: &Path, cx: &mut gpui::Context<Self>) -> gpui::AnyElement {
+        use gpui::{div, prelude::*, px};
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let mut row = div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.value(path.display().to_string()));
+        if let Some(button) = self.drive_button(ui, format!("drive-{}", path.display()), path, &name, cx) {
+            row = row.child(button);
+        }
+        if let Some(why) = self.drive_failure(path) {
+            row = row.child(ui.hint(why));
+        }
+        row.into_any_element()
+    }
+}

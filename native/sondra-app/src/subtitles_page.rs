@@ -442,7 +442,7 @@ impl Shell {
                     .child(div().flex().flex_wrap().gap(px(8.)).child(film("als-spur", "Als Spur im Film", false)).child(film("einbrennen", "Ins Bild einbrennen", true)))
                     .child(ui.hint("Die Spur lässt sich im Player ein- und ausschalten; eingebrannt ist die Schrift fest im Bild. Der Film selbst bleibt unverändert, es entsteht eine Kopie."));
                 for path in &s.made {
-                    out = out.child(ui.value(path.display().to_string()));
+                    out = out.child(self.written_row(&ui, path, cx));
                 }
                 page = page.child(out);
             }

@@ -545,7 +545,7 @@ impl Shell {
                     .child(group("Abtastrate", [22050u32, 44100, 48000].iter().map(|r| op(format!("rate-{r}"), format!("{r} Hz"), Op::Resample(*r)).into_any_element()).collect()))
                     .child(group("Speichern", vec![save("wav", "Als WAV speichern").into_any_element(), save("flac", "Als FLAC speichern").into_any_element(), save("mp3", "Als MP3 speichern").into_any_element()]));
                 for path in &a.made {
-                    panel = panel.child(ui.value(path.display().to_string()));
+                    panel = panel.child(self.written_row(&ui, path, cx));
                 }
             }
             Tool::History => {
