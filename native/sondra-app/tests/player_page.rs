@@ -131,8 +131,8 @@ fn pause_holds_the_clock_and_the_keyboard_on_the_bar_jumps(cx: &mut TestAppConte
     let held = w.position();
     w.watch(0.5);
     assert!((w.position() - held).abs() < 0.06, "{held} → {}", w.position());
-    assert!(w.tree().find(Role::Button, "Abspielen").is_some(), "and the button offers to go on");
-    w.press(Role::Button, "Abspielen");
+    assert!(w.tree().find(Role::Button, "Wiedergabe starten").is_some(), "and the button offers to go on");
+    w.press(Role::Button, "Wiedergabe starten");
 
     // A key on the bar steps by ten seconds of a film of twenty: half of it.
     let bar = w.tree().find(Role::Slider, "Stelle im Film").unwrap().id;
@@ -274,10 +274,14 @@ fn the_keys_of_the_player_space_arrows_and_m(cx: &mut TestAppContext) {
     w.cx.simulate_keystrokes("m");
     w.draw();
     assert_eq!(w.tree().find(Role::Button, "Stumm").unwrap().toggled, Some(true));
-    focus(&mut w);
+    // Space on a button presses that button; on the bar, which does not use it, it pauses.
+    let bar = w.tree().find(Role::Slider, "Stelle im Film").unwrap().id;
+    w.cx.update(|window, cx| {
+        run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: bar, data: None }, window, cx)
+    });
     w.cx.simulate_keystrokes("space");
     w.draw();
-    assert!(w.tree().find(Role::Button, "Abspielen").is_some(), "Space pauses");
+    assert!(w.tree().find(Role::Button, "Wiedergabe starten").is_some(), "Space pauses");
 }
 
 #[gpui::test]

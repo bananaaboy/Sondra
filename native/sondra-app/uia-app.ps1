@@ -57,6 +57,9 @@ function Shot($name) {
 function Invoke-It($e) {
     $p = $null
     if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); return $true }
+    # A control that is on or off (a filter chip) is a toggle button: it is switched, not invoked.
+    $t = $null
+    if ($e.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$t)) { $t.Toggle(); return $true }
     return $false
 }
 

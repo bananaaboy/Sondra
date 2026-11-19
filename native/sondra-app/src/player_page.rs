@@ -469,7 +469,7 @@ impl Shell {
         // The controls.
         let toggle = {
             let me = me.clone();
-            ui.button("abspielen-pause", if playing { "Pause" } else { "Abspielen" }).primary().on_click(move |_, app| Self::player_do(&me, app, |p| if let Some(pb) = p.playback.as_mut() { pb.toggle() }))
+            ui.button("abspielen-pause", if playing { "Pause" } else { "Abspielen" }).accessible_name(if playing { "Pause" } else { "Wiedergabe starten" }).primary().on_click(move |_, app| Self::player_do(&me, app, |p| if let Some(pb) = p.playback.as_mut() { pb.toggle() }))
         };
         let mut controls = div().flex().flex_wrap().items_center().gap(px(10.));
         if p.queue.len() > 1 {

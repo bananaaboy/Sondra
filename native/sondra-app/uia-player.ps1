@@ -37,6 +37,9 @@ function Wait-For($pattern, $type) {
 function Invoke-It($e) {
     $p = $null
     if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); return $true }
+    # A control that is on or off (a filter chip) is a toggle button: it is switched, not invoked.
+    $t = $null
+    if ($e.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$t)) { $t.Toggle(); return $true }
     return $false
 }
 function Shot($name) {
@@ -57,8 +60,8 @@ Start-Sleep -Seconds 2
 Shot 'app-player.png'
 if ($null -ne $pause) {
     Check (Invoke-It $pause) 'the pause can be invoked'
-    Check ($null -ne (Wait-For 'Abspielen' $CT::Button)) 'and then the button offers to go on'
-    $go = Named 'Abspielen' $CT::Button
+    Check ($null -ne (Wait-For 'Wiedergabe starten' $CT::Button)) 'and then the button offers to go on'
+    $go = Named 'Wiedergabe starten' $CT::Button
     if ($null -ne $go) {
         [void](Invoke-It $go)
         Check ($null -ne (Wait-For 'Pause' $CT::Button)) 'it plays again'
