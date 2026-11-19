@@ -80,6 +80,8 @@ pub trait Link: Send + Sync + 'static {
         let _ = wait;
         self.recv().map(Some)
     }
+    /// Lets the cable go: whoever waits in `recv` is woken with an error.
+    fn close(&self) {}
 }
 
 /// What the handshake says about the phone.
@@ -204,6 +206,11 @@ impl Adb {
                 Err(MirrorError::Disconnected)
             }
         }
+    }
+
+    /// Lets go of the phone: every stream ends.
+    pub fn close(&self) {
+        self.inner.link.close();
     }
 
     /// Whether the phone has gone.

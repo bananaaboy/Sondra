@@ -107,6 +107,9 @@ impl Link for ChannelLink {
         // The receiver is locked only by the one reader.
         self.from_phone.lock().expect("lock").recv().map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "unplugged"))
     }
+    fn close(&self) {
+        let _ = self.to_phone.lock().expect("lock").send(Message::Stop);
+    }
     fn recv_timeout(&self, wait: std::time::Duration) -> io::Result<Option<Packet>> {
         match self.from_phone.lock().expect("lock").recv_timeout(wait) {
             Ok(p) => Ok(Some(p)),

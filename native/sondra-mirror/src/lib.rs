@@ -15,6 +15,7 @@ pub mod hid;
 pub mod key;
 pub mod ogg;
 pub mod options;
+pub mod session;
 pub mod stream;
 
 /// What can go wrong between this computer and the phone, in words for the person.
