@@ -43,5 +43,5 @@ gpui = { version = "=0.2.2", features = ["test-support"] }
 accesskit = "0.25"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Power", "Win32_UI_WindowsAndMessaging"] }
 raw-window-handle = "0.6"

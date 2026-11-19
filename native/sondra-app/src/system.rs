@@ -48,3 +48,47 @@ pub fn is_minimized(window: &gpui::Window) -> bool {
         false
     }
 }
+
+/// Keeps the screen and the system awake while a download runs (`true`), and lets them sleep again
+/// (`false`). Windows keeps this per thread, so it must be called from the same thread every time — the
+/// window's.
+pub fn keep_awake(on: bool) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Power::{SetThreadExecutionState, ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED};
+        // SAFETY: the call only sets flags for the calling thread.
+        unsafe {
+            if on {
+                SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+            } else {
+                SetThreadExecutionState(ES_CONTINUOUS);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = on;
+    }
+}
+
+/// The soft chime of a finished download, on the sound card; nothing where there is none. The sound card
+/// is opened on a thread of its own and let go once the sound has been heard.
+pub fn play_chime() {
+    use std::sync::atomic::AtomicBool;
+
+    use sondra_audio::{chime::chime_samples, Output};
+    std::thread::spawn(|| {
+        let out = Output::open(2.0);
+        let shared = out.shared();
+        let (rate, channels) = (shared.rate(), shared.channels());
+        let mut interleaved = Vec::new();
+        for v in chime_samples(rate) {
+            for _ in 0..channels {
+                interleaved.push(v);
+            }
+        }
+        shared.push(&interleaved, &AtomicBool::new(false));
+        std::thread::sleep(std::time::Duration::from_millis(900));
+        drop(out);
+    });
+}

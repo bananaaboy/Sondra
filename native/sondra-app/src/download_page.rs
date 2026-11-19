@@ -68,6 +68,10 @@ pub struct DownloadState {
     pub running_queue: bool,
     /// Addresses of a list that gave nothing, or loads that failed, with the reason.
     pub failed: Vec<String>,
+    /// Whether a chime says that loading is done (on unless turned off).
+    pub chime: bool,
+    /// What the window's title and the system were last told, so they are told only when it changes.
+    pub told: Option<(bool, String)>,
 }
 
 /// An address that is a file or a stream itself rather than a page.
@@ -138,6 +142,8 @@ impl DownloadState {
             queue: Vec::new(),
             running_queue: false,
             failed: Vec::new(),
+            chime: crate::store::FileStore::at_default("Herunterladen.json").is_none_or(|store| sondra_merk::folder_memory::Store::get_item(&store, "gong").as_deref() != Some("aus")),
+            told: None,
         }
     }
 }
@@ -205,6 +211,41 @@ impl Shell {
                 cx.notify();
             },
         );
+        cx.notify();
+    }
+
+    /// The window's title says how far a download is, and the screen and system stay awake while it runs;
+    /// both are put back when it ends. Called on every frame, it tells only what changed.
+    pub(crate) fn sync_download_chrome(&mut self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+        let d = &self.download;
+        let now = match &d.job {
+            Some(job) => {
+                let p = *job.progress.lock().expect("lock");
+                let said = match p.total.filter(|t| *t > 0) {
+                    Some(t) => format!("⬇ {} % · {} — Sondra", (p.loaded * 100 / t).min(100), job.title),
+                    None => format!("⬇ {} — Sondra", job.title),
+                };
+                (true, said)
+            }
+            None => (false, "Sondra".to_string()),
+        };
+        if d.told.as_ref() == Some(&now) {
+            return;
+        }
+        let was_awake = d.told.as_ref().is_some_and(|t| t.0);
+        if now.0 != was_awake {
+            crate::system::keep_awake(now.0);
+        }
+        sondra_a11y::set_window_title(window, cx, &now.1);
+        self.download.told = Some(now);
+    }
+
+    /// Turns the chime on or off, and remembers it.
+    pub(crate) fn set_download_chime(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.download.chime = on;
+        if let Some(mut store) = crate::store::FileStore::at_default("Herunterladen.json") {
+            sondra_merk::folder_memory::Store::set_item(&mut store, "gong", if on { "an" } else { "aus" }.to_string());
+        }
         cx.notify();
     }
 
@@ -294,6 +335,10 @@ impl Shell {
                 if shell.download.running_queue {
                     shell.next_in_queue(cx);
                 }
+                let d = &shell.download;
+                if d.job.is_none() && !d.running_queue && d.error.is_none() && d.chime && !d.done.is_empty() {
+                    crate::system::play_chime();
+                }
                 cx.notify();
             },
         );
@@ -351,6 +396,8 @@ impl Shell {
                 .child(ui.value(d.folder.display().to_string()))
                 .child(ui.button("ordner-aendern", "Ändern").small().disabled(busy).on_click(move |_, app| me2.update(app, |shell, cx| shell.choose_download_folder(cx)))),
         );
+        let (me_chime, chime_on) = (me.clone(), d.chime);
+        page = page.child(div().flex().child(ui.chip("gong", "Ton, wenn fertig", chime_on).on_click(move |_, app| me_chime.update(app, |shell, cx| shell.set_download_chime(!chime_on, cx)))));
 
         // A pasted list: what was found behind each address.
         if !d.queue.is_empty() && d.job.is_none() {

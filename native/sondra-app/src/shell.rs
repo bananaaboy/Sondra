@@ -809,6 +809,8 @@ impl Render for Shell {
             window.defer(cx, move |window, _| window.focus(&handle));
         }
 
+        self.sync_download_chrome(window, cx);
+
         // What plays goes on whichever page is open; the picture is taken only for the page that shows it.
         let showing = self.panel == Panel::Player;
         if self.player.tick(window, showing) {
