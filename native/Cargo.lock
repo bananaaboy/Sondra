@@ -5569,8 +5569,10 @@ dependencies = [
 name = "sondra-merk"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "chrono-tz",
+ "flate2",
  "regex",
  "rusqlite",
  "serde",
