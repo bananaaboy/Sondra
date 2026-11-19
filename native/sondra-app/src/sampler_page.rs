@@ -41,6 +41,8 @@ pub struct SamplerState {
     pub player: Option<ClipPlayer>,
     pub made: Vec<PathBuf>,
     pub bounds: Rc<Cell<Bounds<Pixels>>>,
+    /// The cut the pointer holds while it is down on the waveform.
+    cut: Option<crate::cut_drag::Grab>,
     ticking: bool,
 }
 
@@ -64,6 +66,7 @@ impl SamplerState {
             player: None,
             made: Vec::new(),
             bounds: Rc::new(Cell::new(Bounds::default())),
+            cut: None,
             ticking: false,
         }
     }
@@ -377,17 +380,48 @@ impl Shell {
         });
     }
 
-    fn sampler_pick_at(&mut self, x: Pixels, cx: &mut Context<Self>) {
-        let Some(audio) = self.sampler.audio.clone() else { return };
+    /// Where on the sound a pointer at `x` is, in seconds, and how many seconds six pixels are.
+    fn sampler_time_at(&self, x: Pixels) -> Option<(f64, f64)> {
+        let audio = self.sampler.audio.as_ref()?;
         let b = self.sampler.bounds.get();
         let width: f32 = b.size.width.into();
         if width <= 0.0 {
-            return;
+            return None;
         }
         let (left, x): (f32, f32) = (b.origin.x.into(), x.into());
-        let at = ((x - left) / width).clamp(0.0, 1.0) as f64 * audio.seconds();
+        let total = audio.seconds();
+        Some((((x - left) / width).clamp(0.0, 1.0) as f64 * total, 6.0 / f64::from(width) * total))
+    }
+
+    /// A press on the waveform: near a cut it takes hold of it, elsewhere it chooses the pad under it.
+    fn sampler_down(&mut self, x: Pixels, cx: &mut Context<Self>) {
+        let Some((at, tolerance)) = self.sampler_time_at(x) else { return };
+        let edges: Vec<(f64, f64)> = self.sampler.pads.iter().map(|p| (p.start, p.end)).collect();
+        if let Some(grab) = crate::cut_drag::grab_at(&edges, at, tolerance) {
+            self.sampler.cut = Some(grab);
+            return;
+        }
         if let Some(i) = self.sampler.pads.iter().position(|p| at >= p.start && at < p.end) {
             self.sampler_select(i, cx);
+        }
+    }
+
+    /// The pointer moves with a cut held: the pads on both sides follow.
+    fn sampler_drag(&mut self, x: Pixels, cx: &mut Context<Self>) {
+        let (Some(grab), Some((at, _))) = (self.sampler.cut, self.sampler_time_at(x)) else { return };
+        let Some(total) = self.sampler.audio.as_ref().map(|a| a.seconds()) else { return };
+        let edges: Vec<(f64, f64)> = self.sampler.pads.iter().map(|p| (p.start, p.end)).collect();
+        for (pad, (start, end)) in self.sampler.pads.iter_mut().zip(crate::cut_drag::drag(&edges, grab, at, total)) {
+            pad.start = start;
+            pad.end = end;
+        }
+        self.sampler.player = None;
+        cx.notify();
+    }
+
+    fn sampler_release(&mut self, cx: &mut Context<Self>) {
+        if self.sampler.cut.take().is_some() {
+            cx.notify();
         }
     }
 
@@ -457,11 +491,26 @@ impl Shell {
             }
             columns = columns.child(cell);
         }
-        let press = me.clone();
-        let stage = div().id("zerschneiden-welle").cursor_pointer().on_mouse_down(MouseButton::Left, move |event, _, app| {
-            let x = event.position.x;
-            press.update(app, |shell, cx| shell.sampler_pick_at(x, cx))
-        }).child(columns);
+        let (press, drag, release) = (me.clone(), me.clone(), me.clone());
+        let stage = div()
+            .id("zerschneiden-welle")
+            .cursor_pointer()
+            .on_mouse_down(MouseButton::Left, move |event, _, app| {
+                let x = event.position.x;
+                press.update(app, |shell, cx| shell.sampler_down(x, cx))
+            })
+            .on_mouse_move(move |event, _, app| {
+                if event.pressed_button == Some(MouseButton::Left) {
+                    let x = event.position.x;
+                    drag.update(app, |shell, cx| shell.sampler_drag(x, cx))
+                }
+            })
+            .on_mouse_up(MouseButton::Left, {
+                let release = release.clone();
+                move |_, _, app| release.update(app, |shell, cx| shell.sampler_release(cx))
+            })
+            .on_mouse_up_out(MouseButton::Left, move |_, _, app| release.update(app, |shell, cx| shell.sampler_release(cx)))
+            .child(columns);
         page = page.child(accessible("zerschneiden-welle", Role::Group, stage).label("Wellenform mit Schnitten").value(format!("{} Pads", s.pads.len())));
 
         // How to cut.

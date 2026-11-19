@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use accesskit::{Action, ActionRequest, TreeId};
-use gpui::{point, px, size, AvailableSpace, Entity, TestAppContext, VisualTestContext};
+use gpui::{point, px, size, AvailableSpace, Entity, Modifiers, MouseButton, TestAppContext, VisualTestContext};
 use sondra_a11y::{attach_sink, run_action, Role, Snapshot};
 use sondra_app::nav::Panel;
 use sondra_app::shell::Shell;
@@ -131,6 +131,44 @@ fn a_break_is_cut_at_its_hits_and_the_pads_are_changed_and_heard(cx: &mut TestAp
     w.press(Role::Button, "Pad 1 anhören");
     assert!(!w.shell.read_with(w.cx, |s, _| s.sampler_is_playing()));
     assert_eq!(n, w.pads());
+}
+
+#[gpui::test]
+fn a_cut_is_dragged_on_the_waveform_and_both_pads_follow_and_a_press_elsewhere_chooses_a_pad(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Break.wav"));
+    w.press(Role::Button, "Verfahren Gleiche Teile");
+    w.press(Role::Button, "Teile 4");
+    let pads = w.shell.read_with(w.cx, |s, _| s.sampler_pads().iter().map(|p| (p.start, p.end)).collect::<Vec<_>>());
+    assert_eq!(pads.len(), 4);
+    let b = w.shell.read_with(w.cx, |s, _| s.sampler_bounds());
+    let total = 2.0;
+    let at = |seconds: f64| point(b.origin.x + b.size.width * (seconds / total) as f32, b.origin.y + b.size.height / 2.0);
+    // The cut between pad 2 and pad 3 lies at one second; take hold of it and pull it to 0.7.
+    assert!((pads[1].1 - 1.0).abs() < 0.01 && (pads[2].0 - 1.0).abs() < 0.01, "{pads:?}");
+    w.cx.simulate_mouse_down(at(1.0), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.85), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.7), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.7), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let moved = w.shell.read_with(w.cx, |s, _| s.sampler_pads().iter().map(|p| (p.start, p.end)).collect::<Vec<_>>());
+    assert!((moved[1].1 - 0.7).abs() < 0.02 && (moved[2].0 - 0.7).abs() < 0.02, "both sides follow: {moved:?}");
+    assert_eq!(moved[0], pads[0]);
+    assert_eq!(moved[3], pads[3]);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_selected()), 0, "taking hold of a cut chooses no pad");
+    // A drag past the neighbour stops short of it.
+    w.cx.simulate_mouse_down(at(0.7), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.0), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.0), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let held = w.shell.read_with(w.cx, |s, _| s.sampler_pads().iter().map(|p| (p.start, p.end)).collect::<Vec<_>>());
+    assert!(held[1].1 - held[1].0 >= 0.0149, "{held:?}");
+    assert!((held[1].0 - pads[1].0).abs() < 1e-9, "the cut before it did not move");
+    // A press in the middle of a pad chooses it, as before.
+    w.cx.simulate_mouse_down(at(1.75), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_up(at(1.75), MouseButton::Left, Modifiers::default());
+    w.draw();
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_selected()), 3);
 }
 
 #[gpui::test]
