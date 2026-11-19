@@ -562,6 +562,46 @@ fn a_big_film_can_be_watched_smaller_and_the_next_film_is_as_it_is_again(cx: &mu
 }
 
 #[gpui::test]
+fn a_song_has_its_visualizer_and_the_window_chooses_its_look(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let song = tmp.path().join("lied.wav");
+    let ff = Ffmpeg::locate().unwrap();
+    let out = Command::new(ff.program()).args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "3"]).arg(&song).output().unwrap();
+    assert!(out.status.success());
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![song], cx));
+    w.watch(0.5);
+    w.press(Role::Button, "Bild und Ton");
+    // On from the start, as bars (as the web player has it).
+    assert_eq!(w.tree().find(Role::Button, "Visualizer zeigen").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Visualizer Balken").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Visualizer Ring");
+    assert_eq!(w.tree().find(Role::Button, "Visualizer Ring").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Visualizer Balken").unwrap().toggled, Some(false));
+    w.press(Role::Button, "Visualizer zeigen");
+    assert_eq!(w.tree().find(Role::Button, "Visualizer zeigen").unwrap().toggled, Some(false));
+    w.watch(0.3);
+    assert!(w.position() > 0.3, "the song goes on: {}", w.position());
+}
+
+#[gpui::test]
+fn a_film_has_no_visualizer_to_choose(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let one = film(tmp.path(), "bild.mp4", 3);
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![one], cx));
+    w.watch(0.3);
+    w.press(Role::Button, "Bild und Ton");
+    assert!(w.tree().find(Role::Button, "Visualizer zeigen").is_none());
+}
+
+#[gpui::test]
 fn the_picture_has_four_sizes_and_over_the_whole_window_the_controls_go_when_nobody_asks_for_them(cx: &mut TestAppContext) {
     use sondra_app::player_page::PlayerSize;
     if !has_ffmpeg() {

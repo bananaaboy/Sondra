@@ -147,3 +147,23 @@ fn the_silent_output_keeps_time_like_a_sound_card_would() {
     assert!((0.35..=0.7).contains(&heard), "about half a second after half a second: {heard}");
     assert!(shared.buffered() > 0.3, "and the rest is still waiting");
 }
+
+#[test]
+fn the_last_frames_heard_are_kept_for_a_look_one_value_each_and_the_volume_does_not_change_them() {
+    let shared = Shared::new(100, 2, 1.0);
+    let mut mixer = Mixer::new(shared.clone());
+    assert!(shared.recent().is_empty());
+    assert!(shared.push(&[1.0, 0.0, 0.5, 0.5, -1.0, -1.0], &no_stop()));
+    shared.set_volume(0.5);
+    let mut out = [0.0f32; 4];
+    mixer.fill(&mut out);
+    // Two frames heard: the channels averaged, as they came (not as loud as the speakers had them).
+    assert_eq!(shared.recent(), [0.5, 0.5]);
+    // Paused, nothing more is taken in.
+    shared.set_paused(true);
+    mixer.fill(&mut out);
+    assert_eq!(shared.recent().len(), 2);
+    // A jump starts the look anew.
+    shared.clear();
+    assert!(shared.recent().is_empty());
+}

@@ -32,6 +32,7 @@ pub mod images_page;
 pub mod instance;
 pub mod mix_page;
 pub mod video_page;
+pub mod visualizer;
 pub mod normalize_page;
 pub mod player_page;
 pub mod sampler_page;

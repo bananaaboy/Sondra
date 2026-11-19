@@ -15,6 +15,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+pub mod analyser;
+pub use analyser::Spectrum;
+
 use sondra_audio::{Output, Shared};
 use sondra_media::{Ffmpeg, MediaError, Probe, Stream};
 
@@ -259,6 +262,7 @@ pub struct Playback {
     state: State,
     /// The last picture handed out, so the window can keep showing it.
     last: Option<Frame>,
+    reader: analyser::Reader,
 }
 
 #[derive(Default)]
@@ -314,6 +318,7 @@ impl Playback {
             timer: Timer::default(),
             state: State::Playing,
             last: None,
+            reader: analyser::Reader::new(),
         };
         playback.restart(from.max(0.0))?;
         Ok(playback)
@@ -498,6 +503,15 @@ impl Playback {
         let at = self.position();
         self.settings.night = on;
         self.restart(at)
+    }
+
+    /// A look at the sound being heard now, for the visualizer: silent while it is paused or nothing plays.
+    pub fn spectrum(&self) -> Spectrum {
+        if self.state != State::Playing || self.audio.is_empty() {
+            self.reader.reset();
+            return Spectrum::silent();
+        }
+        self.reader.read(&self.shared.recent())
     }
 
     /// The heights a film can be watched at below its own, as the web player offers them.

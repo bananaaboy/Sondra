@@ -15,7 +15,12 @@ struct State {
     volume: f32,
     /// How much may wait in the queue, in samples; a producer waits when it is full.
     capacity: usize,
+    /// The last frames that were heard, one value each (the channels averaged), for the visualizer.
+    recent: VecDeque<f32>,
 }
+
+/// How many of the last frames are kept for a look at the sound.
+pub const RECENT_FRAMES: usize = 2048;
 
 /// The queue between the decoder and the speakers, with its clock. Cloned handles share one queue.
 #[derive(Clone)]
@@ -31,7 +36,7 @@ impl Shared {
         let capacity = ((rate as f32 * seconds) as usize).max(1) * channels.max(1);
         Shared {
             inner: Arc::new((
-                Mutex::new(State { queue: VecDeque::new(), heard_frames: 0, paused: false, volume: 1.0, capacity }),
+                Mutex::new(State { queue: VecDeque::new(), heard_frames: 0, paused: false, volume: 1.0, capacity, recent: VecDeque::new() }),
                 Condvar::new(),
             )),
             channels: channels.max(1),
@@ -77,6 +82,7 @@ impl Shared {
         let (lock, cv) = &*self.inner;
         let mut state = lock.lock().expect("lock");
         state.queue.clear();
+        state.recent.clear();
         state.heard_frames = 0;
         cv.notify_all();
     }
@@ -95,6 +101,11 @@ impl Shared {
 
     pub fn paused(&self) -> bool {
         self.inner.0.lock().expect("lock").paused
+    }
+
+    /// The last `RECENT_FRAMES` frames that were heard (fewer at the start), one value each, oldest first.
+    pub fn recent(&self) -> Vec<f32> {
+        self.inner.0.lock().expect("lock").recent.iter().copied().collect()
     }
 
     /// Seconds of sound heard since the last `clear`.
@@ -132,8 +143,19 @@ impl Mixer {
         let take = out.len().min(state.queue.len());
         // Whole frames only: a half frame would shift the channels from then on.
         let take = take - take % self.shared.channels;
-        for (slot, sample) in out[..take].iter_mut().zip(state.queue.drain(..take)) {
-            *slot = sample * volume;
+        let channels = self.shared.channels;
+        for frame in 0..take / channels {
+            let mut sum = 0.0f32;
+            for channel in 0..channels {
+                let sample = state.queue[frame * channels + channel];
+                out[frame * channels + channel] = sample * volume;
+                sum += sample;
+            }
+            state.recent.push_back(sum / channels as f32);
+        }
+        state.queue.drain(..take);
+        while state.recent.len() > RECENT_FRAMES {
+            state.recent.pop_front();
         }
         out[take..].fill(0.0);
         let frames = take / self.shared.channels;

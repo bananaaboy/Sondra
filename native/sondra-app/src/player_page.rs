@@ -827,7 +827,14 @@ impl Shell {
         stage = match (&p.image, playback.picture_size()) {
             (Some(image), Some(_)) => stage.child(img(ImageSource::Render(image.clone())).object_fit(match p.settings.fit { sondra_player::Fit::Contain => ObjectFit::Contain, sondra_player::Fit::Cover => ObjectFit::Cover, sondra_player::Fit::Fill => ObjectFit::Fill }).size_full()),
             (None, Some(_)) => stage.child(div().text_color(c.stage_muted).child("Das Bild kommt …")),
-            (_, None) => stage.child(div().flex().flex_col().items_center().gap(px(6.)).child(div().text_color(c.stage_ink).text_size(px(size::SUBHEADING)).child(name.clone())).child(div().text_color(c.stage_muted).child("Ton"))),
+            (_, None) => {
+                // A song: the visualizer behind its name, when it is switched on.
+                let mut stage = stage;
+                if p.settings.visualizer {
+                    stage = stage.child(crate::visualizer::visualizer(p.settings.visualizer_mode, playback.spectrum(), playing, c.stage_accent, c.stage_line));
+                }
+                stage.child(div().flex().flex_col().items_center().gap(px(6.)).child(div().text_color(c.stage_ink).text_size(px(size::SUBHEADING)).child(name.clone())).child(div().text_color(c.stage_muted).child("Ton")))
+            }
         };
         if skip_opening || offer_next {
             let mut offers = div().absolute().right(px(16.)).top(px(16.)).flex().flex_col().items_end().gap(px(8.));
@@ -1143,6 +1150,27 @@ impl Shell {
                             })),
                         )),
                 );
+            }
+            // The visualizer belongs to a song's stage.
+            if p.playback.as_ref().is_some_and(|pb| pb.picture_size().is_none()) {
+                let mut row = div().flex().flex_wrap().gap(px(6.));
+                let (on, mode) = (st.visualizer, st.visualizer_mode);
+                {
+                    let me = me.clone();
+                    row = row.child(ui.chip("visualizer-an", "Visualizer", on).accessible_name("Visualizer zeigen").on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        p.settings.visualizer = !on;
+                        p.keep_settings();
+                    })));
+                }
+                for (value, label) in [(sondra_player::VisualizerMode::Bars, "Balken"), (sondra_player::VisualizerMode::Wave, "Welle"), (sondra_player::VisualizerMode::Radial, "Ring")] {
+                    let me = me.clone();
+                    row = row.child(ui.chip(format!("visualizer-{label}"), label, on && mode == value).accessible_name(format!("Visualizer {label}")).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        p.settings.visualizer = true;
+                        p.settings.visualizer_mode = value;
+                        p.keep_settings();
+                    })));
+                }
+                body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Anzeige zum Ton")).child(row));
             }
             // The equalizer: five bands and the presets of the web player.
             {
