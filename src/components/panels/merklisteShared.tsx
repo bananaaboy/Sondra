@@ -6,7 +6,6 @@
  * tab into its chunk to get a stepper.
  */
 
-import { parseLinkEpisodeInfo } from '../../lib/download'
 import type { SavedLinkStatus } from '../../lib/merkliste'
 import type { AniworldLanguagePref, AudioFilePref, VideoFilePref } from './DownloaderPanel'
 
@@ -69,24 +68,7 @@ export function Stepper({
   )
 }
 
-/**
- * What kind of numbering an address carries: seasons and episodes
- * (`series`), a place in a playlist (`list`), or none — a single video, where
- * season and episode controls would do nothing.
- */
-export function episodeKindOf(url: string): 'series' | 'list' | null {
-  if (!url.trim()) return null
-  if (!parseLinkEpisodeInfo(url).isEpisodicUrl) return null
-  const seasonal = /staffel|season|filme?(?:\/|-|$)|\/s\d{1,2}e\d{1,3}/i.test(url)
-  return /[?&](?:list|index)=/i.test(url) && !seasonal ? 'list' : 'series'
-}
-
-/** Where an entry stands, in words: „Staffel 2, Folge 8", „Film 3", „Staffel 1, alle Folgen". */
-export function positionLabel(season: number, episode: number | null, kind: 'series' | 'list' = 'series'): string {
-  if (kind === 'list') return episode ? `Nr. ${episode}` : 'ganze Liste'
-  if (season === 0) return episode ? `Film ${episode}` : 'Alle Filme'
-  return episode ? `Staffel ${season}, Folge ${episode}` : `Staffel ${season}, alle Folgen`
-}
+export { episodeKindOf, positionLabel } from '../../lib/merkRows'
 
 /** The language versions a multi-language source may offer. */
 export const LANGUAGE_OPTIONS: { value: AniworldLanguagePref; label: string; title: string }[] = [

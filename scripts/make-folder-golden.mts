@@ -28,6 +28,7 @@ import {
   type KindFilter,
   type SortKey,
 } from '../src/lib/folder'
+import { episodeKindOf, leftLabel, positionLabel, standLabel } from '../src/lib/merkRows'
 import { subtitleNameFor, subtitlesBeside } from '../src/lib/subtitleFiles'
 import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy } from '../src/lib/duplicates'
 import { createMerkItem, type SavedLinkItem } from '../src/lib/merkliste'
@@ -193,7 +194,30 @@ const subtitles = {
   beside: subFiles.filter((f) => /\.(mkv|mp4)$/i.test(f.name)).map((film) => ({ film, srt: subtitlesBeside(film, subFiles).map((f) => `${f.dir}/${f.name}`) })),
   named: ['Film.mkv', 'Serie - 01.mp4', 'a.b.c.mp4', 'ohne Endung', 'Ünï.MKV', '.verborgen', 'x.', 'Film.de.mkv'].map((name) => ({ name, srt: subtitleNameFor(name) })),
 }
+const rowUrls = [
+  '', 'https://aniworld.to/anime/stream/frieren/staffel-1/episode-4', 'https://www.youtube.com/watch?v=abc&list=PL123&index=4', 'https://www.youtube.com/playlist?list=PL123',
+  'https://example.org/video.mp4', 'https://serien.example/serie/staffel-2/folge-3', 'https://example.org/show/season-1/s01e05', 'https://example.org/filme/1', '  ',
+]
+const rowRaw: Record<string, unknown>[] = []
+for (const [u, url] of rowUrls.entries()) {
+  for (const status of ['watching', 'later', 'done', 'paused', 'dropped']) {
+    rowRaw.push({ id: `r${u}-${status}`, url, title: `Reihe ${u}`, status, season: 1, episode: 4, seasons: [{ number: 1, episodes: 12, watched: status === 'later' ? [] : [1, 2, 3] }, { number: 2, episodes: null, watched: [] }] })
+    rowRaw.push({ id: `s${u}-${status}`, url, title: `Fertig ${u}`, status, season: 1, episode: null, seasons: [{ number: 1, episodes: 3, watched: [1, 2, 3] }] })
+    rowRaw.push({ id: `f${u}-${status}`, url, title: `Film ${u}`, status, season: 0, episode: 2, filmDuration: 100, seasons: [{ number: 0, episodes: 4, watched: [1] }] })
+    rowRaw.push({ id: `z${u}-${status}`, url, title: `Leer ${u}`, status, season: 3, episode: null, seasons: [{ number: 3, episodes: null, watched: [] }] })
+    rowRaw.push({ id: `n${u}-${status}`, url, title: `Ohne ${u}`, status, season: 1, episode: 1 })
+    rowRaw.push({ id: `d${u}-${status}`, url, title: `Dauer ${u}`, status, season: 1, episode: 2, episodeDuration: 45, durations: { '1:3': 60 }, seasons: [{ number: 1, episodes: 5, watched: [1] }] })
+  }
+}
+const rowItems = rowRaw.map((raw) => mk(raw))
+const rows = {
+  items: rowItems,
+  kinds: rowUrls.map((url) => ({ url, kind: episodeKindOf(url) ?? null })),
+  positions: [[1, 4, 'series'], [1, null, 'series'], [0, 2, 'series'], [0, null, 'series'], [2, 7, 'list'], [2, null, 'list'], [3, 0, 'series']].map(([season, episode, kind]) => ({ season, episode, kind, label: positionLabel(season as number, episode as number | null, kind as 'series' | 'list') })),
+  lines: rowItems.map((item) => ({ id: item.id, stand: standLabel(item), left: leftLabel(item) ?? null })),
+}
 const out = {
+  rows,
   subtitles,
   dup: dupOut,
   items,

@@ -14,6 +14,7 @@ pub mod normalize;
 pub mod plan;
 pub mod progress;
 pub mod recap;
+pub mod rows;
 pub mod share;
 pub mod sqlite;
 pub mod stats;

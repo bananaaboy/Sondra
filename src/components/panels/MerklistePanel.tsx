@@ -59,7 +59,6 @@ import {
   merkItems,
   markRange,
   importMerkliste,
-  itemRemainingMinutes,
   merkSaveFailed,
   noteRemoved,
   partName,
@@ -120,7 +119,8 @@ import { sendAppNotification } from '../../lib/notifications'
 import { useSession } from '../../state/store'
 import { ChoiceRow } from '../editor/EditorShell'
 import { Button, Card, Dialog, Notice, Reveal, RowMark, Select, Slider, TextInput, Toggle } from '../ui/primitives'
-import { goalState, lengthLabel, parseDay } from '../../lib/watchPlan'
+import { leftLabel, standLabel, statusOf } from '../../lib/merkRows'
+import { goalState, parseDay } from '../../lib/watchPlan'
 import { CoverImage, MIDDLE } from '../CoverImage'
 import { MerklisteRecap } from './MerklisteRecap'
 import { ShareDialog } from '../MerklisteShare'
@@ -133,7 +133,6 @@ import {
   Stepper,
   VIDEO_QUALITY_OPTIONS,
   episodeKindOf,
-  positionLabel,
   whenLabel,
 } from './merklisteShared'
 
@@ -146,7 +145,6 @@ const AUDIO_FORMATS: { id: AudioOutputFormat; label: string }[] = [
   { id: 'opus', label: 'Opus' },
 ]
 
-const statusOf = (item: SavedLinkItem): SavedLinkStatus => item.status ?? 'watching'
 
 /* -------------------------------------------------------------------------- */
 /* Small pieces                                                                */
@@ -2214,17 +2212,6 @@ function seriesCover(item: SavedLinkItem): { src: string; frame?: CoverFrame } |
   return first ? coverOf(item, first, partsOf(first)[0]) : null
 }
 
-/** „Staffel 3, Folge 5", „Alles gesehen", „Nicht angefangen" — where a series stands, in a few words. */
-function standLabel(item: SavedLinkItem): string {
-  const status = statusOf(item)
-  const seasons = seasonsOf(item)
-  const kind = episodeKindOf(item.url) ?? 'series'
-  if (caughtUp(seasons)) return 'Alles gesehen'
-  if (status === 'done') return `${itemProgress(item).watched} gesehen`
-  if (status === 'later' && itemProgress(item).watched === 0) return 'Nicht angefangen'
-  return positionLabel(item.season, item.episode, kind)
-}
-
 /** A poster without a cover: the name itself, set on the tint. */
 function NamePoster({ title, large = false }: { title: string; large?: boolean }) {
   return (
@@ -2299,13 +2286,6 @@ function ViewChoice({ value, onChange }: { value: MerkView; onChange: (view: Mer
       })}
     </span>
   )
-}
-
-/** „noch 6 · 2 Std. 15 Min.“: what is left of a series, in episodes and time. */
-function leftLabel(item: SavedLinkItem): string | null {
-  const left = itemRemainingMinutes(item)
-  if (!left.remainingCount) return null
-  return `noch ${left.remainingCount} · ${lengthLabel(left.minutes)}${left.known ? '' : ' +'}`
 }
 
 /**
