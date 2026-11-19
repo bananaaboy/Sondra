@@ -47,6 +47,7 @@ pub mod presets;
 pub mod run;
 pub mod separation;
 pub mod tempo;
+pub mod crop_drag;
 pub mod declick;
 pub mod thumbnail;
 pub mod timestretch;

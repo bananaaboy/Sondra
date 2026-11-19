@@ -83,7 +83,7 @@ export function mirrorRect(rect: Rect, axis: 'h' | 'v'): Rect {
     : { ...rect, y: 1 - rect.y - rect.height }
 }
 
-type Handle = 'move' | 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se' | 'new'
+export type Handle = 'move' | 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'sw' | 'se' | 'new'
 
 const HANDLES: { id: Handle; style: string; cursor: string }[] = [
   { id: 'nw', style: 'left-0 top-0 -translate-x-1/2 -translate-y-1/2', cursor: 'nwse-resize' },
@@ -98,6 +98,84 @@ const HANDLES: { id: Handle; style: string; cursor: string }[] = [
 
 /** The smallest crop that still has pixels in it, as a fraction. */
 const MIN = 0.02
+
+/** What a press on the rectangle was: which handle, the rectangle as it was, and where the pointer landed. */
+export interface DragState {
+  handle: Handle
+  start: Rect
+  originX: number
+  originY: number
+}
+
+/**
+ * The rectangle after the pointer moved to `point` (fractions of the source, 0 to 1). Pure: a drag works
+ * from the snapshot taken when it began, and nothing else. The native editors (`native/sondra-media`) carry
+ * the same rules and are checked against this function.
+ */
+export function dragRect(state: DragState, point: { x: number; y: number }, ratio: number | null, sourceAspect: number): Rect {
+  const { start } = state
+  let { x, y, width, height } = start
+
+  if (state.handle === 'move') {
+    x = clamp01(start.x + (point.x - state.originX))
+    y = clamp01(start.y + (point.y - state.originY))
+    // Pushing against an edge stops the rectangle rather than shrinking it.
+    x = Math.min(x, 1 - start.width)
+    y = Math.min(y, 1 - start.height)
+    return { x, y, width: start.width, height: start.height }
+  }
+
+  const handle = state.handle === 'new' ? 'se' : state.handle
+  // Each edge is moved to the pointer; the opposite edge stays where it is.
+  const left = handle.includes('w') ? point.x : start.x
+  const right = handle.includes('e') ? point.x : start.x + start.width
+  const top = handle.includes('n') ? point.y : start.y
+  const bottom = handle.includes('s') ? point.y : start.y + start.height
+
+  if (state.handle === 'new') {
+    x = Math.min(state.originX, point.x)
+    y = Math.min(state.originY, point.y)
+    width = Math.abs(point.x - state.originX)
+    height = Math.abs(point.y - state.originY)
+  } else {
+    x = Math.min(left, right)
+    y = Math.min(top, bottom)
+    width = Math.abs(right - left)
+    height = Math.abs(bottom - top)
+  }
+
+  width = Math.max(MIN, width)
+  height = Math.max(MIN, height)
+
+  if (ratio !== null) {
+    // The ratio is in pixels, the rectangle is in fractions of the source.
+    const wanted = ratio / sourceAspect
+    // Grow from whichever dimension the pointer moved further in, so the
+    // rectangle follows the hand instead of snapping sideways.
+    if (width / wanted > height) height = width / wanted
+    else width = height * wanted
+    // Then pull it back inside the frame, keeping the anchored corner put.
+    const anchorRight = handle.includes('w')
+    const anchorBottom = handle.includes('n')
+    if (width > 1) {
+      width = 1
+      height = width / wanted
+    }
+    if (height > 1) {
+      height = 1
+      width = height * wanted
+    }
+    x = anchorRight ? Math.min(start.x + start.width, 1) - width : x
+    y = anchorBottom ? Math.min(start.y + start.height, 1) - height : y
+  }
+
+  x = clamp01(Math.min(x, 1 - width))
+  y = clamp01(Math.min(y, 1 - height))
+  width = Math.min(width, 1 - x)
+  height = Math.min(height, 1 - y)
+
+  return { x, y, width, height }
+}
 
 export function CropOverlay({
   rect,
@@ -147,70 +225,7 @@ export function CropOverlay({
     const point = pointAt(event)
     if (!point) return
     event.preventDefault()
-
-    const { start } = state
-    let { x, y, width, height } = start
-
-    if (state.handle === 'move') {
-      x = clamp01(start.x + (point.x - state.originX))
-      y = clamp01(start.y + (point.y - state.originY))
-      // Pushing against an edge stops the rectangle rather than shrinking it.
-      x = Math.min(x, 1 - start.width)
-      y = Math.min(y, 1 - start.height)
-      onChange({ x, y, width: start.width, height: start.height })
-      return
-    }
-
-    const handle = state.handle === 'new' ? 'se' : state.handle
-    // Each edge is moved to the pointer; the opposite edge stays where it is.
-    const left = handle.includes('w') ? point.x : start.x
-    const right = handle.includes('e') ? point.x : start.x + start.width
-    const top = handle.includes('n') ? point.y : start.y
-    const bottom = handle.includes('s') ? point.y : start.y + start.height
-
-    if (state.handle === 'new') {
-      x = Math.min(state.originX, point.x)
-      y = Math.min(state.originY, point.y)
-      width = Math.abs(point.x - state.originX)
-      height = Math.abs(point.y - state.originY)
-    } else {
-      x = Math.min(left, right)
-      y = Math.min(top, bottom)
-      width = Math.abs(right - left)
-      height = Math.abs(bottom - top)
-    }
-
-    width = Math.max(MIN, width)
-    height = Math.max(MIN, height)
-
-    if (ratio !== null) {
-      // The ratio is in pixels, the rectangle is in fractions of the source.
-      const wanted = ratio / sourceAspect
-      // Grow from whichever dimension the pointer moved further in, so the
-      // rectangle follows the hand instead of snapping sideways.
-      if (width / wanted > height) height = width / wanted
-      else width = height * wanted
-      // Then pull it back inside the frame, keeping the anchored corner put.
-      const anchorRight = handle.includes('w')
-      const anchorBottom = handle.includes('n')
-      if (width > 1) {
-        width = 1
-        height = width / wanted
-      }
-      if (height > 1) {
-        height = 1
-        width = height * wanted
-      }
-      x = anchorRight ? Math.min(start.x + start.width, 1) - width : x
-      y = anchorBottom ? Math.min(start.y + start.height, 1) - height : y
-    }
-
-    x = clamp01(Math.min(x, 1 - width))
-    y = clamp01(Math.min(y, 1 - height))
-    width = Math.min(width, 1 - x)
-    height = Math.min(height, 1 - y)
-
-    onChange({ x, y, width, height })
+    onChange(dragRect(state, point, ratio, sourceAspect))
   }
 
   const end = (event: ReactPointerEvent) => {
