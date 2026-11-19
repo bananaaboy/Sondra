@@ -11,6 +11,8 @@ import { buildConvertArgs, DEFAULT_CONVERT, OUTPUT_FORMATS, rateFor, findFormat,
 import { BUILT_IN_PRESETS, presetFor } from '../src/lib/convertPresets'
 import { applyNormalization, DEFAULT_NORMALIZATION, measureLoudness } from '../src/lib/loudness'
 import { istft, magnitudeOf, stft } from '../src/lib/fft'
+import { detectAutoChop16, detectOnsets } from '../src/lib/onsets'
+import { beatGrid, estimateTempo, snapToZeroCrossing } from '../src/lib/tempo'
 
 const outDir = 'native/sondra-media/tests/golden'
 mkdirSync(outDir, { recursive: true })
@@ -167,4 +169,51 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
     `${JSON.stringify({ frames: spec.frames, bins: spec.bins, padding: spec.padding, length: spec.length, samples, roundTripWorst: worst, backFirst: Array.from(back.slice(0, 8)), backLast: Array.from(back.slice(-8)) }, null, 1)}\n`,
   )
   console.log(`FFT: ${spec.frames} Bilder, Hin-und-zurück ${worst.toExponential(2)}`)
+}
+
+/* -- Tempo und Einsätze: ein Schlagzeug-Muster ohne Zufall --------------------------------------- */
+
+{
+  const sr = 44100
+  // Like the one in verify-tempo, but the hat noise comes from an integer generator.
+  const drums = (bpm: number, seconds: number, offsetSeconds = 0) => {
+    const frames = Math.round(sr * seconds)
+    const channel = new Float32Array(frames)
+    const beat = 60 / bpm
+    let state = 987654321
+    for (let i = 0; i < frames; i += 1) {
+      const t = i / sr - offsetSeconds
+      if (t < 0) continue
+      const inBeat = t % beat
+      const inEighth = t % (beat / 2)
+      let value = 0
+      if (inBeat < 0.05) value += 0.9 * Math.sin(2 * Math.PI * 60 * inBeat) * Math.exp(-inBeat * 60)
+      if (inEighth < 0.02) {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+        value += 0.35 * ((state >>> 8) / 2 ** 24 * 2 - 1) * Math.exp(-inEighth * 220)
+      }
+      value += 0.05 * Math.sin(2 * Math.PI * 220 * t)
+      channel[i] = value
+    }
+    return { channels: [channel, new Float32Array(channel)], sampleRate: sr }
+  }
+  const cases = [
+    { name: 'drums-90', bpm: 90, seconds: 8, offset: 0 },
+    { name: 'drums-120', bpm: 120, seconds: 8, offset: 0 },
+    { name: 'drums-128-offset', bpm: 128, seconds: 8, offset: 0.25 },
+    { name: 'drums-174', bpm: 174, seconds: 8, offset: 0 },
+  ]
+  const tempo = cases.map((c) => ({ ...c, estimate: estimateTempo(drums(c.bpm, c.seconds, c.offset)) }))
+  const held = new Float32Array(sr * 4)
+  for (let i = 0; i < held.length; i += 1) held[i] = 0.3 * Math.sin((2 * Math.PI * 220 * i) / sr)
+  const heldEstimate = estimateTempo({ channels: [held], sampleRate: sr })
+  const grids = [0.5, 1, 4].map((beats) => ({ beats, grid: beatGrid({ bpm: 120, offsetSeconds: 0.3, beatsPerSlice: beats, durationSeconds: 4 }) }))
+  const sineWave = new Float32Array(sr)
+  for (let i = 0; i < sineWave.length; i += 1) sineWave[i] = Math.sin((2 * Math.PI * 100 * i) / sr)
+  const snaps = [0.1234, 0.777, 0.5].map((at) => ({ at, snapped: snapToZeroCrossing({ channels: [sineWave], sampleRate: sr }, at) }))
+  const audio = drums(120, 4, 0)
+  const onsets = detectOnsets(audio)
+  const chop = detectAutoChop16(audio)
+  writeFileSync(`${outDir}/tempo.json`, `${JSON.stringify({ tempo, held: heldEstimate, grids, snaps, onsets, chop }, null, 1)}\n`)
+  console.log(`Tempo: ${tempo.map((t) => t.estimate.bpm).join(', ')} · ${onsets.length} Einsätze`)
 }

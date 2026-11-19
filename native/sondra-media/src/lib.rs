@@ -6,6 +6,8 @@
 //! * [`presets`] — the templates of the converter (`src/lib/convertPresets.ts`).
 //! * [`ffmpeg`] — running FFmpeg: locating it, progress, cancelling, probing.
 //! * [`fft`] — FFT and short-time transform (`src/lib/fft.ts`), the front end of the spectral tools.
+//! * [`audio`] — the planar float audio the tools hold.
+//! * [`onsets`], [`tempo`] — spectral-flux onsets, tempo by autocorrelation, beat grids (`onsets.ts`, `tempo.ts`).
 //! * [`loudness`] — EBU R128 / BS.1770: measuring and moving to a target (`src/lib/loudness.ts`).
 //! * [`run`] — a whole conversion: a file in, a file out (`src/lib/convertRun.ts`).
 //!
@@ -14,11 +16,14 @@
 //! WebAssembly build's encoder crashes are *needed* — but the arguments keep their limits (libopus at
 //! complexity 4, WebM as VP8), because the files must stay the same ones the web app makes.
 
+pub mod audio;
 pub mod convert;
 pub mod ffmpeg;
 pub mod fft;
 pub mod loudness;
+pub mod onsets;
 pub mod presets;
 pub mod run;
+pub mod tempo;
 
 pub use ffmpeg::{Cancel, Ffmpeg, MediaError, Probe};

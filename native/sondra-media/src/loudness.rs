@@ -7,12 +7,7 @@ const ABSOLUTE_GATE_LUFS: f64 = -70.0;
 const RELATIVE_GATE_LU: f64 = -10.0;
 const LRA_RELATIVE_GATE_LU: f64 = -20.0;
 
-/// Audio as the tools hold it: one vector per channel.
-#[derive(Debug, Clone, PartialEq)]
-pub struct AudioData {
-    pub channels: Vec<Vec<f32>>,
-    pub sample_rate: u32,
-}
+pub use crate::audio::AudioData;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LoudnessReport {
