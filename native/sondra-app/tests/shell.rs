@@ -126,36 +126,31 @@ fn the_start_page_has_its_headings_its_tabs_and_its_tiles(cx: &mut TestAppContex
 #[gpui::test]
 fn a_group_tab_opens_its_menu_and_a_choice_goes_there(cx: &mut TestAppContext) {
     let mut w = open(cx, 1280.);
-    assert!(w.tree().find(Role::Menu, "Ton").is_none());
-    w.press(Role::Button, "Ton", 1280.);
+    assert!(w.tree().find(Role::Menu, "Aufnehmen").is_none());
+    w.press(Role::Button, "Aufnehmen", 1280.);
     let tree = w.tree();
     assert!(
-        tree.find(Role::Menu, "Ton").is_some(),
+        tree.find(Role::Menu, "Aufnehmen").is_some(),
         "the group is a menu"
     );
-    for tool in [
-        "Ton",
-        "Mischen",
-        "Spuren trennen",
-        "Lautstärke",
-        "Zerschneiden",
-        "Tonart",
-    ] {
+    for tool in ["Bildschirm", "Handy spiegeln", "Mikrofon"] {
         assert!(tree.find(Role::MenuItem, tool).is_some(), "{tool}");
     }
-    w.press(Role::MenuItem, "Spuren trennen", 1280.);
-    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Stems);
+    // (A tool that is not built yet, so that its page says so; every tool of the other groups has a page of
+    // its own now.)
+    w.press(Role::MenuItem, "Bildschirm", 1280.);
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Screen);
     let tree = w.tree();
     assert!(
-        tree.find(Role::Menu, "Ton").is_none(),
+        tree.find(Role::Menu, "Aufnehmen").is_none(),
         "a choice shuts the menu"
     );
     assert!(
-        tree.find(Role::Button, "Ton · Spuren trennen").is_some(),
+        tree.find(Role::Button, "Aufnehmen · Bildschirm").is_some(),
         "the group names the tool chosen in it"
     );
-    assert!(said(&tree, Role::Button, "Ton · Spuren trennen").starts_with("Geöffnet"));
-    assert!(tree.find(Role::Heading, "Spuren trennen").is_some());
+    assert!(said(&tree, Role::Button, "Aufnehmen · Bildschirm").starts_with("Geöffnet"));
+    assert!(tree.find(Role::Heading, "Bildschirm").is_some());
     assert!(
         tree.find(Role::Status, "Dieses Werkzeug gibt es in der neuen App noch nicht. In der Windows-App und auf der Website funktioniert es wie gewohnt.").is_some(),
         "a tool that is not built says so"

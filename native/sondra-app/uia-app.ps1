@@ -167,22 +167,22 @@ if ($null -ne $ordner -and $demo) {
 }
 
 # A group of tabs is a menu: open it, find its tools, choose one.
-$group = Named 'Ton' $CT::Button
-Check ($null -ne $group) 'the group Ton is in the row'
+$group = Named 'Aufnehmen' $CT::Button
+Check ($null -ne $group) 'the group Aufnehmen is in the row'
 if ($null -ne $group) {
     Check (Invoke-It $group) 'it can be invoked'
-    # (A tool that is not built yet, so that its page says so; Mischen has a page of its own now.)
-    $mix = Wait-For 'Spuren trennen' $CT::MenuItem
-    Check ($null -ne $mix) 'its menu appeared, with Spuren trennen as a menu item'
-    foreach ($tool in @('Mischen', 'Lautst*rke', 'Zerschneiden', 'Tonart')) {
+    # (A tool that is not built yet, so that its page says so; every tool of the other groups has a page.)
+    $screen = Wait-For 'Bildschirm' $CT::MenuItem
+    Check ($null -ne $screen) 'its menu appeared, with Bildschirm as a menu item'
+    foreach ($tool in @('Handy spiegeln', 'Mikrofon')) {
         Check ($null -ne (Named $tool $CT::MenuItem)) "the menu holds $tool"
     }
-    if ($null -ne $mix) {
-        Check (Invoke-It $mix) 'a menu item can be invoked'
-        $heading = Wait-For 'Spuren trennen' $CT::Text
+    if ($null -ne $screen) {
+        Check (Invoke-It $screen) 'a menu item can be invoked'
+        $heading = Wait-For 'Bildschirm' $CT::Text
         Check ($null -ne $heading) 'the tool opened: its heading is on the page'
-        Check ($null -ne (Wait-For 'Ton * Spuren trennen' $CT::Button)) 'the group names the tool chosen in it'
-        Check (Wait-Gone 'Mischen' $CT::MenuItem) 'the menu shut by the choice'
+        Check ($null -ne (Wait-For 'Aufnehmen * Bildschirm' $CT::Button)) 'the group names the tool chosen in it'
+        Check (Wait-Gone 'Mikrofon' $CT::MenuItem) 'the menu shut by the choice'
     }
 }
 
