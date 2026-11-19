@@ -112,4 +112,16 @@ fn a_song_is_split_heard_stem_by_stem_and_written(cx: &mut TestAppContext) {
     let folder = tmp.path().join("lied (Spuren)");
     assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 5);
     assert!(folder.join("lied – Instrumental.wav").exists());
+    // And all of them in one ZIP beside them.
+    w.press(Role::Button, "Als ZIP speichern");
+    w.settle(|s| s.stems_zip().is_some());
+    let (zip, bytes) = w.shell.read_with(w.cx, |s, _| s.stems_zip()).unwrap().expect("a ZIP");
+    assert_eq!(zip.parent().unwrap(), folder);
+    assert_eq!(std::fs::metadata(&zip).unwrap().len(), bytes);
+    let data = std::fs::read(&zip).unwrap();
+    assert_eq!(&data[..2], b"PK");
+    for name in ["Gesang", "Schlagzeug", "Bass", "Übriges", "Instrumental"] {
+        let wanted = format!("lied – {name}.wav");
+        assert!(data.windows(wanted.len()).any(|w| w == wanted.as_bytes()), "{wanted} is not in the ZIP");
+    }
 }

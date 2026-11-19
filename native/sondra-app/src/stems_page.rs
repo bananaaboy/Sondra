@@ -48,12 +48,15 @@ pub struct StemsState {
     pub error: Option<String>,
     pub made: Vec<PathBuf>,
     pub writing: bool,
+    /// The ZIP of the written tracks: where it lies and how big, or why not.
+    pub zip: Option<Result<(PathBuf, u64), String>>,
+    pub packing: bool,
     ticking: bool,
 }
 
 impl StemsState {
     pub fn new() -> StemsState {
-        StemsState { path: None, preset: 0, original: None, work: None, stems: Vec::new(), playing: None, reading: false, error: None, made: Vec::new(), writing: false, ticking: false }
+        StemsState { path: None, preset: 0, original: None, work: None, stems: Vec::new(), playing: None, reading: false, error: None, made: Vec::new(), writing: false, zip: None, packing: false, ticking: false }
     }
 }
 
@@ -227,13 +230,36 @@ impl Shell {
             |shell, answer, cx| {
                 shell.stems.writing = false;
                 match answer {
-                    Ok(p) => shell.stems.made = p,
+                    Ok(p) => {
+                        shell.stems.made = p;
+                        shell.stems.zip = None;
+                    }
                     Err(e) => shell.stems.error = Some(e),
                 }
                 cx.notify();
             },
         );
         cx.notify();
+    }
+
+    /// The written tracks in one ZIP beside them.
+    pub fn stems_pack(&mut self, cx: &mut Context<Self>) {
+        let files: Vec<(String, PathBuf)> = self.stems.made.iter().map(|p| (p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), p.clone())).collect();
+        let Some(dir) = self.stems.made.first().and_then(|p| p.parent().map(PathBuf::from)) else { return };
+        let suggestion = self.stems.path.as_ref().and_then(|p| p.file_stem()).map(|s| format!("{} (Spuren)", s.to_string_lossy())).unwrap_or_else(|| "Spuren".into());
+        self.stems.packing = true;
+        self.stems.zip = None;
+        cx.notify();
+        Self::pack_in_background(cx, files, dir, suggestion, |shell, result, cx| {
+            shell.stems.packing = false;
+            shell.stems.zip = Some(result);
+            cx.notify();
+        });
+    }
+
+    /// For tests: where the ZIP lies, once it is written.
+    pub fn stems_zip(&self) -> Option<Result<(PathBuf, u64), String>> {
+        self.stems.zip.clone()
     }
 
     /// For tests.
@@ -317,6 +343,16 @@ impl Shell {
             out = out.child(div().flex().child(ui.button("spuren-speichern", "Alle als WAV speichern").disabled(s.writing).on_click(move |_, app| me3.update(app, |shell, cx| shell.stems_save(cx)))));
             for path in &s.made {
                 out = out.child(self.written_row(&ui, path, cx));
+            }
+            if !s.made.is_empty() {
+                let me4 = me.clone();
+                out = out.child(div().flex().child(ui.button("spuren-zip", "Als ZIP speichern").small().disabled(s.packing).on_click(move |_, app| me4.update(app, |shell, cx| shell.stems_pack(cx)))));
+                match &s.zip {
+                    Some(Ok((path, bytes))) => out = out.child(ui.prose(format!("ZIP gespeichert: {} · {}", path.display(), sondra_merk::format::format_bytes(*bytes as f64, 1)))),
+                    Some(Err(e)) => out = out.child(ui.notice(NoticeKind::Warning, e.clone())),
+                    None if s.packing => out = out.child(ui.prose("Das ZIP wird geschrieben …")),
+                    None => {}
+                }
             }
             page = page.child(out);
         }
