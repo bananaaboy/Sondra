@@ -9,5 +9,6 @@
 
 pub mod identity;
 pub mod registry;
+pub mod rtc;
 pub mod transfer;
 pub use identity::*;

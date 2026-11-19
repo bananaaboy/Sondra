@@ -14,9 +14,11 @@ serde_json = "1"
 thiserror = "2"
 
 # GPUI pulls in `xattr`, which does not build on Linux with the current `libc`.
-# See vendor/xattr/PATCH.md.
+# See vendor/xattr/PATCH.md. `webrtc` reads data-channel messages into a buffer one byte too small for
+# the 64 KiB pieces the apps send: vendor/webrtc/PATCH.md.
 [patch.crates-io]
 xattr = { path = "vendor/xattr" }
+webrtc = { path = "vendor/webrtc" }
 
 # The test builds of the UI crates are large; debug symbols for dependencies are never read.
 [profile.dev]

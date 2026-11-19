@@ -284,7 +284,7 @@ pub fn send_over(wire: &mut dyn Wire, files: &mut [OutgoingFile], mut options: O
     let mut saved: Option<Vec<String>> = None;
 
     // One frame from the other side, acted on. `Err` ends the transfer.
-    let mut handle = |frame: Frame, acked: &mut u64, ready: &mut bool, kept_done: &mut std::collections::BTreeSet<usize>, kept_from: &mut BTreeMap<usize, u64>, saved: &mut Option<Vec<String>>, options: &mut Options| -> Result<(), TransferError> {
+    let handle = |frame: Frame, acked: &mut u64, ready: &mut bool, kept_done: &mut std::collections::BTreeSet<usize>, kept_from: &mut BTreeMap<usize, u64>, saved: &mut Option<Vec<String>>, options: &mut Options| -> Result<(), TransferError> {
         let Frame::Text(text) = frame else { return Ok(()) };
         let Some(control) = Control::from_text(&text) else { return Ok(()) };
         match control {
