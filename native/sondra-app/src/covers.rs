@@ -52,8 +52,12 @@ fn bytes_of(src: &str) -> Option<Vec<u8>> {
 
 /// The picture for a box of `w × h` device pixels, as BGRA (what the window takes).
 pub fn render_cover(src: &str, frame: Option<CoverFrame>, w: u32, h: u32) -> Option<RgbaImage> {
-    let bytes = bytes_of(src)?;
-    let decoded = image::load_from_memory(&bytes).ok()?.to_rgba8();
+    render_bytes(&bytes_of(src)?, frame, w, h)
+}
+
+/// The same from the bytes of a picture (a file's own, or a frame FFmpeg cut out of a film).
+pub fn render_bytes(bytes: &[u8], frame: Option<CoverFrame>, w: u32, h: u32) -> Option<RgbaImage> {
+    let decoded = image::load_from_memory(bytes).ok()?.to_rgba8();
     let (mut level, mut scale) = (decoded, 1.0f64);
     let (src_w, src_h) = (f64::from(level.width()), f64::from(level.height()));
     let (sx, sy, sw, sh) = cover_part(src_w, src_h, frame, f64::from(w), f64::from(h));

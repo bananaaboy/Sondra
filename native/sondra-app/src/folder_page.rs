@@ -23,6 +23,9 @@ use crate::store::FileStore;
 
 /// Lines drawn at once; more on request — a folder of thousands stays quick.
 const PAGE: usize = 240;
+/// A tile and the picture on it.
+const TILE_W: f32 = 232.0;
+const TILE_H: f32 = 130.0;
 const PATH_KEY: &str = "sondra:ordner:pfad";
 
 const FILTERS: [(KindFilter, &str, &str); 5] = [
@@ -46,11 +49,13 @@ pub struct Prefs {
     pub sort: SortKey,
     pub descending: bool,
     pub deep: bool,
+    /// Tiles with a picture (the first look of a folder, as on the website) or lines.
+    pub tiles: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { filter: KindFilter::All, sort: SortKey::Name, descending: false, deep: false }
+        Prefs { filter: KindFilter::All, sort: SortKey::Name, descending: false, deep: false, tiles: true }
     }
 }
 
@@ -58,7 +63,7 @@ impl Prefs {
     fn to_map(self) -> Map<String, Value> {
         let kind = FILTERS.iter().find(|(f, _, _)| *f == self.filter).map_or("alle", |(_, id, _)| id);
         let sort = SORTS.iter().find(|(s, _, _)| *s == self.sort).map_or("name", |(_, id, _)| id);
-        let Value::Object(map) = json!({ "kind": kind, "sort": sort, "descending": self.descending, "deep": self.deep }) else { unreachable!() };
+        let Value::Object(map) = json!({ "kind": kind, "sort": sort, "descending": self.descending, "deep": self.deep, "view": if self.tiles { "kacheln" } else { "liste" } }) else { unreachable!() };
         map
     }
 
@@ -69,6 +74,7 @@ impl Prefs {
             sort: SORTS.iter().find(|(_, id, _)| *id == text("sort")).map_or(SortKey::Name, |(s, _, _)| *s),
             descending: map.get("descending").and_then(Value::as_bool).unwrap_or(false),
             deep: map.get("deep").and_then(Value::as_bool).unwrap_or(false),
+            tiles: text("view") != "liste",
         }
     }
 }
@@ -112,6 +118,8 @@ pub struct FolderState {
     pub delete_cancel: FocusHandle,
     pub bin_first: FocusHandle,
     pub bin_last: FocusHandle,
+    /// The small pictures of the tiles, and how long each file is.
+    pub thumbs: crate::thumbs::SharedThumbs,
 }
 
 /// The window onto Sondra's bin in this folder.
@@ -159,6 +167,7 @@ impl FolderState {
             delete_cancel: cx.focus_handle().tab_stop(true),
             bin_first: cx.focus_handle().tab_stop(true),
             bin_last: cx.focus_handle().tab_stop(true),
+            thumbs: Default::default(),
         }
     }
 
@@ -409,6 +418,14 @@ impl Shell {
                 Self::folder_do(&me, app, |f| f.set_prefs(|p| p.deep = !p.deep))
             })
         };
+        let looks = {
+            let (tiles_me, lines_me) = (me.clone(), me.clone());
+            div()
+                .flex()
+                .gap(px(6.))
+                .child(ui.chip("ansicht-kacheln", "Kacheln", f.prefs.tiles).accessible_name("Ansicht: Kacheln").on_click(move |_, app| Self::folder_do(&tiles_me, app, |f| f.set_prefs(|p| p.tiles = true))))
+                .child(ui.chip("ansicht-liste", "Liste", !f.prefs.tiles).accessible_name("Ansicht: Liste").on_click(move |_, app| Self::folder_do(&lines_me, app, |f| f.set_prefs(|p| p.tiles = false))))
+        };
         page = page.child(
             div()
                 .flex()
@@ -418,6 +435,7 @@ impl Shell {
                 .child(kinds)
                 .child(div().w(px(240.)).child(f.search.clone()))
                 .child(deep)
+                .child(looks)
                 .child(sorts),
         );
 
@@ -464,7 +482,8 @@ impl Shell {
 
         let local = chrono::Local;
         let order: Vec<String> = view.files.iter().map(|file| file.path.clone()).collect();
-        let mut rows = div().flex().flex_col();
+        let tiles = f.prefs.tiles;
+        let mut rows = if tiles { div().flex().flex_wrap().gap(px(10.)) } else { div().flex().flex_col() };
         let mut first = true;
         for dir in &view.dirs {
             let me = me.clone();
@@ -476,12 +495,19 @@ impl Shell {
                 name: dir.name.clone().into(),
                 says: says.clone().into(),
                 first,
-                tile: None,
+                tile: tiles.then_some(TILE_W),
                 selected: false,
-                body: vec![
-                    div().flex_1().min_w(px(0.)).truncate().text_color(c.ink).font_weight(gpui::FontWeight::SEMIBOLD).child(format!("{} ›", dir.name)).into_any_element(),
-                    div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(says.trim_start_matches("Ordner. ").to_string()).into_any_element(),
-                ],
+                body: if tiles {
+                    vec![
+                        div().w(px(TILE_W - 8.)).h(px(TILE_H)).rounded(px(sondra_ui::radius::NAV)).bg(c.panel_soft).flex().items_center().justify_center().text_color(c.prose).child("Ordner ›").into_any_element(),
+                        div().flex().flex_col().gap(px(2.)).child(div().truncate().text_color(c.ink).font_weight(gpui::FontWeight::SEMIBOLD).child(dir.name.clone())).child(div().text_size(px(size::SMALL)).text_color(c.prose).child(says.trim_start_matches("Ordner. ").to_string())).into_any_element(),
+                    ]
+                } else {
+                    vec![
+                        div().flex_1().min_w(px(0.)).truncate().text_color(c.ink).font_weight(gpui::FontWeight::SEMIBOLD).child(format!("{} ›", dir.name)).into_any_element(),
+                        div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(says.trim_start_matches("Ordner. ").to_string()).into_any_element(),
+                    ]
+                },
                 on_open: std::rc::Rc::new(move |_, app| {
                     let path = path.clone();
                     Self::folder_do(&me, app, move |f| {
@@ -521,12 +547,21 @@ impl Shell {
                 name: file.name.clone().into(),
                 says: format!("{facts}{}", if place.is_empty() { String::new() } else { format!(" · in {place}") }).into(),
                 first,
-                tile: None,
+                tile: tiles.then_some(TILE_W),
                 selected,
-                body: vec![
-                    name.into_any_element(),
-                    div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(facts).into_any_element(),
-                ],
+                body: if tiles {
+                    let picture = self.tile_picture(c, file);
+                    let mut under = div().flex().flex_col().gap(px(2.)).child(div().font_family(family::VALUE).text_color(c.ink).truncate().child(file.name.clone())).child(div().text_size(px(size::SMALL)).text_color(c.prose).truncate().child(facts));
+                    if !place.is_empty() {
+                        under = under.child(div().text_size(px(size::SMALL)).text_color(c.muted).truncate().child(place.clone()));
+                    }
+                    vec![picture, under.into_any_element()]
+                } else {
+                    vec![
+                        name.into_any_element(),
+                        div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(facts).into_any_element(),
+                    ]
+                },
                 on_open: std::rc::Rc::new(move |window, app| {
                     let modifiers = window.modifiers();
                     let (toggle, range) = (modifiers.control || modifiers.platform, modifiers.shift);
@@ -537,6 +572,15 @@ impl Shell {
             first = false;
         }
         page = page.child(rows);
+        {
+            let t = self.folder.thumbs.borrow();
+            if t.waiting() > 0 && t.running() < crate::thumbs::AT_ONCE {
+                cx.spawn(async move |this, cx| {
+                    this.update(cx, |shell, cx| shell.pump_thumbs(cx)).ok();
+                })
+                .detach();
+            }
+        }
         if total > f.shown {
             let me = me.clone();
             let more = (total - f.shown).min(PAGE);
@@ -547,6 +591,33 @@ impl Shell {
         page.into_any_element()
     }
 
+
+    /// The picture of a tile: the file's own small picture when there is one, otherwise what kind of file it is;
+    /// the length of a film or a song in a corner.
+    fn tile_picture(&self, colors: sondra_ui::Colors, file: &FolderFile) -> AnyElement {
+        let mut frame = div().relative().w(px(TILE_W - 8.)).h(px(TILE_H)).flex_none().overflow_hidden().rounded(px(sondra_ui::radius::NAV)).bg(colors.panel_mid).flex().items_center().justify_center();
+        let mut seconds = None;
+        let mut shown = false;
+        if let (Some(root), None) = (&self.folder.root, &file.drive) {
+            if matches!(file.kind, AssetKind::Video | AssetKind::Audio | AssetKind::Image) {
+                let path = root.join(file.path.replace('/', std::path::MAIN_SEPARATOR_STR));
+                let key = crate::thumbs::key_of(&path, file.size, file.modified);
+                let mut t = self.folder.thumbs.borrow_mut();
+                if let Some(Some(image)) = t.ask(&key, path, file.kind) {
+                    frame = frame.child(gpui::img(gpui::ImageSource::Render(image)).object_fit(gpui::ObjectFit::Cover).w(px(TILE_W - 8.)).h(px(TILE_H)));
+                    shown = true;
+                }
+                seconds = t.seconds.get(&key).copied().flatten();
+            }
+        }
+        if !shown {
+            frame = frame.child(div().text_color(colors.prose).child(kind_word(file.kind)));
+        }
+        if let Some(seconds) = seconds {
+            frame = frame.child(div().absolute().right(px(6.)).bottom(px(6.)).px(px(6.)).py(px(1.)).rounded(px(sondra_ui::radius::PILL)).bg(colors.ink).text_color(colors.canvas).font_family(family::VALUE).text_size(px(size::MICRO)).child(crate::thumbs::clock(seconds)));
+        }
+        frame.into_any_element()
+    }
 
     /// Does `work` away from the window and then hands its answer to `then`.
     pub(crate) fn in_background<T: Send + 'static>(

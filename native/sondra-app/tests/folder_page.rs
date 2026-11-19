@@ -314,3 +314,56 @@ fn the_bin_window_puts_back_and_erases_only_after_a_second_question(cx: &mut Tes
     assert!(!root.join(sondra_merk::bin::BIN_NAME).join("notizen.txt").exists(), "gone for good");
     assert!(!root.join("notizen.txt").exists());
 }
+
+#[gpui::test]
+fn the_files_are_tiles_with_a_picture_and_a_length_and_the_look_is_kept(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Bilder");
+    fs::create_dir_all(&root).unwrap();
+    // A real picture, and — where FFmpeg is — a film of ten seconds and a song of three.
+    let mut png = Vec::new();
+    image::DynamicImage::new_rgb8(64, 48).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    fs::write(root.join("foto.png"), &png).unwrap();
+    let ff = sondra_media::Ffmpeg::locate();
+    if let Some(ff) = &ff {
+        let make = |args: &[&str], out: &str| {
+            assert!(std::process::Command::new(ff.program()).args(["-v", "error", "-y"]).args(args).arg(root.join(out)).status().unwrap().success());
+        };
+        make(&["-f", "lavfi", "-i", "testsrc=size=160x120:rate=10:duration=10", "-pix_fmt", "yuv420p"], "film.mp4");
+        make(&["-f", "lavfi", "-i", "sine=frequency=440:duration=3"], "lied.wav");
+    }
+    let wanted = if ff.is_some() { 2 } else { 1 };
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    // Tiles are the first look; each file is still one item with its name for a screen reader.
+    assert!(w.tree().find(Role::Button, "Ansicht: Kacheln").is_some());
+    assert!(w.tree().find(Role::ListItem, "foto.png").is_some());
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.shell.read_with(w.cx, |s, _| s.thumbs_state().0) >= wanted {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let (made, waiting) = w.shell.read_with(w.cx, |s, _| s.thumbs_state());
+    assert_eq!((made, waiting), (wanted, 0), "the picture and the film have a picture; the song has none");
+    if ff.is_some() {
+        for _ in 0..100 {
+            w.cx.run_until_parked();
+            if w.shell.read_with(w.cx, |s, _| s.thumb_seconds().len()) >= 2 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let lengths = w.shell.read_with(w.cx, |s, _| s.thumb_seconds());
+        assert!(lengths.iter().any(|s| (s - 3.0).abs() < 0.3) && lengths.iter().any(|s| (s - 10.0).abs() < 0.3), "{lengths:?}");
+    }
+
+    // The list, kept for this folder.
+    w.press(Role::Button, "Ansicht: Liste");
+    assert!(w.tree().find(Role::ListItem, "foto.png").is_some());
+    drop(w);
+    let kept = fs::read_to_string(tmp.path().join("Ordner.json")).unwrap();
+    assert!(kept.contains("liste"), "the look is kept: {kept}");
+}

@@ -48,6 +48,7 @@ pub mod run;
 pub mod separation;
 pub mod tempo;
 pub mod declick;
+pub mod thumbnail;
 pub mod timestretch;
 pub mod video_ops;
 
