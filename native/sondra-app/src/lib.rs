@@ -28,4 +28,5 @@ pub mod shell;
 pub mod share_window;
 pub mod stats_window;
 pub mod store;
+pub mod subtitles_page;
 pub mod system;

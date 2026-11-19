@@ -25,6 +25,7 @@ use crate::harmony_page::HarmonyState;
 use crate::images_page::ImagesState;
 use crate::mic_page::MicState;
 use crate::sampler_page::SamplerState;
+use crate::subtitles_page::SubtitlesState;
 use crate::mix_page::MixState;
 use crate::video_page::VideoState;
 use crate::normalize_page::NormalizeState;
@@ -72,6 +73,7 @@ pub struct Shell {
     pub(crate) mic: MicState,
     pub(crate) audio: AudioState,
     pub(crate) sampler: SamplerState,
+    pub(crate) subtitles: SubtitlesState,
     /// The Umwandeln page.
     pub(crate) convert: ConvertState,
     /// The Lautstärke page.
@@ -145,6 +147,7 @@ impl Shell {
             mic: MicState::new(),
             audio: AudioState::new(),
             sampler: SamplerState::new(),
+            subtitles: SubtitlesState::new(),
             convert: ConvertState::new(),
             normalize: NormalizeState::new(),
             harmony: HarmonyState::new(),
@@ -847,6 +850,8 @@ impl Render for Shell {
             self.convert_page(ui, cx)
         } else if self.panel == Panel::Video {
             self.video_page(ui, cx)
+        } else if self.panel == Panel::Subtitles {
+            self.subtitles_page(ui, cx)
         } else if self.panel == Panel::Sampler {
             self.sampler_page(ui, cx)
         } else if self.panel == Panel::Audio {

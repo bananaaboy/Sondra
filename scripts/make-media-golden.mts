@@ -37,6 +37,7 @@ import {
   shelfEq,
 } from '../src/lib/effects'
 import { applyGain, channelTrick, concatAudio, cutRange, detectSilence, normalizePeak, peakDb, removeDcOffset, removeSilence, resampleAudio, setChannels } from '../src/lib/edit'
+import { toCues, toSrt, toText, toVtt, type TranscriptSegment } from '../src/lib/transcribe'
 import { cellsToNotes, patternHits, patternToMidi, resizeNotes, starterPattern, stepTime, type Pattern, type Slice } from '../src/lib/pattern'
 import { calibrate, PURPOSES, type MicPurpose } from '../src/lib/micCalibrate'
 import { DEFAULT_SEGMENTATION, midiName, segmentNotes, trackPitch } from '../src/lib/pitch'
@@ -793,4 +794,27 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
     `${JSON.stringify({ starter: starterPattern(slices, 16), roll, resized: resizeNotes(notes.c, 16, 40), resizedShort: resizeNotes(notes.c, 16, 8), times: [0, 1, 2, 3, 7].map((i) => stepTime(i, 100, 0.3)), out }, null, 1)}\n`,
   )
   console.log(`Pattern: ${out.map((o) => `${o.hits.length} Treffer`).join(', ')}`)
+}
+
+
+/* -- Untertitel: Segmente zu Zeilen, SRT, VTT und Text ----------------------------------------------- */
+
+{
+  const sets: { name: string; segments: TranscriptSegment[] }[] = [
+    { name: 'kurz', segments: [{ start: 0, end: 2.5, text: 'Hallo und willkommen.' }, { start: 2.5, end: 4.123, text: 'Heute geht es um Brot.' }] },
+    {
+      name: 'lang',
+      segments: [
+        { start: 1.2, end: 9.8, text: 'Das ist ein sehr langer Satz, der in mehrere Zeilen und Untertitel zerlegt werden muss, weil niemand vier Zeilen auf einmal lesen will, schon gar nicht beim Schauen eines Films am Abend.' },
+        { start: 12.0, end: 13.0, text: '  Kurz   danach.  ' },
+      ],
+    },
+    { name: 'absatz', segments: [{ start: 0, end: 1, text: 'Erster Satz.' }, { start: 1.5, end: 2, text: 'Gleicher Absatz.' }, { start: 5, end: 6.2, text: 'Neuer Absatz nach der Pause.' }, { start: 3600.5, end: 3661.0049, text: 'Spät.' }] },
+    { name: 'umlaute', segments: [{ start: 0, end: 4, text: 'Über Äpfel, Öl und Straßenbahnen — „Größe“ zählt, 日本語のテキストも 😀 Emoji und noch mehr Wörter bis zur Zeilengrenze hin.' }, { start: 4, end: 4, text: '' }] },
+    { name: 'leer', segments: [] },
+  ]
+  const out = sets.map((set) => ({ name: set.name, segments: set.segments, cues: toCues(set.segments), srt: toSrt(set.segments), vtt: toVtt(set.segments), text: toText(set.segments) }))
+  mkdirSync('native/sondra-speech/tests/golden', { recursive: true })
+  writeFileSync('native/sondra-speech/tests/golden/cues.json', `${JSON.stringify(out, null, 1)}\n`)
+  console.log(`Untertitel: ${out.map((o) => `${o.name} ${o.cues.length} Zeilen`).join(', ')}`)
 }

@@ -19,6 +19,7 @@ sondra-media = { path = "../sondra-media" }
 sondra-player = { path = "../sondra-player" }
 sondra-playback = { path = "../sondra-playback" }
 sondra-audio = { path = "../sondra-audio" }
+sondra-speech = { path = "../sondra-speech" }
 sondra-extract = { path = "../sondra-extract" }
 sondra-download = { path = "../sondra-download" }
 sondra-discord = { path = "../sondra-discord" }

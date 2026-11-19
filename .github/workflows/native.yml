@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           npm run native:golden
-          git diff --exit-code -- native/sondra-media/tests/golden native/sondra-app/tests/golden native/sondra-app/data native/sondra-ui/data native/sondra-merk/tests/golden
+          git diff --exit-code -- native/sondra-media/tests/golden native/sondra-app/tests/golden native/sondra-app/data native/sondra-ui/data native/sondra-merk/tests/golden native/sondra-speech/tests/golden
       # The tests of the media and download crates run the real FFmpeg (and skip, saying so, without it).
       - name: FFmpeg (Linux)
         if: runner.os == 'Linux'
@@ -74,6 +74,23 @@ jobs:
         with:
           path: native/target
           key: native-${{ matrix.os }}-${{ hashFiles('native/Cargo.lock') }}
+      # Speech recognition is built from whisper.cpp: bindgen needs libclang, which the Windows runner has
+      # but does not announce.
+      - name: libclang for whisper.cpp (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" >> "$GITHUB_ENV"
+      # A real model and a real voice (whisper.cpp's own sample), only on Linux: the test that listens skips,
+      # saying so, where they are not.
+      - name: A Whisper model and a voice to test with (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/whisper"
+          curl -sSL --retry 4 -o "$RUNNER_TEMP/whisper/ggml-base-q5_1.bin" https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin
+          curl -sSL --retry 4 -o "$RUNNER_TEMP/whisper/jfk.wav" https://raw.githubusercontent.com/ggml-org/whisper.cpp/master/samples/jfk.wav
+          ls -l "$RUNNER_TEMP/whisper"
+          echo "SONDRA_WHISPER_DIR=$RUNNER_TEMP/whisper" >> "$GITHUB_ENV"
       - run: cargo test --manifest-path native/Cargo.toml --locked
       # What the native client writes, read by the website's own reader: the list in Drive may never get
       # worse because a native client wrote it.
