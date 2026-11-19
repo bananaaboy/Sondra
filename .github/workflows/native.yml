@@ -8,9 +8,9 @@ name: Native
 on:
   push:
     branches: [main]
-    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', 'src/lib/loudness.ts', 'src/lib/fft.ts', 'src/lib/onsets.ts', 'src/lib/tempo.ts', 'src/lib/chroma.ts', 'src/lib/key.ts', 'src/lib/pitch.ts', 'src/lib/midi.ts', 'src/lib/introPrint.ts', 'src/lib/actions.ts', 'src/components/panelMeta.tsx', 'scripts/make-nav-golden.mts', '.github/workflows/native.yml']
+    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', 'src/lib/loudness.ts', 'src/lib/fft.ts', 'src/lib/onsets.ts', 'src/lib/tempo.ts', 'src/lib/chroma.ts', 'src/lib/key.ts', 'src/lib/pitch.ts', 'src/lib/midi.ts', 'src/lib/introPrint.ts', 'src/lib/actions.ts', 'src/components/panelMeta.tsx', 'scripts/make-nav-golden.mts', 'scripts/make-merk-golden.mts', 'src/lib/merkliste.ts', 'src/lib/download.ts', '.github/workflows/native.yml']
   pull_request:
-    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', 'src/lib/loudness.ts', 'src/lib/fft.ts', 'src/lib/onsets.ts', 'src/lib/tempo.ts', 'src/lib/chroma.ts', 'src/lib/key.ts', 'src/lib/pitch.ts', 'src/lib/midi.ts', 'src/lib/introPrint.ts', 'src/lib/actions.ts', 'src/components/panelMeta.tsx', 'scripts/make-nav-golden.mts', '.github/workflows/native.yml']
+    paths: ['native/**', 'scripts/make-native-fixture.mts', 'scripts/make-media-golden.mts', 'src/lib/sqlite.ts', 'src/lib/convert.ts', 'src/lib/convertPresets.ts', 'src/lib/loudness.ts', 'src/lib/fft.ts', 'src/lib/onsets.ts', 'src/lib/tempo.ts', 'src/lib/chroma.ts', 'src/lib/key.ts', 'src/lib/pitch.ts', 'src/lib/midi.ts', 'src/lib/introPrint.ts', 'src/lib/actions.ts', 'src/components/panelMeta.tsx', 'scripts/make-nav-golden.mts', 'scripts/make-merk-golden.mts', 'src/lib/merkliste.ts', 'src/lib/download.ts', '.github/workflows/native.yml']
   workflow_dispatch:
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
         shell: bash
         run: |
           npm run native:golden
-          git diff --exit-code -- native/sondra-media/tests/golden native/sondra-app/tests/golden native/sondra-app/data native/sondra-ui/data
+          git diff --exit-code -- native/sondra-media/tests/golden native/sondra-app/tests/golden native/sondra-app/data native/sondra-ui/data native/sondra-merk/tests/golden
       # The tests of the media and download crates run the real FFmpeg (and skip, saying so, without it).
       - name: FFmpeg (Linux)
         if: runner.os == 'Linux'

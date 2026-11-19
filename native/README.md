@@ -47,6 +47,8 @@ native/
                   Chip, Reiter, Kachel, Menü, Hinweis, Textfeld), alle mit Namen und Rolle
   sondra-app/     das Fenster `sondra`: Kopfzeile, Reiterleiste (Gruppen, „Mehr“), Startseite;
                   Reiter und Kacheln kommen als Daten aus dem Code der Website
+  sondra-merk/    die Merkliste: Eintrag, Einlesen aus allen Formen, Fortschritt und Teile, Zusammenführen
+                  zweier Listen — mit den Zahlen der Website verglichen (`tests/golden`)
   vendor/xattr/   xattr 0.2.3 mit einer Zeile Patch, damit GPUI unter Linux baut
   probes/         Machbarkeitsproben der Welle 0b
 ```

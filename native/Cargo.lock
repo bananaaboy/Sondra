@@ -5494,6 +5494,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sondra-merk"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "sondra-service"
 version = "0.1.0"
 dependencies = [

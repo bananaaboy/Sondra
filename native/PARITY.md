@@ -34,7 +34,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | --- | --- | --- | --- | --- | --- |
 | M01 | Liste lesen aus Drive (SQLite und JSON) | `merkliste.ts`, `sqlite.ts` | 0 | Testdateien der Website | **nativ ✔** |
 | M02 | Serie hinzufügen mit einem Feld; „Wie weit sind Sie?“; „Mehr Angaben“ | `AddDialog` | 4 | Szenario „serien“ | offen |
-| M03 | Staffeln, Teile, Filme, Folgenzahlen, Gesehenes, „Stand“ rückt weiter (`settle`) | `merkliste.ts` | 4 | `verify:merkliste` | offen |
+| M03 | Staffeln, Teile, Filme, Folgenzahlen, Gesehenes, „Stand“ rückt weiter (`settle`) | `merkliste.ts` | 4 | `sondra-merk`: 57 Einträge aus ungewöhnlichen Formen, Fortschritt, Teile, Abhaken, `settle` — dieselben Zahlen wie die Website (golden) | **Logik nativ ✔**, Oberfläche offen |
 | M04 | Cover mit Ausschnitt und Zoom, Pyramide beim Verkleinern | `CoverImage` | 4 | Bildvergleich | offen |
 | M05 | Stände (Am Schauen, Später, Pausiert, Fertig, Abgebrochen), Filter | `MerklistePanel` | 4 | `verify:merkliste` | offen |
 | M06 | Ansicht als Poster oder Liste, Sortierungen | `MerklistePanel` | 4 | Szenario „merkliste“ | offen |
@@ -42,8 +42,8 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | M08 | „Bis wohin?“ Planer, Ziel merken, Tempo aus dem Verlauf | `watchPlan`, `WatchPlanner` | 4 | `verify:merkliste` | offen |
 | M09 | Statistiken und Rückblick, Verlauf, Würfeln | `MerklisteRecap` | 4 | `verify:merkliste` | offen |
 | M10 | Teilen: Link, Text, QR, Datei, Bilder im Link, Teile; Empfangen und Vergleichen | `merkShare`, `shareCover`, `qr` | 4 | `verify:merkliste` | offen |
-| M11 | Export und Einlesen (JSON, MAL, AniList), Zusammenführen, Rückgängig | `merkliste.ts` | 4 | `verify:merkliste` | offen |
-| M12 | Zusammenführen mit Drive (`mergeShared`), Entfernen bleibt entfernt | `merkliste.ts`, `googleDrive.ts` | 4 | Hin und Her mit der Website | offen |
+| M11 | Export und Einlesen (JSON, MAL, AniList), Zusammenführen, Rückgängig | `merkliste.ts` | 4 | `merge_merkliste` nativ (golden); MAL/AniList-Einlesen, Export und Rückgängig offen | in Arbeit |
+| M12 | Zusammenführen mit Drive (`mergeShared`), Entfernen bleibt entfernt | `merkliste.ts`, `googleDrive.ts` | 4 | `sondra-merk`: `merge_shared`, `take_shared`, `travelling`, `shared_key` gegen die Website (5 Abgleiche mit Entfernungen, Bildern von Dateien, gleichen Namen); **noch nicht gegen das echte Drive** | **Logik nativ ✔**, Anbindung offen |
 | M13 | Abgleich mit Anytype (v1 und v2, Space, Seite „Sondra · Merkliste“) | `anytype.mjs`, `anytype.ts` | 4 | `verify:anytype` | offen |
 | M14 | Discord-Status über die lokale Pipe | `discord.mjs` | 4 | `verify:discord` | offen |
 | M15 | Neue Folgen melden (alle 3 Stunden, Benachrichtigung, Klick öffnet die Serie) | `newEpisodes.ts` | 1 | `verify:extractors`, `:resolve` | offen |
