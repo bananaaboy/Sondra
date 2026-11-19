@@ -17,6 +17,7 @@ pub mod recap;
 pub mod share;
 pub mod sqlite;
 pub mod stats;
+pub mod subtitles;
 pub mod urlinfo;
 
 pub use model::*;

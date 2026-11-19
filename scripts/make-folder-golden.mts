@@ -28,6 +28,7 @@ import {
   type KindFilter,
   type SortKey,
 } from '../src/lib/folder'
+import { subtitleNameFor, subtitlesBeside } from '../src/lib/subtitleFiles'
 import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy } from '../src/lib/duplicates'
 import { createMerkItem, type SavedLinkItem } from '../src/lib/merkliste'
 import { kindFromMime } from '../src/state/store'
@@ -182,7 +183,18 @@ const dupOut = {
   contentKeys,
 }
 
+const subFiles = [
+  ['Film.mkv', 'A'], ['Film.srt', 'A'], ['Film.de.srt', 'A'], ['Film.EN.srt', 'A'], ['Film.vtt', 'A'], ['Film.deu.vtt', 'A'], ['Film.german.srt', 'A'],
+  ['Film.srt', 'B'], ['Film 2.srt', 'A'], ['film.SRT', 'A'], ['Film.ass', 'A'], ['Film.txt', 'A'], ['Film.a.srt', 'A'], ['Ünï.mp4', 'A'], ['ünï.srt', 'A'], ['ÜNÏ.de.srt', 'A'],
+  ['Serie - 01.mkv', 'S'], ['Serie - 01.srt', 'S'], ['Serie - 01.fr.srt', 'S'], ['Serie - 010.srt', 'S'], ['Serie - 02.srt', 'S'], ['a.b.c.mp4', 'D'], ['a.b.srt', 'D'], ['a.b.c.srt', 'D'], ['a.b.c.de.srt', 'D'], ['.srt', 'A'], ['Film', 'A'],
+].map(([name, dir]) => ({ name, dir }))
+const subtitles = {
+  files: subFiles,
+  beside: subFiles.filter((f) => /\.(mkv|mp4)$/i.test(f.name)).map((film) => ({ film, srt: subtitlesBeside(film, subFiles).map((f) => `${f.dir}/${f.name}`) })),
+  named: ['Film.mkv', 'Serie - 01.mp4', 'a.b.c.mp4', 'ohne Endung', 'Ünï.MKV', '.verborgen', 'x.', 'Film.de.mkv'].map((name) => ({ name, srt: subtitleNameFor(name) })),
+}
 const out = {
+  subtitles,
   dup: dupOut,
   items,
   files,

@@ -402,3 +402,36 @@ fn copies_are_found_and_the_original_is_kept_as_the_web_app_does() {
         keys[2]["key"].as_str().unwrap()
     );
 }
+
+struct Entry {
+    name: String,
+    dir: String,
+}
+
+impl sondra_merk::subtitles::Named for Entry {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn dir(&self) -> &str {
+        &self.dir
+    }
+}
+
+#[test]
+fn subtitles_are_found_beside_their_film_and_made_ones_are_named_like_the_web_app_does() {
+    use sondra_merk::subtitles::*;
+    let g = golden();
+    let s = &g["subtitles"];
+    let all: Vec<Entry> = s["files"].as_array().unwrap().iter().map(|f| Entry { name: f["name"].as_str().unwrap().into(), dir: f["dir"].as_str().unwrap().into() }).collect();
+    let cases = s["beside"].as_array().unwrap();
+    assert!(cases.len() >= 4);
+    for case in cases {
+        let film = &case["film"];
+        let got: Vec<String> = subtitles_beside(film["name"].as_str().unwrap(), film["dir"].as_str().unwrap(), &all).iter().map(|f| format!("{}/{}", f.dir, f.name)).collect();
+        let want: Vec<String> = case["srt"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().into()).collect();
+        assert_eq!(got, want, "beside {}", film["name"]);
+    }
+    for case in s["named"].as_array().unwrap() {
+        assert_eq!(subtitle_name_for(case["name"].as_str().unwrap()), case["srt"].as_str().unwrap(), "named {}", case["name"]);
+    }
+}
