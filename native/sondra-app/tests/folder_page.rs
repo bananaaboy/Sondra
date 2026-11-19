@@ -452,3 +452,21 @@ fn series_the_names_tell_of_are_offered_once_ignored_on_a_no_and_put_on_the_list
     w.press(Role::Button, "Ansehen");
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
 }
+
+#[gpui::test]
+fn the_series_on_the_list_continue_from_where_they_stand_and_play_the_unseen_ones_after(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Serien");
+    for (n, name) in ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv"].iter().enumerate() {
+        put(&root, name, 100 + n * 10);
+    }
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    // Put on the list from the folder, then „Weiterschauen“ stands where the list stands: the first episode.
+    w.press(Role::Button, "Frieren auf die Merkliste");
+    assert!(w.tree().find(Role::Heading, "Weiterschauen").is_some() || w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "Weiterschauen")));
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Staffel 1 · Folge 1 · 3 Folgen hier ungesehen"))), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    w.press(Role::Button, "Frieren: Staffel 1 · Folge 1 abspielen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv"]);
+}
