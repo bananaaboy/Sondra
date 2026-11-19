@@ -117,3 +117,43 @@ fn a_stop_between_pieces_ends_it_and_no_file_appears() {
     assert_eq!(error, sondra_drive::DriveError::Cancelled);
     assert_eq!(drive.file_count(), 0, "Drive makes the file only when the last piece is there");
 }
+
+#[test]
+fn the_tree_below_sondra_lists_files_and_folders_with_their_paths_and_notes_and_a_file_can_be_binned_and_fetched() {
+    let drive = FakeDrive::start();
+    let client = drive.client();
+    let ton = client.ensure_path(&["Sondra", "Dateien", "Ton"]).unwrap();
+    let serie = client.ensure_path(&["Sondra", "Serien", "Frieren", "Staffel 1"]).unwrap();
+    let a = client.create(&ton, "a.mp3", b"aaa", "audio/mpeg", &notes()).unwrap();
+    let hint: BTreeMap<String, String> = [("sondraSerie".to_string(), "fr".to_string()), ("sondraStaffel".to_string(), "1".to_string()), ("sondraFolge".to_string(), "2".to_string())].into();
+    let b = client.create(&serie, "Folge 2.mkv", b"bbbb", "video/x-matroska", &hint).unwrap();
+    let tree = client.tree(100, &AtomicBool::new(false), |_| {}).unwrap();
+    let mut paths: Vec<&str> = tree.files.iter().map(|f| f.path.as_str()).collect();
+    paths.sort();
+    assert_eq!(paths, ["Dateien/Ton/a.mp3", "Serien/Frieren/Staffel 1/Folge 2.mkv"]);
+    assert!(tree.dirs.contains(&"Serien/Frieren/Staffel 1".to_string()) && tree.dirs[0].is_empty());
+    let found = tree.files.iter().find(|f| f.file.id == b.id).unwrap();
+    assert_eq!(found.notes["sondraFolge"], "2");
+    assert_eq!(found.parent, serie);
+    assert!(!tree.truncated);
+    // A limit stops the listing and says so.
+    let short = client.tree(1, &AtomicBool::new(false), |_| {}).unwrap();
+    assert_eq!(short.files.len(), 1);
+    assert!(short.truncated);
+
+    // Fetched into a file, piece by piece.
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("a.mp3");
+    let mut said = (0, None);
+    client.download_to(&a.id, &target, &AtomicBool::new(false), |l, t| said = (l, t)).unwrap();
+    assert_eq!(std::fs::read(&target).unwrap(), b"aaa");
+    assert_eq!(said.0, 3);
+    assert!(!dir.path().join("a.teil").exists());
+
+    // Into the bin; the same again counts as gone.
+    client.trash(&a.id).unwrap();
+    client.trash(&a.id).unwrap();
+    assert_eq!(drive.state.lock().unwrap().trashed, vec![a.id.clone()]);
+    let after = client.tree(100, &AtomicBool::new(false), |_| {}).unwrap();
+    assert_eq!(after.files.len(), 1);
+}

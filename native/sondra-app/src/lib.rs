@@ -17,6 +17,7 @@ pub mod discord;
 pub mod floating;
 pub mod folder_continue;
 pub mod folder_dupes;
+pub mod folder_drive;
 pub mod folder_page;
 pub mod folder_series;
 pub mod layout;

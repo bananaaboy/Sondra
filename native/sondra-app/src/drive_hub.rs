@@ -275,3 +275,10 @@ impl crate::shell::Shell {
         row.into_any_element()
     }
 }
+
+/// A file name that is safe on every file system (what Windows refuses is replaced).
+pub fn safe_name(name: &str) -> String {
+    let cleaned: String = name.chars().map(|c| if matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '_' } else { c }).collect();
+    let trimmed = cleaned.trim().trim_end_matches('.');
+    if trimmed.is_empty() { "datei".to_string() } else { trimmed.to_string() }
+}

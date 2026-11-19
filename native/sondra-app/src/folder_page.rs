@@ -108,8 +108,8 @@ pub struct FolderState {
     pub last_visit: Option<f64>,
     /// Only what came since the visit before this one.
     pub only_new: bool,
-    cancel: Arc<AtomicBool>,
-    generation: u64,
+    pub(crate) cancel: Arc<AtomicBool>,
+    pub(crate) generation: u64,
     /// The files a delete is being asked about.
     pub confirm: Option<Vec<FolderFile>>,
     /// Something is being moved or deleted.
@@ -269,7 +269,7 @@ impl Shell {
         cx.notify();
     }
 
-    fn folder_read(&mut self, generation: u64, result: std::io::Result<FolderScan>, cx: &mut Context<Self>) {
+    pub(crate) fn folder_read(&mut self, generation: u64, result: std::io::Result<FolderScan>, cx: &mut Context<Self>) {
         let f = &mut self.folder;
         if generation != f.generation {
             return;
@@ -395,6 +395,10 @@ impl Shell {
                     if f.bin_count > 0 {
                         let me = me.clone();
                         right = right.child(ui.button("papierkorb-ansehen", format!("Papierkorb ({})", f.bin_count)).small().ghost().on_click(move |_, app| me.update(app, |shell, cx| shell.open_bin(cx))));
+                    }
+                    if self.drive.as_ref().is_some_and(|d| d.configured) {
+                        let me = me.clone();
+                        right = right.child(ui.button("ordner-aus-drive", "Aus Google Drive").small().ghost().on_click(move |_, app| me.update(app, |shell, cx| shell.open_drive_folder(cx))));
                     }
                     let me = me.clone();
                     right.child(ui.button("anderer-ordner", "Anderen Ordner wählen").small().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_folder(cx))))
@@ -780,6 +784,9 @@ impl Shell {
 
     /// Plays the chosen files that can be played, in the order of the list; the Player takes over.
     pub(crate) fn play_selected(&mut self, cx: &mut Context<Self>) {
+        if self.folder.scan.as_ref().is_some_and(|s| s.drive) {
+            return self.play_selected_from_drive(cx);
+        }
         let f = &self.folder;
         let (Some(scan), Some(root)) = (&f.scan, f.root.clone()) else { return };
         // In the order the list shows them, not the order the disk gave them.
@@ -853,6 +860,9 @@ impl Shell {
 
     /// Into the bin, or for good: moved or deleted away from the window, then the page is told.
     fn delete_chosen(&mut self, into_bin: bool, cx: &mut Context<Self>) {
+        if self.folder.scan.as_ref().is_some_and(|s| s.drive) {
+            return self.trash_chosen_in_drive(cx);
+        }
         let f = &mut self.folder;
         let (Some(files), Some(root)) = (f.confirm.clone(), f.root.clone()) else { return };
         f.busy = true;
@@ -878,7 +888,7 @@ impl Shell {
         cx.notify();
     }
 
-    fn deleted(&mut self, into_bin: bool, gone: Vec<String>, binned: Vec<Binned>, failed: Vec<String>, cx: &mut Context<Self>) {
+    pub(crate) fn deleted(&mut self, into_bin: bool, gone: Vec<String>, binned: Vec<Binned>, failed: Vec<String>, cx: &mut Context<Self>) {
         let f = &mut self.folder;
         f.busy = false;
         f.confirm = None;
@@ -1001,12 +1011,15 @@ impl Shell {
             let total: u64 = files.iter().map(|x| x.size).sum();
             let n = files.len();
             let title = if n == 1 { "Datei löschen?".to_string() } else { format!("{n} Dateien löschen?") };
-            let text = format!(
+            let in_drive = self.folder.scan.as_ref().is_some_and(|s| s.drive);
+            let text = if in_drive {
+                format!("{} in den Papierkorb von Google Drive. Dort liegt es 30 Tage und lässt sich in Drive zurückholen. Zusammen {}.", if n == 1 { "Die Datei kommt" } else { "Die Dateien kommen" }, format_bytes(total as f64, 1))
+            } else { format!(
                 "{} in den Ordner „{BIN_NAME}“ in diesem Ordner und {} sich gleich mit „Rückgängig“ und später unter „Papierkorb“ zurücklegen. Weg ist es erst, wenn Sie es dort endgültig löschen. Zusammen {}.",
                 if n == 1 { "Sie kommt" } else { "Sie kommen" },
                 if n == 1 { "lässt" } else { "lassen" },
                 format_bytes(total as f64, 1)
-            );
+            ) };
             let mut list = div().flex().flex_col().max_h(px(240.));
             for file in files.iter().take(12) {
                 list = list.child(div().border_t_1().border_color(ui.c.line).py(px(5.)).child(ui.value(file.path.clone())));
@@ -1027,7 +1040,7 @@ impl Shell {
                             .focus_handle(f.delete_first.clone())
                             .on_click(move |_, app| m1.update(app, |shell, cx| shell.delete_chosen(true, cx))),
                     )
-                    .action(ui.button("endgueltig-loeschen", "Endgültig löschen").disabled(busy).on_click(move |_, app| m2.update(app, |shell, cx| shell.delete_chosen(false, cx))))
+                    .action(if in_drive { div().into_any_element() } else { ui.button("endgueltig-loeschen", "Endgültig löschen").disabled(busy).on_click(move |_, app| m2.update(app, |shell, cx| shell.delete_chosen(false, cx))).into_any_element() })
                     .action(
                         ui.button("loeschen-abbrechen", "Abbrechen")
                             .disabled(busy)
@@ -1130,6 +1143,10 @@ impl Shell {
             let me = me.clone();
             ui.button("ordner-waehlen-start", "Ordner wählen").primary().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_folder(cx)))
         });
+        if self.drive.as_ref().is_some_and(|d| d.configured) {
+            let me = me.clone();
+            ways = ways.child(ui.button("ordner-aus-drive", "Aus Google Drive").on_click(move |_, app| me.update(app, |shell, cx| shell.open_drive_folder(cx))));
+        }
         if let Some(path) = &self.folder.remembered {
             let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
             let path = path.clone();

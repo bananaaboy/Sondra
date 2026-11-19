@@ -575,6 +575,77 @@ fn the_chosen_files_are_packed_into_a_zip_in_the_folder_with_their_folders_and_n
 }
 
 #[gpui::test]
+fn sondras_folder_in_drive_is_read_played_by_fetching_it_and_deleted_into_drives_bin(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    std::env::set_var("SONDRA_DATA", tmp.path().join("daten"));
+    let fake = sondra_drive::fake::FakeDrive::start();
+    let client = fake.client();
+    let ton = client.ensure_path(&["Sondra", "Dateien", "Ton"]).unwrap();
+    let serie = client.ensure_path(&["Sondra", "Serien", "Frieren", "Staffel 1"]).unwrap();
+    client.create(&ton, "lied.mp3", &vec![7u8; 4000], "audio/mpeg", &Default::default()).unwrap();
+    let hint: std::collections::BTreeMap<String, String> = [("sondraSerie".to_string(), "fr".to_string()), ("sondraStaffel".to_string(), "1".to_string()), ("sondraFolge".to_string(), "2".to_string())].into();
+    client.create(&serie, "Folge 2.mkv", &vec![9u8; 6000], "video/x-matroska", &hint).unwrap();
+    let mut w = open(cx, tmp.path());
+    // Nothing offered where no Google client is built in; with one, the way in is a button.
+    assert!(w.tree().find(Role::Button, "Aus Google Drive").is_none());
+    w.shell.update(w.cx, |shell, _| {
+        shell.set_drive_for_test(sondra_app::drive_hub::Drive {
+            api: fake.api(),
+            tokens: std::sync::Arc::new(sondra_drive::fake::Always),
+            configured: true,
+            connected: std::sync::Arc::new(|| true),
+            sign_in: std::sync::Arc::new(|| Ok(())),
+        })
+    });
+    w.draw();
+    w.press(Role::Button, "Aus Google Drive");
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().find(Role::ListItem, "Dateien").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(w.files(), ["Dateien", "Serien"], "the folders of Sondra in Drive");
+    w.press(Role::Button, "Mit Unterordnern");
+    assert!(w.files().contains(&"lied.mp3".to_string()) && w.files().contains(&"Folge 2.mkv".to_string()), "{:?}", w.files());
+    // Playing fetches the file into this program's folder and hands it to the player.
+    w.press(Role::ListItem, "lied.mp3");
+    w.press(Role::Button, "Gewählte Dateien abspielen");
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        if w.shell.read_with(w.cx, |s, _| s.panel()) == Panel::Player {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
+    let names = w.shell.read_with(w.cx, |s, _| s.player_queue_names());
+    assert_eq!(names.len(), 1);
+    assert!(names[0].ends_with("lied.mp3"), "{names:?}");
+    let kept = tmp.path().join("daten").join("Drive-Ablage");
+    assert_eq!(fs::read_dir(&kept).unwrap().count(), 1, "kept for the next time");
+    // Deleting goes into Drive's bin, and „Endgültig löschen“ is not offered.
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Folder, cx));
+    w.draw();
+    w.press(Role::ListItem, "Folge 2.mkv");
+    w.press(Role::Button, "Löschen …");
+    assert!(w.tree().find(Role::Button, "Endgültig löschen").is_none());
+    w.press(Role::Button, "In den Papierkorb");
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if !fake.state.lock().unwrap().trashed.is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(fake.state.lock().unwrap().trashed.len(), 1);
+    assert!(!w.files().contains(&"Folge 2.mkv".to_string()), "gone from the list");
+}
+
+#[gpui::test]
 fn what_the_list_has_seen_can_be_left_out_of_the_view(cx: &mut TestAppContext) {
     use sondra_merk::normalize::{normalize, Context as Ids};
     use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};

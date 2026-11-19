@@ -45,6 +45,8 @@ pub struct State {
     pub pieces: Vec<(u64, u64)>,
     /// The next this many pieces are answered with a 503 and not kept (a hiccup of the server).
     pub hiccups: u32,
+    /// The ids that were put into the bin.
+    pub trashed: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -276,7 +278,7 @@ fn handle(mut request: tiny_http::Request, shared: &Arc<Mutex<State>>) {
             let only_folders = q.contains("mimeType = 'application/vnd.google-apps.folder'");
             let only_files = q.contains("mimeType != 'application/vnd.google-apps.folder'");
             let name = between(&q, "name = '", "' and").map(unquote);
-            let parent = between(&q, "and '", "' in parents").map(unquote);
+            let parent = between(&q, "and '", "' in parents").or_else(|| between(&q, "trashed = false and '", "' in parents")).map(unquote);
             let note = between(&q, "key='", "'").zip(between(&q, "value='", "' }")).map(|(k, v)| (unquote(k), unquote(v)));
             let mut found: Vec<(&String, &Entry)> = state
                 .entries
@@ -355,6 +357,21 @@ fn handle(mut request: tiny_http::Request, shared: &Arc<Mutex<State>>) {
             match state.entries.get(&id) {
                 Some(entry) => reply(request, 200, entry.data.clone(), "application/octet-stream"),
                 None => reply(request, 404, b"{}".to_vec(), "application/json"),
+            }
+        }
+        ("PATCH", p) if p.starts_with("/drive/v3/files/") => {
+            let id = id_of(&p["/drive/v3/files".len()..]);
+            let meta: Value = serde_json::from_slice(&body).unwrap_or_default();
+            if meta["trashed"] == json!(true) {
+                match state.entries.remove(&id) {
+                    Some(_) => {
+                        state.trashed.push(id.clone());
+                        json_reply(request, json!({ "id": id }))
+                    }
+                    None => reply(request, 404, b"{}".to_vec(), "application/json"),
+                }
+            } else {
+                reply(request, 400, b"{}".to_vec(), "application/json")
             }
         }
         ("DELETE", p) if p.starts_with("/drive/v3/files/") => {

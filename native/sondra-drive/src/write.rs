@@ -303,3 +303,115 @@ impl<T: TokenSource> DriveClient<T> {
         }
     }
 }
+
+/// One file of the tree below „Sondra“.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeFile {
+    pub file: DriveFile,
+    /// Inside „Sondra“, with `/`: „Heruntergeladen/Frieren S01E01.mp4“.
+    pub path: String,
+    /// The folder it lies in.
+    pub parent: String,
+    pub notes: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Tree {
+    pub files: Vec<TreeFile>,
+    /// Every folder inside, relative, the top („“) first, sorted.
+    pub dirs: Vec<String>,
+    /// Stopped at the limit.
+    pub truncated: bool,
+}
+
+impl<T: TokenSource> DriveClient<T> {
+    /// Everything below the folder `Sondra` (made if it is not there), its subfolders walked through, as
+    /// `driveClient.ts` `tree` does. Only what Sondra put there: `drive.file` shows nothing else.
+    pub fn tree(&self, limit: usize, cancel: &AtomicBool, mut progress: impl FnMut(usize)) -> Result<Tree, DriveError> {
+        let root = self.ensure_path(&["Sondra"])?;
+        let mut tree = Tree { dirs: vec![String::new()], ..Tree::default() };
+        let mut queue = std::collections::VecDeque::from([(root, String::new())]);
+        while let Some((id, path)) = queue.pop_front() {
+            let mut token = String::new();
+            loop {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(DriveError::Cancelled);
+                }
+                let mut params = vec![
+                    ("q", format!("trashed = false and {} in parents", quote(&id))),
+                    ("fields", format!("nextPageToken,files({FILE_FIELDS},parents,appProperties)")),
+                    ("spaces", "drive".to_string()),
+                    ("pageSize", "1000".to_string()),
+                ];
+                if !token.is_empty() {
+                    params.push(("pageToken", token.clone()));
+                }
+                let url = Url::parse_with_params(&format!("{}/files", self.api()), params).map_err(|e| DriveError::Failed(e.to_string()))?;
+                let page = json_of(self.send("GET", url.as_str(), None, None)?)?;
+                for raw in page["files"].as_array().cloned().unwrap_or_default() {
+                    let entry = as_file(&raw);
+                    let inside = if path.is_empty() { entry.name.clone() } else { format!("{path}/{}", entry.name) };
+                    if entry.mime_type.as_deref() == Some(FOLDER_TYPE) {
+                        tree.dirs.push(inside.clone());
+                        queue.push_back((entry.id, inside));
+                    } else if tree.files.len() >= limit {
+                        tree.truncated = true;
+                    } else {
+                        tree.files.push(TreeFile { file: entry, path: inside, parent: id.clone(), notes: notes_of(&raw) });
+                    }
+                }
+                progress(tree.files.len());
+                token = page["nextPageToken"].as_str().unwrap_or_default().to_owned();
+                if token.is_empty() || tree.truncated {
+                    break;
+                }
+            }
+        }
+        tree.dirs.sort();
+        Ok(tree)
+    }
+
+    /// Puts a file into Drive's own bin (30 days to take it back), as the page's „In den Papierkorb“ does. A file that is
+    /// gone already counts as gone.
+    pub fn trash(&self, id: &str) -> Result<(), DriveError> {
+        let url = format!("{}/files/{id}?fields=id", self.api());
+        match self.send("PATCH", &url, Some("application/json; charset=UTF-8"), Some(br#"{"trashed":true}"#)) {
+            Ok(_) | Err(DriveError::Missing(_)) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// A file of Drive into a file on this computer, piece by piece (a film is not held in memory). `progress` gets
+    /// (loaded, total) — the total when Drive says it.
+    pub fn download_to(&self, id: &str, path: &Path, cancel: &AtomicBool, mut progress: impl FnMut(u64, Option<u64>)) -> Result<(), DriveError> {
+        let url = Url::parse_with_params(&format!("{}/files/{id}", self.api()), [("alt", "media")]).map_err(|e| DriveError::Failed(e.to_string()))?;
+        let mut response = self.send("GET", url.as_str(), None, None)?;
+        let total = response.headers().get("content-length").and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok());
+        let part = path.with_extension("teil");
+        let result = (|| -> Result<(), DriveError> {
+            let mut out = std::fs::File::create(&part).map_err(|e| DriveError::Failed(e.to_string()))?;
+            let mut reader = response.body_mut().as_reader();
+            let (mut loaded, mut buffer) = (0u64, vec![0u8; 256 * 1024]);
+            loop {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(DriveError::Cancelled);
+                }
+                let n = reader.read(&mut buffer).map_err(|e| DriveError::Offline(e.to_string()))?;
+                if n == 0 {
+                    break;
+                }
+                std::io::Write::write_all(&mut out, &buffer[..n]).map_err(|e| DriveError::Failed(e.to_string()))?;
+                loaded += n as u64;
+                progress(loaded, total);
+            }
+            Ok(())
+        })();
+        match result {
+            Ok(()) => std::fs::rename(&part, path).map_err(|e| DriveError::Failed(e.to_string())),
+            Err(e) => {
+                let _ = std::fs::remove_file(&part);
+                Err(e)
+            }
+        }
+    }
+}
