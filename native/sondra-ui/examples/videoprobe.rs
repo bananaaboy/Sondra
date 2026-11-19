@@ -194,7 +194,8 @@ impl Render for Probe {
             cx.quit();
         }
         // Draw again at once: the window takes frames as fast as the screen asks for them.
-        window.request_animation_frame();
+        let me = cx.entity_id();
+        window.on_next_frame(move |_, cx| cx.notify(me));
         let c = sondra_ui::LIGHT;
         let shown = self.numbers.last().map_or(0, |n| n.shown);
         div()

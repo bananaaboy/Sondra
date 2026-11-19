@@ -101,7 +101,12 @@ impl FileStore {
     }
 
     pub fn default_location() -> Option<FileStore> {
-        Some(FileStore::open(data_dir()?.join("Ordner.json")))
+        FileStore::at_default("Ordner.json")
+    }
+
+    /// A store in Sondra's data folder under this file name.
+    pub fn at_default(file: &str) -> Option<FileStore> {
+        Some(FileStore::open(data_dir()?.join(file)))
     }
 }
 

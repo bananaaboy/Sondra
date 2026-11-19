@@ -17,6 +17,7 @@ use crate::actions::{self, Group};
 use crate::layout::{columns, shell_width, tab_width, GUTTER};
 use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
+use crate::player_page::PlayerState;
 use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -52,6 +53,8 @@ pub struct Shell {
     pub(crate) merk: MerkState,
     /// The Ordner page: the folder read, what it shows, what is chosen.
     pub(crate) folder: FolderState,
+    /// The player: what is queued, what plays.
+    pub(crate) player: PlayerState,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
     pub(crate) pending_focus: Option<FocusHandle>,
 }
@@ -92,8 +95,15 @@ impl Shell {
                 .collect(),
             merk,
             folder,
+            player: PlayerState::new(),
             pending_focus: None,
         }
+    }
+
+    /// Gives the player the settings and the places it remembered.
+    pub fn open_player_memory(&mut self, store: crate::store::FileStore, cx: &mut Context<Self>) {
+        self.player.remember_from(store);
+        cx.notify();
     }
 
     /// Gives the Ordner page what it remembered the last time.
@@ -715,12 +725,22 @@ impl Render for Shell {
             window.defer(cx, move |window, _| window.focus(&handle));
         }
 
+        // What plays goes on whichever page is open; the picture is taken only for the page that shows it.
+        let showing = self.panel == Panel::Player;
+        if self.player.tick(window, showing) {
+            // Draw again at the next frame. (`request_animation_frame` asks the view being drawn, which a
+            // window's root view is not yet while it renders itself — it is asked by name instead.)
+            let me = cx.entity_id();
+            window.on_next_frame(move |_, cx| cx.notify(me));
+        }
         let page = if self.panel == Panel::Start {
             self.start(ui, cols, cx)
         } else if self.panel == Panel::Merkliste {
             self.merkliste(ui, inner, cx)
         } else if self.panel == Panel::Folder {
             self.folder_page(ui, cx)
+        } else if self.panel == Panel::Player {
+            self.player_page(ui, inner, cx)
         } else {
             self.unfinished(ui, self.panel)
         };

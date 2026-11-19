@@ -35,6 +35,9 @@ fn main() {
                     if let Some(store) = sondra_app::store::FileStore::default_location() {
                         shell.open_ordner_memory(store, cx);
                     }
+                    if let Some(store) = sondra_app::store::FileStore::at_default("Abspielen.json") {
+                        shell.open_player_memory(store, cx);
+                    }
                     shell
                 })
             },
