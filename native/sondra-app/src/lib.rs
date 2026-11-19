@@ -8,6 +8,7 @@ pub mod layout;
 pub mod lines;
 pub mod merkliste;
 pub mod nav;
+pub mod normalize_page;
 pub mod player_page;
 pub mod shell;
 pub mod store;
