@@ -6,10 +6,12 @@
 //! Not yet as on the website: the crop is chosen by ratio and centred (the free rectangle with handles to
 //! drag is open), results are written beside their sources instead of into a ZIP.
 
+use std::cell::Cell;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui::{div, img, prelude::*, px, AnyElement, Context, Entity, ImageSource, ObjectFit, PathPromptOptions, RenderImage};
+use gpui::{canvas, div, img, prelude::*, px, AnyElement, Bounds, Context, Entity, ImageSource, ObjectFit, PathPromptOptions, Pixels, RenderImage};
 use image::{Frame as ImageFrame, RgbaImage};
 use smallvec::smallvec;
 use sondra_media::image_ops::{mirror_rect, output_size, process_file, render_bgra, rect_for_aspect, rotate_rect, size_of, Format, ImageOps, Made, ASPECTS};
@@ -58,6 +60,10 @@ pub struct ImagesState {
     pub made: Vec<Made>,
     pub working: bool,
     pub error: Option<String>,
+    /// The stage and the picture on it as drawn last, and what a press on the crop took hold of.
+    pub stage_bounds: Rc<Cell<Bounds<Pixels>>>,
+    pub crop_bounds: Rc<Cell<Bounds<Pixels>>>,
+    pub crop_drag: Option<sondra_media::crop_drag::Drag>,
 }
 
 impl ImagesState {
@@ -76,6 +82,9 @@ impl ImagesState {
             made: Vec::new(),
             working: false,
             error: None,
+            stage_bounds: Rc::new(Cell::new(Bounds::default())),
+            crop_bounds: Rc::new(Cell::new(Bounds::default())),
+            crop_drag: None,
         }
     }
 
@@ -153,7 +162,11 @@ impl Shell {
         i.generation += 1;
         let generation = i.generation;
         i.previewing = true;
-        let ops = i.ops.clone();
+        // While the crop is drawn the picture is shown whole, with the crop on it.
+        let mut ops = i.ops.clone();
+        if i.tool == Tool::Crop {
+            ops.crop = None;
+        }
         Self::in_background(
             cx,
             move || -> Result<(u32, u32, Vec<u8>), String> {
@@ -181,6 +194,37 @@ impl Shell {
             },
         );
         cx.notify();
+    }
+
+    /// A press on the crop: takes hold of a handle, the middle, or starts a new rectangle.
+    pub(crate) fn images_crop_down(&mut self, bounds: Bounds<Pixels>, at: gpui::Point<Pixels>, cx: &mut Context<Self>) {
+        let Some((x, y)) = crate::crop_ui::fractions(bounds, at) else { return };
+        let (wp, hp): (f32, f32) = (bounds.size.width.into(), bounds.size.height.into());
+        let rect = self.images.ops.crop.unwrap_or(sondra_media::image_ops::FULL_RECT);
+        self.images.crop_drag = Some(crate::crop_ui::begin(&rect, x, y, f64::from(wp), f64::from(hp)));
+        self.images_crop_move(bounds, at, cx);
+    }
+
+    /// The pointer moves with the button down: the rectangle follows, kept to the ratio when one is chosen.
+    pub(crate) fn images_crop_move(&mut self, bounds: Bounds<Pixels>, at: gpui::Point<Pixels>, cx: &mut Context<Self>) {
+        let (Some(drag), Some((x, y)), Some((w, h))) = (self.images.crop_drag, crate::crop_ui::fractions(bounds, at), self.images.dims) else { return };
+        let (fw, fh) = sondra_media::image_ops::rotated_size(w, h, self.images.ops.rotate);
+        let ratio = ASPECTS.iter().find(|(id, _, _)| *id == self.images.aspect).and_then(|(_, _, r)| *r);
+        let rect = sondra_media::crop_drag::drag_rect(&drag, x, y, ratio, f64::from(fw) / f64::from(fh.max(1)));
+        // The whole picture is no crop at all.
+        self.images.ops.crop = if crate::crop_ui::is_full(&rect) { None } else { Some(rect) };
+        self.images.made.clear();
+        cx.notify();
+    }
+
+    /// For tests: where the crop picture was drawn.
+    pub fn images_crop_bounds(&self) -> Bounds<Pixels> {
+        self.images.crop_bounds.get()
+    }
+
+    /// For tests: the crop as it is.
+    pub fn images_crop(&self) -> Option<sondra_media::image_ops::Rect> {
+        self.images.ops.crop
     }
 
     fn images_patch(&mut self, change: impl FnOnce(&mut ImagesState), cx: &mut Context<Self>) {
@@ -267,7 +311,33 @@ impl Shell {
 
         // The stage.
         let mut stage = div().relative().w_full().h(px(460.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).overflow_hidden().flex().items_center().justify_center();
+        let measure_stage = i.stage_bounds.clone();
+        stage = stage.child(canvas(move |b, _, _| measure_stage.set(b), |_, _, _, _| {}).absolute().top_0().left_0().size_full());
         stage = match &i.preview {
+            Some(image) if i.tool == Tool::Crop => {
+                // The picture whole, at the size it fits the stage, with the crop drawn on it.
+                let (fw, fh) = sondra_media::image_ops::rotated_size(w, h, ops.rotate);
+                let aspect = f64::from(fw) / f64::from(fh.max(1));
+                let (stage_w, stage_h): (f32, f32) = (i.stage_bounds.get().size.width.into(), 460.0);
+                let stage_w = if stage_w > 1.0 { stage_w } else { 10_000.0 };
+                let (dw, dh) = if f64::from(stage_w / stage_h) > aspect { ((f64::from(stage_h) * aspect) as f32, stage_h) } else { (stage_w, (f64::from(stage_w) / aspect) as f32) };
+                let rect = ops.crop.unwrap_or(sondra_media::image_ops::FULL_RECT);
+                let handlers = crate::crop_ui::Handlers {
+                    down: {
+                        let me = me.clone();
+                        Rc::new(move |b, at, app| me.update(app, |shell, cx| shell.images_crop_down(b, at, cx)))
+                    },
+                    drag: {
+                        let me = me.clone();
+                        Rc::new(move |b, at, app| me.update(app, |shell, cx| shell.images_crop_move(b, at, cx)))
+                    },
+                    up: {
+                        let me = me.clone();
+                        Rc::new(move |app| me.update(app, |shell, _| shell.images.crop_drag = None))
+                    },
+                };
+                stage.child(div().relative().w(px(dw)).h(px(dh)).child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Fill).size_full()).child(crate::crop_ui::overlay(c, rect, i.crop_bounds.clone(), handlers)))
+            }
             Some(image) => stage.child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Contain).size_full()),
             None => stage.child(div().text_color(c.prose).child("Das Bild kommt …")),
         };
@@ -282,8 +352,14 @@ impl Shell {
             }
             let me = me.clone();
             rail = rail.child(ui.chip(format!("werkzeug-{label}"), label, i.tool == tool).accessible_name(format!("Werkzeug {label}")).on_click(move |_, app| me.update(app, |shell, cx| {
+                let was = shell.images.tool == Tool::Crop;
                 shell.images.tool = tool;
-                cx.notify();
+                shell.images.crop_drag = None;
+                if was != (tool == Tool::Crop) {
+                    shell.images_preview(cx);
+                } else {
+                    cx.notify();
+                }
             })));
         }
         let steps = |title: &str, key: &'static str, values: Vec<(f64, String)>, now: f64, set: fn(&mut ImageOps, f64)| {
@@ -323,11 +399,16 @@ impl Shell {
                         )
                     })));
                 }
+                let reset = me.clone();
+                panel = panel.child(ui.prose("Ziehen Sie im Bild ein Rechteck auf. An den Griffen lässt es sich anpassen, in der Mitte verschieben; mit einem Seitenverhältnis bleibt es in Form."));
                 panel = panel.child(ui.subheading("Seitenverhältnis")).child(ratios);
-                panel = panel.child(ui.hint(match ops.crop {
-                    Some(r) => format!("Ausschnitt: {} × {} px, in der Mitte. Frei wählen heisst das ganze Bild.", ((f64::from(sondra_media::image_ops::rotated_size(w, h, ops.rotate).0) * r.width).round()) as u32, ((f64::from(sondra_media::image_ops::rotated_size(w, h, ops.rotate).1) * r.height).round()) as u32),
-                    None => "Das ganze Bild. Ein Seitenverhältnis wählt den grössten Ausschnitt in der Mitte.".to_string(),
-                }));
+                panel = panel.child(div().flex().flex_wrap().items_center().gap(px(12.)).child(ui.hint(match ops.crop {
+                    Some(r) => format!("Ausschnitt: {} × {} px.", ((f64::from(sondra_media::image_ops::rotated_size(w, h, ops.rotate).0) * r.width).round()) as u32, ((f64::from(sondra_media::image_ops::rotated_size(w, h, ops.rotate).1) * r.height).round()) as u32),
+                    None => "Das ganze Bild.".to_string(),
+                })).child(ui.button("bild-ausschnitt-aufheben", "Ganzes Bild").small().disabled(ops.crop.is_none()).on_click(move |_, app| reset.update(app, |shell, cx| shell.images_patch(|s| {
+                    s.ops.crop = None;
+                    s.aspect = "free";
+                }, cx)))));
             }
             Tool::Turn => {
                 let (left, right) = (me.clone(), me.clone());

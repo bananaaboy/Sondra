@@ -7,6 +7,7 @@ pub mod clip_player;
 pub mod convert_page;
 pub mod download_page;
 pub mod covers;
+pub mod crop_ui;
 pub mod devices_page;
 pub mod devices_servers;
 pub mod devices_setup;

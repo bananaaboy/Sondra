@@ -85,10 +85,12 @@ fn a_picture_is_cropped_turned_scaled_and_saved_and_many_go_through_together(cx:
     assert!(w.tree().find(Role::Button, "Werkzeug Ausschnitt").is_some());
     assert!(w.tree().find(Role::Button, "Werkzeug Viele").is_none(), "one picture needs no batch");
 
-    // Crop to a square: the stage shows 360 × 360.
+    // Crop to a square: while the crop is drawn the stage shows the whole picture with the crop on it.
     w.press(Role::Button, "Seitenverhältnis 1:1");
     w.settle();
-    assert_eq!(w.preview(), Some((360, 360)));
+    assert_eq!(w.preview(), Some((640, 360)));
+    let crop = w.cx.read_entity(&w.shell, |s, _| s.images_crop()).expect("a crop");
+    assert!((crop.width * 640.0 - 360.0).abs() < 1.0 && (crop.height * 360.0 - 360.0).abs() < 1.0, "{crop:?}");
     // Turned: the crop turns with it, still square.
     w.press(Role::Button, "Werkzeug Drehen");
     w.press(Role::Button, "Nach rechts drehen");
@@ -128,4 +130,53 @@ fn a_picture_is_cropped_turned_scaled_and_saved_and_many_go_through_together(cx:
     assert_eq!(made.len(), 2);
     assert_eq!((made[0].width, made[0].height), (400, 225));
     assert_eq!((made[1].width, made[1].height), (400, 300));
+}
+
+#[gpui::test]
+fn the_crop_is_drawn_on_the_picture_kept_to_a_ratio_and_shown_cropped_when_the_tool_is_left(cx: &mut TestAppContext) {
+    use gpui::{Modifiers, MouseButton};
+    let Some(ff) = Ffmpeg::locate() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let a = picture(&ff, tmp.path(), "eins.png", "640x360");
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let (shell, vcx) = cx.add_window_view(|window, cx| Shell::new(window, cx));
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    vcx.simulate_resize(size(px(WIDTH), px(900.)));
+    let mut w = Window { cx: vcx, shell, seen };
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Images, cx));
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.images_take(vec![a.clone()], cx));
+    w.settle();
+    w.draw();
+    let b = w.cx.read_entity(&w.shell, |s, _| s.images_crop_bounds());
+    assert!(f32::from(b.size.width) > 200.0, "the picture was measured: {b:?}");
+    let at = |fx: f32, fy: f32| point(b.origin.x + b.size.width * fx, b.origin.y + b.size.height * fy);
+
+    // A rectangle drawn from a quarter to three quarters (free).
+    w.cx.simulate_mouse_down(at(0.25, 0.25), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.75, 0.75), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.75, 0.75), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let crop = w.cx.read_entity(&w.shell, |s, _| s.images_crop()).expect("a crop");
+    assert!((crop.width - 0.5).abs() < 0.04 && (crop.height - 0.5).abs() < 0.04, "{crop:?}");
+
+    // With 1:1 chosen the rectangle stays square in pixels, whatever the hand does.
+    w.press(Role::Button, "Seitenverhältnis 1:1");
+    w.cx.simulate_mouse_down(at(0.0, 0.0), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.4, 0.3), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.4, 0.3), MouseButton::Left, Modifiers::default());
+    let square = w.cx.read_entity(&w.shell, |s, _| s.images_crop()).expect("a crop");
+    assert!(((square.width * 640.0) - (square.height * 360.0)).abs() < 2.0, "{square:?}");
+
+    // Leaving the tool: the stage shows what will be written.
+    w.press(Role::Button, "Werkzeug Drehen");
+    w.settle();
+    let (pw, ph) = w.preview().unwrap();
+    assert!((f64::from(pw) - square.width * 640.0).abs() < 3.0 && (f64::from(ph) - square.height * 360.0).abs() < 3.0, "{pw} × {ph}");
 }

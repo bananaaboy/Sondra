@@ -74,6 +74,10 @@ pub struct VideoState {
     pub bounds: Rc<Cell<Bounds<Pixels>>>,
     /// What a press on the timeline is moving.
     pub drag: Option<TimelineDrag>,
+    /// The stage as drawn, and the picture on it while the crop is drawn on it; what a press on the crop took hold of.
+    pub stage_bounds: Rc<Cell<Bounds<Pixels>>>,
+    pub crop_bounds: Rc<Cell<Bounds<Pixels>>>,
+    pub crop_drag: Option<sondra_media::crop_drag::Drag>,
 }
 
 /// What a press on the timeline grabbed: the place, or one end of what stays.
@@ -86,7 +90,7 @@ pub enum TimelineDrag {
 
 impl VideoState {
     pub fn new() -> VideoState {
-        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None }
+        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None, stage_bounds: Rc::new(Cell::new(Bounds::default())), crop_bounds: Rc::new(Cell::new(Bounds::default())), crop_drag: None }
     }
 }
 
@@ -156,7 +160,11 @@ impl Shell {
         };
         v.generation += 1;
         let generation = v.generation;
-        let ops = v.ops.clone();
+        // While the crop is drawn the picture is shown whole, with the crop on it; after, as it will be written.
+        let mut ops = v.ops.clone();
+        if v.tool == VTool::Crop {
+            ops.crop = None;
+        }
         let at = v.position;
         Self::in_background(
             cx,
@@ -401,6 +409,44 @@ impl Shell {
         }
     }
 
+    /// A press on the crop: takes hold of a handle, the middle, or starts a new rectangle.
+    pub(crate) fn video_crop_down(&mut self, bounds: Bounds<Pixels>, at: gpui::Point<Pixels>, cx: &mut Context<Self>) {
+        let Some((x, y)) = crate::crop_ui::fractions(bounds, at) else { return };
+        let (wp, hp): (f32, f32) = (bounds.size.width.into(), bounds.size.height.into());
+        let rect = self.video.ops.crop.map_or(sondra_media::image_ops::FULL_RECT, to_rect);
+        self.video.crop_drag = Some(crate::crop_ui::begin(&rect, x, y, f64::from(wp), f64::from(hp)));
+        self.video_crop_move(bounds, at, cx);
+    }
+
+    /// The pointer moves with the button down: the rectangle follows, kept to the ratio when one is chosen.
+    pub(crate) fn video_crop_move(&mut self, bounds: Bounds<Pixels>, at: gpui::Point<Pixels>, cx: &mut Context<Self>) {
+        let (Some(drag), Some((x, y)), Some((w, h))) = (self.video.crop_drag, crate::crop_ui::fractions(bounds, at), self.video.source) else { return };
+        let mut whole = self.video.ops.clone();
+        whole.crop = None;
+        let (fw, fh) = cropped_size(w, h, &whole);
+        let ratio = ASPECTS.iter().find(|(id, _, _)| *id == self.video.aspect).and_then(|(_, _, r)| *r);
+        let rect = sondra_media::crop_drag::drag_rect(&drag, x, y, ratio, f64::from(fw) / f64::from(fh.max(1)));
+        // The whole picture is no crop at all.
+        self.video.ops.crop = if crate::crop_ui::is_full(&rect) { None } else { Some(to_box(rect)) };
+        self.video.made.clear();
+        cx.notify();
+    }
+
+    /// For tests: where the stage was drawn.
+    pub fn video_stage_bounds(&self) -> Bounds<Pixels> {
+        self.video.stage_bounds.get()
+    }
+
+    /// For tests: whether a press on the crop is being followed.
+    pub fn video_crop_dragging(&self) -> bool {
+        self.video.crop_drag.is_some()
+    }
+
+    /// For tests: where the crop picture was drawn.
+    pub fn video_crop_bounds(&self) -> Bounds<Pixels> {
+        self.video.crop_bounds.get()
+    }
+
     /// For tests: where the timeline was drawn.
     pub fn video_timeline_bounds(&self) -> Bounds<Pixels> {
         self.video.bounds.get()
@@ -430,7 +476,35 @@ impl Shell {
 
         // The stage and its slider.
         let mut stage = div().relative().w_full().h(px(420.)).rounded(px(sondra_ui::radius::CARD)).bg(c.stage).overflow_hidden().flex().items_center().justify_center();
+        let measure_stage = v.stage_bounds.clone();
+        stage = stage.child(canvas(move |b, _, _| measure_stage.set(b), |_, _, _, _| {}).absolute().size_full());
         stage = match &v.frame {
+            Some(image) if v.tool == VTool::Crop => {
+                // The picture whole, at the size it fits the stage, with the crop drawn on it.
+                let mut whole = ops.clone();
+                whole.crop = None;
+                let (fw, fh) = cropped_size(w, h, &whole);
+                let aspect = f64::from(fw) / f64::from(fh.max(1));
+                let (stage_w, stage_h): (f32, f32) = (v.stage_bounds.get().size.width.into(), 420.0);
+                let stage_w = if stage_w > 1.0 { stage_w } else { 10_000.0 };
+                let (dw, dh) = if f64::from(stage_w / stage_h) > aspect { ((stage_h as f64 * aspect) as f32, stage_h) } else { (stage_w, (f64::from(stage_w) / aspect) as f32) };
+                let rect = ops.crop.map_or(sondra_media::image_ops::FULL_RECT, to_rect);
+                let handlers = crate::crop_ui::Handlers {
+                    down: {
+                        let me = me.clone();
+                        Rc::new(move |b, at, app| me.update(app, |shell, cx| shell.video_crop_down(b, at, cx)))
+                    },
+                    drag: {
+                        let me = me.clone();
+                        Rc::new(move |b, at, app| me.update(app, |shell, cx| shell.video_crop_move(b, at, cx)))
+                    },
+                    up: {
+                        let me = me.clone();
+                        Rc::new(move |app| me.update(app, |shell, _| shell.video.crop_drag = None))
+                    },
+                };
+                stage.child(div().relative().w(px(dw)).h(px(dh)).child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Fill).size_full()).child(crate::crop_ui::overlay(c, rect, v.crop_bounds.clone(), handlers)))
+            }
             Some(image) => stage.child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Contain).size_full()),
             None => stage.child(div().text_color(c.stage_muted).child("Das Bild kommt …")),
         };
@@ -483,8 +557,14 @@ impl Shell {
         for (tool, label) in VTool::ALL {
             let me = me.clone();
             rail = rail.child(ui.chip(format!("vwerkzeug-{label}"), label, v.tool == tool).accessible_name(format!("Werkzeug {label}")).on_click(move |_, app| me.update(app, |shell, cx| {
+                let was = shell.video.tool == VTool::Crop;
                 shell.video.tool = tool;
-                cx.notify();
+                shell.video.crop_drag = None;
+                if was != (tool == VTool::Crop) {
+                    shell.video_still(cx);
+                } else {
+                    cx.notify();
+                }
             })));
         }
         let steps = |title: &str, key: &'static str, values: Vec<(f64, String)>, now: f64, set: fn(&mut VideoOps, f64)| {
@@ -538,7 +618,15 @@ impl Shell {
                     }, cx))));
                 }
                 let (cw, ch) = cropped_size(w, h, ops);
-                panel = panel.child(ui.subheading("Seitenverhältnis")).child(ratios).child(ui.hint(if ops.crop.is_some() { format!("Ausschnitt: {cw} × {ch} px, in der Mitte.") } else { "Das ganze Bild.".to_string() }));
+                let reset = me.clone();
+                panel = panel
+                    .child(ui.prose("Ziehen Sie im Bild ein Rechteck auf. An den Griffen lässt es sich anpassen, in der Mitte verschieben; mit einem Seitenverhältnis bleibt es in Form."))
+                    .child(ui.subheading("Seitenverhältnis"))
+                    .child(ratios)
+                    .child(div().flex().flex_wrap().items_center().gap(px(12.)).child(ui.hint(if ops.crop.is_some() { format!("Ausschnitt: {cw} × {ch} px.") } else { "Das ganze Bild.".to_string() })).child(ui.button("ausschnitt-aufheben", "Ganzes Bild").small().disabled(ops.crop.is_none()).on_click(move |_, app| reset.update(app, |shell, cx| shell.video_patch(|s| {
+                        s.ops.crop = None;
+                        s.aspect = "free";
+                    }, cx)))));
             }
             VTool::Speed => {
                 panel = panel.child(steps("Tempo", "vtempo", [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0].iter().map(|x| (*x, format!("{}×", format!("{x}").replace('.', ",")))).collect(), ops.speed, |o, x| o.speed = x)).child(toggle("v-rueckwaerts", "Rückwärts", ops.reverse, |o, on| o.reverse = on));

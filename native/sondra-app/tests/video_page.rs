@@ -20,6 +20,8 @@ struct Window<'a> {
     cx: &'a mut VisualTestContext,
     shell: Entity<Shell>,
     seen: Seen,
+    /// A tall window, for what lies low on the page.
+    tall: bool,
 }
 
 const WIDTH: f32 = 1280.;
@@ -27,7 +29,7 @@ const WIDTH: f32 = 1280.;
 impl Window<'_> {
     fn draw(&mut self) {
         let view = self.shell.clone();
-        self.cx.draw(point(px(0.), px(0.)), size(AvailableSpace::Definite(px(WIDTH)), AvailableSpace::Definite(px(1000.))), move |_, _| view);
+        self.cx.draw(point(px(0.), px(0.)), size(AvailableSpace::Definite(px(WIDTH)), AvailableSpace::Definite(px(if self.tall { 1800. } else { 1000. }))), move |_, _| view);
     }
     fn tree(&self) -> Rc<Snapshot> {
         self.seen.borrow().last().expect("a frame").clone()
@@ -76,7 +78,7 @@ fn a_video_is_cut_cropped_sped_up_and_written_its_sound_pulled_out_and_a_still_s
     let sink = seen.clone();
     vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
     vcx.simulate_resize(size(px(WIDTH), px(1000.)));
-    let mut w = Window { cx: vcx, shell, seen };
+    let mut w = Window { cx: vcx, shell, seen, tall: false };
     w.draw();
     w.shell.update(w.cx, |shell, cx| shell.go(Panel::Video, cx));
     w.draw();
@@ -156,7 +158,7 @@ fn the_timeline_moves_the_place_and_both_ends_of_what_stays(cx: &mut TestAppCont
     let sink = seen.clone();
     vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
     vcx.simulate_resize(size(px(WIDTH), px(1000.)));
-    let mut w = Window { cx: vcx, shell, seen };
+    let mut w = Window { cx: vcx, shell, seen, tall: false };
     w.draw();
     w.shell.update(w.cx, |shell, cx| shell.go(Panel::Video, cx));
     w.draw();
@@ -195,5 +197,63 @@ fn the_timeline_moves_the_place_and_both_ends_of_what_stays(cx: &mut TestAppCont
     w.cx.simulate_mouse_up(at(0.0, 0.0), MouseButton::Left, Modifiers::default());
     let ops = w.cx.read_entity(&w.shell, |s, _| s.video_ops().clone());
     assert!(ops.end > ops.start, "{} {}", ops.start, ops.end);
+    w.settle(10);
+}
+
+#[gpui::test]
+fn the_crop_is_drawn_moved_and_taken_back_on_the_picture(cx: &mut TestAppContext) {
+    use gpui::{Modifiers, MouseButton};
+    let Some(ff) = Ffmpeg::locate() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let film = tmp.path().join("film.mp4");
+    let out = Command::new(ff.program())
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=10:duration=4", "-pix_fmt", "yuv420p"])
+        .arg(&film)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let (shell, vcx) = cx.add_window_view(|window, cx| Shell::new(window, cx));
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    vcx.simulate_resize(size(px(WIDTH), px(1800.)));
+    let mut w = Window { cx: vcx, shell, seen, tall: false };
+    w.tall = true;
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Video, cx));
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.video_take(film.clone(), cx));
+    w.settle(20);
+    w.press(Role::Button, "Werkzeug Ausschnitt");
+    w.settle(20);
+    // The stage shows the picture whole; draw twice so the picture's place is measured.
+    w.draw();
+    let b = w.cx.read_entity(&w.shell, |s, _| s.video_crop_bounds());
+    assert!(f32::from(b.size.width) > 200.0, "the picture was measured: {b:?}");
+    let at = |fx: f32, fy: f32| point(b.origin.x + b.size.width * fx, b.origin.y + b.size.height * fy);
+
+    // A new rectangle from a quarter to three quarters.
+    w.cx.simulate_mouse_down(at(0.25, 0.25), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.75, 0.75), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.75, 0.75), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let crop = w.cx.read_entity(&w.shell, |s, _| s.video_ops().crop).expect("a crop");
+    assert!((crop.x - 0.25).abs() < 0.03 && (crop.y - 0.25).abs() < 0.03 && (crop.width - 0.5).abs() < 0.04 && (crop.height - 0.5).abs() < 0.04, "{crop:?}");
+
+    // Its middle moves it, and it stays the size it was.
+    w.cx.simulate_mouse_down(at(0.5, 0.5), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.6, 0.55), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.6, 0.55), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let moved = w.cx.read_entity(&w.shell, |s, _| s.video_ops().crop).unwrap();
+    assert!((moved.x - (crop.x + 0.1)).abs() < 0.03 && (moved.width - crop.width).abs() < 1e-9, "{moved:?}");
+
+    // A corner drawn out to the edge of the picture, then the whole picture is taken back.
+    w.press(Role::Button, "Ganzes Bild");
+    assert!(w.cx.read_entity(&w.shell, |s, _| s.video_ops().crop).is_none());
     w.settle(10);
 }
