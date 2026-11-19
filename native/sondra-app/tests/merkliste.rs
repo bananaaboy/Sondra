@@ -466,3 +466,39 @@ fn a_series_can_be_added_as_already_begun(cx: &mut TestAppContext) {
     w.draw();
     assert_eq!(said(&w.tree(), Role::ListItem, "Dark"), "Staffel 1, Folge 5. 4 gesehen. —");
 }
+
+#[cfg(unix)]
+#[gpui::test]
+fn in_discord_zeigen_is_off_until_chosen_and_then_says_what_the_page_is(cx: &mut TestAppContext) {
+    use std::io::{Read, Write};
+    let dir = tempfile::tempdir().unwrap();
+    let runtime = dir.path().join("run");
+    std::fs::create_dir_all(&runtime).unwrap();
+    std::env::set_var("XDG_RUNTIME_DIR", &runtime);
+    let listener = std::os::unix::net::UnixListener::bind(runtime.join("discord-ipc-0")).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert!(listener.accept().is_err(), "nothing connects while it is off");
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "In Discord zeigen");
+    w.draw();
+    let mut peer = None;
+    for _ in 0..100 {
+        if let Ok((s, _)) = listener.accept() {
+            peer = Some(s);
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    let mut peer = peer.expect("Sondra connects once it is on");
+    peer.set_nonblocking(false).unwrap();
+    peer.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
+    let mut buf = [0u8; 4096];
+    let n = peer.read(&mut buf).unwrap();
+    assert!(String::from_utf8_lossy(&buf[8..n]).contains("client_id"));
+    peer.write_all(&sondra_discord::encode_frame(1, "{\"cmd\":\"DISPATCH\",\"evt\":\"READY\"}")).unwrap();
+    let n = peer.read(&mut buf).unwrap();
+    let text = String::from_utf8_lossy(&buf[8..n]).to_string();
+    assert!(text.contains("SET_ACTIVITY") && text.contains("\"details\":\"Merkliste\"") && text.contains("3 Serien (1 aktiv)"), "{text}");
+}

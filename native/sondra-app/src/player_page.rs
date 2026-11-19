@@ -609,6 +609,26 @@ impl Shell {
         self.player.pause_for_minimized(minimized);
     }
 
+    /// What plays now (the file's name), when something plays.
+    pub fn player_playing_name(&self) -> Option<String> {
+        let p = &self.player;
+        let playback = p.playback.as_ref()?;
+        (playback.state() == State::Playing).then(|| p.current_path().map(file_label).unwrap_or_default())
+    }
+
+    /// A choice kept on this device (the player's small store).
+    pub fn player_setting(&self, key: &str) -> Option<String> {
+        use sondra_merk::folder_memory::Store;
+        self.player.memory.as_ref().and_then(|s| s.get_item(key))
+    }
+
+    pub fn player_set_setting(&mut self, key: &str, value: &str) {
+        use sondra_merk::folder_memory::Store;
+        if let Some(s) = self.player.memory.as_mut() {
+            s.set_item(key, value.to_string());
+        }
+    }
+
     /// For tests: the size the picture has.
     pub fn player_size(&self) -> PlayerSize {
         self.player.size

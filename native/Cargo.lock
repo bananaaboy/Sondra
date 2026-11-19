@@ -5865,6 +5865,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "sondra-a11y",
+ "sondra-discord",
  "sondra-download",
  "sondra-extract",
  "sondra-media",
@@ -5918,6 +5919,14 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+]
+
+[[package]]
+name = "sondra-discord"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "windows 0.62.2",
 ]
 
 [[package]]

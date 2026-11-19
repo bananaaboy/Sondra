@@ -546,6 +546,16 @@ impl Shell {
                     shell.choose_list_file(cx);
                 })).into_any_element());
             }
+            {
+                let me = me.clone();
+                let on = self.discord.on;
+                items.push(ui.menu_item("discord-zeigen", "In Discord zeigen", on).on_click(move |_, app| me.update(app, |shell, cx| {
+                    shell.merk.more = false;
+                    let on = shell.discord.on;
+                    shell.set_discord(!on);
+                    cx.notify();
+                })).into_any_element());
+            }
             items.push(ui.hint("Auswertung"));
             {
                 let me = me.clone();

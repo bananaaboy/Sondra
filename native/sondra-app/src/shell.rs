@@ -72,6 +72,7 @@ pub struct Shell {
     pub(crate) images: ImagesState,
     pub(crate) mix: MixState,
     pub(crate) video: VideoState,
+    pub(crate) discord: crate::discord::DiscordState,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
@@ -131,6 +132,7 @@ impl Shell {
             images: ImagesState::new(),
             mix: MixState::new(),
             video: VideoState::new(),
+            discord: crate::discord::DiscordState::default(),
             convert_watch: None,
             pending_focus: None,
         }
@@ -791,6 +793,7 @@ impl Render for Shell {
             window.on_next_frame(move |_, cx| cx.notify(me));
         }
         self.player_merkliste_tick();
+        self.update_discord();
         // A download in progress is drawn again and again: the bar moves.
         if self.download.job.is_some() || self.convert.run.is_some() || self.video.run.is_some() {
             let me = cx.entity_id();

@@ -4,6 +4,7 @@ pub mod actions;
 pub mod convert_page;
 pub mod download_page;
 pub mod covers;
+pub mod discord;
 pub mod folder_page;
 pub mod layout;
 pub mod lines;
