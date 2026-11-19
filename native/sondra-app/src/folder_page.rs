@@ -523,6 +523,10 @@ impl Shell {
                     })
                     .child({
                         let me = me.clone();
+                        ui.button("auswahl-zip", "Als ZIP").small().accessible_name("Gewählte Dateien als ZIP speichern").disabled(f.busy).on_click(move |_, app| me.update(app, |shell, cx| shell.zip_selected(cx)))
+                    })
+                    .child({
+                        let me = me.clone();
                         ui.button("auswahl-loeschen", "Löschen …").small().on_click(move |_, app| me.update(app, |shell, cx| shell.ask_delete(cx)))
                     })
                     .child(ui.button("auswahl-aufheben", "Auswahl aufheben").small().on_click(move |_, app| {
@@ -794,6 +798,43 @@ impl Shell {
         }
         self.go(crate::nav::Panel::Player, cx);
         self.play_files(files, cx);
+    }
+
+    /// For tests: is something being done to the folder (a ZIP being written, files being moved)?
+    pub fn folder_busy(&self) -> bool {
+        self.folder.busy
+    }
+
+    /// Packs the chosen files of this computer into one ZIP in the folder, with their folders kept; what lies in Drive is
+    /// not packed (it would have to be fetched first) and the notice says so.
+    pub(crate) fn zip_selected(&mut self, cx: &mut Context<Self>) {
+        let f = &self.folder;
+        let (Some(scan), Some(root)) = (&f.scan, f.root.clone()) else { return };
+        let chosen: Vec<&FolderFile> = scan.files.iter().filter(|file| f.selected.contains(&file.path)).collect();
+        let (local, remote): (Vec<&FolderFile>, Vec<&FolderFile>) = chosen.into_iter().partition(|file| file.drive.is_none());
+        if local.is_empty() {
+            self.folder.notice = Some(if remote.is_empty() { "Es ist nichts gewählt." } else { "Dateien in Drive lassen sich hier nicht packen; holen Sie sie zuerst auf diesen Computer." }.into());
+            cx.notify();
+            return;
+        }
+        let skipped = remote.len();
+        // In the order of the list, with the folders as they lie.
+        let options = ListingOptions { dir: f.dir.clone(), deep: f.prefs.deep, filter: f.prefs.filter, query: f.search.read(cx).text().to_string(), sort: f.prefs.sort, descending: f.prefs.descending };
+        let shown: Vec<String> = listing(scan, &options).files.iter().map(|file| file.path.clone()).collect();
+        let mut files: Vec<(String, PathBuf)> = local.iter().map(|file| (file.path.clone(), root.join(file.path.replace('/', std::path::MAIN_SEPARATOR_STR)))).collect();
+        files.sort_by_key(|(name, _)| shown.iter().position(|p| p == name).unwrap_or(usize::MAX));
+        let suggestion = scan.name.clone();
+        self.folder.busy = true;
+        self.folder.notice = Some("Das ZIP wird geschrieben …".into());
+        cx.notify();
+        Self::pack_in_background(cx, files, root, suggestion, move |shell, result, cx| {
+            shell.folder.busy = false;
+            shell.folder.notice = Some(match result {
+                Ok((path, bytes)) => format!("ZIP gespeichert: {} · {}{}", path.display(), format_bytes(bytes as f64, 1), if skipped > 0 { format!(" (ohne {skipped} Datei{} in Drive)", if skipped == 1 { "" } else { "en" }) } else { String::new() }),
+                Err(message) => message,
+            });
+            cx.notify();
+        });
     }
 
     /// Asks whether the chosen files are to go.

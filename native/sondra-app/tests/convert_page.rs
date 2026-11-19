@@ -105,6 +105,30 @@ fn files_are_converted_one_after_the_other_and_offered_in_a_list(cx: &mut TestAp
     assert_eq!(names, ["eins.mp3", "zwei.mp3"], "both, named after their sources, in the folder chosen");
     assert!(w.tree().find(Role::ListItem, "eins.mp3").is_some());
     assert!(w.tree().find(Role::Button, "eins.mp3 abspielen").is_some());
+    // Two results: one ZIP of them, beside them, and the same again does not replace it.
+    w.press(Role::Button, "Alle als ZIP speichern");
+    for _ in 0..200 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with("ZIP gespeichert"))) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(out.join("Umgewandelt.zip").exists(), "{:?}", std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name()).collect::<Vec<_>>());
+    if let Ok(listing) = Command::new("unzip").arg("-l").arg(out.join("Umgewandelt.zip")).output() {
+        let listing = String::from_utf8_lossy(&listing.stdout);
+        assert!(listing.contains("eins.mp3") && listing.contains("zwei.mp3"), "{listing}");
+    }
+    w.press(Role::Button, "Alle als ZIP speichern");
+    for _ in 0..200 {
+        w.cx.run_until_parked();
+        std::thread::sleep(Duration::from_millis(10));
+        if out.join("Umgewandelt (2).zip").exists() {
+            break;
+        }
+    }
+    assert!(out.join("Umgewandelt (2).zip").exists(), "a second ZIP is a second file");
     // The result is a real MP3 with the length of the source.
     let probe = Ffmpeg::locate().unwrap().probe(&out.join("eins.mp3")).unwrap();
     assert!(probe.format.contains("mp3"));

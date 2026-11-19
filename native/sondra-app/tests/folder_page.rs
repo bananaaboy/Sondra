@@ -538,6 +538,43 @@ fn episodes_stand_together_under_their_series_and_season_and_the_rest_after_them
 }
 
 #[gpui::test]
+fn the_chosen_files_are_packed_into_a_zip_in_the_folder_with_their_folders_and_never_over_another(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Musik");
+    put(&root, "a.mp3", 300);
+    put(&root, "Album/b.mp3", 500);
+    put(&root, "c.txt", 10);
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    w.press(Role::ListItem, "a.mp3");
+    assert!(w.tree().find(Role::Button, "Gewählte Dateien als ZIP speichern").is_some());
+    w.press(Role::Button, "Gewählte Dateien als ZIP speichern");
+    for _ in 0..200 {
+        w.cx.run_until_parked();
+        w.draw();
+        if root.join("Musik.zip").exists() && !w.shell.read_with(w.cx, |s, _| s.folder_busy()) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(root.join("Musik.zip").exists());
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with("ZIP gespeichert:"))));
+    if let Ok(out) = std::process::Command::new("unzip").arg("-t").arg(root.join("Musik.zip")).output() {
+        assert!(String::from_utf8_lossy(&out.stdout).contains("No errors detected"), "{}", String::from_utf8_lossy(&out.stdout));
+    }
+    // Once more: a second file, the first stays.
+    w.press(Role::Button, "Gewählte Dateien als ZIP speichern");
+    for _ in 0..200 {
+        w.cx.run_until_parked();
+        if root.join("Musik (2).zip").exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(root.join("Musik (2).zip").exists() && root.join("Musik.zip").exists());
+}
+
+#[gpui::test]
 fn what_the_list_has_seen_can_be_left_out_of_the_view(cx: &mut TestAppContext) {
     use sondra_merk::normalize::{normalize, Context as Ids};
     use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};

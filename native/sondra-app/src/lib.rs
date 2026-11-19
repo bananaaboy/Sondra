@@ -35,6 +35,7 @@ pub mod mix_page;
 pub mod updater;
 pub mod updater_ui;
 pub mod video_page;
+pub mod zip_ui;
 pub mod visualizer;
 pub mod normalize_page;
 pub mod player_page;

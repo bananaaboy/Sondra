@@ -43,6 +43,9 @@ pub struct ConvertState {
     pub folder: Option<PathBuf>,
     pub run: Option<Run>,
     pub made: Vec<Made>,
+    /// The ZIP of the results, when one was asked for: where it lies and how big, or why not.
+    pub zip: Option<Result<(PathBuf, u64), String>>,
+    pub packing: bool,
     pub error: Option<String>,
 }
 
@@ -51,7 +54,7 @@ impl ConvertState {
         let store = crate::store::FileStore::at_default("Umwandeln.json");
         let own = store.as_ref().and_then(|s| s.get_item("vorlagen")).map(|j| parse_own(&j)).unwrap_or_default();
         let name = cx.new(|cx| TextField::new(cx, colors, "Name der Vorlage").placeholder("Name für diese Einstellungen").max_chars(40));
-        ConvertState { files: Vec::new(), settings: Settings::default(), preset: None, own, name, store, folder: None, run: None, made: Vec::new(), error: None }
+        ConvertState { files: Vec::new(), settings: Settings::default(), preset: None, own, name, store, folder: None, run: None, made: Vec::new(), zip: None, packing: false, error: None }
     }
 
     fn keep_own(&mut self) {
@@ -175,12 +178,27 @@ impl Shell {
                 shell.convert.run = None;
                 shell.convert_watch = None;
                 shell.convert.made = made;
+                shell.convert.zip = None;
                 cx.notify();
             })
             .ok();
         })
         .detach();
         cx.notify();
+    }
+
+    /// Packs the converted files into one ZIP beside them.
+    pub(crate) fn convert_pack(&mut self, cx: &mut Context<Self>) {
+        let files: Vec<(String, PathBuf)> = self.convert.made.iter().filter_map(|m| m.result.as_ref().ok()).map(|(p, _)| (p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), p.clone())).collect();
+        let Some(dir) = files.first().and_then(|(_, p)| p.parent().map(PathBuf::from)) else { return };
+        self.convert.packing = true;
+        self.convert.zip = None;
+        cx.notify();
+        Self::pack_in_background(cx, files, dir, "Umgewandelt".to_string(), |shell, result, cx| {
+            shell.convert.packing = false;
+            shell.convert.zip = Some(result);
+            cx.notify();
+        });
     }
 
     /// For tests: types a name for a template.
@@ -359,7 +377,24 @@ impl Shell {
                     on_open: std::rc::Rc::new(|_, _| {}),
                 });
             }
-            page = page.child(div().flex().flex_col().gap(px(10.)).child(div().pb(px(10.)).border_b_1().border_color(c.line).child(ui.subheading("Fertig"))).child(rows));
+            let mut done = div().flex().flex_col().gap(px(10.)).child(div().pb(px(10.)).border_b_1().border_color(c.line).child(ui.subheading("Fertig"))).child(rows);
+            // Two or more results: one ZIP of them all, beside them.
+            let made_ok = s.made.iter().filter(|m| m.result.is_ok()).count();
+            if made_ok >= 2 {
+                let pack = {
+                    let me = me.clone();
+                    ui.button("alle-als-zip", "Alle als ZIP speichern").small().disabled(s.packing || busy).on_click(move |_, app| me.update(app, |shell, cx| shell.convert_pack(cx)))
+                };
+                let mut line = div().flex().flex_wrap().items_center().gap(px(12.)).child(pack);
+                match &s.zip {
+                    Some(Ok((path, bytes))) => line = line.child(ui.prose(format!("ZIP gespeichert: {} · {}", path.display(), size_text(*bytes)))),
+                    Some(Err(message)) => line = line.child(ui.notice(NoticeKind::Warning, message.clone())),
+                    None if s.packing => line = line.child(ui.prose("Das ZIP wird geschrieben …")),
+                    None => {}
+                }
+                done = done.child(line);
+            }
+            page = page.child(done);
         }
         page.into_any_element()
     }

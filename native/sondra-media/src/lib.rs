@@ -52,5 +52,6 @@ pub mod declick;
 pub mod thumbnail;
 pub mod timestretch;
 pub mod video_ops;
+pub mod zip;
 
 pub use ffmpeg::{Cancel, Ffmpeg, MediaError, Probe, Progress, Stream};
