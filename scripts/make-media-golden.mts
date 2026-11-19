@@ -37,6 +37,7 @@ import {
   shelfEq,
 } from '../src/lib/effects'
 import { applyGain, channelTrick, concatAudio, cutRange, detectSilence, normalizePeak, peakDb, removeDcOffset, removeSilence, resampleAudio, setChannels } from '../src/lib/edit'
+import { cellsToNotes, patternHits, patternToMidi, resizeNotes, starterPattern, stepTime, type Pattern, type Slice } from '../src/lib/pattern'
 import { calibrate, PURPOSES, type MicPurpose } from '../src/lib/micCalibrate'
 import { DEFAULT_SEGMENTATION, midiName, segmentNotes, trackPitch } from '../src/lib/pitch'
 
@@ -764,4 +765,32 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   }
   writeFileSync(`${outDir}/edit.json`, `${JSON.stringify(edits, null, 1)}\n`)
   console.log(`Schnitt: ${silence.length} Pausen, Spitze ${peakDb(base).toFixed(2)} dB`)
+}
+
+
+/* -- Pads und Pattern: Treffer, Zeiten, MIDI ---------------------------------------------------- */
+
+{
+  const mk = (id: string, start: number, end: number, extra: Partial<Slice> = {}): Slice => ({ id, start, end, semitones: 0, gainDb: 0, reverse: false, mode: 'oneshot', pan: 0, attackMs: 0, releaseMs: 0, ...extra })
+  const slices: Slice[] = [mk('a', 0, 0.4), mk('b', 0.4, 0.9, { mode: 'gate', semitones: 2 }), mk('c', 0.9, 1.5, { mode: 'loop' }), mk('d', 1.5, 2.2, { semitones: -3, sound: 'sub808' }), mk('e', 2.2, 2.6)]
+  const cells = starterPattern(slices, 16)
+  cells.d = Array.from({ length: 16 }, (_, i) => i % 5 === 0)
+  const roll = cellsToNotes([true, false, true, false, false, true, false, false, false, false, true, true, false, false, false, true])
+  const notes = { c: [{ step: 0, length: 3, semitone: 0 }, { step: 4, length: 2, semitone: 7, velocity: 0.5 }, { step: 14, length: 4, semitone: -5 }, { step: 20, length: 1, semitone: 0 }], e: roll }
+  const patterns: Pattern[] = [
+    { steps: 16, bpm: 120, swing: 0, cells, notes: {}, muted: {} },
+    { steps: 16, bpm: 93.5, swing: 0.4, cells, notes, muted: { b: true } },
+    { steps: 32, bpm: 140, swing: 0.2, cells: { ...cells, a: Array.from({ length: 32 }, (_, i) => i % 3 === 0) }, notes: { d: resizeNotes([{ step: 0, length: 2, semitone: 0 }, { step: 8, length: 4, semitone: 3 }], 16, 32) }, muted: {} },
+  ]
+  const out = patterns.map((pattern) => ({
+    pattern: { steps: pattern.steps, bpm: pattern.bpm, swing: pattern.swing },
+    hits: patternHits(slices, pattern).map((h) => ({ id: h.slice.id, semitones: h.slice.semitones, mode: h.slice.mode, row: h.row, step: h.step, at: h.at, hold: h.hold, velocity: h.velocity, voice: h.voice })),
+    midi: Array.from(patternToMidi(slices, pattern, 1)),
+    midiLoops: Array.from(patternToMidi(slices, pattern, 2)),
+  }))
+  writeFileSync(
+    `${outDir}/pattern.json`,
+    `${JSON.stringify({ starter: starterPattern(slices, 16), roll, resized: resizeNotes(notes.c, 16, 40), resizedShort: resizeNotes(notes.c, 16, 8), times: [0, 1, 2, 3, 7].map((i) => stepTime(i, 100, 0.3)), out }, null, 1)}\n`,
+  )
+  console.log(`Pattern: ${out.map((o) => `${o.hits.length} Treffer`).join(', ')}`)
 }

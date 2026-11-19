@@ -39,6 +39,7 @@ pub mod loudness;
 pub mod midi;
 pub mod mic;
 pub mod onsets;
+pub mod pattern;
 pub mod pitch;
 pub mod presets;
 pub mod run;
