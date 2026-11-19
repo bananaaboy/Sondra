@@ -41,11 +41,11 @@ jobs:
         run: |
           npm run native:fixture
           git diff --exit-code -- native/sondra-core/tests/fixtures
-      - name: The converter's commands are what the web app builds today
+      - name: The converter's commands and the tabs are what the web app builds today
         shell: bash
         run: |
           npm run native:golden
-          git diff --exit-code -- native/sondra-media/tests/golden
+          git diff --exit-code -- native/sondra-media/tests/golden native/sondra-app/tests/golden
       # The tests of the media and download crates run the real FFmpeg (and skip, saying so, without it).
       - name: FFmpeg (Linux)
         if: runner.os == 'Linux'

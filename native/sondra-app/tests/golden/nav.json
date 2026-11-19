@@ -1,0 +1,178 @@
+{
+  "panels": [
+    {
+      "id": "start",
+      "slug": "start",
+      "label": "Start",
+      "summary": "Alle Werkzeuge als Kacheln, mit Suche"
+    },
+    {
+      "id": "merkliste",
+      "slug": "merkliste",
+      "label": "Merkliste",
+      "summary": "Serien und Listen, die Sie schauen — Staffeln, Folgen, Fortschritt"
+    },
+    {
+      "id": "folder",
+      "slug": "ordner",
+      "label": "Ordner",
+      "summary": "Die Dateien eines Ordners sehen, auswählen und weiterschauen"
+    },
+    {
+      "id": "player",
+      "slug": "abspielen",
+      "label": "Abspielen",
+      "summary": "Videos und Musik ansehen und anhören, auch grosse Filme"
+    },
+    {
+      "id": "downloader",
+      "slug": "herunterladen",
+      "label": "Herunterladen",
+      "summary": "Ein Video oder Lied von einer Adresse holen"
+    },
+    {
+      "id": "devices",
+      "slug": "geraete",
+      "label": "Geräte",
+      "summary": "Dateien direkt an Ihr Handy oder Ihren Rechner senden"
+    },
+    {
+      "id": "converter",
+      "slug": "umwandeln",
+      "label": "Umwandeln",
+      "summary": "In ein anderes Dateiformat bringen — etwa Video zu MP3"
+    },
+    {
+      "id": "video",
+      "slug": "video",
+      "label": "Video",
+      "summary": "Schneiden, drehen, Farbe, Blenden, Tempo, Ton"
+    },
+    {
+      "id": "images",
+      "slug": "bilder",
+      "label": "Bilder",
+      "summary": "Skalieren, zuschneiden, umwandeln, viele auf einmal"
+    },
+    {
+      "id": "subtitles",
+      "slug": "untertitel",
+      "label": "Untertitel",
+      "summary": "Gesprochenes als Text, SRT-Datei oder direkt im Video"
+    },
+    {
+      "id": "audio",
+      "slug": "ton",
+      "label": "Ton",
+      "summary": "Schneiden, einfügen, Filter, Rauschen, Hall, Tonhöhe, Tempo"
+    },
+    {
+      "id": "mix",
+      "slug": "mischen",
+      "label": "Mischen",
+      "summary": "Stimme und Musik zusammen, die Musik weicht beim Sprechen"
+    },
+    {
+      "id": "stems",
+      "slug": "spuren-trennen",
+      "label": "Spuren trennen",
+      "summary": "Gesang, Schlagzeug und Bass als einzelne Dateien"
+    },
+    {
+      "id": "normalize",
+      "slug": "lautstaerke",
+      "label": "Lautstärke",
+      "summary": "So laut machen wie im Radio, ohne zu übersteuern"
+    },
+    {
+      "id": "sampler",
+      "slug": "zerschneiden",
+      "label": "Zerschneiden",
+      "summary": "In Schläge zerlegen, auf Pads legen und einen Beat daraus bauen"
+    },
+    {
+      "id": "harmony",
+      "slug": "tonart",
+      "label": "Tonart",
+      "summary": "Tonart, Tempo, Akkorde und die Melodie als MIDI"
+    },
+    {
+      "id": "screen",
+      "slug": "bildschirm",
+      "label": "Bildschirm",
+      "summary": "Bildschirm oder ein Fenster mit Ton als Video aufnehmen"
+    },
+    {
+      "id": "phone",
+      "slug": "spiegeln",
+      "label": "Handy spiegeln",
+      "summary": "Den Bildschirm Ihres Android-Handys hier zeigen und mit der Maus bedienen"
+    },
+    {
+      "id": "mic",
+      "slug": "mikrofon",
+      "label": "Mikrofon",
+      "summary": "Testen, Geräte wählen und für Podcast, Stream oder Musik einstellen"
+    }
+  ],
+  "entries": [
+    {
+      "type": "panel",
+      "panel": "start"
+    },
+    {
+      "type": "panel",
+      "panel": "merkliste"
+    },
+    {
+      "type": "panel",
+      "panel": "folder"
+    },
+    {
+      "type": "panel",
+      "panel": "player"
+    },
+    {
+      "type": "panel",
+      "panel": "downloader"
+    },
+    {
+      "type": "panel",
+      "panel": "devices"
+    },
+    {
+      "type": "group",
+      "id": "bearbeiten",
+      "label": "Bearbeiten",
+      "panels": [
+        "converter",
+        "video",
+        "images",
+        "subtitles"
+      ]
+    },
+    {
+      "type": "group",
+      "id": "ton",
+      "label": "Ton",
+      "panels": [
+        "audio",
+        "mix",
+        "stems",
+        "normalize",
+        "sampler",
+        "harmony"
+      ]
+    },
+    {
+      "type": "group",
+      "id": "aufnehmen",
+      "label": "Aufnehmen",
+      "panels": [
+        "screen",
+        "phone",
+        "mic"
+      ]
+    }
+  ]
+}

@@ -5403,6 +5403,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sondra-app"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "serde",
+ "serde_json",
+ "sondra-a11y",
+ "sondra-ui",
+]
+
+[[package]]
 name = "sondra-core"
 version = "0.1.0"
 dependencies = [

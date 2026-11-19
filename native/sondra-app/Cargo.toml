@@ -1,0 +1,21 @@
+[package]
+name = "sondra-app"
+description = "Sondra's window: the header, the row of tabs and the screens, built from sondra-ui."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "sondra"
+path = "src/main.rs"
+
+[dependencies]
+gpui = "=0.2.2"
+sondra-a11y = { path = "../sondra-a11y" }
+sondra-ui = { path = "../sondra-ui" }
+
+[dev-dependencies]
+gpui = { version = "=0.2.2", features = ["test-support"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
