@@ -1,4 +1,136 @@
 {
+ "sqlite": {
+  "items": [
+   {
+    "id": "a",
+    "url": "",
+    "title": " frieren ",
+    "language": "auto",
+    "season": 1,
+    "episode": 9,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000020,
+    "status": "watching"
+   },
+   {
+    "id": "b",
+    "url": "",
+    "title": "Dark",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching",
+    "cover": "sondra:lokal"
+   },
+   {
+    "id": "c",
+    "url": "",
+    "title": "Same One",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000000,
+    "status": "watching"
+   },
+   {
+    "id": "d",
+    "url": "",
+    "title": "Only Here",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000001,
+    "status": "watching",
+    "seasons": [
+     {
+      "number": 1,
+      "episodes": 12,
+      "watched": [
+       1,
+       2
+      ],
+      "cover": "sondra:lokal",
+      "parts": [
+       {
+        "episodes": 6,
+        "cover": "sondra:lokal"
+       },
+       {
+        "episodes": 6
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "f",
+    "url": "",
+    "title": "Back Again",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000050,
+    "status": "watching"
+   },
+   {
+    "id": "g",
+    "url": "",
+    "title": "New There",
+    "language": "auto",
+    "season": 1,
+    "episode": 1,
+    "mode": "video",
+    "audioFormat": "mp3",
+    "videoPref": "untouched",
+    "audioPref": "high",
+    "autoTranscribe": false,
+    "updatedAt": 1700000000003,
+    "status": "watching"
+   }
+  ],
+  "removed": {
+   "h": 1700000000100,
+   "e": 1700000000001
+  },
+  "appState": {
+   "ansicht": {
+    "value": "liste",
+    "updatedAt": 1700000000000
+   },
+   "sortierung": {
+    "value": {
+     "by": "titel",
+     "up": true
+    },
+    "updatedAt": 1700000000001
+   }
+  }
+ },
  "urls": [
   {
    "url": "",
@@ -294,12 +426,14 @@
  "read": [
   {
    "raw": {
-    "updatedAt": 1700000000000
+    "updatedAt": 1700000000000,
+    "id": "z0",
+    "title": "Nur Titel"
    },
    "item": {
-    "id": "merk-1795050440627-oau5z",
+    "id": "z0",
     "url": "",
-    "title": "Ohne Namen",
+    "title": "Nur Titel",
     "language": "auto",
     "season": 1,
     "episode": 1,
@@ -2229,7 +2363,7 @@
  ],
  "progress": [
   {
-   "id": "merk-1795050440627-oau5z",
+   "id": "z0",
    "seasonsOf": [
     {
      "number": 1,

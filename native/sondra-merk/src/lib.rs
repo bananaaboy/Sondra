@@ -6,6 +6,7 @@ pub mod merge;
 pub mod model;
 pub mod normalize;
 pub mod progress;
+pub mod sqlite;
 pub mod urlinfo;
 
 pub use model::*;

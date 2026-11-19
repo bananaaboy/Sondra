@@ -9,6 +9,8 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 
+import { deserializeSondraSqlite, serializeSondraSqlite } from '../src/lib/sqlite'
+
 import { deriveLinkTitle, parseLinkEpisodeInfo } from '../src/lib/download'
 import {
   adoptRemovals,
@@ -82,7 +84,9 @@ const urls = [
 const season = (raw: Record<string, unknown>) => ({ number: 1, episodes: 12, watched: [], ...raw })
 
 const raws: Record<string, unknown>[] = [
-  {},
+  // (An entry without an id gets a random one — checked in the Rust tests, not here: a table that changes
+  // on every run could not be checked in.)
+  { id: 'z0', title: 'Nur Titel' },
   { id: 'a' },
   { id: 'b', title: 'Frieren', url: urls[2], season: 2, episode: 5 },
   { id: 'c', url: urls[2] },
@@ -254,7 +258,24 @@ const importCases = [
   { current: local, incoming: local, result: mergeMerkliste(local, local) },
 ]
 
+// The SQLite file the web app writes for a list, and what its own reader makes of it: the native reader
+// is held to the second, and the native writer is held to being read by the first (`scripts/verify-native-sqlite.mts`).
+const fileItems = mergeCases[1].shared.items
+const fileRemoved = mergeCases[1].shared.removed
+const fileState = {
+  ansicht: { value: 'liste', updatedAt: T },
+  sortierung: { value: { by: 'titel', up: true }, updatedAt: T + 1 },
+}
+const sqliteBytes = serializeSondraSqlite({
+  items: fileItems.map(travelling) as unknown as Record<string, unknown>[],
+  removed: fileRemoved,
+  appState: fileState,
+})
+writeFileSync(`${outDir}/web.sqlite`, sqliteBytes)
+const sqlite = deserializeSondraSqlite(sqliteBytes)
+
 const out = {
+  sqlite,
   urls: urls.map((url) => ({ url, info: parseLinkEpisodeInfo(url), title: deriveLinkTitle(url) })),
   read: readCases,
   progress: progressCases,

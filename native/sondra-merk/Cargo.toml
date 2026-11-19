@@ -11,4 +11,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 regex = "1"
 url = "2"
-
+rusqlite = { version = "0.37", features = ["bundled"] }
+tempfile = "3"
+thiserror = { workspace = true }

@@ -302,3 +302,12 @@ fn two_lists_merge_the_way_the_web_app_merges_them() {
         &g["takeShared"]["result"],
     );
 }
+
+#[test]
+fn an_entry_without_an_id_gets_one_of_its_own() {
+    let mut ctx = Context::system();
+    let a = normalize(&json!({"title": "A"}), &mut ctx);
+    let b = normalize(&json!({"title": "B"}), &mut ctx);
+    assert!(a.id.starts_with("merk-") && b.id.starts_with("merk-"));
+    assert_ne!(a.id, b.id);
+}
