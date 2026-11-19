@@ -49,6 +49,27 @@ pub fn is_minimized(window: &gpui::Window) -> bool {
     }
 }
 
+/// The taskbar button flashes until the window is brought forward: something waits for the person (a new episode, a
+/// device that offers files) and the window is behind others or minimised. Quiet where the platform has no such call.
+pub fn flash_taskbar(window: &gpui::Window) {
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{FlashWindowEx, FLASHWINFO, FLASHW_TIMERNOFG, FLASHW_TRAY};
+        let handle = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| HasWindowHandle::window_handle(window).ok().map(|h| h.as_raw())));
+        if let Ok(Some(RawWindowHandle::Win32(h))) = handle {
+            let info = FLASHWINFO { cbSize: std::mem::size_of::<FLASHWINFO>() as u32, hwnd: HWND(h.hwnd.get() as *mut _), dwFlags: FLASHW_TRAY | FLASHW_TIMERNOFG, uCount: 0, dwTimeout: 0 };
+            // SAFETY: `info` is filled in whole and the handle is of a window that is open for as long as this call runs.
+            let _ = unsafe { FlashWindowEx(&info) };
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+    }
+}
+
 /// Keeps the screen and the system awake while a download runs (`true`), and lets them sleep again
 /// (`false`). Windows keeps this per thread, so it must be called from the same thread every time — the
 /// window's.

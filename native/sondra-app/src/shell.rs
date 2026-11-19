@@ -93,6 +93,8 @@ pub struct Shell {
     pub(crate) anytype: crate::anytype_window::AnytypeState,
     pub(crate) merk_drive: crate::merk_drive::MerkDrive,
     pub(crate) old_app: crate::old_app::OldApp,
+    /// How many things waited for the person at the last frame (new episodes, offers of files).
+    pub(crate) attention_seen: usize,
     pub update: crate::updater_ui::Updates,
     pub palette: crate::palette::Palette,
     /// Google Drive for the saves of results; `None` where nothing can be kept.
@@ -154,6 +156,10 @@ impl Shell {
                 if (shell.panel == Panel::Devices && shell.devices.engine.is_some()) || (shell.panel == Panel::Folder && shell.folder.dupes.running) {
                     cx.notify();
                 }
+                // Something new waits for the person: draw it, so the card and the flashing come even on another page.
+                if shell.attention_count() != shell.attention_seen {
+                    cx.notify();
+                }
             }).is_err() {
                 break;
             }
@@ -198,6 +204,7 @@ impl Shell {
             anytype: crate::anytype_window::AnytypeState::new(cx, colors),
             merk_drive: crate::merk_drive::MerkDrive::load(),
             old_app: Default::default(),
+            attention_seen: 0,
             update: crate::updater_ui::Updates::default(),
             palette,
             drive: crate::drive_hub::Drive::production(),
@@ -324,6 +331,21 @@ impl Shell {
             }
             cx.notify();
         }
+    }
+
+    /// What waits for the person: announced episodes and devices that offer files.
+    pub(crate) fn attention_count(&self) -> usize {
+        let offers = self.devices.engine.as_ref().map_or(0, |e| e.snapshot().transfers.iter().filter(|t| t.state == sondra_devices::engine::State::Asking).count());
+        self.news_rounds.notes.len() + offers
+    }
+
+    /// More waiting than at the last frame while the window is behind others: the taskbar button flashes.
+    fn flash_for_news(&mut self, window: &Window) {
+        let count = self.attention_count();
+        if count > self.attention_seen && !window.is_window_active() {
+            crate::system::flash_taskbar(window);
+        }
+        self.attention_seen = count;
     }
 
     /// Every text field of every page. One left out stays in the colours of the other theme and cannot be read.
@@ -985,6 +1007,7 @@ impl Render for Shell {
         }
         self.player_merkliste_tick();
         self.update_discord();
+        self.flash_for_news(window);
         // A download in progress is drawn again and again: the bar moves.
         if self.download.job.is_some() || self.convert.run.is_some() || self.video.run.is_some() {
             let me = cx.entity_id();
