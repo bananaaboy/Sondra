@@ -87,6 +87,15 @@ VIAddVersionKey /LANG=1031 "LegalCopyright" "MIT-Lizenz"
   !insertmacro ${MACRO} ".gif"
 !macroend
 
+; The program is 64-bit, so its entries go into the 64-bit view of the registry (the setup itself is 32-bit,
+; and would otherwise write below WOW6432Node, where Apps & Features of a 64-bit program does not look).
+Function .onInit
+  SetRegView 64
+FunctionEnd
+Function un.onInit
+  SetRegView 64
+FunctionEnd
+
 Section "Sondra" SecMain
   SetShellVarContext all
   SetOutPath "$INSTDIR"
