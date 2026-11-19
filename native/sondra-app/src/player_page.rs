@@ -52,6 +52,12 @@ pub struct PlayerState {
     pub tracks_open: bool,
     /// The window with the picture and the sound.
     pub look_open: bool,
+    /// How big the picture is: beside the list, wide, over the whole window, or over the whole screen.
+    pub size: PlayerSize,
+    /// When the window was asked to take the whole screen (`None`: it was not).
+    pub screen: Option<std::time::Instant>,
+    /// When the mouse or a key last asked for the controls.
+    pub activity: std::time::Instant,
     track: usize,
     /// The subtitles of a file beside the film, and which source is shown.
     external_cues: Vec<Cue>,
@@ -62,6 +68,26 @@ pub struct PlayerState {
     pub marks_first: FocusHandle,
     pub marks_last: FocusHandle,
 }
+
+/// The four sizes of the picture. `Fill` is the window (Esc goes back), `Full` the screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlayerSize {
+    Normal,
+    /// The cinema mode: the picture over the whole width of the page, the list out of the way.
+    Kino,
+    Fill,
+    Full,
+}
+
+impl PlayerSize {
+    /// The picture is all there is and the controls lie over it.
+    pub fn immersive(self) -> bool {
+        matches!(self, PlayerSize::Fill | PlayerSize::Full)
+    }
+}
+
+/// How long the controls stay over a playing picture after the last touch of the mouse or a key.
+pub const CONTROLS_SHOWN: std::time::Duration = std::time::Duration::from_secs(4);
 
 /// The picture settings the playback understands.
 fn picture_of(settings: &sondra_player::Settings) -> sondra_playback::Picture {
@@ -112,6 +138,9 @@ impl PlayerState {
             sleep_open: false,
             tracks_open: false,
             look_open: false,
+            size: PlayerSize::Normal,
+            screen: None,
+            activity: std::time::Instant::now(),
             track: 0,
             external_cues: Vec::new(),
             subtitle: Subtitle::Off,
@@ -252,8 +281,13 @@ impl PlayerState {
             "down" => self.volume_by(-0.05),
             "m" => self.toggle_mute(),
             "b" => self.add_mark(),
+            "t" => self.size = if self.size == PlayerSize::Kino { PlayerSize::Normal } else { PlayerSize::Kino },
+            "w" => self.size = if self.size == PlayerSize::Fill { PlayerSize::Normal } else { PlayerSize::Fill },
+            "f" => self.size = if self.size == PlayerSize::Full { PlayerSize::Normal } else { PlayerSize::Full },
+            "escape" if self.size.immersive() && !(self.marks_open || self.sleep_open || self.tracks_open || self.look_open) => self.size = PlayerSize::Normal,
             _ => return false,
         }
+        self.activity = std::time::Instant::now();
         true
     }
 
@@ -552,6 +586,16 @@ impl Shell {
         self.player.set_sleep(Some(Sleep::At { until: std::time::Instant::now() + after, minutes: 1 }));
     }
 
+    /// For tests: the size the picture has.
+    pub fn player_size(&self) -> PlayerSize {
+        self.player.size
+    }
+
+    /// For tests: as if the mouse and the keys had been quiet for this long.
+    pub fn player_quiet_for(&mut self, quiet: std::time::Duration) {
+        self.player.activity = std::time::Instant::now() - quiet;
+    }
+
     /// Jumps to a place in the film that plays.
     pub fn player_seek(&mut self, seconds: f64) {
         if let Some(p) = self.player.playback.as_mut() {
@@ -603,8 +647,37 @@ impl Shell {
         cx.notify();
     }
 
+    /// Keeps the window's screen mode and the player's size in step. The player says what it wants
+    /// (`PlayerSize::Full`); the window is asked once, and a window that left the screen mode on its own
+    /// (the system's own key) takes the size back with it. The asking is not answered at once, so for a
+    /// moment after it a window that is not yet full is not taken as having left.
+    pub(crate) fn sync_fullscreen(&mut self, window: &mut Window) {
+        let wants = self.player.size == PlayerSize::Full;
+        match (wants, self.player.screen) {
+            (true, None) => {
+                if !window.is_fullscreen() {
+                    window.toggle_fullscreen();
+                }
+                self.player.screen = Some(std::time::Instant::now());
+            }
+            (true, Some(since)) => {
+                if !window.is_fullscreen() && since.elapsed() > std::time::Duration::from_millis(1500) {
+                    self.player.size = PlayerSize::Normal;
+                    self.player.screen = None;
+                }
+            }
+            (false, Some(_)) => {
+                if window.is_fullscreen() {
+                    window.toggle_fullscreen();
+                }
+                self.player.screen = None;
+            }
+            (false, None) => {}
+        }
+    }
+
     /// The page: the stage, the controls and the list.
-    pub(crate) fn player_page(&self, ui: Ui, width: f32, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn player_page(&self, ui: Ui, width: f32, height: f32, cx: &mut Context<Self>) -> AnyElement {
         let me = cx.entity();
         let c = ui.c;
         let p = &self.player;
@@ -635,11 +708,23 @@ impl Shell {
         let skip_opening = p.settings.skip_opening && video && sondra_player::opening_offered(position, duration, opening_len);
         let has_next = p.index + 1 < p.queue.len();
         let offer_next = p.settings.skip_opening && video && has_next && sondra_player::next_offered(position, duration);
-        let stage_height = (width * 9.0 / 16.0).clamp(240.0, 620.0);
+        let immersive = p.size.immersive();
+        let stage_height = match p.size {
+            PlayerSize::Kino => (height - 240.0).clamp(320.0, 900.0),
+            _ => (width * 9.0 / 16.0).clamp(240.0, 620.0),
+        };
         let name = p.current_path().map(file_label).unwrap_or_default();
 
         // The stage: the picture, and the words of the subtitle over its foot.
-        let mut stage = div().relative().w_full().h(px(stage_height)).rounded(px(sondra_ui::radius::CARD)).bg(c.stage).overflow_hidden().flex().items_center().justify_center();
+        let mut stage = div().id("buehne").relative().w_full().bg(c.stage).overflow_hidden().flex().items_center().justify_center();
+        stage = if immersive { stage.size_full() } else { stage.h(px(stage_height)).rounded(px(sondra_ui::radius::CARD)) };
+        stage = stage.on_mouse_move({
+            let me = me.clone();
+            move |_, _, app| me.update(app, |shell, cx| {
+                shell.player.activity = std::time::Instant::now();
+                cx.notify();
+            })
+        });
         stage = match (&p.image, playback.picture_size()) {
             (Some(image), Some(_)) => stage.child(img(ImageSource::Render(image.clone())).object_fit(match p.settings.fit { sondra_player::Fit::Contain => ObjectFit::Contain, sondra_player::Fit::Cover => ObjectFit::Cover, sondra_player::Fit::Fill => ObjectFit::Fill }).size_full()),
             (None, Some(_)) => stage.child(div().text_color(c.stage_muted).child("Das Bild kommt …")),
@@ -770,7 +855,52 @@ impl Shell {
             let me = me.clone();
             ui.button("bild-ton", "Bild und Ton").small().on_click(move |_, app| Self::player_do(&me, app, |p| p.look_open = true))
         };
-        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(look_button).child(marks_button).child(sleep_button).child(mute).child(volume);
+        let sizes = {
+            let mut row = div().flex().gap(px(6.));
+            for (size, id, label, name) in [
+                (PlayerSize::Kino, "kino", "Kino", "Kinomodus (T)"),
+                (PlayerSize::Fill, "fenster-fuellen", "Fenster füllen", "Bild über das ganze Fenster (W)"),
+                (PlayerSize::Full, "vollbild", "Vollbild", "Vollbild (F)"),
+            ] {
+                let me = me.clone();
+                let on = p.size == size;
+                row = row.child(ui.chip(id, label, on).accessible_name(name).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                    p.size = if on { PlayerSize::Normal } else { size };
+                    p.activity = std::time::Instant::now();
+                })));
+            }
+            row
+        };
+        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(look_button).child(marks_button).child(sleep_button).child(sizes).child(mute).child(volume);
+        if immersive {
+            // The picture is all there is. The controls lie over its foot and go when nobody asks for them.
+            let dialogs = p.marks_open || p.sleep_open || p.tracks_open || p.look_open;
+            let shown = !playing || dialogs || p.activity.elapsed() < CONTROLS_SHOWN;
+            let mut stage = stage.child(div().absolute().top_0().left_0().size_full());
+            if !shown {
+                stage = stage.cursor(gpui::CursorStyle::None);
+            }
+            if shown {
+                // Over black the controls are the dark ones, in whichever mode the page is.
+                stage = stage.child(
+                    div()
+                        .absolute()
+                        .bottom_0()
+                        .left_0()
+                        .w_full()
+                        .px(px(24.))
+                        .py(px(16.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(12.))
+                        .bg(gpui::hsla(0., 0., 0., 0.62))
+                        .child(div().child(ui.value(name.clone())))
+                        .child(seek)
+                        .child(div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(controls).child(bottom)),
+                );
+            }
+            return stage.into_any_element();
+        }
         page = page
             .child(div().flex().items_baseline().justify_between().gap(px(12.)).child(ui.heading("Abspielen")).child({
                 let me = me.clone();
@@ -781,6 +911,9 @@ impl Shell {
             .children(self.player_merkliste_line(ui, cx))
             .child(seek)
             .child(div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(controls).child(bottom));
+        if p.size == PlayerSize::Kino {
+            return page.into_any_element();
+        }
         page.child(self.player_queue(ui, cx)).into_any_element()
     }
 

@@ -198,3 +198,25 @@ fn the_picture_can_be_brightened_greyed_and_mirrored_and_the_sound_made_for_the_
     assert!(p.position() > 0.9);
     p.set_night(false).unwrap();
 }
+
+#[test]
+fn what_a_browser_would_not_play_plays_here_without_a_preview() {
+    let Some(ff) = ffmpeg() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let run = |args: &[&str]| {
+        let out = Command::new(ff.program()).args(["-v", "error", "-y"]).args(args).output().expect("FFmpeg runs");
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    };
+    // An AVI with MPEG-4 part 2 and MP3, and an MKV with H.264 and AC-3: the two the web player had to repack.
+    let avi = tmp.path().join("alt.avi");
+    let mkv = tmp.path().join("ac3.mkv");
+    let (a, m) = (avi.to_str().unwrap(), mkv.to_str().unwrap());
+    run(&["-f", "lavfi", "-i", "testsrc2=size=320x180:rate=15", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "2", "-c:v", "mpeg4", "-c:a", "libmp3lame", "-shortest", a]);
+    run(&["-f", "lavfi", "-i", "testsrc2=size=320x180:rate=15", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "ac3", "-shortest", m]);
+    for path in [avi, mkv] {
+        let mut p = Playback::open(Ffmpeg::locate().unwrap(), &path, 0.0).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let seen = watch(&mut p, 1.0);
+        assert!(seen.len() >= 8, "{}: {} pictures", path.display(), seen.len());
+        assert!(p.position() > 0.7, "{}: the clock of the sound runs", path.display());
+    }
+}

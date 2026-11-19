@@ -747,6 +747,7 @@ impl Render for Shell {
         let ui = Ui::new(self.mode.colors());
         let c = ui.c;
         let vw: f32 = window.viewport_size().width.into();
+        let vh_px: f32 = window.viewport_size().height.into();
         let column = shell_width(vw).min(vw);
         let gutter = if vw < 640.0 { 16.0 } else { GUTTER };
         let inner = (column - 2.0 * gutter).max(280.0);
@@ -775,14 +776,24 @@ impl Render for Shell {
             let me = cx.entity_id();
             window.on_next_frame(move |_, cx| cx.notify(me));
         }
-        let page = if self.panel == Panel::Start {
+        // The picture over the whole window (or screen): the page is nothing but it, in dark colours.
+        let immersive = self.panel == Panel::Player && self.player.playback.is_some() && self.player.size.immersive();
+        self.sync_fullscreen(window);
+        if immersive && !self.focus.contains_focused(window, cx) {
+            // Over the whole window the controls come and go; the keys must have somewhere to land.
+            let handle = self.focus.clone();
+            window.defer(cx, move |window, _| window.focus(&handle));
+        }
+        let page = if immersive {
+            self.player_page(Ui::new(Mode::Dark.colors()), inner, vh_px, cx)
+        } else if self.panel == Panel::Start {
             self.start(ui, cols, cx)
         } else if self.panel == Panel::Merkliste {
             self.merkliste(ui, inner, cx)
         } else if self.panel == Panel::Folder {
             self.folder_page(ui, cx)
         } else if self.panel == Panel::Player {
-            self.player_page(ui, inner, cx)
+            self.player_page(ui, inner, vh_px, cx)
         } else if self.panel == Panel::Downloader {
             self.download_page(ui, cx)
         } else if self.panel == Panel::Converter {
@@ -794,13 +805,13 @@ impl Render for Shell {
         };
         // A tool comes from the side of its tab, ±20 px; the start page comes from below, a little.
         let side = slide_from(self.from, self.panel) as f32;
-        let page = motion::enter(
+        let page = if immersive { page } else { motion::enter(
             div().w_full().child(page),
             ("seite", self.panel.index()),
             (20.0 * side, if side == 0.0 { 8.0 } else { 0.0 }),
             Duration::ZERO,
             motion::BASE,
-        );
+        ).into_any_element() };
 
         let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else { None };
         let header = div()
@@ -832,6 +843,9 @@ impl Render for Shell {
                         }
                         app.stop_propagation();
                         return;
+                    }
+                    if me.read(app).panel == Panel::Player {
+                        me.update(app, |shell, _| shell.player.activity = std::time::Instant::now());
                     }
                     // The player's own keys, on its page: Space, the arrows, M — when nothing else took them.
                     let m = &event.keystroke.modifiers;
@@ -875,13 +889,13 @@ impl Render for Shell {
                 })
                 .size_full()
                 .relative()
-                .bg(c.canvas)
+                .bg(if immersive { Mode::Dark.colors().stage } else { c.canvas })
                 .text_color(c.prose)
                 .font_family(family::SANS)
                 .text_size(px(size::BODY))
                 .flex()
                 .justify_center()
-                .child(
+                .child(if immersive { page } else {
                     div()
                         .id("blatt")
                         .size_full()
@@ -899,8 +913,7 @@ impl Render for Shell {
                                 .gap(px(28.))
                                 .child(header)
                                 .child(page),
-                        ),
-                )
+                        ).into_any_element() })
                 .children(overlay),
         )
     }

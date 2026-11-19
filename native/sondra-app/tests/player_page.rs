@@ -503,3 +503,53 @@ fn picture_and_sound_have_their_window_and_what_is_chosen_is_kept_and_taken_back
     w.press(Role::Button, "Schliessen");
     assert!(w.tree().find(Role::Dialog, "Bild und Ton").is_none());
 }
+
+#[gpui::test]
+fn the_picture_has_four_sizes_and_over_the_whole_window_the_controls_go_when_nobody_asks_for_them(cx: &mut TestAppContext) {
+    use sondra_app::player_page::PlayerSize;
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let a = film(tmp.path(), "a.mp4", 4);
+    let b = film(tmp.path(), "b.mp4", 4);
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![a, b], cx));
+    w.watch(0.3);
+    assert!(w.tree().find(Role::Heading, "Liste").is_some(), "beside the list at first");
+    // The cinema mode: wide, and the list is out of the way.
+    w.press(Role::Button, "Kinomodus (T)");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_size()), PlayerSize::Kino);
+    assert!(w.tree().find(Role::Heading, "Liste").is_none());
+    assert!(w.tree().find(Role::Button, "Pause").is_some(), "the controls are there");
+    w.press(Role::Button, "Kinomodus (T)");
+    assert!(w.tree().find(Role::Heading, "Liste").is_some());
+    // Over the whole window: no header, the controls over the picture.
+    w.press(Role::Button, "Bild über das ganze Fenster (W)");
+    w.watch(0.2);
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_size()), PlayerSize::Fill);
+    assert!(w.tree().find(Role::Button, "Pause").is_some());
+    assert!(w.tree().find(Role::Heading, "Abspielen").is_none(), "the page is the picture alone");
+    // Quiet for a while: the controls go; the mouse (or a key) brings them back.
+    w.shell.update(w.cx, |s, cx| {
+        s.player_quiet_for(std::time::Duration::from_secs(10));
+        cx.notify();
+    });
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Pause").is_none(), "gone after the quiet");
+    w.cx.simulate_keystrokes("left");
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Pause").is_some(), "a key brings them back");
+    // Escape goes back to the page; it does not stop the film.
+    w.cx.simulate_keystrokes("escape");
+    w.draw();
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_size()), PlayerSize::Normal);
+    assert!(w.tree().find(Role::Heading, "Abspielen").is_some());
+    // Over the whole screen, by the key: the window is asked, and the next film stays at that size.
+    w.cx.simulate_keystrokes("f");
+    w.draw();
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_size()), PlayerSize::Full);
+    w.cx.simulate_keystrokes("escape");
+    w.draw();
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_size()), PlayerSize::Normal);
+}
