@@ -133,7 +133,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | B06 | „Öffnen mit Sondra“, Dateiendungen `.sondra` und `.sondra-liste` mit Logo | `installer.nsh` | 8 | Workflow | offen |
 | B07 | Einzel-Instanz, zweiter Start reicht Dateien weiter | `electron.mjs` | 1/8 | Test | **nativ ✔** — `sondra-app::instance`: der erste Start lauscht nur auf 127.0.0.1 an einem selbst gewählten Port und legt Port und Geheimnis in `Instanz.json` im Datenordner; ein zweiter Start reicht Dateien und Ordner weiter (auch ohne Dateien: das Fenster kommt nach vorn) und beendet sich; wer das Geheimnis nicht kennt (eine Webseite, die Text an den Port schickt) wird nicht gehört, eine übrig gebliebene Datei sperrt keinen neuen Start. Test mit zwei Starts und einem Fremden. |
 | B08 | Offline: alles nach dem ersten Besuch | `coi-serviceworker.js` | 8 | Test | offen |
-| B09 | Datenschutz, Lizenzen (FFmpeg, scrcpy, Tango, Modelle), Changelog | `public/` | 8 | `verify:scrcpy` u. a. | offen |
+| B09 | Datenschutz, Lizenzen (FFmpeg, scrcpy, Tango, Modelle), Changelog | `public/` | 8 | `verify:scrcpy` u. a. | **teils nativ ✔** — Changelog („Was ist neu“, dieselbe Datei) und Fenster „Lizenzen“ (Bausteine mit Lizenz und Herkunft, die Texte MIT, Apache-2.0 des scrcpy-Servers und GPL-2.0 für FFmpeg-Fassungen mit x264); offen: Datenschutzerklärung im Fenster, Lizenzen im Installer |
 | B10 | Daten der Electron-App übernehmen (Sitzung, Einstellungen, Lesezeichen) | `localStorage`, IndexedDB | 8 | Test mit echten Daten | offen |
 
 ## Neu im nativen Sondra (kein Bestand)

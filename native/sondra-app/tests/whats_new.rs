@@ -109,3 +109,18 @@ fn after_an_update_the_line_is_there_and_opens_the_list(cx: &mut TestAppContext)
     // The next start knows this version has been seen.
     assert_eq!(FileStore::open(&file).get_item("gesehene-version").as_deref(), Some(app_version().as_str()));
 }
+
+#[gpui::test]
+fn the_licences_open_from_the_list_with_the_texts_that_have_to_travel_along(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, FileStore::open(dir.path().join("Einstellungen.json")));
+    let version = sondra_app::whats_new::app_version();
+    w.press(Role::Button, &format!("Was ist neu, Version {version}"));
+    w.press(Role::Button, "Lizenzen");
+    assert!(w.tree().find(Role::Dialog, "Lizenzen").is_some());
+    for needle in ["MIT License", "FFmpeg", "scrcpy-Server 3.3.3", "yt-dlp", "Apache License", "GNU GENERAL PUBLIC LICENSE"] {
+        assert!(w.said(needle), "{needle}");
+    }
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Dialog, "Lizenzen").is_none());
+}

@@ -120,6 +120,13 @@ impl Shell {
             ui.dialog("was-ist-neu", "Was ist neu")
                 .width(640.)
                 .child(list)
+                .action(ui.button("lizenzen-oeffnen", "Lizenzen").on_click({
+                    let me = cx.entity();
+                    move |_, app| me.update(app, |shell, cx| {
+                        shell.licenses_open = true;
+                        cx.notify();
+                    })
+                }))
                 .action(ui.button("neu-fenster-schliessen", "Schliessen").primary().on_click(move |_, app| close.update(app, |shell, cx| {
                     shell.whats_new_open = false;
                     cx.notify();
