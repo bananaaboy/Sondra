@@ -279,3 +279,26 @@ pub fn seen_episode(
     });
     Seen { settled, history }
 }
+
+/// The step „+1“: the episode the entry stands at (and every one before it) is seen, the place settles on
+/// the next, and the history gets the episode — the web app's `advance`. An entry that stands at no
+/// episode only settles. The history entry's id is made from the time and four characters of luck, which
+/// the caller brings.
+pub fn advance(item: &Item, now: i64, luck: &str) -> Seen {
+    let at = item.episode.filter(|e| *e != 0);
+    let seasons = match at {
+        Some(episode) => crate::progress::watched_up_to(item, item.season, episode),
+        None => seasons_of(item),
+    };
+    let settled = settle(item, &seasons, item.season);
+    let mut history = item.history.clone().unwrap_or_default();
+    if let Some(episode) = at {
+        history.push(HistoryEntry {
+            id: format!("wh-{now}-{luck}"),
+            season: item.season,
+            episode,
+            at: now,
+        });
+    }
+    Seen { settled, history }
+}

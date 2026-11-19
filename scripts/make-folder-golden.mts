@@ -31,7 +31,7 @@ import {
 import { episodeKindOf, leftLabel, positionLabel, standLabel } from '../src/lib/merkRows'
 import { subtitleNameFor, subtitlesBeside } from '../src/lib/subtitleFiles'
 import { contentKey, copiesOf, findDuplicates, keepFirst, looksLikeCopy } from '../src/lib/duplicates'
-import { createMerkItem, type SavedLinkItem } from '../src/lib/merkliste'
+import { advance, createMerkItem, type SavedLinkItem } from '../src/lib/merkliste'
 import { kindFromMime } from '../src/state/store'
 
 const outDir = 'native/sondra-merk/tests/golden'
@@ -215,6 +215,19 @@ const rows = {
   kinds: rowUrls.map((url) => ({ url, kind: episodeKindOf(url) ?? null })),
   positions: [[1, 4, 'series'], [1, null, 'series'], [0, 2, 'series'], [0, null, 'series'], [2, 7, 'list'], [2, null, 'list'], [3, 0, 'series']].map(([season, episode, kind]) => ({ season, episode, kind, label: positionLabel(season as number, episode as number | null, kind as 'series' | 'list') })),
   lines: rowItems.map((item) => ({ id: item.id, stand: standLabel(item), left: leftLabel(item) ?? null })),
+  advanced: (() => {
+    // The entry's id is made from the clock and a random: both held still, so the answer is a table.
+    const realNow = Date.now
+    const realRandom = Math.random
+    Date.now = () => T + 777
+    Math.random = () => 0.5
+    try {
+      return rowItems.map((item) => ({ id: item.id, now: T + 777, result: advance(item) }))
+    } finally {
+      Date.now = realNow
+      Math.random = realRandom
+    }
+  })(),
 }
 const out = {
   rows,

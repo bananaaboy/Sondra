@@ -37,3 +37,21 @@ fn kinds_positions_and_lines_are_the_web_apps() {
         assert_eq!(left_label(item).as_deref(), line["left"].as_str(), "left of {}", item.id);
     }
 }
+
+#[test]
+fn the_step_forward_settles_and_writes_history_like_the_web_app() {
+    use sondra_merk::matching::advance;
+    let g = golden();
+    let items: Vec<Item> = serde_json::from_value(g["rows"]["items"].clone()).unwrap();
+    let cases = g["rows"]["advanced"].as_array().unwrap();
+    assert_eq!(items.len(), cases.len());
+    for (item, case) in items.iter().zip(cases) {
+        let want = &case["result"];
+        let got = advance(item, case["now"].as_i64().unwrap(), "i");
+        assert_eq!(serde_json::to_value(&got.settled.seasons).unwrap(), want["seasons"], "seasons of {}", item.id);
+        assert_eq!(got.settled.season, want["season"].as_i64().unwrap(), "season of {}", item.id);
+        assert_eq!(got.settled.episode, want["episode"].as_i64(), "episode of {}", item.id);
+        assert_eq!(serde_json::to_value(got.settled.status).unwrap(), want["status"], "status of {}", item.id);
+        assert_eq!(serde_json::to_value(&got.history).unwrap(), want["history"], "history of {}", item.id);
+    }
+}
