@@ -1045,6 +1045,8 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Token (DPAPI), „Mehr → Anytype …“; Abgleich nach jeder Änderung (nach einem Takt Ruhe) und alle drei Minuten, ein
   fehlgeschlagener erst eine Minute später wieder; was während einer Runde hier geändert wird, wird zusammengeführt,
   nicht ersetzt. Nie gegen ein echtes Anytype gelaufen.
+  **„Merkliste über Drive“ nativ** (`merk_drive.rs`): dieselbe Runde wie `syncMerklisteWithDrive` (lesen, `merge_shared`,
+  zurückschreiben nur wenn die Datei nicht schon genau das hält), Schalter unter „Mehr“ aus bis zur Wahl.
 - **Google Drive** (22.10.2026, `lib/googleDrive.ts`, `lib/driveClient.ts`,
   `GoogleDrive.tsx`): auf Wunsch alles geordnet in einen Ordner „Sondra“ im
   eigenen Drive — `Projekte`, `Dateien/{Ton,Video,Bilder,Andere}`,

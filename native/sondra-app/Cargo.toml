@@ -16,6 +16,7 @@ sondra-a11y = { path = "../sondra-a11y" }
 sondra-ui = { path = "../sondra-ui" }
 sondra-merk = { path = "../sondra-merk" }
 sondra-anytype = { path = "../sondra-anytype" }
+tempfile = "3"
 sondra-media = { path = "../sondra-media" }
 sondra-player = { path = "../sondra-player" }
 sondra-playback = { path = "../sondra-playback" }
@@ -41,7 +42,6 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 [dev-dependencies]
 sondra-extract = { path = "../sondra-extract", features = ["testing"] }
 tiny_http = "0.12"
-tempfile = "3"
 gpui = { version = "=0.2.2", features = ["test-support"] }
 accesskit = "0.25"
 

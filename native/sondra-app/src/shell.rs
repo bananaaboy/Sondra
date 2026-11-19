@@ -91,6 +91,7 @@ pub struct Shell {
     pub(crate) discord: crate::discord::DiscordState,
     pub(crate) news_rounds: crate::new_episodes::NewEpisodes,
     pub(crate) anytype: crate::anytype_window::AnytypeState,
+    pub(crate) merk_drive: crate::merk_drive::MerkDrive,
     pub update: crate::updater_ui::Updates,
     pub palette: crate::palette::Palette,
     /// Google Drive for the saves of results; `None` where nothing can be kept.
@@ -141,6 +142,7 @@ impl Shell {
         .detach();
         Self::start_new_episode_rounds(window, cx);
         Self::start_anytype_rounds(window, cx);
+        Self::start_merk_drive_rounds(window, cx);
         Self::start_update_rounds(window, cx);
         // Twice a second: is the window minimised? (A window nobody draws does not ask by itself.)
         cx.spawn_in(window, async move |this, cx| loop {
@@ -193,6 +195,7 @@ impl Shell {
             discord: crate::discord::DiscordState::default(),
             news_rounds: crate::new_episodes::NewEpisodes::default(),
             anytype: crate::anytype_window::AnytypeState::new(cx, colors),
+            merk_drive: crate::merk_drive::MerkDrive::load(),
             update: crate::updater_ui::Updates::default(),
             palette,
             drive: crate::drive_hub::Drive::production(),

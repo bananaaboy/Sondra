@@ -437,6 +437,9 @@ impl Shell {
             })));
             page = page.child(line);
         }
+        if let Some(said) = self.merk_drive.said.as_ref().filter(|_| self.merk_drive.on) {
+            page = page.child(ui.hint(said.clone()));
+        }
         if let Some(taken) = &state.undo {
             let me = me.clone();
             page = page.child(
@@ -608,6 +611,15 @@ impl Shell {
                     shell.merk.more = false;
                     let on = shell.news_rounds.on;
                     shell.set_new_episodes(!on, cx);
+                })).into_any_element());
+            }
+            if self.drive.as_ref().is_some_and(|d| d.configured) {
+                let me = me.clone();
+                let on = self.merk_drive.on;
+                items.push(ui.menu_item("merkliste-ueber-drive", "Über Google Drive abgleichen", on).on_click(move |_, app| me.update(app, |shell, cx| {
+                    shell.merk.more = false;
+                    let on = shell.merk_drive.on;
+                    shell.set_merk_drive(!on, cx);
                 })).into_any_element());
             }
             {

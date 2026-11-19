@@ -25,6 +25,7 @@ pub mod layout;
 pub mod licenses;
 pub mod lines;
 pub mod merk_dialogs;
+pub mod merk_drive;
 pub mod merkliste;
 pub mod mic_page;
 pub mod nav;

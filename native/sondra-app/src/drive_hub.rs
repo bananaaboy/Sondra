@@ -68,7 +68,7 @@ impl Drive {
         })
     }
 
-    fn client(&self) -> DriveClient<Tokens> {
+    pub(crate) fn client(&self) -> DriveClient<Tokens> {
         DriveClient::new(self.tokens.clone(), self.api.clone())
     }
 }
