@@ -34,6 +34,8 @@ pub struct PlayerState {
     pub image: Option<Arc<RenderImage>>,
     pub error: Option<String>,
     pub settings: Settings,
+    /// The tallest picture chosen for this film; the next film is as it is again.
+    pub quality: Option<u32>,
     pub memory: Option<FileStore>,
     pub cues: Vec<Cue>,
     /// When the place was last written down.
@@ -136,6 +138,7 @@ impl PlayerState {
             image: None,
             error: None,
             settings: Settings::default(),
+            quality: None,
             memory: None,
             cues: Vec::new(),
             saved_at: None,
@@ -213,6 +216,7 @@ impl PlayerState {
         self.tracks_open = false;
         self.look_open = false;
         self.track = 0;
+        self.quality = None;
         self.marks_open = false;
         self.sleep_open = false;
         self.stay_ended = false;
@@ -1096,6 +1100,23 @@ impl Shell {
                 })));
             }
             body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Bild")).child(fit));
+            // The quality: a smaller picture is cheaper to carry to the window; the film goes on from where it is.
+            let steps_here = p.playback.as_ref().map(|pb| pb.quality_steps()).unwrap_or_default();
+            if !steps_here.is_empty() {
+                let mut row = div().flex().flex_wrap().gap(px(6.));
+                let mut choices: Vec<(Option<u32>, String)> = vec![(None, "Original".to_string())];
+                choices.extend(steps_here.iter().map(|h| (Some(*h), format!("{h}p"))));
+                for (value, label) in choices {
+                    let me = me.clone();
+                    row = row.child(ui.chip(format!("qualitaet-{label}"), label.clone(), p.quality == value).accessible_name(format!("Qualität {label}")).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        if let Some(pb) = p.playback.as_mut() {
+                            let _ = pb.set_quality(value);
+                        }
+                        p.quality = value;
+                    })));
+                }
+                body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Qualität")).child(row));
+            }
             body = body.child(steps(&ui, "Helligkeit", "hell", &light, st.brightness, |s, v| s.brightness = v));
             body = body.child(steps(&ui, "Kontrast", "kontrast", &contrast, st.contrast, |s, v| s.contrast = v));
             body = body.child(steps(&ui, "Sättigung", "saettigung", &colour, st.saturation, |s, v| s.saturation = v));

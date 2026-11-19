@@ -527,6 +527,41 @@ fn picture_and_sound_have_their_window_and_what_is_chosen_is_kept_and_taken_back
 }
 
 #[gpui::test]
+fn a_big_film_can_be_watched_smaller_and_the_next_film_is_as_it_is_again(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let big = tmp.path().join("gross.mp4");
+    let ff = Ffmpeg::locate().unwrap();
+    let out = Command::new(ff.program())
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=15", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "3"])
+        .args(["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest"])
+        .arg(&big)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let small = film(tmp.path(), "klein.mp4", 3);
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![big, small], cx));
+    w.watch(0.3);
+    w.press(Role::Button, "Bild und Ton");
+    assert_eq!(w.tree().find(Role::Button, "Qualität Original").unwrap().toggled, Some(true));
+    assert!(w.tree().find(Role::Button, "Qualität 720p").is_none(), "only steps below the film's own are offered");
+    w.press(Role::Button, "Qualität 480p");
+    assert_eq!(w.tree().find(Role::Button, "Qualität 480p").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Qualität Original").unwrap().toggled, Some(false));
+    w.watch(0.8);
+    assert!(w.position() > 0.3, "the film goes on: {}", w.position());
+    // A small film has no step to offer.
+    w.press(Role::Button, "Schliessen");
+    w.press(Role::Button, "Weiter");
+    w.watch(0.3);
+    w.press(Role::Button, "Bild und Ton");
+    assert!(w.tree().find(Role::Button, "Qualität Original").is_none());
+}
+
+#[gpui::test]
 fn the_picture_has_four_sizes_and_over_the_whole_window_the_controls_go_when_nobody_asks_for_them(cx: &mut TestAppContext) {
     use sondra_app::player_page::PlayerSize;
     if !has_ffmpeg() {

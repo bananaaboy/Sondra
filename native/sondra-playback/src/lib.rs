@@ -248,6 +248,8 @@ pub struct Playback {
     output: Output,
     shared: Shared,
     size: (u32, u32),
+    /// The tallest the picture is made, or `None` for the film's own.
+    quality: Option<u32>,
     settings: Settings,
     run: Run,
     /// Where in the file this run started, in seconds.
@@ -305,6 +307,7 @@ impl Playback {
             output,
             shared,
             size,
+            quality: None,
             settings: Settings { rate: 1.0, volume: 1.0, muted: false, audio_track: 0, boost: 1.0, night: false, karaoke: false, equalizer: Equalizer::default(), picture: Picture::default() },
             run: Run { children: Vec::new(), frames: Arc::new(Frames::new()), video_done: Arc::default(), audio_done: Arc::default(), stop: Arc::default() },
             started_at: 0.0,
@@ -497,6 +500,34 @@ impl Playback {
         self.restart(at)
     }
 
+    /// The heights a film can be watched at below its own, as the web player offers them.
+    pub fn quality_steps(&self) -> Vec<u32> {
+        let tall = self.video.as_ref().and_then(|v| v.height).unwrap_or(0);
+        QUALITY_STEPS.iter().copied().filter(|h| *h + 40 < tall).collect()
+    }
+
+    pub fn quality(&self) -> Option<u32> {
+        self.quality
+    }
+
+    /// Makes the picture smaller (or, with `None`, as the film is): cheaper to carry to the window on a slow
+    /// computer, and the film goes on from where it is.
+    pub fn set_quality(&mut self, height: Option<u32>) -> Result<(), PlaybackError> {
+        let Some(video) = &self.video else { return Ok(()) };
+        let (w, h) = (video.width.unwrap_or(0), video.height.unwrap_or(0));
+        let size = match height {
+            Some(tall) if h > tall && h > 0 => fit((w as u64 * tall as u64 / h as u64) as u32, tall),
+            _ => fit(w, h),
+        };
+        self.quality = height.filter(|_| size != fit(w, h));
+        if size == self.size {
+            return Ok(());
+        }
+        let at = self.position();
+        self.size = size;
+        self.restart(at)
+    }
+
     /// The voice remover needs the sound made again, from where it is.
     pub fn set_karaoke(&mut self, on: bool) -> Result<(), PlaybackError> {
         if self.settings.karaoke == on {
@@ -578,6 +609,9 @@ impl Drop for Playback {
         self.run.end();
     }
 }
+
+/// The heights a film can be watched at below its own (`QUALITY_STEPS` of the web player).
+pub const QUALITY_STEPS: [u32; 6] = [2160, 1440, 1080, 720, 480, 360];
 
 /// The size of the pictures asked of FFmpeg: the file's own, at most `MAX_WIDTH` wide, both even (some
 /// scalers insist) — and never zero.
