@@ -91,6 +91,7 @@ pub struct Shell {
     pub(crate) discord: crate::discord::DiscordState,
     pub(crate) news_rounds: crate::new_episodes::NewEpisodes,
     pub update: crate::updater_ui::Updates,
+    pub palette: crate::palette::Palette,
     /// Google Drive for the saves of results; `None` where nothing can be kept.
     pub drive: Option<crate::drive_hub::Drive>,
     pub drive_saves: crate::drive_hub::Saves,
@@ -129,6 +130,8 @@ impl Shell {
         let download = DownloadState::new(cx, colors);
         let devices = DevicesState::new(cx, colors);
         let convert = ConvertState::new(cx, colors);
+        let palette = crate::palette::Palette::new(cx, colors);
+        crate::palette::subscribe(&palette.field, cx);
         cx.subscribe(&convert.name, |shell, _, event: &FieldEvent, cx| match event {
             FieldEvent::Changed => cx.notify(),
             FieldEvent::Submitted => shell.convert_save_own(cx),
@@ -188,6 +191,7 @@ impl Shell {
             discord: crate::discord::DiscordState::default(),
             news_rounds: crate::new_episodes::NewEpisodes::default(),
             update: crate::updater_ui::Updates::default(),
+            palette,
             drive: crate::drive_hub::Drive::production(),
             drive_saves: crate::drive_hub::Saves::default(),
             drive_signing: false,
@@ -1019,7 +1023,7 @@ impl Render for Shell {
             motion::BASE,
         ).into_any_element() };
 
-        let overlay = if self.licenses_open { self.licenses_overlay(ui, cx) } else if self.whats_new_open { self.whats_new_overlay(ui, cx) } else if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)).or_else(|| self.history_overlay(ui, cx)).or_else(|| self.dice_overlay(ui, cx)) } else { None };
+        let overlay = if self.palette.open || self.palette.help { self.palette_overlay(ui, cx) } else if self.licenses_open { self.licenses_overlay(ui, cx) } else if self.whats_new_open { self.whats_new_overlay(ui, cx) } else if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)).or_else(|| self.history_overlay(ui, cx)).or_else(|| self.dice_overlay(ui, cx)) } else { None };
         // A film that goes on behind another tool says so, and can be stopped from here.
         let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
         let floating = self.floating_cards(ui, cx);
@@ -1065,6 +1069,17 @@ impl Render for Shell {
                             shell.player.jump_mark(forward);
                             cx.notify();
                         });
+                        app.stop_propagation();
+                        return;
+                    }
+                    // Ctrl/⌘ + K: the command palette; „?“: the overview of keys (when no field took the key).
+                    if (m.control || m.platform) && !m.alt && event.keystroke.key == "k" {
+                        me.update(app, |shell, cx| shell.open_palette(cx));
+                        app.stop_propagation();
+                        return;
+                    }
+                    if (event.keystroke.key == "?" || (m.shift && event.keystroke.key == "/")) && !window.context_stack().iter().any(|c| c.contains("SondraTextField")) {
+                        me.update(app, |shell, cx| shell.toggle_help(cx));
                         app.stop_propagation();
                         return;
                     }

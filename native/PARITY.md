@@ -21,7 +21,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | R05 | Hell und dunkel, Farben und Radien nach `DESIGN.md`, Kontrast nach APCA | `ThemeToggle` | 3 | Kontrastmessung | offen |
 | R06 | Schriften Public Sans, Courier Prime, Cormorant | `index.css` | 3 | Bildschirmfotos | offen |
 | R07 | Bewegung: Reiterstrich, Werkzeug von der Seite, gestaffelte Listen, Menüs, Dialoge, ruhige Bewegung | `DESIGN.md` „Motion“ | 3 | Szenario „bewegung“ | offen |
-| R08 | Tastenkürzel, Übersicht mit „?“, Befehlspalette | `ShortcutHelp`, `CommandPalette` | 3 | Klicktest | offen |
+| R08 | Tastenkürzel, Übersicht mit „?“, Befehlspalette | `ShortcutHelp`, `CommandPalette` | 3 | Klicktest | **nativ ✔** — Strg/⌘ + K: Befehlspalette mit der Suche der Startseite (Enter nimmt den ersten Treffer, Klick jeden), „?“: Übersicht der Tasten dieses Programms nach Orten (nicht in einem Feld); `palette.rs`, getestet mit den echten Tasten |
 | R09 | Dateien ablegen und auswählen, Sitzung (Dateien, Umbenennen, Reihenfolge) | `FileDrop`, `useIngest` | 3 | Klicktest | offen |
 | R10 | Sitzung bleibt auf dem Gerät, „Letzte Sitzung wiederherstellen“ | `sessionStore`, `RestoreOffer` | 3 | Klicktest | offen |
 | R11 | Adresse je Werkzeug (`#umwandeln` …) als Startparameter | `usePanelRoute` | 3 | Test | offen |

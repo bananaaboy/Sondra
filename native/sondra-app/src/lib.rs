@@ -29,6 +29,7 @@ pub mod mic_page;
 pub mod nav;
 pub mod new_episodes;
 pub mod phone_page;
+pub mod palette;
 pub mod planner;
 pub mod harmony_page;
 pub mod images_page;
