@@ -54,3 +54,42 @@ fn every_field_follows_the_theme_switch(cx: &mut TestAppContext) {
     let after = w.colors();
     assert!(after.iter().all(|c| *c == if light { DARK } else { LIGHT }), "every field changed with the switch");
 }
+
+fn open_with_memory(cx: &mut TestAppContext, path: std::path::PathBuf) -> Window<'_> {
+    let (shell, cx) = cx.add_window_view(move |window, cx| {
+        let mut shell = Shell::new(window, cx);
+        shell.open_theme_memory(sondra_app::store::FileStore::open(path), cx);
+        shell
+    });
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    cx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    cx.simulate_resize(size(px(1280.), px(900.)));
+    let mut w = Window { cx, shell, seen };
+    w.draw();
+    w
+}
+
+#[gpui::test]
+fn the_chosen_theme_is_kept_and_taken_again(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("Thema.json");
+    // No choice yet: the system's theme (the test window is light), and nothing written.
+    let mut w = open_with_memory(cx, file.clone());
+    assert!(w.colors().iter().all(|c| *c == LIGHT));
+    assert!(!file.exists());
+    w.press(Role::Button, "Dunkles Thema");
+    assert!(w.colors().iter().all(|c| *c == DARK));
+    drop(w);
+    // A new window with the same file starts dark; choosing light again is kept as well.
+    let mut w = open_with_memory(cx, file.clone());
+    assert!(w.colors().iter().all(|c| *c == DARK), "the choice was not taken");
+    w.press(Role::Button, "Helles Thema");
+    drop(w);
+    let mut w = open_with_memory(cx, file.clone());
+    assert!(w.colors().iter().all(|c| *c == LIGHT));
+}

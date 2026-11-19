@@ -112,7 +112,11 @@ pub struct Shell {
     pub(crate) licenses_open: bool,
     /// The version a line under the header says is new, until it is read or closed.
     pub(crate) news: Option<String>,
+    /// Where the chosen theme is kept; without a choice the system's own is followed.
+    theme_store: Option<crate::store::FileStore>,
 }
+
+const THEME_KEY: &str = "sondra:theme";
 
 impl Shell {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -213,6 +217,7 @@ impl Shell {
             drive_error: None,
             convert_watch: None,
             pending_focus: None,
+            theme_store: None,
             whats_new_open: false,
             licenses_open: false,
             news: None,
@@ -379,6 +384,27 @@ impl Shell {
         ]
     }
 
+    /// Takes the theme a person chose earlier (`hell` or `dunkel`, as on the website); no choice means the
+    /// system's, which `new` already took.
+    pub fn open_theme_memory(&mut self, store: crate::store::FileStore, cx: &mut Context<Self>) {
+        use sondra_merk::folder_memory::Store;
+        match store.get_item(THEME_KEY).as_deref() {
+            Some("dunkel") => self.set_mode(Mode::Dark, cx),
+            Some("hell") => self.set_mode(Mode::Light, cx),
+            _ => {}
+        }
+        self.theme_store = Some(store);
+    }
+
+    /// A choice made with the button: shown and remembered.
+    fn choose_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
+        self.set_mode(mode, cx);
+        if let Some(store) = self.theme_store.as_mut() {
+            use sondra_merk::folder_memory::Store;
+            store.set_item(THEME_KEY, if mode == Mode::Dark { "dunkel" } else { "hell" }.to_string());
+        }
+    }
+
     fn set_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
         self.mode = mode;
         let colors = mode.colors();
@@ -460,7 +486,7 @@ impl Shell {
                         })
                     })
                     .child(ui.button("thema", label).small().on_click(move |_, app| {
-                        me.update(app, |shell, cx| shell.set_mode(to_mode, cx));
+                        me.update(app, |shell, cx| shell.choose_mode(to_mode, cx));
                     })),
             )
             .into_any_element()
