@@ -5,6 +5,7 @@
 //!   (`npm run native:golden`), so the command is the same one.
 //! * [`presets`] — the templates of the converter (`src/lib/convertPresets.ts`).
 //! * [`ffmpeg`] — running FFmpeg: locating it, progress, cancelling, probing.
+//! * [`duck`] — voice over music with the music stepping back (`duck.ts`).
 //! * [`fft`] — FFT and short-time transform (`src/lib/fft.ts`), the front end of the spectral tools.
 //! * [`audio`] — the planar float audio the tools hold.
 //! * [`onsets`], [`tempo`] — spectral-flux onsets, tempo by autocorrelation, beat grids (`onsets.ts`, `tempo.ts`).
@@ -22,6 +23,7 @@
 pub mod audio;
 pub mod chroma;
 pub mod convert;
+pub mod duck;
 pub mod ffmpeg;
 pub mod fft;
 pub mod image_ops;

@@ -9,6 +9,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 
 import { buildConvertArgs, DEFAULT_CONVERT, OUTPUT_FORMATS, rateFor, findFormat, type ConvertSettings } from '../src/lib/convert'
 import { BUILT_IN_PRESETS, presetFor } from '../src/lib/convertPresets'
+import { mixWithDucking, DEFAULT_DUCK } from '../src/lib/duck'
 import { applyNormalization, DEFAULT_NORMALIZATION, measureLoudness } from '../src/lib/loudness'
 import { istft, magnitudeOf, stft } from '../src/lib/fft'
 import { detectAutoChop16, detectOnsets } from '../src/lib/onsets'
@@ -443,4 +444,53 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
     )}\n`,
   )
   console.log(`Vorspann: ${shared.frames / PRINT_FPS} s bei ${shared.a / PRINT_FPS} / ${shared.b / PRINT_FPS}, wiedergefunden bei ${found?.at}`)
+}
+
+
+/* -- Mischen: die Musik tritt zurück, wenn jemand spricht ----------------------------------------- */
+
+{
+  const sr = 8000
+  // Speech-like bursts with a faint floor between them, from an integer generator.
+  function voiceOf(seconds: number): Float32Array {
+    const out = new Float32Array(sr * seconds)
+    let state = 4242
+    for (let i = 0; i < out.length; i += 1) {
+      state = (Math.imul(state, 1103515245) + 12345) >>> 0
+      const noise = ((state >>> 8) / 2 ** 24) * 2 - 1
+      const t = i / sr
+      const talking = (t % 1.7) < 0.9 || (t > 4.5 && t < 5.2)
+      out[i] = 0.004 * noise + (talking ? 0.35 * Math.sin(2 * Math.PI * 180 * t) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 3 * t)) : 0)
+    }
+    return out
+  }
+  const music = (hz: number, seconds: number) => {
+    const out = new Float32Array(sr * seconds)
+    for (let i = 0; i < out.length; i += 1) out[i] = 0.5 * Math.sin((2 * Math.PI * hz * i) / sr) + 0.3 * Math.sin((2 * Math.PI * hz * 1.5 * i) / sr)
+    return out
+  }
+  const cases = [
+    { name: 'standard', settings: DEFAULT_DUCK, voice: { channels: [voiceOf(7)], sampleRate: sr }, music: { channels: [music(220, 3), music(224, 3)], sampleRate: sr } },
+    { name: 'empfindlich', settings: { ...DEFAULT_DUCK, sensitivity: 0.9, duckDb: 18, attackMs: 60, releaseMs: 900 }, voice: { channels: [voiceOf(7)], sampleRate: sr }, music: { channels: [music(330, 9)], sampleRate: sr } },
+    { name: 'ohne-anlauf', settings: { ...DEFAULT_DUCK, leadIn: 0, tail: 0, loopMusic: false, musicDb: 0 }, voice: { channels: [voiceOf(6), voiceOf(6)], sampleRate: sr }, music: { channels: [music(440, 4)], sampleRate: sr } },
+    { name: 'laut', settings: { ...DEFAULT_DUCK, musicDb: 6, duckDb: 0, tail: 1.5 }, voice: { channels: [voiceOf(5)], sampleRate: sr }, music: { channels: [music(110, 5), music(112, 5)], sampleRate: sr } },
+  ].map((c) => {
+    const r = mixWithDucking(c.voice, c.music, c.settings)
+    const every = (a: Float32Array | number[], n: number) => Array.from(a).filter((_, i) => i % n === 0)
+    return {
+      name: c.name,
+      settings: c.settings,
+      voice: { channels: c.voice.channels.length, frames: c.voice.channels[0].length },
+      music: { channels: c.music.channels.length, frames: c.music.channels[0].length },
+      report: r.report,
+      frames: r.audio.channels[0].length,
+      left: every(r.audio.channels[0], 211),
+      right: every(r.audio.channels[1], 211),
+      voiceDb: every(r.voiceDb, 7),
+      musicGainDb: every(r.musicGainDb, 7),
+      outFrames: r.musicGainDb.length,
+    }
+  })
+  writeFileSync(`${outDir}/duck.json`, `${JSON.stringify({ rate: sr, cases }, null, 1)}\n`)
+  console.log(`Mischen: ${cases.map((c) => `${c.name} ${c.report.speechSeconds.toFixed(2)} s Sprache`).join(', ')}`)
 }

@@ -10,6 +10,7 @@ pub mod merkliste;
 pub mod nav;
 pub mod harmony_page;
 pub mod images_page;
+pub mod mix_page;
 pub mod normalize_page;
 pub mod player_page;
 pub mod shell;

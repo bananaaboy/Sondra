@@ -113,7 +113,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | W04 | Untertitel: Whisper, TXT/SRT/VTT, als Spur oder eingebrannt | `SubtitlesPanel`, `transcribe.ts` | 2/7a | Test | offen |
 | W05 | Video-Editor: schneiden, drehen, Farbe, Blenden, Tempo, Ton; große Dateien | `VideoPanel`, `video.ts` | 2/7c | Szenario | offen |
 | W06 | Ton-Editor: Studio, acht Werkzeuge, Filter, Rauschen, Hall, Tonhöhe, Tempo, Blenden | `AudioEditorPanel`, `effects.ts` | 2/7b | Test, Hörprobe | offen |
-| W07 | Mischen: Stimme und Musik, Ducking | `MixPanel`, `duck.ts` | 2/7b | Test | offen |
+| W07 | Mischen: Stimme und Musik, Ducking | `MixPanel`, `duck.ts` | 2/7b | Test | **nativ ✔** — `sondra-media::duck` Zahl für Zahl gegen `duck.ts` (vier Fälle: Schwelle, Sprache, Verstärkung je 10 ms, Abtastwerte, Spitze und Abzug), Seite „Stimme und Musik mischen“ (Einstellungen als Stufen, neu gemischt bei jeder Änderung, Pegel von Stimme und Musik, WAV 24 Bit, Einzelspuren in einen Ordner, unter ein Video legen); Hörprobe in der Mischseite offen (Abspielen im Player nach dem Speichern) |
 | W08 | Spuren trennen (Gesang, Schlagzeug, Bass) | `StemsPanel`, `separation.ts` | 2/7b | Test | offen |
 | W09 | Tonart, Tempo, Akkorde, Melodie als MIDI | `HarmonyPanel`, `key.ts`, `midi.ts` | 2/7b | `verify:harmony`, `:tempo` | **nativ ✔** — Seite „Tonart und Akkorde“ (Datei wählen, Akkordfenster, Melodie verfolgen mit Klarheit, kürzester Note und Raster; Tonart, Camelot, Tempo, Akkorde, Melodie; MIDI für Akkorde, Melodie oder beides neben die Quelle); Test mit echtem FFmpeg und gesynthetem Akkord und Tonleiter |
 | W10 | Zerschneiden: sechs Verfahren, Pads, Pattern, Klavierrolle | `SamplerPanel`, `chop.ts`, `pattern.ts` | 7c | Test, Hörprobe | offen |

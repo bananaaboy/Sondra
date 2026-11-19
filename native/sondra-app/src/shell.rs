@@ -21,6 +21,7 @@ use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
 use crate::harmony_page::HarmonyState;
 use crate::images_page::ImagesState;
+use crate::mix_page::MixState;
 use crate::normalize_page::NormalizeState;
 use crate::player_page::PlayerState;
 use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
@@ -68,6 +69,7 @@ pub struct Shell {
     pub(crate) normalize: NormalizeState,
     pub(crate) harmony: HarmonyState,
     pub(crate) images: ImagesState,
+    pub(crate) mix: MixState,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
@@ -125,6 +127,7 @@ impl Shell {
             normalize: NormalizeState::new(),
             harmony: HarmonyState::new(),
             images: ImagesState::new(),
+            mix: MixState::new(),
             convert_watch: None,
             pending_focus: None,
         }
@@ -816,6 +819,8 @@ impl Render for Shell {
             self.download_page(ui, cx)
         } else if self.panel == Panel::Converter {
             self.convert_page(ui, cx)
+        } else if self.panel == Panel::Mix {
+            self.mix_page(ui, cx)
         } else if self.panel == Panel::Images {
             self.images_page(ui, cx)
         } else if self.panel == Panel::Harmony {
