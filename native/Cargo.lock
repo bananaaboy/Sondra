@@ -6340,6 +6340,7 @@ dependencies = [
  "sha2 0.10.9",
  "smallvec",
  "sondra-a11y",
+ "sondra-anytype",
  "sondra-audio",
  "sondra-devices",
  "sondra-discord",

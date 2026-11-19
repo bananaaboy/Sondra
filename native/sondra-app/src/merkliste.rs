@@ -612,6 +612,14 @@ impl Shell {
             }
             {
                 let me = me.clone();
+                let on = self.anytype.link.as_ref().is_some_and(|l| l.connected());
+                items.push(ui.menu_item("anytype-oeffnen", "Anytype …", on).on_click(move |_, app| me.update(app, |shell, cx| {
+                    shell.merk.more = false;
+                    shell.anytype_open(cx);
+                })).into_any_element());
+            }
+            {
+                let me = me.clone();
                 items.push(ui.menu_item("teilen-oeffnen", "Teilen …", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {
                     m.share.open = true;
                     m.share.said = None;

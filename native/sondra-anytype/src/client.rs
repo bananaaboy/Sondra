@@ -550,12 +550,28 @@ impl Anytype {
         })
     }
 
+    /// Forgets the space and the page, keeps the key — to choose them again.
+    pub fn forget_space(&self) {
+        self.change(|c| {
+            c.space_id = None;
+            c.space_name = None;
+            c.object_id = None;
+            c.object_name = None;
+        });
+    }
+
     /// Disconnects: the key and the link's file are gone.
     pub fn forget(&self) {
         self.drop_key();
         self.inner.lock().unwrap().config = Config::default();
         let _ = std::fs::remove_file(&self.config_file);
         self.say("Anytype: getrennt");
+    }
+
+    /// Paired and a space chosen — nothing is asked of Anytype to know it. Rounds only run while this holds.
+    pub fn connected(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        inner.key.is_some() && inner.config.space_id.is_some()
     }
 
     /// The link's settings, for the page.

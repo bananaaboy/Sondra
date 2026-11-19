@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod anilist;
+pub mod anytype_window;
 pub mod audio_page;
 pub mod clip_player;
 pub mod convert_page;

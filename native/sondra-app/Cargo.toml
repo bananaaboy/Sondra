@@ -15,6 +15,7 @@ gpui = "=0.2.2"
 sondra-a11y = { path = "../sondra-a11y" }
 sondra-ui = { path = "../sondra-ui" }
 sondra-merk = { path = "../sondra-merk" }
+sondra-anytype = { path = "../sondra-anytype" }
 sondra-media = { path = "../sondra-media" }
 sondra-player = { path = "../sondra-player" }
 sondra-playback = { path = "../sondra-playback" }

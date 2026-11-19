@@ -507,7 +507,7 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Einzel-Instanz, Gong und Wachhalten beim Laden. **Noch nicht:** Tray, Benachrichtigungen
   des Systems (die Karte „Neue Folge“ im Fenster gibt es: `new_episodes.rs`), die Zeitleiste des
   Video-Editors (inzwischen da: Zeitleiste mit Ziehen, Ausschnitt ziehen), die Klavierrolle und das Ziehen der
-  Schnitte, Anytype, Store, Updates, Datenübernahme; Bild-in-Bild; ein eigenes Fenster für das Handy. **Setup**
+  Schnitte, Store, Datenübernahme; Bild-in-Bild; ein eigenes Fenster für das Handy. **Setup**
   (`native/installer/sondra.nsi`, NSIS, für alle Benutzer, FFmpeg daneben, Apps & Features, `.sondra-liste`, Öffnen mit)
   installiert, startet mit einem Film und deinstalliert sich in der CI (Lauf 76 grün, 19.11.2026), mit Symbol in der .exe.
   **Player nativ:** Entzerrer (fünf Bänder, Voreinstellungen), Karaoke, Qualität, Visualizer (Balken, Welle, Ring) und
@@ -1040,6 +1040,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   klein im Fenster, mit „Erneut“ daneben. Die Liste gehört allein
   `lib/merkliste.ts`; das Herunterladen hält keine eigene Kopie im Projekt.
   `npm run verify:anytype` spielt das gegen eine nachgebaute Anytype-API durch.
+  **Nativ** (19.11.2026, `native/sondra-anytype`, `anytype_window.rs`): dieselben Dialekte, Fehlercodes und dieselbe
+  Seite (die Gegenprobe `tests/golden/page.json` kommt aus `merklisteToMarkdown` der Website), Schlüssel wie Drives
+  Token (DPAPI), „Mehr → Anytype …“; Abgleich nach jeder Änderung (nach einem Takt Ruhe) und alle drei Minuten, ein
+  fehlgeschlagener erst eine Minute später wieder; was während einer Runde hier geändert wird, wird zusammengeführt,
+  nicht ersetzt. Nie gegen ein echtes Anytype gelaufen.
 - **Google Drive** (22.10.2026, `lib/googleDrive.ts`, `lib/driveClient.ts`,
   `GoogleDrive.tsx`): auf Wunsch alles geordnet in einen Ordner „Sondra“ im
   eigenen Drive — `Projekte`, `Dateien/{Ton,Video,Bilder,Andere}`,
