@@ -540,3 +540,42 @@ fn suchen_asks_anilist_only_when_pressed_and_adds_the_series_with_its_length(cx:
     w.press(Role::Button, "Hinzufügen");
     assert!(said(&w.tree(), Role::ListItem, "Frieren").contains("0/28. noch 28"), "{}", said(&w.tree(), Role::ListItem, "Frieren"));
 }
+
+#[gpui::test]
+fn the_list_is_shared_as_a_link_that_opens_again_as_text_as_a_qr_code_and_as_a_file(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("teilen");
+    std::env::set_var("SONDRA_DOWNLOADS", &out);
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Teilen …");
+    assert!(w.tree().find(Role::Dialog, "Merkliste teilen").is_some());
+    // Am Schauen is chosen at the start: Frieren only.
+    assert_eq!(w.tree().find(Role::Button, "Am Schauen mitnehmen, 1 Serien").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Später mitnehmen, 1 Serien").unwrap().toggled, Some(false));
+    let (links, text) = w.cx.read_entity(&w.shell, |s, _| s.share_outputs());
+    assert_eq!(links.len(), 1);
+    assert!(links[0].starts_with("https://sondra.lizge.ch/#g="));
+    assert!(text.contains("Frieren"), "{text}");
+    assert!(!text.contains("Mob Psycho"), "what is not chosen does not go");
+    let back = sondra_merk::share::decode_share(sondra_merk::share::shared_from_hash(&links[0][links[0].find('#').unwrap()..]).unwrap()).expect("the link opens again");
+    assert_eq!(back.items.len(), 1);
+    assert_eq!(back.items[0].title, "Frieren");
+    // Another stand joins.
+    w.press(Role::Button, "Später mitnehmen, 1 Serien");
+    let (links, _) = w.cx.read_entity(&w.shell, |s, _| s.share_outputs());
+    assert_eq!(sondra_merk::share::decode_share(sondra_merk::share::shared_from_hash(&links[0][links[0].find('#').unwrap()..]).unwrap()).unwrap().items.len(), 2);
+    // The QR code stands for the link, with its three finder squares.
+    w.press(Role::Button, "QR-Code zeigen");
+    let rows = sondra_app::share_window::qr_modules(&links[0]).unwrap();
+    assert!(rows.len() >= 21 && rows.len() == rows[0].len());
+    assert!((0..7).all(|i| rows[0][i] && rows[i][0] && rows[6][i] && rows[i][6]), "the corner square");
+    // As a file that reads back.
+    w.press(Role::Button, "Als Datei speichern");
+    let files: Vec<_> = std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().path()).collect();
+    assert_eq!(files.len(), 1);
+    assert!(files[0].to_string_lossy().ends_with(".sondra-liste"));
+    assert_eq!(sondra_merk::share::read_share_file(&std::fs::read(&files[0]).unwrap()).unwrap().items.len(), 2);
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Dialog, "Merkliste teilen").is_none());
+}

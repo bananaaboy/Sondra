@@ -19,6 +19,7 @@ pub mod video_page;
 pub mod normalize_page;
 pub mod player_page;
 pub mod shell;
+pub mod share_window;
 pub mod stats_window;
 pub mod store;
 pub mod system;

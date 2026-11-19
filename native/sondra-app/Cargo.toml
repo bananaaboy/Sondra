@@ -24,6 +24,7 @@ sondra-discord = { path = "../sondra-discord" }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 ureq = { version = "3", features = ["platform-verifier"] }
 base64 = "0.22"
+qrcode = { version = "0.14", default-features = false }
 url = "2"
 smallvec = "1"
 serde = { workspace = true }

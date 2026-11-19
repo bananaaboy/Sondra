@@ -60,6 +60,7 @@ pub struct MerkState {
     pub recap_year: Option<i32>,
     /// What the last export or reading-in said, in a sentence.
     pub note: Option<String>,
+    pub share: crate::share_window::ShareState,
     /// „Wie weit sind Sie?“ when adding: the episode to watch next (1: not begun).
     pub add_next: i64,
     /// What „Suchen“ found for the name typed.
@@ -108,6 +109,7 @@ impl MerkState {
             stats_open: false,
             recap_year: None,
             note: None,
+            share: Default::default(),
             add_next: 1,
             add_found: None,
             add_searching: false,
@@ -576,6 +578,14 @@ impl Shell {
                     let on = shell.discord.on;
                     shell.set_discord(!on);
                     cx.notify();
+                })).into_any_element());
+            }
+            {
+                let me = me.clone();
+                items.push(ui.menu_item("teilen-oeffnen", "Teilen …", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {
+                    m.share.open = true;
+                    m.share.said = None;
+                    m.more = false;
                 })).into_any_element());
             }
             items.push(ui.hint("Auswertung"));
