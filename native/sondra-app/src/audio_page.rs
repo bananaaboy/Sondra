@@ -26,11 +26,12 @@ pub enum Tool {
     Tone,
     Clean,
     Room,
+    Pitch,
     Output,
     History,
 }
 
-const TOOLS: [(Tool, &str); 7] = [(Tool::Cut, "Schnitt"), (Tool::Level, "Pegel"), (Tool::Tone, "Klang"), (Tool::Clean, "Säubern"), (Tool::Room, "Raum"), (Tool::Output, "Ausgabe"), (Tool::History, "Verlauf")];
+const TOOLS: [(Tool, &str); 8] = [(Tool::Cut, "Schnitt"), (Tool::Level, "Pegel"), (Tool::Tone, "Klang"), (Tool::Clean, "Säubern"), (Tool::Room, "Raum"), (Tool::Pitch, "Tonhöhe und Tempo"), (Tool::Output, "Ausgabe"), (Tool::History, "Verlauf")];
 
 pub struct AudioState {
     pub path: Option<PathBuf>,
@@ -499,6 +500,15 @@ impl Shell {
                         op("echo-lang".into(), "Lang (350 ms)".into(), Op::Echo { delay_ms: 350.0, feedback: 0.5, mix: 0.5 }).into_any_element(),
                     ]))
                     .child(group("Hall", [0.8, 1.5, 3.0].iter().map(|s| op(format!("hall-{s}"), format!("{} s", format!("{s}").replace('.', ",")), Op::Reverb { seconds: *s, mix: 0.5 }).into_any_element()).collect()));
+            }
+            Tool::Pitch => {
+                panel = panel
+                    .child(ui.prose("Gilt für die Auswahl, ohne Auswahl für die ganze Datei. Die Länge bleibt bei der Tonhöhe, die Tonhöhe beim Tempo — gerechnet wird mit dem Phasenvocoder, wie auf der Website."))
+                    .child(group("Tonhöhe", [-12.0, -7.0, -5.0, -2.0, -1.0, 1.0, 2.0, 5.0, 7.0, 12.0].iter().map(|n: &f64| {
+                        let label = format!("{}{} Halbtöne", if *n > 0.0 { "+" } else { "−" }, n.abs());
+                        op(format!("tonhoehe-{n}"), label, Op::Pitch(*n)).into_any_element()
+                    }).collect()))
+                    .child(group("Tempo", [0.5, 0.75, 0.9, 1.1, 1.25, 1.5, 2.0].iter().map(|t: &f64| op(format!("tempo-{t}"), format!("{}×", format!("{t}").replace('.', ",")), Op::Tempo(*t)).into_any_element()).collect()));
             }
             Tool::Output => {
                 let save = |format_id: &'static str, label: &str| {

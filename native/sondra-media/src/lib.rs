@@ -47,6 +47,7 @@ pub mod presets;
 pub mod run;
 pub mod separation;
 pub mod tempo;
+pub mod timestretch;
 pub mod video_ops;
 
 pub use ffmpeg::{Cancel, Ffmpeg, MediaError, Probe, Progress, Stream};

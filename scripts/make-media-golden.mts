@@ -21,6 +21,7 @@ import { decodePrint, encodePrint, fingerprint, locate, longestShared, PRINT_FPS
 import { estimateChords, estimateKey } from '../src/lib/key'
 import { chordsToMidiNotes, writeMidi } from '../src/lib/midi'
 import { extractAddresses } from '../src/lib/download'
+import { pitchShift, resampleByRatio, stretchAudio, timeStretch } from '../src/lib/timestretch'
 import {
   compressAudio,
   copyRange,
@@ -891,4 +892,38 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   ]
   writeFileSync(`${dir}/addresses.json`, `${JSON.stringify(texts.map((text) => ({ text, found: extractAddresses(text) })), null, 1)}\n`)
   console.log('Adressen: ' + texts.length + ' Texte')
+}
+
+{
+  const dir = 'native/sondra-media/tests/golden'
+  const rate = 8000
+  const n = 6000
+  const tone = new Float32Array(n)
+  const mixed = new Float32Array(n)
+  let seed = 7
+  for (let i = 0; i < n; i += 1) {
+    seed = (seed * 1664525 + 1013904223) >>> 0
+    const noise = (seed / 0xffffffff - 0.5) * 0.1
+    tone[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / rate)
+    mixed[i] = 0.3 * Math.sin((2 * Math.PI * 330 * i) / rate) + 0.2 * Math.sin((2 * Math.PI * 1250 * i) / rate) * (i % 2000 < 1000 ? 1 : 0.3) + noise
+  }
+  const every = (a: Float32Array, k: number) => Array.from(a).filter((_, i) => i % k === 0)
+  const stretches = [0.7, 1.5, 2].map((factor) => ({ factor, stretched: (() => { const o = timeStretch(mixed, factor, 1024, 256); return { length: o.length, sample: every(o, 53) } })() }))
+  const audio = { channels: [tone, mixed], sampleRate: rate }
+  const shifts = [
+    { semitones: 3, preserve: true },
+    { semitones: -5, preserve: true },
+    { semitones: 7, preserve: false },
+    { semitones: -12, preserve: false },
+  ].map((o) => {
+    const r = pitchShift(audio, { semitones: o.semitones, preserveDuration: o.preserve, fftSize: 1024 })
+    return { ...o, length: r.channels[0].length, left: every(r.channels[0], 47), right: every(r.channels[1], 47) }
+  })
+  const half = stretchAudio(audio, 2, 1024)
+  const resampled = [0.5, 1.25, 3].map((ratio) => { const o = resampleByRatio(mixed, ratio); return { ratio, length: o.length, sample: every(o, 31) } })
+  writeFileSync(
+    `${dir}/timestretch.json`,
+    `${JSON.stringify({ rate, n, stretches, shifts, half: { length: half.channels[0].length, left: every(half.channels[0], 61) }, resampled }, null, 1)}\n`,
+  )
+  console.log('Tonhöhe und Tempo: ' + stretches.length + ' Dehnungen, ' + shifts.length + ' Verschiebungen')
 }

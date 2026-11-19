@@ -40,6 +40,10 @@ pub enum Op {
     ToStereo,
     Swap,
     Resample(u32),
+    /// Moves the pitch by this many semitones and keeps the length (a phase vocoder).
+    Pitch(f64),
+    /// Plays this much faster (2 = twice as fast, half as long) and keeps the pitch.
+    Tempo(f64),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -166,6 +170,26 @@ impl Editor {
                 (format!("Rauschen um bis zu {} dB gesenkt · {place}", db(max_cut_db)), effects::process_range(&self.audio, from, to, |p| effects::remove_noise(&p, &profile, max_cut_db)))
             }
             Op::Echo { delay_ms, feedback, mix } => (format!("Echo {delay_ms:.0} ms · {place}"), effects::process_range(&self.audio, from, to, |p| effects::echo(&p, delay_ms, feedback, mix, true))),
+            Op::Pitch(semitones) => {
+                if semitones.abs() < 1e-6 {
+                    return Err("Eine Verschiebung um null Halbtöne ändert nichts.".into());
+                }
+                let sign = if semitones > 0.0 { "+" } else { "−" };
+                (format!("Tonhöhe {sign}{} Halbtöne · {place}", format!("{}", semitones.abs()).replace('.', ",")), effects::process_range(&self.audio, from, to, |p| crate::timestretch::pitch_shift(&p, semitones, true, 2048)))
+            }
+            Op::Tempo(tempo) => {
+                if (tempo - 1.0).abs() < 1e-6 || tempo <= 0.0 {
+                    return Err("Das Tempo bleibt, wie es ist.".into());
+                }
+                let label = format!("Tempo {}× · {place}", format!("{tempo:.2}").replace('.', ","));
+                if whole {
+                    (label, crate::timestretch::stretch_audio(&self.audio, 1.0 / tempo, 2048))
+                } else {
+                    // The stretch changes the length, so the stretched part takes the place of the part.
+                    let part = crate::timestretch::stretch_audio(&effects::copy_range(&self.audio, from, to), 1.0 / tempo, 2048);
+                    (label, effects::insert_at(&edit::cut_range(&self.audio, from, to), from, &part))
+                }
+            }
             Op::Reverb { seconds: s, mix } => (format!("Hall {} s · {place}", seconds(s)), effects::process_range(&self.audio, from, to, |p| effects::reverb(&p, s, mix, true))),
             Op::Cut => {
                 if whole {

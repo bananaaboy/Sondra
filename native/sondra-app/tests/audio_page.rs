@@ -164,3 +164,36 @@ fn the_refusals_come_as_words_and_the_take_is_played_and_written(cx: &mut TestAp
     assert!(made[0].exists() && made[0].file_name().unwrap().to_string_lossy().contains("(bearbeitet)"));
     assert!(!tmp.path().join("Probe.wav").exists(), "the original name is not written over");
 }
+
+fn crossings(samples: &[f32]) -> usize {
+    samples.windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count()
+}
+
+#[gpui::test]
+fn the_pitch_moves_without_the_length_and_the_tempo_changes_the_length_without_the_pitch(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Probe.wav"));
+    let before = w.shell.read_with(w.cx, |s, _| s.audio_take().unwrap().channels[0].clone());
+    w.press(Role::Button, "Werkzeug Tonhöhe und Tempo");
+    w.press(Role::Button, "+12 Halbtöne");
+    w.settle();
+    let up = w.shell.read_with(w.cx, |s, _| s.audio_take().unwrap().channels[0].clone());
+    assert_eq!(up.len(), before.len(), "the length stays");
+    let (a, b) = (crossings(&before[2000..30000]), crossings(&up[2000..30000]));
+    assert!((b as f64 / a as f64 - 2.0).abs() < 0.15, "an octave higher: {a} → {b} zero crossings");
+    assert!(w.said("Tonhöhe +12 Halbtöne"), "{:?}", w.labels());
+
+    // And back, to see that it is a step of the history like any other.
+    w.press(Role::Button, "Werkzeug Verlauf");
+    w.press(Role::Button, "Rückgängig");
+    assert_eq!(w.frames(), 32000);
+
+    w.press(Role::Button, "Werkzeug Tonhöhe und Tempo");
+    w.press(Role::Button, "2×");
+    w.settle();
+    assert!((w.frames() as f64 - 16000.0).abs() < 600.0, "twice as fast: {}", w.frames());
+    let fast = w.shell.read_with(w.cx, |s, _| s.audio_take().unwrap().channels[0].clone());
+    // The same pitch in half the time: as many crossings per second as before.
+    let per_second = |s: &[f32], from: usize, to: usize| crossings(&s[from..to]) as f64 / ((to - from) as f64 / 8000.0);
+    assert!((per_second(&fast, 2000, 14000) / per_second(&before, 2000, 30000) - 1.0).abs() < 0.1);
+}
