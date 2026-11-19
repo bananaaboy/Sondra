@@ -263,7 +263,11 @@ bricht ab, sobald das Dateiformat sich ändert, ohne dass der Kern mitzieht.
   Die Version wird festgeschrieben; ein Wechsel ist eine eigene Arbeit.
 - **Bedienungshilfen** könnten ein echter Verlust werden. Das entscheidet die
   Probe in Welle 0b, und Sie entscheiden, wenn sie schlecht ausfällt.
-- **Video im Fenster** ist die größte technische Frage.
+- **Video im Fenster** war die größte technische Frage und ist beantwortet, soweit eine CI-Maschine ohne
+  Grafikkarte es sagt (19.11.2026, `videoprobe`): 720p30 in Echtzeit kam mit rund 30 Bildern je Sekunde an
+  (123 gezeigt in den vier Sekunden nach dem Start; die Lücke von 4 s ist der Start), 1080p so schnell es
+  geht mit 46 Bildern je Sekunde im Mittel — das Bild herzustellen kostet unter 0,002 ms, die Zeit geht in
+  der Zeichnung auf. Auf einem Rechner mit Grafikkarte ist das nur besser. Nicht von einem Menschen gesehen.
 - **Nur Windows.** Linux und macOS sind nicht Teil des Plans.
 - **Nichts davon ist auf echter Hardware gelaufen.** Ich arbeite auf einem Linux-
   Rechner ohne Bildschirm; Fenster zeichnet erst Windows in der CI. Jedes Tor, das

@@ -48,10 +48,27 @@ pub struct PlayerState {
     pub marks_open: bool,
     pub sleep: Option<Sleep>,
     pub sleep_open: bool,
+    /// The window with the sound tracks, subtitles and their looks.
+    pub tracks_open: bool,
+    track: usize,
+    /// The subtitles of a file beside the film, and which source is shown.
+    external_cues: Vec<Cue>,
+    pub subtitle: Subtitle,
+    pub subtitle_error: Option<String>,
     /// The film ended on „Ende des Titels“: it stays ended, the next one does not begin.
     stay_ended: bool,
     pub marks_first: FocusHandle,
     pub marks_last: FocusHandle,
+}
+
+/// Where the words on the stage come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Subtitle {
+    Off,
+    /// The file beside the film.
+    File,
+    /// A subtitle stream inside the film, by its number.
+    Inside(u32),
 }
 
 /// The sleep timer: a moment on the clock, or the end of the title that plays.
@@ -86,6 +103,11 @@ impl PlayerState {
             marks_open: false,
             sleep: None,
             sleep_open: false,
+            tracks_open: false,
+            track: 0,
+            external_cues: Vec::new(),
+            subtitle: Subtitle::Off,
+            subtitle_error: None,
             stay_ended: false,
             marks_first: cx.focus_handle().tab_stop(true),
             marks_last: cx.focus_handle().tab_stop(true),
@@ -137,6 +159,11 @@ impl PlayerState {
         self.index = index.min(self.queue.len().saturating_sub(1));
         self.error = None;
         self.cues.clear();
+        self.external_cues.clear();
+        self.subtitle = Subtitle::Off;
+        self.subtitle_error = None;
+        self.tracks_open = false;
+        self.track = 0;
         self.marks_open = false;
         self.sleep_open = false;
         self.stay_ended = false;
@@ -239,6 +266,52 @@ impl PlayerState {
         }
     }
 
+    /// Chooses where the subtitles come from; one inside the film is read out of it (FFmpeg hands it over as
+    /// SubRip, a few kilobytes) and shown.
+    pub fn choose_subtitle(&mut self, choice: Subtitle) {
+        self.subtitle_error = None;
+        match choice {
+            Subtitle::Off => self.cues.clear(),
+            Subtitle::File => self.cues = self.external_cues.clone(),
+            Subtitle::Inside(index) => {
+                let (Some(path), Some(ffmpeg)) = (self.current_path().cloned(), Ffmpeg::locate()) else { return };
+                let out = std::process::Command::new(ffmpeg.program())
+                    .args(["-v", "error", "-nostdin", "-i"])
+                    .arg(&path)
+                    .args(["-map", &format!("0:{index}"), "-f", "srt", "-"])
+                    .stdin(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .output();
+                match out {
+                    Ok(out) if out.status.success() => {
+                        self.cues = parse_cues(&String::from_utf8_lossy(&out.stdout));
+                        if self.cues.is_empty() {
+                            self.subtitle_error = Some("In diesem Untertitel steht kein Text, den Sondra anzeigen kann (Bild-Untertitel zeigt Sondra noch nicht).".into());
+                        }
+                    }
+                    _ => {
+                        self.cues.clear();
+                        self.subtitle_error = Some("Der Untertitel liess sich nicht aus dem Film lesen.".into());
+                    }
+                }
+            }
+        }
+        self.subtitle = choice;
+    }
+
+    /// Plays another sound track from where the film is now.
+    pub fn choose_track(&mut self, track: usize) {
+        if let Some(p) = self.playback.as_mut() {
+            let _ = p.set_audio_track(track);
+            self.track = track;
+        }
+    }
+
+    /// The sound track that plays, by its place in the list.
+    pub fn settings_track(&self) -> usize {
+        self.track
+    }
+
     /// Starts, changes or ends the sleep timer.
     pub fn set_sleep(&mut self, sleep: Option<Sleep>) {
         self.sleep = sleep;
@@ -293,7 +366,9 @@ impl PlayerState {
         found.sort();
         if let Some(path) = found.first() {
             if let Ok(bytes) = std::fs::read(path) {
-                self.cues = parse_cues(&String::from_utf8_lossy(&bytes));
+                self.external_cues = parse_cues(&String::from_utf8_lossy(&bytes));
+                self.cues = self.external_cues.clone();
+                self.subtitle = Subtitle::File;
             }
         }
     }
@@ -664,7 +739,11 @@ impl Shell {
             };
             ui.button("schlaf-timer", label).small().on_click(move |_, app| Self::player_do(&me, app, |p| p.sleep_open = true))
         };
-        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(marks_button).child(sleep_button).child(mute).child(volume);
+        let tracks_button = {
+            let me = me.clone();
+            ui.button("ton-untertitel", "Ton und Untertitel").small().on_click(move |_, app| Self::player_do(&me, app, |p| p.tracks_open = true))
+        };
+        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(marks_button).child(sleep_button).child(mute).child(volume);
         page = page
             .child(div().flex().items_baseline().justify_between().gap(px(12.)).child(ui.heading("Abspielen")).child({
                 let me = me.clone();
@@ -708,6 +787,69 @@ impl Shell {
                     .child(options)
                     .action(ui.button("schlaf-schliessen", "Schliessen").primary().on_click(move |_, app| Self::player_do(&close, app, |p| p.sleep_open = false)))
                     .on_close(move |_, app| Self::player_do(&me, app, |p| p.sleep_open = false))
+                    .into_any_element(),
+            );
+        }
+        if p.tracks_open {
+            let me = cx.entity();
+            let playback = p.playback.as_ref()?;
+            let mut body = div().flex().flex_col().gap(px(16.));
+            // Sound tracks: only worth a choice when there is more than one.
+            let tracks = playback.audio_tracks();
+            if tracks.len() > 1 {
+                let mut chips = div().flex().flex_wrap().gap(px(6.));
+                for (n, track) in tracks.iter().enumerate() {
+                    let me = me.clone();
+                    let label = track.title.clone().or_else(|| track.language.clone()).unwrap_or_else(|| format!("Spur {}", n + 1));
+                    chips = chips.child(ui.chip(format!("spur-{n}"), label.clone(), p.settings_track() == n).accessible_name(format!("Tonspur {label}")).on_click(move |_, app| Self::player_do(&me, app, move |p| p.choose_track(n))));
+                }
+                body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Tonspur")).child(chips));
+            }
+            // Subtitles: off, the file beside the film, the ones inside it.
+            let mut chips = div().flex().flex_wrap().gap(px(6.));
+            {
+                let me = me.clone();
+                chips = chips.child(ui.chip("untertitel-aus", "Aus", p.subtitle == Subtitle::Off).accessible_name("Untertitel aus").on_click(move |_, app| Self::player_do(&me, app, |p| p.choose_subtitle(Subtitle::Off))));
+            }
+            if !p.external_cues.is_empty() {
+                let me = me.clone();
+                chips = chips.child(ui.chip("untertitel-datei", "Datei neben dem Film", p.subtitle == Subtitle::File).on_click(move |_, app| Self::player_do(&me, app, |p| p.choose_subtitle(Subtitle::File))));
+            }
+            for stream in playback.probe().streams.iter().filter(|s| s.kind == "subtitle") {
+                let me = me.clone();
+                let index = stream.index;
+                let label = stream.title.clone().or_else(|| stream.language.clone()).unwrap_or_else(|| format!("Eingebaut {index}"));
+                chips = chips.child(ui.chip(format!("untertitel-{index}"), label.clone(), p.subtitle == Subtitle::Inside(index)).accessible_name(format!("Untertitel {label}")).on_click(move |_, app| Self::player_do(&me, app, move |p| p.choose_subtitle(Subtitle::Inside(index)))));
+            }
+            body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Untertitel")).child(chips));
+            if let Some(error) = &p.subtitle_error {
+                body = body.child(ui.notice(NoticeKind::Info, error.clone()));
+            }
+            // Their looks.
+            let mut looks = div().flex().flex_wrap().items_center().gap(px(6.));
+            for (size, label) in [(sondra_player::CaptionSize::Klein, "Klein"), (sondra_player::CaptionSize::Mittel, "Mittel"), (sondra_player::CaptionSize::Gross, "Gross")] {
+                let me = me.clone();
+                looks = looks.child(ui.chip(format!("schrift-{label}"), label, p.settings.caption_size == size).accessible_name(format!("Schriftgrösse {label}")).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                    p.settings.caption_size = size;
+                    p.keep_settings();
+                })));
+            }
+            {
+                let me = me.clone();
+                let on = p.settings.caption_background;
+                looks = looks.child(ui.chip("untertitel-grund", "Dunkler Grund", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                    p.settings.caption_background = !on;
+                    p.keep_settings();
+                })));
+            }
+            body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Schrift")).child(looks));
+            let close = me.clone();
+            return Some(
+                ui.dialog("ton-untertitel-fenster", "Ton und Untertitel")
+                    .width(560.)
+                    .child(body)
+                    .action(ui.button("ton-schliessen", "Schliessen").primary().on_click(move |_, app| Self::player_do(&close, app, |p| p.tracks_open = false)))
+                    .on_close(move |_, app| Self::player_do(&me, app, |p| p.tracks_open = false))
                     .into_any_element(),
             );
         }

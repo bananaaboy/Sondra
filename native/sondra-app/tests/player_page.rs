@@ -421,3 +421,49 @@ fn the_sleep_timer_fades_the_sound_and_stops_the_film_and_the_end_of_the_title_d
     assert!(w.tree().find(Role::ListItem, "eins.mp4").unwrap().description.as_ref().is_some_and(|d| d.contains("läuft")), "still the first, not gone on");
     assert!(w.tree().find(Role::Button, "Schlaf-Timer").is_some(), "the timer is spent");
 }
+
+#[gpui::test]
+fn sound_tracks_and_subtitles_are_chosen_in_one_window_and_their_looks_are_kept(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    // A film with two sound tracks and a subtitle inside it.
+    let srt = tmp.path().join("innen.srt");
+    std::fs::write(&srt, "1\n00:00:00,300 --> 00:00:01,500\nEingebaut.\n\n2\n00:00:01,600 --> 00:00:02,500\nZweite Zeile.\n").unwrap();
+    let path = tmp.path().join("zwei-spuren.mp4");
+    let ff = Ffmpeg::locate().unwrap();
+    let out = Command::new(ff.program())
+        .args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=15", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000", "-i"])
+        .arg(&srt)
+        .args(["-map", "0:v", "-map", "1:a", "-map", "2:a", "-map", "3:s", "-t", "3", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-c:s", "mov_text"])
+        .args(["-metadata:s:a:0", "language=deu", "-metadata:s:a:1", "language=eng", "-metadata:s:s:0", "language=deu"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![path], cx));
+    w.watch(0.3);
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_cues()), 0, "nothing shown until chosen");
+
+    w.press(Role::Button, "Ton und Untertitel");
+    assert!(w.tree().find(Role::Dialog, "Ton und Untertitel").is_some());
+    assert!(w.tree().find(Role::Button, "Tonspur deu").is_some(), "both tracks are offered");
+    assert!(w.tree().find(Role::Button, "Tonspur eng").is_some());
+    assert_eq!(w.tree().find(Role::Button, "Untertitel aus").unwrap().toggled, Some(true));
+    // Another track plays on.
+    w.press(Role::Button, "Tonspur eng");
+    assert_eq!(w.tree().find(Role::Button, "Tonspur eng").unwrap().toggled, Some(true));
+    // The subtitle inside the film is read out of it.
+    w.press(Role::Button, "Untertitel deu");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_cues()), 2);
+    assert_eq!(w.tree().find(Role::Button, "Untertitel deu").unwrap().toggled, Some(true));
+    // Their looks are kept.
+    w.press(Role::Button, "Schriftgrösse Gross");
+    assert_eq!(w.tree().find(Role::Button, "Schriftgrösse Gross").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Untertitel aus");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_cues()), 0);
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Dialog, "Ton und Untertitel").is_none());
+}
