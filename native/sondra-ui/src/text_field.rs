@@ -202,6 +202,10 @@ impl TextField {
         cx.notify();
     }
 
+    pub fn colors(&self) -> Colors {
+        self.colors
+    }
+
     pub fn set_colors(&mut self, colors: Colors, cx: &mut Context<Self>) {
         self.colors = colors;
         cx.notify();

@@ -324,16 +324,40 @@ impl Shell {
         }
     }
 
+    /// Every text field of every page. One left out stays in the colours of the other theme and cannot be read.
+    fn all_fields(&self) -> Vec<gpui::Entity<TextField>> {
+        vec![
+            self.search.clone(),
+            self.merk.search.clone(),
+            self.merk.add.clone(),
+            self.folder.search.clone(),
+            self.download.input.clone(),
+            self.convert.name.clone(),
+            self.devices.rename.clone(),
+            self.devices.text.clone(),
+            self.devices.servers.stun.clone(),
+            self.devices.servers.turn.clone(),
+            self.devices.servers.user.clone(),
+            self.devices.servers.password.clone(),
+            self.palette.field.clone(),
+            self.merk.receive.field.clone(),
+            self.anytype.code.clone(),
+            self.anytype.name.clone(),
+        ]
+    }
+
     fn set_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
         self.mode = mode;
         let colors = mode.colors();
-        self.search
-            .update(cx, |field, cx| field.set_colors(colors, cx));
-        self.merk.search.update(cx, |field, cx| field.set_colors(colors, cx));
-        self.merk.add.update(cx, |field, cx| field.set_colors(colors, cx));
-        self.folder.search.update(cx, |field, cx| field.set_colors(colors, cx));
-        self.download.input.update(cx, |field, cx| field.set_colors(colors, cx));
+        for field in self.all_fields() {
+            field.update(cx, |field, cx| field.set_colors(colors, cx));
+        }
         cx.notify();
+    }
+
+    /// For tests: the colours each field draws with now.
+    pub fn field_colors_for_test(&self, cx: &gpui::App) -> Vec<sondra_ui::Colors> {
+        self.all_fields().iter().map(|f| f.read(cx).colors()).collect()
     }
 
     fn choose_files(&mut self, cx: &mut Context<Self>) {
