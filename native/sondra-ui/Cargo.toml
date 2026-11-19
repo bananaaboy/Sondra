@@ -14,5 +14,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+image = { version = "0.25", default-features = false }
+smallvec = "1"
 accesskit = "0.25"
 gpui = { version = "=0.2.2", features = ["test-support"] }

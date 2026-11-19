@@ -158,6 +158,55 @@ jobs:
             gallery.png
             gallery.txt
 
+  # The biggest open question: a film in a GPUI window. Each frame decoded by FFmpeg is handed to the window
+  # as a picture; this measures what that costs on a real desktop, and photographs it mid-play.
+  video:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - run: choco install ffmpeg --no-progress -y
+      - uses: actions/cache@v4
+        with:
+          path: native/target
+          key: native-video-${{ hashFiles('native/Cargo.lock') }}
+          save-always: true
+      - run: cargo build --release --locked --example videoprobe -p sondra-ui --manifest-path native/Cargo.toml
+      - name: Play the test film in the window, measure it, photograph it
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path native/target/release/examples/videoprobe.exe).Path
+          $p = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput video-out.txt -RedirectStandardError video-err.txt
+          Start-Sleep -Seconds 4
+          (New-Object -ComObject Shell.Application).MinimizeAll()
+          Add-Type -Namespace Win -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h2, bool r);'
+          $p.Refresh()
+          if ($p.MainWindowHandle -ne 0) {
+            [Win.Native]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+            [Win.Native]::MoveWindow($p.MainWindowHandle, 0, 0, 1280, 760, $true) | Out-Null
+            [Win.Native]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+          }
+          Start-Sleep -Seconds 1
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$PWD\video.png")
+          [void]$p.WaitForExit(60000)
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force; "the probe did not end by itself" | Tee-Object -FilePath video.txt }
+          Copy-Item videoprobe.json video.txt -ErrorAction SilentlyContinue
+          Get-Content video-out.txt, video-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath video.txt
+          '```' | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content video.txt >> $env:GITHUB_STEP_SUMMARY
+          '```' | Add-Content $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: video
+          path: |
+            video.png
+            video.txt
+
   # The app itself, on a real Windows desktop: photographed, and driven through UI Automation the way a
   # screen reader user drives it — a menu, a tool, the search, Escape.
   app:

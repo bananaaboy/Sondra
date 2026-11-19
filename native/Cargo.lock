@@ -5610,8 +5610,10 @@ version = "0.1.0"
 dependencies = [
  "accesskit",
  "gpui",
+ "image",
  "serde",
  "serde_json",
+ "smallvec",
  "sondra-a11y",
  "unicode-segmentation",
 ]
