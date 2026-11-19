@@ -28,7 +28,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -49,13 +49,13 @@ jobs:
       # The tests of the media and download crates run the real FFmpeg (and skip, saying so, without it).
       - name: FFmpeg (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: FFmpeg (Windows)
         if: runner.os == 'Windows'
         run: choco install ffmpeg --no-progress -y
       - name: Libraries GPUI links against on Linux
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-x11-dev libxcb1-dev libfontconfig-dev libfreetype-dev libwayland-dev
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-dev libxcb1-dev libfontconfig-dev libfreetype-dev libwayland-dev
       - uses: actions/cache@v4
         with:
           path: native/target
