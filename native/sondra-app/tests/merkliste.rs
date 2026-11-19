@@ -161,6 +161,9 @@ fn an_empty_list_says_what_to_do_and_a_typed_name_becomes_a_series(cx: &mut Test
     let tree = w.tree();
     assert!(tree.find(Role::ListItem, "Frieren").is_some(), "the series is on the page");
     assert!(tree.find(Role::Heading, "Noch nichts auf der Merkliste").is_none());
+    assert_eq!(said(&tree, Role::ListItem, "Frieren"), "Staffel 1, Folge 1. 0 gesehen. —", "a new series stands at the start, its length not asked");
+    w.press(Role::Button, "Staffel 1, Folge 1 von Frieren als gesehen markieren");
+    assert_eq!(said(&w.tree(), Role::ListItem, "Frieren"), "Staffel 1, Folge 2. 1 gesehen. —");
     let bytes = std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap();
     let back = read_shared(&bytes, &mut Ids::system()).unwrap();
     assert_eq!(back.items.len(), 1);

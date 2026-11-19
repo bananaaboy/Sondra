@@ -3,7 +3,7 @@
 # Windows PowerShell 5.1; ASCII only on purpose (5.1 reads a script without a BOM as ANSI).
 #
 #   powershell -NoProfile -File uia-app.ps1 -ProcessId <pid>
-param([Parameter(Mandatory = $true)][int]$ProcessId)
+param([Parameter(Mandatory = $true)][int]$ProcessId, [string]$ShotDir = '')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms
 $AE = [System.Windows.Automation.AutomationElement]
@@ -45,6 +45,15 @@ function Wait-Gone($pattern, $type) {
     }
     return $false
 }
+# A picture of the whole screen, when asked for a folder to put it in.
+function Shot($name) {
+    if ($ShotDir -eq '') { return }
+    Add-Type -AssemblyName System.Drawing
+    $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+    [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+    $bmp.Save((Join-Path $ShotDir $name))
+}
 function Invoke-It($e) {
     $p = $null
     if ($e.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$p)) { $p.Invoke(); return $true }
@@ -68,6 +77,45 @@ Check ($null -ne (Named 'Datei ausw*hlen' $CT::Button)) 'the way in has its butt
 Check ($null -ne (Named 'Von Adresse laden' $CT::Button)) 'and the other one'
 foreach ($tab in @('Start', 'Merkliste', 'Ordner', 'Abspielen', 'Herunterladen')) {
     Check ($null -ne (Named $tab $CT::Button)) "the tab $tab is a button by name"
+}
+
+# The Merkliste: empty at first (the app was started on an empty data folder), a series typed in, the step
+# forward, and the file on disk written to.
+$merk = Named 'Merkliste' $CT::Button
+if ($null -ne $merk) {
+    Check (Invoke-It $merk) 'the tab Merkliste can be invoked'
+    Check ($null -ne (Wait-For 'Noch nichts auf der Merkliste' $CT::Text)) 'an empty list says what to do'
+    $type = Wait-For 'Eine Serie eintippen' $CT::Button
+    Check ($null -ne $type) 'and offers to type a series in'
+    if ($null -ne $type) {
+        [void](Invoke-It $type)
+        $name = Wait-For 'Name der neuen Serie' $CT::Edit
+        Check ($null -ne $name) 'the field for the name is an edit by name'
+        if ($null -ne $name) {
+            $name.SetFocus()
+            Start-Sleep -Milliseconds 600
+            [System.Windows.Forms.SendKeys]::SendWait('Frieren{ENTER}')
+            $line = Wait-For 'Frieren' $CT::ListItem
+            Check ($null -ne $line) 'the typed series is a line of the list'
+            if ($null -ne $line) {
+                Check ($line.Current.HelpText -like 'Staffel 1, Folge 1.*') ('it stands at the first episode: ' + $line.Current.HelpText)
+                $plus = Wait-For 'Staffel 1, Folge 1 von Frieren als gesehen markieren' $CT::Button
+                Check ($null -ne $plus) 'the step forward is a button that says what it does'
+                if ($null -ne $plus) {
+                    Check (Invoke-It $plus) 'it can be invoked'
+                    $moved = $false
+                    for ($i = 0; $i -lt 24 -and -not $moved; $i++) {
+                        $again = Named 'Frieren' $CT::ListItem
+                        if ($null -ne $again -and $again.Current.HelpText -like 'Staffel 1, Folge 2.*') { $moved = $true } else { Start-Sleep -Milliseconds 250 }
+                    }
+                    Check $moved 'the line moved on to the second episode'
+                }
+            }
+            Shot 'app-merkliste.png'
+        }
+    }
+    $file = if ($env:SONDRA_DATA) { Join-Path $env:SONDRA_DATA 'Merkliste.sqlite' } else { '' }
+    Check (($file -ne '') -and (Test-Path $file) -and ((Get-Item $file).Length -gt 4096)) 'the list was written to its file'
 }
 
 # A group of tabs is a menu: open it, find its tools, choose one.

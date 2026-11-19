@@ -175,6 +175,9 @@ jobs:
         shell: pwsh
         run: |
           $exe = (Resolve-Path native/target/release/sondra.exe).Path
+          # The app starts on an empty data folder of its own: the Merkliste check types a series in.
+          $env:SONDRA_DATA = Join-Path $env:RUNNER_TEMP 'sondra-daten'
+          New-Item -ItemType Directory -Force -Path $env:SONDRA_DATA | Out-Null
           $p = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput app-out.txt -RedirectStandardError app-err.txt
           Start-Sleep -Seconds 4
           if ($p.HasExited) {
@@ -197,7 +200,7 @@ jobs:
           [Win.Native]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
           Start-Sleep -Seconds 3
           Shot 'app-start.png'
-          $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-app/uia-app.ps1 -ProcessId $p.Id 2>&1
+          $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-app/uia-app.ps1 -ProcessId $p.Id -ShotDir $PWD 2>&1
           $code = $LASTEXITCODE
           $out | Tee-Object -FilePath app.txt
           Shot 'app-menu.png'
@@ -212,5 +215,6 @@ jobs:
           name: app
           path: |
             app-start.png
+            app-merkliste.png
             app-menu.png
             app.txt
