@@ -584,3 +584,52 @@ fn the_list_is_shared_as_a_link_that_opens_again_as_text_as_a_qr_code_and_as_a_f
     w.press(Role::Button, "Schliessen");
     assert!(w.tree().find(Role::Dialog, "Merkliste teilen").is_none());
 }
+
+#[gpui::test]
+fn a_received_list_is_set_beside_the_own_and_what_is_new_is_taken(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    // Mia has Frieren (as the own list does, in other spelling), a film and a series with a little picture.
+    let mut ids = Ids::system();
+    let theirs = vec![
+        normalize(&json!({ "id": "a", "title": "FRIEREN", "status": "done", "season": 1, "episode": 12 }), &mut ids),
+        normalize(&json!({ "id": "b", "title": "Das wandelnde Schloss", "status": "done", "rating": 5 }), &mut ids),
+        normalize(&json!({ "id": "c", "title": "Cowboy Bebop", "status": "watching", "season": 1, "episode": 7 }), &mut ids),
+    ];
+    let mut thumbs = std::collections::HashMap::new();
+    // Six by nine mid-grey pixels, packed as „winzig“.
+    thumbs.insert("c".to_string(), sondra_merk::cover::pack_raw(&[128u8; sondra_merk::cover::RAW_W * sondra_merk::cover::RAW_H * 4]).unwrap());
+    let shared = sondra_merk::share::shareable_list(&theirs, "Mia", true, &thumbs);
+    let link = sondra_merk::share::share_links(&shared, "https://sondra.lizge.ch", sondra_merk::share::LINK_MAX).remove(0);
+
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Liste empfangen …");
+    assert!(w.tree().find(Role::Dialog, "Liste empfangen").is_some());
+    // Rubbish says so, and nothing is shown of it.
+    w.shell.update(w.cx, |s, _| s.receive_read("das ist kein Link"));
+    w.draw();
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("keine Liste"))));
+
+    w.shell.update(w.cx, |s, _| {
+        s.receive_with_parts(Box::new(sondra_app::receive_window::MemoryParts::default()));
+        s.receive_read(&link)
+    });
+    w.draw();
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Beide haben 1 · nur bei Ihnen 2 · nur bei Mia 2"))), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    // Both new ones are ticked; the one already on the list is not offered.
+    assert_eq!(w.tree().find(Role::Button, "Cowboy Bebop aufnehmen").unwrap().toggled, Some(true));
+    assert!(w.tree().find(Role::Button, "FRIEREN aufnehmen").is_none());
+    // The film is left out, the other taken as it stands there.
+    w.press(Role::Button, "Das wandelnde Schloss aufnehmen");
+    w.press(Role::Button, "1 Serie aufnehmen");
+    let items = w.cx.read_entity(&w.shell, |s, _| s.merk_items());
+    assert_eq!(items.len(), 4);
+    let bebop = items.iter().find(|i| i.title == "Cowboy Bebop").expect("taken");
+    assert_eq!(bebop.status, sondra_merk::Status::Watching);
+    assert_eq!((bebop.season, bebop.episode), (1, Some(7)));
+    assert!(bebop.cover.as_deref().is_some_and(|c| c.starts_with("data:image/png;base64,")), "the little picture came along");
+    assert!(items.iter().all(|i| i.title != "Das wandelnde Schloss"));
+    // And it is on disk: the file the website reads.
+    let on_disk = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    assert!(on_disk.items.iter().any(|i| i.title == "Cowboy Bebop"));
+}

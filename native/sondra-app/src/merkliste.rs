@@ -61,6 +61,7 @@ pub struct MerkState {
     /// What the last export or reading-in said, in a sentence.
     pub note: Option<String>,
     pub share: crate::share_window::ShareState,
+    pub receive: crate::receive_window::ReceiveState,
     /// „Wie weit sind Sie?“ when adding: the episode to watch next (1: not begun).
     pub add_next: i64,
     /// What „Suchen“ found for the name typed.
@@ -110,6 +111,7 @@ impl MerkState {
             recap_year: None,
             note: None,
             share: Default::default(),
+            receive: crate::receive_window::ReceiveState::new(cx, colors),
             add_next: 1,
             add_found: None,
             add_searching: false,
@@ -134,7 +136,7 @@ impl MerkState {
         }
     }
 
-    fn save(&mut self) {
+    pub(crate) fn save(&mut self) {
         let Some(store) = &self.store else { return };
         if let Err(error) = store.save(&self.items, &self.removed, &Default::default()) {
             self.problem = Some(format!("Die Merkliste konnte nicht gespeichert werden: {error}"));
@@ -588,6 +590,13 @@ impl Shell {
                     m.more = false;
                 })).into_any_element());
             }
+            {
+                let me = me.clone();
+                items.push(ui.menu_item("empfangen-oeffnen", "Liste empfangen …", false).on_click(move |_, app| me.update(app, |shell, cx| {
+                    shell.merk.more = false;
+                    shell.receive_open(cx);
+                })).into_any_element());
+            }
             items.push(ui.hint("Auswertung"));
             {
                 let me = me.clone();
@@ -1032,4 +1041,11 @@ impl Shell {
 fn initials(title: &str) -> String {
     let letters: String = title.split_whitespace().filter_map(|w| w.chars().find(|c| c.is_alphanumeric())).take(3).collect();
     letters.to_uppercase()
+}
+
+impl Shell {
+    /// For tests: the entries of the list.
+    pub fn merk_items(&self) -> Vec<Item> {
+        self.merk.items.clone()
+    }
 }
