@@ -58,6 +58,10 @@ pub struct MerkState {
     /// The window with the numbers and the year looked back on.
     pub stats_open: bool,
     pub recap_year: Option<i32>,
+    /// What the last export or reading-in said, in a sentence.
+    pub note: Option<String>,
+    /// The list as it was before a file was read in, to take it back.
+    pub before_import: Option<(Vec<Item>, Removed)>,
 }
 
 impl MerkState {
@@ -98,6 +102,8 @@ impl MerkState {
             planner: None,
             stats_open: false,
             recap_year: None,
+            note: None,
+            before_import: None,
         }
     }
 
@@ -122,6 +128,70 @@ impl MerkState {
         let Some(store) = &self.store else { return };
         if let Err(error) = store.save(&self.items, &self.removed, &Default::default()) {
             self.problem = Some(format!("Die Merkliste konnte nicht gespeichert werden: {error}"));
+        }
+    }
+
+    /// Writes the list as a SQLite file into the downloads folder (the same format the website exports).
+    pub fn export_list(&mut self, folder: &std::path::Path) {
+        let snapshot = sondra_merk::sqlite::Snapshot { items: self.items.clone(), removed: self.removed.clone(), ..Default::default() };
+        let day = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let result = std::fs::create_dir_all(folder).and_then(|_| {
+            let bytes = sondra_merk::sqlite::write_sqlite(&snapshot).map_err(|e| std::io::Error::other(e.to_string()))?;
+            let target = sondra_media::run::unique_path(folder, &format!("Sondra-Merkliste-{day}"), "sqlite");
+            std::fs::write(&target, bytes).map(|_| target)
+        });
+        self.before_import = None;
+        self.note = Some(match result {
+            Ok(path) => format!("Die Merkliste liegt in {}.", path.display()),
+            Err(e) => format!("Die Merkliste liess sich nicht schreiben: {e}"),
+        });
+    }
+
+    /// Reads a file in (SQLite, JSON, MyAnimeList, AniList) and brings its entries into the list: the same
+    /// series is not doubled, and whichever side was changed last wins.
+    pub fn import_file(&mut self, path: &std::path::Path) {
+        self.before_import = None;
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(e) => {
+                self.note = Some(format!("Die Datei liess sich nicht lesen: {e}"));
+                return;
+            }
+        };
+        let mut ids = sondra_merk::normalize::Context::system();
+        match sondra_merk::importer::read_merkliste_file(&bytes, &mut ids) {
+            Ok(incoming) => {
+                let merged = sondra_merk::merge::merge_merkliste(&self.items, &incoming);
+                let before = (self.items.clone(), self.removed.clone());
+                self.items = merged.items;
+                self.save();
+                self.before_import = Some(before);
+                let mut parts = vec![];
+                if merged.added > 0 {
+                    parts.push(format!("{} neu", merged.added));
+                }
+                if merged.updated > 0 {
+                    parts.push(format!("{} aktualisiert", merged.updated));
+                }
+                if merged.same > 0 {
+                    parts.push(format!("{} schon gleich", merged.same));
+                }
+                if merged.kept > 0 {
+                    parts.push(format!("{} hier neuer, so belassen", merged.kept));
+                }
+                self.note = Some(format!("Eingelesen: {}.", if parts.is_empty() { "nichts Neues".to_string() } else { parts.join(", ") }));
+            }
+            Err(e) => self.note = Some(e.to_string()),
+        }
+    }
+
+    /// Takes a reading-in back: the list as it was.
+    pub fn revert_import(&mut self) {
+        if let Some((items, removed)) = self.before_import.take() {
+            self.items = items;
+            self.removed = removed;
+            self.save();
+            self.note = Some("Das Einlesen ist zurückgenommen.".into());
         }
     }
 
@@ -305,6 +375,18 @@ impl Shell {
         if let Some(problem) = &state.problem {
             page = page.child(ui.notice(NoticeKind::Warning, problem.clone()));
         }
+        if let Some(note) = &state.note {
+            let (back, close) = (me.clone(), me.clone());
+            let mut line = div().flex().flex_wrap().items_center().gap(px(12.)).child(ui.prose(note.clone()));
+            if state.before_import.is_some() {
+                line = line.child(ui.button("einlesen-zuruecknehmen", "Zurücknehmen").small().on_click(move |_, app| Self::merk_do(&back, app, |m| m.revert_import())));
+            }
+            line = line.child(ui.button("hinweis-schliessen", "Schliessen").small().on_click(move |_, app| Self::merk_do(&close, app, |m| {
+                m.note = None;
+                m.before_import = None;
+            })));
+            page = page.child(line);
+        }
         if let Some(taken) = &state.undo {
             let me = me.clone();
             page = page.child(
@@ -425,6 +507,18 @@ impl Shell {
                         .into_any_element(),
                 );
             }
+            items.push(ui.hint("Datei"));
+            {
+                let (me, me2) = (me.clone(), me.clone());
+                items.push(ui.menu_item("merkliste-exportieren", "Exportieren", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {
+                    m.more = false;
+                    m.export_list(&crate::store::downloads_dir());
+                })).into_any_element());
+                items.push(ui.menu_item("merkliste-einlesen", "Einlesen …", false).on_click(move |_, app| me2.update(app, |shell, cx| {
+                    shell.merk.more = false;
+                    shell.choose_list_file(cx);
+                })).into_any_element());
+            }
             items.push(ui.hint("Auswertung"));
             {
                 let me = me.clone();
@@ -490,6 +584,28 @@ impl Shell {
                 None
             }
         }
+    }
+
+    /// Reads a file into the list (what „Einlesen …“ does with the chosen file).
+    pub fn merk_import_file(&mut self, path: &std::path::Path, cx: &mut Context<Self>) {
+        self.merk.import_file(path);
+        cx.notify();
+    }
+
+    fn choose_list_file(&mut self, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(gpui::PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = answer.await {
+                if let Some(path) = paths.into_iter().next() {
+                    this.update(cx, |shell, cx| {
+                        shell.merk.import_file(&path);
+                        cx.notify();
+                    })
+                    .ok();
+                }
+            }
+        })
+        .detach();
     }
 
     /// For tests: how many covers have been made (or found unmakeable) so far.

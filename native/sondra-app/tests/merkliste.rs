@@ -413,3 +413,38 @@ fn the_statistics_window_gives_the_numbers_and_a_year_looked_back_on(cx: &mut Te
     w.press(Role::Button, "Schliessen");
     assert!(w.tree().find(Role::Dialog, "Statistik und Rückblick").is_none());
 }
+
+#[gpui::test]
+fn the_list_is_exported_and_a_file_read_in_without_doubling_and_taken_back(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("aus");
+    std::env::set_var("SONDRA_DOWNLOADS", &out);
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Exportieren");
+    let exported: Vec<_> = std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().path()).collect();
+    assert_eq!(exported.len(), 1);
+    assert!(exported[0].extension().unwrap() == "sqlite");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Die Merkliste liegt in"))));
+    w.press(Role::Button, "Schliessen");
+    // Reading the same file in changes nothing; a MyAnimeList file brings one new series.
+    let file = exported[0].clone();
+    w.shell.update(w.cx, |s, cx| s.merk_import_file(&file, cx));
+    w.draw();
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).contains("schon gleich"))));
+    let mal = dir.path().join("mal.xml");
+    std::fs::write(&mal, "<myanimelist><anime><series_title><![CDATA[Cowboy Bebop]]></series_title><series_episodes>26</series_episodes><my_watched_episodes>5</my_watched_episodes><my_status>Watching</my_status></anime></myanimelist>").unwrap();
+    w.shell.update(w.cx, |s, cx| s.merk_import_file(&mal, cx));
+    w.draw();
+    assert!(w.tree().find(Role::ListItem, "Cowboy Bebop").is_some(), "the new series is on the list");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).contains("1 neu"))));
+    w.press(Role::Button, "Zurücknehmen");
+    assert!(w.tree().find(Role::ListItem, "Cowboy Bebop").is_none(), "taken back");
+    assert!(w.tree().find(Role::ListItem, "Frieren").is_some());
+    // A file that is no list says so.
+    let junk = dir.path().join("x.txt");
+    std::fs::write(&junk, "nichts").unwrap();
+    w.shell.update(w.cx, |s, cx| s.merk_import_file(&junk, cx));
+    w.draw();
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Die Datei ist keine Merkliste"))));
+}
