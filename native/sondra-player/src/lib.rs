@@ -5,6 +5,8 @@
 //! Nothing here plays anything or touches a file: what is remembered is handed in and out as JSON text, so
 //! the program decides where it lives.
 
+pub mod cues;
+
 use std::sync::LazyLock;
 
 use regex::Regex;
