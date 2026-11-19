@@ -16,6 +16,7 @@ use sondra_ui::{family, motion, radius, size, FieldEvent, Mode, NoticeKind, Text
 use crate::actions::{self, Group};
 use crate::layout::{columns, shell_width, tab_width, GUTTER};
 use crate::convert_page::ConvertState;
+use crate::devices_page::DevicesState;
 use crate::download_page::DownloadState;
 use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
@@ -64,6 +65,7 @@ pub struct Shell {
     pub(crate) player: PlayerState,
     /// The Herunterladen page: the address, what was found, what loads.
     pub(crate) download: DownloadState,
+    pub(crate) devices: DevicesState,
     /// The Umwandeln page.
     pub(crate) convert: ConvertState,
     /// The Lautstärke page.
@@ -98,10 +100,17 @@ impl Shell {
         let merk = MerkState::new(cx, colors);
         let folder = FolderState::new(cx, colors);
         let download = DownloadState::new(cx, colors);
+        let devices = DevicesState::new(cx, colors);
         // Twice a second: is the window minimised? (A window nobody draws does not ask by itself.)
         cx.spawn_in(window, async move |this, cx| loop {
             cx.background_executor().timer(Duration::from_millis(500)).await;
-            if this.update_in(cx, |shell, window, _| shell.player.pause_for_minimized(crate::system::is_minimized(window))).is_err() {
+            if this.update_in(cx, |shell, window, cx| {
+                shell.player.pause_for_minimized(crate::system::is_minimized(window));
+                // What the devices' worker says changes by itself; the page shows it while it is open.
+                if shell.panel == Panel::Devices && shell.devices.engine.is_some() {
+                    cx.notify();
+                }
+            }).is_err() {
                 break;
             }
         })
@@ -126,6 +135,7 @@ impl Shell {
             folder,
             player: PlayerState::new(cx),
             download,
+            devices,
             convert: ConvertState::new(),
             normalize: NormalizeState::new(),
             harmony: HarmonyState::new(),
@@ -828,6 +838,8 @@ impl Render for Shell {
             self.convert_page(ui, cx)
         } else if self.panel == Panel::Video {
             self.video_page(ui, cx)
+        } else if self.panel == Panel::Devices {
+            self.devices_page(ui, cx)
         } else if self.panel == Panel::Mix {
             self.mix_page(ui, cx)
         } else if self.panel == Panel::Images {

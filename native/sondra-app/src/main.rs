@@ -38,6 +38,9 @@ fn main() {
                     if let Some(store) = sondra_app::store::FileStore::at_default("Abspielen.json") {
                         shell.open_player_memory(store, cx);
                     }
+                    if let (Some(setup), Some(store)) = (sondra_app::devices_setup::production(), sondra_app::store::FileStore::at_default("Geraete.json")) {
+                        shell.open_devices(setup, store, cx);
+                    }
                     // Files and folders on the command line: „Öffnen mit Sondra“ and a drop on the program.
                     let given: Vec<std::path::PathBuf> = std::env::args_os().skip(1).map(Into::into).collect();
                     if !given.is_empty() {
