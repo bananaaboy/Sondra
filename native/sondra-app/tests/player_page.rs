@@ -223,8 +223,12 @@ fn a_file_named_like_an_episode_is_ticked_off_at_ninety_percent_and_can_be_taken
     let line = |w: &Window| w.tree().nodes.iter().find(|n| n.role == Role::Status).and_then(|n| n.label.as_ref().map(|l| l.to_string())).unwrap_or_default();
     assert_eq!(line(&w), "Merkliste · Frieren · Staffel 1, Folge 2 — wird ab 90 % abgehakt.");
     assert!(w.tree().find(Role::Button, "Serie „Frieren“ öffnen").is_some());
-    // To the end of the film: past 90 % it is ticked off.
-    w.watch(3.0);
+    // To the end of the film: past 90 % it is ticked off. (Waited for, not timed: on a loaded machine the
+    // film starts late.)
+    let limit = std::time::Instant::now() + Duration::from_secs(40);
+    while std::time::Instant::now() < limit && !line(&w).ends_with("— abgehakt.") {
+        w.watch(0.1);
+    }
     assert_eq!(line(&w), "Merkliste · Frieren · Staffel 1, Folge 2 — abgehakt.");
     let stored = read_shared(&std::fs::read(&list).unwrap(), &mut Ids::system()).unwrap();
     assert_eq!(stored.items[0].seasons.as_ref().unwrap()[0].watched, vec![1, 2]);
