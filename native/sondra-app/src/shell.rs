@@ -89,6 +89,10 @@ pub struct Shell {
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
     pub(crate) pending_focus: Option<FocusHandle>,
+    /// „Was ist neu“ is open.
+    pub(crate) whats_new_open: bool,
+    /// The version a line under the header says is new, until it is read or closed.
+    pub(crate) news: Option<String>,
 }
 
 impl Shell {
@@ -160,6 +164,8 @@ impl Shell {
             discord: crate::discord::DiscordState::default(),
             convert_watch: None,
             pending_focus: None,
+            whats_new_open: false,
+            news: None,
         }
     }
 
@@ -338,9 +344,26 @@ impl Shell {
             .items_center()
             .justify_between()
             .child(ui.wordmark())
-            .child(ui.button("thema", label).small().on_click(move |_, app| {
-                me.update(app, |shell, cx| shell.set_mode(to_mode, cx));
-            }))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .child({
+                        let me = me.clone();
+                        let version = crate::whats_new::app_version();
+                        ui.button("version", version.clone()).small().ghost().accessible_name(format!("Was ist neu, Version {version}")).on_click(move |_, app| {
+                            me.update(app, |shell, cx| {
+                                shell.whats_new_open = true;
+                                shell.news = None;
+                                cx.notify();
+                            })
+                        })
+                    })
+                    .child(ui.button("thema", label).small().on_click(move |_, app| {
+                        me.update(app, |shell, cx| shell.set_mode(to_mode, cx));
+                    })),
+            )
             .into_any_element()
     }
 
@@ -960,7 +983,7 @@ impl Render for Shell {
             motion::BASE,
         ).into_any_element() };
 
-        let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)) } else { None };
+        let overlay = if self.whats_new_open { self.whats_new_overlay(ui, cx) } else if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)) } else { None };
         // A film that goes on behind another tool says so, and can be stopped from here.
         let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
         let floating = self.floating_cards(ui, cx);
@@ -969,6 +992,7 @@ impl Render for Shell {
             .flex_col()
             .gap(px(8.))
             .child(self.header(ui, cx))
+            .children(self.news_banner(ui, cx))
             .child(self.tab_row(ui, inner, cx))
             .child(ui.rule());
 

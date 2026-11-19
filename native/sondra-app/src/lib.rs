@@ -34,3 +34,4 @@ pub mod stems_page;
 pub mod store;
 pub mod subtitles_page;
 pub mod system;
+pub mod whats_new;

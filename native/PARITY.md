@@ -25,7 +25,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | R09 | Dateien ablegen und auswählen, Sitzung (Dateien, Umbenennen, Reihenfolge) | `FileDrop`, `useIngest` | 3 | Klicktest | offen |
 | R10 | Sitzung bleibt auf dem Gerät, „Letzte Sitzung wiederherstellen“ | `sessionStore`, `RestoreOffer` | 3 | Klicktest | offen |
 | R11 | Adresse je Werkzeug (`#umwandeln` …) als Startparameter | `usePanelRoute` | 3 | Test | offen |
-| R12 | „Was ist neu“, Versionsmarke, Hinweis nach Update | `WhatsNew`, `changelog.json` | 8 | `verify:changelog` | offen |
+| R12 | „Was ist neu“, Versionsmarke, Hinweis nach Update | `WhatsNew`, `changelog.json` | 8 | `verify:changelog` | **nativ ✔** — die Versionsmarke neben dem Namen öffnet „Was ist neu“ aus derselben `src/changelog.json` (eingebaut), „Diese Fassung“ markiert; nach einem Update einmal die Zeile „Neu in …“ (`gesehene-version` in `Einstellungen.json`), ein erster Besuch bekommt sie nicht. Die Version ist die aus `package.json`, eine Zahl für alle. |
 | R13 | Bedienungshilfen: Rolle, Name, Lage, Fokus und Aktivieren für Screenreader, Tastaturbedienung | überall | 0b/3 | `sondra-a11y`: 7 Tests im GPUI-Testfenster; Windows-Anbindung wird in der CI über UI Automation abgefragt (Job `uia`); **echter Screenreader (NVDA, Sprecher) noch nie** | in Arbeit |
 
 ## Merkliste
