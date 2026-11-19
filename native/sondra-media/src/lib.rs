@@ -13,6 +13,7 @@
 //! * [`intro`] — the opening of a series, found by ear (`introPrint.ts`).
 //! * [`loudness`] — EBU R128 / BS.1770: measuring and moving to a target (`src/lib/loudness.ts`).
 //! * [`image_ops`] — pictures: turn, crop, scale, colour, write as WebP, JPEG or PNG (`image.ts`).
+//! * [`video_ops`] — the video editor's one FFmpeg invocation (`src/lib/video.ts`).
 //! * [`run`] — a whole conversion: a file in, a file out (`src/lib/convertRun.ts`).
 //!
 //! What changes from the browser: no memory limit (a file is read from where it lies), no crash of
@@ -36,5 +37,6 @@ pub mod pitch;
 pub mod presets;
 pub mod run;
 pub mod tempo;
+pub mod video_ops;
 
 pub use ffmpeg::{Cancel, Ffmpeg, MediaError, Probe, Progress, Stream};

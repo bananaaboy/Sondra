@@ -9,6 +9,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 
 import { buildConvertArgs, DEFAULT_CONVERT, OUTPUT_FORMATS, rateFor, findFormat, type ConvertSettings } from '../src/lib/convert'
 import { BUILT_IN_PRESETS, presetFor } from '../src/lib/convertPresets'
+import { buildVideoJob, buildAudioExtraction, buildFrameGrab, buildAudioReplacement, DEFAULT_VIDEO_OPS, type VideoOps } from '../src/lib/video'
 import { mixWithDucking, DEFAULT_DUCK } from '../src/lib/duck'
 import { applyNormalization, DEFAULT_NORMALIZATION, measureLoudness } from '../src/lib/loudness'
 import { istft, magnitudeOf, stft } from '../src/lib/fft'
@@ -493,4 +494,47 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   })
   writeFileSync(`${outDir}/duck.json`, `${JSON.stringify({ rate: sr, cases }, null, 1)}\n`)
   console.log(`Mischen: ${cases.map((c) => `${c.name} ${c.report.speechSeconds.toFixed(2)} s Sprache`).join(', ')}`)
+}
+
+
+/* -- Video: die Befehlszeile des Editors ----------------------------------------------------------- */
+
+{
+  const base: VideoOps = { ...DEFAULT_VIDEO_OPS }
+  const cases: { name: string; ops: Partial<VideoOps>; duration: number; source: { width: number; height: number } | null }[] = [
+    { name: 'unverändert', ops: {}, duration: 60, source: { width: 1920, height: 1080 } },
+    { name: 'nur-schnitt', ops: { start: 5.5, end: 20.25 }, duration: 60, source: { width: 1920, height: 1080 } },
+    { name: 'schnitt-bis-ende', ops: { start: 12.3456 }, duration: 60, source: null },
+    { name: 'schnitt-ohne-ton', ops: { start: 2, end: 9, mute: true }, duration: 60, source: { width: 1280, height: 720 } },
+    { name: '720p', ops: { preset: '720p' }, duration: 30, source: { width: 1920, height: 1080 } },
+    { name: '480p-kleine-quelle', ops: { preset: '480p' }, duration: 30, source: { width: 320, height: 241 } },
+    { name: 'original', ops: { preset: 'original' }, duration: 30, source: { width: 1920, height: 1080 } },
+    { name: 'drehen-90', ops: { rotate: 90, preset: 'high' }, duration: 30, source: null },
+    { name: 'drehen-180-spiegeln', ops: { rotate: 180, flipH: true, flipV: true }, duration: 30, source: null },
+    { name: 'drehen-270-ausschnitt', ops: { rotate: 270, crop: { x: 0.1, y: 0.125, width: 0.5, height: 0.6666667 } }, duration: 30, source: { width: 1080, height: 1920 } },
+    { name: 'farbe', ops: { brightness: -0.12, contrast: 1.15, saturation: 0.8, look: 'sepia' }, duration: 30, source: null },
+    { name: 'looks-warm', ops: { look: 'warm', sharpen: true, denoise: true }, duration: 30, source: null },
+    { name: 'looks-kuehl-stabil', ops: { look: 'cool', stabilize: true }, duration: 30, source: null },
+    { name: 'blenden', ops: { fadeIn: 1.5, fadeOut: 2 }, duration: 20, source: null },
+    { name: 'blenden-geschnitten-schnell', ops: { start: 3, end: 11, fadeIn: 1, fadeOut: 20, speed: 2 }, duration: 20, source: null },
+    { name: 'tempo-halb', ops: { speed: 0.5 }, duration: 20, source: null },
+    { name: 'tempo-achtel', ops: { speed: 0.125 }, duration: 20, source: null },
+    { name: 'tempo-viermal', ops: { speed: 4 }, duration: 20, source: null },
+    { name: 'tempo-krumm', ops: { speed: 1.37, volumeDb: -3.25, loudnorm: true }, duration: 20, source: null },
+    { name: 'rückwärts', ops: { reverse: true, start: 1, end: 6 }, duration: 20, source: null },
+    { name: 'laut-leise', ops: { volumeDb: 6 }, duration: 20, source: null },
+    { name: 'webm', ops: { container: 'webm', preset: '720p' }, duration: 20, source: { width: 1280, height: 720 } },
+    { name: 'webm-stumm', ops: { container: 'webm', mute: true, start: 1 }, duration: 20, source: null },
+    { name: 'gif', ops: { container: 'gif', fps: 12, width: 360 }, duration: 20, source: null },
+    { name: 'gif-geschnitten', ops: { container: 'gif', start: 2, end: 5 }, duration: 20, source: null },
+    { name: 'webp', ops: { container: 'webp', fps: 10, width: 320, start: 1.5 }, duration: 20, source: null },
+  ]
+  const jobs = cases.map((c) => {
+    const job = buildVideoJob({ ...base, ...c.ops } as VideoOps, 'in.mp4', c.duration, c.source)
+    return { name: c.name, ops: { ...base, ...c.ops }, duration: c.duration, source: c.source, args: job.args, extension: job.extension, mime: job.mime, copyOnly: job.copyOnly }
+  })
+  const extraction = ['copy', 'wav', 'mp3', 'flac'].map((f) => ({ format: f, ...buildAudioExtraction('in.mp4', f as 'copy') }))
+  const grabs = [0, 1.2345, 59.9996].map((t) => ({ at: t, ...buildFrameGrab('in.mp4', t) }))
+  writeFileSync(`${outDir}/video.json`, `${JSON.stringify({ jobs, extraction, grabs, replacement: buildAudioReplacement('v.mp4', 'a.wav') }, null, 1)}\n`)
+  console.log(`Video: ${jobs.length} Befehle`)
 }
