@@ -8,8 +8,8 @@ use url::Url;
 use crate::auth::{agent, Account};
 use crate::DriveError;
 
-const FOLDER_TYPE: &str = "application/vnd.google-apps.folder";
-const FILE_FIELDS: &str = "id,name,size,modifiedTime,mimeType";
+pub(crate) const FOLDER_TYPE: &str = "application/vnd.google-apps.folder";
+pub(crate) const FILE_FIELDS: &str = "id,name,size,modifiedTime,mimeType";
 /// Nothing the service reads is bigger; a bigger answer is something else.
 const MAX_DOWNLOAD: u64 = 256 * 1024 * 1024;
 
@@ -39,7 +39,7 @@ pub struct DriveFile {
     pub mime_type: Option<String>,
 }
 
-fn as_file(raw: &Value) -> DriveFile {
+pub(crate) fn as_file(raw: &Value) -> DriveFile {
     DriveFile {
         id: raw["id"].as_str().unwrap_or_default().to_owned(),
         name: raw["name"].as_str().unwrap_or_default().to_owned(),
@@ -83,15 +83,34 @@ impl<T: TokenSource> DriveClient<T> {
     /// One GET with the token. A refused token is renewed once; a busy Drive is asked
     /// again, a little later each time, up to four times.
     fn get(&self, url: &str) -> Result<ureq::http::Response<ureq::Body>, DriveError> {
+        self.send("GET", url, None, None)
+    }
+
+    /// One request with the token, the same patience as `get`. `body` carries its content type.
+    pub(crate) fn send(
+        &self,
+        method: &str,
+        url: &str,
+        content_type: Option<&str>,
+        body: Option<&[u8]>,
+    ) -> Result<ureq::http::Response<ureq::Body>, DriveError> {
         let mut refused = false;
         let mut attempt: u32 = 0;
         loop {
             let token = self.tokens.token(refused)?;
+            let mut request = ureq::http::Request::builder()
+                .method(method)
+                .uri(url)
+                .header("Authorization", format!("Bearer {token}"));
+            if let Some(kind) = content_type {
+                request = request.header("Content-Type", kind);
+            }
+            let request = request
+                .body(body.unwrap_or_default().to_vec())
+                .map_err(|e| DriveError::Failed(e.to_string()))?;
             let mut response = self
                 .http
-                .get(url)
-                .header("Authorization", &format!("Bearer {token}"))
-                .call()
+                .run(request)
                 .map_err(|e| DriveError::Offline(e.to_string()))?;
             let status = response.status().as_u16();
             if (200..300).contains(&status) {
@@ -121,6 +140,10 @@ impl<T: TokenSource> DriveClient<T> {
                 }
             }
         }
+    }
+
+    pub(crate) fn api(&self) -> &str {
+        &self.api
     }
 
     fn files(
