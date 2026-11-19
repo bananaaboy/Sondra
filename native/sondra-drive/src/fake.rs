@@ -47,6 +47,8 @@ pub struct State {
     pub hiccups: u32,
     /// The ids that were put into the bin.
     pub trashed: Vec<String>,
+    /// The ranges asked for when a file's content was read, (first byte, last byte).
+    pub range_requests: Vec<(u64, u64)>,
 }
 
 #[derive(Clone)]
@@ -354,8 +356,32 @@ fn handle(mut request: tiny_http::Request, shared: &Arc<Mutex<State>>) {
         }
         ("GET", p) if p.starts_with("/drive/v3/files/") => {
             let id = id_of(&p["/drive/v3/files".len()..]);
+            let wanted = header_of(&headers, "Range").and_then(|r| r.strip_prefix("bytes=").map(str::to_owned));
+            if let Some(range) = wanted.as_deref() {
+                let (from, to) = range.split_once('-').unwrap_or(("0", ""));
+                let total = state.entries.get(&id).map_or(0, |e| e.data.len() as u64);
+                if total > 0 {
+                    let start = from.parse::<u64>().unwrap_or(0);
+                    state.range_requests.push((start, to.parse::<u64>().map_or(total - 1, |e| e.min(total - 1))));
+                }
+            }
             match state.entries.get(&id) {
-                Some(entry) => reply(request, 200, entry.data.clone(), "application/octet-stream"),
+                Some(entry) => {
+                    // A range, the way Drive answers it: 206 with the slice and where it lies.
+                    let total = entry.data.len() as u64;
+                    match header_of(&headers, "Range").and_then(|r| r.strip_prefix("bytes=").map(str::to_owned)) {
+                        Some(range) if total > 0 => {
+                            let (from, to) = range.split_once('-').unwrap_or(("0", ""));
+                            let start = from.parse::<u64>().unwrap_or(0);
+                            let end = to.parse::<u64>().map_or(total - 1, |e| e.min(total - 1));
+                            if start >= total {
+                                return reply_with(request, 416, Vec::new(), &[("Content-Range", format!("bytes */{total}"))]);
+                            }
+                            reply_with(request, 206, entry.data[start as usize..=end as usize].to_vec(), &[("Content-Range", format!("bytes {start}-{end}/{total}")), ("Content-Type", "application/octet-stream".into())])
+                        }
+                        _ => reply(request, 200, entry.data.clone(), "application/octet-stream"),
+                    }
+                }
                 None => reply(request, 404, b"{}".to_vec(), "application/json"),
             }
         }

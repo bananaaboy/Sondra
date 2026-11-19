@@ -117,6 +117,18 @@ impl<T: TokenSource> DriveClient<T> {
         content_type: Option<&str>,
         body: Option<&[u8]>,
     ) -> Result<ureq::http::Response<ureq::Body>, DriveError> {
+        self.send_with(method, url, content_type, body, &[])
+    }
+
+    /// `send` with more headers (a `Range`).
+    pub(crate) fn send_with(
+        &self,
+        method: &str,
+        url: &str,
+        content_type: Option<&str>,
+        body: Option<&[u8]>,
+        extra: &[(&str, String)],
+    ) -> Result<ureq::http::Response<ureq::Body>, DriveError> {
         let mut refused = false;
         let mut attempt: u32 = 0;
         loop {
@@ -127,6 +139,9 @@ impl<T: TokenSource> DriveClient<T> {
                 .header("Authorization", format!("Bearer {token}"));
             if let Some(kind) = content_type {
                 request = request.header("Content-Type", kind);
+            }
+            for (name, value) in extra {
+                request = request.header(*name, value);
             }
             let request = request
                 .body(body.unwrap_or_default().to_vec())

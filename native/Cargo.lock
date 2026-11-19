@@ -6517,6 +6517,7 @@ name = "sondra-playback"
 version = "0.1.0"
 dependencies = [
  "sondra-audio",
+ "sondra-drive",
  "sondra-media",
  "tempfile",
  "thiserror 2.0.21",

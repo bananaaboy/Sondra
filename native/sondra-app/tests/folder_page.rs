@@ -610,7 +610,7 @@ fn sondras_folder_in_drive_is_read_played_by_fetching_it_and_deleted_into_drives
     assert_eq!(w.files(), ["Dateien", "Serien"], "the folders of Sondra in Drive");
     w.press(Role::Button, "Mit Unterordnern");
     assert!(w.files().contains(&"lied.mp3".to_string()) && w.files().contains(&"Folge 2.mkv".to_string()), "{:?}", w.files());
-    // Playing fetches the file into this program's folder and hands it to the player.
+    // Playing opens the film where it lies — nothing is fetched whole — and hands it to the player.
     w.press(Role::ListItem, "lied.mp3");
     w.press(Role::Button, "Gewählte Dateien abspielen");
     for _ in 0..300 {
@@ -625,7 +625,7 @@ fn sondras_folder_in_drive_is_read_played_by_fetching_it_and_deleted_into_drives
     assert_eq!(names.len(), 1);
     assert!(names[0].ends_with("lied.mp3"), "{names:?}");
     let kept = tmp.path().join("daten").join("Drive-Ablage");
-    assert_eq!(fs::read_dir(&kept).unwrap().count(), 1, "kept for the next time");
+    assert!(!kept.exists() || fs::read_dir(&kept).unwrap().count() == 0, "read in ranges, not fetched whole");
     // Deleting goes into Drive's bin, and „Endgültig löschen“ is not offered.
     w.shell.update(w.cx, |shell, cx| shell.go(Panel::Folder, cx));
     w.draw();

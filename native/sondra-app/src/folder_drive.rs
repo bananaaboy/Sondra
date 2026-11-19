@@ -48,6 +48,20 @@ pub fn cache_dir() -> PathBuf {
     crate::store::data_dir().unwrap_or_else(std::env::temp_dir).join("Drive-Ablage")
 }
 
+/// The program's small server for films in Drive: one for each Drive it talks to, started when first needed.
+fn stream_for(drive: &crate::drive_hub::Drive) -> Result<Arc<sondra_drive::DriveStream>, String> {
+    static STREAM: std::sync::Mutex<Option<(String, Arc<sondra_drive::DriveStream>)>> = std::sync::Mutex::new(None);
+    let mut held = STREAM.lock().unwrap();
+    if let Some((api, stream)) = held.as_ref() {
+        if *api == drive.api {
+            return Ok(stream.clone());
+        }
+    }
+    let stream = Arc::new(sondra_drive::DriveStream::start(DriveClient::new(drive.tokens.clone(), drive.api.clone())).map_err(|e| format!("Der Film lässt sich nicht aus Drive öffnen: {e}"))?);
+    *held = Some((drive.api.clone(), stream.clone()));
+    Ok(stream)
+}
+
 impl Shell {
     /// Reads Sondra's folder in Drive in the background, signing in first when that is needed.
     pub fn open_drive_folder(&mut self, cx: &mut Context<Self>) {
@@ -111,7 +125,7 @@ impl Shell {
             return;
         }
         self.folder.busy = true;
-        self.folder.notice = Some(if wanted.len() == 1 { "Die Datei wird aus Drive geholt …".into() } else { format!("{} Dateien werden aus Drive geholt …", wanted.len()) });
+        self.folder.notice = Some(if wanted.len() == 1 { "Der Film wird aus Drive geöffnet …".into() } else { format!("{} Dateien werden aus Drive geöffnet …", wanted.len()) });
         cx.notify();
         let dir = cache_dir();
         Self::in_background(
@@ -120,16 +134,23 @@ impl Shell {
                 if !(drive.connected)() {
                     (drive.sign_in)()?;
                 }
-                let client = DriveClient::new(drive.tokens.clone(), drive.api.clone());
-                let never = AtomicBool::new(false);
+                let stream = stream_for(&drive)?;
                 let mut paths = Vec::new();
                 for file in wanted {
-                    let id = file.drive.as_ref().map(|d| d.id.clone()).unwrap_or_default();
-                    let path = dir.join(format!("{id}-{}", crate::drive_hub::safe_name(&file.name)));
+                    let Some(info) = file.drive.as_ref() else { continue };
+                    // The name in the list; a file kept from an earlier time is played as it is, anything else is
+                    // read from Drive where it lies, in ranges, so the film starts at once.
+                    let path = dir.join(format!("{}-{}", info.id, crate::drive_hub::safe_name(&file.name)));
                     let kept = std::fs::metadata(&path).is_ok_and(|m| m.len() == file.size && file.size > 0);
                     if !kept {
-                        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-                        client.download_to(&id, &path, &never, |_, _| {}).map_err(|e| says(&e))?;
+                        if file.size == 0 {
+                            // Without a size no range can be asked for.
+                            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                            let client = DriveClient::new(drive.tokens.clone(), drive.api.clone());
+                            client.download_to(&info.id, &path, &AtomicBool::new(false), |_, _| {}).map_err(|e| says(&e))?;
+                        } else {
+                            sondra_playback::register_source(&path, &stream.url(&info.id, &file.name, file.size, &info.mime));
+                        }
                     }
                     paths.push(path);
                 }

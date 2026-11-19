@@ -17,11 +17,13 @@ pub mod client;
 pub mod fake;
 pub mod keystore;
 pub mod library;
+pub mod stream;
 pub mod write;
 
 pub use auth::{Account, ClientCredentials, Endpoints, DRIVE_SCOPE};
 pub use client::{DriveClient, DriveFile, TokenSource};
 pub use library::DriveLibrary;
+pub use stream::DriveStream;
 pub use write::{notes_query, Found};
 
 /// What can go wrong, in the words the apps use.

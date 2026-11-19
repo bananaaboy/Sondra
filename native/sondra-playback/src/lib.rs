@@ -290,9 +290,28 @@ impl Timer {
     }
 }
 
+/// Where a film is really read from when its name in the list is not a file: a path that stands for something the
+/// program serves itself (a film in Drive, through its own small server). The list keeps the name — labels, the
+/// kind of file, the place to resume — and only FFmpeg is given the address.
+fn sources() -> &'static std::sync::Mutex<std::collections::HashMap<PathBuf, PathBuf>> {
+    static SOURCES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<PathBuf, PathBuf>>> = std::sync::OnceLock::new();
+    SOURCES.get_or_init(Default::default)
+}
+
+/// Says that `shown` is read from `source` (an address FFmpeg can open) instead of from disk.
+pub fn register_source(shown: &Path, source: &str) {
+    sources().lock().unwrap().insert(shown.to_path_buf(), PathBuf::from(source));
+}
+
+fn resolved(path: &Path) -> PathBuf {
+    sources().lock().unwrap().get(path).cloned().unwrap_or_else(|| path.to_path_buf())
+}
+
 impl Playback {
     /// Opens a file and starts playing it from the beginning (or at `from`).
     pub fn open(ffmpeg: Ffmpeg, path: &Path, from: f64) -> Result<Playback, PlaybackError> {
+        let path = resolved(path);
+        let path = path.as_path();
         let probe = ffmpeg.probe(path)?;
         let video = probe.streams.iter().find(|s| s.kind == "video" && !s.attached_picture && s.width.is_some()).cloned();
         let audio: Vec<Stream> = probe.streams.iter().filter(|s| s.kind == "audio").cloned().collect();
