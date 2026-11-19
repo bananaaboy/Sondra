@@ -22,6 +22,7 @@ use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
 use crate::harmony_page::HarmonyState;
 use crate::images_page::ImagesState;
+use crate::mic_page::MicState;
 use crate::mix_page::MixState;
 use crate::video_page::VideoState;
 use crate::normalize_page::NormalizeState;
@@ -66,6 +67,7 @@ pub struct Shell {
     /// The Herunterladen page: the address, what was found, what loads.
     pub(crate) download: DownloadState,
     pub(crate) devices: DevicesState,
+    pub(crate) mic: MicState,
     /// The Umwandeln page.
     pub(crate) convert: ConvertState,
     /// The Lautstärke page.
@@ -136,6 +138,7 @@ impl Shell {
             player: PlayerState::new(cx),
             download,
             devices,
+            mic: MicState::new(),
             convert: ConvertState::new(),
             normalize: NormalizeState::new(),
             harmony: HarmonyState::new(),
@@ -838,6 +841,8 @@ impl Render for Shell {
             self.convert_page(ui, cx)
         } else if self.panel == Panel::Video {
             self.video_page(ui, cx)
+        } else if self.panel == Panel::Mic {
+            self.mic_page(ui, cx)
         } else if self.panel == Panel::Devices {
             self.devices_page(ui, cx)
         } else if self.panel == Panel::Mix {

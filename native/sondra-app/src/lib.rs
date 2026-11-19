@@ -12,6 +12,7 @@ pub mod folder_page;
 pub mod layout;
 pub mod lines;
 pub mod merkliste;
+pub mod mic_page;
 pub mod nav;
 pub mod planner;
 pub mod harmony_page;

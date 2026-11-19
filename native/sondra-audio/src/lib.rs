@@ -8,8 +8,10 @@
 //! card, a build server) opening fails with [`AudioError::NoDevice`] and the player keeps time with a
 //! clock of its own instead.
 
+mod input;
 mod mixer;
 mod output;
 
+pub use input::{input_devices, open_input, Capture, Mic};
 pub use mixer::{Mixer, Shared};
 pub use output::{AudioError, AudioOut, Output, SilentOut};

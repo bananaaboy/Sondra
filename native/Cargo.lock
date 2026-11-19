@@ -6239,6 +6239,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "sondra-a11y",
+ "sondra-audio",
  "sondra-devices",
  "sondra-discord",
  "sondra-download",
