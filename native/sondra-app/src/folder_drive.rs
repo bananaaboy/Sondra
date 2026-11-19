@@ -11,7 +11,8 @@ use std::sync::Arc;
 use gpui::{AppContext, Context};
 use sondra_drive::write::Tree;
 use sondra_drive::DriveClient;
-use sondra_merk::folder::{hint_of, kind_from_mime, DriveInfo, FolderFile, FolderScan, ListingOptions};
+use sondra_merk::folder::{hint_of, hint_properties, kind_from_mime, season_path, unfiled_episodes, DriveInfo, FolderFile, FolderScan, ListingOptions};
+use sondra_merk::matching::EpisodeHint;
 
 use crate::drive_hub::says;
 use crate::shell::Shell;
@@ -172,5 +173,78 @@ impl Shell {
             |shell, (gone, failed), cx| shell.deleted(true, gone, Vec::new(), failed, cx),
         );
         cx.notify();
+    }
+}
+
+impl Shell {
+    /// „3 Folgen liegen noch lose“ over the list of a Drive folder, with „Einordnen“: what the Merkliste knows by name and
+    /// that carries no note yet goes into `Serien/<Titel>/Staffel n`, one click for all of it.
+    pub(crate) fn filing_section(&self, ui: sondra_ui::Ui, cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
+        use gpui::{div, prelude::*, px};
+        let scan = self.folder.scan.as_ref().filter(|s| s.drive)?;
+        let groups = unfiled_episodes(&scan.files, &self.merk.items);
+        let total: usize = groups.iter().map(|g| g.files.len()).sum();
+        if total == 0 {
+            return None;
+        }
+        let me = cx.entity();
+        let busy = self.folder.busy;
+        let titles: Vec<String> = groups.iter().map(|g| g.title.clone()).collect();
+        let says = format!("{}. Einordnen legt sie in „Serien“ in Ordner je Serie und Staffel; umbenannt wird nichts.", titles.join(", "));
+        Some(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(10.))
+                .p(px(16.))
+                .rounded(px(sondra_ui::radius::CARD))
+                .bg(ui.c.panel_soft)
+                .child(div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(ui.subheading(if total == 1 { "1 Folge liegt noch lose".to_string() } else { format!("{total} Folgen liegen noch lose") })).child(ui.button("einordnen", if busy { "Ordnet ein …" } else { "Einordnen" }).small().primary().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.file_loose_episodes(cx)))))
+                .child(ui.prose(says))
+                .into_any_element(),
+        )
+    }
+
+    /// Moves the loose episodes of Drive into their season folders (with the note of what they are), then reads the folder
+    /// again. There is no „Rückgängig“: the files lie in the season's folder afterwards.
+    pub(crate) fn file_loose_episodes(&mut self, cx: &mut Context<Self>) {
+        let (Some(drive), Some(scan)) = (self.drive.clone(), self.folder.scan.clone()) else { return };
+        let groups = unfiled_episodes(&scan.files, &self.merk.items);
+        if groups.is_empty() || self.folder.busy {
+            return;
+        }
+        self.folder.busy = true;
+        cx.notify();
+        Self::in_background(
+            cx,
+            move || -> Result<usize, String> {
+                let client = DriveClient::new(drive.tokens.clone(), drive.api.clone());
+                let mut done = 0;
+                for group in groups {
+                    let [serien, series, season] = season_path(&group.title, group.season);
+                    let target = client.ensure_path(&["Sondra", &serien, &series, &season]).map_err(|e| says(&e))?;
+                    for (file, episode) in group.files {
+                        let Some(info) = file.drive else { continue };
+                        let hint = EpisodeHint { series: group.item.clone(), season: group.season, episode };
+                        client.move_file(&info.id, &target, info.parent.as_deref(), &hint_properties(&hint)).map_err(|e| says(&e))?;
+                        done += 1;
+                    }
+                }
+                Ok(done)
+            },
+            |shell, result, cx| {
+                shell.folder.busy = false;
+                match result {
+                    Ok(n) => {
+                        shell.folder.notice = Some(format!("{n} {} eingeordnet (Sondra/Serien).", if n == 1 { "Folge" } else { "Folgen" }));
+                        shell.open_drive_folder(cx);
+                    }
+                    Err(why) => {
+                        shell.folder.notice = Some(why);
+                        cx.notify();
+                    }
+                }
+            },
+        );
     }
 }

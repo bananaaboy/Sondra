@@ -497,6 +497,9 @@ impl Shell {
         if let Some(section) = self.continue_section(ui, cx) {
             page = page.child(section);
         }
+        if let Some(section) = self.filing_section(ui, cx) {
+            page = page.child(section);
+        }
         if let Some(section) = self.offer_section(ui, cx) {
             page = page.child(section);
         }

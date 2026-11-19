@@ -157,3 +157,20 @@ fn the_tree_below_sondra_lists_files_and_folders_with_their_paths_and_notes_and_
     let after = client.tree(100, &AtomicBool::new(false), |_| {}).unwrap();
     assert_eq!(after.files.len(), 1);
 }
+
+#[test]
+fn a_file_is_moved_into_another_folder_with_notes_added_and_nothing_is_renamed() {
+    let drive = FakeDrive::start();
+    let client = drive.client();
+    let loose = client.ensure_path(&["Sondra", "Heruntergeladen"]).unwrap();
+    let season = client.ensure_path(&["Sondra", "Serien", "Frieren", "Staffel 1"]).unwrap();
+    let file = client.create(&loose, "Frieren - 02.mkv", b"x", "video/x-matroska", &notes()).unwrap();
+    let hint: BTreeMap<String, String> = [("sondraSerie".to_string(), "fr".to_string()), ("sondraFolge".to_string(), "2".to_string())].into();
+    let moved = client.move_file(&file.id, &season, Some(&loose), &hint).unwrap();
+    assert_eq!(moved.name, "Frieren - 02.mkv");
+    let tree = client.tree(100, &AtomicBool::new(false), |_| {}).unwrap();
+    let found = tree.files.iter().find(|f| f.file.id == file.id).unwrap();
+    assert_eq!(found.path, "Serien/Frieren/Staffel 1/Frieren - 02.mkv");
+    assert_eq!(found.notes["sondraFolge"], "2");
+    assert_eq!(found.notes["sondraArt"], "ergebnis", "the notes that were there stay");
+}

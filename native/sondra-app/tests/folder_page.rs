@@ -646,6 +646,62 @@ fn sondras_folder_in_drive_is_read_played_by_fetching_it_and_deleted_into_drives
 }
 
 #[gpui::test]
+fn loose_episodes_in_drive_are_filed_into_their_season_with_one_click(cx: &mut TestAppContext) {
+    use sondra_merk::normalize::{normalize, Context as Ids};
+    use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};
+    let tmp = tempfile::tempdir().unwrap();
+    std::env::set_var("SONDRA_DATA", tmp.path().join("daten"));
+    let fake = sondra_drive::fake::FakeDrive::start();
+    let client = fake.client();
+    let loose = client.ensure_path(&["Sondra", "Heruntergeladen"]).unwrap();
+    client.create(&loose, "Frieren S01E02.mkv", b"zwei", "video/x-matroska", &Default::default()).unwrap();
+    client.create(&loose, "Frieren S01E03.mkv", b"drei", "video/x-matroska", &Default::default()).unwrap();
+    client.create(&loose, "etwas anderes.mkv", b"x", "video/x-matroska", &Default::default()).unwrap();
+    let mut ids = Ids::system();
+    let frieren = normalize(&serde_json::json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 1, "seasons": [{ "number": 1, "episodes": 12, "watched": [] }] }), &mut ids);
+    let list = tmp.path().join("Merkliste.sqlite");
+    fs::write(&list, write_sqlite(&Stored { items: vec![frieren], ..Default::default() }).unwrap()).unwrap();
+    let mut w = open(cx, tmp.path());
+    w.shell.update(w.cx, |shell, cx| {
+        shell.open_merkliste(sondra_app::store::MerkStore::at(list.clone()), cx);
+        shell.set_drive_for_test(sondra_app::drive_hub::Drive {
+            api: fake.api(),
+            tokens: std::sync::Arc::new(sondra_drive::fake::Always),
+            configured: true,
+            connected: std::sync::Arc::new(|| true),
+            sign_in: std::sync::Arc::new(|| Ok(())),
+        });
+    });
+    w.draw();
+    w.press(Role::Button, "Aus Google Drive");
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().find(Role::Button, "Einordnen").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "2 Folgen liegen noch lose")), "only what the list knows by name");
+    w.press(Role::Button, "Einordnen");
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().find(Role::Button, "Einordnen").is_none() && !w.shell.read_with(w.cx, |s, _| s.folder_busy()) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let tree = fake.client().tree(100, &std::sync::atomic::AtomicBool::new(false), |_| {}).unwrap();
+    let mut paths: Vec<String> = tree.files.iter().map(|f| f.path.clone()).collect();
+    paths.sort();
+    assert_eq!(paths, ["Heruntergeladen/etwas anderes.mkv", "Serien/Frieren/Staffel 1/Frieren S01E02.mkv", "Serien/Frieren/Staffel 1/Frieren S01E03.mkv"]);
+    let filed = tree.files.iter().find(|f| f.path.ends_with("S01E03.mkv")).unwrap();
+    assert_eq!((filed.notes["sondraSerie"].as_str(), filed.notes["sondraStaffel"].as_str(), filed.notes["sondraFolge"].as_str()), ("fr", "1", "3"));
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with("2 Folgen eingeordnet"))));
+}
+
+#[gpui::test]
 fn what_the_list_has_seen_can_be_left_out_of_the_view(cx: &mut TestAppContext) {
     use sondra_merk::normalize::{normalize, Context as Ids};
     use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};

@@ -370,6 +370,26 @@ fn handle(mut request: tiny_http::Request, shared: &Arc<Mutex<State>>) {
                     }
                     None => reply(request, 404, b"{}".to_vec(), "application/json"),
                 }
+            } else if params.contains_key("addParents") {
+                // A move: into the new folder, out of the old one, with notes added.
+                match state.entries.get_mut(&id) {
+                    Some(entry) => {
+                        if let Some(to) = params.get("addParents") {
+                            entry.parent = to.clone();
+                        }
+                        if let Some(o) = meta["appProperties"].as_object() {
+                            for (k, v) in o {
+                                if let Some(v) = v.as_str() {
+                                    entry.notes.insert(k.clone(), v.to_owned());
+                                }
+                            }
+                        }
+                        entry.modified = now;
+                        let shown = view(&id, entry);
+                        json_reply(request, shown)
+                    }
+                    None => reply(request, 404, b"{}".to_vec(), "application/json"),
+                }
             } else {
                 reply(request, 400, b"{}".to_vec(), "application/json")
             }

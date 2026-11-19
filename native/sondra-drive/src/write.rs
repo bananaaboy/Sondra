@@ -415,3 +415,17 @@ impl<T: TokenSource> DriveClient<T> {
         }
     }
 }
+
+impl<T: TokenSource> DriveClient<T> {
+    /// A file into another folder, with notes put on it (the notes already there stay; these are added). `from` is the
+    /// folder it lies in now. Nothing is renamed (`driveClient.ts` `move`).
+    pub fn move_file(&self, id: &str, to: &str, from: Option<&str>, notes: &BTreeMap<String, String>) -> Result<DriveFile, DriveError> {
+        let mut params = vec![("addParents", to.to_string()), ("fields", format!("{FILE_FIELDS},parents,appProperties"))];
+        if let Some(from) = from.filter(|f| *f != to) {
+            params.push(("removeParents", from.to_string()));
+        }
+        let url = Url::parse_with_params(&format!("{}/files/{id}", self.api()), params).map_err(|e| DriveError::Failed(e.to_string()))?;
+        let body = if notes.is_empty() { json!({}) } else { json!({ "appProperties": notes }) };
+        Ok(as_file(&json_of(self.send("PATCH", url.as_str(), Some("application/json; charset=UTF-8"), Some(body.to_string().as_bytes()))?)?))
+    }
+}
