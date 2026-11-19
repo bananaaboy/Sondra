@@ -76,7 +76,7 @@ impl Shell {
                 let (cancel, go) = (job.cancel.clone(), me.clone());
                 stack.push(
                     card()
-                        .child(div().truncate().child(ui.title(format!("Lädt: {}", job.title))))
+                        .child(div().truncate().child(ui.title(format!("{}: {}", if job.cancel.is_paused() { "Angehalten" } else { "Lädt" }, job.title))))
                         .child(ui.bar("karte-laden", fraction, format!("{}: geladen", job.title)))
                         .child(div().font_family(family::VALUE).text_size(px(size::SMALL)).text_color(c.prose).child(said))
                         .child(

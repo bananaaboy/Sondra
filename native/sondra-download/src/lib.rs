@@ -81,7 +81,14 @@ pub struct Progress {
 
 /// Stops a running download from another thread.
 #[derive(Debug, Clone, Default)]
-pub struct Cancel(Arc<AtomicBool>);
+pub struct Cancel(Arc<AtomicBool>, Arc<Hold>);
+
+/// The pause switch of a download: whether it is held now and how often it was.
+#[derive(Debug, Default)]
+struct Hold {
+    paused: AtomicBool,
+    times: std::sync::atomic::AtomicU32,
+}
 
 impl Cancel {
     pub fn new() -> Self {
@@ -92,6 +99,31 @@ impl Cancel {
     }
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::SeqCst)
+    }
+    /// Holds the download where it is: nothing more is read until `resume`. The connection may die
+    /// meanwhile; the download opens it again with `Range` and does not count that as a failure.
+    pub fn pause(&self) {
+        if !self.1.paused.swap(true, Ordering::SeqCst) {
+            self.1.times.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    pub fn resume(&self) {
+        self.1.paused.store(false, Ordering::SeqCst);
+    }
+    pub fn is_paused(&self) -> bool {
+        self.1.paused.load(Ordering::SeqCst)
+    }
+    /// How often a pause began; a retry loop compares it before and after an attempt.
+    fn pauses(&self) -> u32 {
+        self.1.times.load(Ordering::SeqCst)
+    }
+    /// Waits while paused. A cancel ends the wait.
+    fn held(&self) -> Result<(), DownloadError> {
+        while self.is_paused() {
+            self.check()?;
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        Ok(())
     }
     fn check(&self) -> Result<(), DownloadError> {
         if self.is_cancelled() {
@@ -200,6 +232,8 @@ impl Downloader {
         let mut attempt = 0;
         loop {
             self.cancel.check()?;
+            self.cancel.held()?;
+            let pauses = self.cancel.pauses();
             let range = (written > 0).then(|| format!("bytes={written}-"));
             let outcome = self
                 .open(url, referer, range.as_deref())
@@ -215,6 +249,8 @@ impl Downloader {
                 });
             match outcome {
                 Ok(()) => return Ok(written),
+                // A line that died while the download was held is not a failure.
+                Err(DownloadError::Network(_)) if self.cancel.pauses() != pauses => {}
                 Err(DownloadError::Network(_)) if attempt + 1 < DIRECT_RETRIES => {
                     attempt += 1;
                     self.pause(Duration::from_millis(800 * u64::from(attempt)))?;
@@ -236,6 +272,7 @@ impl Downloader {
         let mut buffer = vec![0u8; 64 * 1024];
         loop {
             self.cancel.check()?;
+            self.cancel.held()?;
             let n = body
                 .read(&mut buffer)
                 .map_err(|e| DownloadError::Network(e.to_string()))?;
@@ -494,6 +531,8 @@ impl Downloader {
         let mut attempt = 0;
         loop {
             self.cancel.check()?;
+            self.cancel.held()?;
+            let pauses = self.cancel.pauses();
             let result = self
                 .open(url, referer, header.as_deref())
                 .and_then(|mut opened| {
@@ -501,6 +540,7 @@ impl Downloader {
                     let mut buffer = vec![0u8; 64 * 1024];
                     loop {
                         self.cancel.check()?;
+                        self.cancel.held()?;
                         let n = opened
                             .body
                             .read(&mut buffer)
@@ -530,6 +570,8 @@ impl Downloader {
                     | DownloadError::PrivateAddress
                     | DownloadError::Expired),
                 ) => return Err(e),
+                // A line that died while the download was held is tried again without counting.
+                Err(DownloadError::Network(_)) if self.cancel.pauses() != pauses => {}
                 Err(e) if attempt >= SEGMENT_RETRIES => return Err(e),
                 Err(_) => {
                     attempt += 1;

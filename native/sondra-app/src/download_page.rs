@@ -42,6 +42,8 @@ pub struct Job {
     pub progress: Arc<Mutex<Progress>>,
     pub cancel: Cancel,
     pub started: Instant,
+    /// A direct file or stream can be held; a yt-dlp load cannot (its own process runs on).
+    pub can_pause: bool,
 }
 
 pub struct Loaded {
@@ -388,7 +390,7 @@ impl Shell {
         };
         let progress = Arc::new(Mutex::new(Progress::default()));
         let cancel = Cancel::new();
-        d.job = Some(Job { title: title.clone(), progress: progress.clone(), cancel: cancel.clone(), started: Instant::now() });
+        d.job = Some(Job { title: title.clone(), progress: progress.clone(), cancel: cancel.clone(), started: Instant::now(), can_pause: !matches!(found, Found::Portal { .. }) });
         d.error = None;
         let allow_private = d.allow_private;
         let stem = title.clone();
@@ -616,19 +618,33 @@ impl Shell {
             let fraction = progress.total.filter(|t| *t > 0).map(|t| (progress.loaded as f32 / t as f32).clamp(0.0, 1.0));
             let seconds = job.started.elapsed().as_secs_f64().max(0.001);
             let rate = progress.loaded as f64 / seconds;
-            let said = match progress.total {
-                Some(total) => format!("{} von {} · {}/s", format_size(progress.loaded), format_size(total), format_size(rate as u64)),
-                None => format!("{} · {}/s", format_size(progress.loaded), format_size(rate as u64)),
+            let paused = job.cancel.is_paused();
+            let said = match (paused, progress.total) {
+                (true, Some(total)) => format!("Angehalten bei {} von {}", format_size(progress.loaded), format_size(total)),
+                (true, None) => format!("Angehalten bei {}", format_size(progress.loaded)),
+                (false, Some(total)) => format!("{} von {} · {}/s", format_size(progress.loaded), format_size(total), format_size(rate as u64)),
+                (false, None) => format!("{} · {}/s", format_size(progress.loaded), format_size(rate as u64)),
             };
             let cancel = job.cancel.clone();
+            let hold = job.cancel.clone();
+            let hold_me = me.clone();
+            let can_pause = job.can_pause;
             page = page.child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .child(ui.title(if d.running_queue && !d.queue.is_empty() { format!("Lädt: {} · noch {} danach", job.title, d.queue.len()) } else { format!("Lädt: {}", job.title) }))
+                    .child(ui.title({
+                        let verb = if paused { "Angehalten" } else { "Lädt" };
+                        if d.running_queue && !d.queue.is_empty() { format!("{verb}: {} · noch {} danach", job.title, d.queue.len()) } else { format!("{verb}: {}", job.title) }
+                    }))
                     .child(ui.bar("laden", fraction, format!("{}: geladen", job.title)))
-                    .child(div().flex().flex_wrap().items_center().gap(px(12.)).child(div().font_family(family::VALUE).text_size(px(size::SMALL)).text_color(c.prose).child(said)).child(ui.button("laden-abbrechen", "Abbrechen").small().on_click(move |_, _| cancel.cancel()))),
+                    .child(div().flex().flex_wrap().items_center().gap(px(12.)).child(div().font_family(family::VALUE).text_size(px(size::SMALL)).text_color(c.prose).child(said)).children(can_pause.then(|| {
+                        ui.button("laden-pause", if paused { "Fortsetzen" } else { "Anhalten" }).small().on_click(move |_, app| {
+                            if hold.is_paused() { hold.resume() } else { hold.pause() }
+                            hold_me.update(app, |_, cx| cx.notify());
+                        })
+                    })).child(ui.button("laden-abbrechen", "Abbrechen").small().on_click(move |_, _| cancel.cancel()))),
             );
         }
 

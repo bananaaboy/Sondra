@@ -248,3 +248,47 @@ fn a_download_goes_on_behind_another_page_and_a_small_card_says_so_and_leads_bac
     }
     assert_eq!(std::fs::metadata(tmp.path().join("lied.mp3")).unwrap().len(), 160_000);
 }
+
+#[gpui::test]
+fn a_download_can_be_held_and_goes_on_where_it_stopped(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let port = server.server_addr().to_ip().unwrap().port();
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            let header = tiny_http::Header::from_bytes("Content-Type", "audio/mpeg").unwrap();
+            let body = Slow { left: 160_000 };
+            let _ = request.respond(tiny_http::Response::new(tiny_http::StatusCode(200), vec![header], body, Some(160_000), None));
+        }
+    });
+    let mut w = open(cx, tmp.path());
+    w.type_address(&format!("http://127.0.0.1:{port}/lied.mp3"));
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    w.press(Role::Button, "Laden");
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Anhalten").is_some());
+    assert!(w.tree().find(Role::Button, "Fortsetzen").is_none());
+    w.press(Role::Button, "Anhalten");
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Fortsetzen").is_some());
+    assert!(w.said("Angehalten: lied"));
+    // Held, the file does not grow: the part file keeps its size over a stretch of time.
+    let size = |dir: &std::path::Path| std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().metadata().unwrap().len()).sum::<u64>();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let before = size(tmp.path());
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert_eq!(size(tmp.path()), before, "it grew while held");
+    assert!(before < 160_000);
+    w.press(Role::Button, "Fortsetzen");
+    for _ in 0..400 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().find(Role::Heading, "Geladen").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    assert_eq!(std::fs::metadata(tmp.path().join("lied.mp3")).unwrap().len(), 160_000);
+}

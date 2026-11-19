@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 
 use gpui::{div, prelude::*, px, AnyElement, Context};
-use sondra_electron::{merge_value, Found, CONVERT_KEY, ORDNER_KEYS, PLAYER_KEYS};
+use sondra_electron::{merge_value, Found, ORDNER_KEYS, PLAYER_KEYS};
 use sondra_merk::folder_memory::Store;
 use sondra_merk::merge::merge_merkliste;
 use sondra_merk::normalize::Context as Ids;

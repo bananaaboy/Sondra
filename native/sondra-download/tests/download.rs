@@ -426,6 +426,73 @@ fn a_download_can_be_cancelled_and_leaves_nothing() {
 }
 
 #[test]
+fn a_paused_download_stands_still_and_then_finishes_whole() {
+    let data = pseudo(2 * 1024 * 1024, 9);
+    let server = Server::start(vec![("/f.mp4", Route::Bytes(data.clone()))]);
+    let dir = tempfile::tempdir().unwrap();
+    let cancel = Cancel::new();
+    let mut d = Downloader::new(Some(1500), cancel.clone());
+    d.allow_private = true;
+    let loaded = Arc::new(AtomicUsize::new(0));
+    let seen = loaded.clone();
+    let hold = cancel.clone();
+    let watcher = std::thread::spawn(move || {
+        // Wait for some bytes, hold, check that nothing moves, let go.
+        while seen.load(Ordering::SeqCst) < 100_000 {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        hold.pause();
+        std::thread::sleep(Duration::from_millis(300));
+        let at = seen.load(Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(700));
+        let still = seen.load(Ordering::SeqCst);
+        hold.resume();
+        (at, still)
+    });
+    let got = d
+        .download(
+            &stream(server.url("/f.mp4"), false),
+            dir.path(),
+            "F",
+            &mut |p| loaded.store(p.loaded as usize, Ordering::SeqCst),
+        )
+        .expect("a file");
+    let (at, still) = watcher.join().unwrap();
+    // One more read may have been in flight when the hold began.
+    assert!(still <= at + 64 * 1024, "it went on while held: {at} -> {still}");
+    assert!(std::fs::read(&got.path).unwrap() == data, "the bytes differ");
+}
+
+#[test]
+fn a_download_held_and_cancelled_ends_at_once() {
+    let server = Server::start(vec![("/f.mp4", Route::Bytes(pseudo(2 * 1024 * 1024, 4)))]);
+    let dir = tempfile::tempdir().unwrap();
+    let cancel = Cancel::new();
+    let mut d = Downloader::new(Some(1500), cancel.clone());
+    d.allow_private = true;
+    let seen = AtomicUsize::new(0);
+    let err = d
+        .download(
+            &stream(server.url("/f.mp4"), false),
+            dir.path(),
+            "F",
+            &mut |_| {
+                if seen.fetch_add(1, Ordering::SeqCst) == 2 {
+                    cancel.pause();
+                    let later = cancel.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(Duration::from_millis(300));
+                        later.cancel();
+                    });
+                }
+            },
+        )
+        .unwrap_err();
+    assert_eq!(err, DownloadError::Cancelled);
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+#[test]
 fn file_names_survive_every_file_system() {
     assert_eq!(
         safe_stem("One Piece - S01E01: \"Ich bin Ruffy!\""),
