@@ -20,6 +20,7 @@ use crate::download_page::DownloadState;
 use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
 use crate::harmony_page::HarmonyState;
+use crate::images_page::ImagesState;
 use crate::normalize_page::NormalizeState;
 use crate::player_page::PlayerState;
 use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
@@ -66,6 +67,7 @@ pub struct Shell {
     /// The Lautstärke page.
     pub(crate) normalize: NormalizeState,
     pub(crate) harmony: HarmonyState,
+    pub(crate) images: ImagesState,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
@@ -122,6 +124,7 @@ impl Shell {
             convert: ConvertState::new(),
             normalize: NormalizeState::new(),
             harmony: HarmonyState::new(),
+            images: ImagesState::new(),
             convert_watch: None,
             pending_focus: None,
         }
@@ -787,6 +790,10 @@ impl Render for Shell {
             let me = cx.entity_id();
             window.on_next_frame(move |_, cx| cx.notify(me));
         }
+        // Pictures the Bilder page has replaced are let go of here, where the window is at hand.
+        for old in std::mem::take(&mut self.images.trash) {
+            let _ = window.drop_image(old);
+        }
         // The picture over the whole window (or screen): the page is nothing but it, in dark colours.
         let immersive = self.panel == Panel::Player && self.player.playback.is_some() && self.player.size.immersive();
         self.sync_fullscreen(window);
@@ -809,6 +816,8 @@ impl Render for Shell {
             self.download_page(ui, cx)
         } else if self.panel == Panel::Converter {
             self.convert_page(ui, cx)
+        } else if self.panel == Panel::Images {
+            self.images_page(ui, cx)
         } else if self.panel == Panel::Harmony {
             self.harmony_page(ui, cx)
         } else if self.panel == Panel::Normalize {
