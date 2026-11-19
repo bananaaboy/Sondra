@@ -8,6 +8,10 @@ publish.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+rsa = "0.9"
+sha1 = { version = "0.10", features = ["oid"] }
+rand = "0.8"
+base64 = "0.22"
 
 [dev-dependencies]
 serde_json.workspace = true

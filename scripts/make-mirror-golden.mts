@@ -6,8 +6,9 @@
  *
  *   npm run native:golden
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
+import { adbGeneratePublicKey, adbGetPublicKeySize, rsaSign } from '@yume-chan/adb'
 import { AdbScrcpyOptions3_3_3 } from '@yume-chan/adb-scrcpy'
 import { AndroidKeyCode, AndroidKeyEventAction, AndroidMotionEventAction, ScrcpyControlMessageSerializer, ScrcpyPointerId } from '@yume-chan/scrcpy'
 
@@ -84,8 +85,15 @@ const keyboardReports = ops.map((op) => {
   return hex(kind === 'down' ? keyboard.down(code) : keyboard.up(code))
 })
 
+// The key: the same private key, the signature over a fixed token and the public key the library makes.
+const der = new Uint8Array(readFileSync(`${dir}/../fixtures/adb-test-key.der`))
+const tokens = [Uint8Array.from({ length: 20 }, (_, i) => i * 13 + 1), Uint8Array.from({ length: 20 }, () => 255), Uint8Array.from({ length: 20 }, () => 0)]
+const publicKey = adbGeneratePublicKey(der)
+if (publicKey.length !== adbGetPublicKeySize()) throw new Error('the public key has an unexpected size')
+const key = { signatures: tokens.map((t) => ({ token: hex(t), signature: hex(rsaSign(der, t)) })), publicKey: hex(publicKey) }
+
 writeFileSync(
   `${dir}/mirror.json`,
-  `${JSON.stringify({ version: '3.3.3', descriptor: hex(KEYBOARD_REPORT_DESCRIPTOR), args, control, keyboard: { ops, reports: keyboardReports } }, null, 1)}\n`,
+  `${JSON.stringify({ version: '3.3.3', descriptor: hex(KEYBOARD_REPORT_DESCRIPTOR), args, control, keyboard: { ops, reports: keyboardReports }, key }, null, 1)}\n`,
 )
 console.log('Handy: ' + args.length + ' Argumentlisten, ' + Object.values(control).flat().length + ' Steuernachrichten, ' + ops.length + ' Tastenberichte')

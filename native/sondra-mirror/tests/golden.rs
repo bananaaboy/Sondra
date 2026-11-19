@@ -98,3 +98,14 @@ fn every_control_message_is_what_the_web_app_sends() {
         list(&c["uhid"])
     );
 }
+
+#[test]
+fn the_key_signs_and_is_written_as_the_web_apps_library_does() {
+    let key = sondra_mirror::key::AdbKey::from_pkcs8(include_bytes!("fixtures/adb-test-key.der")).unwrap();
+    let t = &table()["key"];
+    assert_eq!(hex(&key.public_key_raw()), t["publicKey"].as_str().unwrap(), "the public key, byte for byte");
+    for case in t["signatures"].as_array().unwrap() {
+        let token: Vec<u8> = (0..20).map(|i| u8::from_str_radix(&case["token"].as_str().unwrap()[i * 2..i * 2 + 2], 16).unwrap()).collect();
+        assert_eq!(hex(&key.sign(&token)), case["signature"].as_str().unwrap(), "the signature over {token:?}");
+    }
+}
