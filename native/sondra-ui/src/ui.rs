@@ -249,10 +249,16 @@ pub struct Tile {
     title: SharedString,
     hint: SharedString,
     symbol: SharedString,
+    icon: Option<SharedString>,
     on_click: Option<Handler>,
 }
 
 impl Tile {
+    /// The mark of the tool, from `icons`; it stands in the place of the symbol.
+    pub fn icon(mut self, path: Option<SharedString>) -> Self {
+        self.icon = path;
+        self
+    }
     /// One character or short word standing in for the icon, until the icons are drawn.
     pub fn symbol(mut self, symbol: impl Into<SharedString>) -> Self {
         self.symbol = symbol.into();
@@ -298,7 +304,13 @@ impl RenderOnce for Tile {
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_size(px(size::BODY))
                     .group_hover(self.id.clone(), move |s| s.bg(c.ink).text_color(c.on_ink))
-                    .child(self.symbol.clone()),
+                    .child(match &self.icon {
+                        Some(path) => gpui::svg()
+                            .path(path.clone())
+                            .size(px(18.))
+                            .into_any_element(),
+                        None => self.symbol.clone().into_any_element(),
+                    }),
             )
             .child(
                 div()
@@ -530,6 +542,7 @@ impl Ui {
             title: title.into(),
             hint: hint.into(),
             symbol: "·".into(),
+            icon: None,
             on_click: None,
         }
     }

@@ -10,6 +10,8 @@ publish.workspace = true
 gpui = "=0.2.2"
 sondra-a11y = { path = "../sondra-a11y" }
 unicode-segmentation = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 accesskit = "0.25"

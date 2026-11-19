@@ -10,7 +10,7 @@ use gpui::{
     WindowOptions,
 };
 use sondra_a11y::{a11y_root, attach, set_window_title};
-use sondra_ui::{fonts, Mode, NoticeKind, Ui};
+use sondra_ui::{fonts, Assets, Mode, NoticeKind, Ui};
 
 struct Gallery {
     chosen_tab: usize,
@@ -134,7 +134,7 @@ impl Render for Gallery {
 }
 
 fn main() {
-    Application::new().run(|cx: &mut App| {
+    Application::new().with_assets(Assets).run(|cx: &mut App| {
         fonts::load(cx);
         let bounds = Bounds::centered(None, size(px(1120.), px(900.)), cx);
         cx.open_window(

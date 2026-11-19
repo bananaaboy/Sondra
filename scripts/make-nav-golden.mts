@@ -7,7 +7,9 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 
-import { PANELS, TAB_ENTRIES } from '../src/components/panelMeta'
+import { renderToStaticMarkup } from 'react-dom/server'
+
+import { ACTION_ICONS, PANELS, TAB_ENTRIES } from '../src/components/panelMeta'
 import { ACTIONS, GROUP_LABEL, searchActions, startGroups, START_FILTERS } from '../src/lib/actions'
 
 const outDir = 'native/sondra-app/tests/golden'
@@ -35,3 +37,20 @@ writeFileSync(
   JSON.stringify(queries.map((query) => ({ query, ids: searchActions(query).map((a) => a.id) })), null, 2) + '\n',
 )
 console.log(`actions.json: ${ACTIONS.length} actions, ${queries.length} searches`)
+
+// The marks of the tiles, as the markup the web app draws them with (all of them are strokes on a 16 × 16
+// grid): the native app draws the same lines, so a mark redrawn there reaches here by the check.
+mkdirSync('native/sondra-ui/data', { recursive: true })
+const markup = (node: unknown) => renderToStaticMarkup(node as never)
+writeFileSync(
+  'native/sondra-ui/data/icons.json',
+  JSON.stringify(
+    {
+      panels: Object.fromEntries(PANELS.map((p) => [p.id, markup(p.icon)])),
+      actions: Object.fromEntries(Object.entries(ACTION_ICONS).map(([id, icon]) => [id, markup(icon)])),
+    },
+    null,
+    2,
+  ) + '\n',
+)
+console.log(`icons.json: ${PANELS.length} tools, ${Object.keys(ACTION_ICONS).length} jobs`)

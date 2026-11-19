@@ -17,3 +17,11 @@ thiserror = "2"
 # See vendor/xattr/PATCH.md.
 [patch.crates-io]
 xattr = { path = "vendor/xattr" }
+
+# The test builds of the UI crates are large; debug symbols for dependencies are never read.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
+[profile.dev.package."*"]
+debug = false

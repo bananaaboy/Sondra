@@ -3,10 +3,10 @@
 use gpui::{prelude::*, px, size, App, Application, Bounds, WindowBounds, WindowOptions};
 use sondra_a11y::{attach, set_window_title};
 use sondra_app::shell::Shell;
-use sondra_ui::{bind_keys, fonts};
+use sondra_ui::{bind_keys, fonts, Assets};
 
 fn main() {
-    Application::new().run(|cx: &mut App| {
+    Application::new().with_assets(Assets).run(|cx: &mut App| {
         fonts::load(cx);
         bind_keys(cx);
         let bounds = Bounds::centered(None, size(px(1180.), px(860.)), cx);
