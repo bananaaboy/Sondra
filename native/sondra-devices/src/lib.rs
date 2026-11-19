@@ -7,6 +7,7 @@
 //! each other's files — Drive knows no finer rights than the account — so a record changed by anyone but its
 //! owner fails its signature, is ignored, and its owner writes it again on its next round.
 
+pub mod engine;
 pub mod identity;
 pub mod registry;
 pub mod rtc;
