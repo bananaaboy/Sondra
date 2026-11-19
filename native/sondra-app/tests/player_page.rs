@@ -240,3 +240,76 @@ fn a_file_named_like_an_episode_is_ticked_off_at_ninety_percent_and_can_be_taken
     let stored = read_shared(&std::fs::read(&list).unwrap(), &mut Ids::system()).unwrap();
     assert_eq!(stored.items[0].seasons.as_ref().unwrap()[0].watched, vec![1], "taken back, it stays taken back");
 }
+
+#[gpui::test]
+fn the_keys_of_the_player_space_arrows_and_m(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let path = film(tmp.path(), "film.mp4", 30);
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![path], cx));
+    w.watch(0.5);
+    // The keys reach the window from a control that does not use them: the „Stumm“ chip.
+    let focus = |w: &mut Window| {
+        let id = w.tree().find(Role::Button, "Stumm").unwrap().id;
+        w.cx.update(|window, cx| {
+            run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: id, data: None }, window, cx)
+        });
+    };
+    focus(&mut w);
+    w.cx.simulate_keystrokes("right");
+    w.watch(0.5);
+    assert!(w.position() >= 10.0, "an arrow jumps by the skip of the settings, ten seconds: {}", w.position());
+    focus(&mut w);
+    w.cx.simulate_keystrokes("left");
+    w.watch(0.4);
+    assert!(w.position() < 5.0, "and the other way: {}", w.position());
+    focus(&mut w);
+    w.cx.simulate_keystrokes("down");
+    w.draw();
+    assert_eq!(w.tree().find(Role::Slider, "Lautstärke").unwrap().value.as_ref().map(|v| v.to_string()), Some("95 Prozent".to_string()));
+    focus(&mut w);
+    w.cx.simulate_keystrokes("m");
+    w.draw();
+    assert_eq!(w.tree().find(Role::Button, "Stumm").unwrap().toggled, Some(true));
+    focus(&mut w);
+    w.cx.simulate_keystrokes("space");
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Abspielen").is_some(), "Space pauses");
+}
+
+#[gpui::test]
+fn over_an_episode_the_opening_can_be_skipped_and_in_the_credits_the_next_is_offered(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    // Five minutes: an episode, not a clip.
+    let one = film(tmp.path(), "Serie - 01.mp4", 300);
+    let two = film(tmp.path(), "Serie - 02.mp4", 5);
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![one, two], cx));
+    w.watch(0.6);
+    assert!(w.tree().find(Role::Button, "Vorspann überspringen").is_some(), "in the first minutes of an episode");
+    assert!(w.tree().find(Role::Button, "Nächste Folge").is_none(), "and not yet the next");
+    let before = w.position();
+    w.press(Role::Button, "Vorspann überspringen");
+    w.watch(0.5);
+    assert!(w.position() >= before + 85.0, "it jumped by the length of an opening, 1:30: {before} → {}", w.position());
+    // A third of a short episode is still its opening: the offer stays until that is passed.
+    w.press(Role::Button, "Vorspann überspringen");
+    w.watch(0.5);
+    assert!(w.tree().find(Role::Button, "Vorspann überspringen").is_none(), "past the first third the offer is gone ({})", w.position());
+    // In the last minutes: the next episode.
+    w.shell.update(w.cx, |shell, cx| {
+        shell.player_seek(275.0);
+        cx.notify();
+    });
+    w.watch(0.8);
+    assert!(w.tree().find(Role::Button, "Nächste Folge").is_some(), "in the credits ({})", w.position());
+    w.press(Role::Button, "Nächste Folge");
+    w.watch(0.3);
+    assert!(w.tree().find(Role::ListItem, "Serie - 02.mp4").unwrap().description.as_ref().is_some_and(|d| d.contains("läuft")));
+}

@@ -134,6 +134,60 @@ impl PlayerState {
         }
     }
 
+    /// Pause or play; a film that has ended starts again.
+    pub fn toggle(&mut self) {
+        if let Some(p) = self.playback.as_mut() {
+            p.toggle();
+        }
+    }
+
+    /// A jump of this many seconds from where the film is.
+    pub fn skip_by(&mut self, seconds: f64) {
+        if let Some(p) = self.playback.as_mut() {
+            let to = p.position() + seconds;
+            let _ = p.seek(to);
+        }
+    }
+
+    /// A step of the volume, 0 to 1 (and beyond up to the boost the settings allow later).
+    pub fn volume_by(&mut self, step: f64) {
+        self.settings.volume = (self.settings.volume + step).clamp(0.0, 1.0);
+        self.settings.muted = false;
+        let volume = self.settings.volume as f32;
+        if let Some(p) = self.playback.as_mut() {
+            p.set_muted(false);
+            p.set_volume(volume);
+        }
+        self.keep_settings();
+    }
+
+    pub fn toggle_mute(&mut self) {
+        self.settings.muted = !self.settings.muted;
+        let muted = self.settings.muted;
+        if let Some(p) = self.playback.as_mut() {
+            p.set_muted(muted);
+        }
+        self.keep_settings();
+    }
+
+    /// A key of the player (Space, the arrows, M); `true` when it was one and has been taken.
+    pub fn key(&mut self, key: &str) -> bool {
+        if self.playback.is_none() {
+            return false;
+        }
+        let skip = self.settings.skip;
+        match key {
+            "space" => self.toggle(),
+            "left" => self.skip_by(-skip),
+            "right" => self.skip_by(skip),
+            "up" => self.volume_by(0.05),
+            "down" => self.volume_by(-0.05),
+            "m" => self.toggle_mute(),
+            _ => return false,
+        }
+        true
+    }
+
     /// A subtitle file with the name of the film, beside it, goes with it.
     fn load_subtitles(&mut self, film: &std::path::Path) {
         let (Some(dir), Some(name)) = (film.parent(), film.file_name().map(|n| n.to_string_lossy().into_owned())) else { return };
@@ -290,6 +344,13 @@ impl Shell {
         self.player.playback.as_ref().map(|p| p.position())
     }
 
+    /// Jumps to a place in the film that plays.
+    pub fn player_seek(&mut self, seconds: f64) {
+        if let Some(p) = self.player.playback.as_mut() {
+            let _ = p.seek(seconds);
+        }
+    }
+
     /// Whether a picture of the film has come to the stage.
     pub fn player_has_picture(&self) -> bool {
         self.player.image.is_some()
@@ -358,6 +419,14 @@ impl Shell {
         let position = playback.position();
         let duration = playback.duration().unwrap_or(0.0);
         let playing = playback.state() == State::Playing;
+        // Over an episode: the opening to skip, and in its credits the next one.
+        let opening_len = episode_of(p, &self.merk.items)
+            .and_then(|(found, _)| self.merk.items.iter().find(|i| i.id == found.item).and_then(|i| i.opening))
+            .map_or(p.settings.opening, |o| o as f64);
+        let video = playback.picture_size().is_some();
+        let skip_opening = p.settings.skip_opening && video && sondra_player::opening_offered(position, duration, opening_len);
+        let has_next = p.index + 1 < p.queue.len();
+        let offer_next = p.settings.skip_opening && video && has_next && sondra_player::next_offered(position, duration);
         let stage_height = (width * 9.0 / 16.0).clamp(240.0, 620.0);
         let name = p.current_path().map(file_label).unwrap_or_default();
 
@@ -368,6 +437,21 @@ impl Shell {
             (None, Some(_)) => stage.child(div().text_color(c.stage_muted).child("Das Bild kommt …")),
             (_, None) => stage.child(div().flex().flex_col().items_center().gap(px(6.)).child(div().text_color(c.stage_ink).text_size(px(size::SUBHEADING)).child(name.clone())).child(div().text_color(c.stage_muted).child("Ton"))),
         };
+        if skip_opening || offer_next {
+            let mut offers = div().absolute().right(px(16.)).top(px(16.)).flex().flex_col().items_end().gap(px(8.));
+            if skip_opening {
+                let me = me.clone();
+                offers = offers.child(ui.button("vorspann-ueberspringen", "Vorspann überspringen").small().on_click(move |_, app| {
+                    Self::player_do(&me, app, move |p| p.skip_by(opening_len))
+                }));
+            }
+            if offer_next {
+                let me = me.clone();
+                let next = p.index + 1;
+                offers = offers.child(ui.button("naechste-folge", "Nächste Folge").small().primary().on_click(move |_, app| Self::player_do(&me, app, move |p| p.start(next))));
+            }
+            stage = stage.child(offers);
+        }
         let lines: Vec<String> = cues_at(&p.cues, position).iter().map(|cue| cue.text.clone()).collect();
         if !lines.is_empty() {
             let px_size = match p.settings.caption_size {

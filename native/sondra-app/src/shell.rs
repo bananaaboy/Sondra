@@ -805,6 +805,21 @@ impl Render for Shell {
                         app.stop_propagation();
                         return;
                     }
+                    // The player's own keys, on its page: Space, the arrows, M — when nothing else took them.
+                    let m = &event.keystroke.modifiers;
+                    if !(m.control || m.alt || m.platform || m.shift) && me.read(app).panel == Panel::Player {
+                        let key = event.keystroke.key.clone();
+                        if me.update(app, |shell, cx| {
+                            let taken = shell.player.key(&key);
+                            if taken {
+                                cx.notify();
+                            }
+                            taken
+                        }) {
+                            app.stop_propagation();
+                            return;
+                        }
+                    }
                     if event.keystroke.key == "escape" && me.read(app).merk.more {
                         me.update(app, |shell, cx| {
                             shell.merk.more = false;
