@@ -82,6 +82,7 @@ jobs:
         run: |
           npm run verify:native-sqlite
           npm run verify:native-share
+          npm run verify:native-devices
 
   # The accessibility bridge, asked the way a screen reader asks: through Windows
   # UI Automation, about a real window. Names, roles, places, activation, toggling, focus.

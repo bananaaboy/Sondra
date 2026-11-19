@@ -92,7 +92,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 
 | ID | Funktion | Bestand | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- | --- |
-| G01 | Gerätekennung aus dem öffentlichen Schlüssel, signierte Einträge, Fälschungen abgelehnt | `deviceIdentity.ts` | 6 | `verify:devices` | offen |
+| G01 | Gerätekennung aus dem öffentlichen Schlüssel, signierte Einträge, Fälschungen abgelehnt | `deviceIdentity.ts` | 6 | `verify:devices` | **nativ ✔** — `sondra-devices` (ECDSA P-256 mit `p256`): Kanonische JSON, Kennung, Namen, signierte Einträge und Nachrichten, Fälschungen, Wiederholung, Alter; Einträge und Nachrichten der Website (echtes WebCrypto) werden geglaubt, Fälschungen nicht; was die Crate schreibt, glaubt die Website (`npm run verify:native-devices` in der CI); der private Schlüssel wird noch nirgends geschützt abgelegt (Windows: Anmeldeinfo-Versiegelung folgt mit der Seite) |
 | G02 | Post über Drive, Namen eindeutig, Wiedererkennen nach Neuinstallation | `devices.ts` | 6 | `verify:devices` | offen |
 | G03 | Direkte Übertragung (WebRTC), Flusskontrolle, Annehmen und Ablehnen | `deviceTransfer.ts` | 6 | Austausch mit der Website | offen |
 | G04 | Ordner senden, Fortsetzen nach Abbruch, drei Übertragungen zugleich | `deviceTransfer.ts` | 6 | Szenario „geraete“ | offen |

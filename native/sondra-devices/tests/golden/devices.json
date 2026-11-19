@@ -1,0 +1,720 @@
+{
+ "now": 1800000000000,
+ "ids": [
+  {
+   "jwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+    "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+   },
+   "id": "FQ72SDV0D9WZT2VPHM3F"
+  },
+  {
+   "jwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "jv8carFBImufvfMAHoeLetwkowQtv_Rf2a_TLqSwq2Q",
+    "y": "APVf4CkwMhP-O4yxkD4Vy8m4v92QSuNoHv3IUkUHmoc"
+   },
+   "id": "WXW9X4P51HEQKAM3W1JQ"
+  },
+  {
+   "jwk": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "7bQFrD_MmAMEBAKjdcW0lcMEX6J-OsT_Zd_nWTWRZhU",
+    "y": "9SIOgDHbfv4VTjQhz2WZSXyRareLy-K27aqDW3R8c0c"
+   },
+   "id": "S8CJHD63WWWE1EF7FPTD"
+  }
+ ],
+ "records": {
+  "laptopRecord": {
+   "v": 1,
+   "id": "FQ72SDV0D9WZT2VPHM3F",
+   "name": "Laptop",
+   "kind": "windows",
+   "platform": "Windows-App",
+   "key": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+    "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+   },
+   "created": 1799999995000,
+   "seen": 1800000000000,
+   "sig": "oiMglSb6hXABgTv8GQNzS04N9NNj7PSmo_cST0ueR1ND-lNNbCA70dzYc_aqJPg_1DmNkgNjoPtR9AkJTZqA3A"
+  },
+  "laptopCaps": {
+   "v": 1,
+   "id": "FQ72SDV0D9WZT2VPHM3F",
+   "name": "Laptop",
+   "kind": "windows",
+   "platform": "Windows-App",
+   "key": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+    "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+   },
+   "created": 1799999995000,
+   "seen": 1800000001000,
+   "caps": [
+    "folder",
+    "play",
+    "resume",
+    "text"
+   ],
+   "sig": "99exosxW_rKNqZdVpdb_Tl22CYDDT27w5xZ0TjNALPAX00Igvxq-GN5aGM856sesf2dM8AKakNrOgpX7a5I0Ow"
+  },
+  "laptopOlder": {
+   "v": 1,
+   "id": "FQ72SDV0D9WZT2VPHM3F",
+   "name": "Laptop",
+   "kind": "windows",
+   "platform": "Windows-App",
+   "key": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+    "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+   },
+   "created": 1799999995000,
+   "seen": 1799999991000,
+   "sig": "AmKJ3XCkR3sjhcXwyKCBj8NHWg9UVOvt_Trh4xzTE5JXd6cFNG-PUhMXeJqg1cUsfkXhjb30G_anmnAQSFliYQ"
+  },
+  "phoneRecord": {
+   "v": 1,
+   "id": "WXW9X4P51HEQKAM3W1JQ",
+   "name": "Handy ✓ „Mia“",
+   "kind": "android",
+   "platform": "Android-App",
+   "key": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "jv8carFBImufvfMAHoeLetwkowQtv_Rf2a_TLqSwq2Q",
+    "y": "APVf4CkwMhP-O4yxkD4Vy8m4v92QSuNoHv3IUkUHmoc"
+   },
+   "created": 1799999998000,
+   "seen": 1799999999900,
+   "caps": [
+    "play"
+   ],
+   "sig": "SCy_LK5IKIh7cdaFEkCcOjwXSx7DRfJoErTwqe7gEch260lWC0vxXDMlnaFJymtN4MCdlWfXHLO6ewjhdXwUJQ"
+  },
+  "intruderRecord": {
+   "v": 1,
+   "id": "S8CJHD63WWWE1EF7FPTD",
+   "name": "Fremd",
+   "kind": "browser",
+   "platform": "Chrome auf Linux",
+   "key": {
+    "kty": "EC",
+    "crv": "P-256",
+    "x": "7bQFrD_MmAMEBAKjdcW0lcMEX6J-OsT_Zd_nWTWRZhU",
+    "y": "9SIOgDHbfv4VTjQhz2WZSXyRareLy-K27aqDW3R8c0c"
+   },
+   "created": 1800000000000,
+   "seen": 1800000000000,
+   "sig": "kkb7bnMxUK2BgRh9uTJ_WSLkO5kw-M0p-apsXG8EXweZh50UJS7Ht9Y4cp3209ciF5oHJZUnlLzUMDojtRDI-g"
+  }
+ },
+ "believed": [
+  {
+   "name": "laptopRecord",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop",
+    "kind": "windows",
+    "platform": "Windows-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+     "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+    },
+    "created": 1799999995000,
+    "seen": 1800000000000,
+    "sig": "oiMglSb6hXABgTv8GQNzS04N9NNj7PSmo_cST0ueR1ND-lNNbCA70dzYc_aqJPg_1DmNkgNjoPtR9AkJTZqA3A"
+   },
+   "ok": true
+  },
+  {
+   "name": "laptopCaps",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop",
+    "kind": "windows",
+    "platform": "Windows-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+     "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+    },
+    "created": 1799999995000,
+    "seen": 1800000001000,
+    "caps": [
+     "folder",
+     "play",
+     "resume",
+     "text"
+    ],
+    "sig": "99exosxW_rKNqZdVpdb_Tl22CYDDT27w5xZ0TjNALPAX00Igvxq-GN5aGM856sesf2dM8AKakNrOgpX7a5I0Ow"
+   },
+   "ok": true
+  },
+  {
+   "name": "laptopOlder",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop",
+    "kind": "windows",
+    "platform": "Windows-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+     "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+    },
+    "created": 1799999995000,
+    "seen": 1799999991000,
+    "sig": "AmKJ3XCkR3sjhcXwyKCBj8NHWg9UVOvt_Trh4xzTE5JXd6cFNG-PUhMXeJqg1cUsfkXhjb30G_anmnAQSFliYQ"
+   },
+   "ok": true
+  },
+  {
+   "name": "phoneRecord",
+   "raw": {
+    "v": 1,
+    "id": "WXW9X4P51HEQKAM3W1JQ",
+    "name": "Handy ✓ „Mia“",
+    "kind": "android",
+    "platform": "Android-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "jv8carFBImufvfMAHoeLetwkowQtv_Rf2a_TLqSwq2Q",
+     "y": "APVf4CkwMhP-O4yxkD4Vy8m4v92QSuNoHv3IUkUHmoc"
+    },
+    "created": 1799999998000,
+    "seen": 1799999999900,
+    "caps": [
+     "play"
+    ],
+    "sig": "SCy_LK5IKIh7cdaFEkCcOjwXSx7DRfJoErTwqe7gEch260lWC0vxXDMlnaFJymtN4MCdlWfXHLO6ewjhdXwUJQ"
+   },
+   "ok": true
+  },
+  {
+   "name": "intruderRecord",
+   "raw": {
+    "v": 1,
+    "id": "S8CJHD63WWWE1EF7FPTD",
+    "name": "Fremd",
+    "kind": "browser",
+    "platform": "Chrome auf Linux",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "7bQFrD_MmAMEBAKjdcW0lcMEX6J-OsT_Zd_nWTWRZhU",
+     "y": "9SIOgDHbfv4VTjQhz2WZSXyRareLy-K27aqDW3R8c0c"
+    },
+    "created": 1800000000000,
+    "seen": 1800000000000,
+    "sig": "kkb7bnMxUK2BgRh9uTJ_WSLkO5kw-M0p-apsXG8EXweZh50UJS7Ht9Y4cp3209ciF5oHJZUnlLzUMDojtRDI-g"
+   },
+   "ok": true
+  },
+  {
+   "name": "renamed",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop 2",
+    "kind": "windows",
+    "platform": "Windows-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+     "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+    },
+    "created": 1799999995000,
+    "seen": 1800000000000,
+    "sig": "oiMglSb6hXABgTv8GQNzS04N9NNj7PSmo_cST0ueR1ND-lNNbCA70dzYc_aqJPg_1DmNkgNjoPtR9AkJTZqA3A"
+   },
+   "ok": false
+  },
+  {
+   "name": "swapped",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop",
+    "kind": "windows",
+    "platform": "Windows-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "jv8carFBImufvfMAHoeLetwkowQtv_Rf2a_TLqSwq2Q",
+     "y": "APVf4CkwMhP-O4yxkD4Vy8m4v92QSuNoHv3IUkUHmoc"
+    },
+    "created": 1799999995000,
+    "seen": 1800000000000,
+    "sig": "oiMglSb6hXABgTv8GQNzS04N9NNj7PSmo_cST0ueR1ND-lNNbCA70dzYc_aqJPg_1DmNkgNjoPtR9AkJTZqA3A"
+   },
+   "ok": false
+  },
+  {
+   "name": "claimed",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Fremd",
+    "kind": "browser",
+    "platform": "Chrome auf Linux",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "7bQFrD_MmAMEBAKjdcW0lcMEX6J-OsT_Zd_nWTWRZhU",
+     "y": "9SIOgDHbfv4VTjQhz2WZSXyRareLy-K27aqDW3R8c0c"
+    },
+    "created": 1800000000000,
+    "seen": 1800000000000,
+    "sig": "kkb7bnMxUK2BgRh9uTJ_WSLkO5kw-M0p-apsXG8EXweZh50UJS7Ht9Y4cp3209ciF5oHJZUnlLzUMDojtRDI-g"
+   },
+   "ok": false
+  },
+  {
+   "name": "capsAdded",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop",
+    "kind": "windows",
+    "platform": "Windows-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+     "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+    },
+    "created": 1799999995000,
+    "seen": 1800000000000,
+    "sig": "oiMglSb6hXABgTv8GQNzS04N9NNj7PSmo_cST0ueR1ND-lNNbCA70dzYc_aqJPg_1DmNkgNjoPtR9AkJTZqA3A",
+    "caps": [
+     "text"
+    ]
+   },
+   "ok": false
+  },
+  {
+   "name": "noSig",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop",
+    "kind": "windows",
+    "platform": "Windows-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+     "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+    },
+    "created": 1799999995000,
+    "seen": 1800000000000
+   },
+   "ok": false
+  },
+  {
+   "name": "wrongKind",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop",
+    "kind": "toaster",
+    "platform": "Windows-App",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+     "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+    },
+    "created": 1799999995000,
+    "seen": 1800000000000,
+    "sig": "oiMglSb6hXABgTv8GQNzS04N9NNj7PSmo_cST0ueR1ND-lNNbCA70dzYc_aqJPg_1DmNkgNjoPtR9AkJTZqA3A"
+   },
+   "ok": false
+  },
+  {
+   "name": "tooManyCaps",
+   "raw": {
+    "v": 1,
+    "id": "FQ72SDV0D9WZT2VPHM3F",
+    "name": "Laptop",
+    "kind": "windows",
+    "platform": "x",
+    "key": {
+     "kty": "EC",
+     "crv": "P-256",
+     "x": "vt_K8cVXBMYQt9MHtUDBQvNStGlKZQmyQPK2bg8seJo",
+     "y": "TpeNZVy1EW0kCdo_43OdTvtBTqDI10e7uoJzIAfS01w"
+    },
+    "created": 1800000000000,
+    "seen": 1800000000000,
+    "caps": [
+     "capa",
+     "capb",
+     "capc",
+     "capd",
+     "cape",
+     "capf",
+     "capg",
+     "caph",
+     "capi",
+     "capj",
+     "capk",
+     "capl",
+     "capm",
+     "capn",
+     "capo",
+     "capp",
+     "capq"
+    ],
+    "sig": "UOiLNYKiqgep9yWxtIyUHCMbazAa3PPxX7W37GOtXNoJjVIsnkIni0p26GzsZobQxT32nlooNA_bUhiFjhX-ig"
+   },
+   "ok": false
+  }
+ ],
+ "picked": [
+  {
+   "id": "FQ72SDV0D9WZT2VPHM3F",
+   "seen": 1800000001000
+  },
+  {
+   "id": "S8CJHD63WWWE1EF7FPTD",
+   "seen": 1800000000000
+  },
+  {
+   "id": "WXW9X4P51HEQKAM3W1JQ",
+   "seen": 1799999999900
+  }
+ ],
+ "devices": [
+  "FQ72SDV0D9WZT2VPHM3F",
+  "WXW9X4P51HEQKAM3W1JQ"
+ ],
+ "messages": [
+  {
+   "name": "gut",
+   "raw": {
+    "v": 1,
+    "id": "ABCDEFGHJKMN",
+    "from": "FQ72SDV0D9WZT2VPHM3F",
+    "to": "WXW9X4P51HEQKAM3W1JQ",
+    "at": 1800000000000,
+    "type": "offer",
+    "transfer": "T1",
+    "body": {
+     "files": [
+      {
+       "name": "Folge 1.mkv",
+       "size": 123456
+      }
+     ],
+     "note": "mit „Umlauten“ ß 日本"
+    },
+    "sig": "LKcjTwvspl3ABVOiNWphdfFwWdTuqAzD-4olps838O40A2A9LjVn5M4CRxDgaAhVpRQBl37Fi_OQNVB1mHRA3A"
+   },
+   "seenIds": [],
+   "now": 1800000000000,
+   "result": "ok"
+  },
+  {
+   "name": "schon-gesehen",
+   "raw": {
+    "v": 1,
+    "id": "ABCDEFGHJKMN",
+    "from": "FQ72SDV0D9WZT2VPHM3F",
+    "to": "WXW9X4P51HEQKAM3W1JQ",
+    "at": 1800000000000,
+    "type": "offer",
+    "transfer": "T1",
+    "body": {
+     "files": [
+      {
+       "name": "Folge 1.mkv",
+       "size": 123456
+      }
+     ],
+     "note": "mit „Umlauten“ ß 日本"
+    },
+    "sig": "3ETNXOkdq4AjHz0yC2H2xldWlCc5yKj5zQAOIq3JindjSVJmHidQidM_gu_8k8lCmI9hROMlPVpeCvhw-jf6nA"
+   },
+   "seenIds": [
+    "ABCDEFGHJKMN"
+   ],
+   "now": 1800000000000,
+   "result": "replayed"
+  },
+  {
+   "name": "zu-alt",
+   "raw": {
+    "v": 1,
+    "id": "ABCDEFGHJKMN",
+    "from": "FQ72SDV0D9WZT2VPHM3F",
+    "to": "WXW9X4P51HEQKAM3W1JQ",
+    "at": 1800000000000,
+    "type": "offer",
+    "transfer": "T1",
+    "body": {
+     "files": [
+      {
+       "name": "Folge 1.mkv",
+       "size": 123456
+      }
+     ],
+     "note": "mit „Umlauten“ ß 日本"
+    },
+    "sig": "0cg6fxcZDpYPNcRcLJmQc8rttOhyh5-NqMDgW2yt1UHdwDgw8z7oKaLJbb9bKV05t11HRRZPk9iBB6GPGqsCqw"
+   },
+   "seenIds": [],
+   "now": 1800000960000,
+   "result": "stale"
+  },
+  {
+   "name": "für-andere",
+   "raw": {
+    "v": 1,
+    "id": "ABCDEFGHJKMN",
+    "from": "FQ72SDV0D9WZT2VPHM3F",
+    "to": "FQ72SDV0D9WZT2VPHM3F",
+    "at": 1800000000000,
+    "type": "offer",
+    "transfer": "T1",
+    "body": {
+     "files": [
+      {
+       "name": "Folge 1.mkv",
+       "size": 123456
+      }
+     ],
+     "note": "mit „Umlauten“ ß 日本"
+    },
+    "sig": "m2cQItGNak7AeWjzIZzR9CRMT0KNT-H91YNZ0V1EkIOqVTA8HmrHY-GASq-uOMQOIQqExKyii9K7_jZEgj4axw"
+   },
+   "seenIds": [],
+   "now": 1800000000000,
+   "result": "not-for-me"
+  },
+  {
+   "name": "unbekannter-absender",
+   "raw": {
+    "v": 1,
+    "id": "ZZZZ",
+    "from": "S8CJHD63WWWE1EF7FPTD",
+    "to": "WXW9X4P51HEQKAM3W1JQ",
+    "at": 1800000000000,
+    "type": "offer",
+    "transfer": "T2",
+    "body": {},
+    "sig": "Cenk5HJ-npX0Mzqdoo7ATwhY0mT36iG-GtOgWKGrIxmIsStKKbl6XBMJCoRo_n6liIep92CBJkvugFxga8oopQ"
+   },
+   "seenIds": [],
+   "now": 1800000000000,
+   "result": "unknown-sender"
+  },
+  {
+   "name": "gefälscht",
+   "raw": {
+    "v": 1,
+    "id": "ABCDEFGHJKMN",
+    "from": "FQ72SDV0D9WZT2VPHM3F",
+    "to": "WXW9X4P51HEQKAM3W1JQ",
+    "at": 1800000000000,
+    "type": "offer",
+    "transfer": "T1",
+    "body": {
+     "files": []
+    },
+    "sig": "8EkJ7gMMPkrNAlBlrO8Efgdc8jZe7fJOC5jKMqU8gLPgKTLq9qFLkuMEto30fj8bmSvjW2FjFDGAFZr38wIl2Q"
+   },
+   "seenIds": [],
+   "now": 1800000000000,
+   "result": "forged"
+  },
+  {
+   "name": "fremd-signiert",
+   "raw": {
+    "v": 1,
+    "id": "QQQQ",
+    "from": "FQ72SDV0D9WZT2VPHM3F",
+    "to": "WXW9X4P51HEQKAM3W1JQ",
+    "at": 1800000000000,
+    "type": "offer",
+    "transfer": "T3",
+    "body": {},
+    "sig": "amLu8WPszSG_jNLuibZ_YdBWUg4sn9tD0wO5eUi_7DE4sncUhDzfNdLXGf3u3Ods_t5VA5IlxRjLVSn32bvNeQ"
+   },
+   "seenIds": [],
+   "now": 1800000000000,
+   "result": "forged"
+  },
+  {
+   "name": "unvollständig",
+   "raw": {
+    "v": 1,
+    "id": "x"
+   },
+   "seenIds": [],
+   "now": 1800000000000,
+   "result": "malformed"
+  }
+ ],
+ "canon": [
+  {
+   "name": "schlüssel-sortiert",
+   "value": {
+    "b": 1,
+    "a": 2,
+    "c": {
+     "z": 1,
+     "y": [
+      3,
+      2,
+      {
+       "b": 1,
+       "a": 0
+      }
+     ]
+    }
+   },
+   "text": "{\"a\":2,\"b\":1,\"c\":{\"y\":[3,2,{\"a\":0,\"b\":1}],\"z\":1}}"
+  },
+  {
+   "name": "texte",
+   "value": {
+    "text": "a\"b\\c\nd\te\u0001f ü ß 日本 🎵  "
+   },
+   "text": "{\"text\":\"a\\\"b\\\\c\\nd\\te\\u0001f ü ß 日本 🎵  \"}"
+  },
+  {
+   "name": "zahlen",
+   "value": {
+    "n": [
+     0,
+     1,
+     -1,
+     1.5,
+     1e+21,
+     123456789012,
+     0.1,
+     1e-7,
+     5
+    ]
+   },
+   "text": "{\"n\":[0,1,-1,1.5,1e+21,123456789012,0.1,1e-7,5]}"
+  },
+  {
+   "name": "null-und-bool",
+   "value": {
+    "a": null,
+    "b": true,
+    "c": false,
+    "d": [],
+    "e": {}
+   },
+   "text": "{\"a\":null,\"b\":true,\"c\":false,\"d\":[],\"e\":{}}"
+  },
+  {
+   "name": "umlaut-schlüssel",
+   "value": {
+    "ä": 1,
+    "z": 2,
+    "a": 3,
+    "ö": 4,
+    "日": 5,
+    "🎵": 6,
+    "￿": 7
+   },
+   "text": "{\"a\":3,\"z\":2,\"ä\":1,\"ö\":4,\"日\":5,\"🎵\":6,\"￿\":7}"
+  }
+ ],
+ "names": [
+  {
+   "wanted": "Laptop",
+   "others": [],
+   "cleaned": "Laptop",
+   "unique": "Laptop"
+  },
+  {
+   "wanted": "Laptop",
+   "others": [
+    "Laptop"
+   ],
+   "cleaned": "Laptop",
+   "unique": "Laptop 2"
+  },
+  {
+   "wanted": "Laptop",
+   "others": [
+    "laptop",
+    "LAPTOP 2"
+   ],
+   "cleaned": "Laptop",
+   "unique": "Laptop 3"
+  },
+  {
+   "wanted": "Laptop 7",
+   "others": [
+    "Laptop 7"
+   ],
+   "cleaned": "Laptop 7",
+   "unique": "Laptop 2"
+  },
+  {
+   "wanted": "   viel   Platz  ",
+   "others": [],
+   "cleaned": "viel Platz",
+   "unique": "viel Platz"
+  },
+  {
+   "wanted": "",
+   "others": [],
+   "cleaned": "",
+   "unique": "Gerät"
+  },
+  {
+   "wanted": "ä\u0001ö  x",
+   "others": [
+    "äö x"
+   ],
+   "cleaned": "äö x",
+   "unique": "äö x 2"
+  },
+  {
+   "wanted": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "others": [
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+   ],
+   "cleaned": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "unique": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 2"
+  },
+  {
+   "wanted": "Ärger",
+   "others": [
+    "ärger"
+   ],
+   "cleaned": "Ärger",
+   "unique": "Ärger 2"
+  }
+ ],
+ "laptopId": "FQ72SDV0D9WZT2VPHM3F",
+ "phoneId": "WXW9X4P51HEQKAM3W1JQ"
+}
