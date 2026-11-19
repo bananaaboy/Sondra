@@ -37,6 +37,7 @@ import {
   shelfEq,
 } from '../src/lib/effects'
 import { applyGain, channelTrick, concatAudio, cutRange, detectSilence, normalizePeak, peakDb, removeDcOffset, removeSilence, resampleAudio, setChannels } from '../src/lib/edit'
+import { separate, toInstrumental, STEM_IDS } from '../src/lib/separation'
 import { toCues, toSrt, toText, toVtt, type TranscriptSegment } from '../src/lib/transcribe'
 import { cellsToNotes, patternHits, patternToMidi, resizeNotes, starterPattern, stepTime, type Pattern, type Slice } from '../src/lib/pattern'
 import { calibrate, PURPOSES, type MicPurpose } from '../src/lib/micCalibrate'
@@ -817,4 +818,52 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   mkdirSync('native/sondra-speech/tests/golden', { recursive: true })
   writeFileSync('native/sondra-speech/tests/golden/cues.json', `${JSON.stringify(out, null, 1)}\n`)
   console.log(`Untertitel: ${out.map((o) => `${o.name} ${o.cues.length} Zeilen`).join(', ')}`)
+}
+
+
+/* -- Spuren trennen: Gesang, Schlagzeug, Bass, Übriges ----------------------------------------------- */
+
+{
+  const sr = 8000
+  const seconds = 5
+  const n = sr * seconds
+  const left = new Float32Array(n)
+  const right = new Float32Array(n)
+  let state = 5150
+  for (let i = 0; i < n; i += 1) {
+    state = (Math.imul(state, 1103515245) + 12345) >>> 0
+    const noise = ((state >>> 8) / 2 ** 24) * 2 - 1
+    const t = i / sr
+    // A voice in the middle, a bass on both sides, a chord a little to the right, drum hits as noise bursts.
+    const voice = 0.3 * Math.sin(2 * Math.PI * (330 + 40 * Math.sin(2 * Math.PI * 0.7 * t)) * t) * (0.6 + 0.4 * Math.sin(2 * Math.PI * 3 * t))
+    const bass = 0.35 * Math.sin(2 * Math.PI * 55 * t)
+    const chord = 0.15 * (Math.sin(2 * Math.PI * 440 * t) + Math.sin(2 * Math.PI * 554.4 * t))
+    const hitAge = t % 0.5
+    const drum = 0.5 * noise * Math.exp(-hitAge * 40)
+    left[i] = voice + bass + 0.5 * chord + drum
+    right[i] = voice + bass + chord + 0.7 * drum
+  }
+  const audio = { channels: [left, right], sampleRate: sr }
+  const options = { fftSize: 1024, hopSize: 256, timeKernel: 9, freqKernel: 9, maskExponent: 2.8, vocalFocus: 0.65, segmentSeconds: 1.8, overlapSeconds: 0.2 }
+  const stems = separate(audio, options)
+  const every = (a: Float32Array, k: number) => Array.from(a).filter((_, i) => i % k === 0)
+  const mono = { channels: [left], sampleRate: sr }
+  const monoStems = separate(mono, { ...options, segmentSeconds: 4, overlapSeconds: 0.5 })
+  const instrumental = toInstrumental(audio, stems.vocals)
+  writeFileSync(
+    `${outDir}/separation.json`,
+    `${JSON.stringify(
+      {
+        rate: sr,
+        options,
+        frames: n,
+        stems: Object.fromEntries(STEM_IDS.map((id) => [id, { left: every(stems[id].channels[0], 97), right: every(stems[id].channels[1], 97) }])),
+        mono: Object.fromEntries(STEM_IDS.map((id) => [id, every(monoStems[id].channels[0], 89)])),
+        instrumental: { left: every(instrumental.channels[0], 97) },
+      },
+      null,
+      1,
+    )}\n`,
+  )
+  console.log('Spuren: getrennt in ' + STEM_IDS.join(', '))
 }

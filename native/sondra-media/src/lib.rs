@@ -44,6 +44,7 @@ pub mod pattern;
 pub mod pitch;
 pub mod presets;
 pub mod run;
+pub mod separation;
 pub mod tempo;
 pub mod video_ops;
 

@@ -27,6 +27,7 @@ pub mod sampler_page;
 pub mod shell;
 pub mod share_window;
 pub mod stats_window;
+pub mod stems_page;
 pub mod store;
 pub mod subtitles_page;
 pub mod system;
