@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["sondra-core", "sondra-daemon", "sondra-a11y", "sondra-drive", "sondra-extract", "sondra-download", "sondra-service", "sondra-media", "sondra-ui", "sondra-app", "sondra-merk", "sondra-player", "sondra-audio"]
+members = ["sondra-core", "sondra-daemon", "sondra-a11y", "sondra-drive", "sondra-extract", "sondra-download", "sondra-service", "sondra-media", "sondra-ui", "sondra-app", "sondra-merk", "sondra-player", "sondra-audio", "sondra-playback"]
 
 [workspace.package]
 version = "0.1.0"

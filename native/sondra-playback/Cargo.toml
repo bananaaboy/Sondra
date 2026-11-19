@@ -1,0 +1,15 @@
+[package]
+name = "sondra-playback"
+description = "Playing a film or a song: FFmpeg decodes picture and sound in two child programs, the sound drives the clock, the picture waits for it."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sondra-media = { path = "../sondra-media" }
+sondra-audio = { path = "../sondra-audio" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

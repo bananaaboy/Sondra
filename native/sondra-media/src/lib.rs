@@ -33,4 +33,4 @@ pub mod presets;
 pub mod run;
 pub mod tempo;
 
-pub use ffmpeg::{Cancel, Ffmpeg, MediaError, Probe};
+pub use ffmpeg::{Cancel, Ffmpeg, MediaError, Probe, Progress, Stream};

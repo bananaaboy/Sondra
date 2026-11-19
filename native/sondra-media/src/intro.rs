@@ -162,7 +162,7 @@ pub fn longest_shared(a: &Print, b: &Print, min_seconds: f64, max_seconds: f64) 
         let mut start: isize = -1;
         let mut last: isize = -1;
         let mut count: usize = 0;
-        let mut close = |start: isize, last: isize, count: usize, best: &mut Option<Shared>| {
+        let close = |start: isize, last: isize, count: usize, best: &mut Option<Shared>| {
             if start < 0 {
                 return;
             }

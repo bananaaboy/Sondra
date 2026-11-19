@@ -61,12 +61,23 @@ pub struct Progress {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stream {
+    /// Its number in the file, as `-map 0:n` names it.
+    pub index: u32,
     pub kind: String,
     pub codec: String,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub sample_rate: Option<u32>,
     pub channels: Option<u32>,
+    /// Frames a second of a picture stream (the average, or the nominal rate when that is not given).
+    pub fps: Option<f64>,
+    /// The language tag the file gives it („ger“, „jpn“), and its title.
+    pub language: Option<String>,
+    pub title: Option<String>,
+    /// The one the file itself marks as the one to play.
+    pub default: bool,
+    /// A cover picture or thumbnail stored as a stream: not a film.
+    pub attached_picture: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -74,6 +85,14 @@ pub struct Probe {
     pub duration: Option<f64>,
     pub format: String,
     pub streams: Vec<Stream>,
+}
+
+/// „30000/1001“ or „25/1“ as 29.97 or 25; „0/0“ is no rate at all.
+fn frame_rate(value: &Value) -> Option<f64> {
+    let text = value.as_str()?;
+    let (n, d) = text.split_once('/')?;
+    let (n, d): (f64, f64) = (n.parse().ok()?, d.parse().ok()?);
+    (n > 0.0 && d > 0.0).then_some(n / d)
 }
 
 impl Probe {
@@ -139,6 +158,11 @@ impl Ffmpeg {
         runs(&on_path.program).then_some(on_path)
     }
 
+    /// The FFmpeg program, for callers that run it themselves (a player keeps two of them running).
+    pub fn program(&self) -> &Path {
+        &self.program
+    }
+
     pub fn version(&self) -> Result<String, MediaError> {
         let out = Command::new(&self.program)
             .arg("-version")
@@ -182,13 +206,20 @@ impl Ffmpeg {
             .as_array()
             .map(|all| {
                 all.iter()
-                    .map(|s| Stream {
+                    .enumerate()
+                    .map(|(at, s)| Stream {
+                        index: s["index"].as_u64().map_or(at as u32, |v| v as u32),
                         kind: s["codec_type"].as_str().unwrap_or("").to_owned(),
                         codec: s["codec_name"].as_str().unwrap_or("").to_owned(),
                         width: s["width"].as_u64().map(|v| v as u32),
                         height: s["height"].as_u64().map(|v| v as u32),
                         sample_rate: number(&s["sample_rate"]).map(|v| v as u32),
                         channels: s["channels"].as_u64().map(|v| v as u32),
+                        fps: frame_rate(&s["avg_frame_rate"]).or_else(|| frame_rate(&s["r_frame_rate"])),
+                        language: s["tags"]["language"].as_str().filter(|l| *l != "und").map(str::to_owned),
+                        title: s["tags"]["title"].as_str().map(str::to_owned),
+                        default: s["disposition"]["default"].as_u64() == Some(1),
+                        attached_picture: s["disposition"]["attached_pic"].as_u64() == Some(1),
                     })
                     .collect()
             })

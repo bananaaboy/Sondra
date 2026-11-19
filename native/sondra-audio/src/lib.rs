@@ -12,4 +12,4 @@ mod mixer;
 mod output;
 
 pub use mixer::{Mixer, Shared};
-pub use output::{AudioError, AudioOut};
+pub use output::{AudioError, AudioOut, Output, SilentOut};

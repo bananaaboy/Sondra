@@ -134,3 +134,16 @@ fn the_device_opens_or_says_there_is_none_and_never_panics() {
         Err(error) => println!("no sound here: {error}"),
     }
 }
+
+#[test]
+fn the_silent_output_keeps_time_like_a_sound_card_would() {
+    let out = sondra_audio::SilentOut::new(48_000, 2, 1.0);
+    let shared = out.shared();
+    // Feed it a second of sound; it takes it at the speed of a real device.
+    let samples = vec![0.0f32; 48_000 * 2];
+    assert!(shared.push(&samples, &no_stop()));
+    std::thread::sleep(Duration::from_millis(500));
+    let heard = shared.heard();
+    assert!((0.35..=0.7).contains(&heard), "about half a second after half a second: {heard}");
+    assert!(shared.buffered() > 0.3, "and the rest is still waiting");
+}

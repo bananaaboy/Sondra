@@ -5787,6 +5787,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sondra-playback"
+version = "0.1.0"
+dependencies = [
+ "sondra-audio",
+ "sondra-media",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "sondra-player"
 version = "0.1.0"
 dependencies = [
