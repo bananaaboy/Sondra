@@ -47,6 +47,10 @@ fn list(n: usize) -> Stored {
 }
 
 fn open<'a>(cx: &'a mut TestAppContext, stored: Option<&Stored>, dir: &std::path::Path) -> Window<'a> {
+    open_as(cx, stored, dir, true)
+}
+
+fn open_as<'a>(cx: &'a mut TestAppContext, stored: Option<&Stored>, dir: &std::path::Path, lines: bool) -> Window<'a> {
     let path = dir.join("Merkliste.sqlite");
     if let Some(stored) = stored {
         std::fs::write(&path, write_sqlite(stored).unwrap()).unwrap();
@@ -68,6 +72,10 @@ fn open<'a>(cx: &'a mut TestAppContext, stored: Option<&Stored>, dir: &std::path
     w.draw();
     w.shell.update(w.cx, |shell, cx| shell.go(Panel::Merkliste, cx));
     w.draw();
+    // The page opens on the shelf of posters; most of these tests are about the lines of the list.
+    if lines && w.tree().find(Role::Button, "Als Liste").is_some() {
+        w.press(Role::Button, "Als Liste");
+    }
     w
 }
 
@@ -162,6 +170,7 @@ fn an_empty_list_says_what_to_do_and_a_typed_name_becomes_a_series(cx: &mut Test
     assert!(tree.find(Role::ListItem, "Frieren").is_some(), "the series is on the page");
     assert!(tree.find(Role::Heading, "Noch nichts auf der Merkliste").is_none());
     assert_eq!(said(&tree, Role::ListItem, "Frieren"), "Staffel 1, Folge 1. 0 gesehen. —", "a new series stands at the start, its length not asked");
+    w.press(Role::Button, "Als Liste");
     w.press(Role::Button, "Staffel 1, Folge 1 von Frieren als gesehen markieren");
     assert_eq!(said(&w.tree(), Role::ListItem, "Frieren"), "Staffel 1, Folge 2. 1 gesehen. —");
     let bytes = std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap();
@@ -253,4 +262,21 @@ fn removing_a_series_can_be_undone_and_is_noted_on_the_file(cx: &mut TestAppCont
     let back = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
     assert_eq!(back.items.len(), 3);
     assert!(back.removed.is_empty());
+}
+
+#[gpui::test]
+fn the_page_opens_on_a_shelf_of_posters_and_a_poster_opens_its_series(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open_as(cx, Some(&list(3)), dir.path(), false);
+    let tree = w.tree();
+    assert_eq!(tree.find(Role::Button, "Als Poster").unwrap().toggled, Some(true));
+    assert_eq!(tree.find(Role::Button, "Als Liste").unwrap().toggled, Some(false));
+    // A poster says what a line says, and has no step forward of its own: that is one click further.
+    assert_eq!(said(&tree, Role::ListItem, "Frieren"), "Staffel 1, Folge 4. 3/12. noch 9 · 3 Std. 36 Min.");
+    assert!(tree.find(Role::Button, "Staffel 1, Folge 4 von Frieren als gesehen markieren").is_none());
+    w.press(Role::ListItem, "Frieren");
+    assert!(w.tree().find(Role::Button, "Folge 4 gesehen").is_some());
+    w.press(Role::Button, "Zurück zur Merkliste");
+    w.press(Role::Button, "Als Liste");
+    assert!(w.tree().find(Role::Button, "Staffel 1, Folge 4 von Frieren als gesehen markieren").is_some());
 }

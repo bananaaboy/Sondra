@@ -712,7 +712,7 @@ impl Render for Shell {
         let page = if self.panel == Panel::Start {
             self.start(ui, cols, cx)
         } else if self.panel == Panel::Merkliste {
-            self.merkliste(ui, cx)
+            self.merkliste(ui, inner, cx)
         } else if self.panel == Panel::Folder {
             self.folder_page(ui, cx)
         } else {

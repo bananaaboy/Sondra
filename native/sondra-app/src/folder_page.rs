@@ -419,6 +419,7 @@ impl Shell {
                 name: dir.name.clone().into(),
                 says: says.clone().into(),
                 first,
+                tile: None,
                 selected: false,
                 body: vec![
                     div().flex_1().min_w(px(0.)).truncate().text_color(c.ink).font_weight(gpui::FontWeight::SEMIBOLD).child(format!("{} ›", dir.name)).into_any_element(),
@@ -463,6 +464,7 @@ impl Shell {
                 name: file.name.clone().into(),
                 says: format!("{facts}{}", if place.is_empty() { String::new() } else { format!(" · in {place}") }).into(),
                 first,
+                tile: None,
                 selected,
                 body: vec![
                     name.into_any_element(),

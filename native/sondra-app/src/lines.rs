@@ -18,6 +18,8 @@ pub struct Line {
     pub name: SharedString,
     pub says: SharedString,
     pub first: bool,
+    /// A tile of a shelf (a column: the picture, then the words) instead of a row of a list.
+    pub tile: Option<f32>,
     /// Chosen among several (a file in a folder): tinted, and said in words — a selected item has no way
     /// to be invoked in UI Automation, so the word goes in the description.
     pub selected: bool,
@@ -38,10 +40,6 @@ impl RenderOnce for Line {
             .id(ElementId::Name(format!("{}-bild", self.id).into()))
             .track_focus(&focus)
             .flex()
-            .items_center()
-            .gap(px(14.))
-            .px(px(8.))
-            .py(px(10.))
             .rounded(px(radius::NAV))
             .cursor_pointer()
             .bg(if self.selected { c.panel_mid } else { c.canvas })
@@ -59,9 +57,18 @@ impl RenderOnce for Line {
                     cx.stop_propagation();
                 }
             });
-        if !self.first {
-            line = line.border_t_1().border_color(c.line);
-        }
+        line = match self.tile {
+            // A tile: as wide as its column, the picture over the words.
+            Some(width) => line.flex_col().gap(px(8.)).w(px(width)).flex_none().p(px(4.)),
+            None => {
+                let line = line.items_center().gap(px(14.)).px(px(8.)).py(px(10.));
+                if self.first {
+                    line
+                } else {
+                    line.border_t_1().border_color(c.line)
+                }
+            }
+        };
         let on_open = self.on_open;
         accessible(ElementId::Name(self.id.clone()), Role::ListItem, line.children(self.body))
             .label(self.name)

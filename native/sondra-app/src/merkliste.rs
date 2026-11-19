@@ -24,11 +24,19 @@ use crate::store::{Loaded, MerkStore};
 /// With this many entries a search is worth its place on the page.
 const SEARCH_FROM: usize = 6;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum View {
+    Poster,
+    List,
+}
+
 pub struct MerkState {
     pub items: Vec<Item>,
     pub removed: Removed,
     pub filter: Filter,
     pub sort: Sort,
+    /// Posters on a shelf, or one line a series.
+    pub view: View,
     pub store: Option<MerkStore>,
     /// Why the list on disk was left alone, when it was.
     pub problem: Option<String>,
@@ -67,6 +75,7 @@ impl MerkState {
             removed: Removed::new(),
             filter: Filter::default(),
             sort: Sort::Recent,
+            view: View::Poster,
             store: None,
             problem: None,
             adding: false,
@@ -219,14 +228,14 @@ impl Shell {
     }
 
     /// The page of the Merkliste: the list, or the page of one series.
-    pub(crate) fn merkliste(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn merkliste(&self, ui: Ui, width: f32, cx: &mut Context<Self>) -> AnyElement {
         if let Some(item) = self.merk.open.as_ref().and_then(|id| self.merk.items.iter().find(|i| &i.id == id)) {
             return self.series_page(ui, item, cx);
         }
-        self.merk_list(ui, cx)
+        self.merk_list(ui, width, cx)
     }
 
-    fn merk_list(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+    fn merk_list(&self, ui: Ui, width: f32, cx: &mut Context<Self>) -> AnyElement {
         let me = cx.entity();
         let state = &self.merk;
         let c = ui.c;
@@ -296,17 +305,35 @@ impl Shell {
                     .on_click(move |_, app| Self::merk_do(&me, app, |m| m.filter.status = if m.filter.status == Some(status) { None } else { Some(status) })),
             );
         }
-        page = page.child(pills);
+        let mut views = div().flex().gap(px(6.));
+        for (view, label) in [(View::Poster, "Als Poster"), (View::List, "Als Liste")] {
+            let me = me.clone();
+            views = views.child(ui.chip(format!("ansicht-{label}"), label, state.view == view).on_click(move |_, app| Self::merk_do(&me, app, move |m| m.view = view)));
+        }
+        page = page.child(div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(pills).child(views));
 
         let sections = groups(&state.items, &state.filter, state.sort);
         if sections.is_empty() {
             return page.child(ui.prose("Keine Serien gefunden für die gewählten Filter.")).into_any_element();
         }
         for group in sections {
-            let mut rows = div().flex().flex_col();
-            for (n, item) in group.entries.iter().enumerate() {
-                rows = rows.child(self.merk_row(ui, item, n == 0, cx));
-            }
+            let rows = if state.view == View::List {
+                let mut rows = div().flex().flex_col();
+                for (n, item) in group.entries.iter().enumerate() {
+                    rows = rows.child(self.merk_row(ui, item, n == 0, cx));
+                }
+                rows
+            } else {
+                // A shelf: as many posters in a row as fit, 150 px wide at the least.
+                let gap = 14.0;
+                let per_row = (((width + gap) / (150.0 + gap)).floor() as usize).clamp(2, 8);
+                let tile = ((width - gap * (per_row as f32 - 1.0)) / per_row as f32).floor();
+                let mut shelf = div().flex().flex_wrap().gap(px(gap));
+                for item in &group.entries {
+                    shelf = shelf.child(self.merk_tile(ui, item, tile, cx));
+                }
+                shelf
+            };
             page = page.child(
                 div()
                     .flex()
@@ -418,7 +445,63 @@ impl Shell {
             name: item.title.clone().into(),
             says: format!("{stand}. {count}. {left}").into(),
             first,
+            tile: None,
             body: vec![poster, name, bar, rest, step.into_any_element()],
+            on_open: Rc::new(move |_, app| {
+                let id = id.clone();
+                Self::merk_do(&me, app, move |m| m.open = Some(id))
+            }),
+        }
+        .into_any_element()
+    }
+
+    /// One series as a poster on a shelf: the name set on the tint, the bar, where it stands.
+    fn merk_tile(&self, ui: Ui, item: &Item, width: f32, cx: &mut Context<Self>) -> AnyElement {
+        let c = ui.c;
+        let me = cx.entity();
+        let progress = item_progress(item);
+        let stand = stand_label(item);
+        let count: SharedString = match progress.total {
+            Some(total) => format!("{}/{}", progress.watched, total).into(),
+            None => format!("{} gesehen", progress.watched).into(),
+        };
+        let left = left_label(item).unwrap_or_else(|| if caught_up(&seasons_of(item)) { "Alles gesehen".into() } else { "—".into() });
+        let fraction = progress.fraction.map(|f| f as f32).or(if progress.watched > 0 { None } else { Some(0.0) });
+        let picture = width - 8.0;
+        let poster = div()
+            .w(px(picture))
+            .h(px((picture * 1.5).floor()))
+            .rounded(px(sondra_ui::radius::NAV))
+            .bg(c.panel_mid)
+            .overflow_hidden()
+            .flex()
+            .items_center()
+            .justify_center()
+            .p(px(picture * 0.12))
+            .text_center()
+            .text_size(px(size::SUBHEADING))
+            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .text_color(c.muted)
+            .child(item.title.clone())
+            .into_any_element();
+        let words = div()
+            .flex()
+            .flex_col()
+            .gap(px(2.))
+            .child(div().text_color(c.ink).font_weight(gpui::FontWeight::SEMIBOLD).truncate().child(item.title.clone()))
+            .child(div().text_size(px(size::SMALL)).text_color(c.prose).truncate().child(stand.clone()))
+            .child(div().pt(px(4.)).child(ui.bar(format!("kachel-{}", item.id), fraction, format!("{}: gesehen", item.title))))
+            .into_any_element();
+        let id = item.id.clone();
+        Line {
+            colors: c,
+            id: format!("serie-{}", item.id).into(),
+            name: item.title.clone().into(),
+            says: format!("{stand}. {count}. {left}").into(),
+            first: true,
+            tile: Some(width),
+            selected: false,
+            body: vec![poster, words],
             on_open: Rc::new(move |_, app| {
                 let id = id.clone();
                 Self::merk_do(&me, app, move |m| m.open = Some(id))
