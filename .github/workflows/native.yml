@@ -353,6 +353,26 @@ jobs:
           [IO.File]::WriteAllText((Join-Path $PWD 'latest-nativ.yml'), $yaml, (New-Object Text.UTF8Encoding($false)))
           Check ((Get-Content latest-nativ.yml -Raw) -match "version: $version") 'latest-nativ.yml names the version'
 
+          # The portable build: the program, FFmpeg, the licences and a mark beside them. With the mark the data live in
+          # `Sondra-Daten` next to the program; nothing is registered.
+          $portable = Join-Path $PWD 'portabel'
+          New-Item -ItemType Directory -Force -Path $portable | Out-Null
+          Copy-Item $exe "$portable\sondra.exe"
+          Copy-Item "$ffdir\ffmpeg.exe", "$ffdir\ffprobe.exe" $portable
+          Copy-Item $licenses "$portable\Lizenzen" -Recurse
+          Set-Content "$portable\portable.txt" 'Sondra portabel: Die Daten liegen im Ordner Sondra-Daten neben dem Programm.'
+          Compress-Archive -Path "$portable\*" -DestinationPath (Join-Path $PWD 'Sondra-Nativ-Portabel.zip') -Force
+          Check (Test-Path 'Sondra-Nativ-Portabel.zip') ("the portable zip is built: {0:N1} MB" -f ((Get-Item 'Sondra-Nativ-Portabel.zip').Length / 1MB))
+          $carried = Join-Path $env:RUNNER_TEMP 'sondra-getragen'
+          Expand-Archive -Path 'Sondra-Nativ-Portabel.zip' -DestinationPath $carried -Force
+          Remove-Item Env:\SONDRA_DATA -ErrorAction SilentlyContinue
+          $pp = Start-Process -FilePath "$carried\sondra.exe" -PassThru
+          Start-Sleep -Seconds 6
+          Check (-not $pp.HasExited) 'the portable program runs'
+          Check (Test-Path "$carried\Sondra-Daten") 'its data lie beside it'
+          Check (-not (Test-Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SondraNativ')) 'and nothing was registered'
+          if (-not $pp.HasExited) { Stop-Process -Id $pp.Id -Force }
+
           $dir = 'C:\SondraNativTest'
           $i = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$dir" -Wait -PassThru
           Check ($i.ExitCode -eq 0) "the silent install ends well (exit code $($i.ExitCode))"
@@ -407,6 +427,7 @@ jobs:
           name: Sondra-Nativ-Setup
           path: |
             Sondra-Nativ-Setup.exe
+            Sondra-Nativ-Portabel.zip
             latest-nativ.yml
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4

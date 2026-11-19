@@ -201,7 +201,7 @@ pub fn is_installed() -> bool {
 pub fn feed() -> Option<String> {
     match std::env::var("SONDRA_UPDATE_FEED") {
         Ok(feed) if !feed.trim().is_empty() => Some(feed),
-        _ => is_installed().then(|| FEED.to_string()),
+        _ => (is_installed() && !crate::store::is_portable()).then(|| FEED.to_string()),
     }
 }
 

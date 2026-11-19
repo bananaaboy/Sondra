@@ -78,10 +78,35 @@ pub fn downloads_dir() -> PathBuf {
     home.map(|h| PathBuf::from(h).join("Downloads").join("Sondra")).unwrap_or_else(|| PathBuf::from("Sondra-Downloads"))
 }
 
+/// The portable build: when a file `portable.txt` lies beside the program, the data live in `Sondra-Daten` next to it
+/// (the program is a folder one can carry); where that folder cannot be written, the usual place is used and the second
+/// answer says so. Nothing is registered anywhere.
+pub fn portable_dir(exe: &std::path::Path) -> Option<PathBuf> {
+    let beside = exe.parent()?;
+    if !beside.join("portable.txt").exists() {
+        return None;
+    }
+    let data = beside.join("Sondra-Daten");
+    std::fs::create_dir_all(&data).ok()?;
+    // Writable? (A program folder on a read-only stick is not.)
+    let probe = data.join(".schreibprobe");
+    std::fs::write(&probe, b"x").ok()?;
+    let _ = std::fs::remove_file(&probe);
+    Some(data)
+}
+
+/// Is this the portable build? (The updater and the file endings leave it alone.)
+pub fn is_portable() -> bool {
+    std::env::current_exe().ok().is_some_and(|exe| exe.parent().is_some_and(|d| d.join("portable.txt").exists()))
+}
+
 /// Sondra's data folder on this computer.
 pub fn data_dir() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("SONDRA_DATA") {
         return Some(PathBuf::from(dir));
+    }
+    if let Some(dir) = std::env::current_exe().ok().and_then(|exe| portable_dir(&exe)) {
+        return Some(dir);
     }
     if cfg!(windows) {
         return std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("Sondra").join("native"));
