@@ -17,6 +17,7 @@ pub mod ogg;
 pub mod options;
 pub mod session;
 pub mod stream;
+pub mod usb;
 
 /// What can go wrong between this computer and the phone, in words for the person.
 #[derive(Debug, thiserror::Error)]
@@ -31,6 +32,8 @@ pub enum MirrorError {
     NotAllowed,
     #[error("Das Handy hat „{0}“ nicht geöffnet.")]
     Refused(String),
+    #[error("{0}")]
+    Usb(String),
 }
 
 impl MirrorError {

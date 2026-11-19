@@ -12,6 +12,8 @@ rsa = "0.9"
 sha1 = { version = "0.10", features = ["oid"] }
 rand = "0.8"
 base64 = "0.22"
+nusb = "0.1"
+futures-lite = "2"
 
 [dev-dependencies]
 serde_json.workspace = true
