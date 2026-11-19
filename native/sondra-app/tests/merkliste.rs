@@ -656,3 +656,26 @@ fn one_series_is_recommended_from_its_own_page_whatever_its_stand(cx: &mut TestA
     assert!(w.tree().find(Role::Dialog, "Merkliste teilen").is_some());
     assert!(w.tree().find(Role::Button, "Am Schauen mitnehmen, 1 Serien").is_some());
 }
+
+#[gpui::test]
+fn a_shared_list_handed_to_the_program_opens_the_window_for_receiving(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    let mut ids = Ids::system();
+    let theirs = vec![normalize(&json!({ "id": "c", "title": "Cowboy Bebop", "status": "watching", "season": 1, "episode": 7 }), &mut ids)];
+    let shared = sondra_merk::share::shareable_list(&theirs, "Mia", true, &std::collections::HashMap::new());
+    let file = dir.path().join("Mia.sondra-liste");
+    std::fs::write(&file, sondra_merk::share::share_file(&shared)).unwrap();
+    w.shell.update(w.cx, |s, cx| s.open_paths(vec![file], cx));
+    w.draw();
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
+    assert!(w.tree().find(Role::Dialog, "Liste empfangen").is_some());
+    assert!(w.tree().find(Role::Button, "Cowboy Bebop aufnehmen").is_some());
+    // A file that is no list says so and takes nothing.
+    let broken = dir.path().join("kaputt.sondra-liste");
+    std::fs::write(&broken, b"nichts").unwrap();
+    w.shell.update(w.cx, |s, cx| s.open_paths(vec![broken], cx));
+    w.draw();
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("keine Liste"))));
+    assert!(w.tree().find(Role::Button, "Cowboy Bebop aufnehmen").is_none());
+}

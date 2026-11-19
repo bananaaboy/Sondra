@@ -164,8 +164,16 @@ impl Shell {
     }
 
     /// Opens what was handed to the program (files dropped on it, „Öffnen mit Sondra“, the command line): a
-    /// folder goes to the Ordner page, films and songs are played, anything else waits on the start page.
+    /// shared list goes to the Merkliste's window for receiving, a folder goes to the Ordner page, films and songs are played, anything else waits on the start page.
     pub fn open_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        // A shared list (`.sondra-liste`) opens the window that sets it beside one's own.
+        if let Some(list) = paths.iter().find(|p| p.file_name().is_some_and(|n| sondra_merk::share::is_share_file(&n.to_string_lossy()))) {
+            self.go(Panel::Merkliste, cx);
+            self.receive_open(cx);
+            self.receive_read_file(list);
+            cx.notify();
+            return;
+        }
         if let [only] = paths.as_slice() {
             if only.is_dir() {
                 self.go(Panel::Folder, cx);
@@ -180,6 +188,26 @@ impl Shell {
         } else if !paths.is_empty() {
             self.take_files(paths, cx);
         }
+    }
+
+    /// Opens what a second start hands over, and brings the window forward.
+    pub fn listen_for_instances(&mut self, paths: std::sync::mpsc::Receiver<Vec<PathBuf>>, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| loop {
+            cx.background_executor().timer(std::time::Duration::from_millis(300)).await;
+            while let Ok(given) = paths.try_recv() {
+                let alive = this.update(cx, |shell, cx| {
+                    if !given.is_empty() {
+                        shell.open_paths(given, cx);
+                    }
+                    cx.notify();
+                });
+                if alive.is_err() {
+                    return;
+                }
+                cx.update(|app| app.activate(true)).ok();
+            }
+        })
+        .detach();
     }
 
     /// Gives the player the settings and the places it remembered.

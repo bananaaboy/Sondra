@@ -19,6 +19,7 @@ pub mod nav;
 pub mod planner;
 pub mod harmony_page;
 pub mod images_page;
+pub mod instance;
 pub mod mix_page;
 pub mod video_page;
 pub mod normalize_page;

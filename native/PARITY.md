@@ -125,13 +125,13 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 
 | ID | Funktion | Bestand | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- | --- |
-| B01 | Installer für alle Benutzer, Eintrag in Apps & Features, stille Installation | `installer.nsh` | 8 | Workflow | offen |
+| B01 | Installer für alle Benutzer, Eintrag in Apps & Features, stille Installation | `installer.nsh` | 8 | Workflow | **Programmseite nativ ✔** (`.sondra-liste` auf der Befehlszeile öffnet das Fenster „Liste empfangen“, Filme und Ton den Player, Ordner die Ordnerseite, alles auch vom zweiten Start); offen: Eintrag in der Registry und Logo (Installer) |
 | B02 | Portabel (Daten daneben, anderer Port, keine Registrierung) | `build-desktop.mjs` | 8 | Workflow | offen |
 | B03 | Microsoft-Store-Paket (MSIX), Store-Fassung ohne eigenen Updater | `build-desktop.mjs --store` | 8 | Workflow | offen |
 | B04 | Arm64 | Workflow | 8 | Workflow | offen |
 | B05 | Automatische Updates (`latest.yml`, Fortschritt, „Auf x.y.z aktualisieren“) | `updater.mjs`, `AppUpdate` | 8 | Workflow | offen |
 | B06 | „Öffnen mit Sondra“, Dateiendungen `.sondra` und `.sondra-liste` mit Logo | `installer.nsh` | 8 | Workflow | offen |
-| B07 | Einzel-Instanz, zweiter Start reicht Dateien weiter | `electron.mjs` | 1/8 | Test | offen |
+| B07 | Einzel-Instanz, zweiter Start reicht Dateien weiter | `electron.mjs` | 1/8 | Test | **nativ ✔** — `sondra-app::instance`: der erste Start lauscht nur auf 127.0.0.1 an einem selbst gewählten Port und legt Port und Geheimnis in `Instanz.json` im Datenordner; ein zweiter Start reicht Dateien und Ordner weiter (auch ohne Dateien: das Fenster kommt nach vorn) und beendet sich; wer das Geheimnis nicht kennt (eine Webseite, die Text an den Port schickt) wird nicht gehört, eine übrig gebliebene Datei sperrt keinen neuen Start. Test mit zwei Starts und einem Fremden. |
 | B08 | Offline: alles nach dem ersten Besuch | `coi-serviceworker.js` | 8 | Test | offen |
 | B09 | Datenschutz, Lizenzen (FFmpeg, scrcpy, Tango, Modelle), Changelog | `public/` | 8 | `verify:scrcpy` u. a. | offen |
 | B10 | Daten der Electron-App übernehmen (Sitzung, Einstellungen, Lesezeichen) | `localStorage`, IndexedDB | 8 | Test mit echten Daten | offen |

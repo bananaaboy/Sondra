@@ -6,7 +6,17 @@ use sondra_app::shell::Shell;
 use sondra_ui::{bind_keys, fonts, Assets};
 
 fn main() {
-    Application::new().with_assets(Assets).run(|cx: &mut App| {
+    // One Sondra at a time: a second start hands over what it was given and ends.
+    let given: Vec<std::path::PathBuf> = std::env::args_os().skip(1).map(Into::into).collect();
+    let instance = match sondra_app::store::data_dir() {
+        Some(dir) => match sondra_app::instance::claim(&dir, &given) {
+            sondra_app::instance::Claim::Handed => return,
+            sondra_app::instance::Claim::First(instance) => Some(instance),
+        },
+        None => None,
+    };
+    let mut instance = instance;
+    Application::new().with_assets(Assets).run(move |cx: &mut App| {
         fonts::load(cx);
         sondra_ui::motion::set_reduced(sondra_app::system::prefers_reduced_motion());
         bind_keys(cx);
@@ -42,9 +52,12 @@ fn main() {
                         shell.open_devices(setup, store, cx);
                     }
                     // Files and folders on the command line: „Öffnen mit Sondra“ and a drop on the program.
-                    let given: Vec<std::path::PathBuf> = std::env::args_os().skip(1).map(Into::into).collect();
                     if !given.is_empty() {
-                        shell.open_paths(given, cx);
+                        shell.open_paths(given.clone(), cx);
+                    }
+                    // And what a second start hands over later.
+                    if let Some(instance) = instance.take() {
+                        shell.listen_for_instances(instance.paths, cx);
                     }
                     shell
                 })
