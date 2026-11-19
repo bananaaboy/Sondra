@@ -196,6 +196,35 @@ impl MerkState {
         }
     }
 
+    /// An episode the player saw to 90 %: ticked off, the place settled on the next, the history written.
+    /// Returns the entry as it was before, for „Rückgängig“.
+    pub fn saw_episode(&mut self, id: &str, season: i64, episode: i64) -> Option<Item> {
+        let pos = self.items.iter().position(|i| i.id == id)?;
+        let before = self.items[pos].clone();
+        let mut ids = Ids::system();
+        let luck = (ids.random)();
+        let seen = sondra_merk::matching::seen_episode(&before, season, episode, ids.now, format!("wh-{}-{}", ids.now, luck.chars().take(4).collect::<String>()));
+        let item = &mut self.items[pos];
+        item.seasons = Some(seen.settled.seasons);
+        item.season = seen.settled.season;
+        item.episode = seen.settled.episode;
+        item.status = seen.settled.status;
+        item.history = Some(seen.history);
+        item.updated_at = ids.now;
+        self.save();
+        Some(before)
+    }
+
+    /// An entry put back as it was, counted as changed now — or the copy in Drive would bring the change
+    /// it undoes back.
+    pub fn put_back(&mut self, before: Item) {
+        let now = Ids::system().now;
+        if let Some(slot) = self.items.iter_mut().find(|i| i.id == before.id) {
+            *slot = Item { updated_at: now, ..before };
+            self.save();
+        }
+    }
+
     /// A new entry with the name typed and nothing else: it stands at the first season, nothing seen. How
     /// many episodes it has is never asked and never guessed.
     pub fn add_series(&mut self, title: &str) -> Option<String> {

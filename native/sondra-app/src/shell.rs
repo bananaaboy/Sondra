@@ -752,6 +752,7 @@ impl Render for Shell {
             let me = cx.entity_id();
             window.on_next_frame(move |_, cx| cx.notify(me));
         }
+        self.player_merkliste_tick();
         let page = if self.panel == Panel::Start {
             self.start(ui, cols, cx)
         } else if self.panel == Panel::Merkliste {

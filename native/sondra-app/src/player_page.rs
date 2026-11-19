@@ -16,6 +16,7 @@ use sondra_playback::{Playback, State};
 use sondra_ui::{family, size, NoticeKind, Ui};
 
 use crate::lines::Line;
+use crate::nav::Panel;
 use crate::shell::Shell;
 use crate::store::FileStore;
 
@@ -34,6 +35,18 @@ pub struct PlayerState {
     pub cues: Vec<Cue>,
     /// When the place was last written down.
     saved_at: Option<std::time::Instant>,
+    /// The file seen playing short of 90 %: only then does the end of it count. On a switch to the next file
+    /// the clock of the old one may still be read for a moment; without this every episode was ticked off the
+    /// moment it began.
+    armed: Option<String>,
+    /// What this file ticked off on the Merkliste, and the entry as it was before.
+    pub ticked: Option<Ticked>,
+}
+
+pub struct Ticked {
+    pub key: String,
+    pub before: sondra_merk::Item,
+    pub undone: bool,
 }
 
 impl PlayerState {
@@ -49,6 +62,8 @@ impl PlayerState {
             memory: None,
             cues: Vec::new(),
             saved_at: None,
+            armed: None,
+            ticked: None,
         }
     }
 
@@ -187,7 +202,89 @@ fn file_label(path: &PathBuf) -> String {
     path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned())
 }
 
+/// The episode of the Merkliste the file on the stage is, with a key that tells one file and episode from
+/// the next.
+fn episode_of(state: &PlayerState, items: &[sondra_merk::Item]) -> Option<(sondra_merk::matching::EpisodeMatch, String)> {
+    if !state.settings.merkliste {
+        return None;
+    }
+    let name = state.current_path()?.file_name()?.to_string_lossy().into_owned();
+    let found = sondra_merk::matching::match_episode(&name, items)?;
+    let key = format!("{name}|{}|{}|{}", found.item, found.season, found.episode);
+    Some((found, key))
+}
+
 impl Shell {
+    /// Once a file has run to 90 %, its episode is ticked off on the Merkliste — once per file and episode,
+    /// and only for a file seen short of 90 % first.
+    pub(crate) fn player_merkliste_tick(&mut self) {
+        let Some((found, key)) = episode_of(&self.player, &self.merk.items) else { return };
+        let Some(playback) = self.player.playback.as_ref() else { return };
+        let duration = playback.duration().unwrap_or(0.0);
+        if duration <= 0.0 || self.player.ticked.as_ref().is_some_and(|t| t.key == key) {
+            return;
+        }
+        if playback.position() / duration < sondra_merk::matching::SEEN_AT {
+            self.player.armed = Some(key);
+            return;
+        }
+        let Some(item) = self.merk.items.iter().find(|i| i.id == found.item) else { return };
+        if self.player.armed.as_deref() != Some(key.as_str()) || sondra_merk::matching::already_seen(item, found.season, found.episode) {
+            return;
+        }
+        if let Some(before) = self.merk.saw_episode(&found.item, found.season, found.episode) {
+            self.player.ticked = Some(Ticked { key, before, undone: false });
+        }
+    }
+
+    /// The line under the picture: which episode the file is and what happened to it on the list.
+    fn player_merkliste_line(&self, ui: Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (found, key) = episode_of(&self.player, &self.merk.items)?;
+        let item = self.merk.items.iter().find(|i| i.id == found.item)?;
+        let me = cx.entity();
+        let c = ui.c;
+        let place = if found.season == 0 { format!("Film {}", found.episode) } else { format!("Staffel {}, Folge {}", found.season, found.episode) };
+        let mine = self.player.ticked.as_ref().filter(|t| t.key == key);
+        let mut line = div().flex().flex_wrap().items_center().gap(px(10.)).text_size(px(size::SMALL)).text_color(c.prose);
+        line = line.child(div().font_weight(gpui::FontWeight::SEMIBOLD).text_color(c.ink).child("Merkliste")).child({
+            let (me, id) = (me.clone(), item.id.clone());
+            ui.button("serie-oeffnen", item.title.clone()).small().ghost().accessible_name(format!("Serie „{}“ öffnen", item.title)).on_click(move |_, app| {
+                let id = id.clone();
+                me.update(app, |shell, cx| {
+                    shell.merk.open = Some(id);
+                    shell.go(Panel::Merkliste, cx);
+                })
+            })
+        });
+        line = line.child(format!("· {place}"));
+        let mut said = format!("Merkliste · {} · {place}", item.title);
+        let line = match mine {
+            Some(t) if !t.undone => line.child("— abgehakt.").child({
+                let me = me.clone();
+                ui.button("abhaken-zurueck", "Rückgängig").small().on_click(move |_, app| {
+                    me.update(app, |shell, cx| {
+                        if let Some(t) = shell.player.ticked.as_mut() {
+                            t.undone = true;
+                            let before = t.before.clone();
+                            shell.merk.put_back(before);
+                        }
+                        cx.notify();
+                    })
+                })
+            }),
+            Some(_) => line.child("— nicht abgehakt."),
+            None if sondra_merk::matching::already_seen(item, found.season, found.episode) => line.child("— schon gesehen."),
+            None => line.child(format!("— wird ab {} % abgehakt.", (sondra_merk::matching::SEEN_AT * 100.0).round() as i32)),
+        };
+        said.push_str(match mine {
+            Some(t) if !t.undone => " — abgehakt.",
+            Some(_) => " — nicht abgehakt.",
+            None if sondra_merk::matching::already_seen(item, found.season, found.episode) => " — schon gesehen.",
+            None => " — wird ab 90 % abgehakt.",
+        });
+        Some(sondra_a11y::accessible("abhaken-zeile", sondra_a11y::Role::Status, line).label(said).live().into_any_element())
+    }
+
     /// Where the film is, when one plays.
     pub fn player_position(&self) -> Option<f64> {
         self.player.playback.as_ref().map(|p| p.position())
@@ -367,6 +464,7 @@ impl Shell {
             }))
             .child(div().child(ui.value(name)))
             .child(stage)
+            .children(self.player_merkliste_line(ui, cx))
             .child(seek)
             .child(div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(controls).child(bottom));
         page.child(self.player_queue(ui, cx)).into_any_element()

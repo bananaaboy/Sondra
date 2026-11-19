@@ -13,6 +13,7 @@ use gpui::{point, px, size, AppContext as _, AvailableSpace, Entity, TestAppCont
 use sondra_a11y::{attach_sink, run_action, Role, Snapshot};
 use sondra_app::nav::Panel;
 use sondra_app::shell::Shell;
+use sondra_app::store::MerkStore;
 use sondra_media::Ffmpeg;
 use sondra_ui::{bind_keys, fonts};
 
@@ -181,4 +182,61 @@ fn what_is_not_a_film_is_said_and_a_missing_file_is_too(cx: &mut TestAppContext)
     w.draw();
     assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("nichts, was sich abspielen lässt"))));
     assert!(w.tree().find(Role::Button, "Datei wählen").is_some(), "and the way in stays");
+}
+
+#[gpui::test]
+fn a_file_named_like_an_episode_is_ticked_off_at_ninety_percent_and_can_be_taken_back(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    use serde_json::json;
+    use sondra_merk::normalize::{normalize, Context as Ids};
+    use sondra_merk::sqlite::{read_shared, write_sqlite, Snapshot};
+    let tmp = tempfile::tempdir().unwrap();
+    let list = tmp.path().join("Merkliste.sqlite");
+    let mut ids = Ids::system();
+    let frieren = normalize(
+        &json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 2, "seasons": [{ "number": 1, "episodes": 12, "watched": [1] }] }),
+        &mut ids,
+    );
+    std::fs::write(&list, write_sqlite(&Snapshot { items: vec![frieren], ..Default::default() }).unwrap()).unwrap();
+    let path = film(tmp.path(), "Frieren S01E02.mp4", 4);
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let listfile = list.clone();
+    let (shell, vcx) = cx.add_window_view(move |window, cx| {
+        let mut shell = Shell::new(window, cx);
+        shell.open_merkliste(MerkStore::at(listfile), cx);
+        shell
+    });
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    vcx.simulate_resize(size(px(WIDTH), px(900.)));
+    let mut w = Window { cx: vcx, shell, seen };
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Player, cx));
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![path], cx));
+    w.watch(0.8);
+    let line = |w: &Window| w.tree().nodes.iter().find(|n| n.role == Role::Status).and_then(|n| n.label.as_ref().map(|l| l.to_string())).unwrap_or_default();
+    assert_eq!(line(&w), "Merkliste · Frieren · Staffel 1, Folge 2 — wird ab 90 % abgehakt.");
+    assert!(w.tree().find(Role::Button, "Serie „Frieren“ öffnen").is_some());
+    // To the end of the film: past 90 % it is ticked off.
+    w.watch(3.0);
+    assert_eq!(line(&w), "Merkliste · Frieren · Staffel 1, Folge 2 — abgehakt.");
+    let stored = read_shared(&std::fs::read(&list).unwrap(), &mut Ids::system()).unwrap();
+    assert_eq!(stored.items[0].seasons.as_ref().unwrap()[0].watched, vec![1, 2]);
+    assert_eq!(stored.items[0].episode, Some(3), "and the place moved on");
+    assert_eq!(stored.items[0].history.as_ref().unwrap().len(), 1);
+    // Taken back: the list is as it was, and the file does not tick it again while it plays.
+    w.press(Role::Button, "Rückgängig");
+    assert_eq!(line(&w), "Merkliste · Frieren · Staffel 1, Folge 2 — nicht abgehakt.");
+    let stored = read_shared(&std::fs::read(&list).unwrap(), &mut Ids::system()).unwrap();
+    assert_eq!(stored.items[0].seasons.as_ref().unwrap()[0].watched, vec![1]);
+    assert_eq!(stored.items[0].episode, Some(2));
+    w.watch(0.5);
+    let stored = read_shared(&std::fs::read(&list).unwrap(), &mut Ids::system()).unwrap();
+    assert_eq!(stored.items[0].seasons.as_ref().unwrap()[0].watched, vec![1], "taken back, it stays taken back");
 }
