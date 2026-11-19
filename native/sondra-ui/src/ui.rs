@@ -6,8 +6,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    div, point, prelude::*, px, AnyElement, App, BoxShadow, Div, ElementId, FontWeight,
-    IntoElement, ParentElement, SharedString, Stateful, Styled, Window,
+    div, point, prelude::*, px, AnyElement, App, BoxShadow, Div, ElementId, FocusHandle,
+    FontWeight, IntoElement, ParentElement, SharedString, Stateful, Styled, Window,
 };
 use sondra_a11y::{accessible, Role};
 
@@ -112,7 +112,9 @@ impl RenderOnce for Button {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = self.ui.c;
         let focus = window
-            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| cx.focus_handle())
+            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| {
+                cx.focus_handle().tab_stop(true)
+            })
             .read(cx)
             .clone();
         let (text_size, pad_x, pad_y) = if self.small {
@@ -195,7 +197,9 @@ impl RenderOnce for Chip {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = self.ui.c;
         let focus = window
-            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| cx.focus_handle())
+            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| {
+                cx.focus_handle().tab_stop(true)
+            })
             .read(cx)
             .clone();
         let mut visual = div()
@@ -264,7 +268,9 @@ impl RenderOnce for Tile {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = self.ui.c;
         let focus = window
-            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| cx.focus_handle())
+            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| {
+                cx.focus_handle().tab_stop(true)
+            })
             .read(cx)
             .clone();
         let visual = div()
@@ -311,7 +317,8 @@ impl RenderOnce for Tile {
                     .child(
                         div()
                             .text_size(px(size::SMALL))
-                            .text_color(c.muted)
+                            // `prose`, not `muted`: on a tint `muted` measures Lc 59.3 in the dark theme.
+                            .text_color(c.prose)
                             .line_clamp(2)
                             .child(self.hint.clone()),
                     ),
@@ -338,9 +345,15 @@ pub struct Tab {
     label: SharedString,
     selected: bool,
     on_click: Option<Handler>,
+    /// A handle the screen owns, so it can give the focus back to this tab when a menu shuts.
+    focus: Option<FocusHandle>,
 }
 
 impl Tab {
+    pub fn focus_handle(mut self, handle: FocusHandle) -> Self {
+        self.focus = Some(handle);
+        self
+    }
     pub fn on_click(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_click = Some(Rc::new(handler));
         self
@@ -350,10 +363,15 @@ impl Tab {
 impl RenderOnce for Tab {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = self.ui.c;
-        let focus = window
-            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| cx.focus_handle())
-            .read(cx)
-            .clone();
+        let focus = match &self.focus {
+            Some(handle) => handle.clone(),
+            None => window
+                .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| {
+                    cx.focus_handle().tab_stop(true)
+                })
+                .read(cx)
+                .clone(),
+        };
         let mut visual = div()
             .id(key_id(&self.id, "bild"))
             .track_focus(&focus)
@@ -496,6 +514,7 @@ impl Ui {
             label: label.into(),
             selected,
             on_click: None,
+            focus: None,
         }
     }
 

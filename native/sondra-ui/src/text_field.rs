@@ -124,7 +124,7 @@ impl Focusable for TextField {
 impl TextField {
     pub fn new(cx: &mut Context<Self>, colors: Colors, label: impl Into<SharedString>) -> Self {
         Self {
-            focus_handle: cx.focus_handle(),
+            focus_handle: cx.focus_handle().tab_stop(true),
             colors,
             label: label.into(),
             placeholder: SharedString::default(),

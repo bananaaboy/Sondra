@@ -249,3 +249,47 @@ fn the_rest_of_a_group_unfolds_and_the_search_finds_by_what_people_type(cx: &mut
     w.press(Role::Button, "Ordner durchsehen", 1280.);
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Folder);
 }
+
+fn focused(tree: &Snapshot) -> String {
+    tree.nodes
+        .iter()
+        .find(|n| n.focused)
+        .and_then(|n| n.label.as_ref().map(|l| l.to_string()))
+        .unwrap_or_else(|| "(nothing)".into())
+}
+
+#[gpui::test]
+fn escape_gives_the_focus_back_to_the_tab_that_opened_the_menu(cx: &mut TestAppContext) {
+    let mut w = open(cx, 1280.);
+    w.press(Role::Button, "Ton ▾", 1280.);
+    assert_eq!(
+        focused(&w.tree()),
+        "Ton",
+        "the first entry of the menu takes the focus"
+    );
+    w.cx.simulate_keystrokes("escape");
+    w.draw(1280.);
+    assert!(w.tree().find(Role::Menu, "Ton").is_none());
+    assert_eq!(
+        focused(&w.tree()),
+        "Ton ▾",
+        "the tab that opened it has the focus again"
+    );
+    // Left and Right walk the row.
+    w.cx.simulate_keystrokes("right");
+    w.draw(1280.);
+    assert_eq!(focused(&w.tree()), "Aufnehmen ▾");
+    w.cx.simulate_keystrokes("left");
+    w.cx.simulate_keystrokes("left");
+    w.draw(1280.);
+    assert_eq!(focused(&w.tree()), "Bearbeiten ▾");
+    w.cx.simulate_keystrokes("enter");
+    w.draw(1280.);
+    assert!(
+        w.tree().find(Role::Menu, "Bearbeiten").is_some(),
+        "Enter opens it"
+    );
+    w.cx.simulate_keystrokes("down");
+    w.draw(1280.);
+    assert_eq!(focused(&w.tree()), "Video", "Down walks the menu");
+}

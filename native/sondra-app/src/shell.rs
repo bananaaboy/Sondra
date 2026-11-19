@@ -44,6 +44,8 @@ pub struct Shell {
     /// The first entry of whatever menu is open takes the focus when it opens.
     menu_focus: FocusHandle,
     focus_menu: bool,
+    /// One handle per tab (the last is „Mehr“): the focus goes back to the one that opened a menu.
+    tab_focus: Vec<FocusHandle>,
 }
 
 impl Shell {
@@ -73,8 +75,11 @@ impl Shell {
             unfolded: HashSet::new(),
             picked: Vec::new(),
             focus: cx.focus_handle(),
-            menu_focus: cx.focus_handle(),
+            menu_focus: cx.focus_handle().tab_stop(true),
             focus_menu: false,
+            tab_focus: (0..=ENTRIES.len())
+                .map(|_| cx.focus_handle().tab_stop(true))
+                .collect(),
         }
     }
 
@@ -103,6 +108,19 @@ impl Shell {
         };
         self.focus_menu = self.menu.is_some();
         cx.notify();
+    }
+
+    /// Whether the focus is on a tab, or in a menu hanging from one.
+    fn in_tab_row(&self, window: &Window) -> bool {
+        self.menu.is_some() || self.tab_focus.iter().any(|h| h.is_focused(window))
+    }
+
+    /// The tab that opened the menu now open, if one is.
+    fn opener_focus(&self) -> Option<FocusHandle> {
+        match self.menu? {
+            Menu::Entry(i) => self.tab_focus.get(i).cloned(),
+            Menu::More => self.tab_focus.get(ENTRIES.len()).cloned(),
+        }
     }
 
     fn close_menu(&mut self, by_click: bool, cx: &mut Context<Self>) {
@@ -197,7 +215,12 @@ impl Shell {
             .collect();
         let fit = fit_row(&widths, 2.0, tab_width("Mehr", false), available, chosen);
 
-        let mut row = div().relative().flex().items_center().gap(px(2.));
+        let mut row = div()
+            .id("reiter-zeile")
+            .relative()
+            .flex()
+            .items_center()
+            .gap(px(2.));
         for i in &fit.shown {
             let i = *i;
             let entry = ENTRIES[i];
@@ -205,6 +228,7 @@ impl Shell {
             let me = me.clone();
             let tab = ui
                 .tab(format!("reiter-{}", entry.id()), label_of(i), selected)
+                .focus_handle(self.tab_focus[i].clone())
                 .on_click(move |_, app| {
                     me.update(app, |shell, cx| match entry {
                         Entry::Single(p) => shell.go(p, cx),
@@ -221,6 +245,7 @@ impl Shell {
             let me = me.clone();
             let more = ui
                 .tab("reiter-mehr", "Mehr ▾", fit.hidden.contains(&chosen))
+                .focus_handle(self.tab_focus[ENTRIES.len()].clone())
                 .on_click(move |_, app| {
                     me.update(app, |shell, cx| shell.toggle_menu(Menu::More, cx));
                 });
@@ -633,9 +658,30 @@ impl Render for Shell {
                 .id("fenster")
                 .key_context("SondraShell")
                 .track_focus(&self.focus)
-                .on_key_down(move |event: &KeyDownEvent, _, app| {
-                    if event.keystroke.key == "escape" {
+                .on_key_down(move |event: &KeyDownEvent, window, app| {
+                    let step = match event.keystroke.key.as_str() {
+                        "left" => -1,
+                        "right" => 1,
+                        _ => 0,
+                    };
+                    // Left and Right walk the row of tabs (sideways out of an open menu shuts it first).
+                    if step != 0 && me.read(app).in_tab_row(window) {
                         me.update(app, |shell, cx| shell.close_menu(false, cx));
+                        if step < 0 {
+                            window.focus_prev();
+                        } else {
+                            window.focus_next();
+                        }
+                        app.stop_propagation();
+                        return;
+                    }
+                    if event.keystroke.key == "escape" {
+                        // Escape shuts the menu and gives the focus back to the tab that opened it.
+                        let back = me.read(app).opener_focus();
+                        me.update(app, |shell, cx| shell.close_menu(false, cx));
+                        if let Some(handle) = back {
+                            window.focus(&handle);
+                        }
                     }
                 })
                 .size_full()

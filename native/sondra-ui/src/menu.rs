@@ -47,7 +47,9 @@ impl RenderOnce for MenuItem {
         let focus = match &self.focus {
             Some(handle) => handle.clone(),
             None => window
-                .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| cx.focus_handle())
+                .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| {
+                    cx.focus_handle().tab_stop(true)
+                })
                 .read(cx)
                 .clone(),
         };
@@ -179,7 +181,7 @@ impl Ui {
         role: Role,
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
-        content: Div,
+        content: impl IntoElement,
     ) -> AnyElement {
         let id: SharedString = id.into();
         accessible(gpui::ElementId::Name(id.to_string().into()), role, content)
