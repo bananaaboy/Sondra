@@ -51,11 +51,13 @@ pub struct Prefs {
     pub deep: bool,
     /// Tiles with a picture (the first look of a folder, as on the website) or lines.
     pub tiles: bool,
+    /// Hide what the Merkliste has seen.
+    pub unseen: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { filter: KindFilter::All, sort: SortKey::Name, descending: false, deep: false, tiles: true }
+        Prefs { filter: KindFilter::All, sort: SortKey::Name, descending: false, deep: false, tiles: true, unseen: false }
     }
 }
 
@@ -63,7 +65,7 @@ impl Prefs {
     fn to_map(self) -> Map<String, Value> {
         let kind = FILTERS.iter().find(|(f, _, _)| *f == self.filter).map_or("alle", |(_, id, _)| id);
         let sort = SORTS.iter().find(|(s, _, _)| *s == self.sort).map_or("name", |(_, id, _)| id);
-        let Value::Object(map) = json!({ "kind": kind, "sort": sort, "descending": self.descending, "deep": self.deep, "view": if self.tiles { "kacheln" } else { "liste" } }) else { unreachable!() };
+        let Value::Object(map) = json!({ "kind": kind, "sort": sort, "descending": self.descending, "deep": self.deep, "view": if self.tiles { "kacheln" } else { "liste" }, "unseen": self.unseen }) else { unreachable!() };
         map
     }
 
@@ -75,6 +77,7 @@ impl Prefs {
             descending: map.get("descending").and_then(Value::as_bool).unwrap_or(false),
             deep: map.get("deep").and_then(Value::as_bool).unwrap_or(false),
             tiles: text("view") != "liste",
+            unseen: map.get("unseen").and_then(Value::as_bool).unwrap_or(false),
         }
     }
 }
@@ -99,6 +102,8 @@ pub struct FolderState {
     pub remembered: Option<PathBuf>,
     /// When this folder was last looked at before now, for „Neu“ later.
     pub last_visit: Option<f64>,
+    /// Only what came since the visit before this one.
+    pub only_new: bool,
     cancel: Arc<AtomicBool>,
     generation: u64,
     /// The files a delete is being asked about.
@@ -158,6 +163,7 @@ impl FolderState {
             session: Session::default(),
             remembered: None,
             last_visit: None,
+            only_new: false,
             cancel: Arc::new(AtomicBool::new(false)),
             generation: 0,
             confirm: None,
@@ -246,6 +252,7 @@ impl Shell {
         f.error = None;
         f.dupes.cancel.store(true, Ordering::Relaxed);
         f.dupes = Default::default();
+        f.only_new = false;
         f.thumbs.borrow_mut().clear_waiting();
         f.root = Some(path.clone());
         let (cancel, generation) = (f.cancel.clone(), f.generation);
@@ -340,7 +347,15 @@ impl Shell {
             sort: f.prefs.sort,
             descending: f.prefs.descending,
         };
-        let view = listing(scan, &options);
+        let mut view = listing(scan, &options);
+        // „Ungesehen“ and „Neu“ narrow what is in view; files that are no episode of the list stay.
+        let (has_series, has_new) = (!sondra_merk::folder::folder_episodes(&scan.files, &self.merk.items).is_empty(), f.last_visit.is_some_and(|since| scan.files.iter().any(|file| file.modified as f64 > since)));
+        if f.prefs.unseen {
+            view.files.retain(|file| sondra_merk::folder::episode_of(file, &self.merk.items).is_none_or(|e| !e.seen));
+        }
+        if let (true, Some(since)) = (f.only_new, f.last_visit) {
+            view.files.retain(|file| file.modified as f64 > since);
+        }
 
         // The head: where one is, and the ways to look.
         let mut steps = div().flex().flex_wrap().items_center().gap(px(6.));
@@ -427,6 +442,15 @@ impl Shell {
                 Self::folder_do(&me, app, |f| f.set_prefs(|p| p.deep = !p.deep))
             })
         };
+        let mut narrow = div().flex().gap(px(6.));
+        if has_series || f.prefs.unseen {
+            let me = me.clone();
+            narrow = narrow.child(ui.chip("nur-ungesehen", "Ungesehen", f.prefs.unseen).accessible_name("Nur Ungesehenes zeigen").on_click(move |_, app| Self::folder_do(&me, app, |f| f.set_prefs(|p| p.unseen = !p.unseen))));
+        }
+        if has_new || f.only_new {
+            let me = me.clone();
+            narrow = narrow.child(ui.chip("nur-neu", "Neu", f.only_new).accessible_name("Nur zeigen, was seit dem letzten Besuch dazukam").on_click(move |_, app| Self::folder_do(&me, app, |f| f.only_new = !f.only_new)));
+        }
         let looks = {
             let (tiles_me, lines_me) = (me.clone(), me.clone());
             div()
@@ -444,6 +468,7 @@ impl Shell {
                 .child(kinds)
                 .child(div().w(px(240.)).child(f.search.clone()))
                 .child(deep)
+                .child(narrow)
                 .child(looks)
                 .child(sorts)
                 .child({

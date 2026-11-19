@@ -470,3 +470,27 @@ fn the_series_on_the_list_continue_from_where_they_stand_and_play_the_unseen_one
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv"]);
 }
+
+#[gpui::test]
+fn what_the_list_has_seen_can_be_left_out_of_the_view(cx: &mut TestAppContext) {
+    use sondra_merk::normalize::{normalize, Context as Ids};
+    use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Serien");
+    for (n, name) in ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv", "notizen.txt"].iter().enumerate() {
+        put(&root, name, 100 + n * 10);
+    }
+    let mut ids = Ids::system();
+    let frieren = normalize(&serde_json::json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 2, "seasons": [{ "number": 1, "episodes": null, "watched": [1] }] }), &mut ids);
+    let list = tmp.path().join("Merkliste.sqlite");
+    fs::write(&list, write_sqlite(&Stored { items: vec![frieren], ..Default::default() }).unwrap()).unwrap();
+
+    let mut w = open(cx, tmp.path());
+    w.shell.update(w.cx, |shell, cx| shell.open_merkliste(sondra_app::store::MerkStore::at(list.clone()), cx));
+    w.read(&root);
+    assert_eq!(w.files(), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv", "notizen.txt"]);
+    w.press(Role::Button, "Nur Ungesehenes zeigen");
+    assert_eq!(w.files(), ["Frieren S01E02.mkv", "Frieren S01E03.mkv", "notizen.txt"], "the seen one is out; a file that is no episode stays");
+    w.press(Role::Button, "Nur Ungesehenes zeigen");
+    assert_eq!(w.files().len(), 4);
+}
