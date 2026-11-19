@@ -720,3 +720,34 @@ fn what_is_new_online_is_offered_on_the_page_and_taken_onto_the_list(cx: &mut Te
     assert_eq!(item.episode, Some(4), "the place stays at the first episode not seen");
     assert!(!w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Neu auf AniWorld"))), "nothing is new any more");
 }
+
+#[gpui::test]
+fn the_history_takes_an_episode_back_and_the_dice_pick_a_series_to_open(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ids = Ids::system();
+    let frieren = normalize(
+        &json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 4,
+            "seasons": [{ "number": 1, "episodes": 12, "watched": [1, 2, 3] }],
+            "history": [{ "id": "h3", "season": 1, "episode": 3, "at": 1_700_000_000_000i64 }] }),
+        &mut ids,
+    );
+    let mut w = open(cx, Some(&Stored { items: vec![frieren], ..Default::default() }), dir.path());
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Verlauf");
+    assert!(w.tree().find(Role::Dialog, "Zuletzt geschaut (Verlauf)").is_some());
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Staffel 1, Folge 3"))));
+    w.press(Role::Button, "Frieren · Staffel 1, Folge 3 als ungesehen markieren");
+    let item = w.shell.read_with(w.cx, |s, _| s.merk_items()).remove(0);
+    assert_eq!(item.seasons.as_ref().unwrap()[0].watched, vec![1, 2], "the episode is not seen any more");
+    assert_eq!(item.episode, Some(3), "the place settles on the first episode not seen");
+    assert!(item.history.unwrap_or_default().is_empty());
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Noch keine Folgen im Verlauf"))));
+    w.press(Role::Button, "Schliessen");
+
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Zufällige Serie würfeln");
+    assert!(w.tree().find(Role::Dialog, "Was soll ich schauen?").is_some());
+    assert!(w.tree().find(Role::Heading, "Frieren").is_some(), "the only series is the pick");
+    w.press(Role::Button, "Serie öffnen");
+    assert!(w.tree().find(Role::Button, "Zurück zur Merkliste").is_some(), "its page is open");
+}

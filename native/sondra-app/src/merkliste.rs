@@ -57,6 +57,10 @@ pub struct MerkState {
     pub planner: Option<crate::planner::PlannerState>,
     /// The window with the numbers and the year looked back on.
     pub stats_open: bool,
+    /// The windows „Verlauf“ and „Was soll ich schauen?“, and the series the dice showed last.
+    pub history_open: bool,
+    pub dice_open: bool,
+    pub dice_id: Option<String>,
     pub recap_year: Option<i32>,
     /// What the last export or reading-in said, in a sentence.
     pub note: Option<String>,
@@ -108,6 +112,9 @@ impl MerkState {
             covers: SharedCovers::default(),
             planner: None,
             stats_open: false,
+            history_open: false,
+            dice_open: false,
+            dice_id: None,
             recap_year: None,
             note: None,
             share: Default::default(),
@@ -620,6 +627,21 @@ impl Shell {
                 })).into_any_element());
             }
             items.push(ui.hint("Auswertung"));
+            {
+                let me = me.clone();
+                items.push(ui.menu_item("wuerfeln-oeffnen", "Zufällige Serie würfeln", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {
+                    m.more = false;
+                    m.roll();
+                    m.dice_open = m.dice_id.is_some();
+                })).into_any_element());
+            }
+            {
+                let me = me.clone();
+                items.push(ui.menu_item("verlauf-oeffnen", "Verlauf", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {
+                    m.history_open = true;
+                    m.more = false;
+                })).into_any_element());
+            }
             {
                 let me = me.clone();
                 items.push(ui.menu_item("statistik-oeffnen", "Statistik und Rückblick", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {

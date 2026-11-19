@@ -14,6 +14,7 @@ pub mod floating;
 pub mod folder_page;
 pub mod layout;
 pub mod lines;
+pub mod merk_dialogs;
 pub mod merkliste;
 pub mod mic_page;
 pub mod nav;
