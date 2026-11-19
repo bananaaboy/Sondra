@@ -497,11 +497,20 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Laden, Datei oder Folgenseite). Die Logik der Merkliste, des Ordners und des Players steht in
   `sondra-merk` und `sondra-player` und ist gegen den Code der Website geprüft (`npm run
   native:golden`); die Seiten sind in GPUIs Testfenster und auf echtem Windows über UI Automation
-  geprüft (CI „Native“: Jobs `app`, `uia`, `gallery`, `video`). **Noch nicht:** Tray,
-  Benachrichtigungen, Geräte, Handy spiegeln, die Werkzeuge (Umwandeln, Editoren …), Setup/Store,
-  Updates; Player-Einstellungen, Größen, Bild-in-Bild; yt-dlp. Kein Fenster hat ein echter Mensch
-  gesehen; die Bildschirmfotos der CI sind die einzige Sicht. Nichts davon ist auf einem echten
-  Handy oder mit echter Tonkarte gelaufen.
+  geprüft (CI „Native“: Jobs `app`, `uia`, `gallery`, `video`). **Stand 19.11.2026
+  abends:** dazu nativ die Seiten **Geräte** (Drive-Post, WebRTC mit der Website, Ordner,
+  Fortsetzen), **Umwandeln, Lautstärke, Bilder, Mischen, Tonart, Video, Untertitel
+  (Whisper, `sondra-speech`), Ton bearbeiten, Mikrofon, Zerschneiden, Spuren trennen**
+  und **Handy spiegeln** (`sondra-mirror`: ADB, scrcpy-Protokoll, Schlüssel, Steuernachrichten
+  und Tastaturberichte Byte für Byte gegen die Bibliotheken der Website; Bild und Ton über FFmpeg;
+  USB über `nusb`), außerdem „Liste empfangen“, „Was ist neu“, schwebende Karten,
+  Einzel-Instanz, Gong und Wachhalten beim Laden. **Noch nicht:** Tray, Benachrichtigungen,
+  Bildschirm aufnehmen, die Zeitleiste des Video-Editors, die Klavierrolle und das Ziehen der
+  Schnitte, Tonhöhe und Tempo im Ton-Editor, Anytype, yt-dlp, Playlists, Setup/Store, Updates,
+  Datenübernahme; Player-Einstellungen, Größen, Bild-in-Bild; ein eigenes Fenster für das Handy.
+  Kein Fenster hat ein echter Mensch gesehen; die Bildschirmfotos der CI sind die einzige Sicht.
+  **Nichts davon ist an einem echten Handy oder mit echter Tonkarte gelaufen** — das Handy
+  wird gegen ein nachgebautes Handy geprüft (`sondra_mirror::fake`).
   Die Testdateien schreibt der Serializer der Website
   (`npm run native:fixture`), der Workflow „Native“ prüft sie auf Windows und
   Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern

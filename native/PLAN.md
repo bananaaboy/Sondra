@@ -214,6 +214,7 @@ Startseite mit Kacheln, hell und dunkel, die Schriften, die Bewegung.
   Untertiteln, von Ihnen angesehen.
 
 ### Welle 6 — Geräte und Handy
+**Stand 19.11.2026:** Geräte nativ (siehe `PARITY.md` G01–G06); Handy spiegeln nativ bis auf ein eigenes Fenster, gegen ein nachgebautes Handy geprüft — **das Tor „erstmals gegen ein echtes Handy“ steht noch aus.**
 **Was Sie danach haben:** Dateien zwischen Ihren Geräten, das Handy auf dem Schirm.
 - Geräte (`devices.ts`, `deviceTransfer.ts`, `deviceIdentity.ts`, 2 300 Zeilen):
   Identität (nicht auslesbarer Schlüssel im Windows-Speicher), Post über Drive,
@@ -227,6 +228,7 @@ Startseite mit Kacheln, hell und dunkel, die Schriften, die Bewegung.
   bis heute nie geschehen).
 
 ### Welle 7 — Die Werkzeuge (in drei Stücken)
+**Stand 19.11.2026:** 7a ist durch (Umwandeln, Lautstärke, Bilder, Untertitel), 7b bis auf Bildschirm aufnehmen und die Ausbauten des Ton-Editors (Tonhöhe, Tempo, Klicks), 7c: Zerschneiden mit Pads und Raster ohne Klavierrolle, Video ohne Zeitleiste. Offene Punkte stehen je Zeile in `PARITY.md`.
 - **7a — Formulare mit Aufträgen:** Umwandeln (Vorlagen, Stapel, ZIP), Lautstärke,
   Bilder, Untertitel.
 - **7b — Ton:** Ton-Editor (Studio, Effektkette, Wellenform, Hören durch
