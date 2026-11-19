@@ -233,14 +233,40 @@ impl<T: TokenSource> DriveClient<T> {
                 None => self.create(parent, name, &data, mime, notes)?,
             }
         } else {
-            self.resumable(parent, name, path, size, mime, notes, existing.as_ref(), cancel, &mut progress)?
+            let mut source = std::fs::File::open(path).map_err(|e| DriveError::Failed(format!("{}: {e}", path.display())))?;
+            let mut read = move |from: u64, to: u64| -> std::io::Result<Vec<u8>> {
+                let mut piece = Vec::new();
+                source.seek(SeekFrom::Start(from))?;
+                (&mut source).take(to - from).read_to_end(&mut piece)?;
+                Ok(piece)
+            };
+            self.resumable(parent, name, size, mime, notes, existing.as_ref(), cancel, &mut read, &mut progress)?
         };
         progress(size, size);
         Ok(if existing.is_some() { Put::Replaced(file) } else { Put::Made(file) })
     }
 
+    /// A file that is not on disk but read piece by piece (`read(from, to)` gives bytes `from..to`) into a folder of
+    /// Drive: what a device hands over when no direct line opened. Written new, or over a file of that name there.
     #[allow(clippy::too_many_arguments)]
-    fn resumable(&self, parent: &str, name: &str, path: &Path, size: u64, mime: &str, notes: &BTreeMap<String, String>, existing: Option<&DriveFile>, cancel: &AtomicBool, progress: &mut impl FnMut(u64, u64)) -> Result<DriveFile, DriveError> {
+    pub fn put_streamed(&self, parent: &str, name: &str, size: u64, mime: &str, notes: &BTreeMap<String, String>, mut read: impl FnMut(u64, u64) -> std::io::Result<Vec<u8>>, cancel: &AtomicBool, mut progress: impl FnMut(u64, u64)) -> Result<DriveFile, DriveError> {
+        let existing = self.find_file(parent, name)?;
+        progress(0, size);
+        let file = if size <= SMALL_LIMIT as u64 {
+            let data = read(0, size).map_err(|e| DriveError::Failed(e.to_string()))?;
+            match &existing {
+                Some(found) => self.rewrite(&found.id, &data, mime)?,
+                None => self.create(parent, name, &data, mime, notes)?,
+            }
+        } else {
+            self.resumable(parent, name, size, mime, notes, existing.as_ref(), cancel, &mut read, &mut progress)?
+        };
+        progress(size, size);
+        Ok(file)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn resumable(&self, parent: &str, name: &str, size: u64, mime: &str, notes: &BTreeMap<String, String>, existing: Option<&DriveFile>, cancel: &AtomicBool, read: &mut dyn FnMut(u64, u64) -> std::io::Result<Vec<u8>>, progress: &mut impl FnMut(u64, u64)) -> Result<DriveFile, DriveError> {
         let base = upload_base(self.api());
         let (method, url, meta) = match existing {
             Some(found) => ("PATCH", format!("{base}/files/{}?uploadType=resumable&fields={FILE_FIELDS}", found.id), json!({})),
@@ -257,17 +283,13 @@ impl<T: TokenSource> DriveClient<T> {
             return Err(DriveError::Failed(format!("{} {}", opened.status, opened.text.chars().take(160).collect::<String>())));
         }
         let session = opened.location.ok_or_else(|| DriveError::Failed("Drive nannte keine Upload-Adresse".into()))?;
-        let mut file = std::fs::File::open(path).map_err(|e| DriveError::Failed(format!("{}: {e}", path.display())))?;
         let (mut offset, mut tries) = (0u64, 0u32);
-        let mut piece = Vec::new();
         loop {
             if cancel.load(Ordering::Relaxed) {
                 return Err(DriveError::Cancelled);
             }
             let end = (offset + CHUNK).min(size);
-            piece.clear();
-            file.seek(SeekFrom::Start(offset)).map_err(|e| DriveError::Failed(e.to_string()))?;
-            (&mut file).take(end - offset).read_to_end(&mut piece).map_err(|e| DriveError::Failed(e.to_string()))?;
+            let piece = read(offset, end).map_err(|e| DriveError::Failed(e.to_string()))?;
             let sent = self.raw("PUT", &session, &[("Content-Range", format!("bytes {offset}-{}/{size}", end - 1))], &piece);
             let answer = match sent {
                 Ok(r) if r.status == 200 || r.status == 201 => return Ok(as_file(&serde_json::from_str(&r.text).map_err(|e| DriveError::Failed(e.to_string()))?)),
@@ -378,6 +400,28 @@ impl<T: TokenSource> DriveClient<T> {
         match self.send("PATCH", &url, Some("application/json; charset=UTF-8"), Some(br#"{"trashed":true}"#)) {
             Ok(_) | Err(DriveError::Missing(_)) => Ok(()),
             Err(e) => Err(e),
+        }
+    }
+
+    /// A file of Drive handed on piece by piece to `sink` (a film is not held in memory); `progress` gets
+    /// (loaded, total). What `download_to` does into a file, for a sink that is not one.
+    pub fn read_to(&self, id: &str, cancel: &AtomicBool, mut sink: impl FnMut(&[u8]) -> std::io::Result<()>, mut progress: impl FnMut(u64, Option<u64>)) -> Result<(), DriveError> {
+        let url = Url::parse_with_params(&format!("{}/files/{id}", self.api()), [("alt", "media")]).map_err(|e| DriveError::Failed(e.to_string()))?;
+        let mut response = self.send("GET", url.as_str(), None, None)?;
+        let total = response.headers().get("content-length").and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok());
+        let mut reader = response.body_mut().as_reader();
+        let (mut loaded, mut buffer) = (0u64, vec![0u8; 256 * 1024]);
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(DriveError::Cancelled);
+            }
+            let n = reader.read(&mut buffer).map_err(|e| DriveError::Offline(e.to_string()))?;
+            if n == 0 {
+                return Ok(());
+            }
+            sink(&buffer[..n]).map_err(|e| DriveError::Failed(e.to_string()))?;
+            loaded += n as u64;
+            progress(loaded, total);
         }
     }
 

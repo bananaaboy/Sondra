@@ -38,11 +38,33 @@ fn engine(drive: &FakeDrive, name: &str, created: f64) -> Engine {
         name,
         created,
         Hardware { kind: "android".into(), platform: "Android-App".into(), caps: vec!["folder".into(), "text".into()] },
-        Config { servers: vec![], live: None, loopback: true },
-        Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150) },
+        Config { servers: vec![], live: None, loopback: true, deaf: false },
+        Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150), ..Timing::default() },
         false,
         None,
     )
+}
+
+/// A device whose line can never open, and which calls that „no direct way“ quickly.
+fn walled(drive: &FakeDrive, name: &str, created: f64) -> Engine {
+    Engine::start(
+        drive.client(),
+        DeviceKeys::generate(),
+        name,
+        created,
+        Hardware { kind: "android".into(), platform: "Android-App".into(), caps: vec!["folder".into(), "text".into()] },
+        Config { servers: vec![], live: None, loopback: true, deaf: true },
+        Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150), no_direct_sender: Duration::from_millis(400), no_direct_receiver: Duration::from_millis(600) },
+        false,
+        None,
+    )
+}
+
+fn setup_walled(drive: &FakeDrive) -> Setup {
+    let mut setup = setup(drive);
+    let drive = drive.clone();
+    setup.start = Arc::new(move || Ok(walled(&drive, "Laptop", now_ms() - 5.0 * 86_400_000.0)));
+    setup
 }
 
 fn setup(drive: &FakeDrive) -> Setup {
@@ -263,4 +285,32 @@ fn an_own_server_is_put_in_checked_and_used_by_the_next_connection_without_showi
 
     w.press(Role::Button, "Leeren");
     assert!(servers.lock().unwrap().stun.is_empty() && servers.lock().unwrap().password.is_empty());
+}
+
+#[gpui::test]
+fn where_no_line_opens_the_page_offers_drive_and_the_files_arrive_that_way(cx: &mut TestAppContext) {
+    let drive = FakeDrive::start();
+    let tmp = tempfile::tempdir().unwrap();
+    let (mine, theirs) = (tmp.path().join("hier"), tmp.path().join("dort"));
+    std::fs::create_dir_all(&mine).unwrap();
+    let mut w = open(cx, setup_walled(&drive), tmp.path(), &mine);
+    let other = walled(&drive, "Handy", now_ms() - 86_400_000.0);
+    w.press(Role::Button, "Dieses Gerät verbinden");
+    w.wait("the other device is listed", 30, |w| w.tree().find(Role::Button, "Dateien an „Handy“ senden").is_some());
+    wait_engine("the other sees this one", 20, || !other.snapshot().devices.is_empty());
+    let file = tmp.path().join("film.bin");
+    std::fs::write(&file, vec![7u8; 900_000]).unwrap();
+    let their_id = other.snapshot().me.unwrap()["id"].as_str().unwrap().to_owned();
+    w.shell.update(w.cx, |shell, cx| shell.devices_send_paths(&their_id, vec![file.clone()], false, cx));
+    wait_engine("the other is asked", 30, || other.snapshot().transfers.iter().any(|t| t.state == State::Asking));
+    other.accept(&other.snapshot().transfers[0].id.clone(), folder_sinks(theirs.clone()));
+    // The line does not open: the page says so and offers the way, and does not take it by itself.
+    w.wait("no direct way", 30, |w| w.tree().find(Role::Button, "Über Drive senden").is_some());
+    assert!(w.said("Kein direkter Weg zu „Handy“"));
+    assert!(w.said("Die Dateien liegen dann kurz in Ihrem Drive"), "said where the files go");
+    assert!(!theirs.join("film.bin").exists());
+    w.press(Role::Button, "Über Drive senden");
+    w.wait("it arrived", 60, |w| w.said("ist bei „Handy“ angekommen"));
+    assert_eq!(std::fs::metadata(theirs.join("film.bin")).unwrap().len(), 900_000);
+    assert!(drive.files_named("000-film.bin").is_empty(), "taken out of Drive after it arrived");
 }

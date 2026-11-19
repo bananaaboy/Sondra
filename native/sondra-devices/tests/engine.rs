@@ -54,8 +54,8 @@ fn device(drive: &FakeDrive, name: &str, created: f64) -> Engine {
         name,
         created,
         Hardware { kind: "windows".into(), platform: "Windows-App".into(), caps: vec!["folder".into(), "text".into()] },
-        Config { servers: vec![], live: None, loopback: true },
-        Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150) },
+        Config { servers: vec![], live: None, loopback: true, deaf: false },
+        Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150), ..Timing::default() },
         false,
         None,
     )
@@ -150,4 +150,83 @@ fn a_rename_is_unique_and_reaches_the_other_device() {
     b.rename("Laptop");
     wait("B's name is unique", 20, || b.snapshot().name == "Laptop 2");
     wait("A sees the new name", 20, || a.snapshot().devices.iter().any(|d| d["name"] == "Laptop 2"));
+}
+
+/// A device whose line can never open (no address to be found at) and which calls that „no direct way“ quickly.
+fn walled(drive: &FakeDrive, name: &str, created: f64) -> Engine {
+    Engine::start(
+        drive.client(),
+        DeviceKeys::generate(),
+        name,
+        created,
+        Hardware { kind: "windows".into(), platform: "Windows-App".into(), caps: vec!["folder".into(), "text".into()] },
+        Config { servers: vec![], live: None, loopback: true, deaf: true },
+        Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150), no_direct_sender: Duration::from_millis(400), no_direct_receiver: Duration::from_millis(600) },
+        false,
+        None,
+    )
+}
+
+#[test]
+fn when_no_line_opens_the_files_go_through_drive_and_are_gone_from_it_afterwards() {
+    let drive = FakeDrive::start();
+    let now = sondra_devices::engine::now_ms();
+    let a = walled(&drive, "Laptop", now - 5.0 * 86_400_000.0);
+    let b = walled(&drive, "Handy", now - 86_400_000.0);
+    wait("A and B find each other", 20, || a.snapshot().devices.len() == 1 && b.snapshot().devices.len() == 1);
+    let idb = b.snapshot().me.unwrap()["id"].as_str().unwrap().to_owned();
+    // One file over five megabytes (resumable upload) and one small, in a folder, with two of one name.
+    let film = bytes(6 * 1024 * 1024 + 11);
+    a.send(&idb, vec![outgoing("Film.mp4", None, film.clone()), outgoing("Folge.mkv", Some("Anime/Staffel 1/Folge.mkv"), b"eins".to_vec()), outgoing("Folge.mkv", Some("Anime/Staffel 2/Folge.mkv"), b"zwei".to_vec())]);
+    wait("B is asked", 20, || b.snapshot().transfers.iter().any(|t| t.state == State::Asking));
+    let id = b.snapshot().transfers[0].id.clone();
+    let store: Store = Arc::default();
+    b.accept(&id, sinks(store.clone()));
+    // The line does not come: both say so, and nothing goes through Drive by itself.
+    wait("both call it no direct way", 20, || a.snapshot().transfers[0].no_direct && b.snapshot().transfers[0].no_direct);
+    assert_eq!(a.snapshot().transfers[0].state, State::Connecting);
+    assert!(drive.files_named("000-Film.mp4").is_empty(), "nothing is put into Drive before the sender says so");
+
+    a.send_via_drive(&id);
+    wait("both done", 60, || a.snapshot().transfers[0].state == State::Done && b.snapshot().transfers[0].state == State::Done);
+    let got = store.lock().unwrap();
+    assert!(got["Film.mp4"] == film);
+    assert_eq!(got["Anime/Staffel 1/Folge.mkv"], b"eins");
+    assert_eq!(got["Anime/Staffel 2/Folge.mkv"], b"zwei", "two files of one name are two files");
+    drop(got);
+    let (sent, received) = (a.snapshot().transfers[0].clone(), b.snapshot().transfers[0].clone());
+    assert_eq!(sent.route, sondra_devices::engine::Route::Drive);
+    assert_eq!(received.route, sondra_devices::engine::Route::Drive);
+    assert!(!sent.no_direct && !received.no_direct);
+    assert_eq!(received.places.len(), 3);
+    assert_eq!(sent.places, received.places, "the sender hears where it went");
+    // What was put there is taken away again.
+    for name in ["000-Film.mp4", "001-Folge.mkv", "002-Folge.mkv"] {
+        assert!(drive.files_named(name).is_empty(), "{name} is gone from Drive");
+    }
+}
+
+#[test]
+fn the_way_through_drive_waits_for_the_yes_and_a_cancel_in_drive_ends_it() {
+    let drive = FakeDrive::start();
+    let now = sondra_devices::engine::now_ms();
+    let a = walled(&drive, "Laptop", now - 5.0 * 86_400_000.0);
+    let b = walled(&drive, "Handy", now - 86_400_000.0);
+    wait("A and B find each other", 20, || a.snapshot().devices.len() == 1 && b.snapshot().devices.len() == 1);
+    let idb = b.snapshot().me.unwrap()["id"].as_str().unwrap().to_owned();
+    // A big file, so that the hand-over takes a moment to cancel.
+    a.send(&idb, vec![outgoing("Gross.bin", None, bytes(12 * 1024 * 1024))]);
+    wait("B is asked", 20, || b.snapshot().transfers.iter().any(|t| t.state == State::Asking));
+    let id = b.snapshot().transfers[0].id.clone();
+    // Nothing to go through Drive with before the line was tried: the sender may only when it is „Connecting“.
+    a.send_via_drive(&id);
+    std::thread::sleep(Duration::from_millis(400));
+    assert_eq!(a.snapshot().transfers[0].state, State::Offering, "not before the other said yes");
+    let store: Store = Arc::default();
+    b.accept(&id, sinks(store.clone()));
+    wait("no direct way", 20, || a.snapshot().transfers[0].no_direct);
+    a.send_via_drive(&id);
+    wait("the hand-over is under way", 20, || a.snapshot().transfers[0].state == State::ViaDrive);
+    a.cancel(&id);
+    wait("cancelled on both sides", 30, || a.snapshot().transfers[0].state == State::Cancelled && b.snapshot().transfers[0].state == State::Cancelled);
 }

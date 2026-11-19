@@ -6,6 +6,7 @@
 //! there: a record counts only when its signature holds (`pick_devices`), a message only when
 //! `open_message` lets it through. Each device writes only its own record.
 
+use std::sync::Arc;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde_json::Value;
@@ -55,7 +56,7 @@ pub struct Hardware {
 }
 
 pub struct Registry<T: TokenSource> {
-    client: DriveClient<T>,
+    client: Arc<DriveClient<T>>,
     keys: DeviceKeys,
     id: String,
     pub name: String,
@@ -82,7 +83,7 @@ impl<T: TokenSource> Registry<T> {
     pub fn new(client: DriveClient<T>, keys: DeviceKeys, name: &str, created: f64, hardware: Hardware) -> Self {
         let id = keys.id();
         Self {
-            client,
+            client: Arc::new(client),
             keys,
             id,
             name: name.to_owned(),
@@ -107,6 +108,11 @@ impl<T: TokenSource> Registry<T> {
 
     pub fn client(&self) -> &DriveClient<T> {
         &self.client
+    }
+
+    /// The client for a thread of its own (a hand-over runs away from the rounds).
+    pub fn shared_client(&self) -> Arc<DriveClient<T>> {
+        self.client.clone()
     }
 
     fn read_json(&mut self, found: &Found) -> Option<Value> {

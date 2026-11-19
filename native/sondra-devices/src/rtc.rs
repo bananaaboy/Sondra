@@ -63,6 +63,8 @@ pub struct Config {
     pub live: Option<LiveServers>,
     /// Also offer the loopback address: for two programs on one computer, in tests.
     pub loopback: bool,
+    /// For tests: the line never opens, as between two networks with nothing in between.
+    pub deaf: bool,
 }
 
 fn configuration(config: &Config) -> RTCConfiguration {

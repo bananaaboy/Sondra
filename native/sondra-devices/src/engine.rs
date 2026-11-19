@@ -4,8 +4,13 @@
 //! `decline`, `cancel`, `text`), the same data channel for the files, so a native device and a browser
 //! are two devices of one account.
 //!
-//! Not here yet: the way through Drive when no direct line opens, resuming a broken transfer, playing on
-//! another device, STUN/TURN settings (a `Config` carries servers, nothing sets them).
+//! The way through Drive, for when no direct line opens: after the line has not come for a while
+//! (`Transfer::no_direct`) the sender may put the files into `Sondra/Geräte/Übergabe` (each with the note
+//! `sondraUebergabe` = this transfer and `sondraVon` = this device) and post `drive`; the receiver fetches exactly
+//! those files — never another by its id —, deletes them, and posts `received`.
+//!
+//! Not here yet: resuming a broken transfer in the rounds (the pieces are in `transfer.rs`), playing on another
+//! device, STUN/TURN settings (a `Config` carries servers, nothing sets them).
 
 use std::collections::HashMap;
 use std::io;
@@ -16,7 +21,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use sondra_drive::{DriveClient, TokenSource};
+use sondra_drive::{notes_query, DriveClient, DriveError, TokenSource};
 
 use crate::identity::{clean_name, random_id, DeviceKeys};
 use crate::registry::{Hardware, Incoming, Registry, BEAT_EVERY, LIST_EVERY};
@@ -42,6 +47,8 @@ pub enum State {
     Connecting,
     Sending,
     Receiving,
+    /// No direct line: the files go through Drive (the sender puts them there, the receiver fetches them).
+    ViaDrive,
     Done,
     Declined,
     Failed,
@@ -56,6 +63,13 @@ impl State {
     pub fn over(self) -> bool {
         matches!(self, State::Done | State::Declined | State::Failed | State::Cancelled | State::Expired)
     }
+}
+
+/// How the files travel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+    Direct,
+    Drive,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +88,9 @@ pub struct Transfer {
     pub at: f64,
     /// Said no, or finished, and closed by the person: no longer shown.
     pub dismissed: bool,
+    pub route: Route,
+    /// The line has not opened for a while (the sender may go through Drive; the receiver is told, no more).
+    pub no_direct: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -116,6 +133,7 @@ enum Command {
     Cancel(String),
     Dismiss(String),
     Text { to: String, text: String },
+    ViaDrive(String),
     DismissNote(String),
     Rename(String),
     Remove(String),
@@ -137,11 +155,15 @@ pub struct Timing {
     pub busy: Duration,
     /// How often the list of devices is read again.
     pub list: Duration,
+    /// How long a line may take to open before it is called „no direct way“: for the sender, for the receiver (who
+    /// only learns of the offer later).
+    pub no_direct_sender: Duration,
+    pub no_direct_receiver: Duration,
 }
 
 impl Default for Timing {
     fn default() -> Self {
-        Self { poll: Duration::from_secs(4), busy: Duration::from_millis(1200), list: Duration::from_millis(LIST_EVERY as u64) }
+        Self { poll: Duration::from_secs(4), busy: Duration::from_millis(1200), list: Duration::from_millis(LIST_EVERY as u64), no_direct_sender: Duration::from_secs(25), no_direct_receiver: Duration::from_secs(45) }
     }
 }
 
@@ -170,6 +192,8 @@ struct Control {
     cancel: Arc<AtomicBool>,
     /// The other side's answer (or no), for an outgoing transfer that waits for it.
     answer: Option<Sender<Result<String, State>>>,
+    /// The way through Drive took over: the direct attempt ends without saying anything.
+    switched: Arc<AtomicBool>,
 }
 
 /// Told when the name this device carries or the answer to „Das war dieses Gerät?“ changed: the app keeps it.
@@ -208,7 +232,7 @@ impl Engine {
         }));
         let (commands, inbox) = channel();
         let stop = Arc::new(AtomicBool::new(false));
-        let worker = Worker { registry, shared: shared.clone(), config, timing, controls: HashMap::new(), offers: HashMap::new(), stop: stop.clone(), on_own_change, told: (name.to_owned(), decided) };
+        let worker = Worker { registry, shared: shared.clone(), config, timing, controls: HashMap::new(), offers: HashMap::new(), pending: HashMap::new(), sinks: HashMap::new(), handed: HashMap::new(), stop: stop.clone(), on_own_change, told: (name.to_owned(), decided) };
         let thread = thread::Builder::new().name("sondra-devices".into()).spawn(move || worker.run(inbox)).ok();
         Engine { shared, commands, stop, thread }
     }
@@ -239,6 +263,10 @@ impl Engine {
     }
     pub fn send_text(&self, to: &str, text: &str) {
         self.command(Command::Text { to: to.to_owned(), text: text.to_owned() });
+    }
+    /// When the line has not opened: the files go through Drive instead.
+    pub fn send_via_drive(&self, id: &str) {
+        self.command(Command::ViaDrive(id.to_owned()));
     }
     pub fn dismiss_note(&self, id: &str) {
         self.command(Command::DismissNote(id.to_owned()));
@@ -283,6 +311,12 @@ struct Worker<T: TokenSource> {
     controls: HashMap<String, Control>,
     /// The offers this device was made and has not answered: the other side's description.
     offers: HashMap<String, String>,
+    /// The files of the transfers going out, kept so that the way through Drive can take them over.
+    pending: HashMap<String, Arc<Mutex<Vec<OutgoingFile>>>>,
+    /// Where the files of accepted transfers go.
+    sinks: HashMap<String, SinkMaker>,
+    /// A hand-over that came before the person said yes.
+    handed: HashMap<String, Value>,
     stop: Arc<AtomicBool>,
     on_own_change: Option<OnOwnChange>,
     told: (String, bool),
@@ -415,8 +449,37 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 let total = files.iter().map(|f| f.size).sum();
                 self.shared.lock().unwrap().transfers.insert(
                     0,
-                    Transfer { id: m.transfer, outgoing: false, peer: m.from, peer_name, files, total, done: 0, state: State::Asking, error: None, places: vec![], at: now_ms(), dismissed: false },
+                    Transfer { id: m.transfer, outgoing: false, peer: m.from, peer_name, files, total, done: 0, state: State::Asking, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false },
                 );
+            }
+            "drive" => {
+                let known = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == m.transfer).map(|t| (t.peer.clone(), t.outgoing, t.state));
+                let Some((peer, false, state)) = known else { return };
+                if peer != m.from || !m.body["files"].is_array() {
+                    return;
+                }
+                match state {
+                    // Not yet said yes: kept for when it is.
+                    State::Asking => {
+                        self.handed.insert(m.transfer, m.body);
+                    }
+                    State::Connecting | State::Receiving => self.receive_via_drive(m.transfer, m.body, events),
+                    _ => {}
+                }
+            }
+            "received" => {
+                let known = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == m.transfer).map(|t| (t.peer.clone(), t.outgoing, t.state));
+                let Some((peer, true, State::ViaDrive)) = known else { return };
+                if peer != m.from {
+                    return;
+                }
+                let places: Vec<String> = m.body["places"].as_array().map(|l| l.iter().filter_map(|p| p.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+                self.pending.remove(&m.transfer);
+                patch(&self.shared, &m.transfer, |t| {
+                    t.state = State::Done;
+                    t.done = t.total;
+                    t.places = places;
+                });
             }
             kind @ ("answer" | "decline" | "cancel") => {
                 let known = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == m.transfer).map(|t| (t.peer.clone(), t.outgoing));
@@ -522,12 +585,13 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                     let _ = events_post(events, &peer, "cancel", &id, json!({}));
                 }
             }
+            Command::ViaDrive(id) => self.send_via_drive(id, events),
             Command::Send { to, files } => self.send(to, files, events),
             Command::Accept { id, sinks } => self.accept(id, sinks, events),
         }
     }
 
-    fn send(&mut self, to: String, mut files: Vec<OutgoingFile>, events: &Sender<Event>) {
+    fn send(&mut self, to: String, files: Vec<OutgoingFile>, events: &Sender<Event>) {
         if files.is_empty() || files.len() > FOLDER_FILES_MAX || !self.registry.devices.iter().any(|d| d["id"].as_str() == Some(to.as_str())) {
             return;
         }
@@ -537,14 +601,21 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
         let peer_name = self.name_of(&to);
         self.shared.lock().unwrap().transfers.insert(
             0,
-            Transfer { id: id.clone(), outgoing: true, peer: to.clone(), peer_name, files: infos.clone(), total, done: 0, state: State::Offering, error: None, places: vec![], at: now_ms(), dismissed: false },
+            Transfer { id: id.clone(), outgoing: true, peer: to.clone(), peer_name, files: infos.clone(), total, done: 0, state: State::Offering, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false },
         );
         let cancel = Arc::new(AtomicBool::new(false));
+        let switched = Arc::new(AtomicBool::new(false));
         let (answer_tx, answer_rx) = channel::<Result<String, State>>();
-        self.controls.insert(id.clone(), Control { cancel: cancel.clone(), answer: Some(answer_tx) });
-        let (shared, config, events) = (self.shared.clone(), self.config.clone(), events.clone());
+        self.controls.insert(id.clone(), Control { cancel: cancel.clone(), answer: Some(answer_tx), switched: switched.clone() });
+        let files = Arc::new(Mutex::new(files));
+        self.pending.insert(id.clone(), files.clone());
+        let (shared, config, events, no_direct_after) = (self.shared.clone(), self.config.clone(), events.clone(), self.timing.no_direct_sender);
         thread::spawn(move || {
             let fail = |state: State, error: Option<String>| {
+                // The way through Drive took over: this attempt ends without a word.
+                if switched.load(Ordering::SeqCst) {
+                    return;
+                }
                 patch(&shared, &id, |t| {
                     if !t.state.over() {
                         t.state = state;
@@ -566,6 +637,11 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 return;
             }
             patch(&shared, &id, |t| t.state = State::Connecting);
+            watch_no_direct(&shared, &id, &cancel, &switched, no_direct_after);
+            if config.deaf {
+                deaf_wait(&cancel, &switched);
+                return fail(State::Failed, Some("Keine Verbindung zustande gekommen.".into()));
+            }
             let mut wire = match initiator.connect(&answer, CONNECT_WAIT) {
                 Ok(w) => w,
                 Err(e) => return fail(State::Failed, Some(e.to_string())),
@@ -573,9 +649,18 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
             if cancel.load(Ordering::SeqCst) {
                 return;
             }
-            patch(&shared, &id, |t| t.state = State::Sending);
+            if switched.load(Ordering::SeqCst) {
+                return;
+            }
+            patch(&shared, &id, |t| {
+                t.state = State::Sending;
+                t.no_direct = false;
+            });
             let mut progress = |p: Progress| patch(&shared, &id, |t| t.done = p.done);
-            let result = send_over(&mut wire, &mut files, Options { on_progress: Some(&mut progress), cancel: Some(cancel.clone()) });
+            let result = {
+                let mut guard = files.lock().unwrap();
+                send_over(&mut wire, &mut guard[..], Options { on_progress: Some(&mut progress), cancel: Some(cancel.clone()) })
+            };
             match result {
                 Ok(places) => patch(&shared, &id, |t| {
                     t.state = State::Done;
@@ -590,16 +675,145 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
         });
     }
 
+    /// Stops the direct attempt of a transfer without a word and gives it a fresh control for the way through Drive.
+    fn switch_to_drive(&mut self, id: &str) -> (Arc<AtomicBool>, String) {
+        if let Some(control) = self.controls.get(id) {
+            control.switched.store(true, Ordering::SeqCst);
+            control.cancel.store(true, Ordering::SeqCst);
+            if let Some(tx) = &control.answer {
+                let _ = tx.send(Err(State::Cancelled));
+            }
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.controls.insert(id.to_owned(), Control { cancel: cancel.clone(), answer: None, switched: Arc::new(AtomicBool::new(false)) });
+        patch(&self.shared, id, |t| {
+            t.state = State::ViaDrive;
+            t.route = Route::Drive;
+            t.done = 0;
+            t.error = None;
+            t.no_direct = false;
+        });
+        (cancel, self.registry.id().to_owned())
+    }
+
+    /// „Über Drive senden“: the files into the hand-over folder, each noted for this transfer, then the message.
+    fn send_via_drive(&mut self, id: String, events: &Sender<Event>) {
+        let found = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == id && t.outgoing && t.state == State::Connecting).map(|t| (t.peer.clone(), t.files.clone()));
+        let (Some((peer, infos)), Some(files)) = (found, self.pending.get(&id).cloned()) else { return };
+        let (cancel, me) = self.switch_to_drive(&id);
+        let (client, shared, events) = (self.registry.shared_client(), self.shared.clone(), events.clone());
+        thread::spawn(move || {
+            let outcome = (|| -> Result<Vec<Value>, DriveError> {
+                let folder = client.ensure_path(&HANDOVER)?;
+                let notes = std::collections::BTreeMap::from([("sondraUebergabe".to_owned(), id.clone()), ("sondraVon".to_owned(), me.clone())]);
+                let (mut placed, mut before) = (Vec::new(), 0u64);
+                for (index, info) in infos.iter().enumerate() {
+                    // A name of its own in Drive: two files of one name may lie in different folders of the transfer.
+                    let drive_name = format!("{index:03}-{}", info.name);
+                    let mut guard = files.lock().unwrap();
+                    let file = &mut guard[index];
+                    let made = client.put_streamed(&folder, &drive_name, info.size, &info.mime, &notes, |from, to| (file.read)(from, to), &cancel, |sent, _| patch(&shared, &id, |t| t.done = before + sent))?;
+                    drop(guard);
+                    before += info.size;
+                    let mut entry = serde_json::to_value(info).unwrap_or_else(|_| json!({}));
+                    entry["id"] = Value::String(made.id);
+                    placed.push(entry);
+                }
+                Ok(placed)
+            })();
+            match outcome {
+                // „received“ from the other side finishes it.
+                Ok(placed) => {
+                    let _ = events.send(Event::Post { to: peer, kind: "drive", transfer: id, body: json!({ "files": placed }) });
+                }
+                Err(DriveError::Cancelled) => patch(&shared, &id, |t| t.state = State::Cancelled),
+                Err(e) => patch(&shared, &id, |t| {
+                    t.state = State::Failed;
+                    t.error = Some(crate::engine::drive_words(&e));
+                }),
+            }
+        });
+    }
+
+    /// The other device put the files into Drive: fetched, one after the other, into the sinks the person's yes
+    /// made — only the files noted for this transfer by that device, never another by its id.
+    fn receive_via_drive(&mut self, id: String, body: Value, events: &Sender<Event>) {
+        let found = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == id && !t.outgoing && !t.state.over()).map(|t| (t.peer.clone(), t.total));
+        let (Some((peer, total)), Some(sinks)) = (found, self.sinks.get(&id).cloned()) else { return };
+        let (cancel, _) = self.switch_to_drive(&id);
+        let (client, shared, events) = (self.registry.shared_client(), self.shared.clone(), events.clone());
+        let list: Vec<Value> = body["files"].as_array().cloned().unwrap_or_default().into_iter().take(FOLDER_FILES_MAX).collect();
+        thread::spawn(move || {
+            let fail = |error: String| patch(&shared, &id, |t| {
+                if !t.state.over() {
+                    t.state = State::Failed;
+                    t.error = Some(error);
+                }
+            });
+            let handed: std::collections::HashSet<String> = match client.search(&notes_query("sondraUebergabe", &id)) {
+                Ok(found) => found.into_iter().filter(|f| f.notes.get("sondraVon") == Some(&peer)).map(|f| f.file.id).collect(),
+                Err(e) => return fail(drive_words(&e)),
+            };
+            let (mut places, mut before) = (Vec::new(), 0u64);
+            for (index, entry) in list.iter().enumerate() {
+                let file_id = entry["id"].as_str().unwrap_or_default().to_owned();
+                if !handed.contains(&file_id) {
+                    return fail("Eine Datei in Drive gehört nicht zu dieser Übertragung.".into());
+                }
+                let name = entry["name"].as_str().unwrap_or("Datei");
+                let (dir, file) = split_path(entry["path"].as_str(), name);
+                let info = FileInfo { name: safe_file_name(name), size: entry["size"].as_u64().unwrap_or(0), mime: entry["mime"].as_str().unwrap_or_default().to_owned(), path: (!dir.is_empty()).then(|| format!("{dir}/{file}")) };
+                let mut sink = match sinks(&info, index, None) {
+                    Ok(sink) => sink,
+                    Err(e) => return fail(e.to_string()),
+                };
+                let result = client.read_to(&file_id, &cancel, |chunk| sink.write(chunk), |loaded, _| patch(&shared, &id, |t| t.done = before + loaded));
+                match result {
+                    Ok(()) => match sink.close() {
+                        Ok(place) => places.push(place),
+                        Err(e) => return fail(e.to_string()),
+                    },
+                    Err(DriveError::Cancelled) => {
+                        sink.abort();
+                        return patch(&shared, &id, |t| t.state = State::Cancelled);
+                    }
+                    Err(e) => {
+                        sink.abort();
+                        return fail(drive_words(&e));
+                    }
+                }
+                before += info.size;
+                let _ = client.remove(&file_id);
+            }
+            patch(&shared, &id, |t| {
+                t.state = State::Done;
+                t.done = total.max(t.done);
+                t.places = places.clone();
+            });
+            let _ = events.send(Event::Post { to: peer, kind: "received", transfer: id, body: json!({ "places": places }) });
+        });
+    }
+
     fn accept(&mut self, id: String, sinks: SinkMaker, events: &Sender<Event>) {
         let Some(sdp) = self.offers.remove(&id) else { return };
         let found = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == id && t.state == State::Asking).map(|t| (t.peer.clone(), t.total));
         let Some((peer, _total)) = found else { return };
         patch(&self.shared, &id, |t| t.state = State::Connecting);
+        self.sinks.insert(id.clone(), sinks.clone());
+        // The sender went through Drive before this was answered: the files are there already.
+        if let Some(body) = self.handed.remove(&id) {
+            self.offers.remove(&id);
+            return self.receive_via_drive(id, body, events);
+        }
         let cancel = Arc::new(AtomicBool::new(false));
-        self.controls.insert(id.clone(), Control { cancel: cancel.clone(), answer: None });
-        let (shared, config, events) = (self.shared.clone(), self.config.clone(), events.clone());
+        let switched = Arc::new(AtomicBool::new(false));
+        self.controls.insert(id.clone(), Control { cancel: cancel.clone(), answer: None, switched: switched.clone() });
+        let (shared, config, events, no_direct_after) = (self.shared.clone(), self.config.clone(), events.clone(), self.timing.no_direct_receiver);
         thread::spawn(move || {
             let fail = |state: State, error: Option<String>| {
+                if switched.load(Ordering::SeqCst) {
+                    return;
+                }
                 patch(&shared, &id, |t| {
                     if !t.state.over() {
                         t.state = state;
@@ -612,11 +826,22 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 Err(e) => return fail(State::Failed, Some(e.to_string())),
             };
             let _ = events.send(Event::Post { to: peer, kind: "answer", transfer: id.clone(), body: json!({ "sdp": answer }) });
+            watch_no_direct(&shared, &id, &cancel, &switched, no_direct_after);
+            if config.deaf {
+                deaf_wait(&cancel, &switched);
+                return fail(State::Failed, Some("Keine Verbindung zustande gekommen.".into()));
+            }
             let mut wire = match responder.connect(CONNECT_WAIT) {
                 Ok(w) => w,
                 Err(e) => return fail(State::Failed, Some(e.to_string())),
             };
-            patch(&shared, &id, |t| t.state = State::Receiving);
+            if switched.load(Ordering::SeqCst) {
+                return;
+            }
+            patch(&shared, &id, |t| {
+                t.state = State::Receiving;
+                t.no_direct = false;
+            });
             let mut progress = |p: Progress| patch(&shared, &id, |t| t.done = p.done);
             let mut make = |file: &FileInfo, i: usize, piece: Option<&Piece>| sinks(file, i, piece);
             let result = receive_over(&mut wire, &mut make, &mut |_| {}, None, None, Options { on_progress: Some(&mut progress), cancel: Some(cancel.clone()) });
@@ -637,4 +862,45 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
 
 fn events_post(events: &Sender<Event>, to: &str, kind: &'static str, transfer: &str, body: Value) -> Result<(), ()> {
     events.send(Event::Post { to: to.to_owned(), kind, transfer: transfer.to_owned(), body }).map_err(|_| ())
+}
+
+/// Where hand-overs wait for the other device.
+const HANDOVER: [&str; 3] = ["Sondra", "Geräte", "Übergabe"];
+
+/// A Drive failure in a sentence for the transfer's line.
+pub(crate) fn drive_words(error: &DriveError) -> String {
+    match error {
+        DriveError::Unauthorized => "Bei Google Drive ist die Anmeldung abgelaufen.".into(),
+        DriveError::Offline(why) => format!("Google Drive ist nicht erreichbar ({why})."),
+        other => format!("Über Google Drive ging es nicht: {other}"),
+    }
+}
+
+/// After `after` of still waiting for the line, the transfer is marked as having no direct way — which only offers
+/// the way through Drive, never takes it by itself. The line goes on waiting; if it opens, the mark goes.
+fn watch_no_direct(shared: &Shared, id: &str, cancel: &Arc<AtomicBool>, switched: &Arc<AtomicBool>, after: Duration) {
+    let (shared, id, cancel, switched) = (shared.clone(), id.to_owned(), cancel.clone(), switched.clone());
+    thread::spawn(move || {
+        let until = std::time::Instant::now() + after;
+        while std::time::Instant::now() < until {
+            thread::sleep(Duration::from_millis(50).min(after));
+            let waiting = shared.lock().unwrap().transfers.iter().any(|t| t.id == id && t.state == State::Connecting);
+            if !waiting || cancel.load(Ordering::SeqCst) || switched.load(Ordering::SeqCst) {
+                return;
+            }
+        }
+        patch(&shared, &id, |t| {
+            if t.state == State::Connecting {
+                t.no_direct = true;
+            }
+        });
+    });
+}
+
+/// For tests: a line that never opens waits as long as one that might, unless it is given up on.
+fn deaf_wait(cancel: &Arc<AtomicBool>, switched: &Arc<AtomicBool>) {
+    let until = std::time::Instant::now() + CONNECT_WAIT;
+    while std::time::Instant::now() < until && !cancel.load(Ordering::SeqCst) && !switched.load(Ordering::SeqCst) {
+        thread::sleep(Duration::from_millis(50));
+    }
 }

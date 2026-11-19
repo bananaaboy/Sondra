@@ -134,6 +134,8 @@ pub(crate) fn say(t: &Transfer) -> String {
         (State::Connecting, _) => format!("Verbindet mit „{peer}“ …"),
         (State::Sending, _) => format!("Sendet {} an „{peer}“", files_phrase(&t.files)),
         (State::Receiving, _) => format!("Empfängt {} von „{peer}“", files_phrase(&t.files)),
+        (State::ViaDrive, true) => format!("Schickt {} über Google Drive an „{peer}“", files_phrase(&t.files)),
+        (State::ViaDrive, false) => format!("Holt {} über Google Drive von „{peer}“", files_phrase(&t.files)),
         (State::Done, true) => format!("{} ist bei „{peer}“ angekommen.", files_phrase(&t.files)),
         (State::Done, false) => format!("{} von „{peer}“ ist da.", files_phrase(&t.files)),
         (State::Declined, true) => format!("„{peer}“ hat abgelehnt."),
@@ -631,7 +633,27 @@ fn transfer_row(ui: Ui, me: &Entity<Shell>, t: &Transfer, dir: &std::path::Path)
     let c = ui.c;
     let mut row = div().flex().flex_col().gap(px(8.)).py(px(12.)).border_t_1().border_color(c.line).child(ui.prose(say(t)));
     let fraction = (t.total > 0).then(|| t.done as f32 / t.total as f32);
-    if matches!(t.state, State::Sending | State::Receiving) {
+    if t.state == State::Connecting && t.no_direct {
+        // The line has not opened: only said here, and for the sender offered — never taken by itself.
+        if t.outgoing {
+            let me = me.clone();
+            let id = t.id.clone();
+            row = row
+                .child(ui.notice(NoticeKind::NotLocal, format!("Kein direkter Weg zu „{}“ — die Geräte sind wohl in verschiedenen Netzen. Über Google Drive geht es trotzdem: Die Dateien liegen dann kurz in Ihrem Drive, bis das andere Gerät sie geholt hat; danach werden sie dort gelöscht.", t.peer_name)))
+                .child(div().child(ui.button(format!("ueber-drive-{}", t.id), "Über Drive senden").small().primary().on_click(move |_, app| {
+                    let id = id.clone();
+                    me.update(app, |shell, cx| {
+                        if let Some(e) = &shell.devices.engine {
+                            e.send_via_drive(&id);
+                        }
+                        cx.notify();
+                    })
+                })));
+        } else {
+            row = row.child(ui.notice(NoticeKind::Info, format!("Kein direkter Weg zu „{}“. Das sendende Gerät kann die Dateien über Google Drive schicken; sie kommen dann von selbst.", t.peer_name)));
+        }
+    }
+    if matches!(t.state, State::Sending | State::Receiving | State::ViaDrive) {
         row = row.child(ui.bar(format!("uebertragung-{}", t.id), fraction, format!("{} {}", if t.outgoing { "Senden an" } else { "Empfangen von" }, t.peer_name)));
         row = row.child(ui.hint(format!("{} von {}", bytes(t.done), bytes(t.total))));
     }
