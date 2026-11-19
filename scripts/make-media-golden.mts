@@ -36,7 +36,7 @@ import {
   removeNoise,
   shelfEq,
 } from '../src/lib/effects'
-import { setChannels } from '../src/lib/edit'
+import { applyGain, channelTrick, concatAudio, cutRange, detectSilence, normalizePeak, peakDb, removeDcOffset, removeSilence, resampleAudio, setChannels } from '../src/lib/edit'
 import { calibrate, PURPOSES, type MicPurpose } from '../src/lib/micCalibrate'
 import { DEFAULT_SEGMENTATION, midiName, segmentNotes, trackPitch } from '../src/lib/pitch'
 
@@ -716,4 +716,52 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   })()
   writeFileSync(`${outDir}/mic.json`, `${JSON.stringify({ rate: sr, results, quiet }, null, 1)}\n`)
   console.log(`Mikrofon: ${results.map((r) => `${r.purpose} ${r.after.lufs.toFixed(1)} LUFS`).join(', ')}`)
+}
+
+
+/* -- Ton-Editor: Pegel, Stille, Verbinden, Kanäle, Abtastrate --------------------------------------- */
+
+{
+  const sr = 8000
+  // Words of tone with real pauses between them, a little offset on the second channel.
+  const take = (seconds: number, salt: number) => {
+    const out = new Float32Array(sr * seconds)
+    let state = 99 + salt
+    for (let i = 0; i < out.length; i += 1) {
+      state = (Math.imul(state, 1103515245) + 12345) >>> 0
+      const noise = ((state >>> 8) / 2 ** 24) * 2 - 1
+      const t = i / sr
+      const speaking = t % 2.0 < 0.6 || (t > 4.1 && t < 4.5)
+      out[i] = 0.0004 * noise + 0.001 * salt + (speaking ? 0.5 * Math.sin(2 * Math.PI * (180 + 40 * salt) * t) : 0)
+    }
+    return out
+  }
+  const base = { channels: [take(6, 0), take(6, 1)], sampleRate: sr }
+  const other = { channels: [take(2, 2)], sampleRate: 6000 }
+  const every = (a: Float32Array | number[], n: number) => Array.from(a).filter((_, i) => i % n === 0)
+  const view = (audio: { channels: Float32Array[] }, n: number) => ({ channels: audio.channels.length, frames: audio.channels[0].length, left: every(audio.channels[0], n), right: every(audio.channels[audio.channels.length - 1], n) })
+  const silence = detectSilence(base, -50, 0.35)
+  const edits = {
+    rate: sr,
+    gain: view(applyGain(base, -6, 0, Infinity), 97),
+    gainRange: view(applyGain(base, 12, 1.0, 2.5), 97),
+    gainSilent: view(applyGain(base, -120, 0.5, 1.5), 97),
+    peak: peakDb(base),
+    normalize: view(normalizePeak(base, -1), 97),
+    silence,
+    quietSilence: detectSilence(base, -30, 0.1),
+    removeSilence: view(removeSilence(base, -50, 0.35, 0.05), 53),
+    removeSilenceNone: view(removeSilence(base, -90, 0.35, 0.05), 97),
+    cut: view(cutRange(base, 1.0, 2.7), 53),
+    concat: view(concatAudio([base, other], 0.1), 97),
+    concatPlain: view(concatAudio([other, base], 0), 97),
+    swap: view(channelTrick(base, 'swap'), 97),
+    left: view(channelTrick(base, 'left'), 97),
+    right: view(channelTrick(base, 'right'), 97),
+    dc: view(removeDcOffset(base), 97),
+    up: view(resampleAudio(base, 11025), 61),
+    down: view(resampleAudio(base, 3000), 61),
+  }
+  writeFileSync(`${outDir}/edit.json`, `${JSON.stringify(edits, null, 1)}\n`)
+  console.log(`Schnitt: ${silence.length} Pausen, Spitze ${peakDb(base).toFixed(2)} dB`)
 }
