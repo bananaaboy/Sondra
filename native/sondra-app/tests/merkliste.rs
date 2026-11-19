@@ -343,19 +343,8 @@ fn a_series_with_a_cover_gets_its_picture_on_the_shelf_and_in_the_list(cx: &mut 
         ..Default::default()
     };
     let mut w = open_as(cx, Some(&stored), tmp.path(), false);
-    // The shelf: the cover is asked for on the first draw, and made in the background.
-    for _ in 0..80 {
-        w.cx.run_until_parked();
-        w.draw();
-        if w.cx.read_entity(&w.shell, |s, _| s.covers_ready()) > 0 {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    }
-    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_asked()), 1, "one series has a cover; the other is not asked for");
-    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_ready()), 1, "and it was made");
-    // Another view is another size: asked for again, once.
-    w.press(Role::Button, "Als Liste");
+    // The start page shows the series being watched with its cover (a small one, as in the list), and the
+    // shelf another, bigger: each size is asked for once and made in the background.
     for _ in 0..80 {
         w.cx.run_until_parked();
         w.draw();
@@ -364,10 +353,17 @@ fn a_series_with_a_cover_gets_its_picture_on_the_shelf_and_in_the_list(cx: &mut 
         }
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
-    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_ready()), 2);
-    // Drawing again does not ask again.
-    w.draw();
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_asked()), 2, "one series has a cover, at two sizes; the other is not asked for");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_ready()), 2, "and both were made");
+    // The list shows it at the size the start page did: nothing is made again.
+    w.press(Role::Button, "Als Liste");
+    for _ in 0..10 {
+        w.cx.run_until_parked();
+        w.draw();
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_asked()), 2);
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_ready()), 2);
 }
 
 #[gpui::test]
@@ -678,4 +674,29 @@ fn a_shared_list_handed_to_the_program_opens_the_window_for_receiving(cx: &mut T
     w.draw();
     assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("keine Liste"))));
     assert!(w.tree().find(Role::Button, "Cowboy Bebop aufnehmen").is_none());
+}
+
+#[gpui::test]
+fn the_start_page_leads_back_to_what_is_watched(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    // Nothing is watched: the heading is not there.
+    let mut w = open(cx, Some(&Stored { items: Vec::new(), ..Default::default() }), dir.path());
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Start, cx));
+    w.draw();
+    assert!(w.tree().find(Role::Heading, "Heute weiterschauen").is_none());
+}
+
+#[gpui::test]
+fn what_is_watched_is_one_click_from_the_start_page(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Start, cx));
+    w.draw();
+    assert!(w.tree().find(Role::Heading, "Heute weiterschauen").is_some());
+    // Frieren is being watched (Dark is done, Mob Psycho 100 is for later).
+    assert_eq!(said(&w.tree(), Role::ListItem, "Frieren"), "Staffel 1, Folge 4. Weiter");
+    assert!(w.tree().find(Role::ListItem, "Dark").is_none());
+    w.press(Role::ListItem, "Frieren");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
+    assert!(w.tree().find(Role::Heading, "Frieren").is_some(), "the series' own page is open");
 }

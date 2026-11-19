@@ -805,12 +805,56 @@ impl Shell {
             .into_any_element()
     }
 
+    /// „Heute weiterschauen“: the three series watched last, one click to each (`ContinueTiles` of the web
+    /// app). Nothing is shown when nothing is being watched.
+    fn continue_watching(&self, ui: Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let c = ui.c;
+        let mut watching: Vec<&sondra_merk::Item> = self.merk.items.iter().filter(|i| i.status == sondra_merk::Status::Watching && i.episode.is_some()).collect();
+        watching.sort_by_key(|i| std::cmp::Reverse(i.last_opened_at.unwrap_or(i.updated_at)));
+        watching.truncate(3);
+        if watching.is_empty() {
+            return None;
+        }
+        let mut rows = div().flex().flex_col();
+        for (n, item) in watching.iter().enumerate() {
+            let stand = sondra_merk::rows::position_label(item.season, item.episode, sondra_merk::rows::EpisodeKind::Series);
+            let poster = match self.cover_element(cx, &item.cover, item.cover_frame, 44.0, 66.0) {
+                Some(cover) => div().w(px(44.)).h(px(66.)).flex_none().rounded(px(6.)).overflow_hidden().child(cover).into_any_element(),
+                None => div().w(px(44.)).h(px(66.)).flex_none().rounded(px(6.)).bg(c.panel_mid).flex().items_center().justify_center().text_size(px(sondra_ui::size::MICRO)).text_color(c.muted).child(crate::merkliste::initials(&item.title)).into_any_element(),
+            };
+            let (me, id) = (cx.entity(), item.id.clone());
+            rows = rows.child(crate::lines::Line {
+                colors: c,
+                id: format!("weiter-{n}").into(),
+                name: item.title.clone().into(),
+                says: format!("{stand}. Weiter").into(),
+                first: n == 0,
+                tile: None,
+                selected: false,
+                body: vec![
+                    poster,
+                    div().flex().flex_col().gap(px(2.)).flex_1().min_w(px(0.)).child(div().text_color(c.ink).font_weight(gpui::FontWeight::SEMIBOLD).truncate().child(item.title.clone())).child(div().text_size(px(sondra_ui::size::SMALL)).text_color(c.prose).truncate().child(stand)).into_any_element(),
+                    div().text_size(px(sondra_ui::size::SMALL)).font_weight(gpui::FontWeight::SEMIBOLD).text_color(c.ink).child("Weiter →").into_any_element(),
+                ],
+                on_open: std::rc::Rc::new(move |_, app| {
+                    let id = id.clone();
+                    me.update(app, |shell, cx| {
+                        shell.merk.open = Some(id);
+                        shell.go(Panel::Merkliste, cx);
+                    })
+                }),
+            });
+        }
+        Some(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Heute weiterschauen")).child(rows).into_any_element())
+    }
+
     fn start(&self, ui: Ui, cols: usize, cx: &mut Context<Self>) -> AnyElement {
         div()
             .flex()
             .flex_col()
             .gap(px(36.))
             .child(self.way_in(ui, cx))
+            .children(self.continue_watching(ui, cx))
             .child(self.media(ui, cols, cx))
             .child(self.tools(ui, cols, cx))
             .into_any_element()

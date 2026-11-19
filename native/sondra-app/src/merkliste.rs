@@ -645,7 +645,7 @@ impl Shell {
     /// The cover of an entry as a picture of `w × h` points (made at twice that, for a screen that is sharp),
     /// or `None` while it is coming, when there is none, or when it cannot be read: the caller then shows the
     /// title instead. The first call starts the making.
-    fn cover_element(&self, cx: &mut Context<Self>, cover: &Option<String>, frame: Option<sondra_merk::model::CoverFrame>, w: f32, h: f32) -> Option<AnyElement> {
+    pub(crate) fn cover_element(&self, cx: &mut Context<Self>, cover: &Option<String>, frame: Option<sondra_merk::model::CoverFrame>, w: f32, h: f32) -> Option<AnyElement> {
         let src = cover.as_ref().filter(|c| c.starts_with("data:") || c.starts_with("http"))?.clone();
         let (dw, dh) = ((w * 2.0).round().max(2.0) as u32, (h * 2.0).round().max(2.0) as u32);
         let key = Covers::key(&src, frame, dw, dh);
@@ -1052,7 +1052,7 @@ impl Shell {
 }
 
 /// The first letters of the words of a title, for a poster without a cover.
-fn initials(title: &str) -> String {
+pub(crate) fn initials(title: &str) -> String {
     let letters: String = title.split_whitespace().filter_map(|w| w.chars().find(|c| c.is_alphanumeric())).take(3).collect();
     letters.to_uppercase()
 }
