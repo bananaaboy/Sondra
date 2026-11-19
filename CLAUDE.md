@@ -509,6 +509,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Video-Editors, die Klavierrolle und das Ziehen der Schnitte, Anytype, Setup/Store, Updates,
   Datenübernahme; Player-Einstellungen, Größen, Bild-in-Bild; ein eigenes Fenster für das Handy.
   Kein Fenster hat ein echter Mensch gesehen; die Bildschirmfotos der CI sind die einzige Sicht.
+  **Stand 19.11.2026 nachmittags:** dazu nativ **Neue Folgen melden** (`new_episodes.rs`: Prüfrunde, Karte im
+  Fenster, „Neu auf AniWorld“ auf der Serienseite), Verlauf und Würfeln in der Merkliste, **Klicks entfernen**,
+  Rückwärts drehen und Bittiefe im Ton-Editor, **eigener STUN/TURN-Server** (Passwort verdeckt: `TextField::secret`).
   **yt-dlp** (19.11.2026, `sondra-download::ytdlp`): Adressen ohne eigene Quelle laufen über yt-dlp, wenn es da ist
   (eigene Kopie, WinGet, PATH); sonst steht auf der Herunterladen-Seite das Angebot „yt-dlp laden“ — geholt wird es nur auf
   den Klick, von yt-dlps Releases, gegen die veröffentlichte SHA-256 (passt sie nicht, bleibt nichts liegen); nie
