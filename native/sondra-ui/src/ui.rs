@@ -565,6 +565,38 @@ impl Ui {
         .into_any_element()
     }
 
+    /// The heading of a section of a screen: 20 px.
+    pub fn subheading(&self, text: impl Into<SharedString>) -> AnyElement {
+        self.heading_at(text, size::SUBHEADING, FontWeight::SEMIBOLD, 1.3)
+    }
+
+    /// The heading of a group inside a section: body size, semibold.
+    pub fn title(&self, text: impl Into<SharedString>) -> AnyElement {
+        self.heading_at(text, size::BODY, FontWeight::SEMIBOLD, 1.4)
+    }
+
+    fn heading_at(
+        &self,
+        text: impl Into<SharedString>,
+        px_size: f32,
+        weight: FontWeight,
+        line: f32,
+    ) -> AnyElement {
+        let text: SharedString = text.into();
+        accessible(
+            eid(format!("ueberschrift-{text}")),
+            Role::Heading,
+            div()
+                .text_size(px(px_size))
+                .font_weight(weight)
+                .text_color(self.c.ink)
+                .line_height(px(px_size * line))
+                .child(text.clone()),
+        )
+        .label(text)
+        .into_any_element()
+    }
+
     /// Running prose: 16 px, at a reading line height.
     pub fn prose(&self, text: impl Into<SharedString>) -> AnyElement {
         let text: SharedString = text.into();

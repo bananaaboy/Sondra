@@ -5406,6 +5406,7 @@ dependencies = [
 name = "sondra-app"
 version = "0.1.0"
 dependencies = [
+ "accesskit",
  "gpui",
  "serde",
  "serde_json",

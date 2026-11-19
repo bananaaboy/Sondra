@@ -19,3 +19,4 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 gpui = { version = "=0.2.2", features = ["test-support"] }
+accesskit = "0.25"

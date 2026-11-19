@@ -5,8 +5,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    div, point, prelude::*, px, AnyElement, App, BoxShadow, Div, FontWeight, IntoElement,
-    SharedString, Window,
+    div, point, prelude::*, px, AnyElement, App, BoxShadow, Div, FocusHandle, FontWeight,
+    IntoElement, SharedString, Window,
 };
 use sondra_a11y::{accessible, Role};
 
@@ -22,9 +22,15 @@ pub struct MenuItem {
     hint: Option<SharedString>,
     selected: bool,
     on_click: Option<Handler>,
+    /// A handle the screen owns, so it can move the focus here when the menu opens.
+    focus: Option<FocusHandle>,
 }
 
 impl MenuItem {
+    pub fn focus_handle(mut self, handle: FocusHandle) -> Self {
+        self.focus = Some(handle);
+        self
+    }
     pub fn hint(mut self, hint: impl Into<SharedString>) -> Self {
         self.hint = Some(hint.into());
         self
@@ -38,10 +44,13 @@ impl MenuItem {
 impl RenderOnce for MenuItem {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = self.ui.c;
-        let focus = window
-            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| cx.focus_handle())
-            .read(cx)
-            .clone();
+        let focus = match &self.focus {
+            Some(handle) => handle.clone(),
+            None => window
+                .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| cx.focus_handle())
+                .read(cx)
+                .clone(),
+        };
         let mut text = div().flex().flex_col().gap(px(1.)).child(
             div()
                 .text_size(px(size::BODY))
@@ -87,7 +96,20 @@ impl RenderOnce for MenuItem {
                     }),
             )
             .child(text);
-        let visual = press(visual, self.on_click.clone());
+        // Up and Down walk the list, as in every menu.
+        let visual = press(visual, self.on_click.clone()).on_key_down(|event, window, cx| {
+            match event.keystroke.key.as_str() {
+                "down" => {
+                    window.focus_next();
+                    cx.stop_propagation();
+                }
+                "up" => {
+                    window.focus_prev();
+                    cx.stop_propagation();
+                }
+                _ => {}
+            }
+        });
         let mut node = accessible(self.id.clone(), Role::MenuItem, visual)
             .label(self.label.clone())
             .selected(self.selected)
@@ -116,6 +138,7 @@ impl Ui {
             hint: None,
             selected,
             on_click: None,
+            focus: None,
         }
     }
 

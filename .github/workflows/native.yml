@@ -147,3 +147,60 @@ jobs:
           path: |
             gallery.png
             gallery.txt
+
+  # The app itself, on a real Windows desktop: photographed, and driven through UI Automation the way a
+  # screen reader user drives it — a menu, a tool, the search, Escape.
+  app:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v4
+        with:
+          path: native/target
+          key: native-app-${{ hashFiles('native/Cargo.lock') }}
+          save-always: true
+      - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
+      - name: Start the app, photograph it and drive it through UI Automation
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path native/target/release/sondra.exe).Path
+          $p = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput app-out.txt -RedirectStandardError app-err.txt
+          Start-Sleep -Seconds 4
+          if ($p.HasExited) {
+            "the app ended by itself after less than 4 seconds, exit code $($p.ExitCode)" | Tee-Object -FilePath app.txt
+            Get-Content app-out.txt, app-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath app.txt
+            exit 1
+          }
+          (New-Object -ComObject Shell.Application).MinimizeAll()
+          Add-Type -Namespace Win -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h2, bool r);'
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("$PWD\$name")
+          }
+          $p.Refresh()
+          [Win.Native]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+          [Win.Native]::MoveWindow($p.MainWindowHandle, 0, 0, 1024, 740, $true) | Out-Null
+          [Win.Native]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+          Start-Sleep -Seconds 3
+          Shot 'app-start.png'
+          $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-app/uia-app.ps1 -ProcessId $p.Id 2>&1
+          $code = $LASTEXITCODE
+          $out | Tee-Object -FilePath app.txt
+          Shot 'app-menu.png'
+          if ($p.HasExited) { "the app had ended by the end of the check, exit code $($p.ExitCode)" | Tee-Object -Append -FilePath app.txt }
+          Get-Content app-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath app.txt
+          Get-Content app.txt | Select-String -Pattern '^(ok|FAIL|all checks|[0-9]+ check)' | ForEach-Object { $_.Line } | Add-Content $env:GITHUB_STEP_SUMMARY
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app
+          path: |
+            app-start.png
+            app-menu.png
+            app.txt

@@ -135,3 +135,17 @@ fn a_row_too_narrow_for_anything_keeps_the_chosen_entry() {
     assert_eq!(fit.shown, vec![1]);
     assert_eq!(fit.hidden, vec![0]);
 }
+
+#[test]
+fn the_sheet_grows_in_steps_and_stops() {
+    use sondra_app::layout::*;
+    assert_eq!(shell_width(1024.0), 1280.0);
+    assert_eq!(shell_width(1600.0), 1440.0);
+    assert_eq!(shell_width(2560.0), 1840.0);
+    assert_eq!(shell_width(5000.0), 1840.0);
+    assert_eq!(
+        [390.0, 700.0, 1100.0, 1500.0].map(columns),
+        [2, 3, 4, 5],
+        "more room is more tiles, not wider ones"
+    );
+}

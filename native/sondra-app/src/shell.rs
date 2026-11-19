@@ -1,0 +1,670 @@
+//! The window: header, row of tabs, and the screen of the chosen tool. What a tool does is not here —
+//! only where it is and how to get to it; a tool that is not built yet says so on its page instead of
+//! pretending.
+
+use std::collections::HashSet;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+use gpui::{
+    deferred, div, prelude::*, px, AnyElement, Context, Entity, ExternalPaths, FocusHandle,
+    KeyDownEvent, PathPromptOptions, Render, Window, WindowAppearance,
+};
+use sondra_a11y::{a11y_root, Role};
+use sondra_ui::{family, radius, size, FieldEvent, Mode, NoticeKind, TextField, Ui};
+
+use crate::actions::{self, Group};
+use crate::layout::{columns, shell_width, tab_width, GUTTER};
+use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Menu {
+    /// The menu of a group of tabs.
+    Entry(usize),
+    /// What did not fit the row.
+    More,
+}
+
+pub struct Shell {
+    mode: Mode,
+    panel: Panel,
+    /// Where the tool came from, for the side it slides in from.
+    from: Panel,
+    menu: Option<Menu>,
+    /// When a click outside shut a menu — the click on its own tab must not open it again.
+    closed_at: Option<(Menu, Instant)>,
+    search: Entity<TextField>,
+    /// A chosen group of tools on the start page; `None` is all of them.
+    chosen_group: Option<Group>,
+    /// Groups whose rest of tiles is shown.
+    unfolded: HashSet<Group>,
+    /// Files chosen or dropped; what to do with them is chosen among the tools.
+    picked: Vec<PathBuf>,
+    focus: FocusHandle,
+    /// The first entry of whatever menu is open takes the focus when it opens.
+    menu_focus: FocusHandle,
+    focus_menu: bool,
+}
+
+impl Shell {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let mode = match window.appearance() {
+            WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
+            _ => Mode::Light,
+        };
+        let colors = mode.colors();
+        let search = cx.new(|cx| {
+            TextField::new(cx, colors, "Werkzeuge durchsuchen").placeholder("Werkzeug suchen…")
+        });
+        cx.subscribe(&search, |_, _, event: &FieldEvent, cx| {
+            if *event == FieldEvent::Changed {
+                cx.notify();
+            }
+        })
+        .detach();
+        Self {
+            mode,
+            panel: Panel::Start,
+            from: Panel::Start,
+            menu: None,
+            closed_at: None,
+            search,
+            chosen_group: None,
+            unfolded: HashSet::new(),
+            picked: Vec::new(),
+            focus: cx.focus_handle(),
+            menu_focus: cx.focus_handle(),
+            focus_menu: false,
+        }
+    }
+
+    pub fn panel(&self) -> Panel {
+        self.panel
+    }
+
+    pub fn go(&mut self, panel: Panel, cx: &mut Context<Self>) {
+        if panel != self.panel {
+            self.from = self.panel;
+            self.panel = panel;
+        }
+        self.menu = None;
+        cx.notify();
+    }
+
+    fn toggle_menu(&mut self, menu: Menu, cx: &mut Context<Self>) {
+        let just_closed = self
+            .closed_at
+            .is_some_and(|(m, at)| m == menu && at.elapsed() < Duration::from_millis(250));
+        self.closed_at = None;
+        self.menu = if self.menu == Some(menu) || just_closed {
+            None
+        } else {
+            Some(menu)
+        };
+        self.focus_menu = self.menu.is_some();
+        cx.notify();
+    }
+
+    fn close_menu(&mut self, by_click: bool, cx: &mut Context<Self>) {
+        if let Some(menu) = self.menu.take() {
+            if by_click {
+                self.closed_at = Some((menu, Instant::now()));
+            }
+            cx.notify();
+        }
+    }
+
+    fn set_mode(&mut self, mode: Mode, cx: &mut Context<Self>) {
+        self.mode = mode;
+        let colors = mode.colors();
+        self.search
+            .update(cx, |field, cx| field.set_colors(colors, cx));
+        cx.notify();
+    }
+
+    fn choose_files(&mut self, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: true,
+            prompt: None,
+        });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = answer.await {
+                this.update(cx, |shell, cx| shell.take_files(paths, cx))
+                    .ok();
+            }
+        })
+        .detach();
+    }
+
+    fn take_files(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        if !paths.is_empty() {
+            self.picked = paths;
+            cx.notify();
+        }
+    }
+}
+
+fn file_name(path: &PathBuf) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
+}
+
+/* The pieces ------------------------------------------------------------------------------------- */
+
+impl Shell {
+    fn header(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        let to_mode = match self.mode {
+            Mode::Light => Mode::Dark,
+            Mode::Dark => Mode::Light,
+        };
+        let label = match self.mode {
+            Mode::Light => "Dunkles Thema",
+            Mode::Dark => "Helles Thema",
+        };
+        div()
+            .flex()
+            .items_center()
+            .justify_between()
+            .child(ui.wordmark())
+            .child(ui.button("thema", label).small().on_click(move |_, app| {
+                me.update(app, |shell, cx| shell.set_mode(to_mode, cx));
+            }))
+            .into_any_element()
+    }
+
+    /// The row of tabs on the line of the header: the tasks first, the tools in three groups, and what does
+    /// not fit behind „Mehr“ — never cut off, never to be scrolled sideways.
+    fn tab_row(&self, ui: Ui, available: f32, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        let chosen = entry_of(self.panel);
+        let label_of = |i: usize| -> String {
+            match ENTRIES[i] {
+                // A group names the tool chosen in it: „Ton · Mischen“.
+                Entry::Group { label, .. } if i == chosen => {
+                    format!("{label} · {} ▾", self.panel.label())
+                }
+                Entry::Group { label, .. } => format!("{label} ▾"),
+                Entry::Single(p) => p.label().to_string(),
+            }
+        };
+        let widths: Vec<f32> = (0..ENTRIES.len())
+            .map(|i| tab_width(&label_of(i), matches!(ENTRIES[i], Entry::Group { .. })))
+            .collect();
+        let fit = fit_row(&widths, 2.0, tab_width("Mehr", false), available, chosen);
+
+        let mut row = div().relative().flex().items_center().gap(px(2.));
+        for i in &fit.shown {
+            let i = *i;
+            let entry = ENTRIES[i];
+            let selected = i == chosen;
+            let me = me.clone();
+            let tab = ui
+                .tab(format!("reiter-{}", entry.id()), label_of(i), selected)
+                .on_click(move |_, app| {
+                    me.update(app, |shell, cx| match entry {
+                        Entry::Single(p) => shell.go(p, cx),
+                        Entry::Group { .. } => shell.toggle_menu(Menu::Entry(i), cx),
+                    });
+                });
+            let mut cell = div().relative().child(tab);
+            if self.menu == Some(Menu::Entry(i)) {
+                cell = cell.child(self.popover(ui, Menu::Entry(i), cx));
+            }
+            row = row.child(cell);
+        }
+        if !fit.hidden.is_empty() {
+            let me = me.clone();
+            let more = ui
+                .tab("reiter-mehr", "Mehr ▾", fit.hidden.contains(&chosen))
+                .on_click(move |_, app| {
+                    me.update(app, |shell, cx| shell.toggle_menu(Menu::More, cx));
+                });
+            let mut cell = div().relative().child(more);
+            if self.menu == Some(Menu::More) {
+                cell = cell.child(self.more_popover(ui, &fit.hidden, cx));
+            }
+            row = row.child(cell);
+        }
+        ui.landmark(
+            Role::Navigation,
+            "reiterleiste",
+            "Werkzeuge und Aufgaben",
+            row,
+        )
+    }
+
+    fn item(&self, ui: Ui, panel: Panel, first: bool, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        let item = ui
+            .menu_item(
+                format!("menue-{}", panel.slug()),
+                panel.label(),
+                panel == self.panel,
+            )
+            .hint(panel.meta().summary)
+            .on_click(move |_, app| {
+                me.update(app, |shell, cx| shell.go(panel, cx));
+            });
+        if first {
+            item.focus_handle(self.menu_focus.clone())
+                .into_any_element()
+        } else {
+            item.into_any_element()
+        }
+    }
+
+    fn floating(&self, popover: AnyElement, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        // Above everything else, just under its tab; a press anywhere else shuts it.
+        deferred(
+            div()
+                .absolute()
+                .top(px(40.))
+                .left_0()
+                .on_mouse_down_out(move |_, _, app| {
+                    me.update(app, |shell, cx| shell.close_menu(true, cx));
+                })
+                .child(popover),
+        )
+        .with_priority(10)
+        .into_any_element()
+    }
+
+    fn popover(&self, ui: Ui, menu: Menu, cx: &mut Context<Self>) -> AnyElement {
+        let Menu::Entry(i) = menu else {
+            unreachable!("a popover belongs to a group")
+        };
+        let entry = ENTRIES[i];
+        let items: Vec<AnyElement> = entry
+            .panels()
+            .iter()
+            .enumerate()
+            .map(|(n, p)| self.item(ui, *p, n == 0, cx))
+            .collect();
+        let pop = ui.popover(format!("menue-{}", entry.id()), entry.label(), items);
+        self.floating(pop, cx)
+    }
+
+    fn more_popover(&self, ui: Ui, hidden: &[usize], cx: &mut Context<Self>) -> AnyElement {
+        let mut items: Vec<AnyElement> = Vec::new();
+        let mut first_given = false;
+        for i in hidden {
+            let entry = ENTRIES[*i];
+            // A group is a heading over its tools; a single tool is an entry.
+            if let Entry::Group { label, .. } = entry {
+                items.push(ui.hint(label));
+            }
+            for p in entry.panels() {
+                let first = !first_given;
+                first_given = true;
+                items.push(self.item(ui, *p, first, cx));
+            }
+        }
+        let pop = ui.popover("menue-mehr", "Weitere Werkzeuge", items);
+        self.floating(pop, cx)
+    }
+
+    /// A tool that is not built yet says so, and says where it is available meanwhile.
+    fn unfinished(&self, ui: Ui, panel: Panel) -> AnyElement {
+        let meta = panel.meta();
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(16.))
+            .child(ui.heading(meta.label))
+            .child(ui.prose(meta.summary))
+            .child(ui.notice(
+                NoticeKind::Info,
+                "Dieses Werkzeug gibt es in der neuen App noch nicht. In der Windows-App und auf der Website funktioniert es wie gewohnt.",
+            ))
+            .into_any_element()
+    }
+
+    /* The start page ------------------------------------------------------------------------------ */
+
+    fn way_in(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+        let c = ui.c;
+        let me = cx.entity();
+        let on_drop = cx.entity();
+        let mut block = div()
+            .id("einstieg")
+            .flex()
+            .flex_col()
+            .gap(px(20.))
+            .p(px(28.))
+            .rounded(px(radius::CARD))
+            .bg(c.panel_soft)
+            .border_1()
+            .border_color(c.line)
+            .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                style.bg(c.panel_mid).border_2().border_color(c.ink)
+            })
+            .on_drop(move |paths: &ExternalPaths, _, app| {
+                let paths = paths.paths().to_vec();
+                on_drop.update(app, |shell, cx| shell.take_files(paths, cx));
+            })
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .max_w(px(34. * size::BODY))
+                    .child(ui.display("Ton, Video und Bilder bearbeiten"))
+                    .child(
+                        ui.prose("Gerechnet wird auf Ihrem Gerät — keine Datei wird hochgeladen."),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        ui.button("datei-waehlen", "Datei auswählen")
+                            .primary()
+                            .on_click(move |_, app| {
+                                me.update(app, |shell, cx| shell.choose_files(cx));
+                            }),
+                    )
+                    .child({
+                        let me = cx.entity();
+                        ui.button("von-adresse", "Von Adresse laden")
+                            .on_click(move |_, app| {
+                                me.update(app, |shell, cx| shell.go(Panel::Downloader, cx));
+                            })
+                    })
+                    .child(ui.hint("oder hierher ziehen")),
+            );
+        if !self.picked.is_empty() {
+            let names: Vec<String> = self.picked.iter().map(file_name).collect();
+            let shown = names.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+            let more = names.len().saturating_sub(3);
+            let text = if more == 0 {
+                shown
+            } else {
+                format!("{shown} und {more} weitere")
+            };
+            block = block
+                .child(div().flex().gap(px(8.)).child(ui.value(text)))
+                .child(ui.prose("Wählen Sie unten, was damit geschehen soll."));
+        }
+        block.into_any_element()
+    }
+
+    fn tile(&self, ui: Ui, action: &'static actions::Action, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        let panel = action.panel;
+        ui.tile(
+            format!("kachel-{}", action.id),
+            action.label.clone(),
+            action.hint.clone(),
+        )
+        .symbol(action.label.chars().next().unwrap_or('·').to_string())
+        .on_click(move |_, app| {
+            me.update(app, |shell, cx| shell.go(panel, cx));
+        })
+        .into_any_element()
+    }
+
+    fn grid(&self, ui: Ui, tiles: Vec<AnyElement>, cols: usize) -> AnyElement {
+        let _ = ui;
+        div()
+            .grid()
+            .grid_cols(cols as u16)
+            .gap(px(12.))
+            .children(tiles)
+            .into_any_element()
+    }
+
+    fn tools(&self, ui: Ui, cols: usize, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        let query = self.search.read(cx).text().to_string();
+        let searching = !query.trim().is_empty();
+
+        // The pills: all, and the four groups. A search overrides them, and they stand back.
+        let mut pills = div().flex().flex_wrap().gap(px(6.));
+        pills = pills.child({
+            let me = me.clone();
+            ui.chip(
+                "gruppe-alle",
+                "Alle",
+                !searching && self.chosen_group.is_none(),
+            )
+            .on_click(move |_, app| {
+                me.update(app, |shell, cx| {
+                    shell.search.update(cx, |f, cx| f.set_text("", cx));
+                    shell.chosen_group = None;
+                    cx.notify();
+                });
+            })
+        });
+        for group in actions::filters() {
+            let group = *group;
+            let me = me.clone();
+            pills = pills.child(
+                ui.chip(
+                    format!("gruppe-{}", group.label()),
+                    group.label(),
+                    !searching && self.chosen_group == Some(group),
+                )
+                .on_click(move |_, app| {
+                    me.update(app, |shell, cx| {
+                        shell.search.update(cx, |f, cx| f.set_text("", cx));
+                        shell.chosen_group = Some(group);
+                        cx.notify();
+                    });
+                }),
+            );
+        }
+        let pills = if searching { pills.opacity(0.4) } else { pills };
+
+        let head = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap(px(12.))
+            .pb(px(14.))
+            .border_b_1()
+            .border_color(ui.c.line)
+            .child(ui.subheading("Werkzeuge"))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(pills)
+                    .child(div().w(px(260.)).child(self.search.clone())),
+            );
+
+        let mut body = div().flex().flex_col().gap(px(28.));
+        if searching {
+            let found = actions::search(&query);
+            if found.is_empty() {
+                body = body.child(ui.prose(format!(
+                    "Nichts gefunden für „{}“. Versuchen Sie es mit einem Format („mp3“, „webp“, „gif“) oder mit dem, was herauskommen soll.",
+                    query.trim()
+                )));
+            } else {
+                let tiles = found.iter().map(|a| self.tile(ui, a, cx)).collect();
+                body = body.child(self.grid(ui, tiles, cols));
+            }
+        } else {
+            for (group, list) in actions::start_groups() {
+                if self.chosen_group.is_some_and(|g| g != group) {
+                    continue;
+                }
+                // Two rows of each group; a chosen group, or one opened, whole.
+                let whole = self.chosen_group == Some(group) || self.unfolded.contains(&group);
+                let shown = if whole {
+                    list.len()
+                } else {
+                    (cols * 2).min(list.len())
+                };
+                let rest = list.len() - shown;
+                let tiles = list[..shown].iter().map(|a| self.tile(ui, a, cx)).collect();
+                let mut section = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap(px(8.))
+                            .child(ui.title(group.label()))
+                            .child(ui.value(list.len().to_string())),
+                    )
+                    .child(self.grid(ui, tiles, cols));
+                if rest > 0 {
+                    let me = me.clone();
+                    let text = if rest == 1 {
+                        format!("Noch ein Werkzeug für {}", group.label())
+                    } else {
+                        format!("Noch {rest} Werkzeuge für {}", group.label())
+                    };
+                    section = section.child(
+                        div().flex().child(
+                            ui.button(format!("mehr-{}", group.label()), text)
+                                .ghost()
+                                .on_click(move |_, app| {
+                                    me.update(app, |shell, cx| {
+                                        shell.unfolded.insert(group);
+                                        cx.notify();
+                                    });
+                                }),
+                        ),
+                    );
+                }
+                body = body.child(section);
+            }
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(16.))
+            .child(head)
+            .child(body)
+            .into_any_element()
+    }
+
+    /// The other tasks as tiles: what the tab row names, one click from the start.
+    fn media(&self, ui: Ui, cols: usize, cx: &mut Context<Self>) -> AnyElement {
+        let tiles: Vec<AnyElement> = [
+            Panel::Merkliste,
+            Panel::Folder,
+            Panel::Player,
+            Panel::Downloader,
+        ]
+        .iter()
+        .map(|p| {
+            let me = cx.entity();
+            let panel = *p;
+            ui.tile(format!("aufgabe-{}", p.slug()), p.label(), p.meta().summary)
+                .symbol(p.label().chars().next().unwrap_or('·').to_string())
+                .on_click(move |_, app| {
+                    me.update(app, |shell, cx| shell.go(panel, cx));
+                })
+                .into_any_element()
+        })
+        .collect();
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(10.))
+            .child(ui.subheading("Filme und Serien"))
+            .child(self.grid(ui, tiles, cols.min(4)))
+            .into_any_element()
+    }
+
+    fn start(&self, ui: Ui, cols: usize, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(36.))
+            .child(self.way_in(ui, cx))
+            .child(self.media(ui, cols, cx))
+            .child(self.tools(ui, cols, cx))
+            .into_any_element()
+    }
+}
+
+impl Render for Shell {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let ui = Ui::new(self.mode.colors());
+        let c = ui.c;
+        let vw: f32 = window.viewport_size().width.into();
+        let column = shell_width(vw).min(vw);
+        let gutter = if vw < 640.0 { 16.0 } else { GUTTER };
+        let inner = (column - 2.0 * gutter).max(280.0);
+        let cols = columns(vw);
+        let me = cx.entity();
+        if self.focus_menu && self.menu.is_some() {
+            self.focus_menu = false;
+            let handle = self.menu_focus.clone();
+            window.defer(cx, move |window, _| window.focus(&handle));
+        }
+
+        let page = if self.panel == Panel::Start {
+            self.start(ui, cols, cx)
+        } else {
+            self.unfinished(ui, self.panel)
+        };
+        // A tool comes from the side of its tab: the direction is kept for the motion pass.
+        let _side = slide_from(self.from, self.panel);
+
+        let header = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .child(self.header(ui, cx))
+            .child(self.tab_row(ui, inner, cx))
+            .child(ui.rule());
+
+        a11y_root(
+            div()
+                .id("fenster")
+                .key_context("SondraShell")
+                .track_focus(&self.focus)
+                .on_key_down(move |event: &KeyDownEvent, _, app| {
+                    if event.keystroke.key == "escape" {
+                        me.update(app, |shell, cx| shell.close_menu(false, cx));
+                    }
+                })
+                .size_full()
+                .bg(c.canvas)
+                .text_color(c.prose)
+                .font_family(family::SANS)
+                .text_size(px(size::BODY))
+                .flex()
+                .justify_center()
+                .child(
+                    div()
+                        .id("blatt")
+                        .size_full()
+                        .overflow_y_scroll()
+                        .flex()
+                        .justify_center()
+                        .child(
+                            div()
+                                .w_full()
+                                .max_w(px(column))
+                                .px(px(gutter))
+                                .py(px(24.))
+                                .flex()
+                                .flex_col()
+                                .gap(px(28.))
+                                .child(header)
+                                .child(page),
+                        ),
+                ),
+        )
+    }
+}

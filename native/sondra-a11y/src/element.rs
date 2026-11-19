@@ -189,7 +189,7 @@ impl gpui::Element for Accessible {
 
 /// Wraps the window's root element. It opens the frame for the [`accessible`]
 /// elements inside it and closes it when they have all painted, which is the
-/// moment the tree of this frame is complete.
+/// moment the tree of this frame is complete (after the deferred draws, which paint last).
 pub fn a11y_root(child: impl IntoElement) -> A11yRoot {
     A11yRoot {
         child: child.into_any_element(),
@@ -254,6 +254,8 @@ impl gpui::Element for A11yRoot {
     ) {
         hub::begin_frame(window, cx);
         self.child.paint(window, cx);
-        hub::end_frame(window, cx);
+        // Deferred elements (menus, popovers) paint after the root is done, and a menu a screen reader
+        // cannot find is not finished: the tree of this frame is closed once they have all painted.
+        window.defer(cx, |window, cx| hub::end_frame(window, cx));
     }
 }
