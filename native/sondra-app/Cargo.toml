@@ -20,7 +20,9 @@ sondra-player = { path = "../sondra-player" }
 sondra-playback = { path = "../sondra-playback" }
 sondra-extract = { path = "../sondra-extract" }
 sondra-download = { path = "../sondra-download" }
-image = { version = "0.25", default-features = false }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+ureq = { version = "3", features = ["platform-verifier"] }
+base64 = "0.22"
 url = "2"
 smallvec = "1"
 serde = { workspace = true }

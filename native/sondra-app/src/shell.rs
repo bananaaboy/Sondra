@@ -797,7 +797,8 @@ impl Render for Shell {
             window.on_next_frame(move |_, cx| cx.notify(me));
         }
         // Pictures the Bilder page has replaced are let go of here, where the window is at hand.
-        for old in std::mem::take(&mut self.images.trash).into_iter().chain(std::mem::take(&mut self.video.trash)) {
+        let cover_trash = std::mem::take(&mut self.merk.covers.borrow_mut().trash);
+        for old in std::mem::take(&mut self.images.trash).into_iter().chain(std::mem::take(&mut self.video.trash)).chain(cover_trash) {
             let _ = window.drop_image(old);
         }
         // The picture over the whole window (or screen): the page is nothing but it, in dark colours.

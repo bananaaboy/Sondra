@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use accesskit::{Action, ActionRequest, TreeId};
-use gpui::{point, px, size, AvailableSpace, Entity, TestAppContext, VisualTestContext};
+use gpui::{point, px, size, AppContext as _, AvailableSpace, Entity, TestAppContext, VisualTestContext};
 use serde_json::json;
 use sondra_a11y::{attach_sink, run_action, Role, Snapshot};
 use sondra_app::nav::Panel;
@@ -309,4 +309,60 @@ fn the_order_of_the_series_is_chosen_behind_mehr(cx: &mut TestAppContext) {
     w.cx.simulate_keystrokes("escape");
     w.draw();
     assert!(w.tree().find(Role::Menu, "Mehr").is_none(), "Escape shuts it");
+}
+
+#[gpui::test]
+fn a_series_with_a_cover_gets_its_picture_on_the_shelf_and_in_the_list(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    // A cover on the web (a picture from a file does not travel in the list and stays on its device).
+    let mut img = image::RgbaImage::new(200, 300);
+    for p in img.pixels_mut() {
+        p.0 = [200, 30, 30, 255];
+    }
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageRgba8(img).write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).unwrap();
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            let _ = request.respond(tiny_http::Response::from_data(bytes.clone()).with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"image/png"[..]).unwrap()));
+        }
+    });
+    let url = format!("http://127.0.0.1:{port}/cover.png");
+    let mut ids = Ids::system();
+    let stored = Stored {
+        items: vec![
+            normalize(&json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 4, "cover": url,
+                "coverFrame": { "x": 50, "y": 50, "zoom": 1.5 },
+                "seasons": [{ "number": 1, "episodes": 12, "watched": [1, 2, 3] }] }), &mut ids),
+            normalize(&json!({ "id": "dk", "title": "Dark", "status": "done" }), &mut ids),
+        ],
+        ..Default::default()
+    };
+    let mut w = open_as(cx, Some(&stored), tmp.path(), false);
+    // The shelf: the cover is asked for on the first draw, and made in the background.
+    for _ in 0..80 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.cx.read_entity(&w.shell, |s, _| s.covers_ready()) > 0 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_asked()), 1, "one series has a cover; the other is not asked for");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_ready()), 1, "and it was made");
+    // Another view is another size: asked for again, once.
+    w.press(Role::Button, "Als Liste");
+    for _ in 0..80 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.cx.read_entity(&w.shell, |s, _| s.covers_ready()) > 1 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_ready()), 2);
+    // Drawing again does not ask again.
+    w.draw();
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_asked()), 2);
 }

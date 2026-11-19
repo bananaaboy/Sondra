@@ -16,6 +16,7 @@ use sondra_merk::view::{counts, groups, Filter, STATUS_OPTIONS};
 use sondra_merk::{Item, Season, Status};
 use sondra_ui::{family, size, FieldEvent, NoticeKind, TextField, Ui};
 
+use crate::covers::{render_cover, Covers, SharedCovers};
 use crate::lines::Line;
 use crate::nav::Panel;
 use crate::shell::Shell;
@@ -50,6 +51,8 @@ pub struct MerkState {
     pub undo: Option<Taken>,
     pub search: Entity<TextField>,
     pub add: Entity<TextField>,
+    /// The pictures of the covers, made at the size they are shown.
+    pub covers: SharedCovers,
 }
 
 impl MerkState {
@@ -86,6 +89,7 @@ impl MerkState {
             undo: None,
             search,
             add,
+            covers: SharedCovers::default(),
         }
     }
 
@@ -449,6 +453,39 @@ impl Shell {
     }
 
     /// One series as a line: where it stands, the bar, what is left, the step forward.
+    /// The cover of an entry as a picture of `w × h` points (made at twice that, for a screen that is sharp),
+    /// or `None` while it is coming, when there is none, or when it cannot be read: the caller then shows the
+    /// title instead. The first call starts the making.
+    fn cover_element(&self, cx: &mut Context<Self>, cover: &Option<String>, frame: Option<sondra_merk::model::CoverFrame>, w: f32, h: f32) -> Option<AnyElement> {
+        let src = cover.as_ref().filter(|c| c.starts_with("data:") || c.starts_with("http"))?.clone();
+        let (dw, dh) = ((w * 2.0).round().max(2.0) as u32, (h * 2.0).round().max(2.0) as u32);
+        let key = Covers::key(&src, frame, dw, dh);
+        let state = self.merk.covers.borrow().get(&key);
+        match state {
+            Some(Some(image)) => Some(gpui::img(gpui::ImageSource::Render(image)).object_fit(gpui::ObjectFit::Fill).w(px(w)).h(px(h)).into_any_element()),
+            Some(None) => None,
+            None => {
+                if self.merk.covers.borrow_mut().begin(&key) {
+                    Self::in_background(cx, move || render_cover(&src, frame, dw, dh), move |shell, made, cx| {
+                        shell.merk.covers.borrow_mut().finish(&key, made);
+                        cx.notify();
+                    });
+                }
+                None
+            }
+        }
+    }
+
+    /// For tests: how many covers have been made (or found unmakeable) so far.
+    pub fn covers_asked(&self) -> usize {
+        self.merk.covers.borrow().asked()
+    }
+
+    /// For tests: how many covers are there to show.
+    pub fn covers_ready(&self) -> usize {
+        self.merk.covers.borrow().ready()
+    }
+
     fn merk_row(&self, ui: Ui, item: &Item, first: bool, cx: &mut Context<Self>) -> AnyElement {
         let c = ui.c;
         let me = cx.entity();
@@ -463,7 +500,11 @@ impl Shell {
         };
         let fraction = progress.fraction.map(|f| f as f32).or(if progress.watched > 0 { None } else { Some(0.0) });
 
-        let poster = div()
+        let cover = self.cover_element(cx, &item.cover, item.cover_frame, 44.0, 66.0);
+        let poster = if let Some(cover) = cover {
+            div().w(px(44.)).h(px(66.)).flex_none().rounded(px(6.)).overflow_hidden().child(cover).into_any_element()
+        } else {
+            div()
             .w(px(44.))
             .h(px(66.))
             .flex_none()
@@ -477,7 +518,8 @@ impl Shell {
             .text_size(px(size::MICRO))
             .text_color(c.muted)
             .child(initials(&item.title))
-            .into_any_element();
+            .into_any_element()
+        };
         let name = div()
             .flex()
             .flex_col()
@@ -542,7 +584,11 @@ impl Shell {
         let left = left_label(item).unwrap_or_else(|| if caught_up(&seasons_of(item)) { "Alles gesehen".into() } else { "—".into() });
         let fraction = progress.fraction.map(|f| f as f32).or(if progress.watched > 0 { None } else { Some(0.0) });
         let picture = width - 8.0;
-        let poster = div()
+        let cover = self.cover_element(cx, &item.cover, item.cover_frame, picture, (picture * 1.5).floor());
+        let poster = if let Some(cover) = cover {
+            div().w(px(picture)).h(px((picture * 1.5).floor())).rounded(px(sondra_ui::radius::NAV)).overflow_hidden().child(cover).into_any_element()
+        } else {
+            div()
             .w(px(picture))
             .h(px((picture * 1.5).floor()))
             .rounded(px(sondra_ui::radius::NAV))
@@ -557,7 +603,8 @@ impl Shell {
             .font_weight(gpui::FontWeight::SEMIBOLD)
             .text_color(c.muted)
             .child(item.title.clone())
-            .into_any_element();
+            .into_any_element()
+        };
         let words = div()
             .flex()
             .flex_col()

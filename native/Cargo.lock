@@ -5856,6 +5856,7 @@ name = "sondra-app"
 version = "0.1.0"
 dependencies = [
  "accesskit",
+ "base64 0.22.1",
  "chrono",
  "gpui",
  "image",
@@ -5873,6 +5874,7 @@ dependencies = [
  "sondra-ui",
  "tempfile",
  "tiny_http",
+ "ureq",
  "url",
  "windows 0.62.2",
 ]
