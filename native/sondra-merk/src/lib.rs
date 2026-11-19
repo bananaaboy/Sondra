@@ -5,6 +5,7 @@
 pub mod cover;
 pub mod duplicates;
 pub mod folder;
+pub mod folder_memory;
 pub mod importer;
 pub mod matching;
 pub mod merge;
