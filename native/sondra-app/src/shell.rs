@@ -26,6 +26,7 @@ use crate::images_page::ImagesState;
 use crate::mic_page::MicState;
 use crate::sampler_page::SamplerState;
 use crate::phone_page::PhoneState;
+use crate::screen_page::ScreenState;
 use crate::stems_page::StemsState;
 use crate::subtitles_page::SubtitlesState;
 use crate::mix_page::MixState;
@@ -78,6 +79,7 @@ pub struct Shell {
     pub(crate) subtitles: SubtitlesState,
     pub(crate) stems: StemsState,
     pub(crate) phone: PhoneState,
+    pub(crate) screen: ScreenState,
     /// The Umwandeln page.
     pub(crate) convert: ConvertState,
     /// The Lautstärke page.
@@ -158,6 +160,7 @@ impl Shell {
             subtitles: SubtitlesState::new(),
             stems: StemsState::new(),
             phone: PhoneState::new(cx),
+            screen: ScreenState::new(),
             convert: ConvertState::new(),
             normalize: NormalizeState::new(),
             harmony: HarmonyState::new(),
@@ -953,6 +956,8 @@ impl Render for Shell {
             self.convert_page(ui, cx)
         } else if self.panel == Panel::Video {
             self.video_page(ui, cx)
+        } else if self.panel == Panel::Screen {
+            self.screen_page(ui, cx)
         } else if self.panel == Panel::Phone {
             self.phone_page(ui, cx)
         } else if self.panel == Panel::Stems {

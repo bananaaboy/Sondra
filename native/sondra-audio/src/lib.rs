@@ -13,6 +13,6 @@ mod mixer;
 mod output;
 
 pub mod chime;
-pub use input::{input_devices, open_input, Capture, Mic};
+pub use input::{input_devices, open_input, open_loopback, Capture, Mic};
 pub use mixer::{Mixer, Shared};
 pub use output::{AudioError, AudioOut, Output, SilentOut};

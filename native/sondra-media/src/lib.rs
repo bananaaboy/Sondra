@@ -23,6 +23,7 @@
 //! complexity 4, WebM as VP8), because the files must stay the same ones the web app makes.
 
 pub mod audio;
+pub mod capture;
 pub mod chop;
 pub mod chroma;
 pub mod convert;

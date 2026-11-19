@@ -29,6 +29,7 @@ pub mod player_page;
 pub mod sampler_page;
 pub mod shell;
 pub mod receive_window;
+pub mod screen_page;
 pub mod share_window;
 pub mod stats_window;
 pub mod stems_page;

@@ -136,8 +136,7 @@ fn a_group_tab_opens_its_menu_and_a_choice_goes_there(cx: &mut TestAppContext) {
     for tool in ["Bildschirm", "Handy spiegeln", "Mikrofon"] {
         assert!(tree.find(Role::MenuItem, tool).is_some(), "{tool}");
     }
-    // (A tool that is not built yet, so that its page says so; every tool of the other groups has a page of
-    // its own now.)
+    // (Every tool has a page of its own now; the tool of the group chosen is named in its tab.)
     w.press(Role::MenuItem, "Bildschirm", 1280.);
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Screen);
     let tree = w.tree();
@@ -150,10 +149,10 @@ fn a_group_tab_opens_its_menu_and_a_choice_goes_there(cx: &mut TestAppContext) {
         "the group names the tool chosen in it"
     );
     assert!(said(&tree, Role::Button, "Aufnehmen · Bildschirm").starts_with("Geöffnet"));
-    assert!(tree.find(Role::Heading, "Bildschirm").is_some());
+    assert!(tree.find(Role::Heading, "Bildschirm aufnehmen").is_some());
     assert!(
-        tree.find(Role::Status, "Dieses Werkzeug gibt es in der neuen App noch nicht. In der Windows-App und auf der Website funktioniert es wie gewohnt.").is_some(),
-        "a tool that is not built says so"
+        tree.find(Role::Status, "Dieses Werkzeug gibt es in der neuen App noch nicht. In der Windows-App und auf der Website funktioniert es wie gewohnt.").is_none(),
+        "no tool is left that says it is not built"
     );
 }
 

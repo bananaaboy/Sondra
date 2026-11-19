@@ -52,8 +52,22 @@ pub fn open_input(name: Option<&str>) -> Result<Mic, AudioError> {
         None => host.default_input_device(),
     }
     .ok_or(AudioError::NoDevice)?;
+    open_device(&device, false)
+}
+
+/// What the computer plays (Windows: WASAPI loopback of the default speakers), taken as a microphone is.
+pub fn open_loopback() -> Result<Mic, AudioError> {
+    if !cfg!(windows) {
+        return Err(AudioError::Open("Den Ton des Rechners nimmt Sondra nur unter Windows auf.".into()));
+    }
+    let device = cpal::default_host().default_output_device().ok_or(AudioError::NoDevice)?;
+    open_device(&device, true)
+}
+
+fn open_device(device: &cpal::Device, loopback: bool) -> Result<Mic, AudioError> {
     let shown = device.description().map(|d| d.name().to_owned()).unwrap_or_default();
-    let config = device.default_input_config().map_err(|e| AudioError::Open(e.to_string()))?;
+    // A loopback is an input stream on an output device, with that device's own format.
+    let config = if loopback { device.default_output_config() } else { device.default_input_config() }.map_err(|e| AudioError::Open(e.to_string()))?;
     let (rate, channels) = (config.sample_rate(), config.channels() as usize);
     let level = Arc::new(AtomicU32::new(0));
     let buffer: Arc<Mutex<Vec<f32>>> = Arc::default();

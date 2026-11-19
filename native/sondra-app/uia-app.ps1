@@ -171,7 +171,7 @@ $group = Named 'Aufnehmen' $CT::Button
 Check ($null -ne $group) 'the group Aufnehmen is in the row'
 if ($null -ne $group) {
     Check (Invoke-It $group) 'it can be invoked'
-    # (A tool that is not built yet, so that its page says so; every tool of the other groups has a page.)
+    # (Every tool has a page of its own now.)
     $screen = Wait-For 'Bildschirm' $CT::MenuItem
     Check ($null -ne $screen) 'its menu appeared, with Bildschirm as a menu item'
     foreach ($tool in @('Handy spiegeln', 'Mikrofon')) {
@@ -179,7 +179,7 @@ if ($null -ne $group) {
     }
     if ($null -ne $screen) {
         Check (Invoke-It $screen) 'a menu item can be invoked'
-        $heading = Wait-For 'Bildschirm' $CT::Text
+        $heading = Wait-For 'Bildschirm aufnehmen' $CT::Text
         Check ($null -ne $heading) 'the tool opened: its heading is on the page'
         Check ($null -ne (Wait-For 'Aufnehmen * Bildschirm' $CT::Button)) 'the group names the tool chosen in it'
         Check (Wait-Gone 'Mikrofon' $CT::MenuItem) 'the menu shut by the choice'

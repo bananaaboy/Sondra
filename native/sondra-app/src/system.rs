@@ -92,3 +92,41 @@ pub fn play_chime() {
         drop(out);
     });
 }
+
+/// The titles of the windows that can be recorded: visible, not minimised, with a name. (Windows only.)
+pub fn visible_windows() -> Vec<String> {
+    #[cfg(windows)]
+    {
+        use windows::core::BOOL;
+        use windows::Win32::Foundation::{HWND, LPARAM};
+        use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextLengthW, GetWindowTextW, IsIconic, IsWindowVisible};
+
+        unsafe extern "system" fn each(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            // SAFETY: `lparam` is the address of the vector `visible_windows` keeps for the length of the call.
+            let titles = unsafe { &mut *(lparam.0 as *mut Vec<String>) };
+            if unsafe { IsWindowVisible(hwnd) }.as_bool() && !unsafe { IsIconic(hwnd) }.as_bool() {
+                let len = unsafe { GetWindowTextLengthW(hwnd) };
+                if len > 0 {
+                    let mut buffer = vec![0u16; len as usize + 1];
+                    let got = unsafe { GetWindowTextW(hwnd, &mut buffer) };
+                    if got > 0 {
+                        let title = String::from_utf16_lossy(&buffer[..got as usize]);
+                        if title != "Program Manager" && !titles.contains(&title) {
+                            titles.push(title);
+                        }
+                    }
+                }
+            }
+            BOOL(1)
+        }
+
+        let mut titles: Vec<String> = Vec::new();
+        // SAFETY: the callback only reads window titles and writes into `titles`, which outlives the call.
+        let _ = unsafe { EnumWindows(Some(each), LPARAM(&mut titles as *mut Vec<String> as isize)) };
+        titles
+    }
+    #[cfg(not(windows))]
+    {
+        Vec::new()
+    }
+}
