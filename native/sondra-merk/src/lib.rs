@@ -7,6 +7,7 @@ pub mod duplicates;
 pub mod folder;
 pub mod folder_memory;
 pub mod importer;
+pub mod list;
 pub mod matching;
 pub mod merge;
 pub mod model;

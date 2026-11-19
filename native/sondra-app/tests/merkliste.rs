@@ -190,3 +190,67 @@ fn a_long_list_has_a_search_and_a_file_that_is_no_list_is_left_alone(cx: &mut Te
     drop(w);
     assert_eq!(std::fs::read(&path).unwrap(), b"this is somebody's other file", "and it is never written over");
 }
+
+#[gpui::test]
+fn a_series_opens_to_its_page_where_episodes_are_ticked(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    assert!(w.tree().find(Role::ListItem, "Frieren").unwrap().default_action.is_some(), "a line can be opened by a screen reader");
+    w.press(Role::ListItem, "Frieren");
+    let tree = w.tree();
+    assert!(tree.find(Role::Heading, "Frieren").is_some());
+    assert!(tree.find(Role::Button, "Zurück zur Merkliste").is_some());
+    assert!(tree.find(Role::Heading, "Staffel 1").is_some());
+    // Where one is is said on the episode, in words.
+    assert!(tree.find(Role::Button, "Folge 4, hier sind Sie").is_some());
+    assert_eq!(tree.find(Role::Button, "Folge 2").unwrap().toggled, Some(true), "seen episodes are pressed");
+    assert_eq!(tree.find(Role::Button, "Folge 5").unwrap().toggled, Some(false));
+    assert_eq!(tree.find(Role::Button, "Stand: Am Schauen").unwrap().toggled, Some(true));
+
+    // Ticking a later episode leaves the place at the first one not seen.
+    w.press(Role::Button, "Folge 5");
+    assert_eq!(w.tree().find(Role::Button, "Folge 5").unwrap().toggled, Some(true));
+    assert!(w.tree().find(Role::Button, "Folge 4, hier sind Sie").is_some());
+    // The big button steps forward: 4 is seen, the place moves to 6 (5 is seen already).
+    w.press(Role::Button, "Folge 4 gesehen");
+    assert!(w.tree().find(Role::Button, "Folge 6, hier sind Sie").is_some());
+    // The length of a season can be changed.
+    w.press(Role::Button, "Eine Folge mehr in Staffel 1");
+    assert!(w.tree().find(Role::Button, "Folge 13").is_some());
+    // And the stand.
+    w.press(Role::Button, "Stand: Pausiert");
+    assert_eq!(w.tree().find(Role::Button, "Stand: Pausiert").unwrap().toggled, Some(true));
+
+    let bytes = std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap();
+    let back = read_shared(&bytes, &mut Ids::system()).unwrap();
+    let frieren = back.items.iter().find(|i| i.id == "fr").unwrap();
+    assert_eq!(frieren.seasons.as_ref().unwrap()[0].watched, vec![1, 2, 3, 4, 5]);
+    assert_eq!(frieren.seasons.as_ref().unwrap()[0].episodes, Some(13));
+    assert_eq!(frieren.episode, Some(6));
+    assert_eq!(frieren.status, sondra_merk::Status::Paused);
+
+    w.press(Role::Button, "Zurück zur Merkliste");
+    assert!(w.tree().find(Role::Heading, "Merkliste").is_some());
+    assert!(w.tree().find(Role::Heading, "Pausiert").is_some(), "the entry is in its new section");
+}
+
+#[gpui::test]
+fn removing_a_series_can_be_undone_and_is_noted_on_the_file(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.press(Role::ListItem, "Dark");
+    w.press(Role::Button, "Von der Merkliste entfernen");
+    let tree = w.tree();
+    assert!(tree.find(Role::Heading, "Merkliste").is_some(), "the page closed");
+    assert!(tree.find(Role::ListItem, "Dark").is_none());
+    assert!(tree.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("„Dark“ ist von der Merkliste"))));
+    let back = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    assert_eq!(back.items.len(), 2);
+    assert!(back.removed.contains_key("dk"), "the removal is noted, so Drive does not bring it back");
+
+    w.press(Role::Button, "Rückgängig");
+    assert!(w.tree().find(Role::ListItem, "Dark").is_some());
+    let back = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    assert_eq!(back.items.len(), 3);
+    assert!(back.removed.is_empty());
+}

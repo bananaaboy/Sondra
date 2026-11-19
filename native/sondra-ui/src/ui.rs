@@ -55,7 +55,11 @@ pub(crate) fn press(visual: Stateful<Div>, handler: Option<Handler>) -> Stateful
     let on_mouse = handler.clone();
     visual
         .cursor_pointer()
-        .on_click(move |_, window, cx| on_mouse(window, cx))
+        .on_click(move |_, window, cx| {
+            // A control inside a clickable row (the step forward on a line of the list) is clicked alone.
+            cx.stop_propagation();
+            on_mouse(window, cx)
+        })
         .on_key_down(move |event, window, cx| {
             if matches!(event.keystroke.key.as_str(), "enter" | "space") {
                 handler(window, cx);
@@ -191,9 +195,16 @@ pub struct Chip {
     label: SharedString,
     selected: bool,
     on_click: Option<Handler>,
+    /// What a screen reader says, when the text on the chip is not enough on its own („4“ for an episode).
+    name: Option<SharedString>,
 }
 
 impl Chip {
+    /// The name a screen reader reads instead of the text on the chip.
+    pub fn accessible_name(mut self, name: impl Into<SharedString>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
     pub fn on_click(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.on_click = Some(Rc::new(handler));
         self
@@ -237,7 +248,7 @@ impl RenderOnce for Chip {
         );
 
         let mut node = accessible(self.id.clone(), Role::Button, visual)
-            .label(self.label)
+            .label(self.name.clone().unwrap_or_else(|| self.label.clone()))
             .toggled(self.selected)
             .focus(&focus);
         if let Some(handler) = self.on_click {
@@ -542,6 +553,7 @@ impl Ui {
             label: label.into(),
             selected,
             on_click: None,
+            name: None,
         }
     }
 
