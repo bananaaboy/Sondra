@@ -145,6 +145,14 @@ Startseite mit Kacheln, hell und dunkel, die Schriften, die Bewegung.
 - Datei ablegen, Dateimenü, Sitzung bleibt (`sessionStore`), Umbenennen,
   Tastenkürzel und Befehlspalette, Adressen der Werkzeuge als Startparameter.
 - Das Ergebnis der Probe zu Bedienungshilfen wird hier verbaut.
+- **Stand 19.11.2026:** `sondra-ui` (Farben, Schriften, Radien, Knopf, Chip, Reiter, Kachel, Menüpunkt,
+  Popover, Hinweis, Textfeld mit Eingabemethoden und Zwischenablage), `sondra-app` (das Fenster `sondra`:
+  Kopfzeile mit Thema-Wechsel, Reiterleiste mit Gruppenmenüs und „Mehr“, Startseite mit Einstieg
+  — Datei wählen oder hierher ziehen —, „Filme und Serien“, Werkzeugkacheln je Gruppe mit Suche).
+  Reiter, Kacheln und Suche kommen aus dem Code der Website (Daten und Tabellen per `npm run
+  native:golden`). Auf echtem Windows: die Galerie als Bildschirmfoto, die Bedienungshilfen über UI
+  Automation. **Offen:** Symbole der Kacheln, Bewegung, Dialoge und Blätter, Dateimenü und Sitzung,
+  Befehlspalette, Pfeiltasten in der Reiterleiste, Kontrastmessung nach APCA, Adressen als Startparameter.
 - **Tor:** Bildschirmfotos aller Zustände (hell/dunkel, schmal/breit) neben denen
   der Website, von mir und von Ihnen angesehen; Kontrastmessung; ein Test mit
   Tastatur allein.

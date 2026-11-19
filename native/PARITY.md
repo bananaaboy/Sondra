@@ -15,8 +15,8 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | ID | Funktion | Bestand | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- | --- |
 | R01 | Kopfzeile: Dateimenü, Sitzung hinter dem Dateinamen, Drive-Knopf, Versionsmarke | `AppShell`, `GoogleDrive` | 3 | Bildschirmfotos | offen |
-| R02 | Reiterleiste: 6 einzelne, 3 Gruppen, „Mehr“ bei Platzmangel, Pfeiltasten | `PanelTabs`, `panelMeta` | 3 | Szenario „bewegung“ als Klicktest | offen |
-| R03 | Startseite: Einstieg, „Datei auswählen“, „Von Adresse laden“, Filme und Serien, Werkzeug-Kacheln mit Filter | `Home` | 3 | Bildschirmfotos | offen |
+| R02 | Reiterleiste: 6 einzelne, 3 Gruppen, „Mehr“ bei Platzmangel, Pfeiltasten | `PanelTabs`, `panelMeta` | 3 | Tabellen gegen `panelMeta.tsx` (golden); Klicktests im GPUI-Fenster (Gruppenmenü, Mehr, gewähltes bleibt, Escape); Job `app` über UI Automation. **Pfeiltasten zwischen den Reitern und Bewegung fehlen noch** | in Arbeit |
+| R03 | Startseite: Einstieg, „Datei auswählen“, „Von Adresse laden“, Filme und Serien, Werkzeug-Kacheln mit Filter | `Home` | 3 | die 50 Kacheln und die Suche sind die der Website (golden, gleiche Treffer in gleicher Reihenfolge); Tests im GPUI-Fenster; Bildschirmfoto aus Job `app`. **Kacheln ohne Symbole (ein Buchstabe), „Projekt laden“, Sitzungsdateien und „Heute weiterschauen“ fehlen** | in Arbeit |
 | R04 | „Heute weiterschauen“ auf der Startseite | `Home` | 4 | Szenario „serien“ | offen |
 | R05 | Hell und dunkel, Farben und Radien nach `DESIGN.md`, Kontrast nach APCA | `ThemeToggle` | 3 | Kontrastmessung | offen |
 | R06 | Schriften Public Sans, Courier Prime, Cormorant | `index.css` | 3 | Bildschirmfotos | offen |

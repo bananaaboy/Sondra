@@ -41,6 +41,12 @@ native/
   sondra-download/ einen aufgelösten Strom in eine Datei laden (direkt, HLS, FFmpeg-Zusammenbau)
   sondra-service/ `sondra-dienst`: Suchen und Laden verdrahtet, Windows-Teile (Papierkorb,
                   Netzteil, getaktet, Wachhalten, Autostart), Schleife, Protokoll
+  sondra-media/   der Medienkern: FFmpeg-Aufrufe, Lautheit, FFT, Tempo, Tonart, Vorspann — mit den
+                  Zahlen der Website verglichen
+  sondra-ui/      Sondras Look für GPUI: Farben hell/dunkel, Schriften, Radien, Bausteine (Knopf,
+                  Chip, Reiter, Kachel, Menü, Hinweis, Textfeld), alle mit Namen und Rolle
+  sondra-app/     das Fenster `sondra`: Kopfzeile, Reiterleiste (Gruppen, „Mehr“), Startseite;
+                  Reiter und Kacheln kommen als Daten aus dem Code der Website
   vendor/xattr/   xattr 0.2.3 mit einer Zeile Patch, damit GPUI unter Linux baut
   probes/         Machbarkeitsproben der Welle 0b
 ```
