@@ -233,6 +233,7 @@ impl PlayerState {
                 }
                 playback.set_boost(self.settings.boost as f32);
                 let _ = playback.set_night(self.settings.night);
+                let _ = playback.set_karaoke(self.settings.karaoke);
                 let _ = playback.set_equalizer(equalizer_of(&self.settings));
                 let _ = playback.set_picture(picture_of(&self.settings));
                 self.playback = Some(playback);
@@ -338,10 +339,11 @@ impl PlayerState {
 
     /// Puts the picture and sound settings onto what plays.
     fn apply_look(&mut self) {
-        let (boost, night, picture, eq) = (self.settings.boost as f32, self.settings.night, picture_of(&self.settings), equalizer_of(&self.settings));
+        let (boost, night, karaoke, picture, eq) = (self.settings.boost as f32, self.settings.night, self.settings.karaoke, picture_of(&self.settings), equalizer_of(&self.settings));
         if let Some(p) = self.playback.as_mut() {
             p.set_boost(boost);
             let _ = p.set_night(night);
+            let _ = p.set_karaoke(karaoke);
             let _ = p.set_equalizer(eq);
             let _ = p.set_picture(picture);
         }
@@ -1101,12 +1103,25 @@ impl Shell {
             {
                 let me = me.clone();
                 let on = st.night;
-                body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Ton")).child(
-                    ui.chip("nachtmodus", "Nachtmodus: Leises lauter, Lautes leiser", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
-                        p.settings.night = !on;
-                        p.apply_look();
-                    })),
-                ));
+                let (karaoke_me, karaoke_on) = (me.clone(), st.karaoke);
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.))
+                        .child(ui.title("Ton"))
+                        .child(div().flex().flex_wrap().gap(px(6.)).child(
+                            ui.chip("nachtmodus", "Nachtmodus: Leises lauter, Lautes leiser", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                                p.settings.night = !on;
+                                p.apply_look();
+                            })),
+                        ).child(
+                            ui.chip("karaoke", "Karaoke: Stimme in der Mitte entfernen", karaoke_on).on_click(move |_, app| Self::player_do(&karaoke_me, app, move |p| {
+                                p.settings.karaoke = !karaoke_on;
+                                p.apply_look();
+                            })),
+                        )),
+                );
             }
             // The equalizer: five bands and the presets of the web player.
             {
@@ -1178,6 +1193,7 @@ impl Shell {
                         p.settings.mirror = d.mirror;
                         p.settings.boost = d.boost;
                         p.settings.night = d.night;
+                        p.settings.karaoke = d.karaoke;
                         p.settings.fit = d.fit;
                         p.settings.eq_band1 = d.eq_band1;
                         p.settings.eq_band2 = d.eq_band2;

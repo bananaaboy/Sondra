@@ -496,6 +496,8 @@ fn picture_and_sound_have_their_window_and_what_is_chosen_is_kept_and_taken_back
     w.press(Role::Button, "Spiegeln");
     w.press(Role::Button, "Nachtmodus: Leises lauter, Lautes leiser");
     assert_eq!(w.tree().find(Role::Button, "Nachtmodus: Leises lauter, Lautes leiser").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Karaoke: Stimme in der Mitte entfernen");
+    assert_eq!(w.tree().find(Role::Button, "Karaoke: Stimme in der Mitte entfernen").unwrap().toggled, Some(true));
     // The equalizer: a preset sets the five bands and switches it on.
     // As in the web player it is on from the start, flat.
     assert_eq!(w.tree().find(Role::Button, "Entzerrer an").unwrap().toggled, Some(true));
@@ -514,6 +516,7 @@ fn picture_and_sound_have_their_window_and_what_is_chosen_is_kept_and_taken_back
     assert!(w.position() > 0.5, "{}", w.position());
     // Everything back.
     w.press(Role::Button, "Zurücksetzen");
+    assert_eq!(w.tree().find(Role::Button, "Karaoke: Stimme in der Mitte entfernen").unwrap().toggled, Some(false));
     assert_eq!(w.tree().find(Role::Button, "Entzerrer: Flat").unwrap().toggled, Some(true));
     assert_eq!(w.tree().find(Role::Slider, "Bässe (80 Hz)").unwrap().value.clone().unwrap().as_ref(), "0 dB");
     assert_eq!(w.tree().find(Role::Button, "Helligkeit 100 %").unwrap().toggled, Some(true));

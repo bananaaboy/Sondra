@@ -132,6 +132,7 @@ struct Settings {
     audio_track: usize,
     boost: f32,
     night: bool,
+    karaoke: bool,
     equalizer: Equalizer,
     picture: Picture,
 }
@@ -218,6 +219,21 @@ pub fn equalizer_filters(eq: &Equalizer) -> Vec<String> {
     filters
 }
 
+/// The voice remover of the web player (`lib/audioKaraoke.ts`): what lies in the middle of the picture of the sound is
+/// taken out between 130 Hz and 7.5 kHz (left minus right, 0.8), the bass below and the air above stay as they are.
+/// A sound of one channel has no middle to take out and is left alone, as the web player leaves it.
+pub fn karaoke_filter(channels: u32) -> Option<String> {
+    if channels < 2 {
+        return None;
+    }
+    Some(
+        "pan=stereo|c0=c0|c1=c1,asplit=3[lo][hi][mid];[lo]lowpass=f=130:t=q:w=0.707[bass];[hi]highpass=f=7500:t=q:w=0.707[air];\
+         [mid]highpass=f=130:t=q:w=1,lowpass=f=7500:t=q:w=1,pan=stereo|c0=0.8*c0-0.8*c1|c1=0.8*c0-0.8*c1[voice];\
+         [bass][air][voice]amix=inputs=3:normalize=0"
+            .to_string(),
+    )
+}
+
 /// The sound the night mode asks for: quiet passages up, loud ones down. The numbers are the web player's
 /// compressor (threshold −32 dB, knee, ratio 5, attack 10 ms, release 350 ms) with a make-up so that the
 /// quiet part really does come up.
@@ -289,7 +305,7 @@ impl Playback {
             output,
             shared,
             size,
-            settings: Settings { rate: 1.0, volume: 1.0, muted: false, audio_track: 0, boost: 1.0, night: false, equalizer: Equalizer::default(), picture: Picture::default() },
+            settings: Settings { rate: 1.0, volume: 1.0, muted: false, audio_track: 0, boost: 1.0, night: false, karaoke: false, equalizer: Equalizer::default(), picture: Picture::default() },
             run: Run { children: Vec::new(), frames: Arc::new(Frames::new()), video_done: Arc::default(), audio_done: Arc::default(), stop: Arc::default() },
             started_at: 0.0,
             timer: Timer::default(),
@@ -380,6 +396,9 @@ impl Playback {
                     left /= 2.0;
                 }
                 filters.push(format!("atempo={left}"));
+            }
+            if self.settings.karaoke {
+                filters.extend(karaoke_filter(track.channels.unwrap_or(2)));
             }
             filters.extend(equalizer_filters(&self.settings.equalizer));
             if self.settings.night {
@@ -475,6 +494,16 @@ impl Playback {
         }
         let at = self.position();
         self.settings.night = on;
+        self.restart(at)
+    }
+
+    /// The voice remover needs the sound made again, from where it is.
+    pub fn set_karaoke(&mut self, on: bool) -> Result<(), PlaybackError> {
+        if self.settings.karaoke == on {
+            return Ok(());
+        }
+        let at = self.position();
+        self.settings.karaoke = on;
         self.restart(at)
     }
 
