@@ -8,9 +8,12 @@
 
 pub mod adb;
 pub mod control;
+pub mod decode;
 pub mod fake;
+pub mod h264;
 pub mod hid;
 pub mod key;
+pub mod ogg;
 pub mod options;
 pub mod stream;
 
