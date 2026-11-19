@@ -44,6 +44,8 @@ pub enum Op {
     Pitch(f64),
     /// Plays this much faster (2 = twice as fast, half as long) and keeps the pitch.
     Tempo(f64),
+    /// The whole file backwards.
+    Reverse,
     /// Clicks and crackle out, over the whole file (`declick.ts`).
     RemoveClicks(crate::declick::ClickStrength),
 }
@@ -192,6 +194,7 @@ impl Editor {
                     (label, effects::insert_at(&edit::cut_range(&self.audio, from, to), from, &part))
                 }
             }
+            Op::Reverse => ("Umgekehrt".to_string(), AudioData { channels: self.audio.channels.iter().map(|c| c.iter().rev().copied().collect()).collect(), sample_rate: self.audio.sample_rate }),
             Op::RemoveClicks(strength) => {
                 let (fixed, repaired) = crate::declick::remove_clicks(&self.audio, strength);
                 if repaired == 0 {

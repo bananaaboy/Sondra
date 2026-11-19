@@ -68,29 +68,67 @@ pub fn decode_file(ffmpeg: &crate::ffmpeg::Ffmpeg, path: &std::path::Path, rate:
     Ok(AudioData { channels: planar, sample_rate })
 }
 
+/// How deep a WAV's samples are (`encodeWav` in `wav.ts`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WavBits {
+    Pcm16,
+    Pcm24,
+    Float32,
+}
+
 /// A WAV file of 32-bit floats: what the tools hand to FFmpeg to encode in whatever format was asked.
 pub fn write_wav_f32(path: &std::path::Path, audio: &AudioData) -> std::io::Result<()> {
-    use std::io::Write;
+    write_wav(path, audio, WavBits::Float32)
+}
+
+/// The bytes of a WAV file, as `encodeWav` writes them: 16 bit and 24 bit are clipped to ±1 and scaled
+/// asymmetrically (−1 → −32768, +1 → +32767), 24 bit rounded; 32 bit is the float as it is.
+pub fn encode_wav(audio: &AudioData, bits: WavBits) -> Vec<u8> {
     let channels = audio.channels.len() as u16;
-    let frames = audio.frames() as u32;
-    let data_len = frames * u32::from(channels) * 4;
-    let mut out = std::io::BufWriter::new(std::fs::File::create(path)?);
-    out.write_all(b"RIFF")?;
-    out.write_all(&(36 + data_len).to_le_bytes())?;
-    out.write_all(b"WAVEfmt ")?;
-    out.write_all(&16u32.to_le_bytes())?;
-    out.write_all(&3u16.to_le_bytes())?; // IEEE float
-    out.write_all(&channels.to_le_bytes())?;
-    out.write_all(&audio.sample_rate.to_le_bytes())?;
-    out.write_all(&(audio.sample_rate * u32::from(channels) * 4).to_le_bytes())?;
-    out.write_all(&(channels * 4).to_le_bytes())?;
-    out.write_all(&32u16.to_le_bytes())?;
-    out.write_all(b"data")?;
-    out.write_all(&data_len.to_le_bytes())?;
-    for i in 0..audio.frames() {
+    let frames = audio.frames();
+    let (bytes, tag, depth) = match bits {
+        WavBits::Pcm16 => (2usize, 1u16, 16u16),
+        WavBits::Pcm24 => (3, 1, 24),
+        WavBits::Float32 => (4, 3, 32),
+    };
+    let block = usize::from(channels) * bytes;
+    let data_len = (frames * block) as u32;
+    let mut out = Vec::with_capacity(44 + data_len as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data_len).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&tag.to_le_bytes());
+    out.extend_from_slice(&channels.to_le_bytes());
+    out.extend_from_slice(&audio.sample_rate.to_le_bytes());
+    out.extend_from_slice(&(audio.sample_rate * block as u32).to_le_bytes());
+    out.extend_from_slice(&(block as u16).to_le_bytes());
+    out.extend_from_slice(&depth.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data_len.to_le_bytes());
+    for i in 0..frames {
         for c in &audio.channels {
-            out.write_all(&c[i].to_le_bytes())?;
+            let v = c[i];
+            match bits {
+                WavBits::Float32 => out.extend_from_slice(&v.to_le_bytes()),
+                WavBits::Pcm16 => {
+                    let s = f64::from(v).clamp(-1.0, 1.0);
+                    // `setInt16` truncates toward zero after the scaling.
+                    let scaled = if s < 0.0 { s * 32768.0 } else { s * 32767.0 };
+                    out.extend_from_slice(&(scaled.trunc() as i16).to_le_bytes());
+                }
+                WavBits::Pcm24 => {
+                    let s = f64::from(v).clamp(-1.0, 1.0);
+                    let scaled = if s < 0.0 { s * 8_388_608.0 } else { s * 8_388_607.0 };
+                    let n = (scaled + 0.5).floor() as i32;
+                    out.extend_from_slice(&n.to_le_bytes()[..3]);
+                }
+            }
         }
     }
-    out.flush()
+    out
+}
+
+pub fn write_wav(path: &std::path::Path, audio: &AudioData, bits: WavBits) -> std::io::Result<()> {
+    std::fs::write(path, encode_wav(audio, bits))
 }

@@ -50,11 +50,13 @@ pub struct AudioState {
     /// Where a drag began, in seconds.
     anchor: Option<f64>,
     ticking: bool,
+    /// How deep a saved WAV is.
+    pub bits: sondra_media::audio::WavBits,
 }
 
 impl AudioState {
     pub fn new() -> AudioState {
-        AudioState { path: None, editor: None, selection: None, tool: Tool::Cut, busy: None, error: None, said: None, player: None, made: Vec::new(), bounds: Rc::new(Cell::new(Bounds::default())), anchor: None, ticking: false }
+        AudioState { path: None, editor: None, selection: None, tool: Tool::Cut, busy: None, error: None, said: None, player: None, made: Vec::new(), bounds: Rc::new(Cell::new(Bounds::default())), anchor: None, ticking: false, bits: sondra_media::audio::WavBits::Pcm16 }
     }
 }
 
@@ -278,13 +280,20 @@ impl Shell {
             return;
         }
         let audio = editor.audio().clone();
+        let bits = self.audio.bits;
         self.audio.busy = Some("Schreibt …");
         Self::in_background(
             cx,
             move || -> Result<PathBuf, String> {
-                let ff = Ffmpeg::locate().ok_or("FFmpeg ist nicht da.".to_string())?;
                 let dir = path.parent().map(PathBuf::from).unwrap_or_default();
                 let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Ton".into());
+                // A WAV is written as it is, at the depth chosen; FFmpeg is for the other formats.
+                if format_id == "wav" {
+                    let target = sondra_media::run::unique_path(&dir, &format!("{stem} (bearbeitet)"), "wav");
+                    sondra_media::audio::write_wav(&target, &audio, bits).map_err(|e| e.to_string())?;
+                    return Ok(target);
+                }
+                let ff = Ffmpeg::locate().ok_or("FFmpeg ist nicht da.".to_string())?;
                 let temp = dir.join(format!(".sondra-ton-{}.wav", std::process::id()));
                 write_wav_f32(&temp, &audio).map_err(|e| e.to_string())?;
                 let out = sondra_media::run::convert_file(&ff, &temp, &dir, &format!("{stem} (bearbeitet)"), &ConvertSettings { format_id: format_id.into(), ..ConvertSettings::default() }, &Cancel::new(), &mut |_| {});
@@ -462,6 +471,7 @@ impl Shell {
                         op("stille-einfuegen-halb".into(), "0,5 s Stille einfügen".into(), Op::InsertSilence(0.5)).into_any_element(),
                         op("stille-einfuegen".into(), "1 s Stille einfügen".into(), Op::InsertSilence(1.0)).into_any_element(),
                         op("stille-entfernen".into(), "Stille entfernen".into(), Op::RemoveSilence { threshold_db: -50.0 }).into_any_element(),
+                        op("rueckwaerts".into(), "Rückwärts drehen".into(), Op::Reverse).into_any_element(),
                     ]));
             }
             Tool::Level => {
@@ -519,6 +529,14 @@ impl Shell {
                     ui.button(format!("speichern-{format_id}"), label.to_string()).small().primary().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.audio_save(format_id, cx)))
                 };
                 panel = panel
+                    .child(group("Bittiefe der WAV", [(sondra_media::audio::WavBits::Pcm16, "16 bit"), (sondra_media::audio::WavBits::Pcm24, "24 bit"), (sondra_media::audio::WavBits::Float32, "32 Float")].iter().map(|(bits, label)| {
+                        let me = me.clone();
+                        let bits = *bits;
+                        ui.chip(format!("bittiefe-{label}"), label.to_string(), self.audio.bits == bits).on_click(move |_, app| me.update(app, |shell, cx| {
+                            shell.audio.bits = bits;
+                            cx.notify();
+                        })).into_any_element()
+                    }).collect()))
                     .child(group("Kanäle", vec![
                         op("mono".into(), "Zu Mono mischen".into(), Op::ToMono).into_any_element(),
                         op("stereo".into(), "Zu Stereo verdoppeln".into(), Op::ToStereo).into_any_element(),

@@ -23,6 +23,8 @@ import { chordsToMidiNotes, writeMidi } from '../src/lib/midi'
 import { extractAddresses } from '../src/lib/download'
 import { pitchShift, resampleByRatio, stretchAudio, timeStretch } from '../src/lib/timestretch'
 import { removeClicks, type ClickStrength } from '../src/lib/declick'
+import { encodeWav } from '../src/lib/wav'
+import { reverseAudio } from '../src/lib/audio'
 import {
   compressAudio,
   copyRange,
@@ -964,4 +966,19 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   })
   writeFileSync(`${dir}/declick.json`, `${JSON.stringify({ rate, n, strengths })}\n`)
   console.log('Klicks entfernen: ' + strengths.map((x) => x.strength + ' ' + x.repaired).join(', '))
+}
+
+{
+  const dir = 'native/sondra-media/tests/golden'
+  // Edges, rounding, clipping and a stereo pair: what 16 and 24 bit do with each.
+  const left = Float32Array.from([0, 1, -1, 1.5, -1.5, 0.5, -0.5, 0.123456, -0.123456, 1e-5, -1e-5, 0.99999, -0.99999, 0.3333333, 0.7071068, -0.7071068])
+  const right = Float32Array.from(Array.from(left).map((v, i) => (i % 3 === 0 && v !== 0 ? -v : v * 0.5)))
+  const audio = { channels: [left, right], sampleRate: 22050 }
+  const hex = (b: Uint8Array) => Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('')
+  const reversed = reverseAudio(audio)
+  writeFileSync(
+    `${dir}/wav.json`,
+    `${JSON.stringify({ left: Array.from(left), right: Array.from(right), rate: 22050, w16: hex(encodeWav(audio, 16)), w24: hex(encodeWav(audio, 24)), w32: hex(encodeWav(audio, 32)), reversed: reversed.channels.map((c) => Array.from(c)) })}\n`,
+  )
+  console.log('WAV: 16, 24, 32 bit und Rückwärts')
 }

@@ -229,3 +229,31 @@ fn clicks_are_taken_out_over_the_whole_file_and_a_clean_file_says_there_was_noth
     w.settle();
     assert!(w.said("Nichts gefunden, was wie ein Klick aussieht."), "{:?}", w.labels());
 }
+
+#[gpui::test]
+fn the_file_turns_backwards_and_a_wav_is_written_at_the_chosen_depth(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Probe.wav"));
+    let before = w.shell.read_with(w.cx, |s, _| s.audio_take().unwrap().channels[0].clone());
+    w.press(Role::Button, "Rückwärts drehen");
+    w.settle();
+    let after = w.shell.read_with(w.cx, |s, _| s.audio_take().unwrap().channels[0].clone());
+    assert_eq!(after, before.iter().rev().copied().collect::<Vec<_>>());
+    assert!(w.said("Umgekehrt"), "{:?}", w.labels());
+
+    w.press(Role::Button, "Werkzeug Ausgabe");
+    w.press(Role::Button, "24 bit");
+    w.press(Role::Button, "Als WAV speichern");
+    for _ in 0..200 {
+        w.settle();
+        if !w.shell.read_with(w.cx, |s, _| s.audio_made().is_empty()) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let made = w.shell.read_with(w.cx, |s, _| s.audio_made().to_vec());
+    assert_eq!(made.len(), 1, "{:?}", w.labels());
+    let bytes = std::fs::read(&made[0]).unwrap();
+    assert_eq!(u16::from_le_bytes([bytes[34], bytes[35]]), 24, "the depth in the header");
+    assert_eq!(bytes.len(), 44 + 32000 * 2 * 3);
+}
