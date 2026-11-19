@@ -1,4 +1,3148 @@
 {
+ "stats": {
+  "cases": [
+   {
+    "name": "alle",
+    "stats": {
+     "totalSeries": 57,
+     "watchingCount": 54,
+     "laterCount": 0,
+     "pausedCount": 1,
+     "doneCount": 1,
+     "droppedCount": 1,
+     "watchingPercent": 95,
+     "laterPercent": 0,
+     "donePercent": 2,
+     "seenTotal": 68,
+     "knownTotalEpisodes": 146,
+     "knownWatchedEpisodes": 34,
+     "openEpisodesCount": 112,
+     "overallProgressPercent": 23,
+     "watchMinutes": 1764,
+     "watchTime": {
+      "short": "29.4 Std.",
+      "long": "1 Tag, 5 Std., 24 Min."
+     },
+     "totalSeasons": 59,
+     "completedSeasons": 2,
+     "filmCount": 5,
+     "filmsSeen": 2,
+     "ratedCount": 2,
+     "avgRating": "4.0",
+     "ratingDistribution": [
+      {
+       "stars": 5,
+       "count": 1
+      },
+      {
+       "stars": 4,
+       "count": 0
+      },
+      {
+       "stars": 3,
+       "count": 1
+      },
+      {
+       "stars": 2,
+       "count": 0
+      },
+      {
+       "stars": 1,
+       "count": 0
+      }
+     ],
+     "recentItems": [
+      "z0",
+      "a",
+      "b"
+     ]
+    },
+    "sorted": {
+     "recent": [
+      "z0",
+      "a",
+      "b",
+      "c",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "k",
+      "l2",
+      "l3",
+      "l4",
+      "m",
+      "m2",
+      "m3",
+      "m4",
+      "n",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "o",
+      "o2",
+      "p",
+      "q",
+      "q2",
+      "q3",
+      "r",
+      "r2",
+      "r3",
+      "r4",
+      "s",
+      "s2",
+      "s3",
+      "t",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "u",
+      "u2",
+      "u3",
+      "u4",
+      "u5",
+      "v",
+      "l"
+     ],
+     "title": [
+      "c3",
+      "b",
+      "c",
+      "z0",
+      "a",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "l",
+      "l2",
+      "l3",
+      "l4",
+      "m",
+      "m2",
+      "m3",
+      "m4",
+      "n",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "o",
+      "o2",
+      "p",
+      "q",
+      "q2",
+      "q3",
+      "r",
+      "r2",
+      "r3",
+      "r4",
+      "s",
+      "s2",
+      "s3",
+      "t",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "u",
+      "u2",
+      "u3",
+      "u4",
+      "u5",
+      "c2",
+      "c5",
+      "k",
+      "c4",
+      "v"
+     ],
+     "rating": [
+      "l3",
+      "l",
+      "z0",
+      "a",
+      "b",
+      "c",
+      "c2",
+      "c3",
+      "c4",
+      "c5",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "k",
+      "l2",
+      "l4",
+      "m",
+      "m2",
+      "m3",
+      "m4",
+      "n",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "o",
+      "o2",
+      "p",
+      "q",
+      "q2",
+      "q3",
+      "r",
+      "r2",
+      "r3",
+      "r4",
+      "s",
+      "s2",
+      "s3",
+      "t",
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "u",
+      "u2",
+      "u3",
+      "u4",
+      "u5",
+      "v"
+     ],
+     "progress": [
+      "t6",
+      "t5",
+      "t2",
+      "t4",
+      "u3",
+      "b",
+      "c",
+      "c2",
+      "c4",
+      "c5",
+      "j",
+      "k",
+      "u",
+      "z0",
+      "a",
+      "c3",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "l2",
+      "l3",
+      "l4",
+      "m",
+      "m2",
+      "m3",
+      "m4",
+      "n",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "o",
+      "o2",
+      "p",
+      "q",
+      "q2",
+      "q3",
+      "r",
+      "r2",
+      "r3",
+      "r4",
+      "s",
+      "s2",
+      "s3",
+      "t",
+      "t3",
+      "t7",
+      "t8",
+      "u2",
+      "u4",
+      "u5",
+      "v",
+      "l"
+     ],
+     "remaining": [
+      "t6",
+      "u5",
+      "t2",
+      "t4",
+      "t5",
+      "u3",
+      "t3",
+      "t8",
+      "u4",
+      "u2",
+      "t7",
+      "c3",
+      "b",
+      "c",
+      "z0",
+      "a",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "j",
+      "l",
+      "l2",
+      "l3",
+      "l4",
+      "m",
+      "m2",
+      "m3",
+      "m4",
+      "n",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "o",
+      "o2",
+      "p",
+      "q",
+      "q2",
+      "q3",
+      "r",
+      "r2",
+      "r3",
+      "r4",
+      "s",
+      "s2",
+      "s3",
+      "t",
+      "u",
+      "c2",
+      "c5",
+      "k",
+      "c4",
+      "v"
+     ],
+     "episodes": [
+      "t5",
+      "t7",
+      "u2",
+      "t2",
+      "t4",
+      "t6",
+      "t8",
+      "u3",
+      "u4",
+      "u5",
+      "j",
+      "k",
+      "u",
+      "b",
+      "c",
+      "c5",
+      "t3",
+      "c2",
+      "c4",
+      "z0",
+      "a",
+      "c3",
+      "d",
+      "e",
+      "f",
+      "g",
+      "h",
+      "i",
+      "l",
+      "l2",
+      "l3",
+      "l4",
+      "m",
+      "m2",
+      "m3",
+      "m4",
+      "n",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "o",
+      "o2",
+      "p",
+      "q",
+      "q2",
+      "q3",
+      "r",
+      "r2",
+      "r3",
+      "r4",
+      "s",
+      "s2",
+      "s3",
+      "t",
+      "v"
+     ]
+    },
+    "minutes": [
+     {
+      "id": "z0",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "a",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "b",
+      "watched": 96,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "c",
+      "watched": 96,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "c2",
+      "watched": 180,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "c3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "c4",
+      "watched": 24,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "c5",
+      "watched": 72,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "d",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "e",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "f",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "g",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "h",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "i",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "j",
+      "watched": 144,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "k",
+      "watched": 144,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "l",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "l2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "l3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "l4",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "m",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "m2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "m3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "m4",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "n",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "n2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "n3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "n4",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "n5",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "n6",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "o",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "o2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "p",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "q",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "q2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "q3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "r",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "r2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "r3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "r4",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "s",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "s2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "s3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "t",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "t2",
+      "watched": 72,
+      "remaining": {
+       "minutes": 216,
+       "known": true,
+       "remainingCount": 9
+      }
+     },
+     {
+      "id": "t3",
+      "watched": 72,
+      "remaining": {
+       "minutes": 270,
+       "known": false,
+       "remainingCount": 3
+      }
+     },
+     {
+      "id": "t4",
+      "watched": 72,
+      "remaining": {
+       "minutes": 216,
+       "known": true,
+       "remainingCount": 9
+      }
+     },
+     {
+      "id": "t5",
+      "watched": 336,
+      "remaining": {
+       "minutes": 240,
+       "known": true,
+       "remainingCount": 10
+      }
+     },
+     {
+      "id": "t6",
+      "watched": 288,
+      "remaining": {
+       "minutes": 0,
+       "known": true,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "t7",
+      "watched": 0,
+      "remaining": {
+       "minutes": 576,
+       "known": true,
+       "remainingCount": 24
+      }
+     },
+     {
+      "id": "t8",
+      "watched": 0,
+      "remaining": {
+       "minutes": 288,
+       "known": true,
+       "remainingCount": 12
+      }
+     },
+     {
+      "id": "u",
+      "watched": 120,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "u2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 432,
+       "known": true,
+       "remainingCount": 18
+      }
+     },
+     {
+      "id": "u3",
+      "watched": 48,
+      "remaining": {
+       "minutes": 240,
+       "known": true,
+       "remainingCount": 10
+      }
+     },
+     {
+      "id": "u4",
+      "watched": 0,
+      "remaining": {
+       "minutes": 288,
+       "known": true,
+       "remainingCount": 12
+      }
+     },
+     {
+      "id": "u5",
+      "watched": 0,
+      "remaining": {
+       "minutes": 192,
+       "known": true,
+       "remainingCount": 8
+      }
+     },
+     {
+      "id": "v",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "leer",
+    "stats": {
+     "totalSeries": 0,
+     "watchingCount": 0,
+     "laterCount": 0,
+     "pausedCount": 0,
+     "doneCount": 0,
+     "droppedCount": 0,
+     "watchingPercent": 0,
+     "laterPercent": 0,
+     "donePercent": 0,
+     "seenTotal": 0,
+     "knownTotalEpisodes": 0,
+     "knownWatchedEpisodes": 0,
+     "openEpisodesCount": 0,
+     "overallProgressPercent": null,
+     "watchMinutes": 0,
+     "watchTime": {
+      "short": "0 Std.",
+      "long": "0 Stunden"
+     },
+     "totalSeasons": 0,
+     "completedSeasons": 0,
+     "filmCount": 0,
+     "filmsSeen": 0,
+     "ratedCount": 0,
+     "avgRating": null,
+     "ratingDistribution": [
+      {
+       "stars": 5,
+       "count": 0
+      },
+      {
+       "stars": 4,
+       "count": 0
+      },
+      {
+       "stars": 3,
+       "count": 0
+      },
+      {
+       "stars": 2,
+       "count": 0
+      },
+      {
+       "stars": 1,
+       "count": 0
+      }
+     ],
+     "recentItems": []
+    },
+    "sorted": {
+     "recent": [],
+     "title": [],
+     "rating": [],
+     "progress": [],
+     "remaining": [],
+     "episodes": []
+    },
+    "minutes": []
+   },
+   {
+    "name": "fünf",
+    "stats": {
+     "totalSeries": 5,
+     "watchingCount": 5,
+     "laterCount": 0,
+     "pausedCount": 0,
+     "doneCount": 0,
+     "droppedCount": 0,
+     "watchingPercent": 100,
+     "laterPercent": 0,
+     "donePercent": 0,
+     "seenTotal": 10,
+     "knownTotalEpisodes": 0,
+     "knownWatchedEpisodes": 0,
+     "openEpisodesCount": 0,
+     "overallProgressPercent": null,
+     "watchMinutes": 372,
+     "watchTime": {
+      "short": "6.2 Std.",
+      "long": "6 Std., 12 Min."
+     },
+     "totalSeasons": 4,
+     "completedSeasons": 0,
+     "filmCount": 2,
+     "filmsSeen": 2,
+     "ratedCount": 0,
+     "avgRating": null,
+     "ratingDistribution": [
+      {
+       "stars": 5,
+       "count": 0
+      },
+      {
+       "stars": 4,
+       "count": 0
+      },
+      {
+       "stars": 3,
+       "count": 0
+      },
+      {
+       "stars": 2,
+       "count": 0
+      },
+      {
+       "stars": 1,
+       "count": 0
+      }
+     ],
+     "recentItems": [
+      "z0",
+      "a",
+      "b"
+     ]
+    },
+    "sorted": {
+     "recent": [
+      "z0",
+      "a",
+      "b",
+      "c",
+      "c2"
+     ],
+     "title": [
+      "b",
+      "c",
+      "z0",
+      "a",
+      "c2"
+     ],
+     "rating": [
+      "z0",
+      "a",
+      "b",
+      "c",
+      "c2"
+     ],
+     "progress": [
+      "b",
+      "c",
+      "c2",
+      "z0",
+      "a"
+     ],
+     "remaining": [
+      "b",
+      "c",
+      "z0",
+      "a",
+      "c2"
+     ],
+     "episodes": [
+      "b",
+      "c",
+      "c2",
+      "z0",
+      "a"
+     ]
+    },
+    "minutes": [
+     {
+      "id": "z0",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "a",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "b",
+      "watched": 96,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "c",
+      "watched": 96,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "c2",
+      "watched": 180,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "mit Staffeln",
+    "stats": {
+     "totalSeries": 12,
+     "watchingCount": 11,
+     "laterCount": 0,
+     "pausedCount": 0,
+     "doneCount": 1,
+     "droppedCount": 0,
+     "watchingPercent": 92,
+     "laterPercent": 0,
+     "donePercent": 8,
+     "seenTotal": 42,
+     "knownTotalEpisodes": 146,
+     "knownWatchedEpisodes": 34,
+     "openEpisodesCount": 112,
+     "overallProgressPercent": 23,
+     "watchMinutes": 1008,
+     "watchTime": {
+      "short": "16.8 Std.",
+      "long": "16 Std., 48 Min."
+     },
+     "totalSeasons": 15,
+     "completedSeasons": 2,
+     "filmCount": 3,
+     "filmsSeen": 0,
+     "ratedCount": 0,
+     "avgRating": null,
+     "ratingDistribution": [
+      {
+       "stars": 5,
+       "count": 0
+      },
+      {
+       "stars": 4,
+       "count": 0
+      },
+      {
+       "stars": 3,
+       "count": 0
+      },
+      {
+       "stars": 2,
+       "count": 0
+      },
+      {
+       "stars": 1,
+       "count": 0
+      }
+     ],
+     "recentItems": [
+      "t2",
+      "t3",
+      "t4"
+     ]
+    },
+    "sorted": {
+     "recent": [
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "u",
+      "u2",
+      "u3",
+      "u4",
+      "u5"
+     ],
+     "title": [
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "u",
+      "u2",
+      "u3",
+      "u4",
+      "u5"
+     ],
+     "rating": [
+      "t2",
+      "t3",
+      "t4",
+      "t5",
+      "t6",
+      "t7",
+      "t8",
+      "u",
+      "u2",
+      "u3",
+      "u4",
+      "u5"
+     ],
+     "progress": [
+      "t6",
+      "t5",
+      "t2",
+      "t4",
+      "u3",
+      "u",
+      "t3",
+      "t7",
+      "t8",
+      "u2",
+      "u4",
+      "u5"
+     ],
+     "remaining": [
+      "t6",
+      "u5",
+      "t2",
+      "t4",
+      "t5",
+      "u3",
+      "t3",
+      "t8",
+      "u4",
+      "u2",
+      "t7",
+      "u"
+     ],
+     "episodes": [
+      "t5",
+      "t7",
+      "u2",
+      "t2",
+      "t4",
+      "t6",
+      "t8",
+      "u3",
+      "u4",
+      "u5",
+      "u",
+      "t3"
+     ]
+    },
+    "minutes": [
+     {
+      "id": "t2",
+      "watched": 72,
+      "remaining": {
+       "minutes": 216,
+       "known": true,
+       "remainingCount": 9
+      }
+     },
+     {
+      "id": "t3",
+      "watched": 72,
+      "remaining": {
+       "minutes": 270,
+       "known": false,
+       "remainingCount": 3
+      }
+     },
+     {
+      "id": "t4",
+      "watched": 72,
+      "remaining": {
+       "minutes": 216,
+       "known": true,
+       "remainingCount": 9
+      }
+     },
+     {
+      "id": "t5",
+      "watched": 336,
+      "remaining": {
+       "minutes": 240,
+       "known": true,
+       "remainingCount": 10
+      }
+     },
+     {
+      "id": "t6",
+      "watched": 288,
+      "remaining": {
+       "minutes": 0,
+       "known": true,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "t7",
+      "watched": 0,
+      "remaining": {
+       "minutes": 576,
+       "known": true,
+       "remainingCount": 24
+      }
+     },
+     {
+      "id": "t8",
+      "watched": 0,
+      "remaining": {
+       "minutes": 288,
+       "known": true,
+       "remainingCount": 12
+      }
+     },
+     {
+      "id": "u",
+      "watched": 120,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "u2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 432,
+       "known": true,
+       "remainingCount": 18
+      }
+     },
+     {
+      "id": "u3",
+      "watched": 48,
+      "remaining": {
+       "minutes": 240,
+       "known": true,
+       "remainingCount": 10
+      }
+     },
+     {
+      "id": "u4",
+      "watched": 0,
+      "remaining": {
+       "minutes": 288,
+       "known": true,
+       "remainingCount": 12
+      }
+     },
+     {
+      "id": "u5",
+      "watched": 0,
+      "remaining": {
+       "minutes": 192,
+       "known": true,
+       "remainingCount": 8
+      }
+     }
+    ]
+   },
+   {
+    "name": "bewertet",
+    "stats": {
+     "totalSeries": 4,
+     "watchingCount": 4,
+     "laterCount": 0,
+     "pausedCount": 0,
+     "doneCount": 0,
+     "droppedCount": 0,
+     "watchingPercent": 100,
+     "laterPercent": 0,
+     "donePercent": 0,
+     "seenTotal": 0,
+     "knownTotalEpisodes": 0,
+     "knownWatchedEpisodes": 0,
+     "openEpisodesCount": 0,
+     "overallProgressPercent": null,
+     "watchMinutes": 0,
+     "watchTime": {
+      "short": "0 Std.",
+      "long": "0 Stunden"
+     },
+     "totalSeasons": 4,
+     "completedSeasons": 0,
+     "filmCount": 0,
+     "filmsSeen": 0,
+     "ratedCount": 2,
+     "avgRating": "4.0",
+     "ratingDistribution": [
+      {
+       "stars": 5,
+       "count": 1
+      },
+      {
+       "stars": 4,
+       "count": 0
+      },
+      {
+       "stars": 3,
+       "count": 1
+      },
+      {
+       "stars": 2,
+       "count": 0
+      },
+      {
+       "stars": 1,
+       "count": 0
+      }
+     ],
+     "recentItems": [
+      "l2",
+      "l3",
+      "l4"
+     ]
+    },
+    "sorted": {
+     "recent": [
+      "l2",
+      "l3",
+      "l4",
+      "l"
+     ],
+     "title": [
+      "l",
+      "l2",
+      "l3",
+      "l4"
+     ],
+     "rating": [
+      "l3",
+      "l",
+      "l2",
+      "l4"
+     ],
+     "progress": [
+      "l2",
+      "l3",
+      "l4",
+      "l"
+     ],
+     "remaining": [
+      "l",
+      "l2",
+      "l3",
+      "l4"
+     ],
+     "episodes": [
+      "l",
+      "l2",
+      "l3",
+      "l4"
+     ]
+    },
+    "minutes": [
+     {
+      "id": "l",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "l2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "l3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "l4",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     }
+    ]
+   },
+   {
+    "name": "Titel",
+    "stats": {
+     "totalSeries": 30,
+     "watchingCount": 30,
+     "laterCount": 0,
+     "pausedCount": 0,
+     "doneCount": 0,
+     "droppedCount": 0,
+     "watchingPercent": 100,
+     "laterPercent": 0,
+     "donePercent": 0,
+     "seenTotal": 0,
+     "knownTotalEpisodes": 0,
+     "knownWatchedEpisodes": 0,
+     "openEpisodesCount": 0,
+     "overallProgressPercent": null,
+     "watchMinutes": 0,
+     "watchTime": {
+      "short": "0 Std.",
+      "long": "0 Stunden"
+     },
+     "totalSeasons": 30,
+     "completedSeasons": 0,
+     "filmCount": 0,
+     "filmsSeen": 0,
+     "ratedCount": 0,
+     "avgRating": null,
+     "ratingDistribution": [
+      {
+       "stars": 5,
+       "count": 0
+      },
+      {
+       "stars": 4,
+       "count": 0
+      },
+      {
+       "stars": 3,
+       "count": 0
+      },
+      {
+       "stars": 2,
+       "count": 0
+      },
+      {
+       "stars": 1,
+       "count": 0
+      }
+     ],
+     "recentItems": [
+      "ti29",
+      "ti28",
+      "ti27"
+     ]
+    },
+    "sorted": {
+     "recent": [
+      "ti29",
+      "ti28",
+      "ti27",
+      "ti26",
+      "ti25",
+      "ti24",
+      "ti23",
+      "ti22",
+      "ti21",
+      "ti20",
+      "ti19",
+      "ti18",
+      "ti17",
+      "ti16",
+      "ti15",
+      "ti14",
+      "ti13",
+      "ti12",
+      "ti11",
+      "ti10",
+      "ti9",
+      "ti8",
+      "ti7",
+      "ti6",
+      "ti5",
+      "ti4",
+      "ti3",
+      "ti2",
+      "ti1",
+      "ti0"
+     ],
+     "title": [
+      "ti13",
+      "ti14",
+      "ti11",
+      "ti23",
+      "ti12",
+      "ti24",
+      "ti1",
+      "ti2",
+      "ti5",
+      "ti0",
+      "ti20",
+      "ti21",
+      "ti27",
+      "ti28",
+      "ti29",
+      "ti26",
+      "ti25",
+      "ti18",
+      "ti15",
+      "ti16",
+      "ti17",
+      "ti19",
+      "ti8",
+      "ti9",
+      "ti10",
+      "ti6",
+      "ti7",
+      "ti3",
+      "ti4",
+      "ti22"
+     ],
+     "rating": [
+      "ti29",
+      "ti28",
+      "ti27",
+      "ti26",
+      "ti25",
+      "ti24",
+      "ti23",
+      "ti22",
+      "ti21",
+      "ti20",
+      "ti19",
+      "ti18",
+      "ti17",
+      "ti16",
+      "ti15",
+      "ti14",
+      "ti13",
+      "ti12",
+      "ti11",
+      "ti10",
+      "ti9",
+      "ti8",
+      "ti7",
+      "ti6",
+      "ti5",
+      "ti4",
+      "ti3",
+      "ti2",
+      "ti1",
+      "ti0"
+     ],
+     "progress": [
+      "ti29",
+      "ti28",
+      "ti27",
+      "ti26",
+      "ti25",
+      "ti24",
+      "ti23",
+      "ti22",
+      "ti21",
+      "ti20",
+      "ti19",
+      "ti18",
+      "ti17",
+      "ti16",
+      "ti15",
+      "ti14",
+      "ti13",
+      "ti12",
+      "ti11",
+      "ti10",
+      "ti9",
+      "ti8",
+      "ti7",
+      "ti6",
+      "ti5",
+      "ti4",
+      "ti3",
+      "ti2",
+      "ti1",
+      "ti0"
+     ],
+     "remaining": [
+      "ti13",
+      "ti14",
+      "ti11",
+      "ti23",
+      "ti12",
+      "ti24",
+      "ti1",
+      "ti2",
+      "ti5",
+      "ti0",
+      "ti20",
+      "ti21",
+      "ti27",
+      "ti28",
+      "ti29",
+      "ti26",
+      "ti25",
+      "ti18",
+      "ti15",
+      "ti16",
+      "ti17",
+      "ti19",
+      "ti8",
+      "ti9",
+      "ti10",
+      "ti6",
+      "ti7",
+      "ti3",
+      "ti4",
+      "ti22"
+     ],
+     "episodes": [
+      "ti0",
+      "ti1",
+      "ti2",
+      "ti3",
+      "ti4",
+      "ti5",
+      "ti6",
+      "ti7",
+      "ti8",
+      "ti9",
+      "ti10",
+      "ti11",
+      "ti12",
+      "ti13",
+      "ti14",
+      "ti15",
+      "ti16",
+      "ti17",
+      "ti18",
+      "ti19",
+      "ti20",
+      "ti21",
+      "ti22",
+      "ti23",
+      "ti24",
+      "ti25",
+      "ti26",
+      "ti27",
+      "ti28",
+      "ti29"
+     ]
+    },
+    "minutes": [
+     {
+      "id": "ti0",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti1",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti2",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti3",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti4",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti5",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti6",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti7",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti8",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti9",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti10",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti11",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti12",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti13",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti14",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti15",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti16",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti17",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti18",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti19",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti20",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti21",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti22",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti23",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti24",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti25",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti26",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti27",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti28",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     },
+     {
+      "id": "ti29",
+      "watched": 0,
+      "remaining": {
+       "minutes": 0,
+       "known": false,
+       "remainingCount": 0
+      }
+     }
+    ]
+   }
+  ],
+  "titled": [
+   "banana",
+   "Äpfel",
+   "apfel",
+   "Zebra",
+   "zebra",
+   "Ärger",
+   "Über",
+   "uber",
+   "ß-Test",
+   "Strasse",
+   "Straße",
+   "10 Dinge",
+   "2 Fast",
+   "  Leer",
+   "(Klammer)",
+   "One Piece",
+   "one-piece",
+   "Os",
+   "Öl",
+   "Oz",
+   "éclair",
+   "eclair",
+   "Zoë",
+   "100",
+   "9",
+   "Naruto: Shippuden",
+   "naruto shippuden",
+   "Frieren",
+   "FRIEREN",
+   "Leer?"
+  ],
+  "minutes": [
+   {
+    "m": -5,
+    "t": {
+     "short": "0 Std.",
+     "long": "0 Stunden"
+    }
+   },
+   {
+    "m": 0,
+    "t": {
+     "short": "0 Std.",
+     "long": "0 Stunden"
+    }
+   },
+   {
+    "m": 1,
+    "t": {
+     "short": "1 Min.",
+     "long": "1 Min."
+    }
+   },
+   {
+    "m": 7,
+    "t": {
+     "short": "7 Min.",
+     "long": "7 Min."
+    }
+   },
+   {
+    "m": 45,
+    "t": {
+     "short": "45 Min.",
+     "long": "45 Min."
+    }
+   },
+   {
+    "m": 59,
+    "t": {
+     "short": "1 Std.",
+     "long": "59 Min."
+    }
+   },
+   {
+    "m": 60,
+    "t": {
+     "short": "1 Std.",
+     "long": "1 Std."
+    }
+   },
+   {
+    "m": 61,
+    "t": {
+     "short": "1 Std.",
+     "long": "1 Std., 1 Min."
+    }
+   },
+   {
+    "m": 90,
+    "t": {
+     "short": "1.5 Std.",
+     "long": "1 Std., 30 Min."
+    }
+   },
+   {
+    "m": 119,
+    "t": {
+     "short": "2 Std.",
+     "long": "1 Std., 59 Min."
+    }
+   },
+   {
+    "m": 120,
+    "t": {
+     "short": "2 Std.",
+     "long": "2 Std."
+    }
+   },
+   {
+    "m": 600,
+    "t": {
+     "short": "10 Std.",
+     "long": "10 Std."
+    }
+   },
+   {
+    "m": 1439,
+    "t": {
+     "short": "24 Std.",
+     "long": "23 Std., 59 Min."
+    }
+   },
+   {
+    "m": 1440,
+    "t": {
+     "short": "24 Std.",
+     "long": "1 Tag"
+    }
+   },
+   {
+    "m": 1441,
+    "t": {
+     "short": "24 Std.",
+     "long": "1 Tag, 1 Min."
+    }
+   },
+   {
+    "m": 2880,
+    "t": {
+     "short": "48 Std.",
+     "long": "2 Tage"
+    }
+   },
+   {
+    "m": 3000,
+    "t": {
+     "short": "50 Std.",
+     "long": "2 Tage, 2 Std."
+    }
+   },
+   {
+    "m": 12345,
+    "t": {
+     "short": "205.8 Std.",
+     "long": "8 Tage, 13 Std., 45 Min."
+    }
+   },
+   {
+    "m": 123456,
+    "t": {
+     "short": "2'057.6 Std.",
+     "long": "85 Tage, 17 Std., 36 Min."
+    }
+   },
+   {
+    "m": 1234567,
+    "t": {
+     "short": "20'576.1 Std.",
+     "long": "857 Tage, 8 Std., 7 Min."
+    }
+   },
+   {
+    "m": 5000000,
+    "t": {
+     "short": "83'333.3 Std.",
+     "long": "3472 Tage, 5 Std., 20 Min."
+    }
+   }
+  ],
+  "durations": [
+   {
+    "id": "z0",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "z0",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "z0",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "z0",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "a",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "a",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "a",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "a",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "b",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "b",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "b",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "b",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "c",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "c",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "c",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "c",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "c2",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "c2",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "c2",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "c2",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "c3",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "c3",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "c3",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "c3",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "c4",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "c4",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "c4",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "c4",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "c5",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "c5",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "c5",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "c5",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "d",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "d",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "d",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "d",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "e",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "e",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "e",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "e",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "f",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "f",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "f",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "f",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "g",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "g",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "g",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "g",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "h",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "h",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "h",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "h",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "i",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "i",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "i",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "i",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "j",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "j",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "j",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "j",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "k",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "k",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "k",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "k",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "l",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "l",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "l",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "l",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "l2",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "l2",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "l2",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "l2",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "l3",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "l3",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "l3",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "l3",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   },
+   {
+    "id": "l4",
+    "s": 0,
+    "e": 1,
+    "minutes": 90
+   },
+   {
+    "id": "l4",
+    "s": 1,
+    "e": 1,
+    "minutes": 24
+   },
+   {
+    "id": "l4",
+    "s": 1,
+    "e": 2,
+    "minutes": 24
+   },
+   {
+    "id": "l4",
+    "s": 2,
+    "e": 3,
+    "minutes": 24
+   }
+  ],
+  "plans": [
+   {
+    "n": 0,
+    "m": 24,
+    "plan": {
+     "episodesRemaining": 0,
+     "watchTime": {
+      "short": "0 Std.",
+      "long": "0 Stunden"
+     }
+    }
+   },
+   {
+    "n": 1,
+    "m": 24,
+    "plan": {
+     "episodesRemaining": 1,
+     "watchTime": {
+      "short": "24 Min.",
+      "long": "24 Min."
+     }
+    }
+   },
+   {
+    "n": 5,
+    "m": 24,
+    "plan": {
+     "episodesRemaining": 5,
+     "watchTime": {
+      "short": "2 Std.",
+      "long": "2 Std."
+     }
+    }
+   },
+   {
+    "n": 13,
+    "m": 45,
+    "plan": {
+     "episodesRemaining": 13,
+     "watchTime": {
+      "short": "9.8 Std.",
+      "long": "9 Std., 45 Min."
+     }
+    }
+   },
+   {
+    "n": 100,
+    "m": 24,
+    "plan": {
+     "episodesRemaining": 100,
+     "watchTime": {
+      "short": "40 Std.",
+      "long": "1 Tag, 16 Std."
+     }
+    }
+   },
+   {
+    "n": 7,
+    "m": 24,
+    "plan": {
+     "episodesRemaining": 7,
+     "watchTime": {
+      "short": "5.6 Std.",
+      "long": "5 Std., 33 Min."
+     }
+    }
+   }
+  ],
+  "dates": [
+   {
+    "y": 2026,
+    "m": 1,
+    "d": 1,
+    "label": "Do., 1. Jan."
+   },
+   {
+    "y": 2026,
+    "m": 1,
+    "d": 7,
+    "label": "Mi., 7. Jan."
+   },
+   {
+    "y": 2026,
+    "m": 1,
+    "d": 13,
+    "label": "Di., 13. Jan."
+   },
+   {
+    "y": 2026,
+    "m": 1,
+    "d": 19,
+    "label": "Mo., 19. Jan."
+   },
+   {
+    "y": 2026,
+    "m": 1,
+    "d": 25,
+    "label": "So., 25. Jan."
+   },
+   {
+    "y": 2026,
+    "m": 1,
+    "d": 31,
+    "label": "Sa., 31. Jan."
+   },
+   {
+    "y": 2026,
+    "m": 2,
+    "d": 6,
+    "label": "Fr., 6. Feb."
+   },
+   {
+    "y": 2026,
+    "m": 2,
+    "d": 12,
+    "label": "Do., 12. Feb."
+   },
+   {
+    "y": 2026,
+    "m": 2,
+    "d": 18,
+    "label": "Mi., 18. Feb."
+   },
+   {
+    "y": 2026,
+    "m": 2,
+    "d": 24,
+    "label": "Di., 24. Feb."
+   },
+   {
+    "y": 2026,
+    "m": 3,
+    "d": 2,
+    "label": "Mo., 2. März"
+   },
+   {
+    "y": 2026,
+    "m": 3,
+    "d": 8,
+    "label": "So., 8. März"
+   },
+   {
+    "y": 2026,
+    "m": 3,
+    "d": 14,
+    "label": "Sa., 14. März"
+   },
+   {
+    "y": 2026,
+    "m": 3,
+    "d": 20,
+    "label": "Fr., 20. März"
+   },
+   {
+    "y": 2026,
+    "m": 3,
+    "d": 26,
+    "label": "Do., 26. März"
+   },
+   {
+    "y": 2026,
+    "m": 4,
+    "d": 1,
+    "label": "Mi., 1. Apr."
+   },
+   {
+    "y": 2026,
+    "m": 4,
+    "d": 7,
+    "label": "Di., 7. Apr."
+   },
+   {
+    "y": 2026,
+    "m": 4,
+    "d": 13,
+    "label": "Mo., 13. Apr."
+   },
+   {
+    "y": 2026,
+    "m": 4,
+    "d": 19,
+    "label": "So., 19. Apr."
+   },
+   {
+    "y": 2026,
+    "m": 4,
+    "d": 25,
+    "label": "Sa., 25. Apr."
+   },
+   {
+    "y": 2026,
+    "m": 5,
+    "d": 1,
+    "label": "Fr., 1. Mai"
+   },
+   {
+    "y": 2026,
+    "m": 5,
+    "d": 7,
+    "label": "Do., 7. Mai"
+   },
+   {
+    "y": 2026,
+    "m": 5,
+    "d": 13,
+    "label": "Mi., 13. Mai"
+   },
+   {
+    "y": 2026,
+    "m": 5,
+    "d": 19,
+    "label": "Di., 19. Mai"
+   },
+   {
+    "y": 2026,
+    "m": 5,
+    "d": 25,
+    "label": "Mo., 25. Mai"
+   },
+   {
+    "y": 2026,
+    "m": 5,
+    "d": 31,
+    "label": "So., 31. Mai"
+   },
+   {
+    "y": 2026,
+    "m": 6,
+    "d": 6,
+    "label": "Sa., 6. Juni"
+   },
+   {
+    "y": 2026,
+    "m": 6,
+    "d": 12,
+    "label": "Fr., 12. Juni"
+   },
+   {
+    "y": 2026,
+    "m": 6,
+    "d": 18,
+    "label": "Do., 18. Juni"
+   },
+   {
+    "y": 2026,
+    "m": 6,
+    "d": 24,
+    "label": "Mi., 24. Juni"
+   },
+   {
+    "y": 2026,
+    "m": 6,
+    "d": 30,
+    "label": "Di., 30. Juni"
+   },
+   {
+    "y": 2026,
+    "m": 7,
+    "d": 6,
+    "label": "Mo., 6. Juli"
+   },
+   {
+    "y": 2026,
+    "m": 7,
+    "d": 12,
+    "label": "So., 12. Juli"
+   },
+   {
+    "y": 2026,
+    "m": 7,
+    "d": 18,
+    "label": "Sa., 18. Juli"
+   },
+   {
+    "y": 2026,
+    "m": 7,
+    "d": 24,
+    "label": "Fr., 24. Juli"
+   },
+   {
+    "y": 2026,
+    "m": 7,
+    "d": 30,
+    "label": "Do., 30. Juli"
+   },
+   {
+    "y": 2026,
+    "m": 8,
+    "d": 5,
+    "label": "Mi., 5. Aug."
+   },
+   {
+    "y": 2026,
+    "m": 8,
+    "d": 11,
+    "label": "Di., 11. Aug."
+   },
+   {
+    "y": 2026,
+    "m": 8,
+    "d": 17,
+    "label": "Mo., 17. Aug."
+   },
+   {
+    "y": 2026,
+    "m": 8,
+    "d": 23,
+    "label": "So., 23. Aug."
+   },
+   {
+    "y": 2026,
+    "m": 8,
+    "d": 29,
+    "label": "Sa., 29. Aug."
+   },
+   {
+    "y": 2026,
+    "m": 9,
+    "d": 4,
+    "label": "Fr., 4. Sept."
+   },
+   {
+    "y": 2026,
+    "m": 9,
+    "d": 10,
+    "label": "Do., 10. Sept."
+   },
+   {
+    "y": 2026,
+    "m": 9,
+    "d": 16,
+    "label": "Mi., 16. Sept."
+   },
+   {
+    "y": 2026,
+    "m": 9,
+    "d": 22,
+    "label": "Di., 22. Sept."
+   },
+   {
+    "y": 2026,
+    "m": 9,
+    "d": 28,
+    "label": "Mo., 28. Sept."
+   },
+   {
+    "y": 2026,
+    "m": 10,
+    "d": 4,
+    "label": "So., 4. Okt."
+   },
+   {
+    "y": 2026,
+    "m": 10,
+    "d": 10,
+    "label": "Sa., 10. Okt."
+   },
+   {
+    "y": 2026,
+    "m": 10,
+    "d": 16,
+    "label": "Fr., 16. Okt."
+   },
+   {
+    "y": 2026,
+    "m": 10,
+    "d": 22,
+    "label": "Do., 22. Okt."
+   },
+   {
+    "y": 2026,
+    "m": 10,
+    "d": 28,
+    "label": "Mi., 28. Okt."
+   },
+   {
+    "y": 2026,
+    "m": 11,
+    "d": 3,
+    "label": "Di., 3. Nov."
+   },
+   {
+    "y": 2026,
+    "m": 11,
+    "d": 9,
+    "label": "Mo., 9. Nov."
+   },
+   {
+    "y": 2026,
+    "m": 11,
+    "d": 15,
+    "label": "So., 15. Nov."
+   },
+   {
+    "y": 2026,
+    "m": 11,
+    "d": 21,
+    "label": "Sa., 21. Nov."
+   },
+   {
+    "y": 2026,
+    "m": 11,
+    "d": 27,
+    "label": "Fr., 27. Nov."
+   },
+   {
+    "y": 2026,
+    "m": 12,
+    "d": 3,
+    "label": "Do., 3. Dez."
+   },
+   {
+    "y": 2026,
+    "m": 12,
+    "d": 9,
+    "label": "Mi., 9. Dez."
+   },
+   {
+    "y": 2026,
+    "m": 12,
+    "d": 15,
+    "label": "Di., 15. Dez."
+   },
+   {
+    "y": 2026,
+    "m": 12,
+    "d": 21,
+    "label": "Mo., 21. Dez."
+   }
+  ]
+ },
  "sqlite": {
   "items": [
    {

@@ -14,9 +14,15 @@ import { deserializeSondraSqlite, serializeSondraSqlite } from '../src/lib/sqlit
 import { deriveLinkTitle, parseLinkEpisodeInfo } from '../src/lib/download'
 import {
   adoptRemovals,
+  calculateBingePlan,
+  calculateMerklisteStats,
   caughtUp,
   createMerkItem,
+  durationOfEpisode,
+  formatWatchMinutes,
   itemProgress,
+  itemRemainingMinutes,
+  itemWatchedMinutes,
   markRange,
   mergeMerkliste,
   mergeShared,
@@ -29,6 +35,7 @@ import {
   seasonsOf,
   settle,
   sharedKey,
+  sortMerkItems,
   splitSeason,
   storedParts,
   takeShared,
@@ -274,7 +281,43 @@ const sqliteBytes = serializeSondraSqlite({
 writeFileSync(`${outDir}/web.sqlite`, sqliteBytes)
 const sqlite = deserializeSondraSqlite(sqliteBytes)
 
+/* Statistics, sorting, the plan ---------------------------------------------------------------- */
+
+const all = readCases.map((c) => c.item)
+const titles = [
+  'banana', 'Äpfel', 'apfel', 'Zebra', 'zebra', 'Ärger', 'Über', 'uber', 'ß-Test', 'Strasse', 'Straße', '10 Dinge', '2 Fast', '  Leer', '(Klammer)',
+  'One Piece', 'one-piece', 'Os', 'Öl', 'Oz', 'éclair', 'eclair', 'Zoë', '100', '9', 'Naruto: Shippuden', 'naruto shippuden', 'Frieren', 'FRIEREN', '',
+]
+const titled = titles.map((title, i) => mk({ id: `ti${i}`, title: title || 'Leer?', updatedAt: T + i }))
+const sorts = ['recent', 'title', 'rating', 'progress', 'remaining', 'episodes'] as const
+const subsets: [string, SavedLinkItem[]][] = [
+  ['alle', all],
+  ['leer', []],
+  ['fünf', all.slice(0, 5)],
+  ['mit Staffeln', all.filter((i) => i.seasons && i.seasons.length > 0)],
+  ['bewertet', all.filter((i) => typeof i.rating === 'number')],
+  ['Titel', titled],
+]
+const statCases = subsets.map(([name, list]) => {
+  const stats = calculateMerklisteStats(list)
+  return {
+    name,
+    stats: { ...stats, recentItems: stats.recentItems.map((i) => i.id) },
+    sorted: Object.fromEntries(sorts.map((by) => [by, sortMerkItems(list, by).map((i) => i.id)])),
+    minutes: list.map((i) => ({ id: i.id, watched: itemWatchedMinutes(i), remaining: itemRemainingMinutes(i) })),
+  }
+})
+const minuteCases = [-5, 0, 1, 7, 45, 59, 60, 61, 90, 119, 120, 600, 1439, 1440, 1441, 2880, 3000, 12345, 123456, 1_234_567, 5_000_000]
+const durationCases = all.slice(0, 20).flatMap((item) => [[0, 1], [1, 1], [1, 2], [2, 3]].map(([s, e]) => ({ id: item.id, s, e, minutes: durationOfEpisode(item, s, e) })))
+const plans = [[0, 24], [1, 24], [5, 24], [13, 45], [100, 24]].map(([n, m]) => ({ n, m, plan: (({ episodesRemaining, watchTime }) => ({ episodesRemaining, watchTime }))(calculateBingePlan(n, m)) }))
+  .concat([{ n: 7, m: 24, plan: (({ episodesRemaining, watchTime }) => ({ episodesRemaining, watchTime }))(calculateBingePlan(7, 24, 333)) }])
+const dateLabels = Array.from({ length: 60 }, (_, i) => {
+  const d = new Date(2026, 0, 1 + i * 6)
+  return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate(), label: d.toLocaleDateString('de-CH', { weekday: 'short', day: 'numeric', month: 'short' }) }
+})
+
 const out = {
+  stats: { cases: statCases, titled: titled.map((i) => i.title), minutes: minuteCases.map((m) => ({ m, t: formatWatchMinutes(m) })), durations: durationCases, plans, dates: dateLabels },
   sqlite,
   urls: urls.map((url) => ({ url, info: parseLinkEpisodeInfo(url), title: deriveLinkTitle(url) })),
   read: readCases,
