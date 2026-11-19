@@ -633,3 +633,26 @@ fn a_received_list_is_set_beside_the_own_and_what_is_new_is_taken(cx: &mut TestA
     let on_disk = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
     assert!(on_disk.items.iter().any(|i| i.title == "Cowboy Bebop"));
 }
+
+#[gpui::test]
+fn one_series_is_recommended_from_its_own_page_whatever_its_stand(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    // Dark is finished: the usual choice (Am Schauen) would leave it out.
+    w.press(Role::ListItem, "Dark");
+    w.press(Role::Button, "Empfehlen");
+    assert!(w.tree().find(Role::Dialog, "Serie empfehlen").is_some());
+    assert!(w.tree().find(Role::Button, "Am Schauen mitnehmen, 1 Serien").is_none(), "no choice of stands for one series");
+    let (links, text) = w.cx.read_entity(&w.shell, |s, _| s.share_outputs());
+    let list = sondra_merk::share::decode_share(sondra_merk::share::shared_from_hash(&links[0][links[0].find('#').unwrap()..]).unwrap()).unwrap();
+    assert_eq!(list.items.len(), 1);
+    assert_eq!(list.items[0].title, "Dark");
+    assert!(!text.contains("Frieren"));
+    // The list's own „Teilen …“ afterwards is the whole choice again.
+    w.press(Role::Button, "Schliessen");
+    w.press(Role::Button, "Zurück zur Merkliste");
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Teilen …");
+    assert!(w.tree().find(Role::Dialog, "Merkliste teilen").is_some());
+    assert!(w.tree().find(Role::Button, "Am Schauen mitnehmen, 1 Serien").is_some());
+}

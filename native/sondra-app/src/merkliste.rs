@@ -587,6 +587,7 @@ impl Shell {
                 items.push(ui.menu_item("teilen-oeffnen", "Teilen …", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {
                     m.share.open = true;
                     m.share.said = None;
+                    m.share.only = None;
                     m.more = false;
                 })).into_any_element());
             }
@@ -904,6 +905,19 @@ impl Shell {
                 Self::merk_do(&me, app, move |m| m.advance(&id))
             }));
         }
+        actions = actions.child({
+            let me = me.clone();
+            let id = item.id.clone();
+            ui.button("serie-empfehlen", "Empfehlen").on_click(move |_, app| {
+                let id = id.clone();
+                Self::merk_do(&me, app, move |m| {
+                    m.share.open = true;
+                    m.share.said = None;
+                    m.share.only = Some(id);
+                    m.share.part = 0;
+                })
+            })
+        });
         actions = actions.child({
             let me = me.clone();
             let id = item.id.clone();

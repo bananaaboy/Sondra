@@ -28,11 +28,13 @@ pub struct ShareState {
     pub part: usize,
     /// What the last copy or save said.
     pub said: Option<String>,
+    /// „Empfehlen“ on a series' page: only this one (by id) goes, whatever its stand.
+    pub only: Option<String>,
 }
 
 impl Default for ShareState {
     fn default() -> Self {
-        ShareState { open: false, stands: BTreeSet::from([0]), progress: true, qr: false, part: 0, said: None }
+        ShareState { open: false, stands: BTreeSet::from([0]), progress: true, qr: false, part: 0, said: None, only: None }
     }
 }
 
@@ -42,6 +44,9 @@ fn stand_index(status: Status) -> u8 {
 
 /// The entries the choices take in.
 fn chosen<'a>(items: &'a [Item], state: &ShareState) -> Vec<Item> {
+    if let Some(id) = &state.only {
+        return items.iter().filter(|i| &i.id == id).cloned().collect();
+    }
     items.iter().filter(|i| state.stands.contains(&stand_index(i.status))).cloned().collect()
 }
 
@@ -100,7 +105,11 @@ impl Shell {
         let n = chosen(&self.merk.items, s).len();
         let mut body = div().flex().flex_col().gap(px(14.));
         body = body.child(ui.prose("Die Liste steht im Link selbst: es wird nichts hochgeladen, und wer den Link hat, sieht sie. Adressen der Folgen und Notizen gehen nie mit."));
-        body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.subheading("Was soll mit?")).child(pills).child(div().flex().child(progress)));
+        if s.only.is_some() {
+            body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.subheading("Diese Serie")).child(div().flex().child(progress)));
+        } else {
+            body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.subheading("Was soll mit?")).child(pills).child(div().flex().child(progress)));
+        }
         if n == 0 {
             body = body.child(ui.hint("Wählen Sie mindestens einen Stand."));
         } else if links.is_empty() {
@@ -177,7 +186,7 @@ impl Shell {
             })).into_any_element());
         }
         let (close, away) = (me.clone(), me.clone());
-        let mut dialog = ui.dialog("teilen-fenster", "Merkliste teilen").width(620.).child(body);
+        let mut dialog = ui.dialog("teilen-fenster", if s.only.is_some() { "Serie empfehlen" } else { "Merkliste teilen" }).width(620.).child(body);
         for a in actions {
             dialog = dialog.action(a);
         }
