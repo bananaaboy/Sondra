@@ -10,6 +10,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { buildConvertArgs, DEFAULT_CONVERT, OUTPUT_FORMATS, rateFor, findFormat, type ConvertSettings } from '../src/lib/convert'
 import { BUILT_IN_PRESETS, presetFor } from '../src/lib/convertPresets'
 import { buildVideoJob, buildAudioExtraction, buildFrameGrab, buildAudioReplacement, DEFAULT_VIDEO_OPS, type VideoOps } from '../src/lib/video'
+import { DEFAULT_CHOP, describeMethod, planChop, type ChopSettings } from '../src/lib/chop'
 import { mixWithDucking, DEFAULT_DUCK } from '../src/lib/duck'
 import { applyNormalization, DEFAULT_NORMALIZATION, measureLoudness } from '../src/lib/loudness'
 import { istft, magnitudeOf, stft } from '../src/lib/fft'
@@ -537,4 +538,59 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   const grabs = [0, 1.2345, 59.9996].map((t) => ({ at: t, ...buildFrameGrab('in.mp4', t) }))
   writeFileSync(`${outDir}/video.json`, `${JSON.stringify({ jobs, extraction, grabs, replacement: buildAudioReplacement('v.mp4', 'a.wav') }, null, 1)}\n`)
   console.log(`Video: ${jobs.length} Befehle`)
+}
+
+
+/* -- Zerschneiden: wo geschnitten wird ---------------------------------------------------------------- */
+
+{
+  const sr = 22050
+  // A little drum break from an integer generator: a decaying noise burst on each hit (with a tone under
+  // some of them), pauses between phrases, and a long quiet part in the middle.
+  const seconds = 9
+  const out = new Float32Array(sr * seconds)
+  let state = 99
+  const noise = () => {
+    state = (Math.imul(state, 1103515245) + 12345) >>> 0
+    return ((state >>> 8) / 2 ** 24) * 2 - 1
+  }
+  const hitsAt = [0.2, 0.7, 1.15, 1.6, 2.05, 2.5, 3.0, 3.5, 6.0, 6.5, 6.95, 7.4, 8.1, 8.5]
+  hitsAt.forEach((t, k) => {
+    const from = Math.round(t * sr)
+    for (let i = 0; i < 0.3 * sr && from + i < out.length; i += 1) {
+      const decay = Math.exp(-i / (0.06 * sr))
+      out[from + i] += (0.7 - 0.05 * (k % 3)) * decay * (noise() * 0.6 + (k % 2 === 0 ? 0.4 * Math.sin((2 * Math.PI * (110 + 40 * (k % 4)) * i) / sr) : 0))
+    }
+  })
+  for (let i = 0; i < out.length; i += 1) out[i] += 0.0005 * noise()
+  const audio = { channels: [out], sampleRate: sr }
+  const base: ChopSettings = { ...DEFAULT_CHOP }
+  const cases: { name: string; settings: Partial<ChopSettings>; range?: { start: number; end: number } | null; tempoOffsetSeconds?: number }[] = [
+    { name: 'anschläge', settings: {} },
+    { name: 'anschläge-empfindlich', settings: { sensitivity: 0.7, minGapMs: 120 } },
+    { name: 'anschläge-streng', settings: { sensitivity: 2.6 } },
+    { name: 'anschläge-vorlauf', settings: { preRollMs: 25, snap: false } },
+    { name: 'anschläge-bereich', settings: {}, range: { start: 2, end: 7 } },
+    { name: 'auto-acht', settings: { method: 'auto', count: 8 } },
+    { name: 'auto-vier-streng', settings: { method: 'auto', count: 4, sensitivity: 2 } },
+    { name: 'raster', settings: { method: 'grid', bpm: 128, beatsPerSlice: 1 }, tempoOffsetSeconds: 0.2 },
+    { name: 'raster-triole', settings: { method: 'grid', bpm: 100, beatsPerSlice: 2 / 3, gridOffsetMs: 40 }, tempoOffsetSeconds: 0.05 },
+    { name: 'raster-bereich', settings: { method: 'grid', bpm: 90, beatsPerSlice: 4 }, range: { start: 1, end: 6 } },
+    { name: 'gleich', settings: { method: 'even', count: 7 } },
+    { name: 'gleich-bereich', settings: { method: 'even', count: 3, snap: false }, range: { start: 0.5, end: 4.5 } },
+    { name: 'länge', settings: { method: 'length', lengthMs: 400 } },
+    { name: 'länge-kurz', settings: { method: 'length', lengthMs: 30, minLengthMs: 50 } },
+    { name: 'stille-ohne', settings: { method: 'silence', silenceDb: -40, silenceMs: 150, dropSilence: true } },
+    { name: 'stille-ohne-vorlauf', settings: { method: 'silence', silenceDb: -40, silenceMs: 150, dropSilence: true, preRollMs: 20 } },
+    { name: 'stille-mit', settings: { method: 'silence', silenceDb: -40, silenceMs: 150, dropSilence: false } },
+    { name: 'stille-bereich', settings: { method: 'silence', silenceDb: -35, silenceMs: 80, dropSilence: true }, range: { start: 1, end: 7.5 } },
+    { name: 'leer-bereich', settings: {}, range: { start: 4, end: 4.005 } },
+  ]
+  const plans = cases.map((c) => {
+    const settings = { ...base, ...c.settings } as ChopSettings
+    const plan = planChop(audio, settings, { range: c.range ?? null, tempoOffsetSeconds: c.tempoOffsetSeconds ?? 0 })
+    return { name: c.name, settings, range: c.range ?? null, tempoOffsetSeconds: c.tempoOffsetSeconds ?? 0, slices: plan.slices, capped: plan.capped, words: describeMethod(settings) }
+  })
+  writeFileSync(`${outDir}/chop.json`, `${JSON.stringify({ rate: sr, seconds, hitsAt, plans }, null, 1)}\n`)
+  console.log(`Zerschneiden: ${plans.map((p) => `${p.name} ${p.slices.length}`).join(', ')}`)
 }

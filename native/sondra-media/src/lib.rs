@@ -9,6 +9,7 @@
 //! * [`fft`] — FFT and short-time transform (`src/lib/fft.ts`), the front end of the spectral tools.
 //! * [`audio`] — the planar float audio the tools hold.
 //! * [`onsets`], [`tempo`] — spectral-flux onsets, tempo by autocorrelation, beat grids (`onsets.ts`, `tempo.ts`).
+//! * [`chop`] — where to cut a sound: hits, grid, equal parts, silence (`chop.ts`).
 //! * [`chroma`], [`key`], [`pitch`], [`midi`] — pitch classes, key and chords, YIN notes, the MIDI file.
 //! * [`intro`] — the opening of a series, found by ear (`introPrint.ts`).
 //! * [`loudness`] — EBU R128 / BS.1770: measuring and moving to a target (`src/lib/loudness.ts`).
@@ -22,6 +23,7 @@
 //! complexity 4, WebM as VP8), because the files must stay the same ones the web app makes.
 
 pub mod audio;
+pub mod chop;
 pub mod chroma;
 pub mod convert;
 pub mod duck;
