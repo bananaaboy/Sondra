@@ -504,9 +504,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   und **Handy spiegeln** (`sondra-mirror`: ADB, scrcpy-Protokoll, Schlüssel, Steuernachrichten
   und Tastaturberichte Byte für Byte gegen die Bibliotheken der Website; Bild und Ton über FFmpeg;
   USB über `nusb`), außerdem „Liste empfangen“, „Was ist neu“, schwebende Karten,
-  Einzel-Instanz, Gong und Wachhalten beim Laden. **Noch nicht:** Tray, Benachrichtigungen,
-  Bildschirm aufnehmen, die Zeitleiste des Video-Editors, die Klavierrolle und das Ziehen der
-  Schnitte, Tonhöhe und Tempo im Ton-Editor, Anytype, Playlists, Setup/Store, Updates,
+  Einzel-Instanz, Gong und Wachhalten beim Laden. **Noch nicht:** Tray, Benachrichtigungen
+  des Systems (die Karte „Neue Folge“ im Fenster gibt es: `new_episodes.rs`), die Zeitleiste des
+  Video-Editors, die Klavierrolle und das Ziehen der Schnitte, Anytype, Setup/Store, Updates,
   Datenübernahme; Player-Einstellungen, Größen, Bild-in-Bild; ein eigenes Fenster für das Handy.
   Kein Fenster hat ein echter Mensch gesehen; die Bildschirmfotos der CI sind die einzige Sicht.
   **yt-dlp** (19.11.2026, `sondra-download::ytdlp`): Adressen ohne eigene Quelle laufen über yt-dlp, wenn es da ist

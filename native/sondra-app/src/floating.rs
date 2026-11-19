@@ -91,6 +91,34 @@ impl Shell {
             }
         }
 
+        // A new episode of a series on the list.
+        for note in &self.news_rounds.notes {
+            let (see, close) = (me.clone(), me.clone());
+            let (id_see, id_close) = (note.id.clone(), note.id.clone());
+            stack.push(
+                card()
+                    .child(div().truncate().child(ui.title(format!("Neue Folge: {}", note.title))))
+                    .child(ui.hint(format!("Staffel {}, Folge {} ist auf AniWorld erschienen.", note.season, note.episode)))
+                    .child(
+                        div()
+                            .flex()
+                            .gap(px(8.))
+                            .child(ui.button(format!("neu-ansehen-{}", note.id), "Ansehen").small().primary().accessible_name(format!("{} ansehen", note.title)).on_click(move |_, app| {
+                                let id = id_see.clone();
+                                see.update(app, |shell, cx| shell.open_announced(&id, cx))
+                            }))
+                            .child(ui.button(format!("neu-schliessen-{}", note.id), "Schließen").small().accessible_name(format!("Meldung zu {} schließen", note.title)).on_click(move |_, app| {
+                                let id = id_close.clone();
+                                close.update(app, |shell, cx| {
+                                    shell.news_rounds.notes.retain(|n| n.id != id);
+                                    cx.notify();
+                                })
+                            })),
+                    )
+                    .into_any_element(),
+            );
+        }
+
         if stack.is_empty() {
             return None;
         }

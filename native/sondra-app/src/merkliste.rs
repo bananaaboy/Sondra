@@ -584,6 +584,15 @@ impl Shell {
             }
             {
                 let me = me.clone();
+                let on = self.news_rounds.on;
+                items.push(ui.menu_item("neue-folgen-melden", "Neue Folgen melden", on).on_click(move |_, app| me.update(app, |shell, cx| {
+                    shell.merk.more = false;
+                    let on = shell.news_rounds.on;
+                    shell.set_new_episodes(!on, cx);
+                })).into_any_element());
+            }
+            {
+                let me = me.clone();
                 items.push(ui.menu_item("teilen-oeffnen", "Teilen …", false).on_click(move |_, app| Self::merk_do(&me, app, |m| {
                     m.share.open = true;
                     m.share.said = None;
