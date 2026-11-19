@@ -506,8 +506,12 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   USB über `nusb`), außerdem „Liste empfangen“, „Was ist neu“, schwebende Karten,
   Einzel-Instanz, Gong und Wachhalten beim Laden. **Noch nicht:** Tray, Benachrichtigungen
   des Systems (die Karte „Neue Folge“ im Fenster gibt es: `new_episodes.rs`), die Zeitleiste des
-  Video-Editors, die Klavierrolle und das Ziehen der Schnitte, Anytype, Setup/Store, Updates,
-  Datenübernahme; Player-Einstellungen, Größen, Bild-in-Bild; ein eigenes Fenster für das Handy.
+  Video-Editors (inzwischen da: Zeitleiste mit Ziehen, Ausschnitt ziehen), die Klavierrolle und das Ziehen der
+  Schnitte, Anytype, Store, Updates, Datenübernahme; Bild-in-Bild; ein eigenes Fenster für das Handy. **Setup**
+  (`native/installer/sondra.nsi`, NSIS, für alle Benutzer, FFmpeg daneben, Apps & Features, `.sondra-liste`, Öffnen mit)
+  installiert, startet mit einem Film und deinstalliert sich in der CI (Lauf 76 grün, 19.11.2026), mit Symbol in der .exe.
+  **Player nativ:** Entzerrer (fünf Bänder, Voreinstellungen), Karaoke, Qualität, Visualizer (Balken, Welle, Ring) und
+  alle Einstellungen der Website bis auf Bild-in-Bild; **Ordner:** Nach Serie, Ungesehen, Neu, ▶ auf der Kachel.
   Kein Fenster hat ein echter Mensch gesehen; die Bildschirmfotos der CI sind die einzige Sicht.
   **Stand 19.11.2026 nachmittags:** dazu nativ **Neue Folgen melden** (`new_episodes.rs`: Prüfrunde, Karte im
   Fenster, „Neu auf AniWorld“ auf der Serienseite), Verlauf und Würfeln in der Merkliste, **Klicks entfernen**,
