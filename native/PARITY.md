@@ -107,15 +107,15 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 
 | ID | Funktion | Bestand | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- | --- |
-| W01 | Umwandeln: alle Formate, Vorlagen (WhatsApp, Reel, Hörbuch, E-Mail), eigene Vorlagen, Stapel, ZIP | `ConverterPanel`, `convert.ts` | 2/7a | `verify:convert` | offen |
-| W02 | Lautstärke: Lautheit messen und angleichen, Stapel | `NormalizePanel`, `loudness.ts` | 2/7a | `verify:loudness` | offen |
+| W01 | Umwandeln: alle Formate, Vorlagen (WhatsApp, Reel, Hörbuch, E-Mail), eigene Vorlagen, Stapel, ZIP | `ConverterPanel`, `convert.ts` | 2/7a | `verify:convert` | **Kern nativ ✔** (`sondra-media`: alle Formate und Vorlagen mit dem echten FFmpeg, Befehle gleich der Website; Stapel, ZIP, eigene Vorlagen und die Oberfläche offen) |
+| W02 | Lautstärke: Lautheit messen und angleichen, Stapel | `NormalizePanel`, `loudness.ts` | 2/7a | `verify:loudness` | **Kern nativ ✔** (Messung und Verstärkung wie die Website auf 8 Signalen und 6 Plänen; das Rechnen der Datei und die Oberfläche offen) |
 | W03 | Bilder: skalieren, zuschneiden, umwandeln, viele auf einmal | `ImagePanel`, `image.ts` | 2/7a | Bildvergleich | offen |
 | W04 | Untertitel: Whisper, TXT/SRT/VTT, als Spur oder eingebrannt | `SubtitlesPanel`, `transcribe.ts` | 2/7a | Test | offen |
 | W05 | Video-Editor: schneiden, drehen, Farbe, Blenden, Tempo, Ton; große Dateien | `VideoPanel`, `video.ts` | 2/7c | Szenario | offen |
 | W06 | Ton-Editor: Studio, acht Werkzeuge, Filter, Rauschen, Hall, Tonhöhe, Tempo, Blenden | `AudioEditorPanel`, `effects.ts` | 2/7b | Test, Hörprobe | offen |
 | W07 | Mischen: Stimme und Musik, Ducking | `MixPanel`, `duck.ts` | 2/7b | Test | offen |
 | W08 | Spuren trennen (Gesang, Schlagzeug, Bass) | `StemsPanel`, `separation.ts` | 2/7b | Test | offen |
-| W09 | Tonart, Tempo, Akkorde, Melodie als MIDI | `HarmonyPanel`, `key.ts`, `midi.ts` | 2/7b | `verify:harmony`, `:tempo` | offen |
+| W09 | Tonart, Tempo, Akkorde, Melodie als MIDI | `HarmonyPanel`, `key.ts`, `midi.ts` | 2/7b | `verify:harmony`, `:tempo` | **Kern nativ ✔** (FFT, Chroma, Tonart, Akkorde, YIN-Tonhöhe, Noten, Tempo, Einsätze, MIDI-Datei Byte für Byte wie die Website; Oberfläche und Web-MIDI offen) |
 | W10 | Zerschneiden: sechs Verfahren, Pads, Pattern, Klavierrolle | `SamplerPanel`, `chop.ts`, `pattern.ts` | 7c | Test, Hörprobe | offen |
 | W11 | Mikrofon: Test, Geräte, Kalibrierung, Kette mit Zahlen, Vorher/Nachher | `MicPanel`, `micCalibrate.ts` | 7b | Test | offen |
 | W12 | Bildschirm aufnehmen (mit Ton des Rechners, Fenster oder Schirm) | `ScreenPanel`, `screenRecord.ts` | 7b | Klicktest | offen |
