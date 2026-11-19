@@ -5673,6 +5673,7 @@ dependencies = [
  "chrono",
  "gpui",
  "image",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "smallvec",

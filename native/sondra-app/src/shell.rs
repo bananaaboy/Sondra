@@ -89,6 +89,14 @@ impl Shell {
         let merk = MerkState::new(cx, colors);
         let folder = FolderState::new(cx, colors);
         let download = DownloadState::new(cx, colors);
+        // Twice a second: is the window minimised? (A window nobody draws does not ask by itself.)
+        cx.spawn_in(window, async move |this, cx| loop {
+            cx.background_executor().timer(Duration::from_millis(500)).await;
+            if this.update_in(cx, |shell, window, _| shell.player.pause_for_minimized(crate::system::is_minimized(window))).is_err() {
+                break;
+            }
+        })
+        .detach();
         Self {
             mode,
             panel: Panel::Start,
@@ -814,6 +822,8 @@ impl Render for Shell {
         ).into_any_element() };
 
         let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else { None };
+        // A film that goes on behind another tool says so, and can be stopped from here.
+        let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
         let header = div()
             .flex()
             .flex_col()
@@ -914,7 +924,8 @@ impl Render for Shell {
                                 .child(header)
                                 .child(page),
                         ).into_any_element() })
-                .children(overlay),
+                .children(overlay)
+                .children(mini),
         )
     }
 }

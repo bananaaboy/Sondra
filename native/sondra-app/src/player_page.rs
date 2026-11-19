@@ -21,6 +21,8 @@ use crate::shell::Shell;
 use crate::store::FileStore;
 
 const SETTINGS_KEY: &str = "sondra:abspielen";
+/// The same key the web player keeps „Beim Minimieren pausieren“ under.
+const MINIMIZE_KEY: &str = "sondra:pausieren-beim-minimieren";
 const PLACES_KEY: &str = "sondra:abspielen:stellen";
 const MARKS_KEY: &str = "sondra:abspielen:marken";
 
@@ -54,6 +56,8 @@ pub struct PlayerState {
     pub look_open: bool,
     /// How big the picture is: beside the list, wide, over the whole window, or over the whole screen.
     pub size: PlayerSize,
+    /// „Beim Minimieren pausieren“: off until the person turns it on (kept on this device).
+    pub pause_on_minimize: bool,
     /// When the window was asked to take the whole screen (`None`: it was not).
     pub screen: Option<std::time::Instant>,
     /// When the mouse or a key last asked for the controls.
@@ -139,6 +143,7 @@ impl PlayerState {
             tracks_open: false,
             look_open: false,
             size: PlayerSize::Normal,
+            pause_on_minimize: false,
             screen: None,
             activity: std::time::Instant::now(),
             track: 0,
@@ -155,6 +160,7 @@ impl PlayerState {
     pub fn remember_from(&mut self, store: FileStore) {
         use sondra_merk::folder_memory::Store;
         self.settings = Settings::from_json(store.get_item(SETTINGS_KEY).as_deref());
+        self.pause_on_minimize = store.get_item(MINIMIZE_KEY).as_deref() == Some("true");
         self.memory = Some(store);
     }
 
@@ -309,6 +315,18 @@ impl PlayerState {
         let next = self.memory.as_ref().map(|store| save_marks(store.get_item(MARKS_KEY).as_deref(), &name, size, &self.marks));
         if let (Some(next), Some(store)) = (next, self.memory.as_mut()) {
             store.set_item(MARKS_KEY, next);
+        }
+    }
+
+    /// A minimised window stops what plays, once; it does not begin again by itself when the window returns.
+    pub fn pause_for_minimized(&mut self, minimized: bool) {
+        if !(minimized && self.pause_on_minimize) {
+            return;
+        }
+        if let Some(p) = self.playback.as_mut() {
+            if p.state() == State::Playing {
+                p.pause();
+            }
         }
     }
 
@@ -586,6 +604,11 @@ impl Shell {
         self.player.set_sleep(Some(Sleep::At { until: std::time::Instant::now() + after, minutes: 1 }));
     }
 
+    /// For tests: the window is taken to be minimised.
+    pub fn player_minimized(&mut self, minimized: bool) {
+        self.player.pause_for_minimized(minimized);
+    }
+
     /// For tests: the size the picture has.
     pub fn player_size(&self) -> PlayerSize {
         self.player.size
@@ -645,6 +668,44 @@ impl Shell {
         self.player.queue = playable;
         self.player.start(0);
         cx.notify();
+    }
+
+    /// The small bar that tells a film goes on behind another tool: its name and place, pause, and the way back.
+    /// Over the page's foot, from the lower edge; the one shadow of the design belongs to it, as to a popover.
+    pub(crate) fn player_mini(&self, ui: Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let p = &self.player;
+        let playback = p.playback.as_ref()?;
+        let c = ui.c;
+        let me = cx.entity();
+        let playing = playback.state() == State::Playing;
+        let name = p.current_path().map(file_label).unwrap_or_default();
+        let (position, duration) = (playback.position(), playback.duration().unwrap_or(0.0));
+        let toggle = {
+            let me = me.clone();
+            ui.button("mini-pause", if playing { "Pause" } else { "Abspielen" }).accessible_name(if playing { "Pause" } else { "Wiedergabe starten" }).small().primary().on_click(move |_, app| Self::player_do(&me, app, |p| if let Some(pb) = p.playback.as_mut() { pb.toggle() }))
+        };
+        let back = {
+            let me = me.clone();
+            ui.button("mini-zurueck", "Zum Player").small().on_click(move |_, app| me.update(app, |shell, cx| shell.go(Panel::Player, cx)))
+        };
+        let bar = div()
+            .absolute()
+            .bottom(px(16.))
+            .right(px(16.))
+            .max_w(px(460.))
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .p(px(12.))
+            .rounded(px(sondra_ui::radius::CARD))
+            .bg(c.raised)
+            .border_1()
+            .border_color(c.line)
+            .shadow(vec![gpui::BoxShadow { color: gpui::hsla(0., 0., 0., 0.2), offset: gpui::point(px(0.), px(8.)), blur_radius: px(24.), spread_radius: px(0.) }])
+            .child(div().flex().items_baseline().justify_between().gap(px(12.)).child(div().truncate().child(ui.value(name))).child(div().font_family(family::VALUE).text_size(px(size::SMALL)).child(format!("{} / {}", clock(position), if duration > 0.0 { clock(duration) } else { "—".into() }))))
+            .child(ui.bar("mini-stelle", if duration > 0.0 { Some((position / duration) as f32) } else { None }, "Stelle im Film"))
+            .child(div().flex().gap(px(8.)).child(toggle).child(back));
+        Some(sondra_ui::motion::enter(bar, "mini-leiste", (0.0, 16.0), std::time::Duration::ZERO, sondra_ui::motion::BASE))
     }
 
     /// Keeps the window's screen mode and the player's size in step. The player says what it wants
@@ -1012,6 +1073,19 @@ impl Shell {
                     ui.chip("nachtmodus", "Nachtmodus: Leises lauter, Lautes leiser", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
                         p.settings.night = !on;
                         p.apply_look();
+                    })),
+                ));
+            }
+            {
+                let me = me.clone();
+                let on = p.pause_on_minimize;
+                body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Wiedergabe")).child(
+                    ui.chip("minimieren-pausieren", "Beim Minimieren pausieren", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        use sondra_merk::folder_memory::Store;
+                        p.pause_on_minimize = !on;
+                        if let Some(store) = p.memory.as_mut() {
+                            store.set_item(MINIMIZE_KEY, if on { "false".to_string() } else { "true".to_string() });
+                        }
                     })),
                 ));
             }

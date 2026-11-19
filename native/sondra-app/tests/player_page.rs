@@ -553,3 +553,57 @@ fn the_picture_has_four_sizes_and_over_the_whole_window_the_controls_go_when_nob
     w.draw();
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_size()), PlayerSize::Normal);
 }
+
+#[gpui::test]
+fn a_minimised_window_pauses_only_when_asked_to_and_does_not_begin_again_by_itself(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let a = film(tmp.path(), "a.mp4", 5);
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![a], cx));
+    w.watch(0.3);
+    // Off to begin with: minimising changes nothing.
+    w.shell.update(w.cx, |s, _| s.player_minimized(true));
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Pause").is_some(), "still playing");
+    // Turned on in the window, then it stops, and coming back does not start it.
+    w.press(Role::Button, "Bild und Ton");
+    w.press(Role::Button, "Beim Minimieren pausieren");
+    assert_eq!(w.tree().find(Role::Button, "Beim Minimieren pausieren").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Schliessen");
+    w.shell.update(w.cx, |s, _| s.player_minimized(true));
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Wiedergabe starten").is_some(), "paused");
+    w.shell.update(w.cx, |s, _| s.player_minimized(false));
+    w.watch(0.3);
+    assert!(w.tree().find(Role::Button, "Wiedergabe starten").is_some(), "and it stays so");
+}
+
+#[gpui::test]
+fn a_film_goes_on_behind_another_tool_and_a_small_bar_says_so_and_stops_it_and_leads_back(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let a = film(tmp.path(), "hinten.mp4", 6);
+    let mut w = open(cx);
+    assert!(w.tree().find(Role::Button, "Zum Player").is_none(), "no film, no bar");
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![a], cx));
+    w.watch(0.3);
+    assert!(w.tree().find(Role::Button, "Zum Player").is_none(), "on its own page there is no bar");
+    let before = w.position();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Merkliste, cx));
+    w.watch(0.8);
+    assert!(w.position() > before + 0.5, "it goes on");
+    assert!(w.tree().find(Role::Button, "Zum Player").is_some(), "and the bar says so");
+    w.press(Role::Button, "Pause");
+    let stopped = w.position();
+    w.watch(0.4);
+    assert!((w.position() - stopped).abs() < 0.05, "stopped from the bar");
+    assert!(w.tree().find(Role::Button, "Wiedergabe starten").is_some());
+    w.press(Role::Button, "Zum Player");
+    assert!(w.tree().find(Role::Heading, "Abspielen").is_some(), "back on the page of the player");
+    assert!(w.tree().find(Role::Button, "Zum Player").is_none());
+}
