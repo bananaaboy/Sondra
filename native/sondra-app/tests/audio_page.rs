@@ -135,11 +135,12 @@ fn the_refusals_come_as_words_and_the_take_is_played_and_written(cx: &mut TestAp
     w.settle();
     assert!(w.said("Wählen Sie zuerst die Stelle"));
     assert_eq!(w.frames(), 32000);
-    // Noise: without a profile, taking it out says what to do first.
+    // Noise: without a profile the page says to learn it first, and learning needs a chosen stretch.
     w.press(Role::Button, "Werkzeug Säubern");
-    w.press(Role::Button, "6,0 dB");
-    w.settle();
-    assert!(w.said("Rauschprofil"), "{:?}", w.labels());
+    assert!(w.said("Wählen Sie eine Stelle, an der nur das Rauschen zu hören ist"));
+    w.shell.update(w.cx, |shell, cx| shell.audio_learn_noise(cx));
+    w.draw();
+    assert!(w.said("Wählen Sie eine Stelle, an der nur das Rauschen zu hören ist."), "{:?}", w.labels());
 
     // Playing: the button turns into „Anhalten“ and back.
     w.press(Role::Button, "Anhören");
