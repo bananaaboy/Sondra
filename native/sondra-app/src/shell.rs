@@ -222,6 +222,15 @@ impl Shell {
     /// Opens what was handed to the program (files dropped on it, „Öffnen mit Sondra“, the command line): a
     /// shared list goes to the Merkliste's window for receiving, a folder goes to the Ordner page, films and songs are played, anything else waits on the start page.
     pub fn open_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        // An address like the website's: `sondra #umwandeln` opens that tool (a file called that is
+        // never taken for one — a real path wins).
+        if let [only] = paths.as_slice() {
+            let text = only.to_string_lossy();
+            if text.starts_with('#') && !only.exists() {
+                self.go(Panel::from_slug(&text), cx);
+                return;
+            }
+        }
         // A shared list (`.sondra-liste`) opens the window that sets it beside one's own.
         if let Some(list) = paths.iter().find(|p| p.file_name().is_some_and(|n| sondra_merk::share::is_share_file(&n.to_string_lossy()))) {
             self.go(Panel::Merkliste, cx);

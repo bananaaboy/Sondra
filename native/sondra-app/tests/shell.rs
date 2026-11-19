@@ -298,3 +298,13 @@ fn escape_gives_the_focus_back_to_the_tab_that_opened_the_menu(cx: &mut TestAppC
     w.draw(1280.);
     assert_eq!(focused(&w.tree()), "Video", "Down walks the menu");
 }
+
+#[gpui::test]
+fn a_tool_address_on_the_command_line_opens_that_tool(cx: &mut TestAppContext) {
+    let mut w = open(cx, 1280.);
+    w.shell.update(w.cx, |s, cx| s.open_paths(vec![std::path::PathBuf::from("#spuren-trennen")], cx));
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Stems);
+    // A slug nobody knows is the start page, like the website.
+    w.shell.update(w.cx, |s, cx| s.open_paths(vec![std::path::PathBuf::from("#gibt-es-nicht")], cx));
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Start);
+}
