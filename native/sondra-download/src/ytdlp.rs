@@ -395,6 +395,52 @@ fn hide_window(command: &mut Command) {
     }
 }
 
+/// Whether an address looks like a list of videos (a playlist, a set, an album) rather than one.
+pub fn is_playlist_address(address: &str) -> bool {
+    let a = address.to_lowercase();
+    let playlist_page = a.find("/playlist").is_some_and(|at| a[at + 9..].chars().next().is_none_or(|c| !c.is_alphanumeric() && c != '_'));
+    a.contains("?list=") || a.contains("&list=") || playlist_page || a.contains("/sets/") || a.contains("/album/")
+}
+
+/// One video of a list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
+    pub title: String,
+    pub url: String,
+}
+
+/// The videos behind a list address (`--flat-playlist`: nothing is loaded, only named). Empty when the
+/// address is not a list after all.
+pub fn playlist(tool: &Tool, address: &str) -> Result<(String, Vec<Entry>), YtdlpError> {
+    let mut command = Command::new(&tool.bin);
+    command.args(["--flat-playlist", "-J", "--no-warnings", "--socket-timeout", "20", "--"]).arg(address).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    hide_window(&mut command);
+    let out = command.output().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { YtdlpError::Missing } else { YtdlpError::Io(e.to_string()) })?;
+    if !out.status.success() {
+        return Err(error_of(&String::from_utf8_lossy(&out.stderr)));
+    }
+    Ok(parse_playlist(&String::from_utf8_lossy(&out.stdout)))
+}
+
+/// The title and the videos of yt-dlp's `-J` answer for a list.
+pub fn parse_playlist(json: &str) -> (String, Vec<Entry>) {
+    let Ok(info) = serde_json::from_str::<serde_json::Value>(json) else { return (String::new(), Vec::new()) };
+    let text = |v: &serde_json::Value, key: &str| v[key].as_str().filter(|s| !s.is_empty()).map(str::to_owned);
+    let title = text(&info, "title").unwrap_or_else(|| "Playlist".into());
+    let entries = info["entries"]
+        .as_array()
+        .map(|list| {
+            list.iter()
+                .filter_map(|e| {
+                    let url = text(e, "url").or_else(|| text(e, "id").map(|id| format!("https://www.youtube.com/watch?v={id}")))?;
+                    Some(Entry { title: text(e, "title").unwrap_or_else(|| "Video".into()), url })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    (title, entries)
+}
+
 /// Brings the own copy up to date (`yt-dlp -U`); true when its version changed.
 pub fn update(data_dir: &Path) -> bool {
     let own = data_dir.join(own_name());
@@ -428,6 +474,25 @@ mod tests {
         assert_eq!(parse_progress("SONDRA 1000 NA 5000"), Some(Progress { loaded: 1000, total: Some(5000) }));
         assert_eq!(parse_progress("SONDRA 1000 NA NA"), Some(Progress { loaded: 1000, total: None }));
         assert_eq!(parse_progress("[download] 12%"), None);
+    }
+
+    #[test]
+    fn lists_are_told_from_single_videos() {
+        assert!(is_playlist_address("https://www.youtube.com/watch?v=a&list=PL1"));
+        assert!(is_playlist_address("https://www.youtube.com/playlist?list=PL1"));
+        assert!(is_playlist_address("https://soundcloud.com/x/sets/y"));
+        assert!(is_playlist_address("https://x.example/album/1"));
+        assert!(!is_playlist_address("https://www.youtube.com/watch?v=a"));
+        assert!(!is_playlist_address("https://x.example/playlists-of-the-year"));
+    }
+
+    #[test]
+    fn a_list_answer_gives_its_title_and_videos() {
+        let json = r#"{"title":"Meine Liste","entries":[{"title":"Eins","url":"https://x.example/1"},{"id":"abc"},{"title":"ohne"}]}"#;
+        let (title, entries) = parse_playlist(json);
+        assert_eq!(title, "Meine Liste");
+        assert_eq!(entries, [Entry { title: "Eins".into(), url: "https://x.example/1".into() }, Entry { title: "Video".into(), url: "https://www.youtube.com/watch?v=abc".into() }]);
+        assert_eq!(parse_playlist("kein json"), (String::new(), Vec::new()));
     }
 
     #[test]

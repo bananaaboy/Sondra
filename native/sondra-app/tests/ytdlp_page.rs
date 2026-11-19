@@ -151,3 +151,24 @@ fn a_program_that_does_not_match_the_published_sum_is_not_kept(cx: &mut TestAppC
     assert!(!tools.path().join(sondra_download::ytdlp::own_name()).exists());
     assert!(w.tree().find(Role::Button, "Laden").is_none());
 }
+
+#[gpui::test]
+fn the_videos_of_a_list_wait_as_a_list_and_load_in_turn(cx: &mut TestAppContext) {
+    let (folder, tools) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    // yt-dlp is already there: Sondra's own copy.
+    let own = tools.path().join(sondra_download::ytdlp::own_name());
+    std::fs::copy(env!("CARGO_BIN_EXE_fake-ytdlp"), &own).unwrap();
+    let base = server(program(), String::new());
+    let mut w = open(cx, folder.path(), tools.path(), format!("{base}/release/"));
+
+    w.shell.update(w.cx, |shell, cx| shell.download_set_input(&format!("{base}/seite?list=PL1"), cx));
+    w.press(Role::Button, "Suchen");
+    w.settle(|w| w.said("2 Quellen gefunden"));
+    assert!(w.said("2 Quellen gefunden"));
+    assert!(w.said("Erster") && w.said("Zweiter"), "the videos are named");
+    assert!(w.tree().find(Role::Button, "yt-dlp laden").is_none(), "yt-dlp is there: nothing to offer");
+
+    w.press(Role::Button, "Alle laden");
+    w.settle(|w| w.tree().find(Role::Heading, "Geladen").is_some() && w.tree().find(Role::Button, "Alle laden").is_none());
+    assert!(folder.path().join("Ein Film.mp4").exists());
+}

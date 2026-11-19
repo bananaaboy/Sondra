@@ -11,6 +11,10 @@ fn main() {
         return;
     }
     let address = args.last().cloned().unwrap_or_default();
+    if args.iter().any(|a| a == "--flat-playlist") {
+        println!(r#"{{"title":"Eine Liste","entries":[{{"title":"Erster","url":"https://portal.example/watch?v=1"}},{{"title":"Zweiter","url":"https://portal.example/watch?v=2"}}]}}"#);
+        return;
+    }
     let template = args.iter().position(|a| a == "-o").and_then(|i| args.get(i + 1)).cloned().unwrap_or_default();
     if address.contains("unsupported") {
         eprintln!("ERROR: Unsupported URL: {address}");

@@ -34,7 +34,7 @@ pub enum Found {
     /// An address of a file or a stream itself.
     Direct(StreamInfo),
     /// A portal Sondra has no extractor for, loaded by yt-dlp.
-    Portal(String),
+    Portal { address: String, title: String },
 }
 
 pub struct Job {
@@ -93,19 +93,26 @@ fn host_of(address: &str) -> String {
 
 /// What an address is when Sondra has no source of its own for it: a portal for yt-dlp if that is
 /// there, otherwise the reason — and whether fetching yt-dlp could help.
-fn find_or_portal(fetch: &dyn Fetch, address: &str, language: &str, ytdlp_dir: &std::path::Path, system: bool) -> Result<Found, (String, bool)> {
+fn find_or_portal(fetch: &dyn Fetch, address: &str, language: &str, ytdlp_dir: &std::path::Path, system: bool) -> Result<Vec<Found>, (String, bool)> {
     match find(fetch, address, language) {
-        Ok(found) => Ok(found),
+        Ok(found) => Ok(vec![found]),
         Err(error) => {
             let is_address = url::Url::parse(address.trim()).ok().is_some_and(|u| matches!(u.scheme(), "http" | "https"));
             if !is_address {
                 return Err((error, false));
             }
-            if sondra_download::ytdlp::locate(ytdlp_dir, system).is_some() {
-                Ok(Found::Portal(address.trim().to_string()))
-            } else {
-                Err((error, true))
+            use sondra_download::ytdlp;
+            let address = address.trim();
+            let Some(tool) = ytdlp::locate(ytdlp_dir, system) else { return Err((error, true)) };
+            // A list is named, not loaded: each video of it is one source of the list.
+            if ytdlp::is_playlist_address(address) {
+                if let Ok((_, entries)) = ytdlp::playlist(&tool, address) {
+                    if !entries.is_empty() {
+                        return Ok(entries.into_iter().map(|e| Found::Portal { address: e.url, title: e.title }).collect());
+                    }
+                }
             }
+            Ok(vec![Found::Portal { address: address.to_string(), title: format!("Video von {}", host_of(address)) }])
         }
     }
 }
@@ -148,7 +155,7 @@ fn found_title(found: &Found) -> String {
         Found::Episode(ep) if !ep.series_title.is_empty() => format!("{} · {}", ep.series_title, ep.title),
         Found::Episode(ep) => ep.title.clone(),
         Found::Direct(s) => s.title.clone(),
-        Found::Portal(address) => format!("Video von {}", host_of(address)),
+        Found::Portal { title, .. } => title.clone(),
     }
 }
 
@@ -266,7 +273,7 @@ impl Shell {
                     d.finding = false;
                     for (address, answer) in answers {
                         match answer {
-                            Ok(found) => d.queue.push(found),
+                            Ok(found) => d.queue.extend(found),
                             Err(error) => d.failed.push(format!("{address}: {error}")),
                         }
                     }
@@ -290,7 +297,9 @@ impl Shell {
                 let d = &mut shell.download;
                 d.finding = false;
                 match answer {
-                    Ok(found) => d.found = Some(found),
+                    // One source is shown for loading; several (a list of videos) wait as a list.
+                    Ok(mut found) if found.len() == 1 => d.found = found.pop(),
+                    Ok(found) => d.queue = found,
                     Err((error, can_fetch)) => {
                         d.error = Some(error);
                         // Fetching yt-dlp is offered, never done by itself.
@@ -370,7 +379,7 @@ impl Shell {
         }
         let (streams, title, dir): (Vec<StreamInfo>, String, PathBuf) = match &found {
             Found::Direct(stream) => (vec![stream.clone()], stream.title.clone(), d.folder.clone()),
-            Found::Portal(_) => (Vec::new(), found_title(&found), d.folder.clone()),
+            Found::Portal { .. } => (Vec::new(), found_title(&found), d.folder.clone()),
             Found::Episode(ep) => (
                 ep.streams.iter().map(|s: &ResolvedStream| StreamInfo { title: ep.title.clone(), url: s.url.clone(), is_hls: s.is_hls, referer: s.referer.clone(), hoster: s.provider.clone() }).collect(),
                 ep.title.clone(),
@@ -384,7 +393,7 @@ impl Shell {
         let allow_private = d.allow_private;
         let stem = title.clone();
         let portal = match &found {
-            Found::Portal(address) => Some((address.clone(), d.ytdlp_dir.clone(), d.ytdlp_system)),
+            Found::Portal { address, .. } => Some((address.clone(), d.ytdlp_dir.clone(), d.ytdlp_system)),
             _ => None,
         };
         Self::in_background(
@@ -461,7 +470,7 @@ impl Shell {
                 match answer {
                     Ok(_) => {
                         d.offer_tool = None;
-                        d.found = Some(Found::Portal(address));
+                        d.found = Some(Found::Portal { title: format!("Video von {}", host_of(&address)), address });
                     }
                     Err(error) => d.error = Some(error),
                 }
@@ -576,7 +585,7 @@ impl Shell {
                     (if ep.series_title.is_empty() { ep.title.clone() } else { format!("{} · {}", ep.series_title, ep.title) }, facts)
                 }
                 Found::Direct(s) => (s.title.clone(), vec![if s.is_hls { "Stream (HLS)".to_string() } else { "Datei".to_string() }, s.hoster.clone()]),
-                Found::Portal(address) => (found_title(found), vec!["Über yt-dlp".to_string(), host_of(address)]),
+                Found::Portal { address, .. } => (found_title(found), vec!["Über yt-dlp".to_string(), host_of(address)]),
             };
             let mut card = div().flex().flex_col().gap(px(10.)).p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.subheading(title)).child(ui.prose(facts.join(" · ")));
             if let Found::Episode(ep) = found {
