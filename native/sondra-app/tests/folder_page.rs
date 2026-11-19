@@ -420,3 +420,35 @@ fn copies_are_found_by_their_content_and_chosen_not_deleted(cx: &mut TestAppCont
     w.press(Role::Button, "Schliessen");
     assert!(w.tree().find(Role::Button, "Kopien auswählen").is_none());
 }
+
+#[gpui::test]
+fn series_the_names_tell_of_are_offered_once_ignored_on_a_no_and_put_on_the_list_on_a_yes(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Serien");
+    for name in ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Dark S01E01.mkv", "Dark S01E02.mkv", "Ocean's 11.mkv"] {
+        put(&root, name, 100);
+        // Different sizes, so nothing here is a copy.
+        let at = fs::metadata(root.join(name)).unwrap().len();
+        fs::write(root.join(name), vec![0u8; at as usize + name.len()]).unwrap();
+    }
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    assert!(w.tree().find(Role::Heading, "2 Serien erkannt").is_some() || w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "2 Serien erkannt")), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    assert!(w.tree().find(Role::Button, "Ocean's 11 auf die Merkliste").is_none(), "one file is a film, not a series");
+
+    // A no is kept.
+    w.press(Role::Button, "Dark nicht mehr fragen");
+    assert!(w.tree().find(Role::Button, "Dark auf die Merkliste").is_none());
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "Eine Serie erkannt")));
+    assert!(fs::read_to_string(tmp.path().join("Ordner.json")).unwrap().contains("sondra:ordner:ignoriert"));
+
+    // A yes puts it on the list from its first episode, the length not known.
+    w.press(Role::Button, "Frieren auf die Merkliste");
+    let items = w.shell.read_with(w.cx, |s, _| s.merk_items());
+    assert_eq!(items.len(), 1);
+    assert_eq!((items[0].title.as_str(), items[0].season, items[0].episode), ("Frieren", 1, Some(1)));
+    assert_eq!(items[0].seasons.as_ref().unwrap()[0].episodes, None);
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("„Frieren“ steht jetzt auf der Merkliste"))));
+    w.press(Role::Button, "Ansehen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
+}

@@ -122,6 +122,8 @@ pub struct FolderState {
     pub thumbs: crate::thumbs::SharedThumbs,
     /// „Doppelte finden“.
     pub dupes: crate::folder_dupes::Dupes,
+    /// „Eine Serie erkannt“.
+    pub offer: crate::folder_series::Offer,
 }
 
 /// The window onto Sondra's bin in this folder.
@@ -171,6 +173,7 @@ impl FolderState {
             bin_last: cx.focus_handle().tab_stop(true),
             thumbs: Default::default(),
             dupes: Default::default(),
+            offer: Default::default(),
         }
     }
 
@@ -449,6 +452,9 @@ impl Shell {
                 }),
         );
 
+        if let Some(section) = self.offer_section(ui, cx) {
+            page = page.child(section);
+        }
         if let Some(section) = self.dupes_section(ui, cx) {
             page = page.child(section);
         }
