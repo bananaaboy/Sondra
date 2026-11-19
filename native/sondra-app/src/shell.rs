@@ -15,6 +15,7 @@ use sondra_ui::{family, motion, radius, size, FieldEvent, Mode, NoticeKind, Text
 
 use crate::actions::{self, Group};
 use crate::layout::{columns, shell_width, tab_width, GUTTER};
+use crate::convert_page::ConvertState;
 use crate::download_page::DownloadState;
 use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
@@ -58,6 +59,10 @@ pub struct Shell {
     pub(crate) player: PlayerState,
     /// The Herunterladen page: the address, what was found, what loads.
     pub(crate) download: DownloadState,
+    /// The Umwandeln page.
+    pub(crate) convert: ConvertState,
+    /// Which file the conversion is at, for the page that shows it.
+    pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
     pub(crate) pending_focus: Option<FocusHandle>,
 }
@@ -101,6 +106,8 @@ impl Shell {
             folder,
             player: PlayerState::new(),
             download,
+            convert: ConvertState::new(),
+            convert_watch: None,
             pending_focus: None,
         }
     }
@@ -760,7 +767,7 @@ impl Render for Shell {
         }
         self.player_merkliste_tick();
         // A download in progress is drawn again and again: the bar moves.
-        if self.download.job.is_some() {
+        if self.download.job.is_some() || self.convert.run.is_some() {
             let me = cx.entity_id();
             window.on_next_frame(move |_, cx| cx.notify(me));
         }
@@ -774,6 +781,8 @@ impl Render for Shell {
             self.player_page(ui, inner, cx)
         } else if self.panel == Panel::Downloader {
             self.download_page(ui, cx)
+        } else if self.panel == Panel::Converter {
+            self.convert_page(ui, cx)
         } else {
             self.unfinished(ui, self.panel)
         };
