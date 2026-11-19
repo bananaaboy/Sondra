@@ -18,13 +18,18 @@ sondra-merk = { path = "../sondra-merk" }
 sondra-media = { path = "../sondra-media" }
 sondra-player = { path = "../sondra-player" }
 sondra-playback = { path = "../sondra-playback" }
+sondra-extract = { path = "../sondra-extract" }
+sondra-download = { path = "../sondra-download" }
 image = { version = "0.25", default-features = false }
+url = "2"
 smallvec = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [dev-dependencies]
+sondra-extract = { path = "../sondra-extract", features = ["testing"] }
+tiny_http = "0.12"
 tempfile = "3"
 gpui = { version = "=0.2.2", features = ["test-support"] }
 accesskit = "0.25"

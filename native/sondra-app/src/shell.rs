@@ -15,6 +15,7 @@ use sondra_ui::{family, motion, radius, size, FieldEvent, Mode, NoticeKind, Text
 
 use crate::actions::{self, Group};
 use crate::layout::{columns, shell_width, tab_width, GUTTER};
+use crate::download_page::DownloadState;
 use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
 use crate::player_page::PlayerState;
@@ -55,6 +56,8 @@ pub struct Shell {
     pub(crate) folder: FolderState,
     /// The player: what is queued, what plays.
     pub(crate) player: PlayerState,
+    /// The Herunterladen page: the address, what was found, what loads.
+    pub(crate) download: DownloadState,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
     pub(crate) pending_focus: Option<FocusHandle>,
 }
@@ -77,6 +80,7 @@ impl Shell {
         .detach();
         let merk = MerkState::new(cx, colors);
         let folder = FolderState::new(cx, colors);
+        let download = DownloadState::new(cx, colors);
         Self {
             mode,
             panel: Panel::Start,
@@ -96,6 +100,7 @@ impl Shell {
             merk,
             folder,
             player: PlayerState::new(),
+            download,
             pending_focus: None,
         }
     }
@@ -194,6 +199,7 @@ impl Shell {
         self.merk.search.update(cx, |field, cx| field.set_colors(colors, cx));
         self.merk.add.update(cx, |field, cx| field.set_colors(colors, cx));
         self.folder.search.update(cx, |field, cx| field.set_colors(colors, cx));
+        self.download.input.update(cx, |field, cx| field.set_colors(colors, cx));
         cx.notify();
     }
 
@@ -753,6 +759,11 @@ impl Render for Shell {
             window.on_next_frame(move |_, cx| cx.notify(me));
         }
         self.player_merkliste_tick();
+        // A download in progress is drawn again and again: the bar moves.
+        if self.download.job.is_some() {
+            let me = cx.entity_id();
+            window.on_next_frame(move |_, cx| cx.notify(me));
+        }
         let page = if self.panel == Panel::Start {
             self.start(ui, cols, cx)
         } else if self.panel == Panel::Merkliste {
@@ -761,6 +772,8 @@ impl Render for Shell {
             self.folder_page(ui, cx)
         } else if self.panel == Panel::Player {
             self.player_page(ui, inner, cx)
+        } else if self.panel == Panel::Downloader {
+            self.download_page(ui, cx)
         } else {
             self.unfinished(ui, self.panel)
         };

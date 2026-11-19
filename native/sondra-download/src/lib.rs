@@ -14,7 +14,7 @@
 //!   keys nor circumvents copy protection.
 
 mod http;
-mod name;
+pub mod name;
 mod throttle;
 
 use std::fs;

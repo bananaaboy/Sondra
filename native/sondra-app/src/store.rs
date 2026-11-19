@@ -68,6 +68,16 @@ impl MerkStore {
     }
 }
 
+/// Where downloads go unless the person chose another folder: `Downloads\Sondra` in their profile
+/// (`SONDRA_DOWNLOADS` overrides it).
+pub fn downloads_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("SONDRA_DOWNLOADS") {
+        return PathBuf::from(dir);
+    }
+    let home = if cfg!(windows) { std::env::var_os("USERPROFILE") } else { std::env::var_os("HOME") };
+    home.map(|h| PathBuf::from(h).join("Downloads").join("Sondra")).unwrap_or_else(|| PathBuf::from("Sondra-Downloads"))
+}
+
 /// Sondra's data folder on this computer.
 pub fn data_dir() -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("SONDRA_DATA") {

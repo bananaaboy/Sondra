@@ -549,7 +549,7 @@ impl Shell {
 
 
     /// Does `work` away from the window and then hands its answer to `then`.
-    fn in_background<T: Send + 'static>(
+    pub(crate) fn in_background<T: Send + 'static>(
         cx: &mut Context<Self>,
         work: impl FnOnce() -> T + Send + 'static,
         then: impl FnOnce(&mut Shell, T, &mut Context<Shell>) + 'static,

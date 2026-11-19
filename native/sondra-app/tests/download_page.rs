@@ -1,0 +1,164 @@
+//! The Herunterladen page: an address typed in, what is behind it found, loaded into a folder with the way
+//! there in view, and offered to play. Against a server on this computer.
+
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
+
+use accesskit::{Action, ActionRequest, TreeId};
+use gpui::{point, px, size, AvailableSpace, Entity, TestAppContext, VisualTestContext};
+use sondra_a11y::{attach_sink, run_action, Role, Snapshot};
+use sondra_app::nav::Panel;
+use sondra_app::shell::Shell;
+use sondra_extract::fetch::UreqFetch;
+use sondra_ui::{bind_keys, fonts};
+
+type Seen = Rc<RefCell<Vec<Rc<Snapshot>>>>;
+
+struct Window<'a> {
+    cx: &'a mut VisualTestContext,
+    shell: Entity<Shell>,
+    seen: Seen,
+}
+
+const WIDTH: f32 = 1280.;
+
+/// A server that serves one file of this many bytes at `/lied.mp3`, and a page that is not a media page.
+fn server(bytes: usize) -> String {
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let port = server.server_addr().to_ip().unwrap().port();
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            let header = |n: &str, v: &str| tiny_http::Header::from_bytes(n, v).unwrap();
+            match request.url() {
+                "/lied.mp3" => {
+                    let body = vec![7u8; bytes];
+                    let _ = request.respond(tiny_http::Response::from_data(body).with_header(header("Content-Type", "audio/mpeg")));
+                }
+                "/seite" => {
+                    let _ = request.respond(tiny_http::Response::from_string("<html><body>Nichts zu laden</body></html>").with_header(header("Content-Type", "text/html")));
+                }
+                _ => {
+                    let _ = request.respond(tiny_http::Response::empty(404));
+                }
+            }
+        }
+    });
+    format!("http://127.0.0.1:{port}")
+}
+
+fn open<'a>(cx: &'a mut TestAppContext, folder: &std::path::Path) -> Window<'a> {
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let folder = folder.to_path_buf();
+    let (shell, cx) = cx.add_window_view(move |window, cx| {
+        let mut shell = Shell::new(window, cx);
+        shell.download_with(Arc::new(|| Box::new(UreqFetch::default())), true, folder);
+        shell
+    });
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    cx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    cx.simulate_resize(size(px(WIDTH), px(900.)));
+    let mut w = Window { cx, shell, seen };
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Downloader, cx));
+    w.draw();
+    w
+}
+
+impl Window<'_> {
+    fn draw(&mut self) {
+        let view = self.shell.clone();
+        self.cx.draw(
+            point(px(0.), px(0.)),
+            size(AvailableSpace::Definite(px(WIDTH)), AvailableSpace::Definite(px(900.))),
+            move |_, _| view,
+        );
+    }
+    fn tree(&self) -> Rc<Snapshot> {
+        self.seen.borrow().last().expect("a frame").clone()
+    }
+    fn press(&mut self, role: Role, label: &str) {
+        let id = self.tree().find(role, label).unwrap_or_else(|| panic!("{label} is on the screen")).id;
+        self.cx.update(|window, cx| {
+            run_action(ActionRequest { action: Action::Click, target_tree: TreeId::ROOT, target_node: id, data: None }, window, cx)
+        });
+        self.draw();
+    }
+    fn type_address(&mut self, text: &str) {
+        let field = self.tree().find(Role::TextInput, "Adresse").unwrap().id;
+        self.cx.update(|window, cx| {
+            run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: field, data: None }, window, cx)
+        });
+        self.cx.simulate_input(text);
+        self.draw();
+    }
+    fn said(&self, needle: &str) -> bool {
+        self.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains(needle)))
+    }
+}
+
+#[gpui::test]
+fn an_address_of_a_file_is_found_loaded_into_the_folder_and_offered_to_play(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = server(300_000);
+    let mut w = open(cx, tmp.path());
+    assert!(w.tree().find(Role::Heading, "Herunterladen").is_some());
+    // The honest line stands on the page: this does not run locally.
+    assert!(w.said("läuft nicht lokal"));
+    assert!(w.tree().find(Role::Button, "Suchen").is_some());
+
+    w.type_address(&format!("{base}/lied.mp3"));
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(w.tree().find(Role::Heading, "lied").is_some(), "found: the file's own name");
+    assert!(w.tree().find(Role::Button, "Laden").is_some());
+
+    w.press(Role::Button, "Laden");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(w.tree().find(Role::Heading, "Geladen").is_some(), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    let file = tmp.path().join("lied.mp3");
+    assert_eq!(std::fs::metadata(&file).unwrap().len(), 300_000);
+    assert!(w.tree().find(Role::Button, "Abspielen").is_some());
+    assert!(w.tree().find(Role::Button, "Im Ordner zeigen").is_some());
+    // The address is cleared for the next one.
+    assert!(w.tree().find(Role::Button, "Laden").is_none());
+
+    // Loading it again does not replace what is there.
+    w.type_address(&format!("{base}/lied.mp3"));
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    w.press(Role::Button, "Laden");
+    w.cx.run_until_parked();
+    w.draw();
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2, "an existing file is never replaced: the second got a number");
+    assert_eq!(std::fs::metadata(tmp.path().join("lied.mp3")).unwrap().len(), 300_000);
+}
+
+#[gpui::test]
+fn what_is_no_address_and_what_has_nothing_to_load_is_said(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = server(10);
+    let mut w = open(cx, tmp.path());
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(w.said("Geben Sie eine Adresse ein"));
+    w.type_address("kein link");
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(w.said("keine Adresse"));
+    w.shell.update(w.cx, |shell, cx| shell.download_set_input(&format!("{base}/seite"), cx));
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(w.said("keine Quelle gefunden"), "a page with nothing behind it says so");
+    assert!(w.tree().find(Role::Button, "Laden").is_none());
+}

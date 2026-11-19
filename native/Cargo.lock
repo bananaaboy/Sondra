@@ -5677,12 +5677,16 @@ dependencies = [
  "serde_json",
  "smallvec",
  "sondra-a11y",
+ "sondra-download",
+ "sondra-extract",
  "sondra-media",
  "sondra-merk",
  "sondra-playback",
  "sondra-player",
  "sondra-ui",
  "tempfile",
+ "tiny_http",
+ "url",
  "windows 0.62.2",
 ]
 
