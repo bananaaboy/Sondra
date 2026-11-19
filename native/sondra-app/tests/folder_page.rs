@@ -386,3 +386,37 @@ fn the_chosen_files_are_played_in_the_order_of_the_list_and_what_cannot_be_playe
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["film.mp4"]);
 }
+
+#[gpui::test]
+fn copies_are_found_by_their_content_and_chosen_not_deleted(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Doppelt");
+    // Three of the same bytes (one named like a copy), one of the same size with other bytes, and a loner.
+    put(&root, "a/Film.mkv", 4000);
+    put(&root, "a/Film (1).mkv", 4000);
+    put(&root, "b/Film.mkv", 4000);
+    fs::create_dir_all(root.join("c")).unwrap();
+    fs::write(root.join("c/anderes.mkv"), vec![1u8; 4000]).unwrap();
+    put(&root, "c/allein.mkv", 123);
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    w.press(Role::Button, "Mit Unterordnern");
+    w.press(Role::Button, "Doppelte finden");
+    for _ in 0..200 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().find(Role::Button, "Kopien auswählen").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with("2 Kopien in 1 Gruppe"))), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    w.press(Role::Button, "Gruppen zeigen");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Byte für Byte gleich"))));
+    w.press(Role::Button, "Kopien auswählen");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "2 Dateien ausgewählt")));
+    // Nothing was deleted by this.
+    assert_eq!(fs::read_dir(root.join("a")).unwrap().count(), 2);
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Button, "Kopien auswählen").is_none());
+}

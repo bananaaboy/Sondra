@@ -127,7 +127,7 @@ impl Shell {
             if this.update_in(cx, |shell, window, cx| {
                 shell.player.pause_for_minimized(crate::system::is_minimized(window));
                 // What the devices' worker says changes by itself; the page shows it while it is open.
-                if shell.panel == Panel::Devices && shell.devices.engine.is_some() {
+                if (shell.panel == Panel::Devices && shell.devices.engine.is_some()) || (shell.panel == Panel::Folder && shell.folder.dupes.running) {
                     cx.notify();
                 }
             }).is_err() {

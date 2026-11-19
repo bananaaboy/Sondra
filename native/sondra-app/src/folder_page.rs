@@ -120,6 +120,8 @@ pub struct FolderState {
     pub bin_last: FocusHandle,
     /// The small pictures of the tiles, and how long each file is.
     pub thumbs: crate::thumbs::SharedThumbs,
+    /// „Doppelte finden“.
+    pub dupes: crate::folder_dupes::Dupes,
 }
 
 /// The window onto Sondra's bin in this folder.
@@ -168,6 +170,7 @@ impl FolderState {
             bin_first: cx.focus_handle().tab_stop(true),
             bin_last: cx.focus_handle().tab_stop(true),
             thumbs: Default::default(),
+            dupes: Default::default(),
         }
     }
 
@@ -238,6 +241,9 @@ impl Shell {
         f.generation += 1;
         f.reading = true;
         f.error = None;
+        f.dupes.cancel.store(true, Ordering::Relaxed);
+        f.dupes = Default::default();
+        f.thumbs.borrow_mut().clear_waiting();
         f.root = Some(path.clone());
         let (cancel, generation) = (f.cancel.clone(), f.generation);
         let task = cx.background_spawn(async move { scan_dir(&path, &cancel, |_| {}) });
@@ -436,8 +442,16 @@ impl Shell {
                 .child(div().w(px(240.)).child(f.search.clone()))
                 .child(deep)
                 .child(looks)
-                .child(sorts),
+                .child(sorts)
+                .child({
+                    let me = me.clone();
+                    ui.button("doppelte-finden", "Doppelte finden").small().ghost().disabled(f.dupes.running).on_click(move |_, app| me.update(app, |shell, cx| shell.dupes_run(cx)))
+                }),
         );
+
+        if let Some(section) = self.dupes_section(ui, cx) {
+            page = page.child(section);
+        }
 
         if scan.truncated {
             page = page.child(ui.notice(
