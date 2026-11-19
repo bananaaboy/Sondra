@@ -181,6 +181,21 @@ fn two_devices_meet_on_the_page_and_files_and_a_text_go_across(cx: &mut TestAppC
     wait_engine("the other hears the no", 20, || other.snapshot().transfers.iter().any(|t| t.state == State::Declined));
     assert!(!mine.join("nein.bin").exists());
 
+    // Wherever the person is, the offer comes to them: on another page a small card asks, and the answer
+    // given there is the answer.
+    w.shell.update(w.cx, |shell, cx| shell.go(sondra_app::nav::Panel::Merkliste, cx));
+    w.draw();
+    let card = tmp.path().join("karte.bin");
+    std::fs::write(&card, vec![5u8; 20_000]).unwrap();
+    other.send(&mine_id, files_to_send(&[card]).unwrap());
+    w.wait("the card asks", 30, |w| w.tree().find(Role::Button, "„karte.bin“ annehmen").is_some());
+    assert!(w.tree().find(Role::Button, "Zu den Geräten").is_some());
+    assert!(!mine.join("karte.bin").exists());
+    w.press(Role::Button, "„karte.bin“ annehmen");
+    wait_engine("it arrived from the card", 40, || mine.join("karte.bin").exists() && std::fs::metadata(mine.join("karte.bin")).map_or(0, |m| m.len()) == 20_000);
+    w.shell.update(w.cx, |shell, cx| shell.go(sondra_app::nav::Panel::Devices, cx));
+    w.draw();
+
     // A link: shown, never opened by itself; a line of text stays text.
     other.send_text(&mine_id, "https://example.org/serie");
     w.wait("the link arrives", 30, |w| w.tree().find(Role::Button, "Link öffnen").is_some());

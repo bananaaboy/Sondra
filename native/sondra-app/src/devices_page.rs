@@ -109,7 +109,7 @@ fn bytes(n: u64) -> String {
     sondra_merk::format::format_bytes(n as f64, 1)
 }
 
-fn files_phrase(files: &[sondra_devices::transfer::FileInfo]) -> String {
+pub(crate) fn files_phrase(files: &[sondra_devices::transfer::FileInfo]) -> String {
     match files {
         [one] => format!("„{}“", one.name),
         [first, rest @ ..] => format!("„{}“ und {} {}", first.name, rest.len(), if rest.len() == 1 { "weitere Datei" } else { "weitere Dateien" }),
@@ -118,7 +118,7 @@ fn files_phrase(files: &[sondra_devices::transfer::FileInfo]) -> String {
 }
 
 /// What a transfer says about itself, in a sentence.
-fn say(t: &Transfer) -> String {
+pub(crate) fn say(t: &Transfer) -> String {
     let peer = &t.peer_name;
     match (t.state, t.outgoing) {
         (State::Offering, _) => format!("Fragt bei „{peer}“ an: {}", files_phrase(&t.files)),

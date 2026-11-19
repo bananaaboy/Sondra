@@ -15,7 +15,7 @@ use sondra_extract::fetch::{Fetch, UreqFetch};
 use sondra_extract::stream::StreamInfo;
 use sondra_ui::{family, size, FieldEvent, NoticeKind, TextField, Ui};
 
-fn format_size(bytes: u64) -> String {
+pub(crate) fn format_size(bytes: u64) -> String {
     sondra_merk::format::format_bytes(bytes as f64, 1)
 }
 

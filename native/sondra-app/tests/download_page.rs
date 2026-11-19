@@ -191,3 +191,60 @@ fn a_pasted_list_is_found_address_by_address_and_loaded_in_turn(cx: &mut TestApp
     assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2, "both were loaded, the second under its own number: {:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
     assert!(w.tree().find(Role::Heading, "Geladen").is_some());
 }
+
+/// A reader that gives a file slowly, so a download is still running when another page is opened.
+struct Slow {
+    left: usize,
+}
+
+impl std::io::Read for Slow {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.left == 0 {
+            return Ok(0);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        let n = buf.len().min(8_000).min(self.left);
+        buf[..n].fill(7);
+        self.left -= n;
+        Ok(n)
+    }
+}
+
+#[gpui::test]
+fn a_download_goes_on_behind_another_page_and_a_small_card_says_so_and_leads_back(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let server = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let port = server.server_addr().to_ip().unwrap().port();
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            let header = tiny_http::Header::from_bytes("Content-Type", "audio/mpeg").unwrap();
+            let body = Slow { left: 160_000 };
+            let _ = request.respond(tiny_http::Response::new(tiny_http::StatusCode(200), vec![header], body, Some(160_000), None));
+        }
+    });
+    let mut w = open(cx, tmp.path());
+    w.type_address(&format!("http://127.0.0.1:{port}/lied.mp3"));
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    w.press(Role::Button, "Laden");
+    // On its own page the card is not there: the page shows the way.
+    assert!(w.tree().find(Role::Button, "Zum Herunterladen").is_none());
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Merkliste, cx));
+    w.draw();
+    assert!(w.said("Lädt: lied"), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    assert!(w.tree().find(Role::Button, "Abbrechen").is_some());
+    w.press(Role::Button, "Zum Herunterladen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Downloader);
+    assert!(w.tree().find(Role::Button, "Zum Herunterladen").is_none());
+    // It finishes by itself, and the file is whole.
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().find(Role::Heading, "Geladen").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    assert_eq!(std::fs::metadata(tmp.path().join("lied.mp3")).unwrap().len(), 160_000);
+}

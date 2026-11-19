@@ -10,6 +10,7 @@ pub mod covers;
 pub mod devices_page;
 pub mod devices_setup;
 pub mod discord;
+pub mod floating;
 pub mod folder_page;
 pub mod layout;
 pub mod lines;

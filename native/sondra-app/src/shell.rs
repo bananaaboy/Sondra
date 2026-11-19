@@ -919,6 +919,7 @@ impl Render for Shell {
         let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)) } else { None };
         // A film that goes on behind another tool says so, and can be stopped from here.
         let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
+        let floating = self.floating_cards(ui, cx);
         let header = div()
             .flex()
             .flex_col()
@@ -1020,7 +1021,8 @@ impl Render for Shell {
                                 .child(page),
                         ).into_any_element() })
                 .children(overlay)
-                .children(mini),
+                .children(mini)
+                .children(floating),
         )
     }
 }
