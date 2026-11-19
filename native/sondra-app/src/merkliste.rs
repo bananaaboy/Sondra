@@ -60,6 +60,8 @@ pub struct MerkState {
     pub recap_year: Option<i32>,
     /// What the last export or reading-in said, in a sentence.
     pub note: Option<String>,
+    /// „Wie weit sind Sie?“ when adding: the episode to watch next (1: not begun).
+    pub add_next: i64,
     /// The list as it was before a file was read in, to take it back.
     pub before_import: Option<(Vec<Item>, Removed)>,
 }
@@ -103,6 +105,7 @@ impl MerkState {
             stats_open: false,
             recap_year: None,
             note: None,
+            add_next: 1,
             before_import: None,
         }
     }
@@ -315,7 +318,16 @@ impl MerkState {
             return None;
         }
         let mut ids = Ids::system();
-        let item = normalize(&serde_json::json!({ "title": title, "status": "watching", "updatedAt": ids.now }), &mut ids);
+        let next = self.add_next.clamp(1, 999);
+        let mut raw = serde_json::json!({ "title": title, "status": "watching", "updatedAt": ids.now });
+        if next > 1 {
+            // Begun already: the episodes before the next one are seen, and the length stays unknown.
+            raw["season"] = 1.into();
+            raw["episode"] = next.into();
+            raw["seasons"] = serde_json::json!([{ "number": 1, "watched": (1..next).collect::<Vec<i64>>() }]);
+        }
+        self.add_next = 1;
+        let item = normalize(&raw, &mut ids);
         let id = item.id.clone();
         self.items.insert(0, item);
         self.save();
@@ -413,6 +425,21 @@ impl Shell {
                         ui.button("serie-anlegen", "Hinzufügen").on_click(move |_, app| me.update(app, |shell, cx| shell.add_series(cx)))
                     })
                     .child(ui.hint("Die Zahl der Folgen wird später gesucht oder eingetragen.")),
+            );
+            // „Wie weit sind Sie?“: not begun, or the episode to watch next.
+            let (new, less, more) = (me.clone(), me.clone(), me.clone());
+            let n = state.add_next;
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(ui.hint("Wie weit sind Sie?"))
+                    .child(ui.chip("add-ganz-neu", "Ganz neu", n <= 1).on_click(move |_, app| Self::merk_do(&new, app, |m| m.add_next = 1)))
+                    .child(ui.button("add-weniger", "Eine Folge weniger").small().disabled(n <= 1).on_click(move |_, app| Self::merk_do(&less, app, |m| m.add_next = (m.add_next - 1).max(1))))
+                    .child(ui.value(if n <= 1 { "Folge 1".to_string() } else { format!("Schon angefangen: weiter mit Folge {n}") }))
+                    .child(ui.button("add-mehr", "Eine Folge mehr").small().on_click(move |_, app| Self::merk_do(&more, app, |m| m.add_next = (m.add_next + 1).min(999)))),
             );
         }
 

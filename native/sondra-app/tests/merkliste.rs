@@ -448,3 +448,21 @@ fn the_list_is_exported_and_a_file_read_in_without_doubling_and_taken_back(cx: &
     w.draw();
     assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Die Datei ist keine Merkliste"))));
 }
+
+#[gpui::test]
+fn a_series_can_be_added_as_already_begun(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, None, dir.path());
+    w.press(Role::Button, "Eine Serie eintippen");
+    assert!(w.tree().find(Role::Button, "Ganz neu").unwrap().toggled == Some(true));
+    for _ in 0..4 {
+        w.press(Role::Button, "Eine Folge mehr");
+    }
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l) == "Schon angefangen: weiter mit Folge 5")));
+    let field = w.tree().find(Role::TextInput, "Name der neuen Serie").unwrap().id;
+    w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: field, data: None }, window, cx));
+    w.cx.simulate_input("Dark");
+    w.cx.simulate_keystrokes("enter");
+    w.draw();
+    assert_eq!(said(&w.tree(), Role::ListItem, "Dark"), "Staffel 1, Folge 5. 4 gesehen. —");
+}
