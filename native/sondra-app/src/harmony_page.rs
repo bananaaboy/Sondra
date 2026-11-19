@@ -355,7 +355,7 @@ impl Shell {
             let folder = path.parent().map(PathBuf::from);
             let me = me.clone();
             out = out.child(
-                div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.value(path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default())).child(
+                div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.value(path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default())).children(self.drive_button(&ui, format!("drive-{}", path.display()), path, &path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default(), cx)).child(
                     ui.button(format!("zeigen-{}", path.display()), "Im Ordner zeigen").small().on_click(move |_, app| {
                         if let Some(folder) = folder.clone() {
                             me.update(app, |shell, cx| {

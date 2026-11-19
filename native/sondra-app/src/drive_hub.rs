@@ -189,3 +189,34 @@ impl crate::shell::Shell {
         self.drive = Some(drive);
     }
 }
+
+impl crate::shell::Shell {
+    /// The „In Drive“ button of a result, with its state in its words; `None` where no Google client is built in.
+    pub(crate) fn drive_button(&self, ui: &sondra_ui::Ui, id: String, path: &Path, name: &str, cx: &mut gpui::Context<Self>) -> Option<sondra_ui::Button> {
+        if !self.drive.as_ref().is_some_and(|d| d.configured) {
+            return None;
+        }
+        let (me, target) = (cx.entity(), path.to_path_buf());
+        let state = self.drive_saves.get(path);
+        let (label, busy) = match &state {
+            Some(Line::Busy(Some(f))) => (format!("Drive {} %", (f * 100.0).round() as i32), true),
+            Some(Line::Busy(None)) => ("Drive …".to_string(), true),
+            Some(Line::Done) => ("In Drive gespeichert".to_string(), false),
+            Some(Line::Already) => ("Schon in Drive".to_string(), false),
+            Some(Line::Failed(_)) => ("Erneut versuchen".to_string(), false),
+            None => ("In Drive".to_string(), false),
+        };
+        Some(ui.button(id, label).small().disabled(busy).accessible_name(format!("{name} in Drive speichern")).on_click(move |_, app| {
+            let p = target.clone();
+            me.update(app, |shell, cx| shell.save_to_drive(p, cx))
+        }))
+    }
+
+    /// The sentence under a result when Drive refused it.
+    pub(crate) fn drive_failure(&self, path: &Path) -> Option<String> {
+        match self.drive_saves.get(path) {
+            Some(Line::Failed(why)) => Some(format!("Drive: {why}")),
+            _ => None,
+        }
+    }
+}

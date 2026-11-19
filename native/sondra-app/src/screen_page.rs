@@ -337,6 +337,7 @@ impl Shell {
                                 sh.play_files(vec![p], cx);
                             })
                         }))
+                        .children(self.drive_button(&ui, format!("aufnahme-drive-{n}"), path, &path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), cx))
                         .child(ui.button(format!("aufnahme-zeigen-{n}"), "Im Ordner zeigen").small().on_click(move |_, app| {
                             if let Some(folder) = folder.clone() {
                                 show.update(app, |sh, cx| {

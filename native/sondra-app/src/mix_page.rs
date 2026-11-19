@@ -366,7 +366,7 @@ impl Shell {
                             shell.play_files(vec![p], cx);
                         })
                     }))
-                    .child(ui.button(format!("zeigen-{}", path.display()), "Im Ordner zeigen").small().accessible_name(format!("{name} im Ordner zeigen")).on_click(move |_, app| {
+                    .children(self.drive_button(&ui, format!("drive-{}", path.display()), &path, &name, cx)).child(ui.button(format!("zeigen-{}", path.display()), "Im Ordner zeigen").small().accessible_name(format!("{name} im Ordner zeigen")).on_click(move |_, app| {
                         if let Some(folder) = folder.clone() {
                             show.update(app, |shell, cx| {
                                 shell.go(Panel::Folder, cx);

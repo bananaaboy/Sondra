@@ -495,7 +495,7 @@ impl Shell {
             let me = me.clone();
             let name = made.path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
             done = done.child(
-                div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.value(name.clone())).child(ui.hint(format!("{} × {} px · {}", made.width, made.height, sondra_merk::format::format_bytes(made.bytes as f64, 1)))).child(
+                div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.value(name.clone())).child(ui.hint(format!("{} × {} px · {}", made.width, made.height, sondra_merk::format::format_bytes(made.bytes as f64, 1)))).children(self.drive_button(&ui, format!("drive-{}", made.path.display()), &made.path, &name, cx)).child(
                     ui.button(format!("zeigen-{}", made.path.display()), "Im Ordner zeigen").small().accessible_name(format!("{name} im Ordner zeigen")).on_click(move |_, app| {
                         if let Some(folder) = folder.clone() {
                             me.update(app, |shell, cx| {

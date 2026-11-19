@@ -229,6 +229,7 @@ impl Shell {
                                     shell.play_files(vec![p], cx);
                                 })
                             }))
+                            .children(self.drive_button(&ui, "angeglichen-drive".to_string(), path, &name, cx))
                             .child(ui.button("angeglichen-zeigen", "Im Ordner zeigen").small().on_click(move |_, app| {
                                 if let Some(folder) = folder.clone() {
                                     show.update(app, |shell, cx| {

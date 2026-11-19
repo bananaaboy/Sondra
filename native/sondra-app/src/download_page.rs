@@ -640,6 +640,7 @@ impl Shell {
                 let (path, folder) = (file.path.clone(), file.path.parent().map(PathBuf::from));
                 let says = format!("{} · {}", file.path.display(), format_size(file.size));
                 let name = file.path.file_name().map_or_else(|| file.title.clone(), |n| n.to_string_lossy().into_owned());
+                let drive_button = self.drive_button(&ui, format!("geladen-drive-{n}"), &path, &name, cx);
                 rows = rows.child(Line {
                     colors: c,
                     id: format!("geladen-{n}").into(),
@@ -650,7 +651,7 @@ impl Shell {
                     selected: false,
                     body: vec![
                         div().flex_1().min_w(px(0.)).child(ui.value(name)).into_any_element(),
-                        div().flex().gap(px(8.)).child(ui.button(format!("geladen-abspielen-{n}"), "Abspielen").small().on_click(move |_, app| {
+                        div().flex().gap(px(8.)).children(drive_button).child(ui.button(format!("geladen-abspielen-{n}"), "Abspielen").small().on_click(move |_, app| {
                             let path = path.clone();
                             play.update(app, |shell, cx| {
                                 shell.go(Panel::Player, cx);
