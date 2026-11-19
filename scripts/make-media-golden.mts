@@ -13,6 +13,10 @@ import { applyNormalization, DEFAULT_NORMALIZATION, measureLoudness } from '../s
 import { istft, magnitudeOf, stft } from '../src/lib/fft'
 import { detectAutoChop16, detectOnsets } from '../src/lib/onsets'
 import { beatGrid, estimateTempo, snapToZeroCrossing } from '../src/lib/tempo'
+import { chromagram, estimateTuning } from '../src/lib/chroma'
+import { estimateChords, estimateKey } from '../src/lib/key'
+import { chordsToMidiNotes, writeMidi } from '../src/lib/midi'
+import { DEFAULT_SEGMENTATION, midiName, segmentNotes, trackPitch } from '../src/lib/pitch'
 
 const outDir = 'native/sondra-media/tests/golden'
 mkdirSync(outDir, { recursive: true })
@@ -216,4 +220,118 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
   const chop = detectAutoChop16(audio)
   writeFileSync(`${outDir}/tempo.json`, `${JSON.stringify({ tempo, held: heldEstimate, grids, snaps, onsets, chop }, null, 1)}\n`)
   console.log(`Tempo: ${tempo.map((t) => t.estimate.bpm).join(', ')} · ${onsets.length} Einsätze`)
+}
+
+/* -- Harmonie: Tonart, Akkorde, Tonhöhe, Noten, MIDI-Datei -------------------------------------- */
+
+{
+  const sr = 44100
+  const midiToHz = (midi: number) => 440 * 2 ** ((midi - 69) / 12)
+  function tone(target: Float32Array, midi: number, from: number, to: number, level = 0.3) {
+    const hz = midiToHz(midi)
+    for (let i = from; i < to && i < target.length; i += 1) {
+      const t = i / sr
+      const fade = Math.min(1, Math.min(i - from, to - i) / (0.01 * sr))
+      target[i] += level * fade * (Math.sin(2 * Math.PI * hz * t) + 0.4 * Math.sin(4 * Math.PI * hz * t) + 0.2 * Math.sin(6 * Math.PI * hz * t))
+    }
+  }
+  function progression(tonic: number, mode: 'dur' | 'moll', seconds = 8) {
+    const frames = sr * seconds
+    const channel = new Float32Array(frames)
+    const degrees = mode === 'dur' ? [0, 7, 9, 5] : [0, 8, 3, 10]
+    const perChord = Math.floor(frames / degrees.length)
+    degrees.forEach((degree, index) => {
+      const from = index * perChord
+      const to = from + perChord
+      const root = 48 + ((tonic + degree) % 12)
+      const quality = mode === 'dur' ? (index === 2 ? 3 : 4) : index === 0 ? 3 : 4
+      tone(channel, root, from, to, 0.25)
+      tone(channel, root + quality, from, to, 0.2)
+      tone(channel, root + 7, from, to, 0.2)
+      tone(channel, root + 12, from, to, 0.15)
+    })
+    return { channels: [channel], sampleRate: sr }
+  }
+  const round3 = (x: number) => Math.round(x * 1e6) / 1e6
+  const keyOf = (name: string, audio: { channels: Float32Array[]; sampleRate: number }) => {
+    const chroma = chromagram(audio)
+    const k = estimateKey(chroma)
+    return {
+      name,
+      tuning: name === 'C-Dur' ? estimateTuning(audio) : null,
+      average: Array.from(chroma.average).map(round3),
+      bass: Array.from(chroma.bass).map(round3),
+      head: Array.from(chroma.head).map(round3),
+      tail: Array.from(chroma.tail).map(round3),
+      key: { tonic: k.tonic, mode: k.mode, label: k.label, camelot: k.camelot, confidence: round3(k.confidence), alternative: k.alternative, scores: k.scores.map((e) => ({ ...e, score: round3(e.score) })) },
+      chords: estimateChords(chroma, 0.5).map((c) => ({ ...c, startSeconds: round3(c.startSeconds), endSeconds: round3(c.endSeconds) })),
+    }
+  }
+  const keys = [
+    keyOf('C-Dur', progression(0, 'dur')),
+    keyOf('G-Dur', progression(7, 'dur')),
+    keyOf('A-Moll', progression(9, 'moll')),
+    keyOf('D-Moll', progression(2, 'moll')),
+  ]
+  const solo = new Float32Array(sr * 4)
+  ;[60, 62, 64, 65, 67, 69, 71, 72].forEach((midi, index) => {
+    const from = Math.round(index * 0.5 * sr)
+    tone(solo, midi, from, from + Math.round(0.45 * sr), 0.4)
+  })
+  const soloChords = estimateChords(chromagram({ channels: [solo], sampleRate: sr }), 0.5)
+  const withMelody = progression(0, 'dur')
+  ;[72, 76, 74, 72, 71, 67, 69, 72, 74, 72, 71, 69, 67, 65, 64, 60].forEach((midi, index) => {
+    const from = Math.round(index * 0.5 * sr)
+    tone(withMelody.channels[0], midi, from, from + Math.round(0.45 * sr), 0.34)
+  })
+  const mixedChords = estimateChords(chromagram(withMelody), 0.5)
+
+  const scale = [60, 62, 64, 65, 67, 69, 71, 72]
+  const melody = new Float32Array(sr * 4)
+  scale.forEach((midi, index) => {
+    const from = Math.round(index * 0.4 * sr)
+    tone(melody, midi, from, from + Math.round(0.35 * sr), 0.4)
+  })
+  const melodyAudio = { channels: [melody], sampleRate: sr }
+  const frames = trackPitch(melodyAudio)
+  const notes = segmentNotes(melodyAudio, frames, { ...DEFAULT_SEGMENTATION, minimumSeconds: 0.12 })
+  const quantized = segmentNotes(melodyAudio, frames, { ...DEFAULT_SEGMENTATION, minimumSeconds: 0.12, quantizeSeconds: 0.125 })
+  const pitchSample = [0, 10, 25, 40, 55, 100, 200, 300].filter((i) => i < frames.length).map((i) => ({ i, ...frames[i], hz: round3(frames[i].hz), clarity: round3(frames[i].clarity), timeSeconds: round3(frames[i].timeSeconds) }))
+  const octaves = [40, 45, 52].map((midi) => {
+    const n = sr * 1.5
+    const channel = new Float32Array(n)
+    const hz = midiToHz(midi)
+    for (let i = 0; i < n; i += 1) {
+      const t = i / sr
+      const fade = Math.min(1, Math.min(i, n - i) / (0.02 * sr))
+      channel[i] = 0.3 * fade * (Math.sin(2 * Math.PI * hz * t) + Math.sin(4 * Math.PI * hz * t) + 0.6 * Math.sin(6 * Math.PI * hz * t) + 0.4 * Math.sin(8 * Math.PI * hz * t))
+    }
+    const clip = { channels: [channel], sampleRate: sr }
+    const found = segmentNotes(clip, trackPitch(clip), { ...DEFAULT_SEGMENTATION, minimumSeconds: 0.2 })
+    return { midi, got: found[0]?.midi ?? 0, name: found[0] ? midiName(found[0].midi) : '' }
+  })
+  const midi = Array.from(writeMidi(notes, { bpm: 120, trackName: 'test' }))
+  const midiNoName = Array.from(writeMidi(notes, { bpm: 0 }))
+  const chordNotes = chordsToMidiNotes(keys[0].chords as never)
+  writeFileSync(
+    `${outDir}/harmony.json`,
+    `${JSON.stringify(
+      {
+        keys,
+        soloChords: soloChords.filter((c) => c.root !== null).length,
+        mixedLabels: mixedChords.filter((c) => c.root !== null).map((c) => c.label),
+        frameCount: frames.length,
+        pitchSample,
+        notes: notes.map((n) => ({ ...n, startSeconds: round3(n.startSeconds), endSeconds: round3(n.endSeconds) })),
+        quantized: quantized.map((n) => ({ ...n, startSeconds: round3(n.startSeconds), endSeconds: round3(n.endSeconds) })),
+        octaves,
+        midi,
+        midiNoName,
+        chordNotes,
+      },
+      null,
+      1,
+    )}\n`,
+  )
+  console.log(`Harmonie: ${keys.map((k) => k.key.label).join(', ')} · ${notes.length} Noten · MIDI ${midi.length} Bytes`)
 }

@@ -1,0 +1,1031 @@
+{
+ "keys": [
+  {
+   "name": "C-Dur",
+   "tuning": -0.5,
+   "average": [
+    1,
+    0.03998,
+    0.383177,
+    0.03135,
+    0.603176,
+    0.504028,
+    0.094771,
+    0.888703,
+    0.058134,
+    0.863039,
+    0.049419,
+    0.408515
+   ],
+   "bass": [
+    0.528836,
+    0,
+    0,
+    0,
+    0,
+    0.01412,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0.497386
+   ],
+   "head": [
+    1,
+    0.04879,
+    0.136128,
+    0.032295,
+    0.459155,
+    0.029109,
+    0.023959,
+    0.692836,
+    0.029414,
+    0.005922,
+    0.01571,
+    0.199317
+   ],
+   "tail": [
+    0.619548,
+    0.021388,
+    0.00764,
+    0.01116,
+    0.137437,
+    1,
+    0.045748,
+    0.127461,
+    0.030128,
+    0.517396,
+    0.031131,
+    0.0161
+   ],
+   "key": {
+    "tonic": 0,
+    "mode": "dur",
+    "label": "C-Dur",
+    "camelot": "8B",
+    "confidence": 1,
+    "alternative": {
+     "label": "A-Moll",
+     "camelot": "8A"
+    },
+    "scores": [
+     {
+      "label": "C-Dur",
+      "camelot": "8B",
+      "score": 1.332598
+     },
+     {
+      "label": "A-Moll",
+      "camelot": "8A",
+      "score": 1.092173
+     },
+     {
+      "label": "G-Dur",
+      "camelot": "9B",
+      "score": 0.825443
+     },
+     {
+      "label": "C-Moll",
+      "camelot": "5A",
+      "score": 0.73078
+     },
+     {
+      "label": "E-Moll",
+      "camelot": "9A",
+      "score": 0.716915
+     },
+     {
+      "label": "F-Dur",
+      "camelot": "7B",
+      "score": 0.703362
+     }
+    ]
+   },
+   "chords": [
+    {
+     "startSeconds": 0,
+     "endSeconds": 2.043356,
+     "label": "C",
+     "root": 0,
+     "quality": "dur"
+    },
+    {
+     "startSeconds": 2.043356,
+     "endSeconds": 4.086712,
+     "label": "G",
+     "root": 7,
+     "quality": "dur"
+    },
+    {
+     "startSeconds": 4.086712,
+     "endSeconds": 6.130068,
+     "label": "Am",
+     "root": 9,
+     "quality": "moll"
+    },
+    {
+     "startSeconds": 6.130068,
+     "endSeconds": 8.080544,
+     "label": "F",
+     "root": 5,
+     "quality": "dur"
+    }
+   ]
+  },
+  {
+   "name": "G-Dur",
+   "tuning": null,
+   "average": [
+    0.426231,
+    0.099419,
+    0.87823,
+    0.055329,
+    0.679307,
+    0.042465,
+    0.337894,
+    1,
+    0.049473,
+    0.352469,
+    0.045057,
+    0.647161
+   ],
+   "bass": [
+    0.566387,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0.016799,
+    0,
+    0.466336,
+    0,
+    1
+   ],
+   "head": [
+    0.024091,
+    0.013327,
+    0.635944,
+    0.014001,
+    0.005639,
+    0.00807,
+    0.131063,
+    1,
+    0.034012,
+    0.109828,
+    0.025636,
+    0.50931
+   ],
+   "tail": [
+    1,
+    0.054397,
+    0.139325,
+    0.03512,
+    0.459987,
+    0.038827,
+    0.029703,
+    0.629076,
+    0.029643,
+    0.009074,
+    0.017612,
+    0.210015
+   ],
+   "key": {
+    "tonic": 7,
+    "mode": "dur",
+    "label": "G-Dur",
+    "camelot": "9B",
+    "confidence": 1,
+    "alternative": {
+     "label": "B-Moll",
+     "camelot": "10A"
+    },
+    "scores": [
+     {
+      "label": "G-Dur",
+      "camelot": "9B",
+      "score": 1.262754
+     },
+     {
+      "label": "B-Moll",
+      "camelot": "10A",
+      "score": 0.992753
+     },
+     {
+      "label": "E-Moll",
+      "camelot": "9A",
+      "score": 0.860905
+     },
+     {
+      "label": "D-Dur",
+      "camelot": "10B",
+      "score": 0.859029
+     },
+     {
+      "label": "C-Dur",
+      "camelot": "8B",
+      "score": 0.751753
+     },
+     {
+      "label": "G-Moll",
+      "camelot": "6A",
+      "score": 0.678308
+     }
+    ]
+   },
+   "chords": [
+    {
+     "startSeconds": 0,
+     "endSeconds": 2.043356,
+     "label": "G",
+     "root": 7,
+     "quality": "dur"
+    },
+    {
+     "startSeconds": 2.043356,
+     "endSeconds": 4.086712,
+     "label": "D",
+     "root": 2,
+     "quality": "dur"
+    },
+    {
+     "startSeconds": 4.086712,
+     "endSeconds": 6.130068,
+     "label": "Em",
+     "root": 4,
+     "quality": "moll"
+    },
+    {
+     "startSeconds": 6.130068,
+     "endSeconds": 8.080544,
+     "label": "C",
+     "root": 0,
+     "quality": "dur"
+    }
+   ]
+  },
+  {
+   "name": "A-Moll",
+   "tuning": null,
+   "average": [
+    1,
+    0.035972,
+    0.410827,
+    0.031462,
+    0.599277,
+    0.494649,
+    0.095439,
+    0.900305,
+    0.062165,
+    0.864043,
+    0.04964,
+    0.407328
+   ],
+   "bass": [
+    0.537583,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0.026337,
+    0.003542,
+    1,
+    0,
+    0.469435
+   ],
+   "head": [
+    0.491476,
+    0.013992,
+    0.004072,
+    0.016396,
+    0.616493,
+    0.016582,
+    0.007105,
+    0.104402,
+    0.040959,
+    1,
+    0.037028,
+    0.110482
+   ],
+   "tail": [
+    0.029388,
+    0.012721,
+    0.713125,
+    0.014897,
+    0.006552,
+    0.010576,
+    0.134502,
+    1,
+    0.043139,
+    0.116252,
+    0.030777,
+    0.511763
+   ],
+   "key": {
+    "tonic": 9,
+    "mode": "moll",
+    "label": "A-Moll",
+    "camelot": "8A",
+    "confidence": 0.65806,
+    "alternative": {
+     "label": "C-Dur",
+     "camelot": "8B"
+    },
+    "scores": [
+     {
+      "label": "A-Moll",
+      "camelot": "8A",
+      "score": 1.286072
+     },
+     {
+      "label": "C-Dur",
+      "camelot": "8B",
+      "score": 1.15446
+     },
+     {
+      "label": "G-Dur",
+      "camelot": "9B",
+      "score": 0.792147
+     },
+     {
+      "label": "E-Moll",
+      "camelot": "9A",
+      "score": 0.740014
+     },
+     {
+      "label": "A-Dur",
+      "camelot": "11B",
+      "score": 0.641665
+     },
+     {
+      "label": "F-Dur",
+      "camelot": "7B",
+      "score": 0.593731
+     }
+    ]
+   },
+   "chords": [
+    {
+     "startSeconds": 0,
+     "endSeconds": 2.043356,
+     "label": "Am",
+     "root": 9,
+     "quality": "moll"
+    },
+    {
+     "startSeconds": 2.043356,
+     "endSeconds": 4.086712,
+     "label": "F",
+     "root": 5,
+     "quality": "dur"
+    },
+    {
+     "startSeconds": 4.086712,
+     "endSeconds": 6.130068,
+     "label": "C",
+     "root": 0,
+     "quality": "dur"
+    },
+    {
+     "startSeconds": 6.130068,
+     "endSeconds": 8.080544,
+     "label": "G",
+     "root": 7,
+     "quality": "dur"
+    }
+   ]
+  },
+  {
+   "name": "D-Moll",
+   "tuning": null,
+   "average": [
+    0.788426,
+    0.055137,
+    0.755885,
+    0.041501,
+    0.302821,
+    1,
+    0.041787,
+    0.32879,
+    0.041964,
+    0.584257,
+    0.578831,
+    0.1023
+   ],
+   "bass": [
+    0.613847,
+    0.006559,
+    0,
+    0,
+    0,
+    0.008119,
+    0,
+    0,
+    0,
+    1,
+    0.655148,
+    0.011104
+   ],
+   "head": [
+    0.117427,
+    0.06541,
+    1,
+    0.045659,
+    0.132574,
+    0.435926,
+    0.02339,
+    0.008937,
+    0.034021,
+    0.668815,
+    0.034165,
+    0.014284
+   ],
+   "tail": [
+    1,
+    0.054397,
+    0.139325,
+    0.03512,
+    0.459987,
+    0.038827,
+    0.029703,
+    0.629076,
+    0.029643,
+    0.009074,
+    0.017612,
+    0.210015
+   ],
+   "key": {
+    "tonic": 2,
+    "mode": "moll",
+    "label": "D-Moll",
+    "camelot": "7A",
+    "confidence": 0.170999,
+    "alternative": {
+     "label": "F-Dur",
+     "camelot": "7B"
+    },
+    "scores": [
+     {
+      "label": "D-Moll",
+      "camelot": "7A",
+      "score": 1.120749
+     },
+     {
+      "label": "F-Dur",
+      "camelot": "7B",
+      "score": 1.086549
+     },
+     {
+      "label": "A-Moll",
+      "camelot": "8A",
+      "score": 0.903287
+     },
+     {
+      "label": "C-Dur",
+      "camelot": "8B",
+      "score": 0.832451
+     },
+     {
+      "label": "B♭-Dur",
+      "camelot": "6B",
+      "score": 0.79326
+     },
+     {
+      "label": "F-Moll",
+      "camelot": "4A",
+      "score": 0.490882
+     }
+    ]
+   },
+   "chords": [
+    {
+     "startSeconds": 0,
+     "endSeconds": 2.043356,
+     "label": "Dm",
+     "root": 2,
+     "quality": "moll"
+    },
+    {
+     "startSeconds": 2.043356,
+     "endSeconds": 4.086712,
+     "label": "A♯",
+     "root": 10,
+     "quality": "dur"
+    },
+    {
+     "startSeconds": 4.086712,
+     "endSeconds": 6.130068,
+     "label": "F",
+     "root": 5,
+     "quality": "dur"
+    },
+    {
+     "startSeconds": 6.130068,
+     "endSeconds": 8.080544,
+     "label": "C",
+     "root": 0,
+     "quality": "dur"
+    }
+   ]
+  }
+ ],
+ "soloChords": 0,
+ "mixedLabels": [
+  "C",
+  "G",
+  "Am",
+  "F"
+ ],
+ "frameCount": 396,
+ "pitchSample": [
+  {
+   "i": 0,
+   "timeSeconds": 0,
+   "hz": 261.81805,
+   "clarity": 0.987618
+  },
+  {
+   "i": 10,
+   "timeSeconds": 0.1,
+   "hz": 261.627748,
+   "clarity": 0.999814
+  },
+  {
+   "i": 25,
+   "timeSeconds": 0.25,
+   "hz": 261.627773,
+   "clarity": 0.999814
+  },
+  {
+   "i": 40,
+   "timeSeconds": 0.4,
+   "hz": 293.852585,
+   "clarity": 0.990233
+  },
+  {
+   "i": 55,
+   "timeSeconds": 0.55,
+   "hz": 293.670854,
+   "clarity": 0.999964
+  },
+  {
+   "i": 100,
+   "timeSeconds": 1,
+   "hz": 329.637053,
+   "clarity": 0.999931
+  },
+  {
+   "i": 200,
+   "timeSeconds": 2,
+   "hz": 440.160267,
+   "clarity": 0.995093
+  },
+  {
+   "i": 300,
+   "timeSeconds": 3,
+   "hz": 523.295141,
+   "clarity": 0.999689
+  }
+ ],
+ "notes": [
+  {
+   "midi": 60,
+   "startSeconds": 0,
+   "endSeconds": 0.35,
+   "velocity": 113
+  },
+  {
+   "midi": 62,
+   "startSeconds": 0.36,
+   "endSeconds": 0.75,
+   "velocity": 113
+  },
+  {
+   "midi": 64,
+   "startSeconds": 0.77,
+   "endSeconds": 1.15,
+   "velocity": 113
+  },
+  {
+   "midi": 65,
+   "startSeconds": 1.16,
+   "endSeconds": 1.55,
+   "velocity": 113
+  },
+  {
+   "midi": 67,
+   "startSeconds": 1.56,
+   "endSeconds": 1.95,
+   "velocity": 113
+  },
+  {
+   "midi": 69,
+   "startSeconds": 1.96,
+   "endSeconds": 2.35,
+   "velocity": 113
+  },
+  {
+   "midi": 71,
+   "startSeconds": 2.36,
+   "endSeconds": 2.75,
+   "velocity": 113
+  },
+  {
+   "midi": 72,
+   "startSeconds": 2.76,
+   "endSeconds": 3.15,
+   "velocity": 113
+  }
+ ],
+ "quantized": [
+  {
+   "midi": 60,
+   "startSeconds": 0,
+   "endSeconds": 0.375,
+   "velocity": 113
+  },
+  {
+   "midi": 62,
+   "startSeconds": 0.375,
+   "endSeconds": 0.75,
+   "velocity": 113
+  },
+  {
+   "midi": 64,
+   "startSeconds": 0.75,
+   "endSeconds": 1.125,
+   "velocity": 113
+  },
+  {
+   "midi": 65,
+   "startSeconds": 1.125,
+   "endSeconds": 1.5,
+   "velocity": 113
+  },
+  {
+   "midi": 67,
+   "startSeconds": 1.5,
+   "endSeconds": 1.875,
+   "velocity": 113
+  },
+  {
+   "midi": 69,
+   "startSeconds": 2,
+   "endSeconds": 2.375,
+   "velocity": 113
+  },
+  {
+   "midi": 71,
+   "startSeconds": 2.375,
+   "endSeconds": 2.75,
+   "velocity": 113
+  },
+  {
+   "midi": 72,
+   "startSeconds": 2.75,
+   "endSeconds": 3.125,
+   "velocity": 113
+  }
+ ],
+ "octaves": [
+  {
+   "midi": 40,
+   "got": 40,
+   "name": "E2"
+  },
+  {
+   "midi": 45,
+   "got": 45,
+   "name": "A2"
+  },
+  {
+   "midi": 52,
+   "got": 52,
+   "name": "E3"
+  }
+ ],
+ "midi": [
+  77,
+  84,
+  104,
+  100,
+  0,
+  0,
+  0,
+  6,
+  0,
+  0,
+  0,
+  0,
+  1,
+  224,
+  77,
+  84,
+  114,
+  107,
+  0,
+  0,
+  0,
+  91,
+  0,
+  255,
+  81,
+  3,
+  7,
+  161,
+  32,
+  0,
+  255,
+  3,
+  4,
+  116,
+  101,
+  115,
+  116,
+  0,
+  144,
+  60,
+  113,
+  130,
+  80,
+  128,
+  60,
+  0,
+  10,
+  144,
+  62,
+  113,
+  130,
+  118,
+  128,
+  62,
+  0,
+  19,
+  144,
+  64,
+  113,
+  130,
+  109,
+  128,
+  64,
+  0,
+  10,
+  144,
+  65,
+  113,
+  130,
+  118,
+  128,
+  65,
+  0,
+  10,
+  144,
+  67,
+  113,
+  130,
+  118,
+  128,
+  67,
+  0,
+  10,
+  144,
+  69,
+  113,
+  130,
+  118,
+  128,
+  69,
+  0,
+  10,
+  144,
+  71,
+  113,
+  130,
+  118,
+  128,
+  71,
+  0,
+  10,
+  144,
+  72,
+  113,
+  130,
+  118,
+  128,
+  72,
+  0,
+  0,
+  255,
+  47,
+  0
+ ],
+ "midiNoName": [
+  77,
+  84,
+  104,
+  100,
+  0,
+  0,
+  0,
+  6,
+  0,
+  0,
+  0,
+  0,
+  1,
+  224,
+  77,
+  84,
+  114,
+  107,
+  0,
+  0,
+  0,
+  83,
+  0,
+  255,
+  81,
+  3,
+  7,
+  161,
+  32,
+  0,
+  144,
+  60,
+  113,
+  130,
+  80,
+  128,
+  60,
+  0,
+  10,
+  144,
+  62,
+  113,
+  130,
+  118,
+  128,
+  62,
+  0,
+  19,
+  144,
+  64,
+  113,
+  130,
+  109,
+  128,
+  64,
+  0,
+  10,
+  144,
+  65,
+  113,
+  130,
+  118,
+  128,
+  65,
+  0,
+  10,
+  144,
+  67,
+  113,
+  130,
+  118,
+  128,
+  67,
+  0,
+  10,
+  144,
+  69,
+  113,
+  130,
+  118,
+  128,
+  69,
+  0,
+  10,
+  144,
+  71,
+  113,
+  130,
+  118,
+  128,
+  71,
+  0,
+  10,
+  144,
+  72,
+  113,
+  130,
+  118,
+  128,
+  72,
+  0,
+  0,
+  255,
+  47,
+  0
+ ],
+ "chordNotes": [
+  {
+   "midi": 48,
+   "startSeconds": 0,
+   "endSeconds": 2.043356,
+   "velocity": 82
+  },
+  {
+   "midi": 60,
+   "startSeconds": 0,
+   "endSeconds": 2.043356,
+   "velocity": 82
+  },
+  {
+   "midi": 64,
+   "startSeconds": 0,
+   "endSeconds": 2.043356,
+   "velocity": 82
+  },
+  {
+   "midi": 67,
+   "startSeconds": 0,
+   "endSeconds": 2.043356,
+   "velocity": 82
+  },
+  {
+   "midi": 55,
+   "startSeconds": 2.043356,
+   "endSeconds": 4.086712,
+   "velocity": 82
+  },
+  {
+   "midi": 67,
+   "startSeconds": 2.043356,
+   "endSeconds": 4.086712,
+   "velocity": 82
+  },
+  {
+   "midi": 71,
+   "startSeconds": 2.043356,
+   "endSeconds": 4.086712,
+   "velocity": 82
+  },
+  {
+   "midi": 74,
+   "startSeconds": 2.043356,
+   "endSeconds": 4.086712,
+   "velocity": 82
+  },
+  {
+   "midi": 57,
+   "startSeconds": 4.086712,
+   "endSeconds": 6.130068,
+   "velocity": 82
+  },
+  {
+   "midi": 69,
+   "startSeconds": 4.086712,
+   "endSeconds": 6.130068,
+   "velocity": 82
+  },
+  {
+   "midi": 72,
+   "startSeconds": 4.086712,
+   "endSeconds": 6.130068,
+   "velocity": 82
+  },
+  {
+   "midi": 76,
+   "startSeconds": 4.086712,
+   "endSeconds": 6.130068,
+   "velocity": 82
+  },
+  {
+   "midi": 53,
+   "startSeconds": 6.130068,
+   "endSeconds": 8.080544,
+   "velocity": 82
+  },
+  {
+   "midi": 65,
+   "startSeconds": 6.130068,
+   "endSeconds": 8.080544,
+   "velocity": 82
+  },
+  {
+   "midi": 69,
+   "startSeconds": 6.130068,
+   "endSeconds": 8.080544,
+   "velocity": 82
+  },
+  {
+   "midi": 72,
+   "startSeconds": 6.130068,
+   "endSeconds": 8.080544,
+   "velocity": 82
+  }
+ ]
+}

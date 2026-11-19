@@ -8,6 +8,7 @@
 //! * [`fft`] — FFT and short-time transform (`src/lib/fft.ts`), the front end of the spectral tools.
 //! * [`audio`] — the planar float audio the tools hold.
 //! * [`onsets`], [`tempo`] — spectral-flux onsets, tempo by autocorrelation, beat grids (`onsets.ts`, `tempo.ts`).
+//! * [`chroma`], [`key`], [`pitch`], [`midi`] — pitch classes, key and chords, YIN notes, the MIDI file.
 //! * [`loudness`] — EBU R128 / BS.1770: measuring and moving to a target (`src/lib/loudness.ts`).
 //! * [`run`] — a whole conversion: a file in, a file out (`src/lib/convertRun.ts`).
 //!
@@ -17,11 +18,15 @@
 //! complexity 4, WebM as VP8), because the files must stay the same ones the web app makes.
 
 pub mod audio;
+pub mod chroma;
 pub mod convert;
 pub mod ffmpeg;
 pub mod fft;
+pub mod key;
 pub mod loudness;
+pub mod midi;
 pub mod onsets;
+pub mod pitch;
 pub mod presets;
 pub mod run;
 pub mod tempo;

@@ -262,7 +262,10 @@ fn onsets_and_auto_chops_are_the_web_apps() {
         assert!((a - b).abs() < 1e-9);
     }
     // The start is there (or an onset right at it); very short material is one slice.
-    assert!(onsets[0] <= 0.02, "the start, or an onset within 20 ms of it");
+    assert!(
+        onsets[0] <= 0.02,
+        "the start, or an onset within 20 ms of it"
+    );
     assert_eq!(
         detect_onsets(&mono(vec![0.0; 100]), &OnsetOptions::default()),
         vec![0.0]
