@@ -74,6 +74,8 @@ import {
   watchedUpTo,
   withParts,
   type SavedLinkItem,
+  onlineNews,
+  takeOnlineNews,
 } from '../src/lib/merkliste'
 
 const outDir = 'native/sondra-merk/tests/golden'
@@ -238,6 +240,11 @@ const progressCases = readCases.map(({ item }) => {
     range: markRange(item, item.season, 3, 8, true),
     unrange: markRange(item, item.season, 3, 8, false),
     settled: seasons.length > 0 ? [item.season, 0, 2, 99].map((from) => ({ from, settled: settle(item, seasons, from) })) : [],
+    news: [[1, 5], [1, 13], [1, 40], [2, 3], [3, 1], [0, 4], [item.season, 99]].map(([maxSeason, maxEpisode]) => {
+      const online = { maxSeason, maxEpisode, checkedAt: 1 }
+      const taken = takeOnlineNews({ ...item, onlineAvailable: online })
+      return { online, news: onlineNews(item, online), taken }
+    }),
     withParts: seasons.length > 0 ? withParts(seasons[0], [{ episodes: 5 }, { episodes: null }, { episodes: 3 }]) : null,
     withOne: seasons.length > 0 ? withParts(seasons[0], [{ episodes: 9, cover: 'https://one/part.jpg' }]) : null,
   }

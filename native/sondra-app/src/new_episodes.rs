@@ -131,6 +131,8 @@ impl Shell {
             // The entry as it stands now — a sync may have changed it meanwhile.
             let Some(item) = self.merk.items.iter_mut().find(|i| i.id == id) else { continue };
             let before = item.online_available.clone();
+            // Whether there is something the list does not know yet — the series page offers it.
+            let online = Online { has_new: Some(sondra_merk::progress::online_news(item, Some(&online)).is_some()), ..online };
             let key = key_of(&online);
             let announce = before.is_some() && later_release(before.as_ref(), &online) && self.news_rounds.told.get(&id) != Some(&key);
             if before.is_none() || announce {
@@ -140,7 +142,7 @@ impl Shell {
                 self.news_rounds.notes.retain(|n| n.id != id);
                 self.news_rounds.notes.push(Announcement { id: id.clone(), title: item.title.clone(), season: online.max_season, episode: online.max_episode });
             }
-            if before.as_ref().is_none_or(|b| (b.max_season, b.max_episode) != (online.max_season, online.max_episode)) {
+            if before.as_ref().is_none_or(|b| (b.max_season, b.max_episode, b.has_new) != (online.max_season, online.max_episode, online.has_new)) {
                 item.online_available = Some(online);
                 changed = true;
             }

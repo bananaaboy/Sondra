@@ -68605,6 +68605,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -68930,6 +69112,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -69307,6 +69671,206 @@
        {
         "number": 2,
         "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 5,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": 99,
         "watched": [
          1,
          2,
@@ -69713,6 +70277,206 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 5,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": 99,
+        "watched": [
+         1,
+         2,
+         3,
+         4
+        ]
+       }
+      ],
+      "season": 2,
+      "episode": 5,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 2,
     "episodes": 9,
@@ -70085,6 +70849,211 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": [
+         1,
+         2
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 0,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": [
+         1,
+         2
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 0,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": [
+         1,
+         2
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 0,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": [
+         1,
+         2
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 0,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": [
+         1,
+         2
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 0,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    }
+   ],
    "withParts": {
     "number": 0,
     "episodes": 9,
@@ -70416,6 +71385,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -70763,6 +71914,200 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": [
+         1
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 2,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 2,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": [
+         1
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 2,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 2,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [
+         1
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 2,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 2,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [
+         1
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 2,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 2,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 2,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 2,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": [
          1
         ]
@@ -71150,6 +72495,212 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 4,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 4,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 4,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 4,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -71483,6 +73034,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -71826,6 +73559,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "paused"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "paused"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "paused"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "paused"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "paused"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "paused"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -72151,6 +74066,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -72494,6 +74591,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "dropped"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "dropped"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "dropped"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "dropped"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "dropped"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "dropped"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -72828,6 +75107,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -73153,6 +75614,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -73548,6 +76191,216 @@
        {
         "number": 3,
         "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       }
+      ],
+      "season": 3,
+      "episode": 7,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 3,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 3,
+      "episode": 7,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 3,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 3,
+      "episode": 7,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 3,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 3,
+      "episode": 7,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 3,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 3,
+      "episode": 7,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 7,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 3,
+        "episodes": 99,
         "watched": [
          1,
          2,
@@ -73980,6 +76833,216 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 7,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 7,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 7,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       },
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 7,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 7,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 2,
+        "episodes": 99,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6
+        ]
+       }
+      ],
+      "season": 2,
+      "episode": 7,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 2,
     "episodes": 9,
@@ -74328,6 +77391,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -74653,6 +77898,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -74996,6 +78423,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -75321,6 +78930,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -75664,6 +79455,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -75989,6 +79962,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -76332,6 +80487,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -76657,6 +80994,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -77000,6 +81519,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -77325,6 +82026,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -77668,6 +82551,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -77993,6 +83058,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -78336,6 +83583,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -78661,6 +84090,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -79004,6 +84615,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -79329,6 +85122,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -79672,6 +85647,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -79997,6 +86154,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -80340,6 +86679,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -80665,6 +87186,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -81008,6 +87711,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -81333,6 +88218,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -81676,6 +88743,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -82001,6 +89250,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -82344,6 +89775,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -82669,6 +90282,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -83012,6 +90807,188 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -83337,6 +91314,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -83675,6 +91834,191 @@
        {
         "number": 1,
         "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": [
          1,
          2,
@@ -84507,6 +92851,256 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 0,
+        "episodes": 3,
+        "watched": []
+       },
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 0,
+        "episodes": 3,
+        "watched": []
+       },
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 0,
+        "episodes": 3,
+        "watched": []
+       },
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 0,
+        "episodes": 3,
+        "watched": []
+       },
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 0,
+        "episodes": 3,
+        "watched": []
+       },
+       {
+        "number": 0,
+        "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -84836,6 +93430,191 @@
        {
         "number": 1,
         "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 4,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": [
          1,
          2,
@@ -85523,6 +94302,228 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 12,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ],
+      "season": 2,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 12,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ],
+      "season": 2,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 12,
+        "watched": [
+         1,
+         2
+        ]
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 13,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 99,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ],
+      "season": 2,
+      "episode": 3,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -85986,6 +94987,236 @@
       "season": 1,
       "episode": 12,
       "status": "done"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 13,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 13,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 2,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": [
+         1,
+         2,
+         3,
+         4,
+         5,
+         6,
+         7,
+         8,
+         9,
+         10,
+         11,
+         12
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 13,
+      "status": "watching"
      }
     }
    ],
@@ -86556,6 +95787,192 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [],
+        "title": "Der Anfang",
+        "cover": "https://s/c.jpg",
+        "coverFrame": {
+         "x": 10,
+         "y": 10,
+         "zoom": 1.5
+        }
+       },
+       {
+        "number": 2,
+        "episodes": 12,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [],
+        "title": "Der Anfang",
+        "cover": "https://s/c.jpg",
+        "coverFrame": {
+         "x": 10,
+         "y": 10,
+         "zoom": 1.5
+        }
+       },
+       {
+        "number": 2,
+        "episodes": 12,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [],
+        "title": "Der Anfang",
+        "cover": "https://s/c.jpg",
+        "coverFrame": {
+         "x": 10,
+         "y": 10,
+         "zoom": 1.5
+        }
+       },
+       {
+        "number": 2,
+        "episodes": 12,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": [],
+        "title": "Der Anfang",
+        "cover": "https://s/c.jpg",
+        "coverFrame": {
+         "x": 10,
+         "y": 10,
+         "zoom": 1.5
+        }
+       },
+       {
+        "number": 2,
+        "episodes": 12,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -86863,6 +96280,171 @@
        {
         "number": 1,
         "episodes": 12,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],
@@ -87577,6 +97159,250 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 26,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [
+         1,
+         2,
+         13,
+         14,
+         25
+        ],
+        "parts": [
+         {
+          "episodes": 12,
+          "title": "Teil A"
+         },
+         {
+          "episodes": 12,
+          "cover": "https://p/1.jpg",
+          "coverFrame": {
+           "x": 1,
+           "y": 2,
+           "zoom": 3
+          }
+         },
+         {
+          "episodes": 16
+         }
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         13,
+         14,
+         25
+        ],
+        "parts": [
+         {
+          "episodes": 12,
+          "title": "Teil A"
+         },
+         {
+          "episodes": 12,
+          "cover": "https://p/1.jpg",
+          "coverFrame": {
+           "x": 1,
+           "y": 2,
+           "zoom": 3
+          }
+         },
+         {
+          "episodes": null
+         }
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": [
+         1,
+         2,
+         13,
+         14,
+         25
+        ],
+        "parts": [
+         {
+          "episodes": 12,
+          "title": "Teil A"
+         },
+         {
+          "episodes": 12,
+          "cover": "https://p/1.jpg",
+          "coverFrame": {
+           "x": 1,
+           "y": 2,
+           "zoom": 3
+          }
+         },
+         {
+          "episodes": null
+         }
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 26,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": [
+         1,
+         2,
+         13,
+         14,
+         25
+        ],
+        "parts": [
+         {
+          "episodes": 12,
+          "title": "Teil A"
+         },
+         {
+          "episodes": 12,
+          "cover": "https://p/1.jpg",
+          "coverFrame": {
+           "x": 1,
+           "y": 2,
+           "zoom": 3
+          }
+         },
+         {
+          "episodes": 75
+         }
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -88087,6 +97913,198 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 19,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 12
+         },
+         {
+          "episodes": 1
+         },
+         {
+          "episodes": 27
+         }
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 18,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 12
+         },
+         {
+          "episodes": 1
+         },
+         {
+          "episodes": 5
+         }
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 18,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 12
+         },
+         {
+          "episodes": 1
+         },
+         {
+          "episodes": 5
+         }
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 19,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 12
+         },
+         {
+          "episodes": 1
+         },
+         {
+          "episodes": 86
+         }
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -88419,6 +98437,186 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [
+         1,
+         2
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": [
+         1,
+         2
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 3,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -88733,6 +98931,176 @@
        {
         "number": 1,
         "episodes": 12,
+        "watched": [],
+        "cover": "https://own/season.jpg"
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [],
+        "cover": "https://own/season.jpg"
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [],
+        "cover": "https://own/season.jpg"
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [],
+        "cover": "https://own/season.jpg"
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 12,
+        "watched": [],
+        "cover": "https://own/season.jpg"
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 13,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": [],
         "cover": "https://own/season.jpg"
        }
@@ -89170,6 +99538,211 @@
      }
     }
    ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 9,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 4
+         },
+         {
+          "episodes": 9
+         }
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 9,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 4
+         },
+         {
+          "episodes": 36
+         }
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 8,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 4
+         },
+         {
+          "episodes": 4
+         }
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 8,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 4
+         },
+         {
+          "episodes": 4
+         }
+        ]
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 9,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
+        "watched": [],
+        "parts": [
+         {
+          "episodes": 4
+         },
+         {
+          "episodes": 95
+         }
+        ]
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
    "withParts": {
     "number": 1,
     "episodes": 9,
@@ -89495,6 +100068,188 @@
        {
         "number": 1,
         "episodes": null,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    }
+   ],
+   "news": [
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 5,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 5,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 5,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 13,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 13,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 13,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 40,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 40,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 40,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 2,
+      "maxEpisode": 3,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 2,
+      "from": 1,
+      "to": 3,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": 3,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 3,
+      "maxEpisode": 1,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 3,
+      "from": 1,
+      "to": 1,
+      "newSeason": true,
+      "countUnknown": false
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 2,
+        "episodes": null,
+        "watched": []
+       },
+       {
+        "number": 3,
+        "episodes": 1,
+        "watched": []
+       }
+      ],
+      "season": 1,
+      "episode": 1,
+      "status": "watching"
+     }
+    },
+    {
+     "online": {
+      "maxSeason": 0,
+      "maxEpisode": 4,
+      "checkedAt": 1
+     },
+     "news": null,
+     "taken": null
+    },
+    {
+     "online": {
+      "maxSeason": 1,
+      "maxEpisode": 99,
+      "checkedAt": 1
+     },
+     "news": {
+      "season": 1,
+      "from": 1,
+      "to": 99,
+      "newSeason": false,
+      "countUnknown": true
+     },
+     "taken": {
+      "seasons": [
+       {
+        "number": 1,
+        "episodes": 99,
         "watched": []
        }
       ],

@@ -273,6 +273,18 @@ impl MerkState {
         }
     }
 
+    /// What is new online, taken onto the list: the season and any missing before it added, or its count
+    /// raised; the place settles on the first episode not seen.
+    pub fn take_news(&mut self, id: &str) {
+        let Some(taken) = self.items.iter().find(|i| i.id == id).and_then(sondra_merk::progress::take_online_news) else { return };
+        self.change(id, |item| {
+            item.seasons = Some(taken.seasons);
+            item.season = taken.season;
+            item.episode = taken.episode;
+            item.status = taken.status;
+        });
+    }
+
     /// Takes the entry off the list; the page it was on closes and „Rückgängig“ is offered.
     pub fn remove(&mut self, id: &str) {
         let now = Ids::system().now;
@@ -936,6 +948,24 @@ impl Shell {
             })
         });
 
+        let news = sondra_merk::progress::online_news(item, None).map(|news| {
+            let me = me.clone();
+            let id = item.id.clone();
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap(px(10.))
+                .p(px(12.))
+                .rounded(px(sondra_ui::radius::CARD))
+                .bg(ui.c.panel_soft)
+                .child(ui.prose(format!("Neu auf AniWorld: {}", news_label(&news))))
+                .child(ui.button("neu-auf-merkliste", "Auf die Merkliste nehmen").small().on_click(move |_, app| {
+                    let id = id.clone();
+                    Self::merk_do(&me, app, move |m| m.take_news(&id))
+                }))
+        });
         let mut page = div()
             .flex()
             .flex_col()
@@ -951,6 +981,9 @@ impl Shell {
             )
             .child(stands)
             .child(actions);
+        if let Some(news) = news {
+            page = page.child(news);
+        }
 
         if let Some(planner) = self.planner_block(ui, item, cx) {
             page = page.child(planner);
@@ -1061,6 +1094,17 @@ impl Shell {
 }
 
 /// The first letters of the words of a title, for a poster without a cover.
+/// What is new online, in words (`newsLabel`).
+pub(crate) fn news_label(news: &sondra_merk::progress::OnlineNews) -> String {
+    if news.new_season {
+        return format!("Staffel {} mit {} {}", news.season, news.to, if news.to == 1 { "Folge" } else { "Folgen" });
+    }
+    if news.count_unknown {
+        return format!("Staffel {} hat {} Folgen", news.season, news.to);
+    }
+    format!("Staffel {}, {}", news.season, if news.from == news.to { format!("Folge {}", news.from) } else { format!("Folgen {}–{}", news.from, news.to) })
+}
+
 pub(crate) fn initials(title: &str) -> String {
     let letters: String = title.split_whitespace().filter_map(|w| w.chars().find(|c| c.is_alphanumeric())).take(3).collect();
     letters.to_uppercase()

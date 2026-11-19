@@ -700,3 +700,23 @@ fn what_is_watched_is_one_click_from_the_start_page(cx: &mut TestAppContext) {
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
     assert!(w.tree().find(Role::Heading, "Frieren").is_some(), "the series' own page is open");
 }
+
+#[gpui::test]
+fn what_is_new_online_is_offered_on_the_page_and_taken_onto_the_list(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ids = Ids::system();
+    let frieren = normalize(
+        &json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 4,
+            "seasons": [{ "number": 1, "episodes": 12, "watched": [1, 2, 3] }],
+            "onlineAvailable": { "maxSeason": 1, "maxEpisode": 14, "checkedAt": 1 } }),
+        &mut ids,
+    );
+    let mut w = open(cx, Some(&Stored { items: vec![frieren], ..Default::default() }), dir.path());
+    w.press(Role::ListItem, "Frieren");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Neu auf AniWorld: Staffel 1, Folgen 13–14"))));
+    w.press(Role::Button, "Auf die Merkliste nehmen");
+    let item = w.shell.read_with(w.cx, |s, _| s.merk_items()).remove(0);
+    assert_eq!(item.seasons.as_ref().unwrap()[0].episodes, Some(14), "the season grew to what is online");
+    assert_eq!(item.episode, Some(4), "the place stays at the first episode not seen");
+    assert!(!w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Neu auf AniWorld"))), "nothing is new any more");
+}

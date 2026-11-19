@@ -419,3 +419,71 @@ pub fn settle(item: &Item, seasons: &[Season], from: i64) -> Settled {
         status: Status::Done,
     }
 }
+
+/// Episodes AniWorld has that the list does not: a season it lacks, or episodes past a known count.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineNews {
+    pub season: i64,
+    /// First and last episode the list does not know yet.
+    pub from: i64,
+    pub to: i64,
+    /// The season itself is not on the list.
+    pub new_season: bool,
+    /// The season is on the list, its number of episodes was not.
+    pub count_unknown: bool,
+}
+
+/// What is new online for this entry (`onlineNews`). Being behind is not news: episodes 14 to 20 of a season
+/// known to have 28 are on the list already.
+pub fn online_news(item: &Item, online: Option<&crate::model::Online>) -> Option<OnlineNews> {
+    let online = online.or(item.online_available.as_ref())?;
+    if online.max_season <= 0 || online.max_episode <= 0 {
+        return None;
+    }
+    let (max_season, max_episode) = (online.max_season, online.max_episode);
+    let Some(season) = seasons_of(item).into_iter().find(|s| s.number == max_season) else {
+        return Some(OnlineNews { season: max_season, from: 1, to: max_episode, new_season: true, count_unknown: false });
+    };
+    match season.episodes {
+        None => {
+            let last = season.watched.iter().copied().max().unwrap_or(0);
+            (max_episode > last).then_some(OnlineNews { season: max_season, from: last + 1, to: max_episode, new_season: false, count_unknown: true })
+        }
+        Some(count) => (max_episode > count).then_some(OnlineNews { season: max_season, from: count + 1, to: max_episode, new_season: false, count_unknown: false }),
+    }
+}
+
+/// A season grown to `to` episodes; when split, its last part grows.
+fn extend_season(season: &Season, to: i64) -> Season {
+    if season.episodes.is_some_and(|e| e >= to) {
+        return season.clone();
+    }
+    if season.parts.as_ref().is_none_or(|p| p.len() < 2) {
+        return Season { episodes: Some(to), ..season.clone() };
+    }
+    let mut parts = stored_parts(season);
+    let before: i64 = parts[..parts.len() - 1].iter().map(|p| p.episodes.unwrap_or(0)).sum();
+    if let Some(last) = parts.last_mut() {
+        last.episodes = Some((to - before).max(1));
+    }
+    with_parts(season, &parts)
+}
+
+/// What is new online, taken onto the list (`takeOnlineNews`): the season and any missing before it added, or
+/// the season's count raised. The place settles on the first episode not seen.
+pub fn take_online_news(item: &Item) -> Option<Settled> {
+    let news = online_news(item, None)?;
+    let mut seasons = seasons_of(item);
+    if news.new_season {
+        let known: std::collections::BTreeSet<i64> = seasons.iter().map(|s| s.number).collect();
+        for number in 1..=news.season {
+            if !known.contains(&number) {
+                seasons.push(Season { number, episodes: if number == news.season { Some(news.to) } else { None }, watched: Vec::new(), title: None, cover: None, cover_frame: None, parts: None });
+            }
+        }
+    } else {
+        seasons = seasons.iter().map(|s| if s.number == news.season { extend_season(s, news.to) } else { s.clone() }).collect();
+    }
+    Some(settle(item, &seasons, item.season))
+}

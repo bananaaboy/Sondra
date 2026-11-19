@@ -227,6 +227,22 @@ fn progress_and_settling_are_the_web_apps() {
                 &drop_nulls(&s["settled"]),
             );
         }
+        for n in case["news"].as_array().unwrap() {
+            let online = sondra_merk::model::Online {
+                max_season: n["online"]["maxSeason"].as_i64().unwrap(),
+                max_episode: n["online"]["maxEpisode"].as_i64().unwrap(),
+                checked_at: 1,
+                has_new: None,
+            };
+            let what = format!("{id}: online {}x{}", online.max_season, online.max_episode);
+            expect_same(&format!("{what}: news"), &to(&sondra_merk::progress::online_news(&item, Some(&online))), &n["news"]);
+            let mut with = item.clone();
+            with.online_available = Some(online);
+            let taken = sondra_merk::progress::take_online_news(&with).map_or(Value::Null, |t| {
+                json!({ "seasons": t.seasons, "season": t.season, "episode": t.episode, "status": t.status })
+            });
+            expect_same(&format!("{what}: taken"), &drop_nulls(&taken), &drop_nulls(&n["taken"]));
+        }
         if !seasons.is_empty() {
             let three = [
                 Part {
