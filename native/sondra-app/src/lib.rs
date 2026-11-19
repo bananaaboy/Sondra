@@ -1,6 +1,7 @@
 //! Sondra's window: the header, the row of tabs and the screens, built from `sondra-ui`.
 
 pub mod actions;
+pub mod anilist;
 pub mod convert_page;
 pub mod download_page;
 pub mod covers;

@@ -502,3 +502,41 @@ fn in_discord_zeigen_is_off_until_chosen_and_then_says_what_the_page_is(cx: &mut
     let text = String::from_utf8_lossy(&buf[8..n]).to_string();
     assert!(text.contains("SET_ACTIVITY") && text.contains("\"details\":\"Merkliste\"") && text.contains("3 Serien (1 aktiv)"), "{text}");
 }
+
+#[gpui::test]
+fn suchen_asks_anilist_only_when_pressed_and_adds_the_series_with_its_length(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let asked = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = asked.clone();
+    std::thread::spawn(move || {
+        for request in server.incoming_requests() {
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let body = r#"{"data":{"Media":{"id":154587,"title":{"romaji":"Sousou no Frieren"},"episodes":28,"seasonYear":2023,"coverImage":{"large":"https://example.invalid/c.jpg"}}}}"#;
+            let _ = request.respond(tiny_http::Response::from_string(body));
+        }
+    });
+    std::env::set_var("SONDRA_ANILIST", format!("http://127.0.0.1:{port}/"));
+    let mut w = open(cx, None, dir.path());
+    w.press(Role::Button, "Eine Serie eintippen");
+    let field = w.tree().find(Role::TextInput, "Name der neuen Serie").unwrap().id;
+    w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: field, data: None }, window, cx));
+    w.cx.simulate_input("Frieren");
+    w.draw();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 0, "typing asks nobody");
+    w.press(Role::Button, "Suchen");
+    for _ in 0..80 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Sousou no Frieren"))) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l) == "Sousou no Frieren (2023) — 28 Folgen")));
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 1);
+    w.press(Role::Button, "Hinzufügen");
+    assert!(said(&w.tree(), Role::ListItem, "Frieren").contains("0/28. noch 28"), "{}", said(&w.tree(), Role::ListItem, "Frieren"));
+}

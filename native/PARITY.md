@@ -47,7 +47,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | M13 | Abgleich mit Anytype (v1 und v2, Space, Seite „Sondra · Merkliste“) | `anytype.mjs`, `anytype.ts` | 4 | `verify:anytype` | offen |
 | M14 | Discord-Status über die lokale Pipe | `discord.mjs` | 4 | `verify:discord` | **nativ ✔** — `sondra-discord` (Handshake, READY, eine Meldung je Änderung, kein Echo auf Discords Antworten, Rahmen in Stücken, Ausschalten leert den Status und schliesst, neu suchen alle 30 s; Windows-Pipe über `PeekNamedPipe`) gegen einen nachgebauten Discord; in der App: „Mehr → In Discord zeigen“, aus bis zur Wahl, Wiedergabe / Serie / Merkliste wie auf der Website; mit echtem Discord nie gelaufen |
 | M15 | Neue Folgen melden (alle 3 Stunden, Benachrichtigung, Klick öffnet die Serie) | `newEpisodes.ts` | 1 | `verify:extractors`, `:resolve` | offen |
-| M16 | AniList und MAL: Fortschritt abgleichen | `anilist.ts` | 4 | Test | offen |
+| M16 | AniList und MAL: Fortschritt abgleichen | `anilist.ts` | 4 | Test | offen — Suchen im Hinzufügen-Feld nativ ✔ (AniList, nur auf Druck, mit Bild und Folgenzahl); der Abgleich des Fortschritts (Token) offen |
 | M17 | Ordner erkennt Serien (zwei Folgen genügen), „Auf die Merkliste“ | `folder.ts` | 4 | `sondra-merk::folder::find_new_series` und `series_to_merk_item` gegen die Website | **Logik nativ ✔**, Oberfläche offen |
 
 ## Ordner

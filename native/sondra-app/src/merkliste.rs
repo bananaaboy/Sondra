@@ -62,6 +62,9 @@ pub struct MerkState {
     pub note: Option<String>,
     /// „Wie weit sind Sie?“ when adding: the episode to watch next (1: not begun).
     pub add_next: i64,
+    /// What „Suchen“ found for the name typed.
+    pub add_found: Option<crate::anilist::Media>,
+    pub add_searching: bool,
     /// The list as it was before a file was read in, to take it back.
     pub before_import: Option<(Vec<Item>, Removed)>,
 }
@@ -106,6 +109,8 @@ impl MerkState {
             recap_year: None,
             note: None,
             add_next: 1,
+            add_found: None,
+            add_searching: false,
             before_import: None,
         }
     }
@@ -320,11 +325,21 @@ impl MerkState {
         let mut ids = Ids::system();
         let next = self.add_next.clamp(1, 999);
         let mut raw = serde_json::json!({ "title": title, "status": "watching", "updatedAt": ids.now });
+        let found = self.add_found.take();
+        if let Some(media) = &found {
+            raw["cover"] = media.cover_url.clone().into();
+            if next <= 1 {
+                if let Some(n) = media.episodes {
+                    raw["seasons"] = serde_json::json!([{ "number": 1, "episodes": n, "watched": [] }]);
+                }
+            }
+        }
         if next > 1 {
             // Begun already: the episodes before the next one are seen, and the length stays unknown.
             raw["season"] = 1.into();
             raw["episode"] = next.into();
-            raw["seasons"] = serde_json::json!([{ "number": 1, "watched": (1..next).collect::<Vec<i64>>() }]);
+            let episodes = found.as_ref().and_then(|m| m.episodes);
+            raw["seasons"] = serde_json::json!([{ "number": 1, "episodes": episodes, "watched": (1..next).collect::<Vec<i64>>() }]);
         }
         self.add_next = 1;
         let item = normalize(&raw, &mut ids);
@@ -424,8 +439,15 @@ impl Shell {
                         let me = me.clone();
                         ui.button("serie-anlegen", "Hinzufügen").on_click(move |_, app| me.update(app, |shell, cx| shell.add_series(cx)))
                     })
-                    .child(ui.hint("Die Zahl der Folgen wird später gesucht oder eingetragen.")),
+                    .child({
+                        let me = me.clone();
+                        ui.button("serie-suchen", if state.add_searching { "Sucht …" } else { "Suchen" }).disabled(state.add_searching).on_click(move |_, app| me.update(app, |shell, cx| shell.search_series(cx)))
+                    })
+                    .child(ui.hint(if state.add_found.is_some() { "Gefunden — mit „Hinzufügen“ kommt es mit Bild und Länge." } else { "Ohne Suchen wird die Zahl der Folgen später gesucht oder eingetragen. „Suchen“ fragt AniList." })),
             );
+            if let Some(media) = &state.add_found {
+                page = page.child(ui.value(format!("{}{}{}", media.title, media.season_year.map_or(String::new(), |y| format!(" ({y})")), media.episodes.map_or(String::new(), |n| format!(" — {n} Folgen")))));
+            }
             // „Wie weit sind Sie?“: not begun, or the episode to watch next.
             let (new, less, more) = (me.clone(), me.clone(), me.clone());
             let n = state.add_next;
@@ -621,6 +643,23 @@ impl Shell {
                 None
             }
         }
+    }
+
+    /// Asks AniList about the name typed — only because „Suchen“ was pressed.
+    pub fn search_series(&mut self, cx: &mut Context<Self>) {
+        let title = self.merk.add.read(cx).text().to_string();
+        if title.trim().is_empty() || self.merk.add_searching {
+            return;
+        }
+        self.merk.add_searching = true;
+        self.merk.add_found = None;
+        Self::in_background(cx, move || crate::anilist::search(&title, 1), |shell, found, cx| {
+            shell.merk.add_searching = false;
+            shell.merk.note = if found.is_none() { Some("Dazu hat AniList nichts gefunden. Die Serie lässt sich trotzdem hinzufügen.".into()) } else { None };
+            shell.merk.add_found = found;
+            cx.notify();
+        });
+        cx.notify();
     }
 
     /// Reads a file into the list (what „Einlesen …“ does with the chosen file).
