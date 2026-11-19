@@ -509,7 +509,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   löschen; nichts ist vorgewählt (keine Serie, kein Wachhalten, kein
   Löschen). **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
   Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
-  gestrichen, sobald etwas davon wegfällt. Nie auf echtem Windows gelaufen.
+  gestrichen, sobald etwas davon wegfällt. Auf Windows nur in der CI gelaufen
+  (windows-latest), nie auf dem Rechner eines Menschen. Der Dienst-Kern schreibt die Liste nicht; das Fenster
+  schreibt sie (`sondra-app/src/store.rs`) im selben Format wie die Website.
 - `npm run dev` · `npm run build` · `npm run typecheck`
 - Offline: `public/coi-serviceworker.js` hält nach einem Besuch alle Dateien
   aus `offline.json` (ein Vite-Plugin schreibt die Liste beim Build) und
