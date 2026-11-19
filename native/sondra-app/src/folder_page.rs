@@ -8,9 +8,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use gpui::{div, prelude::*, px, AnyElement, App, Context, Entity, PathPromptOptions, SharedString};
+use gpui::{div, prelude::*, px, AnyElement, App, Context, Entity, FocusHandle, PathPromptOptions, SharedString};
 use serde_json::{json, Map, Value};
-use sondra_merk::folder::{click_select, crumbs, listing, AssetKind, FolderScan, KindFilter, ListingOptions, SortKey};
+use sondra_merk::bin::{bin_files, count_bin, erase_files, erase_from_bin, list_bin, restore_binned, restore_from_bin, BinItem, Binned, BIN_NAME};
+use sondra_merk::folder::{click_select, crumbs, listing, without_files, AssetKind, FolderFile, FolderScan, KindFilter, ListingOptions, SortKey};
 use sondra_merk::folder_memory::{folder_key, last_visit, prefs_for, save_prefs, Session, Store};
 use sondra_merk::format::{format_bytes, short_date};
 use sondra_merk::scan::scan_dir;
@@ -94,6 +95,31 @@ pub struct FolderState {
     pub last_visit: Option<f64>,
     cancel: Arc<AtomicBool>,
     generation: u64,
+    /// The files a delete is being asked about.
+    pub confirm: Option<Vec<FolderFile>>,
+    /// Something is being moved or deleted.
+    pub busy: bool,
+    /// What the last „In den Papierkorb“ moved, for „Rückgängig“.
+    pub undo: Option<Vec<Binned>>,
+    /// A line of what happened, under the head.
+    pub notice: Option<String>,
+    /// The bin window, when it is open.
+    pub bin: Option<BinWindow>,
+    pub bin_count: usize,
+    /// After a read caused by an undo, the folder one was in.
+    pub reopen_dir: Option<String>,
+    pub delete_first: FocusHandle,
+    pub delete_cancel: FocusHandle,
+    pub bin_first: FocusHandle,
+    pub bin_last: FocusHandle,
+}
+
+/// The window onto Sondra's bin in this folder.
+pub struct BinWindow {
+    pub items: Vec<BinItem>,
+    pub chosen: BTreeSet<String>,
+    /// „Wirklich endgültig?“ has been asked.
+    pub asking: bool,
 }
 
 impl FolderState {
@@ -122,6 +148,17 @@ impl FolderState {
             last_visit: None,
             cancel: Arc::new(AtomicBool::new(false)),
             generation: 0,
+            confirm: None,
+            busy: false,
+            undo: None,
+            notice: None,
+            bin: None,
+            bin_count: 0,
+            reopen_dir: None,
+            delete_first: cx.focus_handle().tab_stop(true),
+            delete_cancel: cx.focus_handle().tab_stop(true),
+            bin_first: cx.focus_handle().tab_stop(true),
+            bin_last: cx.focus_handle().tab_stop(true),
         }
     }
 
@@ -211,7 +248,8 @@ impl Shell {
         f.reading = false;
         match result {
             Ok(scan) => {
-                f.dir = String::new();
+                f.dir = f.reopen_dir.take().filter(|d| d.is_empty() || scan.dirs.contains(d)).unwrap_or_default();
+                f.bin_count = f.root.as_ref().map_or(0, |r| count_bin(r));
                 f.selected.clear();
                 f.anchor = None;
                 f.shown = PAGE;
@@ -311,11 +349,26 @@ impl Shell {
                 .gap(px(12.))
                 .child(ui.heading("Ordner"))
                 .child({
+                    let mut right = div().flex().flex_wrap().items_center().gap(px(8.));
+                    if f.bin_count > 0 {
+                        let me = me.clone();
+                        right = right.child(ui.button("papierkorb-ansehen", format!("Papierkorb ({})", f.bin_count)).small().ghost().on_click(move |_, app| me.update(app, |shell, cx| shell.open_bin(cx))));
+                    }
                     let me = me.clone();
-                    ui.button("anderer-ordner", "Anderen Ordner wählen").small().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_folder(cx)))
+                    right.child(ui.button("anderer-ordner", "Anderen Ordner wählen").small().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_folder(cx))))
                 }),
         );
         page = page.child(steps);
+
+        // What just happened, with the way back.
+        if let Some(text) = &f.notice {
+            let mut line = div().flex().flex_wrap().items_center().gap(px(12.)).child(ui.prose(text.clone()));
+            if f.undo.is_some() {
+                let me = me.clone();
+                line = line.child(ui.button("rueckgaengig-papierkorb", "Rückgängig").small().disabled(f.busy).on_click(move |_, app| me.update(app, |shell, cx| shell.undo_bin(cx))));
+            }
+            page = page.child(line);
+        }
 
         let mut kinds = div().flex().flex_wrap().gap(px(6.));
         for (filter, id, label) in FILTERS {
@@ -385,6 +438,10 @@ impl Shell {
                     .items_center()
                     .gap(px(12.))
                     .child(ui.prose(if f.selected.len() == 1 { "1 Datei ausgewählt".to_string() } else { format!("{} Dateien ausgewählt", f.selected.len()) }))
+                    .child({
+                        let me = me.clone();
+                        ui.button("auswahl-loeschen", "Löschen …").small().on_click(move |_, app| me.update(app, |shell, cx| shell.ask_delete(cx)))
+                    })
                     .child(ui.button("auswahl-aufheben", "Auswahl aufheben").small().on_click(move |_, app| {
                         Self::folder_do(&me, app, |f| {
                             f.selected.clear();
@@ -488,6 +545,306 @@ impl Shell {
             })));
         }
         page.into_any_element()
+    }
+
+
+    /// Does `work` away from the window and then hands its answer to `then`.
+    fn in_background<T: Send + 'static>(
+        cx: &mut Context<Self>,
+        work: impl FnOnce() -> T + Send + 'static,
+        then: impl FnOnce(&mut Shell, T, &mut Context<Shell>) + 'static,
+    ) {
+        let task = cx.background_spawn(async move { work() });
+        cx.spawn(async move |this, cx| {
+            let answer = task.await;
+            this.update(cx, |shell, cx| then(shell, answer, cx)).ok();
+        })
+        .detach();
+    }
+
+    /// Asks whether the chosen files are to go.
+    pub(crate) fn ask_delete(&mut self, cx: &mut Context<Self>) {
+        let f = &mut self.folder;
+        let Some(scan) = &f.scan else { return };
+        let files: Vec<FolderFile> = scan.files.iter().filter(|file| f.selected.contains(&file.path)).cloned().collect();
+        if files.is_empty() {
+            return;
+        }
+        f.confirm = Some(files);
+        // The safe answer takes the focus: Enter on a dialog that was not expected must not delete.
+        self.pending_focus = Some(self.folder.delete_cancel.clone());
+        cx.notify();
+    }
+
+    /// Into the bin, or for good: moved or deleted away from the window, then the page is told.
+    fn delete_chosen(&mut self, into_bin: bool, cx: &mut Context<Self>) {
+        let f = &mut self.folder;
+        let (Some(files), Some(root)) = (f.confirm.clone(), f.root.clone()) else { return };
+        f.busy = true;
+        Self::in_background(
+            cx,
+            move || -> (Vec<String>, Vec<Binned>, Vec<String>) {
+                if into_bin {
+                    match bin_files(&root, &files) {
+                        Ok((binned, failed)) => (
+                            binned.iter().map(|b| b.path.clone()).collect(),
+                            binned,
+                            failed.into_iter().map(|x| format!("{}: {}", x.item.name, x.reason)).collect(),
+                        ),
+                        Err(e) => (Vec::new(), Vec::new(), vec![format!("Der Papierkorb konnte nicht angelegt werden: {e}")]),
+                    }
+                } else {
+                    let (done, failed) = erase_files(&root, &files);
+                    (done.into_iter().map(|d| d.path).collect(), Vec::new(), failed.into_iter().map(|x| format!("{}: {}", x.item.name, x.reason)).collect())
+                }
+            },
+            move |shell, (gone, binned, failed), cx| shell.deleted(into_bin, gone, binned, failed, cx),
+        );
+        cx.notify();
+    }
+
+    fn deleted(&mut self, into_bin: bool, gone: Vec<String>, binned: Vec<Binned>, failed: Vec<String>, cx: &mut Context<Self>) {
+        let f = &mut self.folder;
+        f.busy = false;
+        f.confirm = None;
+        let set: std::collections::HashSet<String> = gone.iter().cloned().collect();
+        if let Some(scan) = &f.scan {
+            f.scan = Some(without_files(scan, &set));
+        }
+        f.selected.clear();
+        f.anchor = None;
+        let n = gone.len();
+        let mut text = match (n, into_bin) {
+            (0, _) => String::new(),
+            (1, true) => "1 Datei in den Papierkorb gelegt.".to_string(),
+            (n, true) => format!("{n} Dateien in den Papierkorb gelegt."),
+            (1, false) => "1 Datei endgültig gelöscht.".to_string(),
+            (n, false) => format!("{n} Dateien endgültig gelöscht."),
+        };
+        if !failed.is_empty() {
+            if !text.is_empty() {
+                text.push(' ');
+            }
+            text.push_str(&format!("{} {} nicht {}: {}", failed.len(), if failed.len() == 1 { "Datei konnte" } else { "Dateien konnten" }, "bearbeitet werden", failed[0]));
+        }
+        f.notice = (!text.is_empty()).then_some(text);
+        f.undo = (!binned.is_empty()).then_some(binned);
+        f.bin_count = f.root.as_ref().map_or(0, |r| count_bin(r));
+        self.pending_focus = Some(self.focus.clone());
+        cx.notify();
+    }
+
+    /// The files of the last „In den Papierkorb“ back where they lay, and the folder read again.
+    pub(crate) fn undo_bin(&mut self, cx: &mut Context<Self>) {
+        let f = &mut self.folder;
+        let (Some(binned), Some(root)) = (f.undo.take(), f.root.clone()) else { return };
+        f.busy = true;
+        let dir = f.dir.clone();
+        Self::in_background(
+            cx,
+            {
+                let root = root.clone();
+                move || restore_binned(&root, &binned)
+            },
+            move |shell, (restored, failed), cx| {
+                shell.folder.busy = false;
+                let mut text = match restored.len() {
+                    0 => String::new(),
+                    1 => "1 Datei zurückgelegt.".to_string(),
+                    n => format!("{n} Dateien zurückgelegt."),
+                };
+                if let Some(first) = failed.first() {
+                    text.push_str(&format!(" {} nicht zurückgelegt: {}", failed.len(), first.reason));
+                }
+                shell.folder.notice = Some(text.trim().to_string());
+                shell.folder.reopen_dir = Some(dir);
+                shell.open_folder(root, cx);
+            },
+        );
+        cx.notify();
+    }
+
+    /// The window onto what lies in the bin.
+    pub(crate) fn open_bin(&mut self, cx: &mut Context<Self>) {
+        let f = &mut self.folder;
+        let Some(root) = f.root.clone() else { return };
+        f.bin = Some(BinWindow { items: list_bin(&root), chosen: BTreeSet::new(), asking: false });
+        self.pending_focus = Some(self.folder.bin_first.clone());
+        cx.notify();
+    }
+
+    /// Back where the chosen lay, or — after the second question — for good.
+    fn bin_do(&mut self, erase: bool, cx: &mut Context<Self>) {
+        let f = &mut self.folder;
+        let (Some(window), Some(root)) = (&f.bin, f.root.clone()) else { return };
+        let items: Vec<BinItem> = window.items.iter().filter(|i| window.chosen.contains(&i.name)).cloned().collect();
+        if items.is_empty() {
+            return;
+        }
+        f.busy = true;
+        let dir = f.dir.clone();
+        Self::in_background(
+            cx,
+            {
+                let root = root.clone();
+                move || if erase { erase_from_bin(&root, &items) } else { restore_from_bin(&root, &items) }
+            },
+            move |shell, (done, failed), cx| {
+                let f = &mut shell.folder;
+                f.busy = false;
+                let verb = if erase { "endgültig gelöscht" } else { "zurückgelegt" };
+                let mut text = match done.len() {
+                    0 => String::new(),
+                    1 => format!("1 Datei {verb}."),
+                    n => format!("{n} Dateien {verb}."),
+                };
+                if let Some(first) = failed.first() {
+                    text.push_str(&format!(" {} nicht bearbeitet: {}", failed.len(), first.reason));
+                }
+                f.notice = Some(text.trim().to_string());
+                f.bin = Some(BinWindow { items: list_bin(&root), chosen: BTreeSet::new(), asking: false });
+                f.bin_count = count_bin(&root);
+                if erase || f.bin.as_ref().is_some_and(|b| b.items.is_empty()) {
+                    f.bin = if erase && f.bin_count > 0 { f.bin.take() } else { None };
+                }
+                if !erase {
+                    f.reopen_dir = Some(dir);
+                    shell.open_folder(root, cx);
+                } else {
+                    cx.notify();
+                }
+            },
+        );
+        cx.notify();
+    }
+
+    /// The dialogs that stand over the page: the question before deleting, and the bin.
+    pub(crate) fn folder_overlay(&self, ui: Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let me = cx.entity();
+        let f = &self.folder;
+        if let Some(files) = &f.confirm {
+            let total: u64 = files.iter().map(|x| x.size).sum();
+            let n = files.len();
+            let title = if n == 1 { "Datei löschen?".to_string() } else { format!("{n} Dateien löschen?") };
+            let text = format!(
+                "{} in den Ordner „{BIN_NAME}“ in diesem Ordner und {} sich gleich mit „Rückgängig“ und später unter „Papierkorb“ zurücklegen. Weg ist es erst, wenn Sie es dort endgültig löschen. Zusammen {}.",
+                if n == 1 { "Sie kommt" } else { "Sie kommen" },
+                if n == 1 { "lässt" } else { "lassen" },
+                format_bytes(total as f64, 1)
+            );
+            let mut list = div().flex().flex_col().max_h(px(240.));
+            for file in files.iter().take(12) {
+                list = list.child(div().border_t_1().border_color(ui.c.line).py(px(5.)).child(ui.value(file.path.clone())));
+            }
+            if n > 12 {
+                list = list.child(div().border_t_1().border_color(ui.c.line).py(px(5.)).child(ui.hint(format!("und {} weitere", n - 12))));
+            }
+            let busy = f.busy;
+            let (m1, m2, m3) = (me.clone(), me.clone(), me.clone());
+            return Some(
+                ui.dialog("loeschen", title)
+                    .child(ui.prose(text))
+                    .child(list)
+                    .action(
+                        ui.button("in-den-papierkorb", if busy { "Löscht …" } else { "In den Papierkorb" })
+                            .primary()
+                            .disabled(busy)
+                            .focus_handle(f.delete_first.clone())
+                            .on_click(move |_, app| m1.update(app, |shell, cx| shell.delete_chosen(true, cx))),
+                    )
+                    .action(ui.button("endgueltig-loeschen", "Endgültig löschen").disabled(busy).on_click(move |_, app| m2.update(app, |shell, cx| shell.delete_chosen(false, cx))))
+                    .action(
+                        ui.button("loeschen-abbrechen", "Abbrechen")
+                            .disabled(busy)
+                            .focus_handle(f.delete_cancel.clone())
+                            .on_click(move |_, app| Self::folder_do(&m3, app, |f| f.confirm = None)),
+                    )
+                    .keeps_focus_between(f.delete_first.clone(), f.delete_cancel.clone())
+                    .on_close({
+                        let me = me.clone();
+                        move |_, app| Self::folder_do(&me, app, |f| if !f.busy { f.confirm = None })
+                    })
+                    .into_any_element(),
+            );
+        }
+        if let Some(window) = &f.bin {
+            let local = chrono::Local;
+            let mut list = div().flex().flex_col().max_h(px(320.)).overflow_y_hidden();
+            if window.items.is_empty() {
+                list = list.child(ui.prose("Der Papierkorb ist leer."));
+            }
+            for (n, item) in window.items.iter().enumerate() {
+                let chosen = window.chosen.contains(&item.name);
+                let from = item.from.clone().map(|p| match p.rsplit_once('/') {
+                    Some((dir, _)) => format!("aus {dir}"),
+                    None => "aus dem obersten Ordner".to_string(),
+                });
+                let when = short_date(&local, item.at.unwrap_or(item.modified));
+                let says = format!("{} · {}{}", format_bytes(item.size as f64, 1), when, from.as_ref().map(|f| format!(" · {f}")).unwrap_or_default());
+                let me = me.clone();
+                let name = item.name.clone();
+                list = list.child(Line {
+                    colors: ui.c,
+                    id: format!("papierkorb-{}", item.name).into(),
+                    name: item.name.clone().into(),
+                    says: says.clone().into(),
+                    first: n == 0,
+                    tile: None,
+                    selected: chosen,
+                    body: vec![
+                        div().flex_1().min_w(px(0.)).child(ui.value(item.name.clone())).into_any_element(),
+                        div().flex_none().text_size(px(size::SMALL)).text_color(ui.c.prose).child(says).into_any_element(),
+                    ],
+                    on_open: std::rc::Rc::new(move |_, app| {
+                        let name = name.clone();
+                        Self::folder_do(&me, app, move |f| {
+                            if let Some(w) = f.bin.as_mut() {
+                                if !w.chosen.remove(&name) {
+                                    w.chosen.insert(name);
+                                }
+                                w.asking = false;
+                            }
+                        })
+                    }),
+                });
+            }
+            let busy = f.busy;
+            let none = window.chosen.is_empty();
+            let (m1, m2, m3, m4) = (me.clone(), me.clone(), me.clone(), me.clone());
+            let mut dialog = ui.dialog("papierkorb", "Papierkorb").width(640.).child(ui.prose(format!("Was Sie in den Papierkorb gelegt haben, liegt im Ordner „{BIN_NAME}“. Wählen Sie Dateien, um sie zurückzulegen oder endgültig zu löschen.")));
+            dialog = dialog.child(list);
+            if window.asking {
+                dialog = dialog
+                    .child(ui.notice(NoticeKind::Warning, format!("{} endgültig löschen? Das lässt sich nicht rückgängig machen.", if window.chosen.len() == 1 { "1 Datei".to_string() } else { format!("{} Dateien", window.chosen.len()) })))
+                    .action(
+                        ui.button("papierkorb-ja", "Ja, endgültig löschen")
+                            .primary()
+                            .disabled(busy)
+                            .focus_handle(f.bin_first.clone())
+                            .on_click(move |_, app| m1.update(app, |shell, cx| shell.bin_do(true, cx))),
+                    )
+                    .action(ui.button("papierkorb-zurueck", "Zurück").disabled(busy).focus_handle(f.bin_last.clone()).on_click(move |_, app| Self::folder_do(&m2, app, |f| if let Some(w) = f.bin.as_mut() { w.asking = false })));
+            } else {
+                dialog = dialog
+                    .action(
+                        ui.button("papierkorb-zuruecklegen", "Zurücklegen")
+                            .primary()
+                            .disabled(busy || none)
+                            .focus_handle(f.bin_first.clone())
+                            .on_click(move |_, app| m1.update(app, |shell, cx| shell.bin_do(false, cx))),
+                    )
+                    .action(ui.button("papierkorb-loeschen", "Endgültig löschen …").disabled(busy || none).on_click(move |_, app| Self::folder_do(&m2, app, |f| if let Some(w) = f.bin.as_mut() { w.asking = true })))
+                    .action(ui.button("papierkorb-schliessen", "Schliessen").focus_handle(f.bin_last.clone()).on_click(move |_, app| Self::folder_do(&m3, app, |f| f.bin = None)));
+            }
+            let _ = m4;
+            return Some(
+                dialog
+                    .keeps_focus_between(f.bin_first.clone(), f.bin_last.clone())
+                    .on_close(move |_, app| Self::folder_do(&me, app, |f| f.bin = None))
+                    .into_any_element(),
+            );
+        }
+        None
     }
 
     /// No folder yet: what the page is for, and the way in.

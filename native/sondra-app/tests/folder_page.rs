@@ -214,3 +214,103 @@ fn what_was_set_on_a_folder_is_kept_and_the_folder_is_offered_the_next_time(cx: 
     assert_eq!(w.tree().find(Role::Button, "Ordnung: Grösse, aufsteigend").unwrap().toggled, Some(true));
     assert_eq!(w.files(), ["Frieren S01E10.mkv", "Frieren S01E02.mkv", "Frieren S01E01.mkv", "film.mp4"]);
 }
+
+fn focused(tree: &Snapshot) -> String {
+    tree.nodes
+        .iter()
+        .find(|n| n.focused)
+        .and_then(|n| n.label.as_ref().map(|l| l.to_string()))
+        .unwrap_or_else(|| "(nothing)".into())
+}
+
+#[gpui::test]
+fn deleting_asks_first_moves_into_sondras_bin_and_can_be_undone(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    w.press(Role::ListItem, "film.mp4");
+    // Ctrl and a click adds the poster to what is chosen.
+    w.cx.simulate_modifiers_change(gpui::Modifiers::control());
+    w.press(Role::ListItem, "poster.png");
+    w.cx.simulate_modifiers_change(gpui::Modifiers::default());
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "2 Dateien ausgewählt")));
+
+    w.press(Role::Button, "Löschen …");
+    let tree = w.tree();
+    assert!(tree.find(Role::Dialog, "2 Dateien löschen?").is_some(), "it asks before anything goes");
+    assert!(root.join("film.mp4").exists() && root.join("poster.png").exists(), "nothing has gone yet");
+    assert_eq!(focused(&tree), "Abbrechen", "the safe answer has the focus");
+    assert!(tree.find(Role::Button, "In den Papierkorb").is_some());
+    assert!(tree.find(Role::Button, "Endgültig löschen").is_some());
+
+    // Escape answers no.
+    w.cx.simulate_keystrokes("escape");
+    w.draw();
+    assert!(w.tree().find(Role::Dialog, "2 Dateien löschen?").is_none());
+    assert!(root.join("film.mp4").exists());
+
+    // Ask again, and say yes.
+    w.press(Role::Button, "Löschen …");
+    w.press(Role::Button, "In den Papierkorb");
+    w.cx.run_until_parked();
+    w.draw();
+    let tree = w.tree();
+    assert!(tree.find(Role::Dialog, "2 Dateien löschen?").is_none());
+    assert!(!root.join("film.mp4").exists() && !root.join("poster.png").exists());
+    assert!(root.join(sondra_merk::bin::BIN_NAME).join("film.mp4").exists(), "they lie in the bin");
+    assert_eq!(w.files(), ["Frieren", "Musik", "notizen.txt"], "and are off the page");
+    assert!(tree.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "2 Dateien in den Papierkorb gelegt.")));
+    assert!(tree.find(Role::Button, "Papierkorb (2)").is_some());
+
+    // Undo: back where they lay.
+    w.press(Role::Button, "Rückgängig");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(root.join("film.mp4").exists() && root.join("poster.png").exists());
+    assert!(w.files().contains(&"film.mp4".to_string()), "and on the page again");
+    assert!(w.tree().find(Role::Button, "Papierkorb (2)").is_none());
+}
+
+#[gpui::test]
+fn the_bin_window_puts_back_and_erases_only_after_a_second_question(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    for name in ["film.mp4", "notizen.txt"] {
+        w.press(Role::ListItem, name);
+        w.press(Role::Button, "Löschen …");
+        w.press(Role::Button, "In den Papierkorb");
+        w.cx.run_until_parked();
+        w.draw();
+    }
+    w.press(Role::Button, "Papierkorb (2)");
+    let tree = w.tree();
+    assert!(tree.find(Role::Dialog, "Papierkorb").is_some());
+    assert!(said(&tree, Role::ListItem, "film.mp4").contains("aus dem obersten Ordner"), "{}", said(&tree, Role::ListItem, "film.mp4"));
+    assert!(tree.find(Role::Button, "Zurücklegen").unwrap().disabled, "nothing chosen, nothing to do");
+
+    // Put one back.
+    w.press(Role::ListItem, "film.mp4");
+    assert!(said(&w.tree(), Role::ListItem, "film.mp4").starts_with("Ausgewählt."));
+    w.press(Role::Button, "Zurücklegen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(root.join("film.mp4").exists());
+    assert!(!root.join(sondra_merk::bin::BIN_NAME).join("film.mp4").exists());
+
+    // Erase the other: the first click only asks.
+    w.press(Role::ListItem, "notizen.txt");
+    w.press(Role::Button, "Endgültig löschen …");
+    assert!(root.join(sondra_merk::bin::BIN_NAME).join("notizen.txt").exists(), "the question is not the deed");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("lässt sich nicht rückgängig machen"))));
+    w.press(Role::Button, "Zurück");
+    assert!(root.join(sondra_merk::bin::BIN_NAME).join("notizen.txt").exists());
+    w.press(Role::Button, "Endgültig löschen …");
+    w.press(Role::Button, "Ja, endgültig löschen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(!root.join(sondra_merk::bin::BIN_NAME).join("notizen.txt").exists(), "gone for good");
+    assert!(!root.join("notizen.txt").exists());
+}

@@ -152,3 +152,22 @@ fn a_name_that_points_out_of_the_bin_is_not_erased() {
     assert_eq!(failed.len(), 1);
     assert!(root.join("wichtig.mkv").exists());
 }
+
+#[test]
+fn files_can_be_deleted_for_good_only_inside_the_folder() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Ordner");
+    put(&root, "a/weg.mkv", "x");
+    put(tmp.path(), "aussen.mkv", "bleibt");
+    let all = files(&root);
+    let mut evil = all[0].clone();
+    evil.path = "../aussen.mkv".into();
+    let (done, failed) = erase_files(&root, &[all[0].clone(), evil]);
+    assert_eq!(done.len(), 1);
+    assert_eq!(failed.len(), 1);
+    assert!(!root.join("a/weg.mkv").exists());
+    assert!(tmp.path().join("aussen.mkv").exists(), "a path out of the folder is refused");
+    let (done, failed) = erase_files(&root, &all);
+    assert!(done.is_empty());
+    assert_eq!(failed.len(), 1, "a file that is gone is said, not hidden");
+}

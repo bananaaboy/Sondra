@@ -89,9 +89,16 @@ pub struct Button {
     on_click: Option<Handler>,
     /// What a screen reader says, when the text on the button is not enough on its own („+1“).
     name: Option<SharedString>,
+    /// A handle the screen owns, so it can give this button the focus (the safe answer of a dialog).
+    focus: Option<FocusHandle>,
 }
 
 impl Button {
+    /// A focus handle the screen owns.
+    pub fn focus_handle(mut self, handle: FocusHandle) -> Self {
+        self.focus = Some(handle);
+        self
+    }
     /// The name a screen reader reads instead of the text on the button.
     pub fn accessible_name(mut self, name: impl Into<SharedString>) -> Self {
         self.name = Some(name.into());
@@ -122,12 +129,15 @@ impl Button {
 impl RenderOnce for Button {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = self.ui.c;
-        let focus = window
-            .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| {
-                cx.focus_handle().tab_stop(true)
-            })
-            .read(cx)
-            .clone();
+        let focus = match &self.focus {
+            Some(handle) => handle.clone(),
+            None => window
+                .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| {
+                    cx.focus_handle().tab_stop(true)
+                })
+                .read(cx)
+                .clone(),
+        };
         let (text_size, pad_x, pad_y) = if self.small {
             (size::SMALL, 12.0, 8.0)
         } else {
@@ -538,6 +548,7 @@ impl Ui {
             disabled: false,
             on_click: None,
             name: None,
+            focus: None,
         }
     }
 

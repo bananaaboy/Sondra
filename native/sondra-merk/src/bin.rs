@@ -281,3 +281,20 @@ pub fn erase_from_bin(root: &Path, items: &[BinItem]) -> (Vec<BinItem>, Vec<Fail
     forget_notes(&bin, &done.iter().map(|i| i.name.clone()).collect::<Vec<_>>());
     (done, failed)
 }
+
+/// Deleted for good, with no way back: only what the person said so for, and only inside the folder. A
+/// path that points out of it (`..`, a drive letter) is refused. Every failure is said with its reason.
+pub fn erase_files(root: &Path, files: &[FolderFile]) -> (Vec<FolderFile>, Vec<Failure<FolderFile>>) {
+    let (mut done, mut failed) = (Vec::new(), Vec::new());
+    for file in files {
+        if !file.path.split('/').all(safe_part) {
+            failed.push(Failure { item: file.clone(), reason: "Der Pfad liegt nicht in diesem Ordner.".into() });
+            continue;
+        }
+        match std::fs::remove_file(root.join(&file.path)) {
+            Ok(()) => done.push(file.clone()),
+            Err(e) => failed.push(Failure { item: file.clone(), reason: reason(&e) }),
+        }
+    }
+    (done, failed)
+}

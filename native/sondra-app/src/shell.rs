@@ -42,7 +42,7 @@ pub struct Shell {
     unfolded: HashSet<Group>,
     /// Files chosen or dropped; what to do with them is chosen among the tools.
     picked: Vec<PathBuf>,
-    focus: FocusHandle,
+    pub(crate) focus: FocusHandle,
     /// The first entry of whatever menu is open takes the focus when it opens.
     menu_focus: FocusHandle,
     focus_menu: bool,
@@ -52,6 +52,8 @@ pub struct Shell {
     pub(crate) merk: MerkState,
     /// The Ordner page: the folder read, what it shows, what is chosen.
     pub(crate) folder: FolderState,
+    /// Where the focus goes at the next frame (a dialog that opened takes it).
+    pub(crate) pending_focus: Option<FocusHandle>,
 }
 
 impl Shell {
@@ -90,6 +92,7 @@ impl Shell {
                 .collect(),
             merk,
             folder,
+            pending_focus: None,
         }
     }
 
@@ -703,6 +706,9 @@ impl Render for Shell {
         let inner = (column - 2.0 * gutter).max(280.0);
         let cols = columns(vw);
         let me = cx.entity();
+        if let Some(handle) = self.pending_focus.take() {
+            window.defer(cx, move |window, _| window.focus(&handle));
+        }
         if self.focus_menu && self.menu.is_some() {
             self.focus_menu = false;
             let handle = self.menu_focus.clone();
@@ -728,6 +734,7 @@ impl Render for Shell {
             motion::BASE,
         );
 
+        let overlay = if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else { None };
         let header = div()
             .flex()
             .flex_col()
@@ -775,6 +782,7 @@ impl Render for Shell {
                     }
                 })
                 .size_full()
+                .relative()
                 .bg(c.canvas)
                 .text_color(c.prose)
                 .font_family(family::SANS)
@@ -800,7 +808,8 @@ impl Render for Shell {
                                 .child(header)
                                 .child(page),
                         ),
-                ),
+                )
+                .children(overlay),
         )
     }
 }
