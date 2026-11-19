@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use gpui::{div, prelude::*, px, AnyElement, Context, PathPromptOptions};
+use gpui::{div, prelude::*, px, AnyElement, Context, Entity, PathPromptOptions};
 use sondra_download::{Cancel, Downloader, Progress};
 use sondra_extract::episode::{extract_episode, Episode, ResolvedStream};
 use sondra_extract::fetch::{Fetch, UreqFetch};
