@@ -115,7 +115,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | W06 | Ton-Editor: Studio, acht Werkzeuge, Filter, Rauschen, Hall, Tonhöhe, Tempo, Blenden | `AudioEditorPanel`, `effects.ts` | 2/7b | Test, Hörprobe | offen |
 | W07 | Mischen: Stimme und Musik, Ducking | `MixPanel`, `duck.ts` | 2/7b | Test | offen |
 | W08 | Spuren trennen (Gesang, Schlagzeug, Bass) | `StemsPanel`, `separation.ts` | 2/7b | Test | offen |
-| W09 | Tonart, Tempo, Akkorde, Melodie als MIDI | `HarmonyPanel`, `key.ts`, `midi.ts` | 2/7b | `verify:harmony`, `:tempo` | **Kern nativ ✔** (FFT, Chroma, Tonart, Akkorde, YIN-Tonhöhe, Noten, Tempo, Einsätze, MIDI-Datei Byte für Byte wie die Website; Oberfläche und Web-MIDI offen) |
+| W09 | Tonart, Tempo, Akkorde, Melodie als MIDI | `HarmonyPanel`, `key.ts`, `midi.ts` | 2/7b | `verify:harmony`, `:tempo` | **nativ ✔** — Seite „Tonart und Akkorde“ (Datei wählen, Akkordfenster, Melodie verfolgen mit Klarheit, kürzester Note und Raster; Tonart, Camelot, Tempo, Akkorde, Melodie; MIDI für Akkorde, Melodie oder beides neben die Quelle); Test mit echtem FFmpeg und gesynthetem Akkord und Tonleiter |
 | W10 | Zerschneiden: sechs Verfahren, Pads, Pattern, Klavierrolle | `SamplerPanel`, `chop.ts`, `pattern.ts` | 7c | Test, Hörprobe | offen |
 | W11 | Mikrofon: Test, Geräte, Kalibrierung, Kette mit Zahlen, Vorher/Nachher | `MicPanel`, `micCalibrate.ts` | 7b | Test | offen |
 | W12 | Bildschirm aufnehmen (mit Ton des Rechners, Fenster oder Schirm) | `ScreenPanel`, `screenRecord.ts` | 7b | Klicktest | offen |

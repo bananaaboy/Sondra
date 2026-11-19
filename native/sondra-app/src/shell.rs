@@ -19,6 +19,7 @@ use crate::convert_page::ConvertState;
 use crate::download_page::DownloadState;
 use crate::folder_page::FolderState;
 use crate::merkliste::MerkState;
+use crate::harmony_page::HarmonyState;
 use crate::normalize_page::NormalizeState;
 use crate::player_page::PlayerState;
 use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
@@ -64,6 +65,7 @@ pub struct Shell {
     pub(crate) convert: ConvertState,
     /// The Lautstärke page.
     pub(crate) normalize: NormalizeState,
+    pub(crate) harmony: HarmonyState,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
@@ -119,6 +121,7 @@ impl Shell {
             download,
             convert: ConvertState::new(),
             normalize: NormalizeState::new(),
+            harmony: HarmonyState::new(),
             convert_watch: None,
             pending_focus: None,
         }
@@ -806,6 +809,8 @@ impl Render for Shell {
             self.download_page(ui, cx)
         } else if self.panel == Panel::Converter {
             self.convert_page(ui, cx)
+        } else if self.panel == Panel::Harmony {
+            self.harmony_page(ui, cx)
         } else if self.panel == Panel::Normalize {
             self.normalize_page(ui, cx)
         } else {
