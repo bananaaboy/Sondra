@@ -15,6 +15,7 @@ use sondra_ui::{family, motion, radius, size, FieldEvent, Mode, NoticeKind, Text
 
 use crate::actions::{self, Group};
 use crate::layout::{columns, shell_width, tab_width, GUTTER};
+use crate::merkliste::MerkState;
 use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -46,6 +47,8 @@ pub struct Shell {
     focus_menu: bool,
     /// One handle per tab (the last is „Mehr“): the focus goes back to the one that opened a menu.
     tab_focus: Vec<FocusHandle>,
+    /// The Merkliste: the list, what narrows it, the lines being typed into.
+    pub(crate) merk: MerkState,
 }
 
 impl Shell {
@@ -64,6 +67,7 @@ impl Shell {
             }
         })
         .detach();
+        let merk = MerkState::new(cx, colors);
         Self {
             mode,
             panel: Panel::Start,
@@ -80,7 +84,14 @@ impl Shell {
             tab_focus: (0..=ENTRIES.len())
                 .map(|_| cx.focus_handle().tab_stop(true))
                 .collect(),
+            merk,
         }
+    }
+
+    /// Reads the Merkliste from this store and keeps writing to it.
+    pub fn open_merkliste(&mut self, store: crate::store::MerkStore, cx: &mut Context<Self>) {
+        self.merk.open(store);
+        cx.notify();
     }
 
     pub fn panel(&self) -> Panel {
@@ -137,6 +148,8 @@ impl Shell {
         let colors = mode.colors();
         self.search
             .update(cx, |field, cx| field.set_colors(colors, cx));
+        self.merk.search.update(cx, |field, cx| field.set_colors(colors, cx));
+        self.merk.add.update(cx, |field, cx| field.set_colors(colors, cx));
         cx.notify();
     }
 
@@ -686,6 +699,8 @@ impl Render for Shell {
 
         let page = if self.panel == Panel::Start {
             self.start(ui, cols, cx)
+        } else if self.panel == Panel::Merkliste {
+            self.merkliste(ui, cx)
         } else {
             self.unfinished(ui, self.panel)
         };

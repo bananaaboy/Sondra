@@ -27,7 +27,13 @@ fn main() {
                 attach(window, cx);
                 set_window_title(window, cx, "Sondra");
                 window.activate_window();
-                cx.new(|cx| Shell::new(window, cx))
+                cx.new(|cx| {
+                    let mut shell = Shell::new(window, cx);
+                    if let Some(store) = sondra_app::store::MerkStore::default_location() {
+                        shell.open_merkliste(store, cx);
+                    }
+                    shell
+                })
             },
         )
         .expect("a window opens");

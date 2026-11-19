@@ -2,6 +2,8 @@
 
 pub mod actions;
 pub mod layout;
+pub mod merkliste;
 pub mod nav;
 pub mod shell;
+pub mod store;
 pub mod system;

@@ -83,9 +83,16 @@ pub struct Button {
     small: bool,
     disabled: bool,
     on_click: Option<Handler>,
+    /// What a screen reader says, when the text on the button is not enough on its own („+1“).
+    name: Option<SharedString>,
 }
 
 impl Button {
+    /// The name a screen reader reads instead of the text on the button.
+    pub fn accessible_name(mut self, name: impl Into<SharedString>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
     pub fn primary(mut self) -> Self {
         self.kind = ButtonKind::Primary;
         self
@@ -165,7 +172,7 @@ impl RenderOnce for Button {
         };
 
         let mut node = accessible(self.id.clone(), Role::Button, visual)
-            .label(self.label.clone())
+            .label(self.name.clone().unwrap_or_else(|| self.label.clone()))
             .focus(&focus);
         if self.disabled {
             node = node.disabled(true);
@@ -519,6 +526,7 @@ impl Ui {
             small: false,
             disabled: false,
             on_click: None,
+            name: None,
         }
     }
 
@@ -713,6 +721,32 @@ impl Ui {
                 .child("Sondra"),
         )
         .label("Sondra")
+        .into_any_element()
+    }
+
+    /// A bar that shows how far something is: the played part in ink on a hairline ground, 4 px high. With
+    /// no fraction there is nothing to show but the ground. A screen reader gets the label and the value.
+    pub fn bar(&self, id: impl Into<SharedString>, fraction: Option<f32>, label: impl Into<SharedString>) -> AnyElement {
+        let id: SharedString = id.into();
+        let label: SharedString = label.into();
+        let fraction = fraction.map(|f| f.clamp(0.0, 1.0));
+        let value = match fraction {
+            Some(f) => format!("{} %", (f * 100.0).round() as i32),
+            None => "unbekannt".to_string(),
+        };
+        accessible(
+            eid(format!("balken-{id}")),
+            Role::ProgressIndicator,
+            div()
+                .w_full()
+                .h(px(4.))
+                .rounded(px(radius::PILL))
+                .bg(self.c.line)
+                .overflow_hidden()
+                .child(div().h_full().w(gpui::relative(fraction.unwrap_or(0.0))).bg(self.c.ink)),
+        )
+        .label(label)
+        .value(value)
         .into_any_element()
     }
 

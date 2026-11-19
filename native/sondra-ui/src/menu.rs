@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    div, point, prelude::*, px, AnyElement, App, BoxShadow, Div, FocusHandle, FontWeight,
+    div, point, prelude::*, px, AnyElement, App, BoxShadow, FocusHandle, FontWeight,
     IntoElement, SharedString, Window,
 };
 use sondra_a11y::{accessible, Role};
