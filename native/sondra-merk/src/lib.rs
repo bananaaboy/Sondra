@@ -2,6 +2,7 @@
 //! the web app's rules (`src/lib/merkliste.ts`), checked against its numbers. A list written here is read
 //! there and the other way round; neither side ever makes the list worse than it was.
 
+pub mod bin;
 pub mod cover;
 pub mod duplicates;
 pub mod folder;
