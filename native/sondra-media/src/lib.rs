@@ -28,6 +28,7 @@ pub mod chroma;
 pub mod convert;
 pub mod duck;
 pub mod edit;
+pub mod editor;
 pub mod effects;
 pub mod ffmpeg;
 pub mod fft;

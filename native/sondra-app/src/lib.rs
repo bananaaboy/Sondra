@@ -2,6 +2,8 @@
 
 pub mod actions;
 pub mod anilist;
+pub mod audio_page;
+pub mod clip_player;
 pub mod convert_page;
 pub mod download_page;
 pub mod covers;

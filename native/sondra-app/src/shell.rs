@@ -16,6 +16,7 @@ use sondra_ui::{family, motion, radius, size, FieldEvent, Mode, NoticeKind, Text
 use crate::actions::{self, Group};
 use crate::layout::{columns, shell_width, tab_width, GUTTER};
 use crate::convert_page::ConvertState;
+use crate::audio_page::AudioState;
 use crate::devices_page::DevicesState;
 use crate::download_page::DownloadState;
 use crate::folder_page::FolderState;
@@ -68,6 +69,7 @@ pub struct Shell {
     pub(crate) download: DownloadState,
     pub(crate) devices: DevicesState,
     pub(crate) mic: MicState,
+    pub(crate) audio: AudioState,
     /// The Umwandeln page.
     pub(crate) convert: ConvertState,
     /// The Lautstärke page.
@@ -139,6 +141,7 @@ impl Shell {
             download,
             devices,
             mic: MicState::new(),
+            audio: AudioState::new(),
             convert: ConvertState::new(),
             normalize: NormalizeState::new(),
             harmony: HarmonyState::new(),
@@ -841,6 +844,8 @@ impl Render for Shell {
             self.convert_page(ui, cx)
         } else if self.panel == Panel::Video {
             self.video_page(ui, cx)
+        } else if self.panel == Panel::Audio {
+            self.audio_page(ui, cx)
         } else if self.panel == Panel::Mic {
             self.mic_page(ui, cx)
         } else if self.panel == Panel::Devices {
