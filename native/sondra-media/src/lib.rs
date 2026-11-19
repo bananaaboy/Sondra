@@ -26,6 +26,7 @@ pub mod audio;
 pub mod chop;
 pub mod chroma;
 pub mod convert;
+pub mod cue;
 pub mod duck;
 pub mod edit;
 pub mod editor;
