@@ -10,6 +10,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { buildConvertArgs, DEFAULT_CONVERT, OUTPUT_FORMATS, rateFor, findFormat, type ConvertSettings } from '../src/lib/convert'
 import { BUILT_IN_PRESETS, presetFor } from '../src/lib/convertPresets'
 import { applyNormalization, DEFAULT_NORMALIZATION, measureLoudness } from '../src/lib/loudness'
+import { istft, magnitudeOf, stft } from '../src/lib/fft'
 
 const outDir = 'native/sondra-media/tests/golden'
 mkdirSync(outDir, { recursive: true })
@@ -146,3 +147,24 @@ const plans = [-23, -16, -9].flatMap((targetLufs) =>
 )
 writeFileSync(`${outDir}/loudness.json`, `${JSON.stringify({ loudness, plans }, null, 1)}\n`)
 console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
+
+/* -- FFT: Kurzzeit-Spektrum desselben Rauschens, in Stichproben ---------------------------------- */
+
+{
+  const signal = swell(3)
+  const spec = stft(signal, 2048, 512)
+  const mag = magnitudeOf(spec)
+  const picks = [0, 1, 7, 100, 513, 1024]
+  const frames = [0, 1, 40, spec.frames - 1]
+  const samples = frames.flatMap((f) =>
+    picks.map((b) => ({ frame: f, bin: b, re: spec.real[f * spec.bins + b], im: spec.imag[f * spec.bins + b], mag: mag[f * spec.bins + b] })),
+  )
+  const back = istft(spec)
+  let worst = 0
+  for (let i = 0; i < signal.length; i += 1) worst = Math.max(worst, Math.abs(back[i] - signal[i]))
+  writeFileSync(
+    `${outDir}/fft.json`,
+    `${JSON.stringify({ frames: spec.frames, bins: spec.bins, padding: spec.padding, length: spec.length, samples, roundTripWorst: worst, backFirst: Array.from(back.slice(0, 8)), backLast: Array.from(back.slice(-8)) }, null, 1)}\n`,
+  )
+  console.log(`FFT: ${spec.frames} Bilder, Hin-und-zurück ${worst.toExponential(2)}`)
+}
