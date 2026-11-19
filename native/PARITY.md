@@ -125,7 +125,7 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 
 | ID | Funktion | Bestand | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- | --- |
-| B01 | Installer für alle Benutzer, Eintrag in Apps & Features, stille Installation | `installer.nsh` | 8 | Workflow | **Programmseite nativ ✔** (`.sondra-liste` auf der Befehlszeile öffnet das Fenster „Liste empfangen“, Filme und Ton den Player, Ordner die Ordnerseite, alles auch vom zweiten Start); offen: Eintrag in der Registry und Logo (Installer) |
+| B01 | Installer für alle Benutzer, Eintrag in Apps & Features, stille Installation | `installer.nsh` | 8 | Workflow | **Programmseite nativ ✔** (`.sondra-liste` auf der Befehlszeile öffnet das Fenster „Liste empfangen“, Filme und Ton den Player, Ordner die Ordnerseite, alles auch vom zweiten Start); offen: Eintrag in der Registry und Logo (Installer); **Setup nativ (NSIS, `native/installer/sondra.nsi`, gebaut und in der CI installiert):** für alle Benutzer, Programm und FFmpeg daneben, Lizenztexte, Startmenü, Eintrag in Apps & Features samt stiller Deinstallation, `.sondra-liste` gehört Sondra, „Öffnen mit“ für Medien ohne eine Endung zu übernehmen; die CI startet das installierte Programm mit einem Film und nur dem mitgelieferten FFmpeg und deinstalliert wieder. Offen: Programm-Symbol, Signatur |
 | B02 | Portabel (Daten daneben, anderer Port, keine Registrierung) | `build-desktop.mjs` | 8 | Workflow | offen |
 | B03 | Microsoft-Store-Paket (MSIX), Store-Fassung ohne eigenen Updater | `build-desktop.mjs --store` | 8 | Workflow | offen |
 | B04 | Arm64 | Workflow | 8 | Workflow | offen |

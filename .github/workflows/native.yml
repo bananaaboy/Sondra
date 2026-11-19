@@ -322,6 +322,83 @@ jobs:
           if (-not $p2.HasExited) { Stop-Process -Id $p2.Id -Force }
           if ($code -eq 0) { $code = $code2 }
           exit $code
+      # The setup: built from the very program the checks above ran, installed silently, started with only
+      # the FFmpeg that came with it (the runner's own is taken off the path), found in Apps & Features, and
+      # taken away again. Unsigned, as every build here.
+      - name: The setup installs, plays a film, shows up in Apps and Features and takes itself away again
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $failures = New-Object System.Collections.ArrayList
+          function Check($ok, $what) { if ($ok) { "ok    $what" } else { "FAIL  $what"; [void]$failures.Add($what) } }
+          choco install nsis --no-progress -y | Out-Null
+          $makensis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          Check (Test-Path $makensis) 'NSIS is there'
+          $exe = (Resolve-Path native/target/release/sondra.exe).Path
+          # Chocolatey's ffmpeg on the path is a shim; the real programs lie in its lib folder.
+          $real = Get-ChildItem 'C:\ProgramData\chocolatey\lib\ffmpeg' -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          $ffdir = $real.Directory.FullName
+          Check ((Test-Path "$ffdir\ffmpeg.exe") -and (Test-Path "$ffdir\ffprobe.exe")) "FFmpeg to bundle: $ffdir"
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $setup = Join-Path $PWD 'Sondra-Nativ-Setup.exe'
+          $licenses = (Resolve-Path desktop/lizenzen).Path
+          & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
+          Check ($LASTEXITCODE -eq 0 -and (Test-Path $setup)) ("the setup is built: {0:N1} MB" -f ((Get-Item $setup).Length / 1MB))
+
+          $dir = 'C:\SondraNativTest'
+          $i = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$dir" -Wait -PassThru
+          Check ($i.ExitCode -eq 0) "the silent install ends well (exit code $($i.ExitCode))"
+          foreach ($f in @('sondra.exe', 'ffmpeg.exe', 'ffprobe.exe', 'Deinstallieren.exe', 'Lizenzen\GPL-2.0.txt')) { Check (Test-Path "$dir\$f") "installed: $f" }
+          $arp = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SondraNativ' -ErrorAction SilentlyContinue
+          Check ($arp -and $arp.DisplayVersion -eq $version) "Apps and Features lists it at $version"
+          Check ($arp -and $arp.InstallLocation -eq $dir) 'with its folder'
+          Check ($arp -and $arp.QuietUninstallString -like '*Deinstallieren.exe*/S') 'and a quiet uninstall'
+          $list = Get-ItemProperty 'HKLM:\Software\Classes\.sondra-liste' -ErrorAction SilentlyContinue
+          Check ($list -and $list.'(default)' -eq 'Sondra.NativListe') 'the ending .sondra-liste is Sondra''s'
+          $mp4 = Get-ItemProperty 'HKLM:\Software\Classes\.mp4' -ErrorAction SilentlyContinue
+          Check (-not ($mp4 -and $mp4.'(default)' -like 'Sondra*')) 'no media ending is taken over'
+          $with = Get-Item 'HKLM:\Software\Classes\.mp4\OpenWithProgids' -ErrorAction SilentlyContinue
+          Check ($with -and ($with.GetValueNames() -contains 'Sondra.NativDatei')) 'but Sondra is on the Open with list'
+          Check (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Sondra Nativ\Sondra (nativ).lnk") 'the Start menu entry'
+
+          # Started from where it was installed, with a film on its command line and no other FFmpeg on the path.
+          $env:PATH = (($env:PATH -split ';') | Where-Object { $_ -notmatch 'chocolatey|ffmpeg' }) -join ';'
+          Check ($null -eq (Get-Command ffmpeg -ErrorAction SilentlyContinue)) 'no FFmpeg on the path'
+          $env:SONDRA_DATA = Join-Path $env:RUNNER_TEMP 'sondra-daten-setup'
+          New-Item -ItemType Directory -Force -Path $env:SONDRA_DATA | Out-Null
+          $film = Join-Path $env:RUNNER_TEMP 'film.mp4'
+          Check (Test-Path $film) 'the test film is there'
+          $p = Start-Process -FilePath "$dir\sondra.exe" -ArgumentList ('"' + $film + '"') -PassThru -RedirectStandardError setup-err.txt
+          Start-Sleep -Seconds 5
+          Check (-not $p.HasExited) 'the installed program runs'
+          Add-Type -Namespace Win -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h2, bool r);'
+          $p.Refresh()
+          [Win.Native]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+          [Win.Native]::MoveWindow($p.MainWindowHandle, 0, 0, 1024, 740, $true) | Out-Null
+          [Win.Native]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+          Start-Sleep -Seconds 2
+          $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-app/uia-player.ps1 -ProcessId $p.Id -ShotDir $PWD 2>&1
+          $out | Select-String -Pattern '^(ok|FAIL|all checks|[0-9]+ check)' | ForEach-Object { $_.Line }
+          if ($LASTEXITCODE -ne 0) { [void]$failures.Add('the installed player check') }
+          Get-Content setup-err.txt -ErrorAction SilentlyContinue
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Start-Sleep -Seconds 1
+
+          # Away again. `_?=` keeps the uninstaller where it is, so this waits for it to finish.
+          $u = Start-Process -FilePath "$dir\Deinstallieren.exe" -ArgumentList '/S', "_?=$dir" -Wait -PassThru
+          Check ($u.ExitCode -eq 0) "the silent uninstall ends well (exit code $($u.ExitCode))"
+          Check (-not (Test-Path "$dir\sondra.exe")) 'the program is gone'
+          Check (-not (Test-Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SondraNativ')) 'Apps and Features lists it no more'
+          Check (-not (Test-Path 'HKLM:\Software\Classes\.sondra-liste')) 'the ending is let go'
+          Check (-not (Test-Path 'HKLM:\Software\Classes\Applications\sondra.exe')) 'the Open with entry is gone'
+          if ($failures.Count -gt 0) { "$($failures.Count) checks failed"; exit 1 }
+          'all checks passed'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sondra-Nativ-Setup
+          path: Sondra-Nativ-Setup.exe
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:
