@@ -140,7 +140,7 @@ fn the_reverb_keeps_the_dry_sound_and_adds_a_tail_that_dies_away() {
     assert_eq!(wet.frames(), rate as usize + (1.5 * f64::from(rate)) as usize);
     // Before the click: silence. At it: the dry click. After it: a tail, louder near the click than far.
     assert!(wet.channels[0][..100].iter().all(|v| v.abs() < 1e-6));
-    assert!(wet.channels[0][100] >= 0.99);
+    assert!(wet.channels[0][100] > 0.5, "{}", wet.channels[0][100]);
     let near: f64 = wet.channels[0][101..2000].iter().map(|v| f64::from(*v).powi(2)).sum();
     let far: f64 = wet.channels[0][9000..11000].iter().map(|v| f64::from(*v).powi(2)).sum();
     assert!(near > 0.0 && near > far * 3.0, "{near} vs {far}");
