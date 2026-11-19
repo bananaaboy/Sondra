@@ -511,7 +511,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   (`native/installer/sondra.nsi`, NSIS, für alle Benutzer, FFmpeg daneben, Apps & Features, `.sondra-liste`, Öffnen mit)
   installiert, startet mit einem Film und deinstalliert sich in der CI (Lauf 76 grün, 19.11.2026), mit Symbol in der .exe.
   **Player nativ:** Entzerrer (fünf Bänder, Voreinstellungen), Karaoke, Qualität, Visualizer (Balken, Welle, Ring) und
-  alle Einstellungen der Website bis auf Bild-in-Bild; **Ordner:** Nach Serie, Ungesehen, Neu, ▶ auf der Kachel.
+  alle Einstellungen der Website bis auf Bild-in-Bild; **Ordner:** Nach Serie, Ungesehen, Neu, ▶ auf der Kachel, Als ZIP.
+  **Zerschneiden:** Schnitte auf der Welle ziehen. **Umwandeln:** eigene Vorlagen (Format der Website), Alle als ZIP
+  (`sondra-media::zip` schreibt dieselben Bytes wie `zip.ts`). **Aktualisierung** (`updater.rs`): `latest-nativ.yml`
+  lesen, Setup laden und gegen SHA-512 prüfen, Karte „Sondra x ist bereit“, stilles Setup mit `/relaunch`; der Workflow
+  „Native“ schreibt die Datei neben das Setup (Artefakt), ins Release kommt sie erst auf Ihr Wort.
   Kein Fenster hat ein echter Mensch gesehen; die Bildschirmfotos der CI sind die einzige Sicht.
   **Stand 19.11.2026 nachmittags:** dazu nativ **Neue Folgen melden** (`new_episodes.rs`: Prüfrunde, Karte im
   Fenster, „Neu auf AniWorld“ auf der Serienseite), Verlauf und Würfeln in der Merkliste, **Klicks entfernen**,
