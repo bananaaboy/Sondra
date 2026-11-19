@@ -377,3 +377,47 @@ fn bookmarks_are_set_with_b_found_with_shift_arrows_listed_and_copied_as_chapter
     let kept = std::fs::read_to_string(&memory).unwrap();
     assert!(kept.contains("sondra:abspielen:marken") && kept.contains("film.mp4|"), "{kept}");
 }
+
+#[gpui::test]
+fn the_sleep_timer_fades_the_sound_and_stops_the_film_and_the_end_of_the_title_does_not_go_on(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let one = film(tmp.path(), "eins.mp4", 3);
+    let two = film(tmp.path(), "zwei.mp4", 3);
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![one.clone(), two.clone()], cx));
+    w.watch(0.3);
+    // The dialog and its choices.
+    w.press(Role::Button, "Schlaf-Timer");
+    assert!(w.tree().find(Role::Dialog, "Schlaf-Timer").is_some());
+    for label in ["15 Minuten", "30 Minuten", "60 Minuten", "Ende des Titels", "Aus"] {
+        assert!(w.tree().find(Role::Button, label).is_some(), "{label}");
+    }
+    assert_eq!(w.tree().find(Role::Button, "Aus").unwrap().toggled, Some(true));
+    w.press(Role::Button, "30 Minuten");
+    assert!(w.tree().find(Role::Dialog, "Schlaf-Timer").is_none(), "a choice closes it");
+    assert!(w.tree().find(Role::Button, "Schlaf-Timer (30 Min.)").is_some());
+
+    // A timer that runs out stops the film.
+    w.shell.update(w.cx, |shell, cx| {
+        shell.player_sleep_in(std::time::Duration::from_millis(600));
+        cx.notify();
+    });
+    w.watch(1.2);
+    assert!(w.tree().find(Role::Button, "Wiedergabe starten").is_some(), "it stopped by itself");
+    assert!(w.tree().find(Role::Button, "Schlaf-Timer").is_some(), "and the timer is over");
+
+    // „Ende des Titels“: the film ends, and the next does not begin.
+    w.press(Role::Button, "Wiedergabe starten");
+    w.press(Role::Button, "Schlaf-Timer");
+    w.press(Role::Button, "Ende des Titels");
+    w.shell.update(w.cx, |shell, cx| {
+        shell.player_seek(2.5);
+        cx.notify();
+    });
+    w.watch(2.0);
+    assert!(w.tree().find(Role::ListItem, "eins.mp4").unwrap().description.as_ref().is_some_and(|d| d.contains("läuft")), "still the first, not gone on");
+    assert!(w.tree().find(Role::Button, "Schlaf-Timer").is_some(), "the timer is spent");
+}

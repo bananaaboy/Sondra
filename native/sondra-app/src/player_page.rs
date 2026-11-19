@@ -46,8 +46,19 @@ pub struct PlayerState {
     pub marks: Vec<Mark>,
     /// The window with the bookmarks is open.
     pub marks_open: bool,
+    pub sleep: Option<Sleep>,
+    pub sleep_open: bool,
+    /// The film ended on „Ende des Titels“: it stays ended, the next one does not begin.
+    stay_ended: bool,
     pub marks_first: FocusHandle,
     pub marks_last: FocusHandle,
+}
+
+/// The sleep timer: a moment on the clock, or the end of the title that plays.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Sleep {
+    At { until: std::time::Instant, minutes: u32 },
+    AtEnd,
 }
 
 pub struct Ticked {
@@ -73,6 +84,9 @@ impl PlayerState {
             ticked: None,
             marks: Vec::new(),
             marks_open: false,
+            sleep: None,
+            sleep_open: false,
+            stay_ended: false,
             marks_first: cx.focus_handle().tab_stop(true),
             marks_last: cx.focus_handle().tab_stop(true),
         }
@@ -124,6 +138,8 @@ impl PlayerState {
         self.error = None;
         self.cues.clear();
         self.marks_open = false;
+        self.sleep_open = false;
+        self.stay_ended = false;
         self.playback = None;
         self.image = None;
         let Some(path) = self.current_path().cloned() else { return };
@@ -223,6 +239,18 @@ impl PlayerState {
         }
     }
 
+    /// Starts, changes or ends the sleep timer.
+    pub fn set_sleep(&mut self, sleep: Option<Sleep>) {
+        self.sleep = sleep;
+        // A timer that is switched off must not leave the volume where its fade had put it.
+        let volume = self.settings.volume as f32;
+        if sleep.is_none() {
+            if let Some(p) = self.playback.as_mut() {
+                p.set_volume(volume);
+            }
+        }
+    }
+
     /// A bookmark where the film is, unless one is there already (a second apart is the same place).
     pub fn add_mark(&mut self) {
         let Some(at) = self.playback.as_ref().map(|p| p.position()) else { return };
@@ -286,6 +314,29 @@ impl PlayerState {
             }
         }
         let state = playback.state();
+        // The sleep timer: the volume goes down over the last ten seconds, then it stops and the volume comes back.
+        if let Some(Sleep::At { until, .. }) = self.sleep {
+            let left = until.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() {
+                playback.pause();
+                playback.set_volume(self.settings.volume as f32);
+                self.sleep = None;
+            } else if left.as_secs_f64() < 10.0 {
+                playback.set_volume(self.settings.volume as f32 * sondra_player::sleep_fade(left.as_secs_f64() * 1000.0) as f32);
+            }
+        }
+        let state = if self.sleep.is_none() && state == State::Playing { playback.state() } else { state };
+        if state != State::Ended {
+            self.stay_ended = false;
+        }
+        if state == State::Ended && (self.sleep == Some(Sleep::AtEnd) || self.stay_ended) {
+            // „Ende des Titels“ stops, instead of going on to the next.
+            if self.sleep.take().is_some() {
+                self.keep_place(true);
+            }
+            self.stay_ended = true;
+            return false;
+        }
         if state == State::Ended {
             self.keep_place(true);
             let last = self.index + 1 >= self.queue.len();
@@ -396,6 +447,11 @@ impl Shell {
     /// Where the film is, when one plays.
     pub fn player_position(&self) -> Option<f64> {
         self.player.playback.as_ref().map(|p| p.position())
+    }
+
+    /// For tests: a sleep timer that runs out after this long.
+    pub fn player_sleep_in(&mut self, after: std::time::Duration) {
+        self.player.set_sleep(Some(Sleep::At { until: std::time::Instant::now() + after, minutes: 1 }));
     }
 
     /// Jumps to a place in the film that plays.
@@ -599,7 +655,16 @@ impl Shell {
             let n = p.marks.len();
             ui.button("lesezeichen", if n == 0 { "Lesezeichen".to_string() } else { format!("Lesezeichen ({n})") }).small().on_click(move |_, app| Self::player_do(&me, app, |p| p.marks_open = true))
         };
-        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(marks_button).child(mute).child(volume);
+        let sleep_button = {
+            let me = me.clone();
+            let label = match p.sleep {
+                Some(Sleep::At { minutes, .. }) => format!("Schlaf-Timer ({minutes} Min.)"),
+                Some(Sleep::AtEnd) => "Schlaf-Timer (Ende des Titels)".to_string(),
+                None => "Schlaf-Timer".to_string(),
+            };
+            ui.button("schlaf-timer", label).small().on_click(move |_, app| Self::player_do(&me, app, |p| p.sleep_open = true))
+        };
+        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(marks_button).child(sleep_button).child(mute).child(volume);
         page = page
             .child(div().flex().items_baseline().justify_between().gap(px(12.)).child(ui.heading("Abspielen")).child({
                 let me = me.clone();
@@ -617,6 +682,35 @@ impl Shell {
     /// chapters for a description.
     pub(crate) fn player_overlay(&self, ui: Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
         let p = &self.player;
+        if p.sleep_open {
+            let me = cx.entity();
+            let mut options = div().flex().flex_wrap().gap(px(8.));
+            let mut choices: Vec<(String, Option<Sleep>, bool)> = sondra_player::SLEEPS
+                .iter()
+                .map(|m| (format!("{m} Minuten"), Some(Sleep::At { until: std::time::Instant::now() + std::time::Duration::from_secs(*m as u64 * 60), minutes: *m as u32 }), matches!(p.sleep, Some(Sleep::At { minutes, .. }) if minutes as i64 == *m)))
+                .collect();
+            choices.push(("Ende des Titels".to_string(), Some(Sleep::AtEnd), p.sleep == Some(Sleep::AtEnd)));
+            choices.push(("Aus".to_string(), None, p.sleep.is_none()));
+            for (n, (label, sleep, on)) in choices.into_iter().enumerate() {
+                let me = me.clone();
+                let mut chip = ui.chip(format!("schlaf-{n}"), label, on);
+                chip = chip.on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                    p.set_sleep(sleep);
+                    p.sleep_open = false;
+                }));
+                options = options.child(chip);
+            }
+            let close = me.clone();
+            return Some(
+                ui.dialog("schlaf-timer-fenster", "Schlaf-Timer")
+                    .width(520.)
+                    .child(ui.prose("Der Ton wird in den letzten zehn Sekunden leiser, dann hält die Wiedergabe an."))
+                    .child(options)
+                    .action(ui.button("schlaf-schliessen", "Schliessen").primary().on_click(move |_, app| Self::player_do(&close, app, |p| p.sleep_open = false)))
+                    .on_close(move |_, app| Self::player_do(&me, app, |p| p.sleep_open = false))
+                    .into_any_element(),
+            );
+        }
         if !p.marks_open {
             return None;
         }
