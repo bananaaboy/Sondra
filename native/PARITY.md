@@ -33,11 +33,11 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | ID | Funktion | Bestand | Welle | Prüfung | Stand |
 | --- | --- | --- | --- | --- | --- |
 | M01 | Liste lesen aus Drive (SQLite und JSON) | `merkliste.ts`, `sqlite.ts` | 0 | Testdateien der Website | **nativ ✔** |
-| M02 | Serie hinzufügen mit einem Feld; „Wie weit sind Sie?“; „Mehr Angaben“ | `AddDialog` | 4 | Szenario „serien“ | offen |
+| M02 | Serie hinzufügen mit einem Feld; „Wie weit sind Sie?“; „Mehr Angaben“ | `AddDialog` | 4 | `sondra-app/tests/merkliste.rs`, UIA „Serie eintippen“ auf Windows | **teilweise nativ ✔** (ein Feld, Enter; „Wie weit sind Sie?“ und „Mehr Angaben“ offen) |
 | M03 | Staffeln, Teile, Filme, Folgenzahlen, Gesehenes, „Stand“ rückt weiter (`settle`) | `merkliste.ts` | 4 | `sondra-merk`: 57 Einträge aus ungewöhnlichen Formen, Fortschritt, Teile, Abhaken, `settle` — dieselben Zahlen wie die Website (golden) | **Logik nativ ✔**, Oberfläche offen |
 | M04 | Cover mit Ausschnitt und Zoom, Pyramide beim Verkleinern | `CoverImage` | 4 | Bildvergleich | offen |
-| M05 | Stände (Am Schauen, Später, Pausiert, Fertig, Abgebrochen), Filter | `MerklistePanel` | 4 | `verify:merkliste` | offen |
-| M06 | Ansicht als Poster oder Liste, Sortierungen | `MerklistePanel` | 4 | Szenario „merkliste“ | offen |
+| M05 | Stände (Am Schauen, Später, Pausiert, Fertig, Abgebrochen), Filter | `MerklistePanel` | 4 | `sondra-merk::view` (Filter, Abschnitte, Zähler) und `sondra-app/tests/merkliste.rs` im echten Fenster; UIA auf Windows | **teilweise nativ ✔** (Liste, Pillen, Suche ab sechs; Tags und „nur offene“ als Logik, noch ohne Knopf) |
+| M06 | Ansicht als Poster oder Liste, Sortierungen | `MerklistePanel` | 4 | Liste ✔ (`merk_row`); Poster-Ansicht und Sortierung nur als Logik (`Sort`) | offen |
 | M07 | Serienseite: abspielen, gesehen, bearbeiten, „Mehr“ | `MerklistePanel` | 4 | Szenario „serien“ | offen |
 | M08 | „Bis wohin?“ Planer, Ziel merken, Tempo aus dem Verlauf | `watchPlan`, `WatchPlanner` | 4 | `sondra-merk`: über 500 Pläne (Ziele × Optionen), Tempo, Ziel, Beschriftungen gegen die Website, in Europe/Zurich über die Zeitumstellungen (golden) | **Logik nativ ✔**, Oberfläche offen |
 | M09 | Statistiken und Rückblick, Verlauf, Würfeln | `MerklisteRecap` | 4 | `sondra-merk`: Statistik, Sortierungen (deutsche Ordnung wie im Browser), Rückblick, Würfel-Auswahl, Plan bis zum Ende, Swiss-Zahlen — gegen die Website | **Logik nativ ✔**, Oberfläche offen |
@@ -58,10 +58,10 @@ sind `CLAUDE.md`, die Seiten unter `src/components/panels/` und `desktop/`.
 | O02 | Art, Suche (auch Unterordner), natürliche Sortierung, Tiefe | `folder.ts` | 4 | `sondra-merk::folder` gegen die Website (golden): Art, Suche ohne Akzente, natürliche Sortierung, Tiefe, Unterordner-Summen | **Logik nativ ✔**, Oberfläche offen |
 | O03 | Auswählen wie im Dateimanager, Abspielen, In die Sitzung, ZIP, In Drive, Löschen | `FolderPanel` | 4 | Szenario „ordner“ | offen |
 | O04 | Papierkorb von Sondra (verschieben, rückgängig, ansehen, endgültig löschen) | `FolderBin`, `folder.ts` | 4 | `verify:folder` | offen |
-| O05 | Untertitel im Ordner: Datei mit gleichem Namen, sonst Whisper erzeugt `Name.srt` | `autoSubtitles`, `FolderSubtitles` | 4 | Test | offen |
+| O05 | Untertitel im Ordner: Datei mit gleichem Namen, sonst Whisper erzeugt `Name.srt` | `autoSubtitles`, `FolderSubtitles` | 4 | `sondra-merk::subtitles` (welche Datei gehört zum Film, wie heisst die erzeugte) gegen die Website; Whisper offen | **Namen nativ ✔**, Rest offen |
 | O06 | Weiterschauen, „Nach Serie“, „Ungesehen“, „Neu“, Merkliste spielt aus dem Ordner | `folderLibrary.ts` | 4 | `verify:folder` | offen |
 | O07 | Doppelte finden (Größe, Hash, 32 Stellen) | `duplicates.ts` | 4 | `sondra-merk::duplicates`: Kopiermarken, Behalten-zuerst, Gruppen, die echten SHA-256-Schlüssel (ganz und an 32 Stellen, 33-MB-Datei) wie die Website; Oberfläche offen | **Logik nativ ✔**, Oberfläche offen |
-| O08 | Ansicht je Ordner, zuletzt geöffnete Ordner, gemerkter Ordner | `folderMemory.ts` | 4 | Szenario „ordner-zuletzt“ | offen |
+| O08 | Ansicht je Ordner, zuletzt geöffnete Ordner, gemerkter Ordner | `folderMemory.ts` | 4 | `sondra-merk::folder_memory`: 9 Abläufe (vierzig Ordner, kaputte Ablage, Besuch je Sitzung) gegen `folderMemory.ts` | **Logik nativ ✔**, Oberfläche offen |
 | O09 | Ordner aus Drive, Löschen in Drive, In Staffel einordnen, „Einordnen“ mit einem Klick | `driveClient.ts`, `SeasonFiling` | 4 | Szenario „serien“ | offen |
 | O10 | Bedienung mit dem Finger (Tipp, langes Drücken, Blatt) | `FolderPanel` | 4 | Entscheidung, ob Touch gebraucht wird | **Entscheidung** |
 

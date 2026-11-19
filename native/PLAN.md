@@ -167,6 +167,16 @@ Startseite mit Kacheln, hell und dunkel, die Schriften, die Bewegung.
 - Ordner (2 350 Zeilen): Kacheln und Liste, Auswahl, Vorschaubilder, Suche,
   Papierkorb von Sondra samt Ansicht, Untertitel im Ordner, Weiterschauen,
   Doppelte finden, Ansicht je Ordner, Drive-Ordner, Einordnen.
+- **Stand 19.11.2026:** Die Logik der Merkliste und des Ordners ist nativ und gegen den Code der Website
+  geprüft (`sondra-merk`: Einträge, Fortschritt, `settle`, Zusammenführen, Einlesen, Teilen in beide
+  Richtungen, Planer, Statistik und Rückblick, Dateinamen → Folge, Ordneransichten, Doppelte, Ansicht
+  je Ordner, Untertitelnamen, die Sätze einer Zeile, der Schritt „+1“, Filter und Abschnitte). Auf der
+  Oberfläche steht die **erste Seite der Merkliste** (`sondra-app/src/merkliste.rs`): Zeilen mit Stand,
+  Balken, Rest und „+1“, Abschnitte je Stand, Pillen, Suche ab sechs Einträgen, „Serie hinzufügen“, die
+  leere Liste als Weg statt Formular; sie liest und schreibt dieselbe SQLite-Datei, die die Website liest
+  (`store.rs`, eine fremde Datei wird nie überschrieben). **Offen:** Serienseite, Poster-Ansicht mit
+  Covern, Bearbeiten, Entfernen mit „Rückgängig“, „Mehr“-Menü, Planer und Statistik als Seiten, Teilen
+  als Fenster, die Ordnerseite, Abgleich mit Drive im laufenden Betrieb, AniList/MAL, Anytype, Discord.
 - **Tor:** `verify:merkliste`, `:anytype`, `:discord`, `:folder`, `:drive` als
   Rust-Tests; ein Hin und Her der Liste zwischen Website und nativem Sondra, in
   beide Richtungen, mit Entfernen und gleichzeitigen Änderungen — die Liste in
