@@ -436,3 +436,61 @@ pub fn build_audio_replacement(video: &str, audio: &str) -> BuiltJob {
         copy_only: false,
     }
 }
+
+
+/// The size of the picture after turning and cropping, as the crop filter works it out (even numbers only,
+/// which 4:2:0 chroma needs): what `build_video_job`'s `crop=` makes of a source of this size.
+pub fn cropped_size(width: u32, height: u32, ops: &VideoOps) -> (u32, u32) {
+    let (w, h) = if ops.rotate == 90 || ops.rotate == 270 { (height, width) } else { (width, height) };
+    match ops.crop {
+        Some(c) => {
+            let even = |v: f64| ((v / 2.0).trunc() * 2.0).max(2.0) as u32;
+            // The filter reads the fractions at four digits, as written.
+            let at4 = |v: f64| to_fixed(v, 4).parse::<f64>().unwrap_or(v);
+            (even(f64::from(w) * at4(c.width)), even(f64::from(h) * at4(c.height)))
+        }
+        None => (w, h),
+    }
+}
+
+/// The picture part of the chain, for a still of what will be written: turned, mirrored, cropped, softened,
+/// coloured, sharpened. Not the cut, the speed, the fades, the reversal or the stabilising — those are about
+/// time, and a still has none.
+pub fn preview_filters(ops: &VideoOps) -> Vec<String> {
+    let mut filters: Vec<String> = Vec::new();
+    match ops.rotate {
+        90 => filters.push("transpose=1".into()),
+        180 => filters.push("transpose=1,transpose=1".into()),
+        270 => filters.push("transpose=2".into()),
+        _ => {}
+    }
+    if ops.flip_h {
+        filters.push("hflip".into());
+    }
+    if ops.flip_v {
+        filters.push("vflip".into());
+    }
+    if let Some(c) = ops.crop {
+        let even = |value: String| format!("trunc({value}/2)*2");
+        filters.push(format!(
+            "crop={}:{}:{}:{}",
+            even(format!("iw*{}", to_fixed(c.width, 4))),
+            even(format!("ih*{}", to_fixed(c.height, 4))),
+            even(format!("iw*{}", to_fixed(c.x, 4))),
+            even(format!("ih*{}", to_fixed(c.y, 4)))
+        ));
+    }
+    if ops.denoise {
+        filters.push("hqdn3d=3:2:4:3".into());
+    }
+    if ops.brightness != 0.0 || ops.contrast != 1.0 || ops.saturation != 1.0 {
+        filters.push(format!("eq=brightness={}:contrast={}:saturation={}", to_fixed(ops.brightness, 3), to_fixed(ops.contrast, 3), to_fixed(ops.saturation, 3)));
+    }
+    if let Some(look) = look_filter(ops.look) {
+        filters.push(look.into());
+    }
+    if ops.sharpen {
+        filters.push("unsharp=5:5:0.8:3:3:0".into());
+    }
+    filters
+}

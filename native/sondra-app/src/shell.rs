@@ -22,6 +22,7 @@ use crate::merkliste::MerkState;
 use crate::harmony_page::HarmonyState;
 use crate::images_page::ImagesState;
 use crate::mix_page::MixState;
+use crate::video_page::VideoState;
 use crate::normalize_page::NormalizeState;
 use crate::player_page::PlayerState;
 use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
@@ -70,6 +71,7 @@ pub struct Shell {
     pub(crate) harmony: HarmonyState,
     pub(crate) images: ImagesState,
     pub(crate) mix: MixState,
+    pub(crate) video: VideoState,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
     /// Where the focus goes at the next frame (a dialog that opened takes it).
@@ -128,6 +130,7 @@ impl Shell {
             harmony: HarmonyState::new(),
             images: ImagesState::new(),
             mix: MixState::new(),
+            video: VideoState::new(),
             convert_watch: None,
             pending_focus: None,
         }
@@ -789,12 +792,12 @@ impl Render for Shell {
         }
         self.player_merkliste_tick();
         // A download in progress is drawn again and again: the bar moves.
-        if self.download.job.is_some() || self.convert.run.is_some() {
+        if self.download.job.is_some() || self.convert.run.is_some() || self.video.run.is_some() {
             let me = cx.entity_id();
             window.on_next_frame(move |_, cx| cx.notify(me));
         }
         // Pictures the Bilder page has replaced are let go of here, where the window is at hand.
-        for old in std::mem::take(&mut self.images.trash) {
+        for old in std::mem::take(&mut self.images.trash).into_iter().chain(std::mem::take(&mut self.video.trash)) {
             let _ = window.drop_image(old);
         }
         // The picture over the whole window (or screen): the page is nothing but it, in dark colours.
@@ -819,6 +822,8 @@ impl Render for Shell {
             self.download_page(ui, cx)
         } else if self.panel == Panel::Converter {
             self.convert_page(ui, cx)
+        } else if self.panel == Panel::Video {
+            self.video_page(ui, cx)
         } else if self.panel == Panel::Mix {
             self.mix_page(ui, cx)
         } else if self.panel == Panel::Images {
