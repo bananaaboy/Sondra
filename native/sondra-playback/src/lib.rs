@@ -130,7 +130,48 @@ struct Settings {
     volume: f32,
     muted: bool,
     audio_track: usize,
+    boost: f32,
+    night: bool,
+    picture: Picture,
 }
+
+/// How the picture is dressed on its way to the window. The numbers are the ones of the web player's
+/// CSS filter: 1 is as the film is, brightness and saturation multiply, contrast turns around mid grey.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Picture {
+    pub brightness: f64,
+    pub contrast: f64,
+    pub saturation: f64,
+    pub mirror: bool,
+}
+
+impl Default for Picture {
+    fn default() -> Self {
+        Picture { brightness: 1.0, contrast: 1.0, saturation: 1.0, mirror: false }
+    }
+}
+
+/// The FFmpeg filters for the picture, after the scaling (empty when it is as it is).
+pub fn picture_filters(picture: &Picture) -> Vec<String> {
+    let mut filters = Vec::new();
+    let near = |a: f64| (a - 1.0).abs() < 1e-9;
+    if !near(picture.brightness) {
+        let b = picture.brightness.clamp(0.0, 3.0);
+        filters.push(format!("lutrgb=r=val*{b}:g=val*{b}:b=val*{b}"));
+    }
+    if !near(picture.contrast) || !near(picture.saturation) {
+        filters.push(format!("eq=contrast={}:saturation={}", picture.contrast.clamp(0.0, 3.0), picture.saturation.clamp(0.0, 3.0)));
+    }
+    if picture.mirror {
+        filters.push("hflip".to_string());
+    }
+    filters
+}
+
+/// The sound the night mode asks for: quiet passages up, loud ones down. The numbers are the web player's
+/// compressor (threshold −32 dB, knee, ratio 5, attack 10 ms, release 350 ms) with a make-up so that the
+/// quiet part really does come up.
+pub const NIGHT_FILTER: &str = "acompressor=threshold=0.0251:ratio=5:attack=10:release=350:knee=4:makeup=4";
 
 pub struct Playback {
     ffmpeg: Ffmpeg,
@@ -198,7 +239,7 @@ impl Playback {
             output,
             shared,
             size,
-            settings: Settings { rate: 1.0, volume: 1.0, muted: false, audio_track: 0 },
+            settings: Settings { rate: 1.0, volume: 1.0, muted: false, audio_track: 0, boost: 1.0, night: false, picture: Picture::default() },
             run: Run { children: Vec::new(), frames: Arc::new(Frames::new()), video_done: Arc::default(), audio_done: Arc::default(), stop: Arc::default() },
             started_at: 0.0,
             timer: Timer::default(),
@@ -256,10 +297,13 @@ impl Playback {
         if let Some(video) = &self.video {
             let fps = video.fps.unwrap_or(25.0).clamp(1.0, 120.0);
             let (w, h) = self.size;
+            let mut chain = vec![format!("scale={w}:{h}:flags=bilinear"), format!("fps={fps}")];
+            chain.extend(picture_filters(&self.settings.picture));
+            let vf = chain.join(",");
             let mut child = Command::new(self.ffmpeg.program())
                 .args(["-v", "error", "-nostdin", "-ss", &seconds_arg(at), "-i"])
                 .arg(&self.path)
-                .args(["-map", &format!("0:{}", video.index), "-an", "-sn", "-vf", &format!("scale={w}:{h}:flags=bilinear,fps={fps}"), "-pix_fmt", "bgra", "-f", "rawvideo", "-"])
+                .args(["-map", &format!("0:{}", video.index), "-an", "-sn", "-vf", &vf, "-pix_fmt", "bgra", "-f", "rawvideo", "-"])
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
                 .stdin(Stdio::null())
@@ -286,6 +330,9 @@ impl Playback {
                     left /= 2.0;
                 }
                 filters.push(format!("atempo={left}"));
+            }
+            if self.settings.night {
+                filters.push(NIGHT_FILTER.to_string());
             }
             let mut command = Command::new(self.ffmpeg.program());
             command.args(["-v", "error", "-nostdin", "-ss", &seconds_arg(at), "-i"]).arg(&self.path).args(["-map", &format!("0:{}", track.index), "-vn", "-sn"]);
@@ -323,7 +370,7 @@ impl Playback {
     }
 
     fn apply_volume(&self) {
-        self.shared.set_volume(if self.settings.muted { 0.0 } else { self.settings.volume });
+        self.shared.set_volume(if self.settings.muted { 0.0 } else { self.settings.volume * self.settings.boost });
     }
 
     pub fn play(&mut self) {
@@ -361,6 +408,32 @@ impl Playback {
     pub fn set_rate(&mut self, rate: f64) -> Result<(), PlaybackError> {
         let at = self.position();
         self.settings.rate = rate.clamp(0.25, 4.0);
+        self.restart(at)
+    }
+
+    /// Gain above 100 %: 1.0 to 3.0, on top of the volume.
+    pub fn set_boost(&mut self, boost: f32) {
+        self.settings.boost = boost.clamp(1.0, 3.0);
+        self.apply_volume();
+    }
+
+    /// The night mode needs the sound made again, from where it is.
+    pub fn set_night(&mut self, on: bool) -> Result<(), PlaybackError> {
+        if self.settings.night == on {
+            return Ok(());
+        }
+        let at = self.position();
+        self.settings.night = on;
+        self.restart(at)
+    }
+
+    /// Dresses the picture anew, from where it is.
+    pub fn set_picture(&mut self, picture: Picture) -> Result<(), PlaybackError> {
+        if self.settings.picture == picture {
+            return Ok(());
+        }
+        let at = self.position();
+        self.settings.picture = picture;
         self.restart(at)
     }
 

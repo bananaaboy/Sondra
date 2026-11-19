@@ -467,3 +467,39 @@ fn sound_tracks_and_subtitles_are_chosen_in_one_window_and_their_looks_are_kept(
     w.press(Role::Button, "Schliessen");
     assert!(w.tree().find(Role::Dialog, "Ton und Untertitel").is_none());
 }
+
+#[gpui::test]
+fn picture_and_sound_have_their_window_and_what_is_chosen_is_kept_and_taken_back(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let one = film(tmp.path(), "bild.mp4", 3);
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![one], cx));
+    w.watch(0.3);
+    w.press(Role::Button, "Bild und Ton");
+    assert!(w.tree().find(Role::Dialog, "Bild und Ton").is_some());
+    assert_eq!(w.tree().find(Role::Button, "Bildpassung Einpassen").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Helligkeit 100 %").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Bildpassung Füllen");
+    assert_eq!(w.tree().find(Role::Button, "Bildpassung Füllen").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Helligkeit 150 %");
+    assert_eq!(w.tree().find(Role::Button, "Helligkeit 150 %").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Helligkeit 100 %").unwrap().toggled, Some(false));
+    w.press(Role::Button, "Sättigung 0 %");
+    w.press(Role::Button, "Verstärkung 200 %");
+    w.press(Role::Button, "Spiegeln");
+    w.press(Role::Button, "Nachtmodus: Leises lauter, Lautes leiser");
+    assert_eq!(w.tree().find(Role::Button, "Nachtmodus: Leises lauter, Lautes leiser").unwrap().toggled, Some(true));
+    // The film goes on through all the restarts.
+    w.watch(0.8);
+    assert!(w.position() > 0.5, "{}", w.position());
+    // Everything back.
+    w.press(Role::Button, "Zurücksetzen");
+    assert_eq!(w.tree().find(Role::Button, "Helligkeit 100 %").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Bildpassung Einpassen").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Verstärkung 100 %").unwrap().toggled, Some(true));
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Dialog, "Bild und Ton").is_none());
+}

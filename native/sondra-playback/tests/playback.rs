@@ -142,3 +142,59 @@ fn a_file_with_nothing_to_play_says_so() {
     std::fs::write(&text, "nur Text").unwrap();
     assert!(Playback::open(ff, &text, 0.0).is_err());
 }
+
+/// The mean of the colour channels of a picture, 0 to 255.
+fn mean(frame: &sondra_playback::Frame) -> f64 {
+    let sum: u64 = frame.bgra.chunks(4).map(|p| p[0] as u64 + p[1] as u64 + p[2] as u64).sum();
+    sum as f64 / (frame.bgra.len() / 4 * 3) as f64
+}
+
+fn first_frame(p: &mut Playback) -> sondra_playback::Frame {
+    let until = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < until {
+        if let Some(f) = p.next_frame() {
+            return f;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    panic!("no picture came");
+}
+
+#[test]
+fn the_picture_can_be_brightened_greyed_and_mirrored_and_the_sound_made_for_the_night() {
+    use sondra_playback::Picture;
+    let Some(ff) = ffmpeg() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let (film, _, _) = media(tmp.path(), &ff);
+    let mut p = Playback::open(ff, &film, 0.5).unwrap();
+    let plain = first_frame(&mut p);
+
+    p.set_picture(Picture { brightness: 0.5, ..Picture::default() }).unwrap();
+    let dark = first_frame(&mut p);
+    assert!(mean(&dark) < mean(&plain) * 0.75, "darker: {} against {}", mean(&dark), mean(&plain));
+
+    p.set_picture(Picture { saturation: 0.0, ..Picture::default() }).unwrap();
+    let grey = first_frame(&mut p);
+    let spread = |f: &sondra_playback::Frame| f.bgra.chunks(4).map(|p| (p[0] as i32 - p[2] as i32).abs() as u64).sum::<u64>() as f64 / (f.bgra.len() / 4) as f64;
+    assert!(spread(&grey) < spread(&plain) * 0.2, "no colour left: {} against {}", spread(&grey), spread(&plain));
+
+    p.set_picture(Picture { mirror: true, ..Picture::default() }).unwrap();
+    let mirrored = first_frame(&mut p);
+    let w = plain.width as usize;
+    let row = |f: &sondra_playback::Frame, y: usize, x: usize| f.bgra[(y * w + x) * 4..(y * w + x) * 4 + 3].to_vec();
+    let distance = |a: Vec<u8>, b: Vec<u8>| a.iter().zip(&b).map(|(a, b)| (*a as i32 - *b as i32).abs()).sum::<i32>();
+    // Compare a column on one side with the column opposite in the other picture; the unmirrored
+    // opposite is a different spot of the test pattern.
+    let (y, x) = (90usize, 20usize);
+    let near = distance(row(&mirrored, y, x), row(&plain, y, w - 1 - x));
+    let far = distance(row(&mirrored, y, x), row(&plain, y, x));
+    assert!(near < far.max(30), "mirrored: {near} against {far}");
+
+    // The boost is on top of the volume, night mode restarts the sound and the film goes on.
+    p.set_boost(2.0);
+    p.set_night(true).unwrap();
+    let seen = watch(&mut p, 1.0);
+    assert!(!seen.is_empty(), "the pictures go on after the sound is made again");
+    assert!(p.position() > 0.9);
+    p.set_night(false).unwrap();
+}

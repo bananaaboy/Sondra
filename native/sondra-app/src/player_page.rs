@@ -50,6 +50,8 @@ pub struct PlayerState {
     pub sleep_open: bool,
     /// The window with the sound tracks, subtitles and their looks.
     pub tracks_open: bool,
+    /// The window with the picture and the sound.
+    pub look_open: bool,
     track: usize,
     /// The subtitles of a file beside the film, and which source is shown.
     external_cues: Vec<Cue>,
@@ -59,6 +61,11 @@ pub struct PlayerState {
     stay_ended: bool,
     pub marks_first: FocusHandle,
     pub marks_last: FocusHandle,
+}
+
+/// The picture settings the playback understands.
+fn picture_of(settings: &sondra_player::Settings) -> sondra_playback::Picture {
+    sondra_playback::Picture { brightness: settings.brightness, contrast: settings.contrast, saturation: settings.saturation, mirror: settings.mirror }
 }
 
 /// Where the words on the stage come from.
@@ -104,6 +111,7 @@ impl PlayerState {
             sleep: None,
             sleep_open: false,
             tracks_open: false,
+            look_open: false,
             track: 0,
             external_cues: Vec::new(),
             subtitle: Subtitle::Off,
@@ -163,6 +171,7 @@ impl PlayerState {
         self.subtitle = Subtitle::Off;
         self.subtitle_error = None;
         self.tracks_open = false;
+        self.look_open = false;
         self.track = 0;
         self.marks_open = false;
         self.sleep_open = false;
@@ -182,6 +191,9 @@ impl PlayerState {
                 if (self.settings.rate - 1.0).abs() > 1e-9 {
                     let _ = playback.set_rate(self.settings.rate);
                 }
+                playback.set_boost(self.settings.boost as f32);
+                let _ = playback.set_night(self.settings.night);
+                let _ = playback.set_picture(picture_of(&self.settings));
                 self.playback = Some(playback);
                 self.load_subtitles(&path);
                 self.load_marks();
@@ -264,6 +276,17 @@ impl PlayerState {
         if let (Some(next), Some(store)) = (next, self.memory.as_mut()) {
             store.set_item(MARKS_KEY, next);
         }
+    }
+
+    /// Puts the picture and sound settings onto what plays.
+    fn apply_look(&mut self) {
+        let (boost, night, picture) = (self.settings.boost as f32, self.settings.night, picture_of(&self.settings));
+        if let Some(p) = self.playback.as_mut() {
+            p.set_boost(boost);
+            let _ = p.set_night(night);
+            let _ = p.set_picture(picture);
+        }
+        self.keep_settings();
     }
 
     /// Chooses where the subtitles come from; one inside the film is read out of it (FFmpeg hands it over as
@@ -618,7 +641,7 @@ impl Shell {
         // The stage: the picture, and the words of the subtitle over its foot.
         let mut stage = div().relative().w_full().h(px(stage_height)).rounded(px(sondra_ui::radius::CARD)).bg(c.stage).overflow_hidden().flex().items_center().justify_center();
         stage = match (&p.image, playback.picture_size()) {
-            (Some(image), Some(_)) => stage.child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Contain).size_full()),
+            (Some(image), Some(_)) => stage.child(img(ImageSource::Render(image.clone())).object_fit(match p.settings.fit { sondra_player::Fit::Contain => ObjectFit::Contain, sondra_player::Fit::Cover => ObjectFit::Cover, sondra_player::Fit::Fill => ObjectFit::Fill }).size_full()),
             (None, Some(_)) => stage.child(div().text_color(c.stage_muted).child("Das Bild kommt …")),
             (_, None) => stage.child(div().flex().flex_col().items_center().gap(px(6.)).child(div().text_color(c.stage_ink).text_size(px(size::SUBHEADING)).child(name.clone())).child(div().text_color(c.stage_muted).child("Ton"))),
         };
@@ -743,7 +766,11 @@ impl Shell {
             let me = me.clone();
             ui.button("ton-untertitel", "Ton und Untertitel").small().on_click(move |_, app| Self::player_do(&me, app, |p| p.tracks_open = true))
         };
-        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(marks_button).child(sleep_button).child(mute).child(volume);
+        let look_button = {
+            let me = me.clone();
+            ui.button("bild-ton", "Bild und Ton").small().on_click(move |_, app| Self::player_do(&me, app, |p| p.look_open = true))
+        };
+        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(look_button).child(marks_button).child(sleep_button).child(mute).child(volume);
         page = page
             .child(div().flex().items_baseline().justify_between().gap(px(12.)).child(ui.heading("Abspielen")).child({
                 let me = me.clone();
@@ -787,6 +814,92 @@ impl Shell {
                     .child(options)
                     .action(ui.button("schlaf-schliessen", "Schliessen").primary().on_click(move |_, app| Self::player_do(&close, app, |p| p.sleep_open = false)))
                     .on_close(move |_, app| Self::player_do(&me, app, |p| p.sleep_open = false))
+                    .into_any_element(),
+            );
+        }
+        if p.look_open {
+            let me = cx.entity();
+            let st = &p.settings;
+            // One row of choices: a title and chips that each set one value.
+            let steps = |ui: &Ui, title: &str, key: &'static str, values: &[(f64, &str)], now: f64, set: fn(&mut sondra_player::Settings, f64)| {
+                let mut chips = div().flex().flex_wrap().gap(px(6.));
+                for (v, label) in values {
+                    let me = me.clone();
+                    let v = *v;
+                    chips = chips.child(ui.chip(format!("{key}-{label}"), label.to_string(), (now - v).abs() < 1e-9).accessible_name(format!("{title} {label}")).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        set(&mut p.settings, v);
+                        p.apply_look();
+                    })));
+                }
+                div().flex().flex_col().gap(px(8.)).child(ui.title(title.to_string())).child(chips)
+            };
+            let percent = |from: f64, to: f64, step: f64| -> Vec<(f64, String)> {
+                let mut out = Vec::new();
+                let mut v = from;
+                while v <= to + 1e-9 {
+                    out.push((v, format!("{} %", (v * 100.0).round())));
+                    v += step;
+                }
+                out
+            };
+            let light = percent(0.5, 1.5, 0.25);
+            let light: Vec<(f64, &str)> = light.iter().map(|(v, l)| (*v, l.as_str())).collect();
+            let contrast = percent(0.5, 1.5, 0.25);
+            let contrast: Vec<(f64, &str)> = contrast.iter().map(|(v, l)| (*v, l.as_str())).collect();
+            let colour = percent(0.0, 2.0, 0.5);
+            let colour: Vec<(f64, &str)> = colour.iter().map(|(v, l)| (*v, l.as_str())).collect();
+            let boost = [(1.0, "100 %"), (1.5, "150 %"), (2.0, "200 %"), (3.0, "300 %")];
+            let mut body = div().flex().flex_col().gap(px(16.));
+            // The fit.
+            let mut fit = div().flex().flex_wrap().gap(px(6.));
+            for (value, label) in [(sondra_player::Fit::Contain, "Einpassen"), (sondra_player::Fit::Cover, "Füllen"), (sondra_player::Fit::Fill, "Strecken")] {
+                let me = me.clone();
+                fit = fit.child(ui.chip(format!("passung-{label}"), label, st.fit == value).accessible_name(format!("Bildpassung {label}")).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                    p.settings.fit = value;
+                    p.keep_settings();
+                })));
+            }
+            {
+                let me = me.clone();
+                let on = st.mirror;
+                fit = fit.child(ui.chip("spiegeln", "Spiegeln", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                    p.settings.mirror = !on;
+                    p.apply_look();
+                })));
+            }
+            body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Bild")).child(fit));
+            body = body.child(steps(&ui, "Helligkeit", "hell", &light, st.brightness, |s, v| s.brightness = v));
+            body = body.child(steps(&ui, "Kontrast", "kontrast", &contrast, st.contrast, |s, v| s.contrast = v));
+            body = body.child(steps(&ui, "Sättigung", "saettigung", &colour, st.saturation, |s, v| s.saturation = v));
+            body = body.child(steps(&ui, "Verstärkung", "verstaerkung", &boost, st.boost, |s, v| s.boost = v));
+            {
+                let me = me.clone();
+                let on = st.night;
+                body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Ton")).child(
+                    ui.chip("nachtmodus", "Nachtmodus: Leises lauter, Lautes leiser", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        p.settings.night = !on;
+                        p.apply_look();
+                    })),
+                ));
+            }
+            let (close, reset) = (me.clone(), me.clone());
+            return Some(
+                ui.dialog("bild-ton-fenster", "Bild und Ton")
+                    .width(560.)
+                    .child(body)
+                    .action(ui.button("bild-zuruecksetzen", "Zurücksetzen").on_click(move |_, app| Self::player_do(&reset, app, |p| {
+                        let d = sondra_player::Settings::default();
+                        p.settings.brightness = d.brightness;
+                        p.settings.contrast = d.contrast;
+                        p.settings.saturation = d.saturation;
+                        p.settings.mirror = d.mirror;
+                        p.settings.boost = d.boost;
+                        p.settings.night = d.night;
+                        p.settings.fit = d.fit;
+                        p.apply_look();
+                    })))
+                    .action(ui.button("bild-schliessen", "Schliessen").primary().on_click(move |_, app| Self::player_do(&close, app, |p| p.look_open = false)))
+                    .on_close(move |_, app| Self::player_do(&me, app, |p| p.look_open = false))
                     .into_any_element(),
             );
         }
