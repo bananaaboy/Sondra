@@ -6309,6 +6309,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sondra-anytype"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "sondra-drive",
+ "sondra-merk",
+ "tempfile",
+ "tiny_http",
+ "ureq",
+ "url",
+]
+
+[[package]]
 name = "sondra-app"
 version = "0.1.0"
 dependencies = [
