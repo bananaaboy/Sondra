@@ -14,6 +14,7 @@
 //!   keys nor circumvents copy protection.
 
 mod http;
+pub mod addresses;
 pub mod name;
 mod throttle;
 

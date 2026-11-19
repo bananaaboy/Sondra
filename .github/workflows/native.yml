@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           npm run native:golden
-          git diff --exit-code -- native/sondra-media/tests/golden native/sondra-app/tests/golden native/sondra-app/data native/sondra-ui/data native/sondra-merk/tests/golden native/sondra-speech/tests/golden
+          git diff --exit-code -- native/sondra-media/tests/golden native/sondra-app/tests/golden native/sondra-app/data native/sondra-ui/data native/sondra-merk/tests/golden native/sondra-speech/tests/golden native/sondra-download/tests/golden
       # The tests of the media and download crates run the real FFmpeg (and skip, saying so, without it).
       - name: FFmpeg (Linux)
         if: runner.os == 'Linux'

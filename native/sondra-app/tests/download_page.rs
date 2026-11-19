@@ -30,7 +30,7 @@ fn server(bytes: usize) -> String {
     std::thread::spawn(move || {
         for request in server.incoming_requests() {
             let header = |n: &str, v: &str| tiny_http::Header::from_bytes(n, v).unwrap();
-            match request.url() {
+            match request.url().split('?').next().unwrap_or("") {
                 "/lied.mp3" => {
                     let body = vec![7u8; bytes];
                     let _ = request.respond(tiny_http::Response::from_data(body).with_header(header("Content-Type", "audio/mpeg")));
@@ -161,4 +161,33 @@ fn what_is_no_address_and_what_has_nothing_to_load_is_said(cx: &mut TestAppConte
     w.draw();
     assert!(w.said("keine Quelle gefunden"), "a page with nothing behind it says so");
     assert!(w.tree().find(Role::Button, "Laden").is_none());
+}
+
+#[gpui::test]
+fn a_pasted_list_is_found_address_by_address_and_loaded_in_turn(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = server(50_000);
+    let mut w = open(cx, tmp.path());
+    // Two files, one page with nothing behind it, and the first again: it counts once.
+    w.shell.update(w.cx, |shell, cx| {
+        shell.download_set_input(&format!("{base}/lied.mp3, {base}/lied.mp3?zweite=1; {base}/seite {base}/lied.mp3"), cx)
+    });
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(w.said("2 Quellen gefunden"), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    assert!(w.said("keine Quelle gefunden"), "the page that gave nothing is named");
+    assert!(w.tree().find(Role::Button, "Laden").is_none(), "one button for the list, not one for the first");
+
+    w.press(Role::Button, "Alle laden");
+    for _ in 0..200 {
+        w.cx.run_until_parked();
+        w.draw();
+        if std::fs::read_dir(tmp.path()).unwrap().count() == 2 && w.tree().find(Role::Button, "Alle laden").is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2, "both were loaded, the second under its own number: {:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    assert!(w.tree().find(Role::Heading, "Geladen").is_some());
 }

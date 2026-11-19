@@ -62,6 +62,12 @@ pub struct DownloadState {
     pub allow_private: bool,
     /// The language chosen among those the page offers (its code), or none: the site's own order.
     pub language: String,
+    /// More than one address was pasted: what was found behind each, waiting to be loaded in turn.
+    pub queue: Vec<Found>,
+    /// Loading the queue: the next one starts when this one is done.
+    pub running_queue: bool,
+    /// Addresses of a list that gave nothing, or loads that failed, with the reason.
+    pub failed: Vec<String>,
 }
 
 /// An address that is a file or a stream itself rather than a page.
@@ -97,6 +103,14 @@ pub fn find(fetch: &dyn Fetch, address: &str, language: &str) -> Result<Found, S
     Err("Hinter dieser Adresse hat Sondra keine Quelle gefunden, die sich laden lässt.".into())
 }
 
+fn found_title(found: &Found) -> String {
+    match found {
+        Found::Episode(ep) if !ep.series_title.is_empty() => format!("{} · {}", ep.series_title, ep.title),
+        Found::Episode(ep) => ep.title.clone(),
+        Found::Direct(s) => s.title.clone(),
+    }
+}
+
 fn clean(name: &str) -> String {
     sondra_download::name::safe_stem(name)
 }
@@ -121,6 +135,9 @@ impl DownloadState {
             fetch: Arc::new(|| Box::new(UreqFetch::default())),
             allow_private: false,
             language: String::new(),
+            queue: Vec::new(),
+            running_queue: false,
+            failed: Vec::new(),
         }
     }
 }
@@ -138,17 +155,43 @@ impl Shell {
         self.download.input.update(cx, |f, cx| f.set_text(text.to_string(), cx));
     }
 
-    /// Looks up the address that is typed.
+    /// Looks up the address that is typed — or, when a list was pasted, each of its addresses.
     pub(crate) fn find_address(&mut self, cx: &mut Context<Self>) {
         let d = &mut self.download;
         if d.finding || d.job.is_some() {
             return;
         }
-        let address = d.input.read(cx).text().to_string();
+        let text = d.input.read(cx).text().to_string();
+        let addresses = sondra_download::addresses::extract_addresses(&text);
         let (factory, language) = (d.fetch.clone(), d.language.clone());
         d.finding = true;
         d.error = None;
         d.found = None;
+        d.queue.clear();
+        d.failed.clear();
+        if addresses.len() > 1 {
+            Self::in_background(
+                cx,
+                move || addresses.into_iter().map(|a| (a.clone(), find(factory().as_ref(), &a, &language))).collect::<Vec<_>>(),
+                |shell, answers, cx| {
+                    let d = &mut shell.download;
+                    d.finding = false;
+                    for (address, answer) in answers {
+                        match answer {
+                            Ok(found) => d.queue.push(found),
+                            Err(error) => d.failed.push(format!("{address}: {error}")),
+                        }
+                    }
+                    if d.queue.is_empty() {
+                        d.error = Some("Hinter keiner dieser Adressen hat Sondra eine Quelle gefunden, die sich laden lässt.".into());
+                    }
+                    cx.notify();
+                },
+            );
+            cx.notify();
+            return;
+        }
+        let address = if addresses.len() == 1 { addresses.into_iter().next().unwrap_or_default() } else { text };
         Self::in_background(
             cx,
             move || find(factory().as_ref(), &address, &language),
@@ -163,6 +206,29 @@ impl Shell {
             },
         );
         cx.notify();
+    }
+
+    /// Loads everything a pasted list gave, one after the other.
+    pub(crate) fn start_queue(&mut self, cx: &mut Context<Self>) {
+        let d = &mut self.download;
+        if d.job.is_some() || d.queue.is_empty() {
+            return;
+        }
+        d.running_queue = true;
+        self.next_in_queue(cx);
+    }
+
+    fn next_in_queue(&mut self, cx: &mut Context<Self>) {
+        let d = &mut self.download;
+        if d.queue.is_empty() {
+            d.running_queue = false;
+            d.found = None;
+            d.input.update(cx, |f, cx| f.set_text("", cx));
+            cx.notify();
+            return;
+        }
+        d.found = Some(d.queue.remove(0));
+        self.start_download(cx);
     }
 
     /// Loads what was found: the first source that works, the others are mirrors of it.
@@ -205,13 +271,28 @@ impl Shell {
             move |shell, answer, cx| {
                 let d = &mut shell.download;
                 d.job = None;
+                let in_queue = d.running_queue;
                 match answer {
                     Ok((path, size)) => {
                         d.done.insert(0, Loaded { title, path, size });
                         d.found = None;
-                        d.input.update(cx, |f, cx| f.set_text("", cx));
+                        if !in_queue {
+                            d.input.update(cx, |f, cx| f.set_text("", cx));
+                        }
                     }
-                    Err(error) => d.error = Some(error),
+                    Err(error) if in_queue && error != "Abgebrochen." => {
+                        d.failed.push(format!("{title}: {error}"));
+                        d.found = None;
+                    }
+                    Err(error) => {
+                        d.error = Some(error);
+                        // A cancelled load stops the rest of the list too.
+                        d.running_queue = false;
+                        d.queue.clear();
+                    }
+                }
+                if shell.download.running_queue {
+                    shell.next_in_queue(cx);
                 }
                 cx.notify();
             },
@@ -250,6 +331,10 @@ impl Shell {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
 
+        for line in &d.failed {
+            page = page.child(ui.notice(NoticeKind::Warning, line.clone()));
+        }
+
         let find_button = {
             let me = me.clone();
             ui.button("suchen", if d.finding { "Sucht …" } else { "Suchen" }).primary().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.find_address(cx)))
@@ -267,8 +352,30 @@ impl Shell {
                 .child(ui.button("ordner-aendern", "Ändern").small().disabled(busy).on_click(move |_, app| me2.update(app, |shell, cx| shell.choose_download_folder(cx)))),
         );
 
+        // A pasted list: what was found behind each address.
+        if !d.queue.is_empty() && d.job.is_none() {
+            let mut rows = div().flex().flex_col().gap(px(4.));
+            for found in &d.queue {
+                rows = rows.child(ui.prose(found_title(found)));
+            }
+            let me4 = me.clone();
+            let count = d.queue.len();
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .p(px(16.))
+                    .rounded(px(sondra_ui::radius::CARD))
+                    .bg(c.panel_soft)
+                    .child(ui.subheading(format!("{count} Quellen gefunden")))
+                    .child(rows)
+                    .child(div().flex().child(ui.button("alle-laden", "Alle laden").primary().on_click(move |_, app| me4.update(app, |shell, cx| shell.start_queue(cx))))),
+            );
+        }
+
         // What was found.
-        if let Some(found) = &d.found {
+        if let Some(found) = d.found.as_ref().filter(|_| !d.running_queue) {
             let (title, facts): (String, Vec<String>) = match found {
                 Found::Episode(ep) => {
                     let mut facts = vec![if ep.season == 0 { "Film".to_string() } else { format!("Staffel {}, Folge {}", ep.season, ep.episode) }];
@@ -319,7 +426,7 @@ impl Shell {
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .child(ui.title(format!("Lädt: {}", job.title)))
+                    .child(ui.title(if d.running_queue && !d.queue.is_empty() { format!("Lädt: {} · noch {} danach", job.title, d.queue.len()) } else { format!("Lädt: {}", job.title) }))
                     .child(ui.bar("laden", fraction, format!("{}: geladen", job.title)))
                     .child(div().flex().flex_wrap().items_center().gap(px(12.)).child(div().font_family(family::VALUE).text_size(px(size::SMALL)).text_color(c.prose).child(said)).child(ui.button("laden-abbrechen", "Abbrechen").small().on_click(move |_, _| cancel.cancel()))),
             );

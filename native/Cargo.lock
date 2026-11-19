@@ -6332,6 +6332,7 @@ dependencies = [
 name = "sondra-download"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "sondra-daemon",
  "sondra-extract",
  "tempfile",

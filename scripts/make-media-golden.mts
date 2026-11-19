@@ -20,6 +20,7 @@ import { chromagram, estimateTuning } from '../src/lib/chroma'
 import { decodePrint, encodePrint, fingerprint, locate, longestShared, PRINT_FPS, PRINT_RATE, slice } from '../src/lib/introPrint'
 import { estimateChords, estimateKey } from '../src/lib/key'
 import { chordsToMidiNotes, writeMidi } from '../src/lib/midi'
+import { extractAddresses } from '../src/lib/download'
 import {
   compressAudio,
   copyRange,
@@ -866,4 +867,28 @@ console.log(`${loudness.length} Signale, ${plans.length} Pläne`)
     )}\n`,
   )
   console.log('Spuren: getrennt in ' + STEM_IDS.join(', '))
+}
+
+{
+  const dir = 'native/sondra-download/tests/golden'
+  mkdirSync(dir, { recursive: true })
+  const texts = [
+    '',
+    'kein Link hier',
+    'https://example.com/a.mp4',
+    'https://example.com/a.mp4\nhttps://example.com/b.mp4\r\nhttps://example.com/a.mp4',
+    'https://example.com/a.mp4, https://example.com/b.mp4',
+    'https://example.com/a.mp4,https://example.com/b.mp4;https://example.com/c.mp4|https://example.com/d.mp4',
+    'Schauen Sie "https://example.com/a.mp4" oder <https://example.com/b.mp4> oder `https://example.com/c.mp4`.',
+    'Siehe https://example.com/seite. Dann (https://example.com/x_(y)) und (https://example.com/z).',
+    'HTTPS://EXAMPLE.COM/Gross.MP4 und http://example.org/klein',
+    '„https://example.com/a“, »https://example.com/b« und https://example.com/c?x=1,2,3!',
+    'https://example.com/a,b,c.mp4',
+    '[https://example.com/a] {https://example.com/b} [https://example.com/c[1]]',
+    'ftp://example.com/a.mp4 https:// http://: https://ok.example/x',
+    'https://example.com/a.mp4,,,;;https://example.com/b.mp4,',
+    'mailto:x@example.com https://example.com/ä/ü.mp4',
+  ]
+  writeFileSync(`${dir}/addresses.json`, `${JSON.stringify(texts.map((text) => ({ text, found: extractAddresses(text) })), null, 1)}\n`)
+  console.log('Adressen: ' + texts.length + ' Texte')
 }
