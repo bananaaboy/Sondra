@@ -472,6 +472,42 @@ jobs:
           Start-Process -FilePath $installer -ArgumentList '/S' -Wait
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
+      # If it builds, the two ways to install it for this processor are built as well — the setup (NSIS: the same script,
+      # the Arm64 program) and the Store package (MSIX with an Arm64 identity) — and the setup is run: installed
+      # silently, started, removed. Still only information; what is green here goes into the release afterwards.
+      - name: The setup and the Store package for Arm64
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install nsis --no-progress -y | Out-Null
+          $makensis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          $exe = (Resolve-Path native/target/release/sondra.exe).Path
+          choco install ffmpeg --no-progress -y | Out-Null
+          $real = Get-ChildItem 'C:\ProgramData\chocolatey\lib\ffmpeg' -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          $ffdir = $real.Directory.FullName
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $setup = Join-Path $PWD 'Sondra-Nativ-Arm64-Setup.exe'
+          $licenses = (Resolve-Path desktop/lizenzen).Path
+          & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $setup)) { throw 'Das Setup ist nicht gebaut.' }
+          $dir = 'C:\SondraNativArm'
+          $i = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$dir" -Wait -PassThru
+          if ($i.ExitCode -ne 0) { throw "Das Setup endet mit $($i.ExitCode)." }
+          if (-not (Test-Path "$dir\sondra.exe")) { throw 'sondra.exe ist nicht installiert.' }
+          $p = Start-Process -FilePath "$dir\sondra.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw 'Das installierte Programm läuft nicht.' }
+          Stop-Process -Id $p.Id -Force
+          Start-Process -FilePath "$dir\Deinstallieren.exe" -ArgumentList '/S' -Wait
+          ./native/installer/make-msix.ps1 -Exe $exe -FFmpegDir $ffdir -Licenses $licenses -Version $version -Out (Join-Path $PWD 'Sondra-Nativ-Arm64-Store.msix') -Arch arm64
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sondra-Nativ-Arm64
+          path: |
+            Sondra-Nativ-Arm64-Setup.exe
+            Sondra-Nativ-Arm64-Store.msix
+          if-no-files-found: ignore
 
   # The Microsoft Store takes an MSIX package and signs it itself. Here it is built, signed with a throwaway
   # certificate for this runner, installed, started and removed again — informational until it has been green.
