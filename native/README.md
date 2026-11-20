@@ -54,6 +54,14 @@ native/
   sondra-merk/    die Merkliste und der Ordner als Logik: Eintrag, Einlesen aus allen Formen, Fortschritt
                   und Teile, Zusammenführen, Teilen, Planer, Dateinamen → Folge, Ordneransichten, Doppelte,
                   Papierkorb auf der Platte, Ordner lesen — mit den Zahlen der Website verglichen
+  sondra-tray/    Tray-Symbol und Systemmeldungen (Windows), Fenster nach vorn, „immer im Vordergrund“
+  sondra-midi/    MIDI-Controller für die Pads (winmm); Bytes und Zuordnung wie die Website
+  sondra-onnx/    ein eigenes `.onnx`-Modell für „Spuren trennen“ (ONNX Runtime über `ort`), beide
+                  Strategien der Website; zwei kleine Modelle für die Tests (`tests/make-models.py`)
+  sondra-player/, sondra-playback/, sondra-audio/, sondra-devices/, sondra-speech/, sondra-mirror/,
+  sondra-anytype/, sondra-electron/, sondra-discord/ — Player, Wiedergabe, Ton, Geräte, Whisper,
+                  Handy spiegeln, Anytype, Datenübernahme aus der Electron-App, Discord
+  installer/      Setup (NSIS) und Store-Paket (`make-msix.ps1`)
   vendor/xattr/   xattr 0.2.3 mit einer Zeile Patch, damit GPUI unter Linux baut
   probes/         Machbarkeitsproben der Welle 0b
 ```
