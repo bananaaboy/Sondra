@@ -504,14 +504,19 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   und **Handy spiegeln** (`sondra-mirror`: ADB, scrcpy-Protokoll, Schlüssel, Steuernachrichten
   und Tastaturberichte Byte für Byte gegen die Bibliotheken der Website; Bild und Ton über FFmpeg;
   USB über `nusb`), außerdem „Liste empfangen“, „Was ist neu“, schwebende Karten,
-  Einzel-Instanz, Gong und Wachhalten beim Laden. **Noch nicht:** Tray, Benachrichtigungen
-  des Systems (die Karte „Neue Folge“ im Fenster gibt es: `new_episodes.rs`), die Zeitleiste des
-  Video-Editors (inzwischen da: Zeitleiste mit Ziehen, Ausschnitt ziehen), das Ziehen der
-  Schnitte (inzwischen da, ebenso die Klavierrolle), Store; Bild-in-Bild; ein eigenes Fenster für das Handy. **Setup**
+  Einzel-Instanz, Gong und Wachhalten beim Laden. **Stand 20.11.2026:** dazu nativ Systemmeldungen und Tray-Symbol (`sondra-tray`, ein Klick auf die
+  Meldung öffnet die Serie), **Bild im Bild** (kleines Fenster, das oben bleibt und die Uhr des Players hält) und
+  **Immer im Vordergrund**, die **Sitzung** (Dateien der Kopfzeile, Reihenfolge, an Werkzeuge weiterreichen, auf Wunsch
+  behalten und beim Start angeboten; `.sondra`-Projekte im Format der Website lesen und schreiben, `sondra-media::project`),
+  Pads übereinander, **MIDI-Controller** (`sondra-midi`, winmm), „Akkorde/Arpeggio zeichnen“, „Lokale KI“ (Rauschprofil
+  von selbst), das Thema bleibt und folgt dem System, Download anhalten, auf anderem Gerät abspielen, `sondra #umwandeln`.
+  **Noch nicht:** ein eigenes `.onnx`-Modell (Spuren trennen), die große Ansicht der Klavierrolle, Umbenennen in der
+  Sitzung; das Store-Paket (MSIX) und Arm64 werden in der CI gebaut (Jobs „store“ und „arm64“, nur zur Auskunft).
+  Auch noch nicht: ein eigenes Fenster für das Handy. **Setup**
   (`native/installer/sondra.nsi`, NSIS, für alle Benutzer, FFmpeg daneben, Apps & Features, `.sondra-liste`, Öffnen mit)
   installiert, startet mit einem Film und deinstalliert sich in der CI (Lauf 76 grün, 19.11.2026), mit Symbol in der .exe.
   **Player nativ:** Entzerrer (fünf Bänder, Voreinstellungen), Karaoke, Qualität, Visualizer (Balken, Welle, Ring) und
-  alle Einstellungen der Website bis auf Bild-in-Bild; **Ordner:** Nach Serie, Ungesehen, Neu, ▶ auf der Kachel, Als ZIP.
+  alle Einstellungen der Website samt Bild im Bild; **Ordner:** Nach Serie, Ungesehen, Neu, ▶ auf der Kachel, Als ZIP.
   **Zerschneiden:** Schnitte auf der Welle ziehen. **Umwandeln:** eigene Vorlagen (Format der Website), Alle als ZIP
   (`sondra-media::zip` schreibt dieselben Bytes wie `zip.ts`). **Aktualisierung** (`updater.rs`): `latest-nativ.yml`
   lesen, Setup laden und gegen SHA-512 prüfen, Karte „Sondra x ist bereit“, stilles Setup mit `/relaunch`; der Workflow
