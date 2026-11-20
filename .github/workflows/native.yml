@@ -486,6 +486,13 @@ jobs:
           $clang = if (Test-Path $vsClang) { $vsClang } else { 'clang-cl' }
           Write-Host "clang-cl: $clang"
           & $clang --version
+          # whisper.cpp tunes an Arm build for the machine it is built on: on this runner that switches SVE on, whose
+          # header (sys/prctl.h) does not exist on Windows — and a program that needs SVE does not run on most Arm
+          # PCs. A file CMake reads before ggml (CMAKE_PROJECT_TOP_LEVEL_INCLUDES, passed on by whisper-rs-sys) turns
+          # the tuning off: the program runs on every Arm64 Windows PC.
+          $portable = Join-Path $env:RUNNER_TEMP 'ggml-portable.cmake'
+          'set(GGML_NATIVE OFF CACHE BOOL "built for every Arm64 PC, not for this machine" FORCE)' | Set-Content -Encoding ascii $portable
+          "CMAKE_PROJECT_TOP_LEVEL_INCLUDES=$($portable -replace '\\','/')" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "CMAKE_GENERATOR=Ninja" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "CC=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "CXX=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
