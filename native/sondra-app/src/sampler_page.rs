@@ -39,6 +39,8 @@ pub struct SamplerState {
     pub error: Option<String>,
     pub said: Option<String>,
     pub player: Option<ClipPlayer>,
+    /// The pads that sound under the fingers, one over the other: which pad, and its voice.
+    pub voices: Vec<(usize, ClipPlayer)>,
     pub made: Vec<PathBuf>,
     pub bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The cut the pointer holds while it is down on the waveform.
@@ -66,6 +68,7 @@ impl SamplerState {
             error: None,
             said: None,
             player: None,
+            voices: Vec::new(),
             made: Vec::new(),
             bounds: Rc::new(Cell::new(Bounds::default())),
             cut: None,
@@ -106,6 +109,7 @@ impl Shell {
 
     pub fn sampler_open(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         self.sampler.player = None;
+        self.sampler.voices.clear();
         self.sampler.busy = Some("Liest und hört den Ton ab …");
         self.sampler.error = None;
         let read = path.clone();
@@ -240,7 +244,9 @@ impl Shell {
     }
 
     fn sampler_stop(&mut self) -> bool {
-        self.sampler.player.take().is_some()
+        let voices = !self.sampler.voices.is_empty();
+        self.sampler.voices.clear();
+        self.sampler.player.take().is_some() || voices
     }
 
     /// One pad, played once by itself; the same button stops it.
@@ -264,13 +270,16 @@ impl Shell {
         let (Some(audio), Some(mut pad)) = (self.sampler.audio.clone(), self.sampler.pads.get(index).cloned()) else { return };
         pad.semitones += extra;
         self.sampler.selected = index;
-        self.sampler_stop();
+        // Pads sound over one another, as on the website; with „Choke“ a pad struck again cuts its own earlier voice.
+        if self.sampler.choke {
+            self.sampler.voices.retain(|(i, _)| *i != index);
+        }
         let rate = audio.sample_rate;
         let length = ((pad.end - pad.start) / 2f64.powf(pad.semitones / 12.0)).max(0.05) + 0.2;
         let mut bed = Bed::new(rate, (length * f64::from(rate)).ceil() as usize);
         render_voice(&mut bed, &Material { audio: &audio }, &Slice { mode: PlayMode::OneShot, ..pad }, 0.0, None, 1.0, None);
         let heard = AudioData { channels: vec![bed.left, bed.right], sample_rate: rate };
-        self.sampler.player = Some(ClipPlayer::start(&heard, 0.0, heard.seconds()));
+        self.sampler.voices.push((index, ClipPlayer::start(&heard, 0.0, heard.seconds())));
         self.sampler_ticker(cx);
         cx.notify();
     }
@@ -319,7 +328,8 @@ impl Shell {
                 if shell.sampler.player.as_ref().is_some_and(ClipPlayer::finished) {
                     shell.sampler.player = None;
                 }
-                let alive = shell.sampler.player.is_some();
+                shell.sampler.voices.retain(|(_, v)| !v.finished());
+                let alive = shell.sampler.player.is_some() || !shell.sampler.voices.is_empty();
                 if !alive {
                     shell.sampler.ticking = false;
                 }
@@ -450,6 +460,7 @@ impl Shell {
             pad.end = end;
         }
         self.sampler.player = None;
+        self.sampler.voices.clear();
         cx.notify();
     }
 
@@ -470,7 +481,11 @@ impl Shell {
         &self.sampler.made
     }
     pub fn sampler_is_playing(&self) -> bool {
-        self.sampler.player.is_some()
+        self.sampler.player.is_some() || !self.sampler.voices.is_empty()
+    }
+    /// For tests: how many pads sound now.
+    pub fn sampler_voice_count(&self) -> usize {
+        self.sampler.voices.len()
     }
     pub fn sampler_bounds(&self) -> Bounds<Pixels> {
         self.sampler.bounds.get()

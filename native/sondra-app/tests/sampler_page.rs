@@ -189,6 +189,9 @@ fn sixteen_keys_play_sixteen_pads_and_a_key_with_no_pad_is_not_taken(cx: &mut Te
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_selected()), 0);
     assert!(w.shell.update(w.cx, |shell, cx| shell.sampler_key("1", cx)));
     assert!(w.shell.read_with(w.cx, |s, _| s.sampler_is_playing()), "the same key again plays again");
+    // Pads sound over one another (pad 3 and pad 1 both), and with „Choke“ on — as it is at first — a pad struck again
+    // cuts its own earlier voice: three strikes, two voices.
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()), 2, "pads layer, a pad struck again cuts itself");
     // Sixteen pads: the keys reach the last row (Y X C V on a German keyboard).
     w.press(Role::Button, "Teile 16");
     assert_eq!(w.pads(), 16);
