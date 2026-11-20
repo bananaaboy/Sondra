@@ -89,7 +89,124 @@ pub fn search_at(endpoint: &str, title: &str, season: i64) -> Option<Media> {
 }
 
 pub fn search(title: &str, season: i64) -> Option<Media> {
-    search_at(&std::env::var("SONDRA_ANILIST").unwrap_or_else(|_| ENDPOINT.to_string()), title, season)
+    search_at(&endpoint(), title, season)
+}
+
+/* The account: progress sent while watching, and the list read back (`verifyAniListToken`, `syncProgressToTrackers`,
+   `fetchAniListCollection`). Only with a token the person gave, and only when they asked for it. The token is never
+   part of an error text. */
+
+/// An entry of the person's AniList, with the status as the Merkliste names it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Entry {
+    pub title: String,
+    pub progress: i64,
+    pub total: Option<i64>,
+    /// `watching`, `later`, `paused`, `dropped` or `done`.
+    pub status: &'static str,
+    pub cover_url: Option<String>,
+    pub site_url: String,
+}
+
+fn endpoint() -> String {
+    std::env::var("SONDRA_ANILIST").unwrap_or_else(|_| ENDPOINT.to_string())
+}
+
+fn ask(endpoint: &str, token: &str, body: Value) -> Result<Value, String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(std::time::Duration::from_secs(20))).http_status_as_error(false).build().into();
+    let mut response = agent
+        .post(endpoint)
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json")
+        .header("Authorization", format!("Bearer {}", token.trim()))
+        .send(body.to_string().as_bytes())
+        .map_err(|_| "AniList antwortet nicht. Prüfen Sie die Verbindung.".to_string())?;
+    let status = response.status();
+    if status.as_u16() == 401 || status.as_u16() == 400 {
+        return Err("AniList nimmt das Token nicht an.".into());
+    }
+    if !status.is_success() {
+        return Err(format!("AniList antwortet mit Fehler {}.", status.as_u16()));
+    }
+    let text = response.body_mut().read_to_string().map_err(|_| "AniList antwortet nicht.".to_string())?;
+    serde_json::from_str(&text).map_err(|_| "AniList hat etwas Unlesbares geantwortet.".to_string())
+}
+
+/// Whose token it is: `Some((id, name))`, or `None` when AniList does not know it.
+pub fn verify_at(endpoint: &str, token: &str) -> Result<Option<(i64, String)>, String> {
+    if token.trim().is_empty() {
+        return Ok(None);
+    }
+    let body = ask(endpoint, token, json!({ "query": "query { Viewer { id name } }" }))?;
+    let viewer = &body["data"]["Viewer"];
+    Ok(viewer["id"].as_i64().zip(viewer["name"].as_str()).map(|(id, name)| (id, name.to_string())))
+}
+
+/// How AniList names the Merkliste's status; a series seen to its end is `COMPLETED` whatever the status says.
+pub fn list_status(status: &str, done: bool) -> &'static str {
+    if done || status == "done" {
+        return "COMPLETED";
+    }
+    match status {
+        "later" => "PLANNING",
+        "paused" => "PAUSED",
+        "dropped" => "DROPPED",
+        _ => "CURRENT",
+    }
+}
+
+/// Sets how far someone is in a series: the series is looked up by title (and season), then its entry saved.
+pub fn save_progress_at(endpoint: &str, token: &str, title: &str, season: i64, watched: i64, total: Option<i64>, status: &str) -> Result<(), String> {
+    let media = search_at(endpoint, title, season.max(1)).ok_or_else(|| "Die Serie gibt es auf AniList nicht (unter diesem Namen).".to_string())?;
+    let done = total.is_some_and(|t| t > 0 && watched >= t);
+    let mutation = "mutation ($mediaId: Int, $progress: Int, $status: MediaListStatus) { SaveMediaListEntry(mediaId: $mediaId, progress: $progress, status: $status) { id progress status } }";
+    let body = ask(endpoint, token, json!({ "query": mutation, "variables": { "mediaId": media.id, "progress": watched.max(0), "status": list_status(status, done) } }))?;
+    if body["errors"].as_array().is_some_and(|e| !e.is_empty()) {
+        return Err("AniList hat den Fortschritt nicht angenommen.".into());
+    }
+    Ok(())
+}
+
+/// The anime list of the account behind the token.
+pub fn collection_at(endpoint: &str, token: &str) -> Result<Vec<Entry>, String> {
+    let (id, _) = verify_at(endpoint, token)?.ok_or_else(|| "AniList nimmt das Token nicht an.".to_string())?;
+    let query = "query ($userId: Int) { MediaListCollection(userId: $userId, type: ANIME) { lists { entries { progress status media { id siteUrl episodes title { romaji english } coverImage { large } } } } } }";
+    let body = ask(endpoint, token, json!({ "query": query, "variables": { "userId": id } }))?;
+    let mut out = Vec::new();
+    for list in body["data"]["MediaListCollection"]["lists"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        for entry in list["entries"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            let media = &entry["media"];
+            let Some(media_id) = media["id"].as_i64() else { continue };
+            let title = media["title"]["english"].as_str().filter(|t| !t.is_empty()).or(media["title"]["romaji"].as_str().filter(|t| !t.is_empty())).map_or_else(|| format!("Anime #{media_id}"), str::to_string);
+            out.push(Entry {
+                title,
+                progress: entry["progress"].as_i64().unwrap_or(0),
+                total: media["episodes"].as_i64().filter(|e| *e > 0),
+                status: match entry["status"].as_str().unwrap_or("CURRENT") {
+                    "PLANNING" => "later",
+                    "PAUSED" => "paused",
+                    "DROPPED" => "dropped",
+                    "COMPLETED" => "done",
+                    _ => "watching",
+                },
+                cover_url: media["coverImage"]["large"].as_str().map(str::to_string),
+                site_url: media["siteUrl"].as_str().filter(|u| !u.is_empty()).map_or_else(|| format!("https://anilist.co/anime/{media_id}"), str::to_string),
+            });
+        }
+    }
+    Ok(out)
+}
+
+pub fn verify(token: &str) -> Result<Option<(i64, String)>, String> {
+    verify_at(&endpoint(), token)
+}
+
+pub fn save_progress(token: &str, title: &str, season: i64, watched: i64, total: Option<i64>, status: &str) -> Result<(), String> {
+    save_progress_at(&endpoint(), token, title, season, watched, total, status)
+}
+
+pub fn collection(token: &str) -> Result<Vec<Entry>, String> {
+    collection_at(&endpoint(), token)
 }
 
 #[cfg(test)]

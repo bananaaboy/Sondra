@@ -73,6 +73,33 @@ pub struct MerkState {
     pub add_searching: bool,
     /// The list as it was before a file was read in, to take it back.
     pub before_import: Option<(Vec<Item>, Removed)>,
+    /// Progress made since the account on AniList was last told (the shell sends it, when the person asked for that).
+    pub tracker: Vec<TrackerEntry>,
+}
+
+/// How far a series is, as the account on AniList is told (`syncProgressToTrackers`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrackerEntry {
+    pub title: String,
+    pub season: i64,
+    pub watched: i64,
+    pub total: Option<i64>,
+    /// `watching`, `later`, `paused`, `dropped` or `done`.
+    pub status: &'static str,
+}
+
+fn watched_total(item: &Item) -> usize {
+    item.seasons.iter().flatten().map(|s| s.watched.len()).sum()
+}
+
+fn status_word(status: Status) -> &'static str {
+    match status {
+        Status::Watching => "watching",
+        Status::Later => "later",
+        Status::Paused => "paused",
+        Status::Done => "done",
+        Status::Dropped => "dropped",
+    }
 }
 
 impl MerkState {
@@ -123,6 +150,7 @@ impl MerkState {
             add_found: None,
             add_searching: false,
             before_import: None,
+            tracker: Vec::new(),
         }
     }
 
@@ -204,6 +232,18 @@ impl MerkState {
         }
     }
 
+    /// Entries from somewhere else (an account, not a file) merged into the list, as a file is: nothing doubled,
+    /// the side changed last wins, and the list as it was is kept for „Rückgängig“. Returns how many are new and
+    /// how many were brought up to date.
+    pub fn bring_in(&mut self, incoming: Vec<Item>) -> (usize, usize) {
+        let merged = sondra_merk::merge::merge_merkliste(&self.items, &incoming);
+        let before = (self.items.clone(), self.removed.clone());
+        self.items = merged.items;
+        self.save();
+        self.before_import = Some(before);
+        (merged.added, merged.updated)
+    }
+
     /// Takes a reading-in back: the list as it was.
     pub fn revert_import(&mut self) {
         if let Some((items, removed)) = self.before_import.take() {
@@ -220,6 +260,7 @@ impl MerkState {
         let mut ids = Ids::system();
         let luck = (ids.random)();
         let item = &self.items[pos];
+        let before = watched_total(item);
         let seen = sondra_merk::matching::advance(item, ids.now, &luck.chars().take(4).collect::<String>());
         let item = &mut self.items[pos];
         item.seasons = Some(seen.settled.seasons);
@@ -228,14 +269,32 @@ impl MerkState {
         item.status = seen.settled.status;
         item.history = Some(seen.history);
         item.updated_at = ids.now;
+        self.note_progress(id, before);
         self.save();
+    }
+
+    /// More episodes seen than before: the entry is noted for the account on AniList (as `updateMerkItem` does),
+    /// the season the entry stands in counting.
+    fn note_progress(&mut self, id: &str, before: usize) {
+        let Some(item) = self.items.iter().find(|i| i.id == id) else { return };
+        if watched_total(item) <= before {
+            return;
+        }
+        let number = if item.season == 0 { 1 } else { item.season };
+        let seasons = item.seasons.as_deref().unwrap_or_default();
+        let Some(season) = seasons.iter().find(|s| s.number == number).or(seasons.first()) else { return };
+        let entry = TrackerEntry { title: item.title.clone(), season: season.number, watched: season.watched.len() as i64, total: season.episodes, status: status_word(item.status) };
+        self.tracker.retain(|t| !(t.title == entry.title && t.season == entry.season));
+        self.tracker.push(entry);
     }
 
     /// Changes one entry and notes the change as made now (`updateMerkItem`).
     fn change(&mut self, id: &str, change: impl FnOnce(&mut Item)) {
         let Some(item) = self.items.iter_mut().find(|i| i.id == id) else { return };
+        let before = watched_total(item);
         change(item);
         item.updated_at = Ids::system().now;
+        self.note_progress(id, before);
         self.save();
     }
 
@@ -324,6 +383,7 @@ impl MerkState {
         item.status = seen.settled.status;
         item.history = Some(seen.history);
         item.updated_at = ids.now;
+        self.note_progress(id, watched_total(&before));
         self.save();
         Some(before)
     }
@@ -628,6 +688,14 @@ impl Shell {
                 items.push(ui.menu_item("anytype-oeffnen", "Anytype …", on).on_click(move |_, app| me.update(app, |shell, cx| {
                     shell.merk.more = false;
                     shell.anytype_open(cx);
+                })).into_any_element());
+            }
+            {
+                let me = me.clone();
+                let on = self.anilist.enabled;
+                items.push(ui.menu_item("anilist-oeffnen", "AniList …", on).on_click(move |_, app| me.update(app, |shell, cx| {
+                    shell.merk.more = false;
+                    shell.anilist_open(cx);
                 })).into_any_element());
             }
             {

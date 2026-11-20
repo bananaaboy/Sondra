@@ -1058,6 +1058,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   gelesen, nicht erst ganz geholt (Dienst auf 127.0.0.1 mit Geheimnis in der Adresse; das Token bleibt im Programm).
   **„Merkliste über Drive“ nativ** (`merk_drive.rs`): dieselbe Runde wie `syncMerklisteWithDrive` (lesen, `merge_shared`,
   zurückschreiben nur wenn die Datei nicht schon genau das hält), Schalter unter „Mehr“ aus bis zur Wahl.
+  **AniList nativ** (20.11.2026, `anilist_window.rs`, `anilist.rs`): wie `anilist.ts` — ein Personal Access Token
+  (verschlüsselt wie Drives Token, nie wieder gezeigt), dann geht jeder abgehakte Fortschritt an das Konto, und die
+  Anime-Liste lässt sich einlesen (zurücknehmbar). Ohne Verbindung wird AniList nie gefragt; das MAL-Token der Website
+  hat dort keine Funktion und fehlt hier. Nur gegen ein Stand-in geprüft. Ein geöffnetes `.sondra`-Projekt reicht seine
+  `toolStates` unverändert ins nächste weiter.
 - **Google Drive** (22.10.2026, `lib/googleDrive.ts`, `lib/driveClient.ts`,
   `GoogleDrive.tsx`): auf Wunsch alles geordnet in einen Ordner „Sondra“ im
   eigenen Drive — `Projekte`, `Dateien/{Ton,Video,Bilder,Andere}`,

@@ -93,6 +93,7 @@ pub struct Shell {
     pub(crate) discord: crate::discord::DiscordState,
     pub(crate) news_rounds: crate::new_episodes::NewEpisodes,
     pub(crate) anytype: crate::anytype_window::AnytypeState,
+    pub(crate) anilist: crate::anilist_window::AniState,
     pub(crate) merk_drive: crate::merk_drive::MerkDrive,
     pub(crate) old_app: crate::old_app::OldApp,
     /// How many things waited for the person at the last frame (new episodes, offers of files).
@@ -194,6 +195,7 @@ impl Shell {
         .detach();
         Self::start_new_episode_rounds(window, cx);
         Self::start_anytype_rounds(window, cx);
+        Self::start_anilist_rounds(window, cx);
         Self::start_merk_drive_rounds(window, cx);
         Self::start_update_rounds(window, cx);
         // Twice a second: is the window minimised? (A window nobody draws does not ask by itself.)
@@ -252,6 +254,7 @@ impl Shell {
             discord: crate::discord::DiscordState::default(),
             news_rounds: crate::new_episodes::NewEpisodes::default(),
             anytype: crate::anytype_window::AnytypeState::new(cx, colors),
+            anilist: crate::anilist_window::AniState::new(cx, colors),
             merk_drive: crate::merk_drive::MerkDrive::load(),
             old_app: Default::default(),
             attention_seen: 0,
@@ -481,6 +484,7 @@ impl Shell {
             self.merk.receive.field.clone(),
             self.anytype.code.clone(),
             self.anytype.name.clone(),
+            self.anilist.token.clone(),
         ]
     }
 
@@ -1244,7 +1248,7 @@ impl Render for Shell {
             motion::BASE,
         ).into_any_element() };
 
-        let overlay = if self.palette.open || self.palette.help { self.palette_overlay(ui, cx) } else if self.panel == Panel::Start && self.old_app.open { self.old_app_overlay(ui, cx) } else if self.licenses_open { self.licenses_overlay(ui, cx) } else if self.whats_new_open { self.whats_new_overlay(ui, cx) } else if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.anytype_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)).or_else(|| self.history_overlay(ui, cx)).or_else(|| self.dice_overlay(ui, cx)) } else { None };
+        let overlay = if self.palette.open || self.palette.help { self.palette_overlay(ui, cx) } else if self.panel == Panel::Start && self.old_app.open { self.old_app_overlay(ui, cx) } else if self.licenses_open { self.licenses_overlay(ui, cx) } else if self.whats_new_open { self.whats_new_overlay(ui, cx) } else if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.anytype_overlay(ui, cx)).or_else(|| self.anilist_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)).or_else(|| self.history_overlay(ui, cx)).or_else(|| self.dice_overlay(ui, cx)) } else { None };
         // A film that goes on behind another tool says so, and can be stopped from here.
         let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
         let floating = self.floating_cards(ui, cx);

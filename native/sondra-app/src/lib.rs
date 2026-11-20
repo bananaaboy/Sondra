@@ -23,6 +23,7 @@ pub mod folder_page;
 pub mod folder_series;
 pub mod layout;
 pub mod licenses;
+pub mod anilist_window;
 pub mod lines;
 pub mod merk_dialogs;
 pub mod merk_drive;
