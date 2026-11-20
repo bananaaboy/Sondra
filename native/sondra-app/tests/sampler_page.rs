@@ -266,20 +266,26 @@ fn a_held_pad_stops_when_its_key_is_let_go_and_the_others_ring_out(cx: &mut Test
         }
         assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()), voices);
     };
-    send.send(Message::NoteOn { pad: 0, velocity: 1.0, note: 36 }).unwrap();
-    settle(&mut w, 1);
+    // The held pad first: it sounds for as long as its key is down, however slow the machine is.
     send.send(Message::NoteOn { pad: 2, velocity: 1.0, note: 38 }).unwrap();
-    settle(&mut w, 2);
-    // Letting go of the one-shot changes nothing; letting go of the held pad ends only its voice.
+    settle(&mut w, 1);
+    // A one-shot pressed and let go at once rings on: the note-off is not a stop. Checked right away — a
+    // short slice of the break rings out by itself after a fraction of a second, and a slow runner took
+    // that long between the two looks (seen on windows-latest).
+    send.send(Message::NoteOn { pad: 0, velocity: 1.0, note: 36 }).unwrap();
     send.send(Message::NoteOff { pad: 0, note: 36 }).unwrap();
-    for _ in 0..10 {
+    settle(&mut w, 2);
+    // Letting go of the held pad ends its voice (the one-shot may have rung out by then as well).
+    send.send(Message::NoteOff { pad: 2, note: 38 }).unwrap();
+    for _ in 0..100 {
         w.cx.executor().advance_clock(std::time::Duration::from_millis(20));
         w.cx.run_until_parked();
+        if w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()) == 0 {
+            break;
+        }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()), 2);
-    send.send(Message::NoteOff { pad: 2, note: 38 }).unwrap();
-    settle(&mut w, 1);
+    assert!(!w.shell.read_with(w.cx, |s, _| s.sampler_held_sounding_for_test(2)), "the held pad stopped with its key");
 }
 
 #[gpui::test]
