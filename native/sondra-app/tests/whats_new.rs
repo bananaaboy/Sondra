@@ -121,6 +121,8 @@ fn the_licences_open_from_the_list_with_the_texts_that_have_to_travel_along(cx: 
     for needle in ["MIT License", "FFmpeg", "scrcpy-Server 3.3.3", "yt-dlp", "Apache License", "GNU GENERAL PUBLIC LICENSE"] {
         assert!(w.said(needle), "{needle}");
     }
+    // The privacy statement is one button away (it opens the page of the website in the browser; not pressed here).
+    assert!(w.tree().find(Role::Button, "Datenschutzerklärung öffnen").is_some());
     w.press(Role::Button, "Schliessen");
     assert!(w.tree().find(Role::Dialog, "Lizenzen").is_none());
 }

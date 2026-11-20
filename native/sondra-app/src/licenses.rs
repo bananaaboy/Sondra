@@ -57,6 +57,7 @@ impl Shell {
             ui.dialog("lizenzen-fenster", "Lizenzen")
                 .width(720.)
                 .child(body)
+                .action(ui.button("lizenzen-datenschutz", "Datenschutzerklärung öffnen").on_click(|_, app| app.open_url("https://sondra.lizge.ch/datenschutz.html")))
                 .action(ui.button("lizenzen-schliessen", "Schliessen").primary().on_click(move |_, app| close.update(app, |shell, cx| {
                     shell.licenses_open = false;
                     cx.notify();
