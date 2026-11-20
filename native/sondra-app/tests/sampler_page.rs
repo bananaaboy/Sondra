@@ -200,6 +200,47 @@ fn sixteen_keys_play_sixteen_pads_and_a_key_with_no_pad_is_not_taken(cx: &mut Te
 }
 
 #[gpui::test]
+fn a_midi_drum_pad_plays_the_pad_on_its_note_and_the_page_names_the_controller(cx: &mut TestAppContext) {
+    use sondra_midi::{Input, Message};
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Break.wav"));
+    w.press(Role::Button, "Verfahren Gleiche Teile");
+    w.press(Role::Button, "Teile 4");
+    assert!(!w.labels().iter().any(|l| l.starts_with("MIDI:")), "no controller, no word about it");
+    let (input, send) = Input::for_test("Pad-Controller");
+    w.shell.update(w.cx, |shell, cx| shell.sampler_midi_for_test(input, cx));
+    w.draw();
+    assert!(w.labels().iter().any(|l| l == "MIDI: Pad-Controller"), "{:?}", w.labels().iter().filter(|l| l.contains("MIDI")).collect::<Vec<_>>());
+    // Note 38 is the third pad.
+    send.send(Message::NoteOn { pad: 2, velocity: 0.5, note: 38 }).unwrap();
+    for _ in 0..100 {
+        w.cx.executor().advance_clock(std::time::Duration::from_millis(20));
+        w.cx.run_until_parked();
+        if w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()) == 1 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()), 1, "the pad sounds");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_selected()), 2);
+    // A note whose pad does not exist (only four were cut) is not taken.
+    send.send(Message::NoteOn { pad: 9, velocity: 1.0, note: 45 }).unwrap();
+    for _ in 0..10 {
+        w.cx.executor().advance_clock(std::time::Duration::from_millis(20));
+        w.cx.run_until_parked();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()), 1);
+    // Leaving the page lets the controllers go.
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Start, cx));
+    for _ in 0..10 {
+        w.cx.executor().advance_clock(std::time::Duration::from_millis(20));
+        w.cx.run_until_parked();
+    }
+    assert!(!w.shell.read_with(w.cx, |s, _| s.sampler_midi_open()));
+}
+
+#[gpui::test]
 fn a_beat_is_laid_heard_and_written_as_sound_and_as_midi(cx: &mut TestAppContext) {
     let tmp = tempfile::tempdir().unwrap();
     let mut w = open(cx, tmp.path().join("Break.wav"));

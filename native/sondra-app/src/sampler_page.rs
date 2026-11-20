@@ -41,6 +41,9 @@ pub struct SamplerState {
     pub player: Option<ClipPlayer>,
     /// The pads that sound under the fingers, one over the other: which pad, and its voice.
     pub voices: Vec<(usize, ClipPlayer)>,
+    /// The MIDI controllers (keyboards, drum pads) listened to while this page is open.
+    pub midi: Option<sondra_midi::Input>,
+    pub midi_ticking: bool,
     pub made: Vec<PathBuf>,
     pub bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The cut the pointer holds while it is down on the waveform.
@@ -69,6 +72,8 @@ impl SamplerState {
             said: None,
             player: None,
             voices: Vec::new(),
+            midi: None,
+            midi_ticking: false,
             made: Vec::new(),
             bounds: Rc::new(Cell::new(Bounds::default())),
             cut: None,
@@ -155,6 +160,53 @@ impl Shell {
         s.made.clear();
         s.said = None;
         self.sampler_replan(cx);
+        self.sampler_midi_listen(cx);
+    }
+
+    /// Listens to the MIDI controllers while this page is open: a strike on a drum pad plays the pad that sits on
+    /// its note (`sondra-midi::pad_of`), with the strength it was struck with. No controller, no listening.
+    pub fn sampler_midi_listen(&mut self, cx: &mut Context<Self>) {
+        if self.sampler.midi.is_none() {
+            self.sampler.midi = sondra_midi::Input::connect();
+        }
+        self.sampler_midi_ticker(cx);
+    }
+
+    /// For tests: a controller that is sent what it should hear.
+    pub fn sampler_midi_for_test(&mut self, input: sondra_midi::Input, cx: &mut Context<Self>) {
+        self.sampler.midi = Some(input);
+        self.sampler_midi_ticker(cx);
+    }
+
+    fn sampler_midi_ticker(&mut self, cx: &mut Context<Self>) {
+        if self.sampler.midi_ticking || self.sampler.midi.is_none() {
+            return;
+        }
+        self.sampler.midi_ticking = true;
+        cx.spawn(async move |this, cx| loop {
+            cx.background_executor().timer(std::time::Duration::from_millis(15)).await;
+            let alive = this.update(cx, |shell, cx| {
+                // The page was left: the controllers are let go of, and the next visit finds them again.
+                if shell.panel() != crate::nav::Panel::Sampler {
+                    shell.sampler.midi = None;
+                    shell.sampler.midi_ticking = false;
+                    return false;
+                }
+                let heard = shell.sampler.midi.as_ref().map(sondra_midi::Input::poll).unwrap_or_default();
+                for message in heard {
+                    if let sondra_midi::Message::NoteOn { pad, velocity, .. } = message {
+                        if shell.sampler.audio.is_some() && pad < shell.sampler.pads.len() {
+                            shell.sampler_trigger(pad, 0.0, velocity, cx);
+                        }
+                    }
+                }
+                true
+            });
+            if !alive.unwrap_or(false) {
+                break;
+            }
+        })
+        .detach();
     }
 
     /// Cuts again with the settings as they are; the pads that are still there keep their settings and steps.
@@ -267,6 +319,11 @@ impl Shell {
 
     /// One pad, played now a number of semitones above its own pitch (the keys of the piano roll).
     pub(crate) fn sampler_audition(&mut self, index: usize, extra: f64, cx: &mut Context<Self>) {
+        self.sampler_trigger(index, extra, 1.0, cx);
+    }
+
+    /// A pad struck with a strength (0.01 … 1): a drum pad that is hit hard sounds louder, as the website's voices.
+    pub(crate) fn sampler_trigger(&mut self, index: usize, extra: f64, velocity: f64, cx: &mut Context<Self>) {
         let (Some(audio), Some(mut pad)) = (self.sampler.audio.clone(), self.sampler.pads.get(index).cloned()) else { return };
         pad.semitones += extra;
         self.sampler.selected = index;
@@ -277,7 +334,7 @@ impl Shell {
         let rate = audio.sample_rate;
         let length = ((pad.end - pad.start) / 2f64.powf(pad.semitones / 12.0)).max(0.05) + 0.2;
         let mut bed = Bed::new(rate, (length * f64::from(rate)).ceil() as usize);
-        render_voice(&mut bed, &Material { audio: &audio }, &Slice { mode: PlayMode::OneShot, ..pad }, 0.0, None, 1.0, None);
+        render_voice(&mut bed, &Material { audio: &audio }, &Slice { mode: PlayMode::OneShot, ..pad }, 0.0, None, velocity, None);
         let heard = AudioData { channels: vec![bed.left, bed.right], sample_rate: rate };
         self.sampler.voices.push((index, ClipPlayer::start(&heard, 0.0, heard.seconds())));
         self.sampler_ticker(cx);
@@ -483,6 +540,10 @@ impl Shell {
     pub fn sampler_is_playing(&self) -> bool {
         self.sampler.player.is_some() || !self.sampler.voices.is_empty()
     }
+    /// For tests: whether the controllers are being listened to.
+    pub fn sampler_midi_open(&self) -> bool {
+        self.sampler.midi.is_some()
+    }
     /// For tests: how many pads sound now.
     pub fn sampler_voice_count(&self) -> usize {
         self.sampler.voices.len()
@@ -520,6 +581,9 @@ impl Shell {
         {
             let me = me.clone();
             bar = bar.child(ui.button("zerschneiden-andere", "Andere Datei").small().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_sampler_file(cx))));
+        }
+        if let Some(input) = s.midi.as_ref().filter(|i| !i.devices.is_empty()) {
+            bar = bar.child(ui.hint(format!("MIDI: {}", input.devices.join(", "))));
         }
         page = page.child(bar);
 

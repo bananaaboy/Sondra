@@ -6407,6 +6407,7 @@ dependencies = [
  "sondra-extract",
  "sondra-media",
  "sondra-merk",
+ "sondra-midi",
  "sondra-mirror",
  "sondra-playback",
  "sondra-player",
@@ -6565,6 +6566,13 @@ dependencies = [
  "thiserror 2.0.21",
  "unicode-normalization",
  "url",
+]
+
+[[package]]
+name = "sondra-midi"
+version = "0.1.0"
+dependencies = [
+ "windows 0.62.2",
 ]
 
 [[package]]
