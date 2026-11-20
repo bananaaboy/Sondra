@@ -471,6 +471,18 @@ jobs:
           Invoke-WebRequest 'https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-woa64.exe' -OutFile $installer
           Start-Process -FilePath $installer -ArgumentList '/S' -Wait
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "C:\Program Files\LLVM\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      # whisper.cpp refuses MSVC's own compiler on Arm („MSVC is not supported for ARM, use clang“): it is built with
+      # clang-cl (which CMake knows as Clang, with the MSVC library) under Ninja, inside the Arm64 build environment.
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+      - name: Clang for the C and C++ parts
+        shell: pwsh
+        run: |
+          "CMAKE_GENERATOR=Ninja" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "CC=clang-cl" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "CXX=clang-cl" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
       # If it builds, the two ways to install it for this processor are built as well — the setup (NSIS: the same script,
       # the Arm64 program) and the Store package (MSIX with an Arm64 identity) — and the setup is run: installed
