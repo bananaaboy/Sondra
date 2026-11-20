@@ -442,3 +442,27 @@ jobs:
             app-player.png
             player.txt
             app.txt
+
+  # Windows on Arm: does the app build there? Informational for now (it never fails the run); the setup for that
+  # processor follows once this is green, and the file is then built and checked by the release like the x64 one.
+  arm64:
+    runs-on: windows-11-arm
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Rust, if the image has none
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            ./rustup-init.exe -y --default-toolchain stable --profile minimal
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+      # Speech recognition is built from whisper.cpp: bindgen needs libclang for this processor.
+      - name: LLVM for whisper.cpp
+        shell: pwsh
+        run: |
+          choco install llvm --no-progress -y
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
