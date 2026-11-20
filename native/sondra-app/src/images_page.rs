@@ -295,8 +295,7 @@ impl Shell {
         let me: Entity<Shell> = cx.entity();
         let c = ui.c;
         let i = &self.images;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Bilder"));
-        page = page.child(ui.prose("Drehen, zuschneiden, verkleinern, Farbe und Schärfe einstellen und als WebP, JPEG oder PNG speichern. Die Bühne zeigt, was geschrieben wird. Das Original bleibt, wie es ist; das Ergebnis liegt daneben."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Bilder", "Drehen, zuschneiden, verkleinern, Farbe und Schärfe einstellen und als WebP, JPEG oder PNG speichern. Die Bühne zeigt, was geschrieben wird. Das Original bleibt, wie es ist; das Ergebnis liegt daneben."));
         if let Some(error) = &i.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

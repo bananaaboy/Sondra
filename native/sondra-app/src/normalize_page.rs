@@ -151,14 +151,13 @@ impl Shell {
         let me: Entity<Shell> = cx.entity();
         let c = ui.c;
         let n = &self.normalize;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Lautstärke angleichen"));
-        page = page.child(ui.prose("Misst, wie laut ein Stück wirklich ist (nach EBU R128), und holt es auf das Maß, das Sie brauchen — ohne dass es übersteuert. Das Original bleibt, wie es ist; das Ergebnis liegt daneben."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Lautstärke angleichen", "Misst, wie laut ein Stück wirklich ist (nach EBU R128), und holt es auf das Maß, das Sie brauchen — ohne dass es übersteuert. Das Original bleibt, wie es ist; das Ergebnis liegt daneben."));
         if let Some(error) = &n.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
         let choose = {
             let me = me.clone();
-            ui.button("lautstaerke-datei", if n.file.is_some() { "Andere Datei wählen" } else { "Datei wählen" }).disabled(n.measuring || n.working).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_normalize_file(cx)))
+            ui.button("lautstaerke-datei", if n.file.is_some() { "Andere Datei wählen" } else { "Datei wählen" }).primary_when(n.file.is_none()).disabled(n.measuring || n.working).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_normalize_file(cx)))
         };
         let mut head = div().flex().flex_wrap().items_center().gap(px(12.)).child(choose);
         if let Some(file) = &n.file {

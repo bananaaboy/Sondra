@@ -1,7 +1,8 @@
 //! The components. Each one is built from the palette of the [`Ui`] it comes from (so a light and a
-//! dark window can stand side by side), follows the rules of `DESIGN.md` — flat, no shadow on the sheet,
-//! rounded only through the radius tokens — and wraps itself in [`sondra_a11y::accessible`]: a control
-//! without a name and a role is not finished.
+//! dark window can stand side by side), at desktop density — controls 28 to 32 px high, 13 to 14 px text —
+//! rounded only through the radius tokens, and wraps itself in [`sondra_a11y::accessible`]: a control
+//! without a name and a role is not finished. Mint fills exactly one thing per screen: the page's primary
+//! action; everything else is a tint of the plate.
 
 use std::rc::Rc;
 
@@ -12,6 +13,9 @@ use gpui::{
 use sondra_a11y::{accessible, Role};
 
 use crate::theme::{family, radius, size, Colors};
+
+/// The reading measure of running text: about 70 characters of 14 px Barlow.
+pub const MEASURE: f32 = 640.0;
 
 /// The palette a part of the interface is drawn in.
 #[derive(Clone, Copy)]
@@ -47,6 +51,25 @@ pub(crate) fn focus_ring(c: &Colors) -> Vec<BoxShadow> {
     ]
 }
 
+/// The one shadow of the window, for what floats over the plate: a menu, a dialog, a floating bar. Soft
+/// and offset downward, as a thing held a little above a lit surface.
+pub fn float_shadow() -> Vec<BoxShadow> {
+    vec![
+        BoxShadow {
+            color: gpui::hsla(0., 0., 0., 0.28),
+            offset: point(px(0.), px(12.)),
+            blur_radius: px(32.),
+            spread_radius: px(-4.),
+        },
+        BoxShadow {
+            color: gpui::hsla(0., 0., 0., 0.18),
+            offset: point(px(0.), px(2.)),
+            blur_radius: px(6.),
+            spread_radius: px(0.),
+        },
+    ]
+}
+
 /// Click, and Enter or Space on the focused control, as in every other program.
 pub(crate) fn press(visual: Stateful<Div>, handler: Option<Handler>) -> Stateful<Div> {
     let Some(handler) = handler else {
@@ -72,7 +95,7 @@ pub(crate) fn press(visual: Stateful<Div>, handler: Option<Handler>) -> Stateful
 pub enum ButtonKind {
     /// Filled ink: the one action a section asks for.
     Primary,
-    /// Field white with a rule ring.
+    /// A soft tint with a hairline edge.
     Quiet,
     /// A word in running text, underlined.
     Ghost,
@@ -108,6 +131,13 @@ impl Button {
         self.kind = ButtonKind::Primary;
         self
     }
+    /// Primary only while `on`: the way in is the page's one action until there is something to run.
+    pub fn primary_when(mut self, on: bool) -> Self {
+        if on {
+            self.kind = ButtonKind::Primary;
+        }
+        self
+    }
     pub fn ghost(mut self) -> Self {
         self.kind = ButtonKind::Ghost;
         self
@@ -138,10 +168,10 @@ impl RenderOnce for Button {
                 .read(cx)
                 .clone(),
         };
-        let (text_size, pad_x, pad_y) = if self.small {
-            (size::SMALL, 12.0, 8.0)
+        let (text_size, pad_x, height) = if self.small {
+            (size::SMALL, 10.0, 28.0)
         } else {
-            (size::BODY, 16.0, 12.0)
+            (size::BODY, 14.0, 32.0)
         };
 
         let mut visual = div()
@@ -152,31 +182,39 @@ impl RenderOnce for Button {
             .font_weight(if self.kind == ButtonKind::Primary {
                 FontWeight::SEMIBOLD
             } else {
-                FontWeight::NORMAL
+                FontWeight::MEDIUM
             })
+            .whitespace_nowrap()
             .child(self.label.clone());
         visual = match self.kind {
             ButtonKind::Primary => visual
+                .flex()
+                .items_center()
+                .h(px(height))
                 .px(px(pad_x))
-                .py(px(pad_y))
                 .rounded(px(radius::NAV))
                 .bg(c.ink)
                 .text_color(c.on_ink)
                 .hover(move |s| s.bg(c.ink_hover)),
             ButtonKind::Quiet => visual
+                .flex()
+                .items_center()
+                .h(px(height))
                 .px(px(pad_x))
-                .py(px(pad_y))
                 .rounded(px(radius::NAV))
-                .bg(c.raised)
-                .text_color(c.ink)
+                .bg(c.panel_soft)
+                .text_color(c.prose)
                 .border_1()
-                .border_color(c.rule)
-                .hover(move |s| s.bg(c.panel_soft)),
+                .border_color(c.line)
+                .hover(move |s| s.bg(c.panel_mid).border_color(c.rule)),
             ButtonKind::Ghost => visual
+                .flex()
+                .items_center()
+                .h(px(height))
+                .px(px(6.))
+                .rounded(px(radius::NAV))
                 .text_color(c.ink)
-                .border_b_1()
-                .border_color(c.rule)
-                .hover(move |s| s.border_color(c.ink)),
+                .hover(move |s| s.bg(c.ink_wash)),
         };
         visual = visual.focus(move |s| s.shadow(focus_ring(&c)));
         visual = if self.disabled {
@@ -197,7 +235,7 @@ impl RenderOnce for Button {
     }
 }
 
-/// A filter that is on or off: a kind of file, one of four ratios. On is filled ink, without a ring.
+/// A filter that is on or off: a kind of file, one of four ratios. On is the ink wash with an ink edge and ink text.
 #[derive(IntoElement)]
 pub struct Chip {
     ui: Ui,
@@ -233,24 +271,31 @@ impl RenderOnce for Chip {
         let mut visual = div()
             .id(key_id(&self.id, "bild"))
             .track_focus(&focus)
+            .flex()
+            .items_center()
+            .h(px(28.))
             .px(px(12.))
-            .py(px(6.))
             .rounded(px(radius::PILL))
             .text_size(px(size::SMALL))
             .font_family(family::SANS)
+            .font_weight(FontWeight::MEDIUM)
+            .whitespace_nowrap()
+            .border_1()
             .child(self.label.clone());
+        // On is the light thinned onto the plate, with the light's own colour for the word — the filled
+        // plate is kept for the one action of the page.
         visual = if self.selected {
             visual
-                .bg(c.ink)
-                .text_color(c.on_ink)
+                .bg(c.ink_wash)
+                .border_color(c.ink)
+                .text_color(c.ink)
                 .font_weight(FontWeight::SEMIBOLD)
         } else {
             visual
                 .bg(c.panel_soft)
                 .text_color(c.prose)
-                .border_1()
                 .border_color(c.line)
-                .hover(move |s| s.bg(c.panel_mid))
+                .hover(move |s| s.bg(c.panel_mid).border_color(c.rule))
         };
         visual = press(
             visual.focus(move |s| s.shadow(focus_ring(&c))),
@@ -312,36 +357,41 @@ impl RenderOnce for Tile {
             .track_focus(&focus)
             .group(self.id.clone())
             .flex()
-            .flex_col()
+            .items_start()
             .gap(px(12.))
-            .p(px(16.))
+            .px(px(14.))
+            .py(px(12.))
             .rounded(px(radius::CARD))
             .bg(c.panel_soft)
+            // No frame at rest — the tint is the edge; the hover lifts it a step.
             .hover(move |s| s.bg(c.panel_mid))
             .focus(move |s| s.shadow(focus_ring(&c)))
             .child(
                 div()
-                    .size(px(36.))
+                    .flex_none()
+                    .size(px(32.))
                     .flex()
                     .items_center()
                     .justify_center()
                     .rounded(px(radius::NAV))
-                    .bg(c.panel_mid)
+                    .bg(c.ink_wash)
                     .text_color(c.ink)
                     .font_family(family::SANS)
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_size(px(size::BODY))
-                    .group_hover(self.id.clone(), move |s| s.bg(c.ink).text_color(c.on_ink))
                     .child(match &self.icon {
                         Some(path) => gpui::svg()
                             .path(path.clone())
-                            .size(px(18.))
+                            .size(px(17.))
+                            .text_color(c.ink)
                             .into_any_element(),
                         None => self.symbol.clone().into_any_element(),
                     }),
             )
             .child(
                 div()
+                    .flex_1()
+                    .min_w_0()
                     .flex()
                     .flex_col()
                     .gap(px(2.))
@@ -350,16 +400,19 @@ impl RenderOnce for Tile {
                         div()
                             .text_size(px(size::BODY))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(c.ink)
+                            .text_color(c.prose)
+                            .line_height(px(18.))
                             .child(self.title.clone()),
                     )
                     // At most two lines: a hint is a hint, not a paragraph.
                     .child(
                         div()
                             .text_size(px(size::SMALL))
-                            // `prose`, not `muted`: on a tint `muted` measures Lc 59.3 in the dark theme.
-                            .text_color(c.prose)
-                            .line_clamp(2)
+                            // Measured: `muted` on `panel_soft` holds Lc 63.1 in the dark theme.
+                            .text_color(c.muted)
+                            // No clamp: GPUI's clamp cut the second line off mid-word. A hint is
+                            // written short instead, and a row of tiles takes the tallest one's height.
+                            .line_height(px(17.))
                             .child(self.hint.clone()),
                     ),
             );
@@ -427,23 +480,25 @@ impl RenderOnce for Tab {
         let mut visual = div()
             .id(key_id(&self.id, "bild"))
             .track_focus(&focus)
+            .flex()
+            .items_center()
+            .h(px(28.))
             .px(px(12.))
-            .py(px(8.))
             .rounded(px(radius::NAV))
             .text_size(px(size::SMALL))
             .font_family(family::SANS)
-            .border_b_2()
+            .font_weight(FontWeight::MEDIUM)
+            .whitespace_nowrap()
             .child(self.label.clone());
         visual = if self.selected {
             visual
-                .text_color(c.ink)
+                .bg(c.panel_mid)
+                .text_color(c.prose)
                 .font_weight(FontWeight::SEMIBOLD)
-                .border_color(c.ink)
         } else {
             visual
-                .text_color(c.prose)
-                .border_color(gpui::transparent_black())
-                .hover(move |s| s.bg(c.panel_soft))
+                .text_color(c.muted)
+                .hover(move |s| s.bg(c.panel_soft).text_color(c.prose))
         };
         visual = press(
             visual.focus(move |s| s.shadow(focus_ring(&c))),
@@ -469,6 +524,192 @@ impl RenderOnce for Tab {
             node = node.on_activate(move |window, cx| handler(window, cx));
         }
         node
+    }
+}
+
+/// A place in the rack (the sidebar): a mark and a name, 30 px high. The chosen place is lit — the plate's
+/// tint with a small mint dot and the name in prose semibold — the others are muted until hovered. In a
+/// narrow window the rack shows the marks alone; the name stays for the screen reader and as a tooltip.
+#[derive(IntoElement)]
+pub struct RackItem {
+    ui: Ui,
+    id: SharedString,
+    label: SharedString,
+    icon: Option<SharedString>,
+    selected: bool,
+    compact: bool,
+    /// Something waits here (new episodes, a device that offers files): a count in the margin.
+    count: Option<usize>,
+    on_click: Option<Handler>,
+    focus: Option<FocusHandle>,
+    name: Option<SharedString>,
+    disabled: bool,
+}
+
+impl RackItem {
+    /// Nothing to press here now (Drive already connected): the line only says so, and is not a stop.
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+    /// What a screen reader says, when the name on the item is not enough on its own.
+    pub fn accessible_name(mut self, name: impl Into<SharedString>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+    pub fn icon(mut self, path: Option<SharedString>) -> Self {
+        self.icon = path;
+        self
+    }
+    pub fn compact(mut self, compact: bool) -> Self {
+        self.compact = compact;
+        self
+    }
+    pub fn count(mut self, count: Option<usize>) -> Self {
+        self.count = count.filter(|n| *n > 0);
+        self
+    }
+    pub fn focus_handle(mut self, handle: FocusHandle) -> Self {
+        self.focus = Some(handle);
+        self
+    }
+    pub fn on_click(mut self, handler: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_click = Some(Rc::new(handler));
+        self
+    }
+}
+
+impl RenderOnce for RackItem {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let c = self.ui.c;
+        let focus = match &self.focus {
+            Some(handle) => handle.clone(),
+            None => window
+                .use_keyed_state(key_id(&self.id, "fokus"), cx, |_, cx| {
+                    cx.focus_handle().tab_stop(true)
+                })
+                .read(cx)
+                .clone(),
+        };
+        let selected = self.selected;
+        let mark = div()
+            .flex_none()
+            .size(px(18.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_color(if selected { c.ink } else { c.muted })
+            .child(match &self.icon {
+                Some(path) => gpui::svg()
+                    .path(path.clone())
+                    .size(px(16.))
+                    .text_color(if selected { c.ink } else { c.muted })
+                    .into_any_element(),
+                None => div()
+                    .size(px(5.))
+                    .rounded(px(radius::PILL))
+                    .bg(if selected { c.ink } else { c.faint })
+                    .into_any_element(),
+            });
+        let mut visual = div()
+            .id(key_id(&self.id, "bild"))
+            .track_focus(&focus)
+            .relative()
+            .flex()
+            .items_center()
+            .gap(px(10.))
+            .h(px(30.))
+            .rounded(px(radius::NAV))
+            .font_family(family::SANS)
+            .text_size(px(size::BODY))
+            .whitespace_nowrap()
+            .focus(move |s| s.shadow(focus_ring(&c)))
+            .child(mark);
+        visual = if self.compact {
+            visual.w(px(36.)).justify_center()
+        } else {
+            visual
+                .w_full()
+                .px(px(10.))
+                .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().child(self.label.clone()))
+        };
+        if let Some(n) = self.count {
+            let badge = div()
+                .flex_none()
+                .min_w(px(18.))
+                .h(px(18.))
+                .px(px(5.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(radius::PILL))
+                .bg(c.ink)
+                .text_color(c.on_ink)
+                .text_size(px(size::MICRO))
+                .font_weight(FontWeight::BOLD)
+                .child(n.to_string());
+            visual = if self.compact {
+                visual.child(div().absolute().top(px(-4.)).right(px(-6.)).child(badge))
+            } else {
+                visual.child(badge)
+            };
+        }
+        visual = if selected {
+            visual
+                .bg(c.ink_wash)
+                .text_color(c.prose)
+                .font_weight(FontWeight::SEMIBOLD)
+        } else {
+            let quiet = visual.text_color(c.muted).font_weight(FontWeight::MEDIUM);
+            if self.disabled {
+                quiet
+            } else {
+                quiet.hover(move |s| s.bg(c.panel_soft).text_color(c.prose))
+            }
+        };
+        if self.compact {
+            let label = self.label.clone();
+            visual = visual.tooltip(move |_, cx| cx.new(|_| TooltipText(label.clone())).into());
+        }
+        let visual = if self.disabled { visual } else { press(visual, self.on_click.clone()) };
+        let mut node = accessible(self.id.clone(), Role::Button, visual)
+            .label(self.name.clone().unwrap_or_else(|| self.label.clone()))
+            .focus(&focus);
+        if self.disabled {
+            node = node.disabled(true);
+        }
+        let mut note: Vec<String> = Vec::new();
+        if selected {
+            note.push("Geöffnet".into());
+        }
+        if let Some(n) = self.count {
+            note.push(format!("{n} neu"));
+        }
+        if !note.is_empty() {
+            node = node.description(note.join(". "));
+        }
+        if let (false, Some(handler)) = (self.disabled, self.on_click) {
+            node = node.on_activate(move |window, cx| handler(window, cx));
+        }
+        node
+    }
+}
+
+/// The name of a place in a narrow rack, shown when the pointer rests on its mark.
+struct TooltipText(SharedString);
+
+impl Render for TooltipText {
+    fn render(&mut self, _window: &mut Window, _cx: &mut gpui::Context<Self>) -> impl IntoElement {
+        let c = crate::theme::DARK;
+        div()
+            .px(px(8.))
+            .py(px(4.))
+            .rounded(px(radius::NAV))
+            .bg(c.panel_strong)
+            .text_color(c.prose)
+            .font_family(family::SANS)
+            .text_size(px(size::SMALL))
+            .child(self.0.clone())
     }
 }
 
@@ -514,10 +755,11 @@ impl RenderOnce for Notice {
             .child(div().flex_1().child(self.text.clone()));
         if self.kind == NoticeKind::NotLocal {
             row = row
-                .p(px(16.))
+                .px(px(14.))
+                .py(px(12.))
                 .rounded(px(radius::CARD))
                 .bg(c.panel_cool)
-                .border_2()
+                .border_1()
                 .border_color(c.ink)
                 .font_weight(FontWeight::SEMIBOLD);
         }
@@ -586,6 +828,43 @@ impl Ui {
         }
     }
 
+    pub fn rack_item(
+        &self,
+        id: impl Into<SharedString>,
+        label: impl Into<SharedString>,
+        selected: bool,
+    ) -> RackItem {
+        RackItem {
+            ui: *self,
+            id: id.into(),
+            label: label.into(),
+            icon: None,
+            selected,
+            compact: false,
+            count: None,
+            on_click: None,
+            focus: None,
+            name: None,
+            disabled: false,
+        }
+    }
+
+    /// The name over a group of places in the rack: small, semibold, muted — a label, not a page heading.
+    pub fn rack_heading(&self, text: impl Into<SharedString>) -> AnyElement {
+        let text: SharedString = text.into();
+        accessible(
+            eid(format!("rack-gruppe-{text}")),
+            Role::Label,
+            div()
+                .text_size(px(12.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(self.c.muted)
+                .child(text.clone()),
+        )
+        .label(text)
+        .into_any_element()
+    }
+
     pub fn tile(
         &self,
         id: impl Into<SharedString>,
@@ -611,7 +890,7 @@ impl Ui {
         }
     }
 
-    /// The ground of a window or a region: the sheet, in Public Sans, in the colour of running text.
+    /// The ground of a window or a region: the sheet, in Barlow, in the colour of running text.
     pub fn sheet(&self) -> Div {
         div()
             .bg(self.c.canvas)
@@ -628,9 +907,9 @@ impl Ui {
             Role::Heading,
             div()
                 .text_size(px(size::HEADING_SM))
-                .font_weight(FontWeight::BOLD)
-                .text_color(self.c.ink)
-                .line_height(px(size::HEADING_SM * 1.25))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(self.c.prose)
+                .line_height(px(size::HEADING_SM * 1.15))
                 .child(text.clone()),
         )
         .label(text)
@@ -644,16 +923,16 @@ impl Ui {
             Role::Heading,
             div()
                 .text_size(px(size::HEADING))
-                .font_weight(FontWeight::BOLD)
-                .text_color(self.c.ink)
-                .line_height(px(size::HEADING * 1.15))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(self.c.prose)
+                .line_height(px(size::HEADING * 1.1))
                 .child(text.clone()),
         )
         .label(text)
         .into_any_element()
     }
 
-    /// The heading of a section of a screen: 20 px.
+    /// The heading of a section of a screen: 17 px.
     pub fn subheading(&self, text: impl Into<SharedString>) -> AnyElement {
         self.heading_at(text, size::SUBHEADING, FontWeight::SEMIBOLD, 1.3)
     }
@@ -677,7 +956,7 @@ impl Ui {
             div()
                 .text_size(px(px_size))
                 .font_weight(weight)
-                .text_color(self.c.ink)
+                .text_color(self.c.prose)
                 .line_height(px(px_size * line))
                 .child(text.clone()),
         )
@@ -685,15 +964,47 @@ impl Ui {
         .into_any_element()
     }
 
-    /// Running prose: 16 px, at a reading line height.
+    /// The head of a page: its title, and under it what the page does in a sentence or two, held to a
+    /// reading measure (about 70 characters) — on a wide plate a summary ran to 160 characters a line. A
+    /// hairline closes it off from the work below.
+    pub fn page_head(&self, title: impl Into<SharedString>, summary: impl Into<SharedString>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .pb(px(20.))
+            .border_b_1()
+            .border_color(self.c.line)
+            .child(self.heading(title))
+            .child(div().max_w(px(MEASURE)).child(self.muted_prose(summary)))
+            .into_any_element()
+    }
+
+    /// Prose a step back: the summary under a title.
+    fn muted_prose(&self, text: impl Into<SharedString>) -> AnyElement {
+        let text: SharedString = text.into();
+        accessible(
+            eid(format!("text-{text}")),
+            Role::Label,
+            div()
+                .text_color(self.c.muted)
+                .line_height(px(size::BODY * 1.5))
+                .child(text.clone()),
+        )
+        .label(text)
+        .into_any_element()
+    }
+
+    /// Running prose: 14 px, at a reading line height.
     pub fn prose(&self, text: impl Into<SharedString>) -> AnyElement {
         let text: SharedString = text.into();
         accessible(
             eid(format!("text-{text}")),
             Role::Label,
             div()
+                .max_w(px(MEASURE))
                 .text_color(self.c.prose)
-                .line_height(px(size::BODY * 1.55))
+                .line_height(px(size::BODY * 1.5))
                 .child(text.clone()),
         )
         .label(text)
@@ -739,9 +1050,25 @@ impl Ui {
             div()
                 .font_family(family::WORDMARK)
                 .font_weight(FontWeight::LIGHT)
-                .text_size(px(25.))
+                .text_size(px(26.))
                 .text_color(self.c.ink)
                 .child("Sondra"),
+        )
+        .label("Sondra")
+        .into_any_element()
+    }
+
+    /// The wordmark's initial, for a rack too narrow for the word.
+    pub fn wordmark_initial(&self) -> AnyElement {
+        accessible(
+            "wortmarke",
+            Role::Label,
+            div()
+                .font_family(family::WORDMARK)
+                .font_weight(FontWeight::LIGHT)
+                .text_size(px(28.))
+                .text_color(self.c.ink)
+                .child("S"),
         )
         .label("Sondra")
         .into_any_element()
@@ -773,9 +1100,10 @@ impl Ui {
         .into_any_element()
     }
 
-    /// The line that opens a section: heavier than the hairline between rows.
+    /// The line that opens a section. In the booth a section is separated by air and a hairline, so this
+    /// is the hairline too.
     pub fn rule(&self) -> Div {
-        div().h(px(1.)).w_full().bg(self.c.rule)
+        div().h(px(1.)).w_full().bg(self.c.line)
     }
 
     /// The hairline between rows.

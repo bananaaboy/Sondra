@@ -57,7 +57,7 @@ pub struct AnytypeState {
 
 impl AnytypeState {
     pub fn new(cx: &mut Context<Shell>, colors: sondra_ui::Colors) -> AnytypeState {
-        let code = cx.new(|cx| TextField::new(cx, colors, "Code aus Anytype").placeholder("4 Ziffern").max_chars(4));
+        let code = cx.new(|cx| TextField::new(cx, colors, "Code aus Anytype").value_face().placeholder("4 Ziffern").max_chars(4));
         cx.subscribe(&code, |shell: &mut Shell, _, event: &FieldEvent, cx| {
             if *event == FieldEvent::Submitted {
                 shell.anytype_pair(cx);

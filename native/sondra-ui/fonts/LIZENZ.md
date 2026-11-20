@@ -1,17 +1,17 @@
 # Schriften
 
-Diese Schriften liegen als TrueType-Dateien bei (aus den Webschriften der Website gewonnen: die variable
-Public Sans in drei feste Schnitte, die variable Cormorant Garamond in den Schnitt 300 geschnitten, Courier
-Prime unverändert). Alle drei stehen unter der **SIL Open Font License, Version 1.1**.
+Diese Schriften liegen als TrueType-Dateien bei (Barlow in vier festen Schnitten unverändert aus Google
+Fonts, über das npm-Paket `@expo-google-fonts/barlow` 0.4.1; die variable Cormorant Garamond in den
+Schnitt 300 geschnitten, Courier Prime unverändert). Alle drei stehen unter der **SIL Open Font License, Version 1.1**.
 
 | Datei | Schrift | Urheber |
 |---|---|---|
-| `PublicSans-Regular.ttf`, `-SemiBold.ttf`, `-Bold.ttf` | Public Sans | © 2015 The Public Sans Project Authors (https://github.com/uswds/public-sans) |
+| `Barlow-Regular.ttf`, `-Medium.ttf`, `-SemiBold.ttf`, `-Bold.ttf` | Barlow | © 2017 The Barlow Project Authors (https://github.com/jpt/barlow) |
 | `CourierPrime-Regular.ttf`, `-Bold.ttf` | Courier Prime | © 2013 Quote-Unquote Apps (https://quoteunquoteapps.com/courierprime/) |
 | `CormorantGaramond-Light.ttf` | Cormorant Garamond | © 2015 The Cormorant Project Authors (Christian Thalmann), https://github.com/CatharsisFonts/Cormorant |
 
-Die Schriftnamen sind unverändert geblieben; die Dateien enthalten nur die Zeichen der lateinischen
-Teilmenge und die festen Schnitte, die Sondra braucht.
+Die Schriftnamen sind unverändert geblieben; Courier Prime und Cormorant enthalten nur die Zeichen der
+lateinischen Teilmenge und die festen Schnitte, die Sondra braucht.
 
 ---
 

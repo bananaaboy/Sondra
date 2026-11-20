@@ -211,8 +211,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let s = &self.screen;
-        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(760.)).child(ui.heading("Bildschirm aufnehmen"));
-        page = page.child(ui.prose("Der ganze Bildschirm oder ein Fenster als Video — auf Wunsch mit dem Ton des Rechners und mit dem Mikrofon. Die Aufnahme bleibt auf diesem Computer."));
+        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(760.)).child(ui.page_head("Bildschirm aufnehmen", "Der ganze Bildschirm oder ein Fenster als Video — auf Wunsch mit dem Ton des Rechners und mit dem Mikrofon. Die Aufnahme bleibt auf diesem Computer."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

@@ -1,20 +1,20 @@
-//! The window: header, row of tabs, and the screen of the chosen tool. What a tool does is not here —
-//! only where it is and how to get to it; a tool that is not built yet says so on its page instead of
-//! pretending.
+//! The window, as a projection booth: the rack on the left (every place one click away), and the lit
+//! plate the chosen page sits on. What a tool does is not here — only where it is and how to get to it; a
+//! tool that is not built yet says so on its page instead of pretending.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use gpui::{
-    deferred, div, prelude::*, px, AnyElement, Context, Entity, ExternalPaths, FocusHandle,
-    KeyDownEvent, PathPromptOptions, Render, SharedString, Window, WindowAppearance,
+    div, prelude::*, px, AnyElement, Context, Entity, ExternalPaths, FocusHandle,
+    KeyDownEvent, PathPromptOptions, Render, SharedString, Window,
 };
 use sondra_a11y::{a11y_root, Role};
 use sondra_ui::{family, motion, radius, size, FieldEvent, Mode, NoticeKind, TextField, Ui};
 
 use crate::actions::{self, Group};
-use crate::layout::{columns, shell_width, tab_width, GUTTER};
+use crate::layout::{columns_for, shell_width, RACK, RACK_COMPACT};
 use crate::convert_page::ConvertState;
 use crate::audio_page::AudioState;
 use crate::devices_page::DevicesState;
@@ -33,24 +33,13 @@ use crate::mix_page::MixState;
 use crate::video_page::VideoState;
 use crate::normalize_page::NormalizeState;
 use crate::player_page::PlayerState;
-use crate::nav::{entry_of, fit_row, slide_from, Entry, Panel, ENTRIES};
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Menu {
-    /// The menu of a group of tabs.
-    Entry(usize),
-    /// What did not fit the row.
-    More,
-}
+use crate::nav::{slide_from, Entry, Panel, ENTRIES};
 
 pub struct Shell {
     mode: Mode,
     panel: Panel,
     /// Where the tool came from, for the side it slides in from.
     from: Panel,
-    menu: Option<Menu>,
-    /// When a click outside shut a menu — the click on its own tab must not open it again.
-    closed_at: Option<(Menu, Instant)>,
     search: Entity<TextField>,
     /// A chosen group of tools on the start page; `None` is all of them.
     chosen_group: Option<Group>,
@@ -61,11 +50,12 @@ pub struct Shell {
     /// The field for a new name of a file of the session.
     pub(crate) session_rename: Entity<TextField>,
     pub(crate) focus: FocusHandle,
-    /// The first entry of whatever menu is open takes the focus when it opens.
-    menu_focus: FocusHandle,
-    focus_menu: bool,
-    /// One handle per tab (the last is „Mehr“): the focus goes back to the one that opened a menu.
-    tab_focus: Vec<FocusHandle>,
+    /// One handle per place in the rack, in the order of `PANELS`: Up and Down walk them.
+    rack_focus: Vec<FocusHandle>,
+    /// „Saallicht“: whether the house lights are down (a film plays), and since when — the rack fades.
+    house: (bool, std::time::Instant),
+    /// The pointer rests on the rack: the lights come back (through the same fade).
+    rack_hovered: bool,
     /// The Merkliste: the list, what narrows it, the lines being typed into.
     pub(crate) merk: MerkState,
     /// The Ordner page: the folder read, what it shows, what is chosen.
@@ -121,7 +111,7 @@ pub struct Shell {
     pub(crate) licenses_open: bool,
     /// The version a line under the header says is new, until it is read or closed.
     pub(crate) news: Option<String>,
-    /// Where the chosen theme is kept; without a choice the system's own is followed.
+    /// Where the chosen theme is kept; without a choice the booth is dark.
     theme_store: Option<crate::store::FileStore>,
 }
 
@@ -154,16 +144,11 @@ const THEME_KEY: &str = "sondra:theme";
 
 impl Shell {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mode = match window.appearance() {
-            WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
-            _ => Mode::Light,
-        };
+        // Dark from the first start, whatever the system says (the user's word, 20.11.2026); a choice made
+        // with the switch is kept (`open_theme_memory`).
+        let _ = window;
+        let mode = Mode::default();
         let colors = mode.colors();
-        // The system's own switch (dark in the evening) is followed as long as the person never chose.
-        cx.observe_window_appearance(window, |shell, window, cx| {
-            shell.system_appearance_changed(window.appearance(), cx);
-        })
-        .detach();
         let search = cx.new(|cx| {
             TextField::new(cx, colors, "Werkzeuge durchsuchen").placeholder("Werkzeug suchen…")
         });
@@ -220,19 +205,17 @@ impl Shell {
             mode,
             panel: Panel::Start,
             from: Panel::Start,
-            menu: None,
-            closed_at: None,
             search,
             chosen_group: None,
             unfolded: HashSet::new(),
             session: Default::default(),
             session_rename,
             focus: cx.focus_handle(),
-            menu_focus: cx.focus_handle().tab_stop(true),
-            focus_menu: false,
-            tab_focus: (0..=ENTRIES.len())
+            rack_focus: (0..crate::nav::PANELS.len())
                 .map(|_| cx.focus_handle().tab_stop(true))
                 .collect(),
+            house: (false, std::time::Instant::now() - motion::SLOW),
+            rack_hovered: false,
             merk,
             folder,
             player: PlayerState::new(cx),
@@ -365,44 +348,12 @@ impl Shell {
             self.from = self.panel;
             self.panel = panel;
         }
-        self.menu = None;
         cx.notify();
     }
 
-    fn toggle_menu(&mut self, menu: Menu, cx: &mut Context<Self>) {
-        let just_closed = self
-            .closed_at
-            .is_some_and(|(m, at)| m == menu && at.elapsed() < Duration::from_millis(250));
-        self.closed_at = None;
-        self.menu = if self.menu == Some(menu) || just_closed {
-            None
-        } else {
-            Some(menu)
-        };
-        self.focus_menu = self.menu.is_some();
-        cx.notify();
-    }
-
-    /// Whether the focus is on a tab, or in a menu hanging from one.
-    fn in_tab_row(&self, window: &Window) -> bool {
-        self.menu.is_some() || self.tab_focus.iter().any(|h| h.is_focused(window))
-    }
-
-    /// The tab that opened the menu now open, if one is.
-    fn opener_focus(&self) -> Option<FocusHandle> {
-        match self.menu? {
-            Menu::Entry(i) => self.tab_focus.get(i).cloned(),
-            Menu::More => self.tab_focus.get(ENTRIES.len()).cloned(),
-        }
-    }
-
-    fn close_menu(&mut self, by_click: bool, cx: &mut Context<Self>) {
-        if let Some(menu) = self.menu.take() {
-            if by_click {
-                self.closed_at = Some((menu, Instant::now()));
-            }
-            cx.notify();
-        }
+    /// Whether the focus is on a place in the rack.
+    fn in_rack(&self, window: &Window) -> bool {
+        self.rack_focus.iter().any(|h| h.is_focused(window))
     }
 
     /// What waits for the person: announced episodes and devices that offer files.
@@ -488,8 +439,8 @@ impl Shell {
         ]
     }
 
-    /// Takes the theme a person chose earlier (`hell` or `dunkel`, as on the website); no choice means the
-    /// system's, which `new` already took.
+    /// Takes the theme a person chose earlier (`hell` or `dunkel`, as on the website); no choice means dark,
+    /// which `new` already took.
     pub fn open_theme_memory(&mut self, store: crate::store::FileStore, cx: &mut Context<Self>) {
         use sondra_merk::folder_memory::Store;
         match store.get_item(THEME_KEY).as_deref() {
@@ -498,22 +449,6 @@ impl Shell {
             _ => {}
         }
         self.theme_store = Some(store);
-    }
-
-    /// The system changed between light and dark: followed unless the person chose a theme here (then that stays).
-    pub fn system_appearance_changed(&mut self, appearance: WindowAppearance, cx: &mut Context<Self>) {
-        use sondra_merk::folder_memory::Store;
-        let chose = self.theme_store.as_ref().is_some_and(|s| s.get_item(THEME_KEY).is_some());
-        if chose {
-            return;
-        }
-        let mode = match appearance {
-            WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
-            _ => Mode::Light,
-        };
-        if mode != self.mode {
-            self.set_mode(mode, cx);
-        }
     }
 
     /// A choice made with the button: shown and remembered.
@@ -570,203 +505,145 @@ fn file_name(path: &PathBuf) -> String {
 /* The pieces ------------------------------------------------------------------------------------- */
 
 impl Shell {
-    fn header(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+    /// The rack: the wordmark, the six tasks, the tools under their three groups — every place one click
+    /// away, no menu to open — and at its foot the session, Drive, what is new and the light switch.
+    /// While a film plays on its page the rack dims („Saallicht“) and comes back under the pointer.
+    fn rack(&self, ui: Ui, compact: bool, light: f32, cx: &mut Context<Self>) -> AnyElement {
+        let c = ui.c;
+        let mut list = div()
+            .id("rack-liste")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .flex()
+            .flex_col()
+            .gap(px(2.))
+            .px(px(if compact { 12. } else { 10. }));
+        let mut tasks_done = false;
+        for entry in ENTRIES.iter() {
+            match entry {
+                Entry::Single(p) => list = list.child(self.rack_place(ui, *p, compact, cx)),
+                Entry::Group { label, panels, .. } => {
+                    if !tasks_done {
+                        tasks_done = true;
+                    }
+                    // A group is a heading over its tools; in a narrow rack a hairline stands in for it.
+                    list = list.child(if compact {
+                        div().mx(px(6.)).my(px(10.)).h(px(1.)).bg(c.line).into_any_element()
+                    } else {
+                        div()
+                            .pt(px(16.))
+                            .pb(px(4.))
+                            .px(px(10.))
+                            .child(ui.rack_heading(*label))
+                            .into_any_element()
+                    });
+                    for p in panels.iter() {
+                        list = list.child(self.rack_place(ui, *p, compact, cx));
+                    }
+                }
+            }
+        }
+        let nav = ui.landmark(Role::Navigation, "reiterleiste", "Werkzeuge und Aufgaben", list);
+
         let me = cx.entity();
         let to_mode = match self.mode {
             Mode::Light => Mode::Dark,
             Mode::Dark => Mode::Light,
         };
-        let label = match self.mode {
-            Mode::Light => "Dunkles Thema",
-            Mode::Dark => "Helles Thema",
+        let (theme_label, theme_icon) = match self.mode {
+            Mode::Light => ("Dunkles Thema", "dunkel"),
+            Mode::Dark => ("Helles Thema", "hell"),
         };
-        div()
+        let version = crate::whats_new::app_version();
+        let mut foot = div()
+            .flex_none()
+            .flex()
+            .flex_col()
+            .gap(px(2.))
+            .px(px(if compact { 12. } else { 10. }))
+            .pt(px(10.))
+            .border_t_1()
+            .border_color(c.line);
+        if let Some(files) = self.session_header_button(&ui, compact, cx) {
+            foot = foot.child(files);
+        }
+        if let Some(drive) = self.drive_header_button(&ui, compact, cx) {
+            foot = foot.child(drive);
+        }
+        let news = me.clone();
+        foot = foot
+            .child(
+                ui.rack_item("version", format!("Was ist neu · {version}"), false)
+                    .icon(Some(sondra_ui::ui_icon("neu")))
+                    .compact(compact)
+                    .accessible_name(format!("Was ist neu, Version {version}"))
+                    .on_click(move |_, app| {
+                        news.update(app, |shell, cx| {
+                            shell.whats_new_open = true;
+                            shell.news = None;
+                            cx.notify();
+                        })
+                    }),
+            )
+            .child(
+                ui.rack_item("thema", theme_label, false)
+                    .icon(Some(sondra_ui::ui_icon(theme_icon)))
+                    .compact(compact)
+                    .on_click(move |_, app| {
+                        me.update(app, |shell, cx| shell.choose_mode(to_mode, cx));
+                    }),
+            );
+
+        let head = div()
+            .flex_none()
+            .h(px(52.))
             .flex()
             .items_center()
-            .justify_between()
-            .child(ui.wordmark())
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .children(self.session_header_button(&ui, cx))
-                    .children(self.drive_header_button(&ui, cx))
-                    .child({
-                        let me = me.clone();
-                        let version = crate::whats_new::app_version();
-                        ui.button("version", version.clone()).small().ghost().accessible_name(format!("Was ist neu, Version {version}")).on_click(move |_, app| {
-                            me.update(app, |shell, cx| {
-                                shell.whats_new_open = true;
-                                shell.news = None;
-                                cx.notify();
-                            })
-                        })
-                    })
-                    .child(ui.button("thema", label).small().on_click(move |_, app| {
-                        me.update(app, |shell, cx| shell.choose_mode(to_mode, cx));
-                    })),
-            )
+            .px(px(if compact { 0. } else { 20. }))
+            .when(compact, |d| d.justify_center())
+            .child(if compact { ui.wordmark_initial() } else { ui.wordmark() });
+
+        div()
+            .id("rack")
+            .flex_none()
+            .w(px(if compact { RACK_COMPACT } else { RACK }))
+            .h_full()
+            .flex()
+            .flex_col()
+            .pb(px(12.))
+            .bg(c.room)
+            .when(light < 1.0, |d| d.opacity(light))
+            .on_hover(cx.listener(|shell, hovered: &bool, _, cx| {
+                if shell.rack_hovered != *hovered {
+                    shell.rack_hovered = *hovered;
+                    cx.notify();
+                }
+            }))
+            .child(head)
+            .child(nav)
+            .child(foot)
             .into_any_element()
     }
 
-    /// The row of tabs on the line of the header: the tasks first, the tools in three groups, and what does
-    /// not fit behind „Mehr“ — never cut off, never to be scrolled sideways.
-    fn tab_row(&self, ui: Ui, available: f32, cx: &mut Context<Self>) -> AnyElement {
+    fn rack_place(&self, ui: Ui, panel: Panel, compact: bool, cx: &mut Context<Self>) -> AnyElement {
         let me = cx.entity();
-        let chosen = entry_of(self.panel);
-        let label_of = |i: usize| -> String {
-            match ENTRIES[i] {
-                // A group names the tool chosen in it: „Ton · Mischen“.
-                Entry::Group { label, .. } if i == chosen => {
-                    format!("{label} · {} ▾", self.panel.label())
-                }
-                Entry::Group { label, .. } => format!("{label} ▾"),
-                Entry::Single(p) => p.label().to_string(),
-            }
-        };
-        let widths: Vec<f32> = (0..ENTRIES.len())
-            .map(|i| tab_width(&label_of(i), matches!(ENTRIES[i], Entry::Group { .. })))
-            .collect();
-        let fit = fit_row(&widths, 2.0, tab_width("Mehr", false), available, chosen);
-
-        let mut row = div()
-            .id("reiter-zeile")
-            .relative()
-            .flex()
-            .items_center()
-            .gap(px(2.));
-        for i in &fit.shown {
-            let i = *i;
-            let entry = ENTRIES[i];
-            let selected = i == chosen;
-            let me = me.clone();
-            let mut tab = ui
-                .tab(format!("reiter-{}", entry.id()), label_of(i), selected)
-                .focus_handle(self.tab_focus[i].clone());
-            if let Entry::Group { label, panels, .. } = entry {
-                // The little arrow is for the eye; the reader gets the name and what the button does.
-                let name = if selected {
-                    format!("{label} · {}", self.panel.label())
-                } else {
-                    label.to_string()
-                };
-                tab = tab
-                    .accessible_name(name)
-                    .note(format!("Menü mit {} Werkzeugen", panels.len()));
-            }
-            let tab = tab.on_click(move |_, app| {
-                me.update(app, |shell, cx| match entry {
-                    Entry::Single(p) => shell.go(p, cx),
-                    Entry::Group { .. } => shell.toggle_menu(Menu::Entry(i), cx),
-                });
-            });
-            let mut cell = div().relative().child(tab);
-            if self.menu == Some(Menu::Entry(i)) {
-                cell = cell.child(self.popover(ui, Menu::Entry(i), cx));
-            }
-            row = row.child(cell);
-        }
-        if !fit.hidden.is_empty() {
-            let me = me.clone();
-            let more = ui
-                .tab("reiter-mehr", "Mehr ▾", fit.hidden.contains(&chosen))
-                .accessible_name("Mehr")
-                .note("Menü mit den weiteren Werkzeugen")
-                .focus_handle(self.tab_focus[ENTRIES.len()].clone())
-                .on_click(move |_, app| {
-                    me.update(app, |shell, cx| shell.toggle_menu(Menu::More, cx));
-                });
-            let mut cell = div().relative().child(more);
-            if self.menu == Some(Menu::More) {
-                cell = cell.child(self.more_popover(ui, &fit.hidden, cx));
-            }
-            row = row.child(cell);
-        }
-        ui.landmark(
-            Role::Navigation,
-            "reiterleiste",
-            "Werkzeuge und Aufgaben",
-            row,
-        )
+        ui.rack_item(format!("reiter-{}", panel.slug()), panel.label(), panel == self.panel)
+            .icon(sondra_ui::panel_icon(panel.meta().id))
+            .compact(compact)
+            .count(self.rack_count(panel))
+            .focus_handle(self.rack_focus[panel.index()].clone())
+            .on_click(move |_, app| me.update(app, |shell, cx| shell.go(panel, cx)))
+            .into_any_element()
     }
 
-    fn item(&self, ui: Ui, panel: Panel, first: bool, cx: &mut Context<Self>) -> AnyElement {
-        let me = cx.entity();
-        let item = ui
-            .menu_item(
-                format!("menue-{}", panel.slug()),
-                panel.label(),
-                panel == self.panel,
-            )
-            .hint(panel.meta().summary)
-            .on_click(move |_, app| {
-                me.update(app, |shell, cx| shell.go(panel, cx));
-            });
-        if first {
-            item.focus_handle(self.menu_focus.clone())
-                .into_any_element()
-        } else {
-            item.into_any_element()
+    /// What waits at a place: devices that offer files wait under „Geräte“.
+    fn rack_count(&self, panel: Panel) -> Option<usize> {
+        if panel != Panel::Devices {
+            return None;
         }
-    }
-
-    fn floating(&self, popover: AnyElement, cx: &mut Context<Self>) -> AnyElement {
-        let me = cx.entity();
-        // Above everything else, just under its tab, unfolding from it (`drop`); a press anywhere else
-        // shuts it.
-        deferred(
-            div()
-                .absolute()
-                .top(px(40.))
-                .left_0()
-                .on_mouse_down_out(move |_, _, app| {
-                    me.update(app, |shell, cx| shell.close_menu(true, cx));
-                })
-                .child(motion::enter(
-                    div().child(popover),
-                    "menue-auf",
-                    (0.0, -6.0),
-                    Duration::ZERO,
-                    motion::FAST,
-                )),
-        )
-        .with_priority(10)
-        .into_any_element()
-    }
-
-    fn popover(&self, ui: Ui, menu: Menu, cx: &mut Context<Self>) -> AnyElement {
-        let Menu::Entry(i) = menu else {
-            unreachable!("a popover belongs to a group")
-        };
-        let entry = ENTRIES[i];
-        let items: Vec<AnyElement> = entry
-            .panels()
-            .iter()
-            .enumerate()
-            .map(|(n, p)| self.item(ui, *p, n == 0, cx))
-            .collect();
-        let pop = ui.popover(format!("menue-{}", entry.id()), entry.label(), items);
-        self.floating(pop, cx)
-    }
-
-    fn more_popover(&self, ui: Ui, hidden: &[usize], cx: &mut Context<Self>) -> AnyElement {
-        let mut items: Vec<AnyElement> = Vec::new();
-        let mut first_given = false;
-        for i in hidden {
-            let entry = ENTRIES[*i];
-            // A group is a heading over its tools; a single tool is an entry.
-            if let Entry::Group { label, .. } = entry {
-                items.push(ui.hint(label));
-            }
-            for p in entry.panels() {
-                let first = !first_given;
-                first_given = true;
-                items.push(self.item(ui, *p, first, cx));
-            }
-        }
-        let pop = ui.popover("menue-mehr", "Weitere Werkzeuge", items);
-        self.floating(pop, cx)
+        let offers = self.devices.engine.as_ref().map_or(0, |e| e.snapshot().transfers.iter().filter(|t| t.state == sondra_devices::engine::State::Asking).count());
+        Some(offers)
     }
 
     /// A tool that is not built yet says so, and says where it is available meanwhile.
@@ -796,13 +673,14 @@ impl Shell {
             .flex()
             .flex_col()
             .gap(px(20.))
-            .p(px(28.))
+            .px(px(28.))
+            .py(px(26.))
             .rounded(px(radius::CARD))
             .bg(c.panel_soft)
             .border_1()
-            .border_color(c.line)
+            .border_color(gpui::transparent_black())
             .drag_over::<ExternalPaths>(move |style, _, _, _| {
-                style.bg(c.panel_mid).border_2().border_color(c.ink)
+                style.bg(c.ink_wash).border_color(c.ink)
             })
             .on_drop(move |paths: &ExternalPaths, _, app| {
                 let paths = paths.paths().to_vec();
@@ -812,9 +690,10 @@ impl Shell {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(8.))
+                    .gap(px(6.))
+                    // A known width, not a maximum: text that wraps under a maximum is measured as one
+                    // line, and the sentence below slid under the buttons.
                     .w_full()
-                    .max_w(px(34. * size::BODY))
                     .child(ui.display("Ton, Video und Bilder bearbeiten"))
                     .child(
                         ui.prose("Gerechnet wird auf Ihrem Gerät — keine Datei wird hochgeladen."),
@@ -846,7 +725,7 @@ impl Shell {
                                 me.update(app, |shell, cx| shell.go(Panel::Downloader, cx));
                             })
                     })
-                    .child(ui.hint("oder hierher ziehen")),
+                    .child(div().pl(px(6.)).child(ui.hint("oder Dateien hierher ziehen"))),
             );
         if !self.session.files.is_empty() {
             let names: Vec<String> = self.session.files.iter().map(file_name).collect();
@@ -960,9 +839,6 @@ impl Shell {
             .items_center()
             .justify_between()
             .gap(px(12.))
-            .pb(px(14.))
-            .border_b_1()
-            .border_color(ui.c.line)
             .child(ui.subheading("Werkzeuge"))
             .child(
                 div()
@@ -971,7 +847,7 @@ impl Shell {
                     .items_center()
                     .gap(px(10.))
                     .child(pills)
-                    .child(div().w(px(260.)).child(self.search.clone())),
+                    .child(div().w(px(240.)).child(self.search.clone())),
             );
 
         let mut body = div().flex().flex_col().gap(px(28.));
@@ -1017,8 +893,11 @@ impl Shell {
                             .flex()
                             .items_baseline()
                             .gap(px(8.))
+                            .pb(px(8.))
+                            .border_b_1()
+                            .border_color(ui.c.line)
                             .child(ui.title(group.label()))
-                            .child(ui.value(list.len().to_string())),
+                            .child(div().text_color(ui.c.muted).child(ui.value(list.len().to_string()))),
                     )
                     .child(self.grid(ui, tiles, cols));
                 if rest > 0 {
@@ -1053,32 +932,20 @@ impl Shell {
             .into_any_element()
     }
 
-    /// The other tasks as tiles: what the tab row names, one click from the start.
-    fn media(&self, ui: Ui, cols: usize, cx: &mut Context<Self>) -> AnyElement {
-        let tiles: Vec<AnyElement> = [
-            Panel::Merkliste,
-            Panel::Folder,
-            Panel::Player,
-            Panel::Downloader,
-        ]
-        .iter()
-        .map(|p| {
-            let me = cx.entity();
-            let panel = *p;
-            ui.tile(format!("aufgabe-{}", p.slug()), p.label(), p.meta().summary)
-                .icon(sondra_ui::panel_icon(p.meta().id))
-                .on_click(move |_, app| {
-                    me.update(app, |shell, cx| shell.go(panel, cx));
-                })
-                .into_any_element()
-        })
-        .collect();
+    /// Films and series: what is being watched, one click to each — the tasks themselves stand in the rack,
+    /// a tile for each would only say it twice. With nothing being watched, one quiet line.
+    fn media(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(watching) = self.continue_watching(ui, cx) {
+            return watching;
+        }
+        let me = cx.entity();
         div()
             .flex()
-            .flex_col()
-            .gap(px(10.))
-            .child(ui.subheading("Filme und Serien"))
-            .child(self.grid(ui, tiles, if cols >= 3 { 4 } else { 2 }))
+            .flex_wrap()
+            .items_center()
+            .gap(px(8.))
+            .child(ui.hint("Noch keine Serie am Schauen."))
+            .child(ui.button("start-ordner", "Ordner mit Serien öffnen").ghost().small().on_click(move |_, app| me.update(app, |shell, cx| shell.go(Panel::Folder, cx))))
             .into_any_element()
     }
 
@@ -1129,11 +996,10 @@ impl Shell {
         div()
             .flex()
             .flex_col()
-            .gap(px(36.))
+            .gap(px(40.))
             .child(self.way_in(ui, cx))
             .children(self.old_app_offer(ui, cx))
-            .children(self.continue_watching(ui, cx))
-            .child(self.media(ui, cols, cx))
+            .child(self.media(ui, cx))
             .child(self.tools(ui, cols, cx))
             .into_any_element()
     }
@@ -1145,17 +1011,16 @@ impl Render for Shell {
         let c = ui.c;
         let vw: f32 = window.viewport_size().width.into();
         let vh_px: f32 = window.viewport_size().height.into();
-        let column = shell_width(vw).min(vw);
-        let gutter = if vw < 640.0 { 16.0 } else { GUTTER };
+        // The rack takes its width; the plate is what is left, inset 8 px from the window's edges.
+        let compact = vw < crate::layout::RACK_NARROW_BELOW;
+        let rack_w = if compact { RACK_COMPACT } else { RACK };
+        let plate_w = (vw - rack_w - 8.0).max(320.0);
+        let gutter = if plate_w < 640.0 { 18.0 } else { crate::layout::GUTTER };
+        let column = shell_width(vw).min(plate_w);
         let inner = (column - 2.0 * gutter).max(280.0);
-        let cols = columns(vw);
+        let cols = columns_for(inner);
         let me = cx.entity();
         if let Some(handle) = self.pending_focus.take() {
-            window.defer(cx, move |window, _| window.focus(&handle));
-        }
-        if self.focus_menu && self.menu.is_some() {
-            self.focus_menu = false;
-            let handle = self.menu_focus.clone();
             window.defer(cx, move |window, _| window.focus(&handle));
         }
 
@@ -1252,16 +1117,30 @@ impl Render for Shell {
         // A film that goes on behind another tool says so, and can be stopped from here.
         let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
         let floating = self.floating_cards(ui, cx);
-        let header = div()
-            .flex()
-            .flex_col()
-            .gap(px(8.))
-            .child(self.header(ui, cx))
-            .children(self.news_banner(ui, cx))
-            .children(self.session_offer_line(ui, cx))
-            .children(self.session_panel(ui, cx))
-            .child(self.tab_row(ui, inner, cx))
-            .child(ui.rule());
+        // What stands above every page: a line about a new version, the offer of the last session, the
+        // files of the session when they are open.
+        let above: Vec<AnyElement> = self
+            .news_banner(ui, cx)
+            .into_iter()
+            .chain(self.session_offer_line(ui, cx))
+            .chain(self.session_panel(ui, cx))
+            .collect();
+        // „Saallicht“: while a film plays on its page, the rack goes dim.
+        let playing = self.panel == Panel::Player
+            && self.player.playback.as_ref().is_some_and(|p| p.state() == sondra_playback::State::Playing);
+        // The lights come back the moment the rack has the focus (Up and Down walk it), and fade either way.
+        let lights_down = playing && !self.in_rack(window) && !self.rack_hovered;
+        if lights_down != self.house.0 {
+            self.house = (lights_down, std::time::Instant::now());
+        }
+        let t = if motion::reduced() { 1.0 } else { (self.house.1.elapsed().as_secs_f32() / motion::SLOW.as_secs_f32()).min(1.0) };
+        let e = motion::ease_out(t);
+        let light = if self.house.0 { 1.0 - 0.68 * e } else { 0.32 + 0.68 * e };
+        if t < 1.0 {
+            let me = cx.entity_id();
+            window.on_next_frame(move |_, cx| cx.notify(me));
+        }
+        let rack = if immersive { None } else { Some(self.rack(ui, compact, light, cx)) };
 
         a11y_root(
             div()
@@ -1270,13 +1149,12 @@ impl Render for Shell {
                 .track_focus(&self.focus)
                 .on_key_down(move |event: &KeyDownEvent, window, app| {
                     let step = match event.keystroke.key.as_str() {
-                        "left" => -1,
-                        "right" => 1,
+                        "up" => -1,
+                        "down" => 1,
                         _ => 0,
                     };
-                    // Left and Right walk the row of tabs (sideways out of an open menu shuts it first).
-                    if step != 0 && me.read(app).in_tab_row(window) {
-                        me.update(app, |shell, cx| shell.close_menu(false, cx));
+                    // Up and Down walk the places of the rack.
+                    if step != 0 && me.read(app).in_rack(window) {
                         if step < 0 {
                             window.focus_prev();
                         } else {
@@ -1338,45 +1216,65 @@ impl Render for Shell {
                         });
                         return;
                     }
-                    if event.keystroke.key == "escape" {
-                        // Escape shuts the menu and gives the focus back to the tab that opened it.
-                        let back = me.read(app).opener_focus();
-                        me.update(app, |shell, cx| shell.close_menu(false, cx));
-                        if let Some(handle) = back {
-                            window.focus(&handle);
-                        }
-                    }
                 })
                 .size_full()
                 .relative()
-                .bg(if immersive { Mode::Dark.colors().stage } else { c.canvas })
+                .bg(if immersive { Mode::Dark.colors().stage } else { c.room })
                 .text_color(c.prose)
                 .font_family(family::SANS)
                 .text_size(px(size::BODY))
                 .flex()
-                .justify_center()
+                .children(rack)
                 .child(if immersive { page } else {
+                    // The plate: the lit thing in the dark room, one step lighter, with a catch-light on
+                    // its edge and the window's one shadow under it.
                     div()
-                        .id("blatt")
-                        .size_full()
-                        .overflow_y_scroll()
-                        .flex()
-                        .justify_center()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .py(px(8.))
+                        .pr(px(8.))
                         .child(
                             div()
-                                .w_full()
-                                .max_w(px(column))
-                                .px(px(gutter))
-                                .py(px(24.))
+                                .id("blatt")
+                                .size_full()
+                                .rounded(px(radius::PLATE))
+                                .bg(c.canvas)
+                                // The catch-light: the plate's upper edge only.
+                                .border_t_1()
+                                .border_color(c.plate_edge)
+                                .shadow(plate_shadow(self.mode))
+                                .overflow_y_scroll()
                                 .flex()
-                                .flex_col()
-                                .gap(px(28.))
-                                .child(header)
-                                .child(page),
+                                .justify_center()
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .max_w(px(column))
+                                        .px(px(gutter))
+                                        .pt(px(28.))
+                                        .pb(px(48.))
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(24.))
+                                        .children(above)
+                                        .child(page),
+                                ),
                         ).into_any_element() })
                 .children(overlay)
                 .children(mini)
                 .children(floating),
         )
     }
+}
+
+/// The shadow the plate throws into the room: deep and soft in the dark, a breath in the light.
+fn plate_shadow(mode: Mode) -> Vec<gpui::BoxShadow> {
+    let alpha = if mode == Mode::Dark { 0.45 } else { 0.07 };
+    vec![gpui::BoxShadow {
+        color: gpui::hsla(0., 0., 0., alpha),
+        offset: gpui::point(px(0.), px(6.)),
+        blur_radius: px(24.),
+        spread_radius: px(-6.),
+    }]
 }

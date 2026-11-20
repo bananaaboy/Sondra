@@ -32,9 +32,9 @@ impl ServersUi {
             .detach();
             entity
         };
-        let e = cx.new(|cx| TextField::new(cx, colors, "STUN-Server").placeholder("stun:beispiel.de:3478").max_chars(200));
+        let e = cx.new(|cx| TextField::new(cx, colors, "STUN-Server").value_face().placeholder("stun:beispiel.de:3478").max_chars(200));
         let stun = watch(cx, e);
-        let e = cx.new(|cx| TextField::new(cx, colors, "TURN-Server (Relay)").placeholder("turn:beispiel.de:3478").max_chars(200));
+        let e = cx.new(|cx| TextField::new(cx, colors, "TURN-Server (Relay)").value_face().placeholder("turn:beispiel.de:3478").max_chars(200));
         let turn = watch(cx, e);
         let e = cx.new(|cx| TextField::new(cx, colors, "Benutzername").max_chars(100));
         let user = watch(cx, e);

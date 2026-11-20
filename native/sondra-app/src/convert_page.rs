@@ -231,15 +231,14 @@ impl Shell {
         let c = ui.c;
         let s = &self.convert;
         let busy = s.run.is_some();
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Umwandeln"));
-        page = page.child(ui.prose("Dateien in ein anderes Format bringen — Ton, Video, Bild. Gerechnet wird auf Ihrem Gerät; keine Datei wird hochgeladen."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Umwandeln", "Dateien in ein anderes Format bringen — Ton, Video, Bild. Gerechnet wird auf Ihrem Gerät; keine Datei wird hochgeladen."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
         // The files.
         let choose = {
             let me = me.clone();
-            ui.button("umwandeln-dateien", if s.files.is_empty() { "Dateien wählen" } else { "Andere Dateien wählen" }).disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_convert_files(cx)))
+            ui.button("umwandeln-dateien", if s.files.is_empty() { "Dateien wählen" } else { "Andere Dateien wählen" }).primary_when(s.files.is_empty()).disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_convert_files(cx)))
         };
         let mut head = div().flex().flex_wrap().items_center().gap(px(12.)).child(choose);
         if !s.files.is_empty() {

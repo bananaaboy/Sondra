@@ -404,8 +404,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let d = &self.devices;
-        let mut page = div().flex().flex_col().gap(px(24.)).max_w(px(760.)).child(ui.heading("Ihre Geräte"));
-        page = page.child(ui.prose("Dateien von hier direkt auf Ihr Handy, Ihren Laptop oder einen anderen Rechner — und zurück. Gefunden werden die Geräte über Ihr Google-Konto; die Dateien gehen von Gerät zu Gerät, verschlüsselt und im selben WLAN, ohne das Netz zu verlassen."));
+        let mut page = div().flex().flex_col().gap(px(24.)).max_w(px(760.)).child(ui.page_head("Ihre Geräte", "Dateien von hier direkt auf Ihr Handy, Ihren Laptop oder einen anderen Rechner — und zurück. Gefunden werden die Geräte über Ihr Google-Konto; die Dateien gehen von Gerät zu Gerät, verschlüsselt und im selben WLAN, ohne das Netz zu verlassen."));
         let Some(setup) = d.setup.as_ref().filter(|s| s.configured) else {
             return page.child(ui.notice(NoticeKind::Info, "Hier nicht eingerichtet: Geräte finden sich über Google Drive, und in dieser Fassung ist Google Drive nicht eingerichtet.")).into_any_element();
         };

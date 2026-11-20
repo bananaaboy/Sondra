@@ -79,7 +79,7 @@ Check ($null -ne (Named 'Sondra' $null)) 'the wordmark is read as Sondra'
 Check ($null -ne (Named 'Datei ausw*hlen' $CT::Button)) 'the way in has its button'
 Check ($null -ne (Named 'Von Adresse laden' $CT::Button)) 'and the other one'
 foreach ($tab in @('Start', 'Merkliste', 'Ordner', 'Abspielen', 'Herunterladen')) {
-    Check ($null -ne (Named $tab $CT::Button)) "the tab $tab is a button by name"
+    Check ($null -ne (Named $tab $CT::Button)) "the place $tab is a button by name"
 }
 
 # The Merkliste: empty at first (the app was started on an empty data folder), a series typed in, the step
@@ -166,24 +166,16 @@ if ($null -ne $ordner -and $demo) {
     }
 }
 
-# A group of tabs is a menu: open it, find its tools, choose one.
-$group = Named 'Aufnehmen' $CT::Button
-Check ($null -ne $group) 'the group Aufnehmen is in the row'
-if ($null -ne $group) {
-    Check (Invoke-It $group) 'it can be invoked'
-    # (Every tool has a page of its own now.)
-    $screen = Wait-For 'Bildschirm' $CT::MenuItem
-    Check ($null -ne $screen) 'its menu appeared, with Bildschirm as a menu item'
-    foreach ($tool in @('Handy spiegeln', 'Mikrofon')) {
-        Check ($null -ne (Named $tool $CT::MenuItem)) "the menu holds $tool"
-    }
-    if ($null -ne $screen) {
-        Check (Invoke-It $screen) 'a menu item can be invoked'
-        $heading = Wait-For 'Bildschirm aufnehmen' $CT::Text
-        Check ($null -ne $heading) 'the tool opened: its heading is on the page'
-        Check ($null -ne (Wait-For 'Aufnehmen * Bildschirm' $CT::Button)) 'the group names the tool chosen in it'
-        Check (Wait-Gone 'Mikrofon' $CT::MenuItem) 'the menu shut by the choice'
-    }
+# The rack: every tool is a place of its own, one invoke away — no menu in between.
+foreach ($tool in @('Bildschirm', 'Handy spiegeln', 'Mikrofon', 'Umwandeln', 'Spuren trennen')) {
+    Check ($null -ne (Named $tool $CT::Button)) "the rack holds $tool as a button"
+}
+$screen = Named 'Bildschirm' $CT::Button
+if ($null -ne $screen) {
+    Check (Invoke-It $screen) 'a place in the rack can be invoked'
+    $heading = Wait-For 'Bildschirm aufnehmen' $CT::Text
+    Check ($null -ne $heading) 'the tool opened: its heading is on the page'
+    Check ($null -eq (Named 'Bildschirm' $CT::MenuItem)) 'and no menu was needed'
 }
 
 # Back to the start, then the search by keyboard.
@@ -200,19 +192,8 @@ if ($null -ne $field) {
     Check ($null -ne (Named 'Werkzeuge durchsuchen' $CT::Edit)) 'the field is still there'
 }
 
-# A menu shuts with Escape.
-$bearbeiten = Named 'Bearbeiten' $CT::Button
-if ($null -ne $bearbeiten) {
-    [void](Invoke-It $bearbeiten)
-    $item = Wait-For 'Umwandeln' $CT::MenuItem
-    Check ($null -ne $item) 'another group opens its menu'
-    Start-Sleep -Milliseconds 400
-    [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
-    Check (Wait-Gone 'Umwandeln' $CT::MenuItem) 'Escape shuts it'
-}
-
-# Leave a menu open for the picture.
-$group = Named 'Ton' $CT::Button
+# Leave a tool open for the picture.
+$group = Named 'Mischen' $CT::Button
 if ($null -ne $group) { [void](Invoke-It $group) }
 Start-Sleep -Seconds 1
 

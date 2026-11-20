@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    deferred, div, point, prelude::*, px, AnyElement, App, BoxShadow, FocusHandle, MouseButton,
+    deferred, div, prelude::*, px, AnyElement, App, FocusHandle, MouseButton,
     SharedString, Window,
 };
 use sondra_a11y::{accessible, Role};
@@ -74,18 +74,13 @@ impl RenderOnce for Dialog {
             .gap(px(16.))
             .p(px(24.))
             .rounded(px(radius::DIALOG))
-            .bg(c.raised)
+            .bg(c.canvas)
             .border_1()
-            .border_color(c.line)
+            .border_color(c.plate_edge)
             .font_family(family::SANS)
             .text_size(px(size::BODY))
             .text_color(c.prose)
-            .shadow(vec![BoxShadow {
-                color: gpui::hsla(0., 0., 0., 0.2),
-                offset: point(px(0.), px(12.)),
-                blur_radius: px(32.),
-                spread_radius: px(0.),
-            }])
+            .shadow(crate::ui::float_shadow())
             // A click on the card is not a click on the dim.
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_key_down(move |event, window, cx| match event.keystroke.key.as_str() {
@@ -127,7 +122,7 @@ impl RenderOnce for Dialog {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .bg(gpui::hsla(0., 0., 0., 0.45))
+                    .bg(gpui::hsla(0., 0., 0., 0.55))
                     // Nothing behind it is clicked while it is open.
                     .occlude()
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {

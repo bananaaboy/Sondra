@@ -60,7 +60,7 @@ pub struct ReceiveState {
 
 impl ReceiveState {
     pub fn new(cx: &mut Context<Shell>, colors: sondra_ui::Colors) -> ReceiveState {
-        let field = cx.new(|cx| TextField::new(cx, colors, "Link der Liste").placeholder("Link oder Teil einer Liste einfügen").max_chars(40_000));
+        let field = cx.new(|cx| TextField::new(cx, colors, "Link der Liste").value_face().placeholder("Link oder Teil einer Liste einfügen").max_chars(40_000));
         cx.subscribe(&field, |shell: &mut Shell, _, event: &FieldEvent, cx| {
             if *event == FieldEvent::Submitted {
                 shell.receive_read_field(cx);

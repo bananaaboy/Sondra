@@ -351,8 +351,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let a = &self.audio;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Ton bearbeiten"));
-        page = page.child(ui.prose("Ziehen Sie über die Welle, um eine Stelle zu wählen; die Werkzeuge gelten für sie, ohne Auswahl für die ganze Datei. Jeder Schritt steht im Verlauf und lässt sich zurücknehmen. Geschrieben wird erst mit „Speichern“, die Ausgangsdatei bleibt, wie sie war."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Ton bearbeiten", "Ziehen Sie über die Welle, um eine Stelle zu wählen; die Werkzeuge gelten für sie, ohne Auswahl für die ganze Datei. Jeder Schritt steht im Verlauf und lässt sich zurücknehmen. Geschrieben wird erst mit „Speichern“, die Ausgangsdatei bleibt, wie sie war."));
         if let Some(error) = &a.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

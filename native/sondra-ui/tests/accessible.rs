@@ -185,7 +185,7 @@ fn activating_a_button_runs_it_and_a_disabled_one_cannot_be_run(cx: &mut TestApp
 }
 
 #[test]
-fn the_palettes_are_the_web_apps_and_dark_is_not_an_inversion() {
+fn the_palettes_keep_the_web_apps_colours_and_dark_is_not_an_inversion() {
     use sondra_ui::{DARK, LIGHT};
     let hex = |c: gpui::Rgba| {
         format!(
@@ -195,10 +195,14 @@ fn the_palettes_are_the_web_apps_and_dark_is_not_an_inversion() {
             (c.b * 255.0).round() as u8
         )
     };
-    assert_eq!(hex(LIGHT.canvas), "f8faf8");
+    // The booth (20.11.2026): the web app's forest ink and mint, the plate a step above the room.
+    assert_eq!(hex(LIGHT.canvas), "f9fbf9");
     assert_eq!(hex(LIGHT.ink), "0b4a22");
-    assert_eq!(hex(DARK.canvas), "0a110d");
+    assert_eq!(hex(DARK.canvas), "111a14");
     assert_eq!(hex(DARK.ink), "a6ecb9");
+    let lum = |c: gpui::Rgba| c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+    assert!(lum(DARK.room) < lum(DARK.canvas), "in the dark the room is darker than the lit plate");
+    assert!(lum(LIGHT.room) < lum(LIGHT.canvas), "with the lights up as well");
     // The stage is the same neutral dark in both: it takes no part in a change of theme.
     assert_eq!(hex(LIGHT.stage_ink), hex(DARK.stage_ink));
     assert_eq!(hex(LIGHT.stage_accent), hex(DARK.stage_accent));

@@ -78,40 +78,31 @@ fn the_chosen_theme_is_kept_and_taken_again(cx: &mut TestAppContext) {
     });
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("Thema.json");
-    // No choice yet: the system's theme (the test window is light), and nothing written.
+    // No choice yet: dark, and nothing written.
     let mut w = open_with_memory(cx, file.clone());
-    assert!(w.colors().iter().all(|c| *c == LIGHT));
-    assert!(!file.exists());
-    w.press(Role::Button, "Dunkles Thema");
     assert!(w.colors().iter().all(|c| *c == DARK));
-    drop(w);
-    // A new window with the same file starts dark; choosing light again is kept as well.
-    let mut w = open_with_memory(cx, file.clone());
-    assert!(w.colors().iter().all(|c| *c == DARK), "the choice was not taken");
+    assert!(!file.exists());
     w.press(Role::Button, "Helles Thema");
+    assert!(w.colors().iter().all(|c| *c == LIGHT));
+    drop(w);
+    // A new window with the same file starts light; choosing dark again is kept as well.
+    let mut w = open_with_memory(cx, file.clone());
+    assert!(w.colors().iter().all(|c| *c == LIGHT), "the choice was not taken");
+    w.press(Role::Button, "Dunkles Thema");
     drop(w);
     let mut w = open_with_memory(cx, file.clone());
-    assert!(w.colors().iter().all(|c| *c == LIGHT));
+    assert!(w.colors().iter().all(|c| *c == DARK));
 }
 
 #[gpui::test]
-fn the_system_switch_is_followed_until_the_person_chooses(cx: &mut TestAppContext) {
-    use gpui::WindowAppearance;
+fn the_first_start_is_dark_whatever_the_system_says(cx: &mut TestAppContext) {
     cx.update(|cx| {
         fonts::load(cx);
         bind_keys(cx);
     });
+    // The test window reports a light system; the booth starts with the lights down all the same.
     let dir = tempfile::tempdir().unwrap();
     let mut w = open_with_memory(cx, dir.path().join("Thema.json"));
-    assert!(w.colors().iter().all(|c| *c == LIGHT));
-    // Evening: the system goes dark and so does the window.
-    w.shell.update(w.cx, |shell, cx| shell.system_appearance_changed(WindowAppearance::Dark, cx));
-    w.draw();
     assert!(w.colors().iter().all(|c| *c == DARK));
-    w.shell.update(w.cx, |shell, cx| shell.system_appearance_changed(WindowAppearance::Light, cx));
-    assert!(w.colors().iter().all(|c| *c == LIGHT));
-    // Once the person chose, the system does not decide any more.
-    w.press(Role::Button, "Dunkles Thema");
-    w.shell.update(w.cx, |shell, cx| shell.system_appearance_changed(WindowAppearance::Light, cx));
-    assert!(w.colors().iter().all(|c| *c == DARK), "the choice stays");
+    assert!(w.seen.borrow().last().unwrap().find(Role::Button, "Helles Thema").is_some(), "light is one switch away");
 }

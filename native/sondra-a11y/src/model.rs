@@ -96,15 +96,47 @@ impl Snapshot {
         self.nodes.iter().find(|node| node.id == id)
     }
 
-    /// The first node of this role with this name — for tests and for finding one's place.
+    /// The node of this role with this name — for tests and for finding one's place. When the page and the
+    /// navigation both have one (the rack's place „Umwandeln“ beside the page's own button „Umwandeln“),
+    /// the one on the page: that is what someone looking for an action means. `find_in_navigation` asks
+    /// for the other.
     pub fn find(&self, role: Role, label: &str) -> Option<&NodeInfo> {
+        let mut named = self.nodes.iter().filter(|node| {
+            node.role == role
+                && node
+                    .label
+                    .as_ref()
+                    .is_some_and(|l| AsRef::<str>::as_ref(l) == label)
+        });
+        let first = named.next()?;
+        if !self.in_navigation(first) {
+            return Some(first);
+        }
+        Some(named.find(|node| !self.in_navigation(node)).unwrap_or(first))
+    }
+
+    /// The node of this role with this name inside a navigation landmark (the rack).
+    pub fn find_in_navigation(&self, role: Role, label: &str) -> Option<&NodeInfo> {
         self.nodes.iter().find(|node| {
             node.role == role
                 && node
                     .label
                     .as_ref()
                     .is_some_and(|l| AsRef::<str>::as_ref(l) == label)
+                && self.in_navigation(node)
         })
+    }
+
+    fn in_navigation(&self, node: &NodeInfo) -> bool {
+        let mut at = node.parent;
+        while let Some(id) = at {
+            let Some(parent) = self.node(id) else { return false };
+            if parent.role == Role::Navigation {
+                return true;
+            }
+            at = parent.parent;
+        }
+        false
     }
 
     /// The whole tree, ready for AccessKit.

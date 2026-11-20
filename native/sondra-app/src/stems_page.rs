@@ -369,8 +369,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let s = &self.stems;
-        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(860.)).child(ui.heading("Spuren trennen"));
-        page = page.child(ui.prose("Gesang, Schlagzeug, Bass und der Rest: ein Lied wird in seine Spuren zerlegt, ohne Netz und ohne Modell: Rechnen am Spektrum trennt, was gleichmässig klingt, von dem, was anschlägt, und die Mitte des Bildes vom Rand. Ergebnis sind vier Spuren und das Lied ohne Gesang."));
+        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(860.)).child(ui.page_head("Spuren trennen", "Gesang, Schlagzeug, Bass und der Rest: ein Lied wird in seine Spuren zerlegt, ohne Netz und ohne Modell: Rechnen am Spektrum trennt, was gleichmässig klingt, von dem, was anschlägt, und die Mitte des Bildes vom Rand. Ergebnis sind vier Spuren und das Lied ohne Gesang."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

@@ -265,8 +265,7 @@ impl Shell {
         let me: Entity<Shell> = cx.entity();
         let c = ui.c;
         let m = &self.mix;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Stimme und Musik mischen"));
-        page = page.child(ui.prose("Legt eine Stimme über Musik. Sobald jemand spricht, tritt die Musik von selbst zurück und kommt danach wieder. Die Originale bleiben, wie sie sind; die Mischung liegt neben der Stimme."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Stimme und Musik mischen", "Legt eine Stimme über Musik. Sobald jemand spricht, tritt die Musik von selbst zurück und kommt danach wieder. Die Originale bleiben, wie sie sind; die Mischung liegt neben der Stimme."));
         if let Some(error) = &m.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

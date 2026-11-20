@@ -105,38 +105,6 @@ fn stepping_wraps_and_tools_slide_in_from_the_side_of_their_tab() {
 }
 
 #[test]
-fn what_does_not_fit_goes_behind_more_from_the_end_and_the_chosen_one_stays() {
-    let widths = [60.0, 90.0, 70.0, 90.0, 110.0, 70.0, 100.0, 60.0, 90.0];
-    let all = fit_row(&widths, 2.0, 60.0, 2000.0, 0);
-    assert_eq!(all.hidden, Vec::<usize>::new());
-    assert_eq!(all.shown.len(), 9);
-
-    let narrow = fit_row(&widths, 2.0, 60.0, 420.0, 0);
-    assert!(!narrow.hidden.is_empty());
-    assert_eq!(*narrow.hidden.last().unwrap(), 8, "the tools go first");
-    assert!(narrow.shown.contains(&0));
-    let used: f32 = narrow.shown.iter().map(|i| widths[*i]).sum::<f32>()
-        + 2.0 * narrow.shown.len() as f32
-        + 60.0;
-    assert!(used <= 420.0 + 2.0, "it fits: {used}");
-    let mut every: Vec<_> = narrow.shown.iter().chain(&narrow.hidden).copied().collect();
-    every.sort();
-    assert_eq!(every, (0..9).collect::<Vec<_>>(), "nothing is lost");
-
-    // A tool from the end of the row stays visible when it is the chosen one.
-    let chosen = fit_row(&widths, 2.0, 60.0, 420.0, 8);
-    assert!(chosen.shown.contains(&8));
-    assert!(!chosen.hidden.contains(&8));
-}
-
-#[test]
-fn a_row_too_narrow_for_anything_keeps_the_chosen_entry() {
-    let fit = fit_row(&[100.0, 100.0], 2.0, 60.0, 50.0, 1);
-    assert_eq!(fit.shown, vec![1]);
-    assert_eq!(fit.hidden, vec![0]);
-}
-
-#[test]
 fn the_sheet_grows_in_steps_and_stops() {
     use sondra_app::layout::*;
     assert_eq!(shell_width(1024.0), 1280.0);
@@ -144,8 +112,8 @@ fn the_sheet_grows_in_steps_and_stops() {
     assert_eq!(shell_width(2560.0), 1840.0);
     assert_eq!(shell_width(5000.0), 1840.0);
     assert_eq!(
-        [390.0, 700.0, 1100.0, 1500.0].map(columns),
+        [400.0, 700.0, 1000.0, 1300.0].map(columns_for),
         [2, 3, 4, 5],
-        "more room is more tiles, not wider ones"
+        "more room on the plate is more tiles, not wider ones"
     );
 }

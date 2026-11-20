@@ -4,7 +4,7 @@
 //! and tells a screen reader its name, its value and when it has the focus.
 //!
 //! Look (`DESIGN.md`): field white, a rule-coloured ring that turns ink on focus, the value in the face
-//! of entered things (Courier Prime), small text, 8 × 12 px of padding, rounded like a control.
+//! of the interface (Barlow; Courier Prime for values, `value_face`), small text, 8 × 12 px of padding, rounded like a control.
 
 use std::ops::Range;
 
@@ -115,6 +115,8 @@ pub struct TextField {
     max_chars: Option<usize>,
     /// A password: shown as dots, not copied, not told to a screen reader.
     secret: bool,
+    /// What is typed is a value the machine reads (an address, a code, a server): set in Courier Prime.
+    value_face: bool,
 }
 
 impl EventEmitter<FieldEvent> for TextField {}
@@ -142,6 +144,7 @@ impl TextField {
             is_selecting: false,
             max_chars: None,
             secret: false,
+            value_face: false,
         }
     }
 
@@ -151,6 +154,12 @@ impl TextField {
     }
 
     /// Shows the text as dots and keeps it out of the clipboard and the screen reader.
+    /// Set what is typed in the face of entered values (Courier Prime): addresses, codes, servers. A search
+    /// or a name stays in the interface's face — mono is not a costume for „technical“.
+    pub fn value_face(mut self) -> Self {
+        self.value_face = true;
+        self
+    }
     pub fn secret(mut self) -> Self {
         self.secret = true;
         self
@@ -841,15 +850,15 @@ impl Render for TextField {
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
-            .px(px(12.))
-            .py(px(8.))
+            .px(px(10.))
+            .py(px(6.))
             .rounded(px(radius::NAV))
             .bg(c.raised)
             .border_1()
             // The ring turns ink on focus; the field does not move.
             .border_color(if focused { c.ink } else { c.rule })
-            .font_family(family::VALUE)
-            .text_size(px(text_size::SMALL))
+            .font_family(if self.value_face { family::VALUE } else { family::SANS })
+            .text_size(px(if self.value_face { text_size::SMALL } else { text_size::BODY }))
             .line_height(px(text_size::SMALL * 1.5))
             .child(TextElement { field: entity });
 
