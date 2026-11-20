@@ -24,6 +24,9 @@ pub struct Project {
     /// The tool that was open (`PanelId` of the website), if any.
     pub panel: Option<String>,
     pub assets: Vec<Asset>,
+    /// What the website kept per tool (its Merkliste, settings), as it stood: never read here, only carried along so
+    /// that a project opened and saved again loses nothing of it.
+    pub tool_states: Option<Value>,
 }
 
 fn u16_at(b: &[u8], at: usize) -> Option<u16> {
@@ -122,7 +125,8 @@ pub fn read(bytes: &[u8], source: &str) -> Result<Project, String> {
             assets.push(Asset { name: name.to_owned(), mime: meta["mime"].as_str().unwrap_or("application/octet-stream").to_owned(), bytes: data.clone() });
         }
     }
-    Ok(Project { panel: manifest["panel"].as_str().map(str::to_owned), assets })
+    let tool_states = manifest.get("toolStates").filter(|v| v.as_object().is_some_and(|o| !o.is_empty())).cloned();
+    Ok(Project { panel: manifest["panel"].as_str().map(str::to_owned), assets, tool_states })
 }
 
 /// What the website would write for a name: no character Windows refuses.
@@ -189,6 +193,11 @@ fn mime_of(name: &str) -> &'static str {
 /// Writes a project the website opens: the files are copied from where they lie, one after the other, never all
 /// held in memory. `panel` is the website's `PanelId` of the tool to open. Returns the number of files.
 pub fn write(out: &Path, files: &[PathBuf], panel: &str, date: [u32; 6]) -> Result<usize, String> {
+    write_with(out, files, panel, date, None)
+}
+
+/// `write`, with the tool states of a project that was opened (`Project::tool_states`) written back as they were.
+pub fn write_with(out: &Path, files: &[PathBuf], panel: &str, date: [u32; 6], tool_states: Option<&Value>) -> Result<usize, String> {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
     let mut metas = Vec::new();
     let mut zipped = Vec::new();
@@ -202,7 +211,7 @@ pub fn write(out: &Path, files: &[PathBuf], panel: &str, date: [u32; 6]) -> Resu
         }));
         zipped.push(ZipFile { name: entry, path: path.clone(), date });
     }
-    let manifest = json!({ "format": "sondra-project", "version": 1, "savedAt": now, "panel": panel, "activeAssetId": null, "assets": metas, "toolStates": {} });
+    let manifest = json!({ "format": "sondra-project", "version": 1, "savedAt": now, "panel": panel, "activeAssetId": null, "assets": metas, "toolStates": tool_states.cloned().unwrap_or_else(|| json!({})) });
     let json_path = out.with_extension("sondra.json.tmp");
     std::fs::write(&json_path, serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     zipped.insert(0, ZipFile { name: "project.json".into(), path: json_path.clone(), date });

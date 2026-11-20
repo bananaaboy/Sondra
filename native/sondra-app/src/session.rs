@@ -31,6 +31,8 @@ pub struct Session {
     /// The file whose name is being changed (its place in the list), and what was wrong with the last name typed.
     pub renaming: Option<usize>,
     pub rename_problem: Option<String>,
+    /// The tool states of the website project that was opened last, carried into the next project written.
+    tool_states: Option<serde_json::Value>,
     store: Option<FileStore>,
 }
 
@@ -414,6 +416,7 @@ impl Shell {
         }
         let files = self.session.files.clone();
         let panel = self.panel().meta().id;
+        let tool_states = self.session.tool_states.clone();
         let dir = crate::store::downloads_dir();
         let base = files[0].file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Sondra-Projekt".into());
         self.session.said = None;
@@ -423,7 +426,7 @@ impl Shell {
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
                 let out = sondra_media::run::unique_path(&dir, &base, "sondra");
                 let date = crate::zip_ui::file_date(&files[0]);
-                let n = sondra_media::project::write(&out, &files, panel, date)?;
+                let n = sondra_media::project::write_with(&out, &files, panel, date, tool_states.as_ref())?;
                 Ok((out, n))
             },
             |shell, result, cx| {
@@ -442,7 +445,7 @@ impl Shell {
         self.session.said = None;
         Self::in_background(
             cx,
-            move || -> Result<(Vec<PathBuf>, Option<String>), String> {
+            move || -> Result<(Vec<PathBuf>, Option<String>, Option<serde_json::Value>), String> {
                 let bytes = std::fs::read(&path).map_err(|e| format!("{name}: {e}"))?;
                 let project = sondra_media::project::read(&bytes, &name)?;
                 let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Projekt".into());
@@ -455,12 +458,13 @@ impl Shell {
                     std::fs::write(&file, &asset.bytes).map_err(|e| e.to_string())?;
                     files.push(file);
                 }
-                Ok((files, project.panel))
+                Ok((files, project.panel, project.tool_states))
             },
             |shell, result, cx| {
                 match result {
-                    Ok((files, panel)) => {
+                    Ok((files, panel, tool_states)) => {
                         let n = files.len();
+                        shell.session.tool_states = tool_states;
                         shell.session.add(files);
                         shell.session.open = n > 0;
                         shell.session.said = Some(Ok(format!("Projekt geöffnet: {n} {}", if n == 1 { "Datei" } else { "Dateien" })));

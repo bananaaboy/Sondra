@@ -71,3 +71,20 @@ fn a_written_project_has_the_websites_manifest_and_comes_back_whole() {
     assert!(write(&broken, &[dir.path().join("fehlt.wav")], "start", [2026, 1, 1, 0, 0, 0]).is_err());
     assert!(!broken.exists());
 }
+
+#[test]
+fn what_the_website_kept_per_tool_travels_through_a_project_opened_and_saved_again() {
+    use sondra_media::project::write_with;
+    let dir = tempfile::tempdir().unwrap();
+    let a = dir.path().join("a.wav");
+    std::fs::write(&a, vec![1u8; 100]).unwrap();
+    let states = serde_json::json!({ "merkliste": [{ "id": "x", "title": "Frieren", "watched": { "1": [1, 2] } }], "converter": { "format": "mp3" } });
+    let out = dir.path().join("mit.sondra");
+    write_with(&out, &[a.clone()], "umwandeln", [2026, 11, 20, 9, 30, 0], Some(&states)).unwrap();
+    let read_back = read(&std::fs::read(&out).unwrap(), "mit.sondra").unwrap();
+    assert_eq!(read_back.tool_states, Some(states));
+    // A project written without any has none, as the website's empty `{}` reads.
+    let plain = dir.path().join("ohne.sondra");
+    write(&plain, &[a], "umwandeln", [2026, 11, 20, 9, 30, 0]).unwrap();
+    assert_eq!(read(&std::fs::read(&plain).unwrap(), "ohne.sondra").unwrap().tool_states, None);
+}
