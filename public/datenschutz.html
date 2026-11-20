@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Datenschutz · Sondra</title>
-    <meta name="description" content="Welche Daten Sondra verarbeitet, wo und wie lange — für die Website und die Windows-App." />
+    <meta name="description" content="Welche Daten Sondra verarbeitet, wo und wie lange — für die Website, die Windows-Apps und die Android-App." />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./fonts.css" />
     <script>
@@ -78,7 +78,7 @@
       <a class="back" href="./">Zurück zu Sondra</a>
 
       <h1>Datenschutz</h1>
-      <p class="stand">Stand: 28. Oktober 2026 · gilt für die Website, die Windows-App und die Android-App</p>
+      <p class="stand">Stand: 20. November 2026 · gilt für die Website, die Windows-App, das native Windows-Programm und die Android-App</p>
 
       <p class="kurz">
         Sondra bearbeitet Ihre Dateien auf Ihrem Gerät. Nichts davon wird zu uns hochgeladen. Es gibt keine
@@ -464,13 +464,93 @@
       </section>
 
       <section>
+        <h2>Das native Windows-Programm</h2>
+        <p>
+          Neben der Windows-App gibt es Sondra als eigenes Programm für Windows, ohne Browser darin. Es rechnet
+          auf Ihrem Rechner: Dateien, die Sie öffnen, umwandeln, schneiden oder abspielen, werden nicht
+          hochgeladen. Es sendet keine Nutzungsdaten, Absturzberichte oder Statistiken, hat keine Konten und
+          zeigt keine Werbung. Es öffnet keinen Port, der von außen erreichbar wäre; was es an Diensten auf Ihrem
+          Rechner startet, hört nur auf <code>127.0.0.1</code>.
+        </p>
+        <ul>
+          <li>
+            <strong>Was auf Ihrem Rechner liegt.</strong> In <code>%APPDATA%\Sondra\native</code> (die
+            portable Fassung: im Ordner <code>Sondra-Daten</code> neben ihrer Datei) legt es Ihre Merkliste, die
+            Einstellungen, die zuletzt benutzten Ordner, Stellen im Player und eine Protokolldatei
+            (<code>dienst.log</code>, Startzeiten und Fehlermeldungen) ab. Die Dateiliste der letzten Sitzung
+            speichert es nur, wenn Sie „Sitzung auf diesem Gerät behalten“ einschalten. Das Protokoll bleibt
+            auf Ihrem Rechner. Löschen Sie den Ordner, ist alles entfernt.
+          </li>
+          <li>
+            <strong>Schlüssel.</strong> Zugangsschlüssel zu Diensten, die Sie verbinden (Google Drive, Anytype,
+            AniList, der Schlüssel Ihres Geräts), speichert es mit der Datenschutzschnittstelle von Windows
+            verschlüsselt und zeigt sie nie an. „Trennen“ löscht sie.
+          </li>
+          <li>
+            <strong>Updates.</strong> Die mit dem Setup installierte Fassung fragt 20 Sekunden nach dem Start und
+            danach alle sechs Stunden bei GitHub (GitHub Inc., USA) nach der Datei <code>latest-nativ.yml</code>;
+            GitHub sieht dabei Ihre IP-Adresse. Eine neue Fassung lädt es im Hintergrund, prüft sie über ihre
+            SHA-512-Prüfsumme und installiert sie erst auf Ihren Klick. Die portable Fassung und die aus dem
+            Microsoft Store fragen nicht selbst.
+          </li>
+          <li>
+            <strong>Herunterladen.</strong> Die Adresse, die Sie eingeben, ruft Ihr Rechner direkt ab; die Quelle
+            sieht Ihre IP-Adresse. Für Videoportale benutzt es yt-dlp, wenn es da ist. Fehlt es, bietet das
+            Programm an, es zu laden — erst auf Ihren Klick, von den Veröffentlichungen von yt-dlp auf GitHub,
+            und es prüft die Datei gegen die dort veröffentlichte SHA-256-Prüfsumme; stimmt sie nicht, bleibt
+            nichts liegen. Zertifikate werden immer geprüft.
+          </li>
+          <li>
+            <strong>Untertitel erzeugen.</strong> Das Sprachmodell (Whisper) lädt es einmalig von Hugging Face
+            (USA); dabei sieht Hugging Face Ihre IP-Adresse und welches Modell Sie wählen. Der Ton verlässt Ihren
+            Rechner nicht. „Eigene Trennmodelle“ (ONNX) bringen Sie selbst mit, es werden keine geladen.
+          </li>
+          <li>
+            <strong>Serie suchen und AniList.</strong> Drücken Sie im Feld „Serie hinzufügen“ auf „Suchen“, geht
+            der Name an AniList (graphql.anilist.co). Haben Sie AniList verbunden, geht außerdem
+            jeder abgehakte Fortschritt an Ihr Konto dort, und Ihre Anime-Liste lässt sich von dort einlesen.
+            Das Zugriffstoken tragen Sie selbst ein; es wird nie wieder angezeigt. Ohne Verbindung fragt
+            Sondra AniList nie.
+          </li>
+          <li>
+            <strong>Google Drive, Geräte, Anytype.</strong> Es gilt, was oben dazu steht: Drive nur auf Ihre
+            Anmeldung und nur für das, was Sondra selbst ablegt (<code>drive.file</code>); Ihre Geräte finden sich
+            über Ihr Drive, Dateien gehen direkt zwischen ihnen, ein STUN- oder TURN-Server wird nur benutzt, wenn
+            Sie selbst einen eintragen; Anytype und Discord spricht es nur auf Ihrem eigenen Rechner an.
+          </li>
+          <li>
+            <strong>Neue Folgen melden</strong> (aus, bis Sie es einschalten): eine Minute nach dem Start und dann
+            alle drei Stunden fragt es für jede Serie „Am Schauen“ mit AniWorld-Adresse bei AniWorld nach der
+            neuesten Folge; AniWorld sieht dabei Ihre IP-Adresse. Das Ergebnis bleibt in der Merkliste auf Ihrem
+            Rechner. Die Meldung selbst zeigt Windows an; sie verlässt den Rechner nicht.
+          </li>
+          <li>
+            <strong>Handy spiegeln.</strong> Der Bildschirm und der Ton Ihres Handys gehen über das USB-Kabel
+            direkt an das Programm. Den Schlüssel, mit dem sich Ihr Rechner am Handy ausweist, behält es in
+            seinem Datenordner; der Server auf dem Handy (scrcpy) liegt dem Programm bei und wird nur für die
+            Dauer der Verbindung dorthin gelegt.
+          </li>
+          <li>
+            <strong>Ordner und Merkliste teilen.</strong> Ordner liest es nur, wenn Sie sie wählen, und löscht
+            nur nach Rückfrage (zuerst in den „Sondra-Papierkorb“). Beim Teilen steht die Liste im Link oder in
+            der Datei selbst; es lädt nichts hoch.
+          </li>
+        </ul>
+        <p>
+          Alles andere bleibt offline. Die Windows-App mit der Oberfläche der Website gibt es weiter; für sie gilt
+          der Abschnitt davor.
+        </p>
+      </section>
+
+      <section>
         <h2>Weitergabe</h2>
         <p>
           Wir verkaufen keine Daten und geben keine weiter, ausser an die oben genannten Stellen und soweit es
           für die jeweilige Funktion nötig ist. Vercel und GitHub sitzen in den USA. Die Übermittlung dorthin
           stützt sich auf die Garantien, die beide in ihren Auftragsverarbeitungsverträgen bieten
           (Standardvertragsklauseln). Hugging Face (ebenfalls USA) erhält nur beim ersten Laden des
-          Untertitel-Modells Ihre IP-Adresse, wie jeder Server, von dem Ihr Browser eine Datei abruft. Google
+          Untertitel-Modells Ihre IP-Adresse, wie jeder Server, von dem Ihr Browser oder Ihr Programm eine Datei abruft.
+          AniList erhält nur, was Sie in der Merkliste selbst suchen oder nach der Verbindung abhaken. Google
           erhält nur, was Sie selbst in Ihr Google Drive schicken, und das in Ihr eigenes Konto — mit verbundenen
           Geräten dazu deren kleine Einträge und die Nachrichten, mit denen sie sich Übertragungen anbieten.
         </p>
