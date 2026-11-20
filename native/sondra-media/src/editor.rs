@@ -144,6 +144,19 @@ impl Editor {
         Ok(format!("Rauschprofil aus {} s gelernt", seconds(to - from)))
     }
 
+    /// Learns the noise from the stretch of the take that is quietest and flattest, found by itself
+    /// (`noise_floor`, the website's „Lokale KI“); says where it lay. A stretch shorter than the least a profile
+    /// needs is taken longer, to the end of the take at most.
+    pub fn learn_noise_auto(&mut self) -> Result<(String, (f64, f64)), String> {
+        let total = edit::duration_of(&self.audio);
+        let (from, mut to) = crate::noise_floor::detect_noise_floor_region(&self.audio);
+        if to - from < 0.2 {
+            to = (from + 0.2).min(total);
+        }
+        self.learn_noise(Some((from, to)))?;
+        Ok((format!("Rauschprofil von selbst gefunden und gelernt: {} bis {} s", seconds(from), seconds(to)), (from, to)))
+    }
+
     /// Does one edit. `range` is the selection in seconds, or none for the whole take. Says in a short
     /// phrase what was done (it is what the history shows).
     pub fn apply(&mut self, op: Op, range: Option<(f64, f64)>) -> Result<String, String> {

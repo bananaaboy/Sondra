@@ -145,6 +145,13 @@ fn the_refusals_come_as_words_and_the_take_is_played_and_written(cx: &mut TestAp
     w.shell.update(w.cx, |shell, cx| shell.audio_learn_noise(cx));
     w.draw();
     assert!(w.said("Wählen Sie eine Stelle, an der nur das Rauschen zu hören ist."), "{:?}", w.labels());
+    // „Lokale KI“ finds the stretch by itself and learns from it; the chosen stretch shows where it lay.
+    w.press(Role::Button, "Rauschprofil automatisch erkennen und lernen");
+    assert!(w.said("Rauschprofil von selbst gefunden und gelernt"), "{:?}", w.labels());
+    assert!(w.shell.read_with(w.cx, |s, _| s.audio_selection()).is_some());
+    assert!(w.tree().find(Role::Button, "Rauschen neu lernen").is_some(), "now there is a profile");
+    w.shell.update(w.cx, |shell, cx| shell.audio_select(None, cx));
+    w.draw();
 
     // Playing: the button turns into „Anhalten“ and back.
     w.press(Role::Button, "Anhören");

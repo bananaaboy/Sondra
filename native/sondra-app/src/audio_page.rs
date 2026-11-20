@@ -215,6 +215,21 @@ impl Shell {
         cx.notify();
     }
 
+    /// „Lokale KI“: the stretch to learn the noise from is found by the program, not chosen.
+    pub fn audio_learn_noise_auto(&mut self, cx: &mut Context<Self>) {
+        if let Some(editor) = &mut self.audio.editor {
+            match editor.learn_noise_auto() {
+                Ok((said, (from, to))) => {
+                    self.audio.selection = Some((from, to));
+                    self.audio.said = Some(said);
+                    self.audio.error = None;
+                }
+                Err(e) => self.audio.error = Some(e),
+            }
+        }
+        cx.notify();
+    }
+
     pub fn audio_undo(&mut self, cx: &mut Context<Self>) {
         self.audio.player = None;
         if let Some(editor) = &mut self.audio.editor {
@@ -498,8 +513,11 @@ impl Shell {
                 let me2 = me.clone();
                 let learn = ui.button("rauschen-lernen", if editor.has_noise_profile() { "Rauschen neu lernen" } else { "Rauschen lernen" }).small().disabled(busy || a.selection.is_none()).on_click(move |_, app| me2.update(app, |shell, cx| shell.audio_learn_noise(cx)));
                 panel = panel
-                    .child(ui.prose("Wählen Sie eine Stelle, an der nur das Rauschen zu hören ist (mindestens eine Fünftelsekunde), und lassen Sie es lernen. Danach lässt es sich abziehen — in der Auswahl oder überall."))
-                    .child(group("Rauschen", vec![learn.into_any_element()]))
+                    .child(ui.prose("Wählen Sie eine Stelle, an der nur das Rauschen zu hören ist (mindestens eine Fünftelsekunde), und lassen Sie es lernen — oder lassen Sie Sondra die ruhigste Stelle selbst suchen („Lokale KI“, rechnet auf diesem Gerät). Danach lässt es sich abziehen — in der Auswahl oder überall."))
+                    .child(group("Rauschen", vec![learn.into_any_element(), {
+                        let me3 = me.clone();
+                        ui.button("rauschen-lokale-ki", "Lokale KI").small().disabled(busy).accessible_name("Rauschprofil automatisch erkennen und lernen").on_click(move |_, app| me3.update(app, |shell, cx| shell.audio_learn_noise_auto(cx))).into_any_element()
+                    }]))
                     .child(group("Rauschen entfernen, bis zu", [6.0, 12.0, 18.0].iter().map(|d| op(format!("rauschen-{d}"), format!("{} dB", db(*d).replace('−', "")), Op::RemoveNoise { max_cut_db: *d }).disabled(busy || !editor.has_noise_profile()).into_any_element()).collect()))
                     .child(ui.prose("Klicks und Knackser: alte Platten, Kabelknacken, Schmatzen am Mikrofon. Schläge und Konsonanten bleiben. Gesucht wird in der ganzen Datei."))
                     .child(group("Klicks entfernen", [("sanft", "Sanft", ClickStrength::Soft), ("mittel", "Mittel", ClickStrength::Medium), ("stark", "Stark", ClickStrength::Strong)].iter().map(|(id, label, strength)| op(format!("klicks-{id}"), label.to_string(), Op::RemoveClicks(*strength)).into_any_element()).collect()))

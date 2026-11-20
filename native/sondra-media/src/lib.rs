@@ -40,6 +40,7 @@ pub mod key;
 pub mod loudness;
 pub mod midi;
 pub mod mic;
+pub mod noise_floor;
 pub mod onsets;
 pub mod pattern;
 pub mod roll;
