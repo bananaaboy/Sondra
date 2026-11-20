@@ -136,27 +136,18 @@ fn a_later_episode_is_announced_once_and_ansehen_opens_the_series(cx: &mut TestA
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
     assert!(w.shell.read_with(w.cx, |s, _| s.announcements()).is_empty());
     assert!(w.tree().find(Role::Heading, "Frieren").is_some(), "the page of the series");
-}
 
-#[gpui::test]
-fn with_the_switch_off_nothing_is_looked_at(cx: &mut TestAppContext) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("Merkliste.sqlite");
-    std::fs::write(&path, write_sqlite(&list()).unwrap()).unwrap();
-    cx.update(|cx| {
-        fonts::load(cx);
-        bind_keys(cx);
+    // A notification of the system says the same as the card, and a click on it opens the series too.
+    newest.store(15, Ordering::SeqCst);
+    w.round();
+    w.shell.update(w.cx, |shell, cx| {
+        shell.go(Panel::Start, cx);
     });
-    let (shell, cx) = cx.add_window_view(move |window, cx| {
-        let mut shell = Shell::new(window, cx);
-        shell.open_merkliste(MerkStore::at(path), cx);
-        shell.new_episodes_for_test(false);
-        shell.download_with(Arc::new(|| site(12)), true, std::env::temp_dir());
-        shell
-    });
-    cx.run_until_parked();
-    shell.update(cx, |shell, cx| shell.new_episodes_round(cx));
-    assert!(!shell.read_with(cx, |s, _| s.new_episodes_running()));
-    let frieren = shell.read_with(cx, |s, _| s.merk_items()).into_iter().find(|i| i.id == "fr").unwrap();
-    assert!(frieren.online_available.is_none());
+    w.draw();
+    let lines = w.shell.read_with(w.cx, |s, _| s.attention_lines_for_test());
+    assert_eq!(lines, [("Neue Folge: Frieren".to_string(), "Staffel 1, Folge 15 ist auf AniWorld erschienen.".to_string())]);
+    w.shell.read_with(w.cx, |s, _| s.tray_notification_clicked_for_test());
+    w.draw();
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
+    assert!(w.shell.read_with(w.cx, |s, _| s.announcements()).is_empty(), "the card is gone once it is opened");
 }

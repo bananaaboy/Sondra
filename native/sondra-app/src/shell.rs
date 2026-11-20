@@ -95,6 +95,9 @@ pub struct Shell {
     pub(crate) old_app: crate::old_app::OldApp,
     /// How many things waited for the person at the last frame (new episodes, offers of files).
     pub(crate) attention_seen: usize,
+    /// The tray icon (the program's start only); what a click on it or on a notification asks for.
+    tray: Option<sondra_tray::Tray>,
+    tray_asks: std::sync::Arc<TrayAsks>,
     pub update: crate::updater_ui::Updates,
     pub palette: crate::palette::Palette,
     /// Google Drive for the saves of results; `None` where nothing can be kept.
@@ -114,6 +117,31 @@ pub struct Shell {
     pub(crate) news: Option<String>,
     /// Where the chosen theme is kept; without a choice the system's own is followed.
     theme_store: Option<crate::store::FileStore>,
+}
+
+/// What the tray's thread leaves for the window's: a click on a notification.
+#[derive(Default)]
+struct TrayAsks {
+    notification: std::sync::atomic::AtomicBool,
+}
+
+struct TrayHandler {
+    asks: std::sync::Arc<TrayAsks>,
+    window: Option<isize>,
+}
+
+impl sondra_tray::Handler for TrayHandler {
+    fn open(&self, from_notification: bool) {
+        if let Some(handle) = self.window {
+            crate::system::bring_forward(handle);
+        }
+        if from_notification {
+            self.asks.notification.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    fn quit(&self) {
+        std::process::exit(0);
+    }
 }
 
 const THEME_KEY: &str = "sondra:theme";
@@ -209,6 +237,8 @@ impl Shell {
             merk_drive: crate::merk_drive::MerkDrive::load(),
             old_app: Default::default(),
             attention_seen: 0,
+            tray: None,
+            tray_asks: Default::default(),
             update: crate::updater_ui::Updates::default(),
             palette,
             drive: crate::drive_hub::Drive::production(),
@@ -353,13 +383,57 @@ impl Shell {
         self.news_rounds.notes.len() + offers
     }
 
-    /// More waiting than at the last frame while the window is behind others: the taskbar button flashes.
-    fn flash_for_news(&mut self, window: &Window) {
+    /// What waits, as a notification would say it (title, line), the announced episodes first.
+    fn attention_lines(&self) -> Vec<(String, String)> {
+        let mut lines: Vec<(String, String)> = self.news_rounds.notes.iter().map(|n| (format!("Neue Folge: {}", n.title), format!("Staffel {}, Folge {} ist auf AniWorld erschienen.", n.season, n.episode))).collect();
+        if let Some(e) = &self.devices.engine {
+            for t in e.snapshot().transfers.iter().filter(|t| t.state == sondra_devices::engine::State::Asking) {
+                lines.push((format!("„{}“ möchte etwas senden", t.peer_name), crate::devices_page::say(t)));
+            }
+        }
+        lines
+    }
+
+    /// More waiting than at the last frame while the window is behind others: the taskbar button flashes and, where
+    /// there is a tray, a notification says what it is. A click on the notification brings that thing forward.
+    fn flash_for_news(&mut self, window: &Window, cx: &mut Context<Self>) {
         let count = self.attention_count();
         if count > self.attention_seen && !window.is_window_active() {
             crate::system::flash_taskbar(window);
+            if let Some(tray) = &self.tray {
+                let lines = self.attention_lines();
+                for (title, text) in lines.iter().skip(self.attention_seen.min(lines.len())) {
+                    tray.notify(title, text);
+                }
+            }
         }
         self.attention_seen = count;
+        // A click on a notification: the newest thing that waits.
+        if self.tray_asks.notification.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            if let Some(id) = self.news_rounds.notes.last().map(|n| n.id.clone()) {
+                self.open_announced(&id, cx);
+            } else if self.devices.engine.as_ref().is_some_and(|e| e.snapshot().transfers.iter().any(|t| t.state == sondra_devices::engine::State::Asking)) {
+                self.go(Panel::Devices, cx);
+            }
+        }
+    }
+
+    /// For tests: what the tray would leave when a notification is clicked.
+    pub fn tray_notification_clicked_for_test(&self) {
+        self.tray_asks.notification.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// For tests: what a notification would say now (title, line).
+    pub fn attention_lines_for_test(&self) -> Vec<(String, String)> {
+        self.attention_lines()
+    }
+
+    /// Puts the icon in the notification area (Windows) and takes its clicks. The program's start calls this; a test
+    /// does not, so no test touches the real tray.
+    pub fn start_tray(&mut self, window: &Window) {
+        let handle = crate::system::window_handle(window);
+        let handler = std::sync::Arc::new(TrayHandler { asks: self.tray_asks.clone(), window: handle });
+        self.tray = sondra_tray::Tray::start("Sondra", handler);
     }
 
     /// Every text field of every page. One left out stays in the colours of the other theme and cannot be read.
@@ -1042,7 +1116,7 @@ impl Render for Shell {
         }
         self.player_merkliste_tick();
         self.update_discord();
-        self.flash_for_news(window);
+        self.flash_for_news(window, cx);
         // A download in progress is drawn again and again: the bar moves.
         if self.download.job.is_some() || self.convert.run.is_some() || self.video.run.is_some() {
             let me = cx.entity_id();

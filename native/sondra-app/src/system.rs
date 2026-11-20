@@ -151,3 +151,26 @@ pub fn visible_windows() -> Vec<String> {
         Vec::new()
     }
 }
+
+/// The native window handle (Windows), to bring the window forward from another thread.
+pub fn window_handle(window: &gpui::Window) -> Option<isize> {
+    #[cfg(windows)]
+    {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let handle = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| HasWindowHandle::window_handle(window).ok().map(|h| h.as_raw())));
+        if let Ok(Some(RawWindowHandle::Win32(h))) = handle {
+            return Some(h.hwnd.get());
+        }
+        None
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        None
+    }
+}
+
+/// Brings the window forward, restored if it was minimised. May be called from any thread.
+pub fn bring_forward(handle: isize) {
+    sondra_tray::bring_forward(handle);
+}
