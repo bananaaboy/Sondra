@@ -174,3 +174,18 @@ pub fn window_handle(window: &gpui::Window) -> Option<isize> {
 pub fn bring_forward(handle: isize) {
     sondra_tray::bring_forward(handle);
 }
+
+/// The window stays above all others (`true`) or takes its place among them again. Quiet where the platform has no
+/// such call.
+pub fn set_always_on_top(window: &gpui::Window, on: bool) {
+    #[cfg(windows)]
+    {
+        if let Some(handle) = window_handle(window) {
+            sondra_tray::set_always_on_top(handle, on);
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (window, on);
+    }
+}

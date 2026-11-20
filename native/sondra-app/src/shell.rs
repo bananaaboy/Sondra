@@ -97,6 +97,9 @@ pub struct Shell {
     pub(crate) attention_seen: usize,
     /// The tray icon (the program's start only); what a click on it or on a notification asks for.
     tray: Option<sondra_tray::Tray>,
+    /// The little window of „Bild im Bild“, while it is open.
+    pub(crate) pip: Option<gpui::WindowHandle<crate::pip::PipView>>,
+    pub(crate) pip_opening: bool,
     tray_asks: std::sync::Arc<TrayAsks>,
     pub update: crate::updater_ui::Updates,
     pub palette: crate::palette::Palette,
@@ -238,6 +241,8 @@ impl Shell {
             old_app: Default::default(),
             attention_seen: 0,
             tray: None,
+            pip: None,
+            pip_opening: false,
             tray_asks: Default::default(),
             update: crate::updater_ui::Updates::default(),
             palette,
@@ -1107,12 +1112,16 @@ impl Render for Shell {
         self.sync_download_chrome(window, cx);
 
         // What plays goes on whichever page is open; the picture is taken only for the page that shows it.
+        // With „Bild im Bild“ open, that window keeps the clock (it is drawn when this one is minimised, too).
         let showing = self.panel == Panel::Player;
-        if self.player.tick(window, showing) {
+        if self.pip.is_none() && self.player.tick(window, showing) {
             // Draw again at the next frame. (`request_animation_frame` asks the view being drawn, which a
             // window's root view is not yet while it renders itself — it is asked by name instead.)
             let me = cx.entity_id();
             window.on_next_frame(move |_, cx| cx.notify(me));
+        }
+        for old in std::mem::take(&mut self.player.retired) {
+            let _ = window.drop_image(old);
         }
         self.player_merkliste_tick();
         self.update_discord();
@@ -1130,6 +1139,7 @@ impl Render for Shell {
         // The picture over the whole window (or screen): the page is nothing but it, in dark colours.
         let immersive = self.panel == Panel::Player && self.player.playback.is_some() && self.player.size.immersive();
         self.sync_fullscreen(window);
+        self.sync_pinned(window);
         if immersive && !self.focus.contains_focused(window, cx) {
             // Over the whole window the controls come and go; the keys must have somewhere to land.
             let handle = self.focus.clone();

@@ -62,6 +62,13 @@ pub struct PlayerState {
     pub pause_on_minimize: bool,
     /// When the window was asked to take the whole screen (`None`: it was not).
     pub screen: Option<std::time::Instant>,
+    /// „Immer im Vordergrund“: the window stays above the others (the person's wish) and whether the system was told.
+    pub pinned: bool,
+    /// The little window of „Bild im Bild“ takes the pictures; the pictures it replaced are let go of in the main
+    /// window as well, which drew them too.
+    pub elsewhere: bool,
+    pub retired: Vec<Arc<RenderImage>>,
+    pub pin_told: bool,
     /// When the mouse or a key last asked for the controls.
     pub activity: std::time::Instant,
     track: usize,
@@ -153,6 +160,10 @@ impl PlayerState {
             size: PlayerSize::Normal,
             pause_on_minimize: false,
             screen: None,
+            pinned: false,
+            elsewhere: false,
+            retired: Vec::new(),
+            pin_told: false,
             activity: std::time::Instant::now(),
             track: 0,
             external_cues: Vec::new(),
@@ -471,6 +482,9 @@ impl PlayerState {
                 if let Some(buffer) = RgbaImage::from_raw(frame.width, frame.height, frame.bgra) {
                     let new = Arc::new(RenderImage::new(smallvec![ImageFrame::new(buffer)]));
                     if let Some(old) = self.image.replace(new) {
+                        if self.elsewhere {
+                            self.retired.push(old.clone());
+                        }
                         let _ = window.drop_image(old);
                     }
                 }
@@ -775,6 +789,20 @@ impl Shell {
         }
     }
 
+    /// The window stays above the others while the person wants it (a film in a corner, work beside it); told to
+    /// the system only when that changes.
+    pub(crate) fn sync_pinned(&mut self, window: &Window) {
+        if self.player.pinned != self.player.pin_told {
+            crate::system::set_always_on_top(window, self.player.pinned);
+            self.player.pin_told = self.player.pinned;
+        }
+    }
+
+    /// For tests: whether the window is to stay above the others.
+    pub fn player_pinned(&self) -> bool {
+        self.player.pinned
+    }
+
     /// The page: the stage, the controls and the list.
     pub(crate) fn player_page(&self, ui: Ui, width: f32, height: f32, cx: &mut Context<Self>) -> AnyElement {
         let me = cx.entity();
@@ -977,7 +1005,17 @@ impl Shell {
             }
             row
         };
-        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(look_button).child(marks_button).child(sleep_button).child(sizes).child(mute).child(volume);
+        let pin = {
+            let me = me.clone();
+            let on = p.pinned;
+            ui.chip("immer-oben", "Immer im Vordergrund", on).accessible_name(if on { "Immer im Vordergrund beenden" } else { "Immer im Vordergrund" }).on_click(move |_, app| Self::player_do(&me, app, move |p| p.pinned = !on))
+        };
+        let pip = {
+            let me = me.clone();
+            let on = self.pip_open();
+            ui.chip("bild-im-bild", "Bild im Bild", on).accessible_name(if on { "Bild im Bild beenden" } else { "Bild im Bild" }).on_click(move |_, app| me.update(app, |shell, cx| shell.pip_switch(cx)))
+        };
+        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(look_button).child(marks_button).child(sleep_button).child(sizes).child(pin).child(pip).child(mute).child(volume);
         if immersive {
             // The picture is all there is. The controls lie over its foot and go when nobody asks for them.
             let dialogs = p.marks_open || p.sleep_open || p.tracks_open || p.look_open;

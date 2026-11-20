@@ -31,6 +31,20 @@ pub fn bring_forward(handle: isize) {
     let _ = handle;
 }
 
+/// Keeps a window above all others (`true`) or lets it sink to its place (`false`), by its native handle.
+pub fn set_always_on_top(handle: isize, on: bool) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
+        let hwnd = HWND(handle as *mut _);
+        // SAFETY: the handle is of the program's main window; position and size stay as they are.
+        let _ = unsafe { SetWindowPos(hwnd, Some(if on { HWND_TOPMOST } else { HWND_NOTOPMOST }), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) };
+    }
+    #[cfg(not(windows))]
+    let _ = (handle, on);
+}
+
 pub struct Tray {
     #[cfg(windows)]
     inner: imp::Inner,

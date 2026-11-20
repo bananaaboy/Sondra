@@ -621,6 +621,13 @@ fn the_picture_has_four_sizes_and_over_the_whole_window_the_controls_go_when_nob
     assert!(w.tree().find(Role::Button, "Pause").is_some(), "the controls are there");
     w.press(Role::Button, "Kinomodus (T)");
     assert!(w.tree().find(Role::Heading, "Liste").is_some());
+    // The window can be kept above all others, and let go again.
+    assert!(!w.cx.read_entity(&w.shell, |s, _| s.player_pinned()));
+    w.press(Role::Button, "Immer im Vordergrund");
+    assert!(w.cx.read_entity(&w.shell, |s, _| s.player_pinned()));
+    assert!(w.tree().find(Role::Button, "Immer im Vordergrund beenden").is_some());
+    w.press(Role::Button, "Immer im Vordergrund beenden");
+    assert!(!w.cx.read_entity(&w.shell, |s, _| s.player_pinned()));
     // Over the whole window: no header, the controls over the picture.
     w.press(Role::Button, "Bild über das ganze Fenster (W)");
     w.watch(0.2);
@@ -703,4 +710,49 @@ fn a_film_goes_on_behind_another_tool_and_a_small_bar_says_so_and_stops_it_and_l
     w.press(Role::Button, "Zum Player");
     assert!(w.tree().find(Role::Heading, "Abspielen").is_some(), "back on the page of the player");
     assert!(w.tree().find(Role::Button, "Zum Player").is_none());
+}
+
+#[gpui::test]
+fn the_film_can_go_in_a_small_window_of_its_own_that_keeps_the_clock_and_comes_back(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let one = film(tmp.path(), "bild.mp4", 30);
+    let mut w = open(cx);
+    // No film, no window.
+    assert!(!w.cx.read_entity(&w.shell, |s, _| s.pip_open()));
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![one], cx));
+    w.watch(0.3);
+    assert_eq!(w.cx.update(|_, cx| cx.windows().len()), 1);
+    w.press(Role::Button, "Bild im Bild");
+    w.cx.run_until_parked();
+    assert!(w.cx.read_entity(&w.shell, |s, _| s.pip_open()));
+    assert_eq!(w.cx.update(|_, cx| cx.windows().len()), 2, "a window of its own");
+    assert!(w.tree().find(Role::Button, "Bild im Bild beenden").is_some());
+    // The small window keeps the clock: the film goes on although the page is no longer what ticks.
+    let drive = |w: &mut Window, seconds: f64| {
+        let until = std::time::Instant::now() + Duration::from_secs_f64(seconds);
+        while std::time::Instant::now() < until {
+            let shell = w.shell.clone();
+            w.cx.update(|window, cx| shell.update(cx, |s, _| { s.pip_drive(window); }));
+            std::thread::sleep(Duration::from_millis(8));
+        }
+    };
+    let before = w.position();
+    drive(&mut w, 0.6);
+    let after = w.position();
+    assert!(after > before + 0.2, "the film stood still: {before} -> {after}");
+    // A click on the picture pauses it; a second one goes on.
+    w.shell.update(w.cx, |shell, cx| shell.pip_toggle(cx));
+    drive(&mut w, 0.1);
+    let held = w.position();
+    drive(&mut w, 0.4);
+    assert!((w.position() - held).abs() < 0.05, "it went on while paused");
+    w.shell.update(w.cx, |shell, cx| shell.pip_toggle(cx));
+    drive(&mut w, 0.5);
+    assert!(w.position() > held + 0.2, "it did not go on");
+    w.press(Role::Button, "Bild im Bild beenden");
+    assert!(!w.cx.read_entity(&w.shell, |s, _| s.pip_open()));
+    assert_eq!(w.cx.update(|_, cx| cx.windows().len()), 1);
 }
