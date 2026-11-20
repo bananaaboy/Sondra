@@ -172,3 +172,17 @@ fn a_program_that_is_not_installed_does_not_look_and_a_failed_look_is_shown_only
     w.shell.update(w.cx, |shell, cx| shell.update_check(true, cx));
     w.wait_for(|s| matches!(s, Status::Failed(_)));
 }
+
+#[gpui::test]
+fn while_the_new_version_loads_a_bar_says_how_far_it_is(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some("http://127.0.0.1:9".into()), dir.path().to_path_buf());
+    w.shell.update(w.cx, |shell, cx| {
+        shell.update.status = Status::Downloading { version: "1.0.1".into(), fraction: Some(0.4) };
+        shell.open_whats_new(cx);
+    });
+    w.draw();
+    assert!(w.said("Sondra 1.0.1 wird geladen"));
+    let bar = w.tree().nodes.iter().find(|n| n.label.as_ref().is_some_and(|l| l.contains("Sondra 1.0.1: geladen"))).cloned().expect("the bar");
+    assert_eq!(bar.value.as_ref().map(|v| AsRef::<str>::as_ref(v)), Some("40 %"));
+}

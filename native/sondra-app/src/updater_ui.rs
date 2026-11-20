@@ -175,6 +175,12 @@ impl Shell {
                 ui.button("update-suchen", "Nach Updates suchen").small().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.update_check(true, cx)))
             }
         };
-        Some(div().flex().flex_wrap().items_center().gap(px(12.)).pb(px(8.)).child(ui.prose(says)).child(button).into_any_element())
+        let line = div().flex().flex_wrap().items_center().gap(px(12.)).child(ui.prose(says)).child(button);
+        // While the new version is loaded, how far it is.
+        let bar = match &self.update.status {
+            Status::Downloading { version, fraction } => Some(div().w(px(320.)).child(ui.bar("update-laden", *fraction, format!("Sondra {version}: geladen")))),
+            _ => None,
+        };
+        Some(div().flex().flex_col().gap(px(6.)).pb(px(8.)).child(line).children(bar).into_any_element())
     }
 }
