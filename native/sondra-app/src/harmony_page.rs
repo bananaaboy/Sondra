@@ -212,7 +212,7 @@ impl Shell {
         }
         let choose = {
             let me = me.clone();
-            ui.button("harmonie-datei", if h.file.is_some() { "Andere Datei wählen" } else { "Datei wählen" }).disabled(h.working).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_harmony_file(cx)))
+            ui.button("harmonie-datei", if h.file.is_some() { "Andere Datei wählen" } else { "Datei wählen" }).primary_when(h.file.is_none()).disabled(h.working).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_harmony_file(cx)))
         };
         let mut head = div().flex().flex_wrap().items_center().gap(px(12.)).child(choose);
         if let Some(file) = &h.file {

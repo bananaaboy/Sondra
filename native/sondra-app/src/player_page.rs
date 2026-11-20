@@ -864,8 +864,15 @@ impl Shell {
                 stage.child(div().flex().flex_col().items_center().gap(px(6.)).child(div().text_color(c.stage_ink).text_size(px(size::SUBHEADING)).child(name.clone())).child(div().text_color(c.stage_muted).child("Ton")))
             }
         };
+        if offer_next {
+            // The changeover cue of a projection booth: a small ring in the picture's upper right corner
+            // says the reel is about to end — here, that the next episode is offered just below it.
+            stage = stage.child(
+                div().absolute().right(px(18.)).top(px(16.)).size(px(14.)).rounded(px(sondra_ui::radius::PILL)).border_2().border_color(c.stage_accent).bg(gpui::Rgba { a: 0.35, ..c.stage_accent }),
+            );
+        }
         if skip_opening || offer_next {
-            let mut offers = div().absolute().right(px(16.)).top(px(16.)).flex().flex_col().items_end().gap(px(8.));
+            let mut offers = div().absolute().right(px(16.)).top(px(if offer_next { 40. } else { 16. })).flex().flex_col().items_end().gap(px(8.));
             if skip_opening {
                 let me = me.clone();
                 offers = offers.child(ui.button("vorspann-ueberspringen", "Vorspann überspringen").small().on_click(move |_, app| {

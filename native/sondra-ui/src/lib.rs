@@ -13,9 +13,9 @@ pub mod theme;
 pub mod ui;
 
 pub use dialog::Dialog;
-pub use icons::{action_icon, panel_icon, Assets};
+pub use icons::{action_icon, panel_icon, ui_icon, Assets};
 pub use menu::MenuItem;
 pub use text_field::{bind_keys, FieldEvent, TextField};
 pub use theme::{family, radius, size, Colors, Mode, DARK, LIGHT};
 pub use slider::Slider;
-pub use ui::{Button, Chip, Notice, NoticeKind, Tab, Tile, Ui};
+pub use ui::{float_shadow, Button, Chip, Notice, NoticeKind, RackItem, Tab, Tile, Ui};

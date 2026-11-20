@@ -1,6 +1,6 @@
-//! The palette, the type and the radii of `DESIGN.md` and `src/styles/theme.css` — the web app's own
-//! numbers, in light and dark. Dark is its own mapping with its own contrast pass, not an inversion: ink
-//! and its ground swap roles, and the one saturated value has to be the light one.
+//! The palette, the type and the radii of the native app („Vorführkabine“, 20.11.2026): the room is dark,
+//! only the plate the page sits on is lit, and mint is the projector's light. The colours are the web
+//! app's family (Waldschwarz, forest ink, mint); the light theme is the same booth with the lights up.
 
 use gpui::Rgba;
 
@@ -16,26 +16,32 @@ pub const fn hex(value: u32) -> Rgba {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Colors {
-    /// The ground of the whole app.
+    /// The room: the window's own ground and the rack on its left. The darkest step in the dark theme.
+    pub room: Rgba,
+    /// The plate the page sits on („Leinwand“): one step lighter than the room, the lit thing.
     pub canvas: Rgba,
-    /// Fields and the one plate that has its own mechanics.
+    /// The catch-light on the plate's upper edge, and the edge of what floats over it.
+    pub plate_edge: Rgba,
+    /// Fields: one step above the plate.
     pub raised: Rgba,
-    /// Inset blocks, the hover ground of rows.
+    /// Inset blocks, tiles, quiet buttons, the hover ground of rows.
     pub panel_soft: Rgba,
     pub panel_mid: Rgba,
     pub panel_strong: Rgba,
     /// Reserved for one statement: something here does not run locally.
     pub panel_cool: Rgba,
-    /// The only saturated colour, the only ink: "you can do something here".
+    /// The projector's light, the only saturated colour: what can be done, and where you are.
     pub ink: Rgba,
     /// Hover of filled ink, nowhere else.
     pub ink_hover: Rgba,
     pub on_ink: Rgba,
+    /// Ink thinned onto the ground: a chosen filter, the chosen place in the rack.
+    pub ink_wash: Rgba,
     pub prose: Rgba,
     pub muted: Rgba,
     /// A hairline: the rule between rows, fields and blocks.
     pub line: Rgba,
-    /// The heavier line that opens a section, and the ring of a quiet control.
+    /// The edge of a field and of a quiet control.
     pub rule: Rgba,
     pub faint: Rgba,
     /// The editors' stage, dark and neutral in both themes.
@@ -48,19 +54,23 @@ pub struct Colors {
     pub stage_accent: Rgba,
 }
 
+/// „Saallicht an“: the booth with the lights up. The plate is near-white, the room a grey-green step below.
 pub const LIGHT: Colors = Colors {
-    canvas: hex(0xf8faf8),
+    room: hex(0xe7ede8),
+    canvas: hex(0xf9fbf9),
+    plate_edge: hex(0xffffff),
     raised: hex(0xffffff),
-    panel_soft: hex(0xe0f0e5),
-    panel_mid: hex(0xd2e8d9),
+    panel_soft: hex(0xe6f1e9),
+    panel_mid: hex(0xd8e9dd),
     panel_strong: hex(0xc8e1cf),
     panel_cool: hex(0xe5eff3),
     ink: hex(0x0b4a22),
     ink_hover: hex(0x073517),
     on_ink: hex(0xffffff),
+    ink_wash: hex(0xd3eadb),
     prose: hex(0x111a14),
     muted: hex(0x4e6355),
-    line: hex(0xcbd7cf),
+    line: hex(0xd5dfd8),
     rule: hex(0xa7bca9),
     faint: hex(0x799081),
     stage: hex(0x15181a),
@@ -71,33 +81,39 @@ pub const LIGHT: Colors = Colors {
     stage_accent: hex(0x8fe0a6),
 };
 
+/// The default: the booth with the house lights down. Waldschwarz in steps — room, plate, field, tint —
+/// and mint as the one light. Measured in `tests/contrast.rs`.
 pub const DARK: Colors = Colors {
-    canvas: hex(0x0a110d),
-    raised: hex(0x111a14),
-    panel_soft: hex(0x142019),
-    panel_mid: hex(0x18271e),
-    panel_strong: hex(0x203427),
-    panel_cool: hex(0x15242a),
+    room: hex(0x050806),
+    canvas: hex(0x111a14),
+    plate_edge: hex(0x223328),
+    raised: hex(0x152019),
+    panel_soft: hex(0x18251d),
+    panel_mid: hex(0x1e2f25),
+    panel_strong: hex(0x273b2f),
+    panel_cool: hex(0x13242b),
     ink: hex(0xa6ecb9),
     ink_hover: hex(0xc3f4d0),
     on_ink: hex(0x04100a),
-    prose: hex(0xe4ede6),
-    muted: hex(0xadc2b2),
-    line: hex(0x4a5e50),
-    rule: hex(0x5d7364),
-    faint: hex(0x8ba191),
-    stage: hex(0x0d1011),
-    stage_soft: hex(0x161a1c),
+    ink_wash: hex(0x1c3726),
+    prose: hex(0xe6eee8),
+    muted: hex(0xabc0af),
+    line: hex(0x253629),
+    rule: hex(0x4d6656),
+    faint: hex(0x7f9686),
+    stage: hex(0x0b0e0f),
+    stage_soft: hex(0x151a1b),
     stage_line: hex(0x515a5d),
     stage_ink: hex(0xeef1f0),
     stage_muted: hex(0xaab5b2),
     stage_accent: hex(0x8fe0a6),
 };
 
+/// Dark is the default (the user's word, 20.11.2026); light stays one switch away.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
-    #[default]
     Light,
+    #[default]
     Dark,
 }
 
@@ -110,31 +126,31 @@ impl Mode {
     }
 }
 
-/// Type: a major third (×1.25) from a 16 px body, and nothing between the steps. Three sizes carry the
-/// whole interface: `MICRO` for the uppercase labels only, `SMALL` for dense tool chrome, `BODY` for prose.
+/// Type at desktop size: 14 px for running text and controls, 13 px for dense chrome, and page titles far
+/// above them — rank by scale contrast, not by colour.
 pub mod size {
     pub const MICRO: f32 = 11.0;
     pub const SMALL: f32 = 13.0;
-    pub const BODY: f32 = 16.0;
-    pub const SUBHEADING: f32 = 20.0;
-    pub const HEADING_SM: f32 = 25.0;
-    pub const HEADING: f32 = 39.0;
+    pub const BODY: f32 = 14.0;
+    pub const SUBHEADING: f32 = 17.0;
+    pub const HEADING_SM: f32 = 26.0;
+    pub const HEADING: f32 = 36.0;
 }
 
-/// Rounding, only through these: blocks, tiles and popovers take `CARD`; controls take `NAV`, a little
-/// tighter so a button inside a block sits concentric with it.
+/// Rounding, only through these: the plate and blocks take `CARD`; controls take `NAV`; the window's
+/// floating things take `DIALOG`.
 pub mod radius {
-    pub const DIALOG: f32 = 20.0;
-    pub const CARD: f32 = 16.0;
-    pub const NAV: f32 = 10.0;
+    pub const DIALOG: f32 = 16.0;
+    pub const CARD: f32 = 12.0;
+    pub const PLATE: f32 = 14.0;
+    pub const NAV: f32 = 8.0;
     pub const PILL: f32 = 999.0;
 }
 
-/// The three faces. Public Sans is the printed form; Courier Prime is what the machine entered
-/// afterwards — measured values, file names, timecodes, never mono as a costume; the wordmark is one
-/// word in one face.
+/// The three faces. Barlow is the label on the booth's equipment; Courier Prime is the typed reel label —
+/// measured values, file names, timecodes, never mono as a costume; the wordmark is one word in one face.
 pub mod family {
-    pub const SANS: &str = "Public Sans";
+    pub const SANS: &str = "Barlow";
     pub const VALUE: &str = "Courier Prime";
     pub const WORDMARK: &str = "Cormorant Garamond";
 }

@@ -35,6 +35,9 @@ fn all() -> &'static HashMap<String, Vec<u8>> {
         for (id, inner) in data.actions {
             out.insert(format!("icons/action/{id}.svg"), wrap(&inner));
         }
+        for (id, inner) in UI_MARKS {
+            out.insert(format!("icons/ui/{id}.svg"), wrap(inner));
+        }
         out
     })
 }
@@ -53,6 +56,25 @@ impl AssetSource for Assets {
             .map(|key| SharedString::from(key.clone()))
             .collect())
     }
+}
+
+/// The marks of the window's own chrome, drawn here on the same 16 × 16 grid and stroke as the tools'.
+const UI_MARKS: [(&str, &str); 5] = [
+    // A crescent: the lights go down.
+    ("dunkel", "<path d=\"M13 9.6A5.5 5.5 0 1 1 6.4 3a4.3 4.3 0 0 0 6.6 6.6z\"/>"),
+    // A disc with rays: the lights go up.
+    ("hell", "<circle cx=\"8\" cy=\"8\" r=\"2.8\"/><path d=\"M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1\"/>"),
+    // Two sheets: the files of the session.
+    ("dateien", "<path d=\"M5.5 2.5h4l3 3v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z\"/><path d=\"M9.5 2.5v3h3\"/><path d=\"M3 5v8.5a1 1 0 0 0 1 1h6\"/>"),
+    // A cloud: Google Drive.
+    ("drive", "<path d=\"M4.6 12.5h7a2.7 2.7 0 0 0 .3-5.4 3.9 3.9 0 0 0-7.5-.9A3.2 3.2 0 0 0 4.6 12.5z\"/>"),
+    // A small spark: what is new in this version.
+    ("neu", "<path d=\"M8 2v3.2M8 10.8V14M2 8h3.2M10.8 8H14M4 4l2 2M10 10l2 2M4 12l2-2M10 6l2-2\"/>"),
+];
+
+/// A mark of the window's chrome: `dunkel`, `hell`, `dateien`, `drive`, `neu`.
+pub fn ui_icon(id: &str) -> SharedString {
+    format!("icons/ui/{id}.svg").into()
 }
 
 /// The mark of a tool.

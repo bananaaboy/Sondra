@@ -4,16 +4,17 @@ use std::borrow::Cow;
 
 use gpui::App;
 
-const FILES: [&[u8]; 6] = [
-    include_bytes!("../fonts/PublicSans-Regular.ttf"),
-    include_bytes!("../fonts/PublicSans-SemiBold.ttf"),
-    include_bytes!("../fonts/PublicSans-Bold.ttf"),
+const FILES: [&[u8]; 7] = [
+    include_bytes!("../fonts/Barlow-Regular.ttf"),
+    include_bytes!("../fonts/Barlow-Medium.ttf"),
+    include_bytes!("../fonts/Barlow-SemiBold.ttf"),
+    include_bytes!("../fonts/Barlow-Bold.ttf"),
     include_bytes!("../fonts/CourierPrime-Regular.ttf"),
     include_bytes!("../fonts/CourierPrime-Bold.ttf"),
     include_bytes!("../fonts/CormorantGaramond-Light.ttf"),
 ];
 
-/// Makes Public Sans, Courier Prime and Cormorant Garamond known to the text system. Call once, before
+/// Makes Barlow, Courier Prime and Cormorant Garamond known to the text system. Call once, before
 /// the first window.
 pub fn load(cx: &App) {
     let fonts: Vec<Cow<'static, [u8]>> = FILES.iter().map(|bytes| Cow::Borrowed(*bytes)).collect();

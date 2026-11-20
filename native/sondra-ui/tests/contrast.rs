@@ -66,7 +66,45 @@ const PAIRS: &[Pair] = &[
         ground: |c| c.canvas,
         floor: 60.0,
     },
-    // On the tints: the tile hint is prose, never muted.
+    // The room: the rack's places, its group names, the wordmark.
+    Pair {
+        what: "prose on the room (a hovered place in the rack)",
+        text: |c| c.prose,
+        ground: |c| c.room,
+        floor: 75.0,
+    },
+    Pair {
+        what: "muted on the room (the rack's places and group names)",
+        text: |c| c.muted,
+        ground: |c| c.room,
+        floor: 60.0,
+    },
+    Pair {
+        what: "ink on the room (the wordmark, the chosen place's mark)",
+        text: |c| c.ink,
+        ground: |c| c.room,
+        floor: 75.0,
+    },
+    // The light thinned onto the ground: a chosen filter, the chosen place.
+    Pair {
+        what: "ink on the wash (a chosen chip)",
+        text: |c| c.ink,
+        ground: |c| c.ink_wash,
+        floor: 75.0,
+    },
+    Pair {
+        what: "prose on the wash (the chosen place in the rack)",
+        text: |c| c.prose,
+        ground: |c| c.ink_wash,
+        floor: 75.0,
+    },
+    // On the tints.
+    Pair {
+        what: "muted on a soft tint (tile hint)",
+        text: |c| c.muted,
+        ground: |c| c.panel_soft,
+        floor: 60.0,
+    },
     Pair {
         what: "prose on a soft tint (tile hint, chip)",
         text: |c| c.prose,

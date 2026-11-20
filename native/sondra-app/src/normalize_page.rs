@@ -158,7 +158,7 @@ impl Shell {
         }
         let choose = {
             let me = me.clone();
-            ui.button("lautstaerke-datei", if n.file.is_some() { "Andere Datei wählen" } else { "Datei wählen" }).disabled(n.measuring || n.working).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_normalize_file(cx)))
+            ui.button("lautstaerke-datei", if n.file.is_some() { "Andere Datei wählen" } else { "Datei wählen" }).primary_when(n.file.is_none()).disabled(n.measuring || n.working).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_normalize_file(cx)))
         };
         let mut head = div().flex().flex_wrap().items_center().gap(px(12.)).child(choose);
         if let Some(file) = &n.file {

@@ -233,7 +233,7 @@ pub fn slide_from(from: Panel, to: Panel) -> i32 {
     (to.index() as i32 - from.index() as i32).signum()
 }
 
-/// What the row of tabs shows: a tool on its own, or a group of tools behind one button.
+/// How the rack groups the places: a task on its own, or a group of tools under one heading.
 #[derive(Clone, Copy, Debug)]
 pub enum Entry {
     Single(Panel),
@@ -309,40 +309,3 @@ pub fn entry_of(panel: Panel) -> usize {
     ENTRIES.iter().position(|e| e.holds(panel)).unwrap_or(0)
 }
 
-/// What the row has room for: the entries that stand in it and the ones behind „Mehr“.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Fit {
-    pub shown: Vec<usize>,
-    pub hidden: Vec<usize>,
-}
-
-/// Which entries fit a row `available` wide, given each one's width and the width of „Mehr“. What does not
-/// fit goes behind „Mehr“ from the end — the tools first, the tasks last — and the chosen entry always
-/// stays; nothing is cut off and nothing needs sideways scrolling.
-pub fn fit_row(widths: &[f32], gap: f32, more: f32, available: f32, chosen: usize) -> Fit {
-    let total = |keep: &[usize], with_more: bool| -> f32 {
-        let tabs: f32 = keep.iter().map(|i| widths[*i]).sum::<f32>()
-            + gap * keep.len().saturating_sub(1) as f32;
-        if with_more {
-            tabs + gap + more
-        } else {
-            tabs
-        }
-    };
-    let mut shown: Vec<usize> = (0..widths.len()).collect();
-    if total(&shown, false) <= available {
-        return Fit {
-            shown,
-            hidden: vec![],
-        };
-    }
-    let mut hidden = Vec::new();
-    while total(&shown, true) > available {
-        // From the end, but never the chosen one; if only it is left, it stays alone.
-        let Some(at) = shown.iter().rposition(|i| *i != chosen) else {
-            break;
-        };
-        hidden.insert(0, shown.remove(at));
-    }
-    Fit { shown, hidden }
-}

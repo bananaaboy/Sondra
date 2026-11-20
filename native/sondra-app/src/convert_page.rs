@@ -239,7 +239,7 @@ impl Shell {
         // The files.
         let choose = {
             let me = me.clone();
-            ui.button("umwandeln-dateien", if s.files.is_empty() { "Dateien wählen" } else { "Andere Dateien wählen" }).disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_convert_files(cx)))
+            ui.button("umwandeln-dateien", if s.files.is_empty() { "Dateien wählen" } else { "Andere Dateien wählen" }).primary_when(s.files.is_empty()).disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_convert_files(cx)))
         };
         let mut head = div().flex().flex_wrap().items_center().gap(px(12.)).child(choose);
         if !s.files.is_empty() {

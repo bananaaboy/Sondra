@@ -218,7 +218,7 @@ impl Shell {
     }
 
     /// „Dateien (3)“ in the header, when there are files: it opens the list below.
-    pub(crate) fn session_header_button(&self, ui: &Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub(crate) fn session_header_button(&self, ui: &Ui, compact: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
         let n = self.session.files.len();
         if n == 0 {
             return None;
@@ -226,8 +226,9 @@ impl Shell {
         let me = cx.entity();
         let open = self.session.open;
         Some(
-            ui.button("sitzung", format!("Dateien ({n})"))
-                .small()
+            ui.rack_item("sitzung", format!("Dateien ({n})"), open)
+                .icon(Some(sondra_ui::ui_icon("dateien")))
+                .compact(compact)
                 .accessible_name(if open { format!("Dateien der Sitzung, {n}, schließen") } else { format!("Dateien der Sitzung, {n}") })
                 .on_click(move |_, app| {
                     me.update(app, |shell, cx| {

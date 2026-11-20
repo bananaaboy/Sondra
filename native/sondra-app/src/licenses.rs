@@ -23,7 +23,7 @@ pub const COMPONENTS: [(&str, &str, &str, &str); 9] = [
     ("scrcpy-Server 3.3.3 (Genymobile)", "Apache-2.0", "https://github.com/Genymobile/scrcpy", "Liegt unverändert bei und wird nur für die Dauer der Verbindung auf das Handy gelegt; der Text steht unten."),
     ("webrtc-rs", "MIT oder Apache-2.0", "https://github.com/webrtc-rs/webrtc", "Die direkte Verbindung zwischen Ihren Geräten."),
     ("yt-dlp", "Unlicense (gemeinfrei)", "https://github.com/yt-dlp/yt-dlp", "Nicht mitgeliefert: Sondra holt es nur auf Ihren Klick von yt-dlp selbst und prüft es gegen die veröffentlichte Prüfsumme."),
-    ("Public Sans, Courier Prime, Cormorant", "SIL Open Font License 1.1", "https://fonts.google.com", "Die Schriften der Oberfläche."),
+    ("Barlow, Courier Prime, Cormorant", "SIL Open Font License 1.1", "https://fonts.google.com", "Die Schriften der Oberfläche."),
 ];
 
 impl Shell {

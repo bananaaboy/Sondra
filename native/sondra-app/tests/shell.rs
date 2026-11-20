@@ -55,11 +55,23 @@ impl Window<'_> {
         self.seen.borrow().last().expect("a frame").clone()
     }
     fn press(&mut self, role: Role, label: &str, width: f32) {
-        let id = self
-            .tree()
+        let tree = self.tree();
+        let id = tree
             .find(role, label)
             .unwrap_or_else(|| panic!("{label} is on the screen"))
             .id;
+        self.click(id, width);
+    }
+    /// A place in the rack, even where the page has a button of the same name.
+    fn go(&mut self, label: &str, width: f32) {
+        let id = self
+            .tree()
+            .find_in_navigation(Role::Button, label)
+            .unwrap_or_else(|| panic!("{label} is in the rack"))
+            .id;
+        self.click(id, width);
+    }
+    fn click(&mut self, id: accesskit::NodeId, width: f32) {
         self.cx.update(|window, cx| {
             run_action(
                 ActionRequest {
@@ -94,11 +106,11 @@ fn the_start_page_has_its_headings_its_tabs_and_its_tiles(cx: &mut TestAppContex
     assert!(
         tree.find(Role::Navigation, "Werkzeuge und Aufgaben")
             .is_some(),
-        "the row of tabs is navigation"
+        "the rack is navigation"
     );
     assert!(
-        said(&tree, Role::Button, "Start").starts_with("Geöffnet"),
-        "the chosen tab says so in words (a selectable item is not invocable in UI Automation)"
+        placed(&tree, "Start").starts_with("Geöffnet"),
+        "the chosen place says so in words (a selectable item is not invocable in UI Automation)"
     );
     assert!(
         tree.find(Role::Button, "Start")
@@ -107,7 +119,6 @@ fn the_start_page_has_its_headings_its_tabs_and_its_tiles(cx: &mut TestAppContex
             .is_some(),
         "and it can be pressed"
     );
-    assert!(said(&tree, Role::Button, "Ton").contains("Menü mit 6 Werkzeugen"));
     for tab in [
         "Merkliste",
         "Ordner",
@@ -117,91 +128,42 @@ fn the_start_page_has_its_headings_its_tabs_and_its_tiles(cx: &mut TestAppContex
     ] {
         assert!(tree.find(Role::Button, tab).is_some(), "{tab}");
     }
-    // Two rows of a group at five columns: ten tiles, and the rest behind a button.
+    // Two rows of a group at four columns (the plate beside the rack): eight tiles, the rest behind a button.
     assert!(tree
-        .find(Role::Button, "Noch 7 Werkzeuge für Ton")
+        .find(Role::Button, "Noch 9 Werkzeuge für Ton")
         .is_some());
 }
 
 #[gpui::test]
-fn a_group_tab_opens_its_menu_and_a_choice_goes_there(cx: &mut TestAppContext) {
+fn every_place_is_one_click_in_the_rack(cx: &mut TestAppContext) {
     let mut w = open(cx, 1280.);
-    assert!(w.tree().find(Role::Menu, "Aufnehmen").is_none());
-    w.press(Role::Button, "Aufnehmen", 1280.);
     let tree = w.tree();
-    assert!(
-        tree.find(Role::Menu, "Aufnehmen").is_some(),
-        "the group is a menu"
-    );
-    for tool in ["Bildschirm", "Handy spiegeln", "Mikrofon"] {
-        assert!(tree.find(Role::MenuItem, tool).is_some(), "{tool}");
+    for meta in sondra_app::nav::PANELS.iter() {
+        assert!(tree.find_in_navigation(Role::Button, meta.label).is_some(), "{} stands in the rack", meta.label);
     }
-    // (Every tool has a page of its own now; the tool of the group chosen is named in its tab.)
-    w.press(Role::MenuItem, "Bildschirm", 1280.);
+    assert!(tree.find(Role::Menu, "Aufnehmen").is_none(), "no menu to open first");
+    w.go("Bildschirm", 1280.);
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Screen);
     let tree = w.tree();
-    assert!(
-        tree.find(Role::Menu, "Aufnehmen").is_none(),
-        "a choice shuts the menu"
-    );
-    assert!(
-        tree.find(Role::Button, "Aufnehmen · Bildschirm").is_some(),
-        "the group names the tool chosen in it"
-    );
-    assert!(said(&tree, Role::Button, "Aufnehmen · Bildschirm").starts_with("Geöffnet"));
+    assert!(placed(&tree, "Bildschirm").starts_with("Geöffnet"));
     assert!(tree.find(Role::Heading, "Bildschirm aufnehmen").is_some());
     assert!(
         tree.find(Role::Status, "Dieses Werkzeug gibt es in der neuen App noch nicht. In der Windows-App und auf der Website funktioniert es wie gewohnt.").is_none(),
-        "no tool is left that says it is not built"
+        "the screen recorder is built"
     );
 }
 
 #[gpui::test]
-fn escape_shuts_a_menu(cx: &mut TestAppContext) {
-    let mut w = open(cx, 1280.);
-    w.press(Role::Button, "Bearbeiten", 1280.);
-    assert!(w.tree().find(Role::Menu, "Bearbeiten").is_some());
-    w.cx.simulate_keystrokes("escape");
-    w.draw(1280.);
-    assert!(w.tree().find(Role::Menu, "Bearbeiten").is_none());
-}
-
-#[gpui::test]
-fn what_does_not_fit_stands_behind_more_and_nothing_is_lost(cx: &mut TestAppContext) {
-    let mut w = open(cx, 700.);
+fn a_narrow_window_keeps_every_place_by_its_name(cx: &mut TestAppContext) {
+    let mut w = open(cx, 760.);
     let tree = w.tree();
-    assert!(
-        tree.find(Role::Button, "Mehr").is_some(),
-        "a narrow window has „Mehr“"
-    );
-    assert!(
-        tree.find(Role::Button, "Start").is_some(),
-        "the tasks stay in the row"
-    );
-    assert!(
-        tree.find(Role::Button, "Aufnehmen").is_none(),
-        "the tools went behind it"
-    );
-    w.press(Role::Button, "Mehr", 700.);
-    let tree = w.tree();
-    assert!(tree.find(Role::Menu, "Weitere Werkzeuge").is_some());
-    assert!(
-        tree.find(Role::MenuItem, "Mikrofon").is_some(),
-        "every tool is still reachable"
-    );
-    assert!(tree.find(Role::MenuItem, "Umwandeln").is_some());
-}
-
-#[gpui::test]
-fn the_chosen_tool_is_always_in_the_row(cx: &mut TestAppContext) {
-    let mut w = open(cx, 700.);
-    w.press(Role::Button, "Mehr", 700.);
-    w.press(Role::MenuItem, "Mikrofon", 700.);
-    let tree = w.tree();
-    assert!(
-        tree.find(Role::Button, "Aufnehmen · Mikrofon").is_some(),
-        "even in a narrow window the chosen group stays in the row"
-    );
+    for meta in sondra_app::nav::PANELS.iter() {
+        assert!(tree.find_in_navigation(Role::Button, meta.label).is_some(), "{} is still there, as a mark", meta.label);
+    }
+    assert!(tree.find(Role::Button, "Mehr").is_none(), "nothing stands behind „Mehr“");
+    w.go("Mikrofon", 760.);
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Mic);
+    assert!(placed(&w.tree(), "Mikrofon").starts_with("Geöffnet"));
 }
 
 #[gpui::test]
@@ -211,10 +173,10 @@ fn the_rest_of_a_group_unfolds_and_the_search_finds_by_what_people_type(cx: &mut
         w.tree().find(Role::Button, "Ordner durchsehen").is_none(),
         "the way in is not a tile of a group"
     );
-    w.press(Role::Button, "Noch 7 Werkzeuge für Ton", 1280.);
+    w.press(Role::Button, "Noch 9 Werkzeuge für Ton", 1280.);
     assert!(
         w.tree()
-            .find(Role::Button, "Noch 7 Werkzeuge für Ton")
+            .find(Role::Button, "Noch 9 Werkzeuge für Ton")
             .is_none(),
         "opened whole, the button is gone"
     );
@@ -249,6 +211,13 @@ fn the_rest_of_a_group_unfolds_and_the_search_finds_by_what_people_type(cx: &mut
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Folder);
 }
 
+/// What a screen reader adds to the name of a place in the rack.
+fn placed(tree: &Snapshot, label: &str) -> String {
+    tree.find_in_navigation(Role::Button, label)
+        .and_then(|n| n.description.as_ref().map(|d| d.to_string()))
+        .unwrap_or_default()
+}
+
 fn said(tree: &Snapshot, role: Role, label: &str) -> String {
     tree.find(role, label)
         .and_then(|n| n.description.as_ref().map(|d| d.to_string()))
@@ -264,39 +233,31 @@ fn focused(tree: &Snapshot) -> String {
 }
 
 #[gpui::test]
-fn escape_gives_the_focus_back_to_the_tab_that_opened_the_menu(cx: &mut TestAppContext) {
+fn up_and_down_walk_the_rack(cx: &mut TestAppContext) {
     let mut w = open(cx, 1280.);
-    w.press(Role::Button, "Ton", 1280.);
-    assert_eq!(
-        focused(&w.tree()),
-        "Ton",
-        "the first entry of the menu takes the focus"
-    );
-    w.cx.simulate_keystrokes("escape");
+    // The focus on the first place of the rack, the way a screen reader puts it there.
+    let start = w.tree().find_in_navigation(Role::Button, "Start").expect("Start in the rack").id;
+    w.cx.update(|window, cx| {
+        run_action(
+            ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: start, data: None },
+            window,
+            cx,
+        )
+    });
     w.draw(1280.);
-    assert!(w.tree().find(Role::Menu, "Ton").is_none());
-    assert_eq!(
-        focused(&w.tree()),
-        "Ton",
-        "the tab that opened it has the focus again"
-    );
-    // Left and Right walk the row.
-    w.cx.simulate_keystrokes("right");
-    w.draw(1280.);
-    assert_eq!(focused(&w.tree()), "Aufnehmen");
-    w.cx.simulate_keystrokes("left");
-    w.cx.simulate_keystrokes("left");
-    w.draw(1280.);
-    assert_eq!(focused(&w.tree()), "Bearbeiten");
-    w.cx.simulate_keystrokes("enter");
-    w.draw(1280.);
-    assert!(
-        w.tree().find(Role::Menu, "Bearbeiten").is_some(),
-        "Enter opens it"
-    );
+    assert_eq!(focused(&w.tree()), "Start");
     w.cx.simulate_keystrokes("down");
     w.draw(1280.);
-    assert_eq!(focused(&w.tree()), "Video", "Down walks the menu");
+    assert_eq!(focused(&w.tree()), "Merkliste");
+    w.cx.simulate_keystrokes("down");
+    w.draw(1280.);
+    assert_eq!(focused(&w.tree()), "Ordner");
+    w.cx.simulate_keystrokes("up");
+    w.draw(1280.);
+    assert_eq!(focused(&w.tree()), "Merkliste");
+    w.cx.simulate_keystrokes("enter");
+    w.draw(1280.);
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Merkliste, "Enter goes there");
 }
 
 #[gpui::test]

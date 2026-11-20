@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    div, point, prelude::*, px, AnyElement, App, BoxShadow, FocusHandle, FontWeight,
+    div, prelude::*, px, AnyElement, App, FocusHandle, FontWeight,
     IntoElement, SharedString, Window,
 };
 use sondra_a11y::{accessible, Role};
@@ -56,11 +56,11 @@ impl RenderOnce for MenuItem {
         let mut text = div().flex().flex_col().gap(px(1.)).child(
             div()
                 .text_size(px(size::BODY))
-                .text_color(c.ink)
+                .text_color(c.prose)
                 .font_weight(if self.selected {
                     FontWeight::SEMIBOLD
                 } else {
-                    FontWeight::NORMAL
+                    FontWeight::MEDIUM
                 })
                 .child(self.label.clone()),
         );
@@ -79,17 +79,18 @@ impl RenderOnce for MenuItem {
             .flex()
             .items_center()
             .gap(px(10.))
-            .px(px(12.))
-            .py(px(8.))
+            .px(px(10.))
+            .py(px(6.))
             .rounded(px(radius::NAV))
             .font_family(family::SANS)
-            .hover(move |s| s.bg(c.panel_soft))
+            .when(self.selected, |s| s.bg(c.ink_wash))
+            .hover(move |s| s.bg(c.panel_mid))
             .focus(move |s| s.shadow(focus_ring(&c)))
-            // The chosen entry carries a short bar of ink in the margin, as the chosen tab carries its line.
+            // The chosen entry carries a small lit dot, as the chosen place in the rack does.
             .child(
                 div()
-                    .w(px(3.))
-                    .h(px(18.))
+                    .flex_none()
+                    .size(px(6.))
                     .rounded(px(radius::PILL))
                     .bg(if self.selected {
                         c.ink
@@ -161,19 +162,14 @@ impl Ui {
         let card = div()
             .flex()
             .flex_col()
-            .gap(px(2.))
-            .p(px(8.))
-            .min_w(px(260.))
+            .gap(px(1.))
+            .p(px(6.))
+            .min_w(px(240.))
             .rounded(px(radius::CARD))
             .bg(c.raised)
             .border_1()
-            .border_color(c.line)
-            .shadow(vec![BoxShadow {
-                color: gpui::hsla(0., 0., 0., 0.16),
-                offset: point(px(0.), px(8.)),
-                blur_radius: px(24.),
-                spread_radius: px(0.),
-            }])
+            .border_color(c.plate_edge)
+            .shadow(crate::ui::float_shadow())
             .children(items);
         accessible(id, Role::Menu, card)
             .label(title)
