@@ -195,7 +195,7 @@ fn load_with_ytdlp(address: &str, tool_dir: &std::path::Path, system: bool, dir:
 
 impl DownloadState {
     pub fn new(cx: &mut Context<Shell>, colors: sondra_ui::Colors) -> DownloadState {
-        let input = cx.new(|cx| TextField::new(cx, colors, "Adresse").placeholder("Adresse einer Folge, eines Films oder einer Datei").max_chars(2000));
+        let input = cx.new(|cx| TextField::new(cx, colors, "Adresse").value_face().placeholder("Adresse einer Folge, eines Films oder einer Datei").max_chars(2000));
         cx.subscribe(&input, |shell: &mut Shell, _, event: &FieldEvent, cx| {
             if *event == FieldEvent::Submitted {
                 shell.find_address(cx);
@@ -506,8 +506,7 @@ impl Shell {
         let d = &self.download;
         let busy = d.finding || d.job.is_some();
 
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Herunterladen"));
-        page = page.child(ui.prose("Geben Sie die Adresse einer Folge, eines Films oder einer Datei ein. Sondra sucht die Quelle dahinter und lädt sie in einen Ordner auf diesem Computer."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Herunterladen", "Geben Sie die Adresse einer Folge, eines Films oder einer Datei ein. Sondra sucht die Quelle dahinter und lädt sie in einen Ordner auf diesem Computer."));
         page = page.child(ui.notice(NoticeKind::Info, "Herunterladen läuft nicht lokal: Die Adresse und die Datei gehen durch das Netz zu dem Dienst, bei dem sie liegen. Laden Sie nur, was Sie laden dürfen."));
         if let Some(error) = &d.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));

@@ -864,15 +864,24 @@ impl Shell {
                 stage.child(div().flex().flex_col().items_center().gap(px(6.)).child(div().text_color(c.stage_ink).text_size(px(size::SUBHEADING)).child(name.clone())).child(div().text_color(c.stage_muted).child("Ton")))
             }
         };
-        if offer_next {
-            // The changeover cue of a projection booth: a small ring in the picture's upper right corner
-            // says the reel is about to end — here, that the next episode is offered just below it.
-            stage = stage.child(
-                div().absolute().right(px(18.)).top(px(16.)).size(px(14.)).rounded(px(sondra_ui::radius::PILL)).border_2().border_color(c.stage_accent).bg(gpui::Rgba { a: 0.35, ..c.stage_accent }),
-            );
+        // The changeover cue of a projection booth: in the eight seconds before „Nächste Folge“ is offered, a
+        // ring in the picture's upper right corner flashes twice — the reel is about to end. It is gone the
+        // moment the button comes.
+        let cue_lead = 8.0;
+        let cue = p.settings.skip_opening && video && has_next && !offer_next && duration > 0.0
+            && sondra_player::next_offered(position + cue_lead, duration);
+        if cue {
+            let left = (0..=(cue_lead * 10.0) as i32).map(|step| step as f64 / 10.0).find(|ahead| sondra_player::next_offered(position + ahead, duration)).unwrap_or(cue_lead);
+            // Two pulses of half a second, in the last two seconds before the offer.
+            let lit = left <= 2.0 && (left * 2.0).floor() as i64 % 2 == 1;
+            if lit {
+                stage = stage.child(
+                    div().absolute().right(px(20.)).top(px(18.)).size(px(18.)).rounded(px(sondra_ui::radius::PILL)).border_2().border_color(c.stage_accent).bg(gpui::Rgba { a: 0.4, ..c.stage_accent }),
+                );
+            }
         }
         if skip_opening || offer_next {
-            let mut offers = div().absolute().right(px(16.)).top(px(if offer_next { 40. } else { 16. })).flex().flex_col().items_end().gap(px(8.));
+            let mut offers = div().absolute().right(px(16.)).top(px(16.)).flex().flex_col().items_end().gap(px(8.));
             if skip_opening {
                 let me = me.clone();
                 offers = offers.child(ui.button("vorspann-ueberspringen", "Vorspann überspringen").small().on_click(move |_, app| {

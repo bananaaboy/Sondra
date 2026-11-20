@@ -535,24 +535,14 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern
   liest die Merkliste nur, nie zurückschreiben; nie eine ungesehene Folge
   löschen; nichts ist vorgewählt (keine Serie, kein Wachhalten, kein
-  Löschen). **Das Aussehen nativ ist eine eigene Welt** (20.11.2026, Wunsch: „ganzes Design-Overhaul von
-  Grund auf, Farben etwa gleich, Standard Darkmode“; Richtung „Vorführkabine“, Vertrag in
-  `.impeccable/surfaces/native-sondra-app-src-shell-rs.md`): der Raum ist dunkel, hell ist nur die Platte
-  („Leinwand“), auf der die Seite liegt — 8 px vom Fensterrand, eine Stufe heller, mit Lichtkante und dem
-  einen Schatten. **Links das Rack** (`Shell::rack`, `RackItem` in `sondra-ui`): Wortmarke, die sechs
-  Aufgaben, die Werkzeuge unter ihren drei Gruppen — jeder Ort ein Klick, kein Menü, kein „Mehr“; unter
-  980 px nur die Zeichen mit Namen für den Screenreader und als Tooltip; Auf/Ab gehen die Orte durch. Am
-  Fuss Dateien der Sitzung, Drive, „Was ist neu“, Hell/Dunkel. **Dunkel beim ersten Start**, egal was das
-  System sagt; die Wahl mit dem Schalter bleibt (`Thema.json`). **Mint füllt genau eine Sache je Seite** —
-  die Hauptaktion (`primary_when`, solange noch nichts gewählt ist); gewählte Pillen und der gewählte Ort
-  sind `ink_wash`, Überschriften `prose`, nicht Mint. **Schrift Barlow** (Desktopgrössen: 14 px Text,
-  13 px dichte Bedienung, Seitentitel 26 px) statt Public Sans; Courier Prime bleibt für Werte, die
-  Wortmarke bleibt. **Saallicht:** spielt ein Film auf seiner Seite, wird das Rack dunkel und kommt unter dem
-  Zeiger zurück; **Überblendmarke** (ein Ring oben rechts im Bild) kündigt „Nächste Folge“ an. GPUI misst
-  Text in einer schrumpfenden Flex-Spalte unter `max_w` zu niedrig und `line_clamp` schneidet mitten im
-  Wort — Kachelhinweise brechen deshalb frei um, und Text, der umbrechen soll, bekommt eine bekannte Breite.
-  Die Website behält ihre Welt. Die leeren Zustände der einzelnen Werkzeugseiten sind noch nicht neu
-  komponiert. **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
+  Löschen). **Das Aussehen nativ ist eine eigene Welt** (20.11.2026, „Vorführkabine“: dunkler Raum, die
+  Seite auf einer beleuchteten Platte, links das Rack mit jedem Ort, Dunkel als Vorgabe, Barlow) — die
+  Entscheidungen stehen in [`native/DESIGN.md`](native/DESIGN.md), der Vertrag in
+  `.impeccable/surfaces/native-sondra-app-src-shell-rs.md`; die Website behält ihre Welt in `DESIGN.md`.
+  Für jeden Edit: GPUI misst Text unter `max_w` in einer schrumpfenden Flex-Spalte falsch und `line_clamp`
+  schneidet mitten im Wort — Text, der umbrechen soll, bekommt eine bekannte Breite, Kachelhinweise brechen
+  frei um. Benennen Rack und Seite denselben Knopf („Umwandeln“), findet `Snapshot::find` den auf der
+  Seite; `find_in_navigation` den im Rack. **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
   Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
   gestrichen, sobald etwas davon wegfällt. Auf Windows nur in der CI gelaufen
   (windows-latest), nie auf dem Rechner eines Menschen. Der Dienst-Kern schreibt die Liste nicht; das Fenster

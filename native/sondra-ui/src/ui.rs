@@ -14,6 +14,9 @@ use sondra_a11y::{accessible, Role};
 
 use crate::theme::{family, radius, size, Colors};
 
+/// The reading measure of running text: about 70 characters of 14 px Barlow.
+pub const MEASURE: f32 = 640.0;
+
 /// The palette a part of the interface is drawn in.
 #[derive(Clone, Copy)]
 pub struct Ui {
@@ -360,9 +363,8 @@ impl RenderOnce for Tile {
             .py(px(12.))
             .rounded(px(radius::CARD))
             .bg(c.panel_soft)
-            .border_1()
-            .border_color(c.line)
-            .hover(move |s| s.bg(c.panel_mid).border_color(c.rule))
+            // No frame at rest — the tint is the edge; the hover lifts it a step.
+            .hover(move |s| s.bg(c.panel_mid))
             .focus(move |s| s.shadow(focus_ring(&c)))
             .child(
                 div()
@@ -962,13 +964,45 @@ impl Ui {
         .into_any_element()
     }
 
-    /// Running prose: 16 px, at a reading line height.
+    /// The head of a page: its title, and under it what the page does in a sentence or two, held to a
+    /// reading measure (about 70 characters) — on a wide plate a summary ran to 160 characters a line. A
+    /// hairline closes it off from the work below.
+    pub fn page_head(&self, title: impl Into<SharedString>, summary: impl Into<SharedString>) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .pb(px(20.))
+            .border_b_1()
+            .border_color(self.c.line)
+            .child(self.heading(title))
+            .child(div().max_w(px(MEASURE)).child(self.muted_prose(summary)))
+            .into_any_element()
+    }
+
+    /// Prose a step back: the summary under a title.
+    fn muted_prose(&self, text: impl Into<SharedString>) -> AnyElement {
+        let text: SharedString = text.into();
+        accessible(
+            eid(format!("text-{text}")),
+            Role::Label,
+            div()
+                .text_color(self.c.muted)
+                .line_height(px(size::BODY * 1.5))
+                .child(text.clone()),
+        )
+        .label(text)
+        .into_any_element()
+    }
+
+    /// Running prose: 14 px, at a reading line height.
     pub fn prose(&self, text: impl Into<SharedString>) -> AnyElement {
         let text: SharedString = text.into();
         accessible(
             eid(format!("text-{text}")),
             Role::Label,
             div()
+                .max_w(px(MEASURE))
                 .text_color(self.c.prose)
                 .line_height(px(size::BODY * 1.5))
                 .child(text.clone()),

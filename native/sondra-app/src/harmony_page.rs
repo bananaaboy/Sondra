@@ -205,8 +205,7 @@ impl Shell {
         let me: Entity<Shell> = cx.entity();
         let c = ui.c;
         let h = &self.harmony;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Tonart und Akkorde"));
-        page = page.child(ui.prose("Hört in ein Stück hinein und sagt, in welcher Tonart es steht, wie schnell es ist und welche Akkorde darin folgen — auf Wunsch auch die Melodie. Akkorde und Melodie lassen sich als MIDI-Datei in ein Musikprogramm mitnehmen."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Tonart und Akkorde", "Hört in ein Stück hinein und sagt, in welcher Tonart es steht, wie schnell es ist und welche Akkorde darin folgen — auf Wunsch auch die Melodie. Akkorde und Melodie lassen sich als MIDI-Datei in ein Musikprogramm mitnehmen."));
         if let Some(error) = &h.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
@@ -218,9 +217,8 @@ impl Shell {
         if let Some(file) = &h.file {
             head = head.child(ui.value(file.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default()));
         }
-        page = page.child(head);
 
-        // The settings.
+        // The settings, in a column of their own beside the work.
         let mut windows = div().flex().flex_wrap().items_center().gap(px(6.));
         for (value, label) in [(0.25, "0,25 s"), (0.5, "0,5 s"), (1.0, "1 s"), (2.0, "2 s")] {
             let me = me.clone();
@@ -237,7 +235,7 @@ impl Shell {
                 cx.notify();
             }))
         };
-        let mut settings = div().flex().flex_col().gap(px(12.)).child(div().flex().flex_col().gap(px(6.)).child(ui.subheading("Akkordfenster")).child(windows).child(ui.hint("Kürzer folgt schnellen Wechseln, länger ist ruhiger."))).child(div().flex().child(follow));
+        let mut settings = div().flex().flex_col().gap(px(18.)).child(div().flex().flex_col().gap(px(8.)).child(ui.title("Akkordfenster")).child(windows).child(ui.hint("Kürzer folgt schnellen Wechseln, länger ist ruhiger."))).child(div().flex().flex_col().gap(px(8.)).child(ui.title("Melodie")).child(div().flex().child(follow)).child(ui.hint("Sucht eine einstimmige Linie und schreibt sie als MIDI dazu.")));
         if h.follow {
             let mut clarity = div().flex().flex_wrap().gap(px(6.));
             for value in [0.3, 0.4, 0.5, 0.6, 0.7] {
@@ -264,11 +262,15 @@ impl Shell {
                 })));
             }
             settings = settings
-                .child(div().flex().flex_col().gap(px(6.)).child(ui.subheading("Geforderte Klarheit")).child(clarity))
-                .child(div().flex().flex_col().gap(px(6.)).child(ui.subheading("Kürzeste Note")).child(shortest))
-                .child(div().flex().flex_col().gap(px(6.)).child(ui.subheading("Auf Raster ziehen")).child(quantize).child(ui.hint("Verschiebt Notenanfänge auf das Tempo-Raster.")));
+                .child(div().flex().flex_col().gap(px(8.)).child(ui.title("Geforderte Klarheit")).child(clarity))
+                .child(div().flex().flex_col().gap(px(8.)).child(ui.title("Kürzeste Note")).child(shortest))
+                .child(div().flex().flex_col().gap(px(8.)).child(ui.title("Auf Raster ziehen")).child(quantize).child(ui.hint("Verschiebt Notenanfänge auf das Tempo-Raster.")));
         }
-        page = page.child(settings);
+        // Header and notes above; below, the settings column on its tint and the work beside it.
+        let frame = page;
+        let settings = div().flex_none().w(px(320.)).p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(settings);
+        let mut page = div().flex_1().min_w(px(320.)).flex().flex_col().gap(px(20.)).child(head);
+        let done = move |page: gpui::Div| frame.child(div().flex().flex_wrap().items_start().gap(px(28.)).child(settings).child(page)).into_any_element();
 
         if h.file.is_some() {
             let stale = h.heard.is_some() && h.made_with.as_deref() != Some(h.signature().as_str());
@@ -282,7 +284,12 @@ impl Shell {
         if h.working {
             page = page.child(ui.prose("Hört in das Stück hinein. Bei einem langen Stück mit Melodie dauert das einen Moment."));
         }
-        let Some(heard) = &h.heard else { return page.into_any_element() };
+        let Some(heard) = &h.heard else {
+            if h.file.is_none() {
+                page = page.child(ui.hint("Noch kein Stück gewählt. Die Einstellungen links gelten für das nächste."));
+            }
+            return done(page);
+        };
 
         // The answer: two numbers first.
         let stat = |label: &str, value: String| div().flex().flex_col().gap(px(2.)).child(ui.hint(label.to_string())).child(div().text_size(px(size::HEADING)).font_family(sondra_ui::family::VALUE).child(value));
@@ -367,7 +374,7 @@ impl Shell {
                 ),
             );
         }
-        page.child(out).into_any_element()
+        done(page.child(out))
     }
 }
 

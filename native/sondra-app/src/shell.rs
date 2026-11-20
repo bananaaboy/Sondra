@@ -52,6 +52,10 @@ pub struct Shell {
     pub(crate) focus: FocusHandle,
     /// One handle per place in the rack, in the order of `PANELS`: Up and Down walk them.
     rack_focus: Vec<FocusHandle>,
+    /// „Saallicht“: whether the house lights are down (a film plays), and since when — the rack fades.
+    house: (bool, std::time::Instant),
+    /// The pointer rests on the rack: the lights come back (through the same fade).
+    rack_hovered: bool,
     /// The Merkliste: the list, what narrows it, the lines being typed into.
     pub(crate) merk: MerkState,
     /// The Ordner page: the folder read, what it shows, what is chosen.
@@ -210,6 +214,8 @@ impl Shell {
             rack_focus: (0..crate::nav::PANELS.len())
                 .map(|_| cx.focus_handle().tab_stop(true))
                 .collect(),
+            house: (false, std::time::Instant::now() - motion::SLOW),
+            rack_hovered: false,
             merk,
             folder,
             player: PlayerState::new(cx),
@@ -502,7 +508,7 @@ impl Shell {
     /// The rack: the wordmark, the six tasks, the tools under their three groups — every place one click
     /// away, no menu to open — and at its foot the session, Drive, what is new and the light switch.
     /// While a film plays on its page the rack dims („Saallicht“) and comes back under the pointer.
-    fn rack(&self, ui: Ui, compact: bool, dim: bool, cx: &mut Context<Self>) -> AnyElement {
+    fn rack(&self, ui: Ui, compact: bool, light: f32, cx: &mut Context<Self>) -> AnyElement {
         let c = ui.c;
         let mut list = div()
             .id("rack-liste")
@@ -607,7 +613,13 @@ impl Shell {
             .flex_col()
             .pb(px(12.))
             .bg(c.room)
-            .when(dim, |d| d.opacity(0.32).hover(|s| s.opacity(1.0)))
+            .when(light < 1.0, |d| d.opacity(light))
+            .on_hover(cx.listener(|shell, hovered: &bool, _, cx| {
+                if shell.rack_hovered != *hovered {
+                    shell.rack_hovered = *hovered;
+                    cx.notify();
+                }
+            }))
             .child(head)
             .child(nav)
             .child(foot)
@@ -666,7 +678,7 @@ impl Shell {
             .rounded(px(radius::CARD))
             .bg(c.panel_soft)
             .border_1()
-            .border_color(c.line)
+            .border_color(gpui::transparent_black())
             .drag_over::<ExternalPaths>(move |style, _, _, _| {
                 style.bg(c.ink_wash).border_color(c.ink)
             })
@@ -920,34 +932,20 @@ impl Shell {
             .into_any_element()
     }
 
-    /// Films and series: what is being watched, then the four tasks as tiles, one click from the start.
-    fn media(&self, ui: Ui, cols: usize, cx: &mut Context<Self>) -> AnyElement {
-        let watching = self.continue_watching(ui, cx);
-        let tiles: Vec<AnyElement> = [
-            Panel::Merkliste,
-            Panel::Folder,
-            Panel::Player,
-            Panel::Downloader,
-        ]
-        .iter()
-        .map(|p| {
-            let me = cx.entity();
-            let panel = *p;
-            ui.tile(format!("aufgabe-{}", p.slug()), p.label(), p.meta().summary)
-                .icon(sondra_ui::panel_icon(p.meta().id))
-                .on_click(move |_, app| {
-                    me.update(app, |shell, cx| shell.go(panel, cx));
-                })
-                .into_any_element()
-        })
-        .collect();
+    /// Films and series: what is being watched, one click to each — the tasks themselves stand in the rack,
+    /// a tile for each would only say it twice. With nothing being watched, one quiet line.
+    fn media(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(watching) = self.continue_watching(ui, cx) {
+            return watching;
+        }
+        let me = cx.entity();
         div()
             .flex()
-            .flex_col()
-            .gap(px(14.))
-            .child(ui.subheading("Filme und Serien"))
-            .children(watching)
-            .child(self.grid(ui, tiles, if cols >= 4 { 4 } else { 2 }))
+            .flex_wrap()
+            .items_center()
+            .gap(px(8.))
+            .child(ui.hint("Noch keine Serie am Schauen."))
+            .child(ui.button("start-ordner", "Ordner mit Serien öffnen").ghost().small().on_click(move |_, app| me.update(app, |shell, cx| shell.go(Panel::Folder, cx))))
             .into_any_element()
     }
 
@@ -991,7 +989,7 @@ impl Shell {
                 }),
             });
         }
-        Some(div().flex().flex_col().gap(px(8.)).child(ui.title("Heute weiterschauen")).child(rows).into_any_element())
+        Some(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Heute weiterschauen")).child(rows).into_any_element())
     }
 
     fn start(&self, ui: Ui, cols: usize, cx: &mut Context<Self>) -> AnyElement {
@@ -1001,7 +999,7 @@ impl Shell {
             .gap(px(40.))
             .child(self.way_in(ui, cx))
             .children(self.old_app_offer(ui, cx))
-            .child(self.media(ui, cols, cx))
+            .child(self.media(ui, cx))
             .child(self.tools(ui, cols, cx))
             .into_any_element()
     }
@@ -1130,7 +1128,19 @@ impl Render for Shell {
         // „Saallicht“: while a film plays on its page, the rack goes dim.
         let playing = self.panel == Panel::Player
             && self.player.playback.as_ref().is_some_and(|p| p.state() == sondra_playback::State::Playing);
-        let rack = if immersive { None } else { Some(self.rack(ui, compact, playing, cx)) };
+        // The lights come back the moment the rack has the focus (Up and Down walk it), and fade either way.
+        let lights_down = playing && !self.in_rack(window) && !self.rack_hovered;
+        if lights_down != self.house.0 {
+            self.house = (lights_down, std::time::Instant::now());
+        }
+        let t = if motion::reduced() { 1.0 } else { (self.house.1.elapsed().as_secs_f32() / motion::SLOW.as_secs_f32()).min(1.0) };
+        let e = motion::ease_out(t);
+        let light = if self.house.0 { 1.0 - 0.68 * e } else { 0.32 + 0.68 * e };
+        if t < 1.0 {
+            let me = cx.entity_id();
+            window.on_next_frame(move |_, cx| cx.notify(me));
+        }
+        let rack = if immersive { None } else { Some(self.rack(ui, compact, light, cx)) };
 
         a11y_root(
             div()
@@ -1230,7 +1240,8 @@ impl Render for Shell {
                                 .size_full()
                                 .rounded(px(radius::PLATE))
                                 .bg(c.canvas)
-                                .border_1()
+                                // The catch-light: the plate's upper edge only.
+                                .border_t_1()
                                 .border_color(c.plate_edge)
                                 .shadow(plate_shadow(self.mode))
                                 .overflow_y_scroll()

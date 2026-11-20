@@ -347,8 +347,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let s = &self.subtitles;
-        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(860.)).child(ui.heading("Untertitel"));
-        page = page.child(ui.prose("Eine Spracherkennung auf diesem Computer hört einen Film oder eine Aufnahme ab und schreibt auf, was gesagt wird — als Text, als Untertitel-Datei oder direkt im Film. Der Ton verlässt den Computer nicht."));
+        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(860.)).child(ui.page_head("Untertitel", "Eine Spracherkennung auf diesem Computer hört einen Film oder eine Aufnahme ab und schreibt auf, was gesagt wird — als Text, als Untertitel-Datei oder direkt im Film. Der Ton verlässt den Computer nicht."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

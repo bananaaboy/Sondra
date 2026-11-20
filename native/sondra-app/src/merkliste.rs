@@ -469,12 +469,16 @@ impl Shell {
         if state.items.len() >= SEARCH_FROM {
             actions = actions.child(div().w(px(240.)).child(state.search.clone()));
         }
-        actions = actions.child({
-            let me = me.clone();
-            ui.button("serie-hinzufuegen", "Serie hinzufügen").primary().small().on_click(move |_, app| {
-                Self::merk_do(&me, app, |m| m.adding = !m.adding)
-            })
-        });
+        // On an empty list the way in below says the same („Eine Serie eintippen“): the header has no button
+        // of its own until there is a list.
+        if !state.items.is_empty() {
+            actions = actions.child({
+                let me = me.clone();
+                ui.button("serie-hinzufuegen", "Serie hinzufügen").primary().on_click(move |_, app| {
+                    Self::merk_do(&me, app, |m| m.adding = !m.adding)
+                })
+            });
+        }
         if !state.items.is_empty() {
             actions = actions.child(self.merk_more(ui, cx));
         }

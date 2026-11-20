@@ -231,8 +231,7 @@ impl Shell {
         let c = ui.c;
         let s = &self.convert;
         let busy = s.run.is_some();
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Umwandeln"));
-        page = page.child(ui.prose("Dateien in ein anderes Format bringen — Ton, Video, Bild. Gerechnet wird auf Ihrem Gerät; keine Datei wird hochgeladen."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Umwandeln", "Dateien in ein anderes Format bringen — Ton, Video, Bild. Gerechnet wird auf Ihrem Gerät; keine Datei wird hochgeladen."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

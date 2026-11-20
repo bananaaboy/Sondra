@@ -445,8 +445,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let p = &self.phone;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Handy spiegeln"));
-        page = page.child(ui.prose("Der Bildschirm Ihres Android-Handys auf diesem Computer — mit Ton, Maus und Tastatur. Es geht über das USB-Kabel; nichts verlässt den Computer."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Handy spiegeln", "Der Bildschirm Ihres Android-Handys auf diesem Computer — mit Ton, Maus und Tastatur. Es geht über das USB-Kabel; nichts verlässt den Computer."));
 
         let done = match &p.phase {
             Phase::Idle | Phase::Failed(_) => 3,

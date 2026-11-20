@@ -96,7 +96,9 @@ fn the_start_page_has_its_headings_its_tabs_and_its_tiles(cx: &mut TestAppContex
     assert!(tree
         .find(Role::Heading, "Ton, Video und Bilder bearbeiten")
         .is_some());
-    assert!(tree.find(Role::Heading, "Filme und Serien").is_some());
+    // The tasks stand in the rack; the start page only says what is being watched (here: nothing yet).
+    assert!(tree.find(Role::Heading, "Filme und Serien").is_none());
+    assert!(tree.find(Role::Label, "Noch keine Serie am Schauen.").is_some());
     assert!(tree.find(Role::Heading, "Werkzeuge").is_some());
     for group in ["Ton", "Video", "Bilder", "Für Musik"] {
         assert!(tree.find(Role::Heading, group).is_some(), "{group}");

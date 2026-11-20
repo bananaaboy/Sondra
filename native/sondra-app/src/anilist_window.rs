@@ -38,7 +38,7 @@ pub struct AniState {
 
 impl AniState {
     pub fn new(cx: &mut Context<Shell>, colors: sondra_ui::Colors) -> AniState {
-        let token = cx.new(|cx| TextField::new(cx, colors, "AniList-Token").placeholder("Personal Access Token einfügen …").max_chars(4000).secret());
+        let token = cx.new(|cx| TextField::new(cx, colors, "AniList-Token").value_face().placeholder("Personal Access Token einfügen …").max_chars(4000).secret());
         cx.subscribe(&token, |shell: &mut Shell, _, event: &FieldEvent, cx| {
             if *event == FieldEvent::Submitted {
                 shell.anilist_connect(cx);

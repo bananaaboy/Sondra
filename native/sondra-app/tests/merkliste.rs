@@ -198,7 +198,7 @@ fn a_long_list_has_a_search_and_a_file_that_is_no_list_is_left_alone(cx: &mut Te
     std::fs::write(&path, b"this is somebody's other file").unwrap();
     let mut w = open(cx, None, dir.path());
     assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("keine Merkliste"))), "it says why");
-    w.press(Role::Button, "Serie hinzufügen");
+    w.press(Role::Button, "Eine Serie eintippen");
     drop(w);
     assert_eq!(std::fs::read(&path).unwrap(), b"this is somebody's other file", "and it is never written over");
 }

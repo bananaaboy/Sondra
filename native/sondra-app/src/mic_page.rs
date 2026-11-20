@@ -327,8 +327,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let m = &self.mic;
-        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(760.)).child(ui.heading("Mikrofon testen und einstellen"));
-        page = page.child(ui.prose("Zwei kurze Aufnahmen — erst der Raum, dann Ihre Stimme — genügen: Sondra misst Rauschen, Brummen und Pegel und stellt die Kette für Ihren Zweck ein. Die Aufnahmen bleiben auf diesem Computer. Nichts wird gesendet."));
+        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(760.)).child(ui.page_head("Mikrofon testen und einstellen", "Zwei kurze Aufnahmen — erst der Raum, dann Ihre Stimme — genügen: Sondra misst Rauschen, Brummen und Pegel und stellt die Kette für Ihren Zweck ein. Die Aufnahmen bleiben auf diesem Computer. Nichts wird gesendet."));
         if let Some(error) = &m.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

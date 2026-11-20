@@ -461,8 +461,7 @@ impl Shell {
         let me: Entity<Shell> = cx.entity();
         let c = ui.c;
         let v = &self.video;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Video bearbeiten"));
-        page = page.child(ui.prose("Schneiden, drehen, zuschneiden, Farbe, Tempo und Blenden einstellen und als MP4, WebM, GIF oder WebP speichern — in einem Durchgang. Die Bühne zeigt ein Standbild von dem, was geschrieben wird. Das Original bleibt, wie es ist; das Ergebnis liegt daneben."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Video bearbeiten", "Schneiden, drehen, zuschneiden, Farbe, Tempo und Blenden einstellen und als MP4, WebM, GIF oder WebP speichern — in einem Durchgang. Die Bühne zeigt ein Standbild von dem, was geschrieben wird. Das Original bleibt, wie es ist; das Ergebnis liegt daneben."));
         if let Some(error) = &v.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

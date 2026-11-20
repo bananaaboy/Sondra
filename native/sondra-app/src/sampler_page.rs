@@ -568,8 +568,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let s = &self.sampler;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Zerlegen und auf Tasten legen"));
-        page = page.child(ui.prose("Loops und Breaks an Schlägen, Pausen oder Takten zerschneiden, jedes Stück als Pad hören und im Schritt-Raster zu einem Beat legen. Jedes Pad lässt sich einzeln in Tonhöhe, Pegel und Lage ändern; geschrieben wird, was Sie hören."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Zerlegen und auf Tasten legen", "Loops und Breaks an Schlägen, Pausen oder Takten zerschneiden, jedes Stück als Pad hören und im Schritt-Raster zu einem Beat legen. Jedes Pad lässt sich einzeln in Tonhöhe, Pegel und Lage ändern; geschrieben wird, was Sie hören."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }

@@ -151,8 +151,7 @@ impl Shell {
         let me: Entity<Shell> = cx.entity();
         let c = ui.c;
         let n = &self.normalize;
-        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.heading("Lautstärke angleichen"));
-        page = page.child(ui.prose("Misst, wie laut ein Stück wirklich ist (nach EBU R128), und holt es auf das Maß, das Sie brauchen — ohne dass es übersteuert. Das Original bleibt, wie es ist; das Ergebnis liegt daneben."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Lautstärke angleichen", "Misst, wie laut ein Stück wirklich ist (nach EBU R128), und holt es auf das Maß, das Sie brauchen — ohne dass es übersteuert. Das Original bleibt, wie es ist; das Ergebnis liegt daneben."));
         if let Some(error) = &n.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
