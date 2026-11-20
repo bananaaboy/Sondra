@@ -241,6 +241,48 @@ fn a_midi_drum_pad_plays_the_pad_on_its_note_and_the_page_names_the_controller(c
 }
 
 #[gpui::test]
+fn a_held_pad_stops_when_its_key_is_let_go_and_the_others_ring_out(cx: &mut TestAppContext) {
+    use sondra_media::pattern::PlayMode;
+    use sondra_midi::{Input, Message};
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Break.wav"));
+    w.press(Role::Button, "Verfahren Gleiche Teile");
+    w.press(Role::Button, "Teile 4");
+    // The third pad is „Gehalten“, the first stays a one-shot.
+    w.shell.update(w.cx, |s, cx| {
+        s.sampler_select(2, cx);
+        s.sampler_pad(|p| p.mode = PlayMode::Gate, cx);
+    });
+    let (input, send) = Input::for_test("Pad-Controller");
+    w.shell.update(w.cx, |shell, cx| shell.sampler_midi_for_test(input, cx));
+    let settle = |w: &mut Window, voices: usize| {
+        for _ in 0..100 {
+            w.cx.executor().advance_clock(std::time::Duration::from_millis(20));
+            w.cx.run_until_parked();
+            if w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()) == voices {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()), voices);
+    };
+    send.send(Message::NoteOn { pad: 0, velocity: 1.0, note: 36 }).unwrap();
+    settle(&mut w, 1);
+    send.send(Message::NoteOn { pad: 2, velocity: 1.0, note: 38 }).unwrap();
+    settle(&mut w, 2);
+    // Letting go of the one-shot changes nothing; letting go of the held pad ends only its voice.
+    send.send(Message::NoteOff { pad: 0, note: 36 }).unwrap();
+    for _ in 0..10 {
+        w.cx.executor().advance_clock(std::time::Duration::from_millis(20));
+        w.cx.run_until_parked();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()), 2);
+    send.send(Message::NoteOff { pad: 2, note: 38 }).unwrap();
+    settle(&mut w, 1);
+}
+
+#[gpui::test]
 fn a_beat_is_laid_heard_and_written_as_sound_and_as_midi(cx: &mut TestAppContext) {
     let tmp = tempfile::tempdir().unwrap();
     let mut w = open(cx, tmp.path().join("Break.wav"));

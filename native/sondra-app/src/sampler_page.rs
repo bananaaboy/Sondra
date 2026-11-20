@@ -194,9 +194,18 @@ impl Shell {
                 }
                 let heard = shell.sampler.midi.as_ref().map(sondra_midi::Input::poll).unwrap_or_default();
                 for message in heard {
-                    if let sondra_midi::Message::NoteOn { pad, velocity, .. } = message {
-                        if shell.sampler.audio.is_some() && pad < shell.sampler.pads.len() {
-                            shell.sampler_trigger(pad, 0.0, velocity, cx);
+                    match message {
+                        sondra_midi::Message::NoteOn { pad, velocity, .. } => {
+                            if shell.sampler.audio.is_some() && pad < shell.sampler.pads.len() {
+                                shell.sampler_trigger(pad, 0.0, velocity, cx);
+                            }
+                        }
+                        // A „Gehalten“ pad sounds only while its key is down (as on the website); the others ring out.
+                        sondra_midi::Message::NoteOff { pad, .. } => {
+                            if shell.sampler.pads.get(pad).is_some_and(|p| p.mode == PlayMode::Gate) {
+                                shell.sampler.voices.retain(|(i, _)| *i != pad);
+                                cx.notify();
+                            }
                         }
                     }
                 }
