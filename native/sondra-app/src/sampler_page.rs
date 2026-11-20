@@ -558,7 +558,7 @@ impl Shell {
         self.sampler.voices.len()
     }
     /// For tests: whether a voice of this pad is still sounding.
-    pub fn sampler_held_sounding_for_test(&self, pad: usize) -> bool {
+    pub fn sampler_pad_sounding_for_test(&self, pad: usize) -> bool {
         self.sampler.voices.iter().any(|(i, _)| *i == pad)
     }
     pub fn sampler_bounds(&self) -> Bounds<Pixels> {

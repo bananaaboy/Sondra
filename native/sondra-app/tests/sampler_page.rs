@@ -230,7 +230,11 @@ fn a_midi_drum_pad_plays_the_pad_on_its_note_and_the_page_names_the_controller(c
         w.cx.run_until_parked();
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()), 1);
+    // Nothing new sounds and the chosen pad stays. (The third pad's slice may have rung out by itself in the
+    // meantime — a slow Windows runner took that long, run 105 — so its voice is not counted on.)
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_voice_count()) <= 1);
+    assert!(!w.shell.read_with(w.cx, |s, _| s.sampler_pad_sounding_for_test(9)), "no pad for note 45");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_selected()), 2);
     // Leaving the page lets the controllers go.
     w.shell.update(w.cx, |shell, cx| shell.go(Panel::Start, cx));
     for _ in 0..10 {
@@ -285,7 +289,7 @@ fn a_held_pad_stops_when_its_key_is_let_go_and_the_others_ring_out(cx: &mut Test
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
-    assert!(!w.shell.read_with(w.cx, |s, _| s.sampler_held_sounding_for_test(2)), "the held pad stopped with its key");
+    assert!(!w.shell.read_with(w.cx, |s, _| s.sampler_pad_sounding_for_test(2)), "the held pad stopped with its key");
 }
 
 #[gpui::test]
