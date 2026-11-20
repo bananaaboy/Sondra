@@ -156,6 +156,11 @@ impl Shell {
             _ => Mode::Light,
         };
         let colors = mode.colors();
+        // The system's own switch (dark in the evening) is followed as long as the person never chose.
+        cx.observe_window_appearance(window, |shell, window, cx| {
+            shell.system_appearance_changed(window.appearance(), cx);
+        })
+        .detach();
         let search = cx.new(|cx| {
             TextField::new(cx, colors, "Werkzeuge durchsuchen").placeholder("Werkzeug suchen…")
         });
@@ -473,6 +478,22 @@ impl Shell {
             _ => {}
         }
         self.theme_store = Some(store);
+    }
+
+    /// The system changed between light and dark: followed unless the person chose a theme here (then that stays).
+    pub fn system_appearance_changed(&mut self, appearance: WindowAppearance, cx: &mut Context<Self>) {
+        use sondra_merk::folder_memory::Store;
+        let chose = self.theme_store.as_ref().is_some_and(|s| s.get_item(THEME_KEY).is_some());
+        if chose {
+            return;
+        }
+        let mode = match appearance {
+            WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
+            _ => Mode::Light,
+        };
+        if mode != self.mode {
+            self.set_mode(mode, cx);
+        }
     }
 
     /// A choice made with the button: shown and remembered.

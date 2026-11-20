@@ -93,3 +93,25 @@ fn the_chosen_theme_is_kept_and_taken_again(cx: &mut TestAppContext) {
     let mut w = open_with_memory(cx, file.clone());
     assert!(w.colors().iter().all(|c| *c == LIGHT));
 }
+
+#[gpui::test]
+fn the_system_switch_is_followed_until_the_person_chooses(cx: &mut TestAppContext) {
+    use gpui::WindowAppearance;
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open_with_memory(cx, dir.path().join("Thema.json"));
+    assert!(w.colors().iter().all(|c| *c == LIGHT));
+    // Evening: the system goes dark and so does the window.
+    w.shell.update(w.cx, |shell, cx| shell.system_appearance_changed(WindowAppearance::Dark, cx));
+    w.draw();
+    assert!(w.colors().iter().all(|c| *c == DARK));
+    w.shell.update(w.cx, |shell, cx| shell.system_appearance_changed(WindowAppearance::Light, cx));
+    assert!(w.colors().iter().all(|c| *c == LIGHT));
+    // Once the person chose, the system does not decide any more.
+    w.press(Role::Button, "Dunkles Thema");
+    w.shell.update(w.cx, |shell, cx| shell.system_appearance_changed(WindowAppearance::Light, cx));
+    assert!(w.colors().iter().all(|c| *c == DARK), "the choice stays");
+}
