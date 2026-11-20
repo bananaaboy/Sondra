@@ -496,6 +496,21 @@ jobs:
           "CMAKE_GENERATOR=Ninja" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "CC=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "CXX=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      # ggml names the half-float type of its NEON code after the compiler: MSVC gets uint16_t, everything else __fp16.
+      # clang-cl defines _MSC_VER too, but its arm_neon.h wants __fp16 (error: incompatible pointer types ... 'const
+      # __fp16 *'). The rest of ggml already asks `!defined(__clang__)` where it matters; this one line does not.
+      - name: whisper.cpp - clang-cl is not MSVC (one line of ggml-cpu-impl.h)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo fetch --locked --manifest-path native/Cargo.toml
+          $h = Get-ChildItem (Join-Path $env:USERPROFILE '.cargo\registry\src') -Recurse -Filter ggml-cpu-impl.h | Where-Object { $_.FullName -match 'whisper-rs-sys-0\.13\.1' } | Select-Object -First 1
+          if (-not $h) { throw 'ggml-cpu-impl.h is not there.' }
+          $text = [IO.File]::ReadAllText($h.FullName)
+          $fixed = [regex]::Replace($text, '#ifdef _MSC_VER(\r?\n\r?\ntypedef uint16_t ggml_fp16_internal_t;)', '#if defined(_MSC_VER) && !defined(__clang__)$1')
+          if ($fixed -eq $text) { throw 'The line to change was not found.' }
+          [IO.File]::WriteAllText($h.FullName, $fixed)
+          Write-Host "patched $($h.FullName)"
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
       # What the compiler said while whisper.cpp was built stays in cargo's file for the build script, not in the log.
       - name: What failed in whisper.cpp
