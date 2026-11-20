@@ -60,6 +60,9 @@ fn main() {
                     if let Some(store) = sondra_app::store::FileStore::at_default("Sitzung.json") {
                         shell.open_session_memory(store, cx);
                     }
+                    if let Some(store) = sondra_app::store::FileStore::at_default("Spuren.json") {
+                        shell.open_stems_memory(store);
+                    }
                     shell.start_tray(window);
                     shell.look_for_old_app(cx);
                     // Files and folders on the command line: „Öffnen mit Sondra“ and a drop on the program.

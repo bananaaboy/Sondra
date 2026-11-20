@@ -1,0 +1,15 @@
+[package]
+name = "sondra-onnx"
+description = "Neural stem separation with a model the person points at (Demucs, Spleeter, any .onnx of those shapes), run on this computer."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sondra-media = { path = "../sondra-media" }
+# ONNX Runtime, linked into the program (nothing to install; no weights are shipped — the person brings the model).
+ort = { version = "=2.0.0-rc.15" }
+
+[dev-dependencies]
+tempfile = "3"

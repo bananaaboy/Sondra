@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 sondra-tray = { path = "../sondra-tray" }
 sondra-midi = { path = "../sondra-midi" }
+sondra-onnx = { path = "../sondra-onnx" }
 gpui = "=0.2.2"
 sondra-a11y = { path = "../sondra-a11y" }
 sondra-ui = { path = "../sondra-ui" }

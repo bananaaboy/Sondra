@@ -125,3 +125,43 @@ fn a_song_is_split_heard_stem_by_stem_and_written(cx: &mut TestAppContext) {
         assert!(data.windows(wanted.len()).any(|w| w == wanted.as_bytes()), "{wanted} is not in the ZIP");
     }
 }
+
+#[gpui::test]
+fn a_model_the_person_brings_is_checked_kept_and_used_instead_of_the_masks(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    std::env::set_var("SONDRA_DATA", tmp.path());
+    let models = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../sondra-onnx/tests/models");
+    let mut w = open(cx, tmp.path().join("lied.wav"));
+    assert!(w.tree().find(Role::Heading, "Eigenes Modell (.onnx)").is_some());
+    assert!(w.tree().find(Role::Button, "Modell wählen …").is_some());
+    // A file that is no model: said in words, nothing chosen.
+    let bad = tmp.path().join("kaputt.onnx");
+    std::fs::write(&bad, b"kein Modell").unwrap();
+    w.shell.update(w.cx, |s, cx| s.stems_set_model(bad, cx));
+    w.settle(|s| s.stems_model().2.is_some());
+    assert!(w.shell.read_with(w.cx, |s, _| s.stems_model()).0.is_none());
+    assert!(w.labels().iter().any(|l| l.starts_with("Das Modell ließ sich nicht laden")), "{:?}", w.labels());
+    // A waveform model: opened once to see what it is, then chosen.
+    let model = models.join("waveform.onnx");
+    w.shell.update(w.cx, |s, cx| s.stems_set_model(model.clone(), cx));
+    w.settle(|s| s.stems_model().1.is_some() || s.stems_model().2.is_some());
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.stems_model()).2, None);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.stems_model()).1.as_deref(), Some("Wellenform, 4 Stimmen"));
+    assert!(w.labels().iter().any(|l| l == "waveform.onnx"));
+    assert!(w.tree().find(Role::Button, "Ohne Modell trennen").is_some());
+    // It is kept for the next start.
+    let kept = std::fs::read_to_string(tmp.path().join("Spuren.json")).unwrap();
+    assert!(kept.contains("waveform.onnx"), "{kept}");
+    // The separation is the model's: each stem is the song times its scale (0.1, 0.2, 0.3, 0.4).
+    w.press(Role::Button, "Spuren trennen");
+    assert!(w.labels().iter().any(|l| l.contains("Ihrem Modell")) || w.shell.read_with(w.cx, |s, _| s.stems_running()));
+    w.settle(|s| s.stems_count() == 5);
+    let original = song(3.0);
+    let drums = w.shell.read_with(w.cx, |s, _| s.stems_audio(1)).unwrap();
+    let mid = 12_000;
+    assert!((drums.channels[0][mid] - original.channels[0][mid] * 0.2).abs() < 1e-3, "{} vs {}", drums.channels[0][mid], original.channels[0][mid] * 0.2);
+    // And the person can go back to the masks.
+    w.press(Role::Button, "Ohne Modell trennen");
+    assert!(w.shell.read_with(w.cx, |s, _| s.stems_model()).0.is_none());
+    assert!(w.tree().find(Role::Button, "Modell wählen …").is_some());
+}

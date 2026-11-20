@@ -52,11 +52,18 @@ pub struct StemsState {
     pub zip: Option<Result<(PathBuf, u64), String>>,
     pub packing: bool,
     ticking: bool,
+    /// A model the person brought (`.onnx`): used instead of the spectral masks, and what the page knows of it.
+    pub model: Option<PathBuf>,
+    pub model_info: Option<String>,
+    pub model_checking: bool,
+    pub model_error: Option<String>,
+    /// The last separation was done by the model.
+    pub by_model: bool,
 }
 
 impl StemsState {
     pub fn new() -> StemsState {
-        StemsState { path: None, preset: 0, original: None, work: None, stems: Vec::new(), playing: None, reading: false, error: None, made: Vec::new(), writing: false, zip: None, packing: false, ticking: false }
+        StemsState { path: None, preset: 0, original: None, work: None, stems: Vec::new(), playing: None, reading: false, error: None, made: Vec::new(), writing: false, zip: None, packing: false, ticking: false, model: None, model_info: None, model_checking: false, model_error: None, by_model: false }
     }
 }
 
@@ -136,21 +143,100 @@ impl Shell {
         s.made.clear();
         s.error = None;
         let options = PRESETS[s.preset].options;
-        let work = Arc::new(Mutex::new(Work { note: "Analyse".into(), ..Default::default() }));
+        let model = s.model.clone();
+        s.by_model = model.is_some();
+        let work = Arc::new(Mutex::new(Work { note: if model.is_some() { "Modell wird geöffnet" } else { "Analyse" }.into(), ..Default::default() }));
         s.work = Some(work.clone());
         std::thread::spawn(move || {
-            let mut out = separate(&audio, &options, &mut |share, note| {
+            let progress = |work: &Arc<Mutex<Work>>, share: f64, note: &str| {
                 let mut w = work.lock().unwrap();
                 w.share = share;
-                w.note = note.to_owned();
-            })
-            .to_vec();
-            let instrumental = to_instrumental(&audio, &out[0]);
-            out.push(instrumental);
-            work.lock().unwrap().done = Some(Ok(out));
+                if !note.is_empty() {
+                    w.note = note.to_owned();
+                }
+            };
+            let separated = match &model {
+                // The person's model, run on this computer.
+                Some(path) => sondra_onnx::Model::open(path).and_then(|mut m| m.separate(&audio, &mut |share, note| progress(&work, share, note))).map(|stems| stems.to_vec()),
+                None => Ok(separate(&audio, &options, &mut |share, note| progress(&work, share, note)).to_vec()),
+            };
+            work.lock().unwrap().done = Some(separated.map(|mut out| {
+                let instrumental = to_instrumental(&audio, &out[0]);
+                out.push(instrumental);
+                out
+            }));
         });
         self.stems_ticker(cx);
         cx.notify();
+    }
+
+    /// The file dialog for a model.
+    pub fn stems_choose_model(&mut self, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(mut paths))) = answer.await {
+                if let Some(path) = paths.pop() {
+                    this.update(cx, |shell, cx| shell.stems_set_model(path, cx)).ok();
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// Takes a model: it is opened once, away from the window, to see what it is (and that it is one); it is kept in
+    /// mind, not in memory — it is opened again when the separation begins.
+    pub fn stems_set_model(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        let s = &mut self.stems;
+        s.model_checking = true;
+        s.model_error = None;
+        let shown = path.clone();
+        Self::in_background(
+            cx,
+            move || sondra_onnx::Model::open(&shown).map(|m| m.info.describe()),
+            move |shell, result, cx| {
+                shell.stems.model_checking = false;
+                match result {
+                    Ok(info) => {
+                        shell.stems.model = Some(path.clone());
+                        shell.stems.model_info = Some(info);
+                        shell.stems_keep_model();
+                    }
+                    Err(e) => shell.stems.model_error = Some(e),
+                }
+                cx.notify();
+            },
+        );
+        cx.notify();
+    }
+
+    /// Back to the spectral masks Sondra brings.
+    pub fn stems_drop_model(&mut self, cx: &mut Context<Self>) {
+        self.stems.model = None;
+        self.stems.model_info = None;
+        self.stems.model_error = None;
+        self.stems_keep_model();
+        cx.notify();
+    }
+
+    /// The model the person chose stays chosen at the next start (the path only; the file stays where it is).
+    fn stems_keep_model(&self) {
+        if let Some(mut store) = crate::store::FileStore::at_default("Spuren.json") {
+            use sondra_merk::folder_memory::Store;
+            store.set_item("modell", self.stems.model.as_ref().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default());
+        }
+    }
+
+    /// Takes up the model of the last time, if the file is still there.
+    pub fn open_stems_memory(&mut self, store: crate::store::FileStore) {
+        use sondra_merk::folder_memory::Store;
+        if let Some(path) = store.get_item("modell").filter(|p| !p.is_empty()).map(PathBuf::from).filter(|p| p.is_file()) {
+            self.stems.model = Some(path);
+        }
+    }
+
+    /// For tests: the model that is chosen and what is known of it.
+    pub fn stems_model(&self) -> (Option<PathBuf>, Option<String>, Option<String>) {
+        (self.stems.model.clone(), self.stems.model_info.clone(), self.stems.model_error.clone())
     }
 
     fn stems_ticker(&mut self, cx: &mut Context<Self>) {
@@ -312,9 +398,31 @@ impl Shell {
         }
         page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Worauf es ankommt")).child(presets).child(ui.hint(PRESETS[s.preset].desc)));
 
+        // A model of the person's own.
+        {
+            let (choose, drop) = (me.clone(), me.clone());
+            let mut block = div().flex().flex_col().gap(px(8.)).child(ui.subheading("Eigenes Modell (.onnx)")).child(ui.hint("Ein Demucs- oder Spleeter-Export, den Sie selbst mitbringen: Sondra liefert keine Modelle mit. Es läuft auf diesem Gerät und ersetzt die Trennung mit Masken."));
+            let mut row = div().flex().flex_wrap().items_center().gap(px(10.));
+            if let Some(path) = &s.model {
+                row = row.child(ui.value(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+                if let Some(info) = &s.model_info {
+                    row = row.child(ui.hint(info.clone()));
+                }
+                row = row.child(ui.button("modell-anderes", "Anderes Modell wählen").small().disabled(s.model_checking || s.work.is_some()).on_click(move |_, app| choose.update(app, |shell, cx| shell.stems_choose_model(cx))));
+                row = row.child(ui.button("modell-weg", "Ohne Modell trennen").small().ghost().disabled(s.work.is_some()).on_click(move |_, app| drop.update(app, |shell, cx| shell.stems_drop_model(cx))));
+            } else {
+                row = row.child(ui.button("modell-waehlen", if s.model_checking { "Prüft das Modell …" } else { "Modell wählen …" }).small().disabled(s.model_checking).on_click(move |_, app| choose.update(app, |shell, cx| shell.stems_choose_model(cx))));
+            }
+            block = block.child(row);
+            if let Some(error) = &s.model_error {
+                block = block.child(ui.notice(NoticeKind::Warning, error.clone()));
+            }
+            page = page.child(block);
+        }
+
         if let Some(work) = &s.work {
             let w = work.lock().unwrap();
-            page = page.child(div().flex().flex_col().gap(px(8.)).child(ui.prose("Wird getrennt …")).child(ui.bar("spuren-fortschritt", Some(w.share as f32), w.note.clone())));
+            page = page.child(div().flex().flex_col().gap(px(8.)).child(ui.prose(if s.by_model { "Wird mit Ihrem Modell getrennt …" } else { "Wird getrennt …" })).child(ui.bar("spuren-fortschritt", Some(w.share as f32), w.note.clone())));
         } else {
             let me2 = me.clone();
             page = page.child(div().flex().child(ui.button("spuren-trennen", if s.stems.is_empty() { "Spuren trennen" } else { "Neu trennen" }).primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.stems_start(cx)))));
