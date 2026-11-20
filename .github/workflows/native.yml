@@ -498,6 +498,272 @@ jobs:
           "CXX=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       # ggml names the half-float type of its NEON code after the compiler: MSVC gets uint16_t, everything else __fp16.
       # clang-cl defines _MSC_VER too, but its arm_neon.h wants __fp16 (error: incompatible pointer types ... 'const
+      # __fp16 *'). The rest of ggml already asks `!defined(__clang__)` where it matters; these three places do not:
+      # ggml-cpu-impl.h (the typedef) and ggml-impl.h (the same typedef, and the switch that picks the __fp16 conversion).
+      - name: whisper.cpp - clang-cl is not MSVC (three lines of ggml)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo fetch --locked --manifest-path native/Cargo.toml
+          function Patch($name, $pairs) {
+            $h = Get-ChildItem (Join-Path $env:USERPROFILE '.cargo\registry\src') -Recurse -Filter $name | Where-Object { $_.FullName -match 'whisper-rs-sys-0\.13\.1' } | Select-Object -First 1
+            if (-not $h) { throw "$name is not there." }
+            $text = [IO.File]::ReadAllText($h.FullName)
+            $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+            foreach ($p in $pairs) {
+              $fixed = $text.Replace($p[0].Replace("`n", $nl), $p[1].Replace("`n", $nl))
+              if ($fixed -eq $text) { throw "Not found in ${name}: $($p[0])" }
+              $text = $fixed
+            }
+            [IO.File]::WriteAllText($h.FullName, $text)
+            Write-Host "patched $($h.FullName)"
+          }
+          Patch 'ggml-cpu-impl.h' @(,@("#ifdef _MSC_VER`n`ntypedef uint16_t ggml_fp16_internal_t;", "#if defined(_MSC_VER) && !defined(__clang__)`n`ntypedef uint16_t ggml_fp16_internal_t;"))
+          Patch 'ggml-impl.h' @(
+            ,@("#if defined(_MSC_VER) || (defined(__CUDACC__) && __CUDACC_VER_MAJOR__ <= 11)", "#if (defined(_MSC_VER) && !defined(__clang__)) || (defined(__CUDACC__) && __CUDACC_VER_MAJOR__ <= 11)")
+            ,@("#if defined(__ARM_NEON) && !defined(_MSC_VER) && !(defined(__CUDACC__)", "#if defined(__ARM_NEON) && !(defined(_MSC_VER) && !defined(__clang__)) && !(defined(__CUDACC__)"))
+      - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
+      - name: Start the app, photograph it and drive it through UI Automation
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path native/target/release/sondra.exe).Path
+          # The app starts on an empty data folder of its own: the Merkliste check types a series in.
+          $env:SONDRA_DATA = Join-Path $env:RUNNER_TEMP 'sondra-daten'
+          New-Item -ItemType Directory -Force -Path $env:SONDRA_DATA | Out-Null
+          # A folder of films for the Ordner check, offered to the app as the one of the last time.
+          $env:SONDRA_DEMO = Join-Path $env:RUNNER_TEMP 'Anime'
+          New-Item -ItemType Directory -Force -Path (Join-Path $env:SONDRA_DEMO 'Frieren\Staffel 1') | Out-Null
+          foreach ($f in @('film.mp4', 'poster.png', 'notizen.txt', 'Frieren\Staffel 1\Frieren S01E01.mkv')) {
+            [IO.File]::WriteAllBytes((Join-Path $env:SONDRA_DEMO $f), (New-Object byte[] 4096))
+          }
+          $remembered = @{ 'sondra:ordner:pfad' = $env:SONDRA_DEMO } | ConvertTo-Json
+          [IO.File]::WriteAllText((Join-Path $env:SONDRA_DATA 'Ordner.json'), $remembered, (New-Object System.Text.UTF8Encoding($false)))
+          $p = Start-Process -FilePath $exe -PassThru -RedirectStandardOutput app-out.txt -RedirectStandardError app-err.txt
+          Start-Sleep -Seconds 4
+          if ($p.HasExited) {
+            "the app ended by itself after less than 4 seconds, exit code $($p.ExitCode)" | Tee-Object -FilePath app.txt
+            Get-Content app-out.txt, app-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath app.txt
+            exit 1
+          }
+          (New-Object -ComObject Shell.Application).MinimizeAll()
+          Add-Type -Namespace Win -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h2, bool r);'
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($name) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("$PWD\$name")
+          }
+          $p.Refresh()
+          [Win.Native]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+          [Win.Native]::MoveWindow($p.MainWindowHandle, 0, 0, 1024, 740, $true) | Out-Null
+          [Win.Native]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+          Start-Sleep -Seconds 3
+          Shot 'app-start.png'
+          $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-app/uia-app.ps1 -ProcessId $p.Id -ShotDir $PWD 2>&1
+          $code = $LASTEXITCODE
+          $out | Tee-Object -FilePath app.txt
+          Shot 'app-menu.png'
+          if ($p.HasExited) { "the app had ended by the end of the check, exit code $($p.ExitCode)" | Tee-Object -Append -FilePath app.txt }
+          Get-Content app-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath app.txt
+          Get-Content app.txt | Select-String -Pattern '^(ok|FAIL|all checks|[0-9]+ check)' | ForEach-Object { $_.Line } | Add-Content $env:GITHUB_STEP_SUMMARY
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          # The same program, started with a film on its command line (what „Öffnen mit Sondra“ does): the
+          # player opens by itself and the film plays.
+          $film = Join-Path $env:RUNNER_TEMP 'film.mp4'
+          ffmpeg -v error -y -f lavfi -i testsrc2=size=640x360:rate=25 -f lavfi -i sine=frequency=440 -t 30 -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -shortest $film
+          $p2 = Start-Process -FilePath $exe -ArgumentList ('"' + $film + '"') -PassThru -RedirectStandardOutput player-out.txt -RedirectStandardError player-err.txt
+          Start-Sleep -Seconds 4
+          $p2.Refresh()
+          [Win.Native]::ShowWindow($p2.MainWindowHandle, 9) | Out-Null
+          [Win.Native]::MoveWindow($p2.MainWindowHandle, 0, 0, 1024, 740, $true) | Out-Null
+          [Win.Native]::SetForegroundWindow($p2.MainWindowHandle) | Out-Null
+          Start-Sleep -Seconds 2
+          $out2 = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-app/uia-player.ps1 -ProcessId $p2.Id -ShotDir $PWD 2>&1
+          $code2 = $LASTEXITCODE
+          $out2 | Tee-Object -FilePath player.txt
+          Get-Content player-err.txt -ErrorAction SilentlyContinue | Tee-Object -Append -FilePath player.txt
+          '--- the player' | Add-Content $env:GITHUB_STEP_SUMMARY
+          Get-Content player.txt | Select-String -Pattern '^(ok|FAIL|all checks|[0-9]+ check)' | ForEach-Object { $_.Line } | Add-Content $env:GITHUB_STEP_SUMMARY
+          if (-not $p2.HasExited) { Stop-Process -Id $p2.Id -Force }
+          if ($code -eq 0) { $code = $code2 }
+          exit $code
+      # The setup: built from the very program the checks above ran, installed silently, started with only
+      # the FFmpeg that came with it (the runner's own is taken off the path), found in Apps & Features, and
+      # taken away again. Unsigned, as every build here.
+      - name: The setup installs, plays a film, shows up in Apps and Features and takes itself away again
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $failures = New-Object System.Collections.ArrayList
+          function Check($ok, $what) { if ($ok) { "ok    $what" } else { "FAIL  $what"; [void]$failures.Add($what) } }
+          choco install nsis --no-progress -y | Out-Null
+          $makensis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          Check (Test-Path $makensis) 'NSIS is there'
+          $exe = (Resolve-Path native/target/release/sondra.exe).Path
+          # Chocolatey's ffmpeg on the path is a shim; the real programs lie in its lib folder.
+          $real = Get-ChildItem 'C:\ProgramData\chocolatey\lib\ffmpeg' -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          $ffdir = $real.Directory.FullName
+          Check ((Test-Path "$ffdir\ffmpeg.exe") -and (Test-Path "$ffdir\ffprobe.exe")) "FFmpeg to bundle: $ffdir"
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $setup = Join-Path $PWD 'Sondra-Nativ-Setup.exe'
+          $licenses = (Resolve-Path desktop/lizenzen).Path
+          & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
+          Check ($LASTEXITCODE -eq 0 -and (Test-Path $setup)) ("the setup is built: {0:N1} MB" -f ((Get-Item $setup).Length / 1MB))
+
+          # The page the installed program looks at for a newer version (`updater.rs`): the flat YAML
+          # electron-builder writes, with the setup's SHA-512 in base64. It goes beside the setup in a release.
+          $bytes = [IO.File]::ReadAllBytes($setup)
+          $sha = [Convert]::ToBase64String([Security.Cryptography.SHA512]::Create().ComputeHash($bytes))
+          $yaml = "version: $version`nfiles:`n  - url: Sondra-Nativ-Setup.exe`n    sha512: $sha`n    size: $($bytes.Length)`npath: Sondra-Nativ-Setup.exe`nsha512: $sha`nreleaseDate: '$((Get-Date).ToUniversalTime().ToString('o'))'`n"
+          [IO.File]::WriteAllText((Join-Path $PWD 'latest-nativ.yml'), $yaml, (New-Object Text.UTF8Encoding($false)))
+          Check ((Get-Content latest-nativ.yml -Raw) -match "version: $version") 'latest-nativ.yml names the version'
+
+          # The portable build: the program, FFmpeg, the licences and a mark beside them. With the mark the data live in
+          # `Sondra-Daten` next to the program; nothing is registered.
+          $portable = Join-Path $PWD 'portabel'
+          New-Item -ItemType Directory -Force -Path $portable | Out-Null
+          Copy-Item $exe "$portable\sondra.exe"
+          Copy-Item "$ffdir\ffmpeg.exe", "$ffdir\ffprobe.exe" $portable
+          Copy-Item $licenses "$portable\Lizenzen" -Recurse
+          Set-Content "$portable\portable.txt" 'Sondra portabel: Die Daten liegen im Ordner Sondra-Daten neben dem Programm.'
+          Compress-Archive -Path "$portable\*" -DestinationPath (Join-Path $PWD 'Sondra-Nativ-Portabel.zip') -Force
+          Check (Test-Path 'Sondra-Nativ-Portabel.zip') ("the portable zip is built: {0:N1} MB" -f ((Get-Item 'Sondra-Nativ-Portabel.zip').Length / 1MB))
+          $carried = Join-Path $env:RUNNER_TEMP 'sondra-getragen'
+          Expand-Archive -Path 'Sondra-Nativ-Portabel.zip' -DestinationPath $carried -Force
+          Remove-Item Env:\SONDRA_DATA -ErrorAction SilentlyContinue
+          $pp = Start-Process -FilePath "$carried\sondra.exe" -PassThru
+          Start-Sleep -Seconds 6
+          Check (-not $pp.HasExited) 'the portable program runs'
+          Check (Test-Path "$carried\Sondra-Daten") 'its data lie beside it'
+          Check (-not (Test-Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SondraNativ')) 'and nothing was registered'
+          if (-not $pp.HasExited) { Stop-Process -Id $pp.Id -Force }
+
+          $dir = 'C:\SondraNativTest'
+          $i = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$dir" -Wait -PassThru
+          Check ($i.ExitCode -eq 0) "the silent install ends well (exit code $($i.ExitCode))"
+          foreach ($f in @('sondra.exe', 'ffmpeg.exe', 'ffprobe.exe', 'Deinstallieren.exe', 'Lizenzen\GPL-2.0.txt')) { Check (Test-Path "$dir\$f") "installed: $f" }
+          $arp = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SondraNativ' -ErrorAction SilentlyContinue
+          Check ($arp -and $arp.DisplayVersion -eq $version) "Apps and Features lists it at $version"
+          Check ($arp -and $arp.InstallLocation -eq $dir) 'with its folder'
+          Check ($arp -and $arp.QuietUninstallString -like '*Deinstallieren.exe*/S') 'and a quiet uninstall'
+          $list = Get-ItemProperty 'HKLM:\Software\Classes\.sondra-liste' -ErrorAction SilentlyContinue
+          Check ($list -and $list.'(default)' -eq 'Sondra.NativListe') 'the ending .sondra-liste is Sondra''s'
+          $project = Get-ItemProperty 'HKLM:\Software\Classes\.sondra' -ErrorAction SilentlyContinue
+          Check ($project -and $project.'(default)' -eq 'Sondra.NativProjekt') 'the ending .sondra (projects) is Sondra''s where nobody had it'
+          $mp4 = Get-ItemProperty 'HKLM:\Software\Classes\.mp4' -ErrorAction SilentlyContinue
+          Check (-not ($mp4 -and $mp4.'(default)' -like 'Sondra*')) 'no media ending is taken over'
+          $with = Get-Item 'HKLM:\Software\Classes\.mp4\OpenWithProgids' -ErrorAction SilentlyContinue
+          Check ($with -and ($with.GetValueNames() -contains 'Sondra.NativDatei')) 'but Sondra is on the Open with list'
+          Check (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Sondra Nativ\Sondra (nativ).lnk") 'the Start menu entry'
+
+          # Started from where it was installed, with a film on its command line and no other FFmpeg on the path.
+          $env:PATH = (($env:PATH -split ';') | Where-Object { $_ -notmatch 'chocolatey|ffmpeg' }) -join ';'
+          Check ($null -eq (Get-Command ffmpeg -ErrorAction SilentlyContinue)) 'no FFmpeg on the path'
+          $env:SONDRA_DATA = Join-Path $env:RUNNER_TEMP 'sondra-daten-setup'
+          New-Item -ItemType Directory -Force -Path $env:SONDRA_DATA | Out-Null
+          $film = Join-Path $env:RUNNER_TEMP 'film.mp4'
+          Check (Test-Path $film) 'the test film is there'
+          $p = Start-Process -FilePath "$dir\sondra.exe" -ArgumentList ('"' + $film + '"') -PassThru -RedirectStandardError setup-err.txt
+          Start-Sleep -Seconds 5
+          Check (-not $p.HasExited) 'the installed program runs'
+          Add-Type -Namespace Win -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h2, bool r);'
+          $p.Refresh()
+          [Win.Native]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+          [Win.Native]::MoveWindow($p.MainWindowHandle, 0, 0, 1024, 740, $true) | Out-Null
+          [Win.Native]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+          Start-Sleep -Seconds 2
+          $out = powershell.exe -NoProfile -ExecutionPolicy Bypass -File native/sondra-app/uia-player.ps1 -ProcessId $p.Id -ShotDir $PWD 2>&1
+          $out | Select-String -Pattern '^(ok|FAIL|all checks|[0-9]+ check)' | ForEach-Object { $_.Line }
+          if ($LASTEXITCODE -ne 0) { [void]$failures.Add('the installed player check') }
+          Get-Content setup-err.txt -ErrorAction SilentlyContinue
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          Start-Sleep -Seconds 1
+
+          # Away again. `_?=` keeps the uninstaller where it is, so this waits for it to finish.
+          $u = Start-Process -FilePath "$dir\Deinstallieren.exe" -ArgumentList '/S', "_?=$dir" -Wait -PassThru
+          Check ($u.ExitCode -eq 0) "the silent uninstall ends well (exit code $($u.ExitCode))"
+          Check (-not (Test-Path "$dir\sondra.exe")) 'the program is gone'
+          Check (-not (Test-Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SondraNativ')) 'Apps and Features lists it no more'
+          Check (-not (Test-Path 'HKLM:\Software\Classes\.sondra-liste')) 'the ending is let go'
+          Check (-not (Test-Path 'HKLM:\Software\Classes\.sondra')) 'the ending .sondra is let go as well'
+          Check (-not (Test-Path 'HKLM:\Software\Classes\Applications\sondra.exe')) 'the Open with entry is gone'
+          if ($failures.Count -gt 0) { "$($failures.Count) checks failed"; exit 1 }
+          'all checks passed'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sondra-Nativ-Setup
+          path: |
+            Sondra-Nativ-Setup.exe
+            Sondra-Nativ-Portabel.zip
+            latest-nativ.yml
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: app
+          path: |
+            app-start.png
+            app-merkliste.png
+            app-ordner.png
+            app-menu.png
+            app-player.png
+            player.txt
+            app.txt
+
+  # Windows on Arm: does the app build there? Informational for now (it never fails the run); the setup for that
+  # processor follows once this is green, and the file is then built and checked by the release like the x64 one.
+  arm64:
+    runs-on: windows-11-arm
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - name: Rust, if the image has none
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            ./rustup-init.exe -y --default-toolchain stable --profile minimal
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+      # Speech recognition is built from whisper.cpp: bindgen needs libclang for this processor. The package of
+      # Chocolatey is the x64 one, whose libclang.dll an Arm64 build cannot load — LLVM's own Arm64 installer is taken.
+      - name: LLVM for whisper.cpp (Arm64)
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'llvm-woa64.exe'
+          Invoke-WebRequest 'https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-woa64.exe' -OutFile $installer
+          Start-Process -FilePath $installer -ArgumentList '/S' -Wait
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "C:\Program Files\LLVM\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      # whisper.cpp refuses MSVC's own compiler on Arm („MSVC is not supported for ARM, use clang“): it is built with
+      # clang-cl (which CMake knows as Clang, with the MSVC library) under Ninja, inside the Arm64 build environment.
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+      - name: Clang for the C and C++ parts
+        shell: pwsh
+        run: |
+          # The C++ library of this Visual Studio checks the version of the compiler (STL1000) and wants a recent
+          # Clang: the one that ships inside Visual Studio for Arm64 goes with it, the downloaded 19.1.7 does not.
+          $vsClang = Join-Path $env:VCINSTALLDIR 'Tools\Llvm\ARM64\bin\clang-cl.exe'
+          $clang = if (Test-Path $vsClang) { $vsClang } else { 'clang-cl' }
+          Write-Host "clang-cl: $clang"
+          & $clang --version
+          # whisper.cpp tunes an Arm build for the machine it is built on: on this runner that switches SVE on, whose
+          # header (sys/prctl.h) does not exist on Windows — and a program that needs SVE does not run on most Arm
+          # PCs. A file CMake reads before ggml (CMAKE_PROJECT_TOP_LEVEL_INCLUDES, passed on by whisper-rs-sys) turns
+          # the tuning off: the program runs on every Arm64 Windows PC.
+          $portable = Join-Path $env:RUNNER_TEMP 'ggml-portable.cmake'
+          'set(GGML_NATIVE OFF CACHE BOOL "built for every Arm64 PC, not for this machine" FORCE)' | Set-Content -Encoding ascii $portable
+          "CMAKE_PROJECT_TOP_LEVEL_INCLUDES=$($portable -replace '\\','/')" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "CMAKE_GENERATOR=Ninja" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "CC=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "CXX=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      # ggml names the half-float type of its NEON code after the compiler: MSVC gets uint16_t, everything else __fp16.
+      # clang-cl defines _MSC_VER too, but its arm_neon.h wants __fp16 (error: incompatible pointer types ... 'const
       # __fp16 *'). The rest of ggml already asks `!defined(__clang__)` where it matters; this one line does not.
       - name: whisper.cpp - clang-cl is not MSVC (one line of ggml-cpu-impl.h)
         shell: pwsh
