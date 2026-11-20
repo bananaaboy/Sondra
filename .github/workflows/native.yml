@@ -480,9 +480,15 @@ jobs:
       - name: Clang for the C and C++ parts
         shell: pwsh
         run: |
+          # The C++ library of this Visual Studio checks the version of the compiler (STL1000) and wants a recent
+          # Clang: the one that ships inside Visual Studio for Arm64 goes with it, the downloaded 19.1.7 does not.
+          $vsClang = Join-Path $env:VCINSTALLDIR 'Tools\Llvm\ARM64\bin\clang-cl.exe'
+          $clang = if (Test-Path $vsClang) { $vsClang } else { 'clang-cl' }
+          Write-Host "clang-cl: $clang"
+          & $clang --version
           "CMAKE_GENERATOR=Ninja" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-          "CC=clang-cl" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-          "CXX=clang-cl" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "CC=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "CXX=$clang" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
       # What the compiler said while whisper.cpp was built stays in cargo's file for the build script, not in the log.
       - name: What failed in whisper.cpp
