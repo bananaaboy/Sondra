@@ -163,27 +163,12 @@ impl Shell {
         if let Some(file) = &n.file {
             head = head.child(ui.value(file.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default()));
         }
-        page = page.child(head);
-        if n.measuring {
-            return page.child(ui.prose("Misst …")).into_any_element();
-        }
-        let Some(report) = n.report else { return page.into_any_element() };
-
-        let facts = format!(
-            "Jetzt: {} LUFS · Spitze {} dBTP · Dynamik {} LU · {} Minuten",
-            num(report.integrated_lufs, 1),
-            num(report.true_peak_dbtp, 1),
-            num(report.loudness_range_lu, 1),
-            num(report.duration_seconds / 60.0, 1)
-        );
-        page = page.child(div().p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.value(facts)));
-
         let mut targets = div().flex().flex_wrap().gap(px(6.));
         for (id, label, lufs, _) in LOUDNESS_PRESETS {
             let me = me.clone();
             targets = targets.child(ui.chip(format!("ziel-{id}"), label, n.preset == id).accessible_name(format!("Ziel {label}, {} LUFS", num(lufs, 0))).on_click(move |_, app| me.update(app, |shell, cx| shell.normalize_choose(id, cx))));
         }
-        let mut formats = div().flex().flex_wrap().items_center().gap(px(6.)).child(ui.hint("Als:"));
+        let mut formats = div().flex().flex_wrap().items_center().gap(px(6.));
         for id in ["flac", "wav", "mp3"] {
             let Some(format) = find_format(id) else { continue };
             let me = me.clone();
@@ -198,18 +183,40 @@ impl Shell {
                 })
             }));
         }
+        // The target and the format are settings: chosen before or after the measuring.
+        let settings_col = vec![ui.setting("Ziel", targets, None), ui.setting("Speichern als", formats, None)];
+        let mut work = div().flex().flex_col().gap(px(20.)).child(head);
+        if n.measuring {
+            return page.child(ui.tool_body(settings_col, work.child(ui.prose("Misst …")))).into_any_element();
+        }
+        let Some(report) = n.report else {
+            if n.file.is_none() {
+                work = work.child(ui.hint("Noch keine Datei gewählt. Gemessen wird gleich nach der Wahl; Ziel und Format links gelten dann."));
+            }
+            return page.child(ui.tool_body(settings_col, work)).into_any_element();
+        };
+
+        let facts = format!(
+            "Jetzt: {} LUFS · Spitze {} dBTP · Dynamik {} LU · {} Minuten",
+            num(report.integrated_lufs, 1),
+            num(report.true_peak_dbtp, 1),
+            num(report.loudness_range_lu, 1),
+            num(report.duration_seconds / 60.0, 1)
+        );
+        work = work.child(div().p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.value(facts)));
+
         let settings = n.settings();
         let go = {
             let me = me.clone();
             ui.button("angleichen", if n.working { "Rechnet …".to_string() } else { format!("Auf {} LUFS bringen", num(settings.target_lufs, 0)) }).primary().disabled(n.working).on_click(move |_, app| me.update(app, |shell, cx| shell.start_normalize(cx)))
         };
-        page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Ziel")).child(targets)).child(formats).child(div().flex().child(go));
+        work = work.child(div().flex().child(go));
 
         if let Some((path, said)) = &n.made {
             let (play, show) = (me.clone(), me.clone());
             let (p1, folder) = (path.clone(), path.parent().map(PathBuf::from));
             let name = path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-            page = page.child(
+            work = work.child(
                 div()
                     .flex()
                     .flex_col()
@@ -240,6 +247,6 @@ impl Shell {
                     ),
             );
         }
-        page.into_any_element()
+        page.child(ui.tool_body(settings_col, work)).into_any_element()
     }
 }

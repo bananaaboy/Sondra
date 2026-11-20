@@ -289,7 +289,7 @@ Rhythmus: 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48 px.
 ### Named Rules
 **Die Ganze-Zellen-Regel.** Ein Raster packt in ganzen Zellen um; eine Kachel wird nicht über rund 260 px gestreckt.
 
-**Die Daneben-Regel.** Eine Werkzeugseite stellt ihre Einstellungen in eine Spalte von 320 px auf `panel-soft` links neben die Arbeitsfläche (`harmony_page.rs` ist das Muster); die Arbeitsfläche hält mindestens 320 px und trägt die Hauptaktion oben.
+**Die Daneben-Regel.** Eine Werkzeugseite stellt ihre Einstellungen in eine Spalte von 320 px auf `panel-soft` links neben die Arbeitsfläche; die Arbeitsfläche hält mindestens 320 px und trägt die Hauptaktion oben. Gebaut über `ui.tool_body(settings, work)`, jede Einstellung als `ui.setting(name, bedienung, hinweis)` (seit 20.11.2026 auf Tonart, Umwandeln, Lautstärke, Untertitel, Spuren trennen, Mischen, Mikrofon, Bildschirm, Herunterladen, Geräte). Die Einstellungen stehen schon vor der Datei da: was dort gewählt ist, gilt für die nächste. **Bühnenseiten** (Video, Bilder) drehen es um wie ein Schnittplatz: Bühne und Zeitleiste links, so breit es geht, der Inspektor — Werkzeugschiene und Einstellungen — rechts auf der Tönung (`ui.stage_body`); Ton bearbeiten hat seine Werkzeuge auf der Tönung unter der Welle. Handy spiegeln behält Schritte links und das Gerät rechts. **Gemessen statt geschätzt, auch hier:** GPUI misst umbrechenden Text und umbrechende Pillenzeilen in einer gestreckten Spalte zu hoch — Bedienung und Hinweis einer Einstellung bekommen deshalb die feste Breite der Spalte (`SETTINGS_WIDTH − 32`), und `hint` setzt seine Zeilenhöhe selbst.
 
 ## Elevation & Depth
 

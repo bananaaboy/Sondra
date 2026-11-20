@@ -327,21 +327,30 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let m = &self.mic;
-        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(760.)).child(ui.page_head("Mikrofon testen und einstellen", "Zwei kurze Aufnahmen — erst der Raum, dann Ihre Stimme — genügen: Sondra misst Rauschen, Brummen und Pegel und stellt die Kette für Ihren Zweck ein. Die Aufnahmen bleiben auf diesem Computer. Nichts wird gesendet."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Mikrofon testen und einstellen", "Zwei kurze Aufnahmen — erst der Raum, dann Ihre Stimme — genügen: Sondra misst Rauschen, Brummen und Pegel und stellt die Kette für Ihren Zweck ein. Die Aufnahmen bleiben auf diesem Computer. Nichts wird gesendet."));
         if let Some(error) = &m.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
+        // What the recording is for: a setting, chosen before or after the microphone is on.
+        let profile = profile_for(m.purpose);
+        let mut chips = div().flex().flex_wrap().gap(px(6.));
+        for p in PURPOSES {
+            let me = me.clone();
+            chips = chips.child(ui.chip(format!("zweck-{}", p.label), p.label, p.id == m.purpose).accessible_name(format!("Zweck {}", p.label)).on_click(move |_, app| me.update(app, |shell, cx| shell.mic_purpose(p.id, cx))));
+        }
+        let purpose = ui.setting("Wofür ist die Aufnahme?", chips, Some(profile.hint));
         if m.capture.is_none() {
             let button = {
                 let me = me.clone();
                 ui.button("mikrofon-einschalten", "Mikrofon einschalten").primary().on_click(move |_, app| me.update(app, |shell, cx| shell.mic_enable(None, cx)))
             };
-            return page.child(div().flex().child(button)).into_any_element();
+            let work = div().flex().flex_col().gap(px(20.)).child(div().flex().child(button)).child(ui.hint("Das Mikrofon wird erst auf diesen Knopf geöffnet und beim Verlassen des Werkzeugs wieder freigegeben."));
+            return page.child(ui.tool_body(vec![purpose], work)).into_any_element();
         }
 
         // The device and its level.
         let devices = (m.list)();
-        let mut device = div().flex().flex_col().gap(px(10.)).child(ui.subheading("Mikrofon")).child(ui.value(m.device.clone().unwrap_or_default()));
+        let mut device = div().flex().flex_col().gap(px(10.)).child(ui.title("Mikrofon")).child(ui.value(m.device.clone().unwrap_or_default()));
         if devices.len() > 1 {
             let mut chips = div().flex().flex_wrap().gap(px(6.));
             for name in devices {
@@ -363,16 +372,9 @@ impl Shell {
             let me = me.clone();
             device = device.child(div().flex().child(ui.button("mikrofon-ausschalten", "Mikrofon ausschalten").small().on_click(move |_, app| me.update(app, |shell, cx| shell.mic_disable(cx)))));
         }
-        page = page.child(device);
+        let settings = vec![device.into_any_element(), purpose];
+        let mut work = div().flex().flex_col().gap(px(20.));
 
-        // What the recording is for.
-        let profile = profile_for(m.purpose);
-        let mut chips = div().flex().flex_wrap().gap(px(6.));
-        for p in PURPOSES {
-            let me = me.clone();
-            chips = chips.child(ui.chip(format!("zweck-{}", p.label), p.label, p.id == m.purpose).accessible_name(format!("Zweck {}", p.label)).on_click(move |_, app| me.update(app, |shell, cx| shell.mic_purpose(p.id, cx))));
-        }
-        page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Wofür ist die Aufnahme?")).child(chips).child(ui.hint(profile.hint)));
 
         // The takes.
         let seconds = |len: usize| len as f64 / f64::from(m.rate);
@@ -380,10 +382,10 @@ impl Shell {
             Phase::Idle => {
                 let me = me.clone();
                 let label = if m.result.is_some() { "Neu einstellen".to_string() } else { format!("Für {} einstellen", profile.label) };
-                page = page.child(div().flex().child(ui.button("einstellen", label).primary().on_click(move |_, app| me.update(app, |shell, cx| shell.mic_begin(cx)))));
+                work = work.child(div().flex().child(ui.button("einstellen", label).primary_when(m.result.is_none()).on_click(move |_, app| me.update(app, |shell, cx| shell.mic_begin(cx)))));
             }
             Phase::Noise => {
-                page = page.child(
+                work = work.child(
                     div()
                         .flex()
                         .flex_col()
@@ -402,7 +404,7 @@ impl Shell {
                     Purpose::Vocals => "Jetzt singen",
                     _ => "Jetzt sprechen",
                 };
-                page = page.child(
+                work = work.child(
                     div()
                         .flex()
                         .flex_col()
@@ -415,14 +417,14 @@ impl Shell {
                         .child(ui.bar("aufnahme-stimme", Some((seconds(m.take.len()) / m.speech_seconds) as f32), "Aufnahme der Stimme")),
                 );
             }
-            Phase::Working => page = page.child(ui.prose("Rechnet …")),
+            Phase::Working => work = work.child(ui.prose("Rechnet …")),
         }
 
         if let Some(done) = &m.result {
             let written: Vec<AnyElement> = m.made.iter().map(|path| self.written_row(&ui, path, cx)).collect();
-            page = page.child(result_block(ui, &me, m, done, written));
+            work = work.child(result_block(ui, &me, m, done, written));
         }
-        page.into_any_element()
+        page.child(ui.tool_body(settings, work)).into_any_element()
     }
 }
 

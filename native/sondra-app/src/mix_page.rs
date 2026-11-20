@@ -269,22 +269,22 @@ impl Shell {
         if let Some(error) = &m.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
-        let pick = |id: &'static str, label: &str, file: &Option<PathBuf>, voice: bool| {
+        // The next file to choose is the page's one action: the voice first, then the music.
+        let pick = |id: &'static str, label: &str, file: &Option<PathBuf>, voice: bool, next: bool| {
             let me = me.clone();
-            let button = ui.button(id, if file.is_some() { format!("{label} ändern") } else { format!("{label} wählen") }).accessible_name(if file.is_some() { format!("{label} ändern") } else { format!("{label} wählen") }).disabled(m.reading || m.writing).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_mix_file(voice, cx)));
+            let button = ui.button(id, if file.is_some() { format!("{label} ändern") } else { format!("{label} wählen") }).accessible_name(if file.is_some() { format!("{label} ändern") } else { format!("{label} wählen") }).primary_when(next).disabled(m.reading || m.writing).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_mix_file(voice, cx)));
             let mut row = div().flex().flex_wrap().items_center().gap(px(12.)).child(button);
             if let Some(f) = file {
                 row = row.child(ui.value(f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
             }
             row
         };
-        page = page.child(pick("stimme-waehlen", "Stimme", &m.voice, true)).child(pick("musik-waehlen", "Musik", &m.music, false));
-        if m.reading {
-            return page.child(ui.prose("Liest den Ton …")).into_any_element();
-        }
-        if m.voice.is_none() || m.music.is_none() {
-            return page.child(ui.hint("Mit beiden Dateien beginnt das Mischen.")).into_any_element();
-        }
+        let files = div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(pick("stimme-waehlen", "Stimme", &m.voice, true, m.voice.is_none()))
+            .child(pick("musik-waehlen", "Musik", &m.music, false, m.voice.is_some() && m.music.is_none()));
         let s = &m.settings;
         let steps = |title: &str, key: &'static str, values: Vec<(f64, String)>, now: f64, set: fn(&mut DuckSettings, f64)| {
             let mut chips = div().flex().flex_wrap().gap(px(6.));
@@ -292,7 +292,7 @@ impl Shell {
                 let me = me.clone();
                 chips = chips.child(ui.chip(format!("{key}-{label}"), label.clone(), (now - v).abs() < 1e-9).accessible_name(format!("{title} {label}")).on_click(move |_, app| me.update(app, |shell, cx| shell.mix_patch(move |d| set(d, v), cx))));
             }
-            div().flex().flex_col().gap(px(8.)).child(ui.subheading(title.to_string())).child(chips)
+            div().flex().flex_col().gap(px(8.)).child(ui.title(title.to_string())).child(chips)
         };
         let dbs = |values: &[f64]| -> Vec<(f64, String)> { values.iter().map(|v| (*v, db(*v))).collect() };
         let secs = |values: &[f64]| -> Vec<(f64, String)> { values.iter().map(|v| (*v, format!("{} s", format!("{v}").replace('.', ",")))).collect() };
@@ -313,9 +313,16 @@ impl Shell {
             .child(steps("Kommt zurück in", "release", ms(&[300.0, 600.0, 1000.0, 2000.0]), s.release_ms, |d, v| d.release_ms = v))
             .child(steps("Musik vor Sprachbeginn", "vorlauf", secs(&[0.0, 1.0, 2.0, 4.0]), s.lead_in, |d, v| d.lead_in = v))
             .child(steps("Ausklang nach Sprache", "ausklang", secs(&[0.0, 1.5, 3.0, 6.0]), s.tail, |d, v| d.tail = v))
-            .child(div().flex().flex_col().gap(px(6.)).child(div().flex().child(loop_chip)).child(ui.hint("Wiederholt die Musik, falls sie kürzer als die Stimme ist.")));
+            .child(div().flex().flex_col().gap(px(6.)).child(div().flex().child(loop_chip)).child(ui.setting_note("Wiederholt die Musik, falls sie kürzer als die Stimme ist.")));
 
-        let mut result = div().flex().flex_col().gap(px(14.));
+        let settings = vec![settings_col.into_any_element()];
+        if m.reading {
+            return page.child(ui.tool_body(settings, div().flex().flex_col().gap(px(20.)).child(files).child(ui.prose("Liest den Ton …")))).into_any_element();
+        }
+        if m.voice.is_none() || m.music.is_none() {
+            return page.child(ui.tool_body(settings, div().flex().flex_col().gap(px(20.)).child(files).child(ui.hint("Mit beiden Dateien beginnt das Mischen. Was links eingestellt ist, gilt dann.")))).into_any_element();
+        }
+        let mut result = div().flex().flex_col().gap(px(14.)).child(files);
         if let Some(mixed) = &m.mixed {
             let r = &mixed.report;
             result = result.child(div().flex().items_baseline().justify_between().gap(px(12.)).child(ui.subheading("Mischung")).child(ui.value(clock(r.total_seconds))));
@@ -375,7 +382,7 @@ impl Shell {
                     })),
             );
         }
-        page.child(div().flex().flex_wrap().items_start().gap(px(32.)).child(div().w(px(380.)).flex_none().child(settings_col)).child(div().flex_1().min_w(px(320.)).child(result))).into_any_element()
+        page.child(ui.tool_body(settings, result)).into_any_element()
     }
 }
 

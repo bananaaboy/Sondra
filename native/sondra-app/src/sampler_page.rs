@@ -584,7 +584,7 @@ impl Shell {
                 let me = me.clone();
                 ui.button("zerschneiden-waehlen", "Datei wählen").primary().disabled(s.busy.is_some()).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_sampler_file(cx)))
             };
-            return page.child(div().flex().child(pick)).into_any_element();
+            return page.child(ui.stage_empty(pick, "Noch keine Datei gewählt. Ein Loop oder Break wird hier an Schlägen, Pausen oder Takten zerschnitten, und jedes Stück wird ein Pad.")).into_any_element();
         };
         let busy = s.busy.is_some();
         let name = s.path.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();

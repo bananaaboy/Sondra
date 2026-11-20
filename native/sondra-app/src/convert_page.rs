@@ -246,9 +246,9 @@ impl Shell {
             let shown = names.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
             head = head.child(ui.value(if names.len() > 3 { format!("{shown} und {} weitere", names.len() - 3) } else { shown }));
         }
-        page = page.child(head);
+        let mut work = div().flex().flex_col().gap(px(20.)).child(head);
         if s.files.is_empty() {
-            return page.into_any_element();
+            work = work.child(ui.hint("Noch keine Datei gewählt. Vorlage und Format links gelten für die nächsten."));
         }
 
         // Templates, then formats.
@@ -288,23 +288,26 @@ impl Shell {
             let me = me.clone();
             ui.button("vorlage-speichern", "Als Vorlage speichern").small().disabled(!can_save || busy).on_click(move |_, app| me.update(app, |shell, cx| shell.convert_save_own(cx)))
         };
-        let own_row = div().flex().flex_wrap().items_center().gap(px(8.)).child(div().w(px(260.)).child(s.name.clone())).child(save);
+        let own_row = div().flex().flex_col().gap(px(8.)).child(div().w_full().child(s.name.clone())).child(div().flex().child(save));
         let mut formats = div().flex().flex_wrap().gap(px(6.));
         for format in FORMATS.iter() {
             let me = me.clone();
             let id = format.id;
             formats = formats.child(ui.chip(format!("format-{id}"), format.label, s.settings.format_id == id).accessible_name(format!("Format {}: {}", format.label, format.hint)).on_click(move |_, app| Self::convert_do(&me, app, move |s| s.choose_format(id))));
         }
-        page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Vorlage")).child(presets).child(own_row)).child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Format")).child(formats));
+        // The settings, in their column: template, format, and for lossy sound the bitrate.
+        let mut settings: Vec<AnyElement> = vec![
+            ui.setting("Vorlage", div().flex().flex_col().gap(px(10.)).child(presets).child(own_row), None),
+            ui.setting("Format", formats, None),
+        ];
         if let Some(format) = find_format(&s.settings.format_id) {
-            page = page.child(ui.hint(format!("{}: {}", format.label, format.hint)));
+            settings.push(ui.setting_note(format!("{}: {}", format.label, format.hint)));
         }
 
         // Audio bitrate for the lossy sound formats.
         if let Some(format) = find_format(&s.settings.format_id) {
             if format.kind == Kind::Audio && !format.lossless {
                 let mut rates = div().flex().flex_wrap().items_center().gap(px(6.));
-                rates = rates.child(ui.hint("Qualität:"));
                 for kbps in [128u32, 192, 256, 320] {
                     let me = me.clone();
                     rates = rates.child(ui.chip(format!("rate-{kbps}"), format!("{kbps} kbit/s"), s.settings.audio_bitrate_kbps == kbps).on_click(move |_, app| Self::convert_do(&me, app, move |s| {
@@ -313,7 +316,7 @@ impl Shell {
                         s.preset = None;
                     })));
                 }
-                page = page.child(rates);
+                settings.push(ui.setting("Qualität", rates, None));
             }
         }
 
@@ -321,14 +324,16 @@ impl Shell {
             let me = me.clone();
             ui.button("umwandeln-los", if busy { "Wandelt um …" } else { "Umwandeln" }).primary().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.start_convert(cx)))
         };
-        page = page.child(div().flex().child(go));
+        if !s.files.is_empty() {
+            work = work.child(div().flex().child(go));
+        }
 
         // The way there.
         if let (Some(run), Some(watch)) = (&s.run, &self.convert_watch) {
             let (n, name) = watch.lock().expect("lock").clone();
             let progress = *run.progress.lock().expect("lock");
             let cancel = run.cancel.clone();
-            page = page.child(
+            work = work.child(
                 div()
                     .flex()
                     .flex_col()
@@ -422,8 +427,8 @@ impl Shell {
                 }
                 done = done.child(line);
             }
-            page = page.child(done);
+            work = work.child(done);
         }
-        page.into_any_element()
+        page.child(ui.tool_body(settings, work)).into_any_element()
     }
 }

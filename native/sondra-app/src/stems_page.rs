@@ -369,14 +369,14 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let s = &self.stems;
-        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(860.)).child(ui.page_head("Spuren trennen", "Gesang, Schlagzeug, Bass und der Rest: ein Lied wird in seine Spuren zerlegt, ohne Netz und ohne Modell: Rechnen am Spektrum trennt, was gleichmässig klingt, von dem, was anschlägt, und die Mitte des Bildes vom Rand. Ergebnis sind vier Spuren und das Lied ohne Gesang."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Spuren trennen", "Gesang, Schlagzeug, Bass und der Rest: ein Lied wird in seine Spuren zerlegt, ohne Netz und ohne Modell: Rechnen am Spektrum trennt, was gleichmässig klingt, von dem, was anschlägt, und die Mitte des Bildes vom Rand. Ergebnis sind vier Spuren und das Lied ohne Gesang."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
         let running = s.work.is_some();
         let pick = {
             let me = me.clone();
-            ui.button("spuren-waehlen", if s.path.is_some() { "Anderes Lied" } else { "Lied wählen" }).primary().disabled(running || s.reading).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_stems_file(cx)))
+            ui.button("spuren-waehlen", if s.path.is_some() { "Anderes Lied" } else { "Lied wählen" }).primary_when(s.path.is_none()).disabled(running || s.reading).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_stems_file(cx)))
         };
         let mut file = div().flex().flex_wrap().items_center().gap(px(12.)).child(pick);
         if s.reading {
@@ -385,22 +385,18 @@ impl Shell {
         if let Some(path) = &s.path {
             file = file.child(ui.value(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
         }
-        page = page.child(file);
-        let Some(original) = &s.original else { return page.into_any_element() };
-        if original.channels.len() == 1 {
-            page = page.child(ui.notice(NoticeKind::Info, "Mono-Material: Ohne Stereobild lässt sich die Stimme nur an Frequenz und Rhythmus erkennen, die Trennung wird gröber."));
-        }
+        let mut work = div().flex().flex_col().gap(px(20.)).child(file);
         let mut presets = div().flex().flex_wrap().gap(px(6.));
         for (i, p) in PRESETS.iter().enumerate() {
             let me = me.clone();
             presets = presets.child(ui.chip(format!("spuren-{}", p.label), p.label, s.preset == i).accessible_name(format!("Worauf es ankommt: {}", p.label)).on_click(move |_, app| me.update(app, |shell, cx| shell.stems_preset(i, cx))));
         }
-        page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Worauf es ankommt")).child(presets).child(ui.hint(PRESETS[s.preset].desc)));
+        let mut settings = vec![ui.setting("Worauf es ankommt", presets, Some(PRESETS[s.preset].desc))];
 
         // A model of the person's own.
         {
             let (choose, drop) = (me.clone(), me.clone());
-            let mut block = div().flex().flex_col().gap(px(8.)).child(ui.subheading("Eigenes Modell (.onnx)")).child(ui.hint("Ein Demucs- oder Spleeter-Export, den Sie selbst mitbringen: Sondra liefert keine Modelle mit. Es läuft auf diesem Gerät und ersetzt die Trennung mit Masken."));
+            let mut block = div().flex().flex_col().gap(px(8.)).child(ui.title("Eigenes Modell (.onnx)")).child(ui.setting_note("Ein Demucs- oder Spleeter-Export, den Sie selbst mitbringen: Sondra liefert keine Modelle mit. Es läuft auf diesem Gerät und ersetzt die Trennung mit Masken."));
             let mut row = div().flex().flex_wrap().items_center().gap(px(10.));
             if let Some(path) = &s.model {
                 row = row.child(ui.value(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
@@ -416,15 +412,24 @@ impl Shell {
             if let Some(error) = &s.model_error {
                 block = block.child(ui.notice(NoticeKind::Warning, error.clone()));
             }
-            page = page.child(block);
+            settings.push(block.into_any_element());
+        }
+        let Some(original) = &s.original else {
+            if s.path.is_none() && !s.reading {
+                work = work.child(ui.hint("Noch kein Lied gewählt. Was links eingestellt ist, gilt für das nächste."));
+            }
+            return page.child(ui.tool_body(settings, work)).into_any_element();
+        };
+        if original.channels.len() == 1 {
+            work = work.child(ui.notice(NoticeKind::Info, "Mono-Material: Ohne Stereobild lässt sich die Stimme nur an Frequenz und Rhythmus erkennen, die Trennung wird gröber."));
         }
 
-        if let Some(work) = &s.work {
-            let w = work.lock().unwrap();
-            page = page.child(div().flex().flex_col().gap(px(8.)).child(ui.prose(if s.by_model { "Wird mit Ihrem Modell getrennt …" } else { "Wird getrennt …" })).child(ui.bar("spuren-fortschritt", Some(w.share as f32), w.note.clone())));
+        if let Some(job) = &s.work {
+            let w = job.lock().unwrap();
+            work = work.child(div().flex().flex_col().gap(px(8.)).child(ui.prose(if s.by_model { "Wird mit Ihrem Modell getrennt …" } else { "Wird getrennt …" })).child(ui.bar("spuren-fortschritt", Some(w.share as f32), w.note.clone())));
         } else {
             let me2 = me.clone();
-            page = page.child(div().flex().child(ui.button("spuren-trennen", if s.stems.is_empty() { "Spuren trennen" } else { "Neu trennen" }).primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.stems_start(cx)))));
+            work = work.child(div().flex().child(ui.button("spuren-trennen", if s.stems.is_empty() { "Spuren trennen" } else { "Neu trennen" }).primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.stems_start(cx)))));
         }
 
         if !s.stems.is_empty() {
@@ -461,8 +466,8 @@ impl Shell {
                     None => {}
                 }
             }
-            page = page.child(out);
+            work = work.child(out);
         }
-        page.into_any_element()
+        page.child(ui.tool_body(settings, work)).into_any_element()
     }
 }

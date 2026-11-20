@@ -268,9 +268,9 @@ impl Shell {
         }
         // Header and notes above; below, the settings column on its tint and the work beside it.
         let frame = page;
-        let settings = div().flex_none().w(px(320.)).p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(settings);
-        let mut page = div().flex_1().min_w(px(320.)).flex().flex_col().gap(px(20.)).child(head);
-        let done = move |page: gpui::Div| frame.child(div().flex().flex_wrap().items_start().gap(px(28.)).child(settings).child(page)).into_any_element();
+        let settings = vec![settings.into_any_element()];
+        let mut page = div().flex().flex_col().gap(px(20.)).child(head);
+        let done = move |page: gpui::Div| frame.child(ui.tool_body(settings, page)).into_any_element();
 
         if h.file.is_some() {
             let stale = h.heard.is_some() && h.made_with.as_deref() != Some(h.signature().as_str());

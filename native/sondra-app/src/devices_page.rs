@@ -516,7 +516,7 @@ impl Shell {
                 }
             }
         }
-        page = page.child(mine);
+        let mut work = div().flex().flex_col().gap(px(20.)).child(mine);
 
         // The others.
         let mut others = div().flex().flex_col().gap(px(12.)).child(ui.subheading("Ihre anderen Geräte"));
@@ -535,9 +535,9 @@ impl Shell {
             }
             others = others.child(list);
         }
-        page = page.child(others);
+        work = work.child(others);
         if let Some(problem) = &d.problem {
-            page = page.child(ui.notice(NoticeKind::Warning, problem.clone()));
+            work = work.child(ui.notice(NoticeKind::Warning, problem.clone()));
         }
 
         // Transfers.
@@ -547,24 +547,27 @@ impl Shell {
             for t in shown {
                 rows = rows.child(transfer_row(ui, &me, t, &d.receive_dir));
             }
-            page = page.child(div().flex().flex_col().gap(px(12.)).child(ui.subheading("Übertragungen")).child(rows));
+            work = work.child(div().flex().flex_col().gap(px(12.)).child(ui.subheading("Übertragungen")).child(rows));
         }
 
-        page = page.child(
+        // How it works, the folder, a server of one's own, and forgetting this device: the settings column.
+        let mut settings: Vec<AnyElement> = vec![
             div()
                 .flex()
                 .flex_col()
                 .gap(px(8.))
-                .child(ui.subheading("So geht es"))
+                .child(ui.title("So geht es"))
                 .child(ui.prose("Das andere Gerät fragt, bevor es etwas annimmt. Hier landen angenommene Dateien im Ordner unten; Ordner behalten ihre Unterordner. Sind die Geräte nicht im selben Netz, findet sich kein direkter Weg."))
-                .child(div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.hint("Ordner:")).child(ui.value(d.receive_dir.display().to_string()))),
-        );
-        page = page.child(self.own_server_block(ui, cx));
+                .child(div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.hint("Ordner:")).child(ui.value(d.receive_dir.display().to_string())))
+                .into_any_element(),
+        ];
+        settings.push(self.own_server_block(ui, cx));
         let forget = {
             let me = me.clone();
             ui.button("geraet-vergessen", "Dieses Gerät ganz vergessen").small().on_click(move |_, app| me.update(app, |shell, cx| shell.devices_forget(cx)))
         };
-        page.child(div().flex().child(forget)).into_any_element()
+        settings.push(div().flex().child(forget).into_any_element());
+        page.child(ui.tool_body(settings, work)).into_any_element()
     }
 }
 

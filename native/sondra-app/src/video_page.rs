@@ -470,7 +470,12 @@ impl Shell {
             ui.button("video-waehlen", if v.file.is_some() { "Anderes Video wählen" } else { "Video wählen" }).primary().disabled(v.run.is_some()).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_video(cx)))
         };
         page = page.child(div().flex().flex_wrap().items_center().gap(px(12.)).child(choose));
-        let (Some(file), Some((w, h))) = (&v.file, v.source) else { return page.into_any_element() };
+        let (Some(file), Some((w, h))) = (&v.file, v.source) else {
+            if v.file.is_none() {
+                page = page.child(ui.hint("Noch kein Video gewählt. Danach steht es hier auf der Bühne, die Werkzeuge rechts daneben."));
+            }
+            return page.into_any_element();
+        };
         let ops = &v.ops;
 
         // The stage and its slider.
@@ -736,9 +741,9 @@ impl Shell {
                     })),
             );
         }
-        let stage_col = div().flex_1().min_w(px(360.)).flex().flex_col().gap(px(12.)).child(stage).child(timeline).child(seek).child(status);
-        let controls = div().w(px(380.)).flex_none().flex().flex_col().gap(px(16.)).child(rail).child(panel).child(reset);
-        page.child(caption).child(div().flex().flex_wrap().items_start().gap(px(24.)).child(stage_col).child(controls)).into_any_element()
+        let stage_col = div().flex().flex_col().gap(px(12.)).child(stage).child(timeline).child(seek).child(status);
+        let controls = div().flex().flex_col().gap(px(16.)).child(rail).child(panel).child(reset);
+        page.child(caption).child(ui.stage_body(stage_col, controls)).into_any_element()
     }
 }
 

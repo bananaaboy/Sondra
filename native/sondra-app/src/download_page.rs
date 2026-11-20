@@ -520,20 +520,18 @@ impl Shell {
             let me = me.clone();
             ui.button("suchen", if d.finding { "Sucht …" } else { "Suchen" }).primary().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.find_address(cx)))
         };
-        page = page.child(div().flex().flex_wrap().items_center().gap(px(10.)).child(div().w(px(520.)).child(d.input.clone())).child(find_button));
+        let mut work = div().flex().flex_col().gap(px(20.)).child(div().flex().flex_wrap().items_center().gap(px(10.)).child(div().flex_1().min_w(px(260.)).max_w(px(560.)).child(d.input.clone())).child(find_button));
+        // Where the files go and whether a sound says they are there: the settings column.
         let me2 = me.clone();
-        page = page.child(
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(10.))
-                .child(ui.hint("Ordner:"))
-                .child(ui.value(d.folder.display().to_string()))
-                .child(ui.button("ordner-aendern", "Ändern").small().disabled(busy).on_click(move |_, app| me2.update(app, |shell, cx| shell.choose_download_folder(cx)))),
-        );
         let (me_chime, chime_on) = (me.clone(), d.chime);
-        page = page.child(div().flex().child(ui.chip("gong", "Ton, wenn fertig", chime_on).on_click(move |_, app| me_chime.update(app, |shell, cx| shell.set_download_chime(!chime_on, cx)))));
+        let settings = vec![
+            ui.setting(
+                "Ordner",
+                div().flex().flex_col().gap(px(8.)).child(ui.value(d.folder.display().to_string())).child(div().flex().child(ui.button("ordner-aendern", "Ändern").small().disabled(busy).on_click(move |_, app| me2.update(app, |shell, cx| shell.choose_download_folder(cx))))),
+                None,
+            ),
+            ui.setting("Wenn es fertig ist", div().flex().child(ui.chip("gong", "Ton, wenn fertig", chime_on).on_click(move |_, app| me_chime.update(app, |shell, cx| shell.set_download_chime(!chime_on, cx)))), None),
+        ];
 
         // A pasted list: what was found behind each address.
         if !d.queue.is_empty() && d.job.is_none() {
@@ -543,7 +541,7 @@ impl Shell {
             }
             let me4 = me.clone();
             let count = d.queue.len();
-            page = page.child(
+            work = work.child(
                 div()
                     .flex()
                     .flex_col()
@@ -560,7 +558,7 @@ impl Shell {
         // Nothing found, yt-dlp not there: the offer to fetch it.
         if let Some(address) = d.offer_tool.as_ref().filter(|_| d.found.is_none()) {
             let me_install = me.clone();
-            page = page.child(
+            work = work.child(
                 div()
                     .flex()
                     .flex_col()
@@ -608,7 +606,7 @@ impl Shell {
             }
             let me3 = me.clone();
             card = card.child(div().flex().child(ui.button("laden", "Laden").primary().disabled(d.job.is_some()).on_click(move |_, app| me3.update(app, |shell, cx| shell.start_download(cx)))));
-            page = page.child(card);
+            work = work.child(card);
         }
 
         // The way there.
@@ -628,7 +626,7 @@ impl Shell {
             let hold = job.cancel.clone();
             let hold_me = me.clone();
             let can_pause = job.can_pause;
-            page = page.child(
+            work = work.child(
                 div()
                     .flex()
                     .flex_col()
@@ -684,8 +682,8 @@ impl Shell {
                     on_open: std::rc::Rc::new(|_, _| {}),
                 });
             }
-            page = page.child(div().flex().flex_col().gap(px(10.)).child(div().pb(px(10.)).border_b_1().border_color(c.line).child(ui.subheading("Geladen"))).child(rows));
+            work = work.child(div().flex().flex_col().gap(px(10.)).child(div().pb(px(10.)).border_b_1().border_color(c.line).child(ui.subheading("Geladen"))).child(rows));
         }
-        page.into_any_element()
+        page.child(ui.tool_body(settings, work)).into_any_element()
     }
 }

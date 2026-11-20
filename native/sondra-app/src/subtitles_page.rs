@@ -347,7 +347,7 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let s = &self.subtitles;
-        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(860.)).child(ui.page_head("Untertitel", "Eine Spracherkennung auf diesem Computer hört einen Film oder eine Aufnahme ab und schreibt auf, was gesagt wird — als Text, als Untertitel-Datei oder direkt im Film. Der Ton verlässt den Computer nicht."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Untertitel", "Eine Spracherkennung auf diesem Computer hört einen Film oder eine Aufnahme ab und schreibt auf, was gesagt wird — als Text, als Untertitel-Datei oder direkt im Film. Der Ton verlässt den Computer nicht."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
@@ -361,16 +361,13 @@ impl Shell {
         let pick = {
             let me = me.clone();
             let label = if s.path.is_some() { "Andere Datei" } else { "Datei wählen" };
-            ui.button("untertitel-waehlen", label).primary().disabled(running).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_subtitles_file(cx)))
+            ui.button("untertitel-waehlen", label).primary_when(s.path.is_none()).disabled(running).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_subtitles_file(cx)))
         };
         let mut file = div().flex().flex_wrap().items_center().gap(px(12.)).child(pick);
         if let Some(path) = &s.path {
             file = file.child(ui.value(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
         }
-        page = page.child(file);
-        if s.path.is_none() {
-            return page.into_any_element();
-        }
+        let mut work = div().flex().flex_col().gap(px(20.)).child(file);
 
         // Model and language.
         let mut models = div().flex().flex_wrap().gap(px(6.));
@@ -386,7 +383,11 @@ impl Shell {
             languages = languages.child(ui.chip(format!("sprache-{code}"), label, s.language == code).accessible_name(format!("Sprache {label}")).on_click(move |_, app| me.update(app, |shell, cx| shell.subtitles_set(model, code, cx))));
         }
         let model = model_by_id(s.model);
-        page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Genauigkeit")).child(models).child(ui.hint(model.hint))).child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Sprache")).child(languages));
+        let settings = vec![ui.setting("Genauigkeit", models, Some(model.hint)), ui.setting("Sprache", languages, None)];
+        if s.path.is_none() {
+            work = work.child(ui.hint("Noch keine Datei gewählt. Genauigkeit und Sprache links gelten für die nächste."));
+            return page.child(ui.tool_body(settings, work)).into_any_element();
+        }
 
         let present = is_present(&s.models_dir, &model);
         let block = || div().flex().flex_col().gap(px(10.)).p(px(16.)).rounded(px(radius::CARD)).bg(c.panel_soft);
@@ -401,7 +402,7 @@ impl Shell {
             } else {
                 b = b.child(div().flex().child(ui.button("modell-laden", format!("Modell laden ({})", megabytes(model.bytes))).primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.subtitles_fetch(cx)))));
             }
-            return page.child(b).into_any_element();
+            return page.child(ui.tool_body(settings, work.child(b))).into_any_element();
         }
 
         // Start, progress, stop.
@@ -414,7 +415,7 @@ impl Shell {
             let me2 = me.clone();
             run = run.child(div().flex().child(ui.button("untertitel-erzeugen", if s.segments.is_empty() { "Untertitel erzeugen" } else { "Neu erzeugen" }).primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.subtitles_start(cx)))));
         }
-        page = page.child(run);
+        work = work.child(run);
 
         // What was heard, as cues, as it comes.
         if !s.segments.is_empty() {
@@ -422,7 +423,7 @@ impl Shell {
             for cue in to_cues(&s.segments) {
                 list = list.child(div().flex().gap(px(12.)).child(div().w(px(70.)).child(ui.value(clock(cue.start)))).child(div().flex_1().child(ui.prose(cue.text.replace('\n', " ")))));
             }
-            page = page.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Gehört")).child(list));
+            work = work.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Gehört")).child(list));
             if !running {
                 let save = |id: &'static str, label: &str, kind: &'static str| {
                     let me = me.clone();
@@ -443,13 +444,13 @@ impl Shell {
                 for path in &s.made {
                     out = out.child(self.written_row(&ui, path, cx));
                 }
-                page = page.child(out);
+                work = work.child(out);
             }
         } else if let Some((_, _, _, _, false)) = job {
             if s.error.is_none() {
-                page = page.child(ui.hint("Es war nichts zu hören, was sich aufschreiben liesse."));
+                work = work.child(ui.hint("Es war nichts zu hören, was sich aufschreiben liesse."));
             }
         }
-        page.into_any_element()
+        page.child(ui.tool_body(settings, work)).into_any_element()
     }
 }

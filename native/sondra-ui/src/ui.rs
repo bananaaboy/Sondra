@@ -17,6 +17,9 @@ use crate::theme::{family, radius, size, Colors};
 /// The reading measure of running text: about 70 characters of 14 px Barlow.
 pub const MEASURE: f32 = 640.0;
 
+/// The width of a tool's settings column.
+pub const SETTINGS_WIDTH: f32 = 320.0;
+
 /// The palette a part of the interface is drawn in.
 #[derive(Clone, Copy)]
 pub struct Ui {
@@ -980,6 +983,83 @@ impl Ui {
             .into_any_element()
     }
 
+    /// The body of a tool page, as on „Tonart“: the settings in a column of their own on the tint at the
+    /// left, the work beside it — the file, the run, the result. On a narrow plate the work wraps under the
+    /// settings. No settings: the work has the whole width.
+    pub fn tool_body(&self, settings: Vec<AnyElement>, work: impl IntoElement) -> AnyElement {
+        let work = div().flex_1().min_w(px(320.)).flex().flex_col().gap(px(20.)).child(work);
+        if settings.is_empty() {
+            return work.into_any_element();
+        }
+        div()
+            .flex()
+            .flex_wrap()
+            .items_start()
+            .gap(px(28.))
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(SETTINGS_WIDTH))
+                    .p(px(16.))
+                    .rounded(px(radius::CARD))
+                    .bg(self.c.panel_soft)
+                    .flex()
+                    .flex_col()
+                    .gap(px(18.))
+                    .children(settings),
+            )
+            .child(work)
+            .into_any_element()
+    }
+
+    /// The body of a tool with a stage (a film, a picture): the stage and its work at the left, as wide as
+    /// there is room, the inspector — the tool's rail and its settings — at the right on the tint, as in a
+    /// cutting room. On a narrow plate the inspector wraps under the stage.
+    pub fn stage_body(&self, work: impl IntoElement, inspector: impl IntoElement) -> AnyElement {
+        div()
+            .flex()
+            .flex_wrap()
+            .items_start()
+            .gap(px(24.))
+            .child(div().flex_1().min_w(px(360.)).flex().flex_col().gap(px(12.)).child(work))
+            .child(
+                div()
+                    .flex_none()
+                    .w(px(SETTINGS_WIDTH + 20.))
+                    .p(px(16.))
+                    .rounded(px(radius::CARD))
+                    .bg(self.c.panel_soft)
+                    .flex()
+                    .flex_col()
+                    .gap(px(16.))
+                    .child(inspector),
+            )
+            .into_any_element()
+    }
+
+    /// What a tool with a stage asks for before there is anything on it: the way in and one line.
+    pub fn stage_empty(&self, pick: impl IntoElement, line: &str) -> AnyElement {
+        div().flex().flex_col().gap(px(12.)).child(div().flex().child(pick)).child(self.hint(line.to_string())).into_any_element()
+    }
+
+    /// One setting in the settings column: its name, the control, and a line on what it does.
+    pub fn setting(&self, title: impl Into<SharedString>, control: impl IntoElement, hint: Option<&str>) -> AnyElement {
+        // The control at the column's width too: a row of pills that wraps, measured without one, was given
+        // the height of more rows than it draws.
+        let mut row = div().w_full().flex().flex_col().gap(px(8.)).child(self.title(title)).child(div().w(px(SETTINGS_WIDTH - 32.)).child(control));
+        if let Some(hint) = hint {
+            // A known width: a stretched text in a column was measured at a narrower one, and the column
+            // kept the height of four lines for two.
+            row = row.child(div().w(px(SETTINGS_WIDTH - 32.)).child(self.hint(hint.to_string())));
+        }
+        row.into_any_element()
+    }
+
+    /// A line in the settings column, outside a `setting`: at the column's width, measured right.
+    pub fn setting_note(&self, text: impl Into<SharedString>) -> AnyElement {
+        div().w(px(SETTINGS_WIDTH - 32.)).child(self.hint(text)).into_any_element()
+    }
+
     /// Prose a step back: the summary under a title.
     fn muted_prose(&self, text: impl Into<SharedString>) -> AnyElement {
         let text: SharedString = text.into();
@@ -1019,6 +1099,9 @@ impl Ui {
             Role::Label,
             div()
                 .text_size(px(size::SMALL))
+                // Said outright: without it a wrapped hint was laid out at the inherited line height and
+                // drawn at its own, and a column kept a gap under every two-line hint.
+                .line_height(px(size::SMALL * 1.45))
                 .text_color(self.c.muted)
                 .child(text.clone()),
         )

@@ -363,7 +363,7 @@ impl Shell {
                 let me = me.clone();
                 ui.button("ton-waehlen", "Datei wählen").primary().disabled(a.busy.is_some()).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_audio_file(cx)))
             };
-            return page.child(div().flex().child(pick)).into_any_element();
+            return page.child(ui.stage_empty(pick, "Noch keine Datei gewählt. Danach steht die Welle hier, und die Werkzeuge darunter gelten für die gewählte Stelle oder das Ganze.")).into_any_element();
         };
         let audio = editor.audio();
         let total = audio.seconds();
@@ -462,7 +462,7 @@ impl Shell {
                 cx.notify();
             })));
         }
-        page = page.child(tabs);
+        let tabs_row = tabs;
         let op = |id: String, label: String, op: Op| {
             let me = me.clone();
             ui.button(id, label.clone()).small().accessible_name(label).disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.audio_do(op, cx)))
@@ -575,6 +575,7 @@ impl Shell {
                 }
             }
         }
-        page.child(panel).into_any_element()
+        // The tools of the editor on the tint under the wave: the rail of jobs, then the one that is open.
+        page.child(div().flex().flex_col().gap(px(16.)).p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(ui.c.panel_soft).child(tabs_row).child(panel)).into_any_element()
     }
 }

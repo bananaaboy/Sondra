@@ -211,11 +211,14 @@ impl Shell {
         let me = cx.entity();
         let c = ui.c;
         let s = &self.screen;
-        let mut page = div().flex().flex_col().gap(px(20.)).max_w(px(760.)).child(ui.page_head("Bildschirm aufnehmen", "Der ganze Bildschirm oder ein Fenster als Video — auf Wunsch mit dem Ton des Rechners und mit dem Mikrofon. Die Aufnahme bleibt auf diesem Computer."));
+        let mut page = div().flex().flex_col().gap(px(20.)).child(ui.page_head("Bildschirm aufnehmen", "Der ganze Bildschirm oder ein Fenster als Video — auf Wunsch mit dem Ton des Rechners und mit dem Mikrofon. Die Aufnahme bleibt auf diesem Computer."));
         if let Some(error) = &s.error {
             page = page.child(ui.notice(NoticeKind::Warning, error.clone()));
         }
-        let mut block = div().flex().flex_col().gap(px(14.)).p(px(20.)).rounded(px(radius::CARD)).bg(c.panel_soft);
+        // A recording under way has the whole width, on its tint; otherwise what to record is set in the
+        // settings column and the work is the button that starts it.
+        let mut block = div().flex().flex_col().gap(px(14.)).when(s.running.is_some(), |d| d.p(px(20.)).rounded(px(radius::CARD)).bg(c.panel_soft));
+        let mut settings: Vec<AnyElement> = Vec::new();
 
         if let Some(running) = &s.running {
             let stop = me.clone();
@@ -229,13 +232,14 @@ impl Shell {
         } else if s.busy {
             block = block.child(ui.prose("Die Aufnahme wird abgeschlossen …"));
         } else {
+            let mut side = div().flex().flex_col().gap(px(18.));
             let (whole, window, refresh) = (me.clone(), me.clone(), me.clone());
-            block = block.child(
+            side = side.child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .child(ui.subheading("Was aufnehmen?"))
+                    .child(ui.title("Was aufnehmen?"))
                     .child(
                         div()
                             .flex()
@@ -264,19 +268,19 @@ impl Shell {
                         cx.notify();
                     })));
                 }
-                block = block.child(list);
+                side = side.child(list);
                 if s.windows.is_empty() {
-                    block = block.child(ui.hint(if cfg!(windows) { "Kein Fenster gefunden. Öffnen Sie das Fenster und suchen Sie erneut." } else { "Fenster lassen sich nur unter Windows wählen." }));
+                    side = side.child(ui.hint(if cfg!(windows) { "Kein Fenster gefunden. Öffnen Sie das Fenster und suchen Sie erneut." } else { "Fenster lassen sich nur unter Windows wählen." }));
                 }
-                block = block.child(div().flex().child(ui.button("fenster-suchen", "Erneut suchen").small().on_click(move |_, app| refresh.update(app, |sh, cx| sh.screen_refresh(cx)))));
+                side = side.child(div().flex().child(ui.button("fenster-suchen", "Erneut suchen").small().on_click(move |_, app| refresh.update(app, |sh, cx| sh.screen_refresh(cx)))));
             }
             let (system, mic, f30, f60) = (me.clone(), me.clone(), me.clone(), me.clone());
-            block = block.child(
+            side = side.child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .child(ui.subheading("Ton"))
+                    .child(ui.title("Ton"))
                     .child(
                         div()
                             .flex()
@@ -292,12 +296,12 @@ impl Shell {
                             }))),
                     ),
             );
-            block = block.child(
+            side = side.child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .child(ui.subheading("Bilder je Sekunde"))
+                    .child(ui.title("Bilder je Sekunde"))
                     .child(
                         div()
                             .flex()
@@ -312,10 +316,11 @@ impl Shell {
                             }))),
                     ),
             );
+            settings.push(side.into_any_element());
             let start = me.clone();
             block = block.child(div().flex().child(ui.button("aufnahme-starten", "Aufnahme starten").primary().disabled(s.choosing_window && !matches!(s.what, What::Window(_))).on_click(move |_, app| start.update(app, |sh, cx| sh.screen_start(cx)))));
         }
-        page = page.child(block);
+        let mut work = div().flex().flex_col().gap(px(20.)).child(block);
 
         if !s.made.is_empty() {
             let mut list = div().flex().flex_col().gap(px(8.)).child(ui.subheading("Aufgenommen"));
@@ -347,8 +352,8 @@ impl Shell {
                         })),
                 );
             }
-            page = page.child(list);
+            work = work.child(list);
         }
-        page.into_any_element()
+        page.child(ui.tool_body(settings, work)).into_any_element()
     }
 }

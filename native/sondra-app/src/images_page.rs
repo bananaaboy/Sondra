@@ -304,7 +304,12 @@ impl Shell {
             ui.button("bilder-waehlen", if i.files.is_empty() { "Bilder wählen" } else { "Andere Bilder wählen" }).primary().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_images(cx)))
         };
         page = page.child(div().flex().flex_wrap().items_center().gap(px(12.)).child(choose));
-        let (Some(path), Some((w, h))) = (i.current(), i.dims) else { return page.into_any_element() };
+        let (Some(path), Some((w, h))) = (i.current(), i.dims) else {
+            if i.files.is_empty() {
+                page = page.child(ui.hint("Noch kein Bild gewählt. Danach steht es hier auf der Bühne, die Werkzeuge rechts daneben."));
+            }
+            return page.into_any_element();
+        };
         let ops = &i.ops;
         let (ow, oh) = output_size(w, h, ops);
 
@@ -506,8 +511,8 @@ impl Shell {
                 ),
             );
         }
-        let controls = div().w(px(360.)).flex_none().flex().flex_col().gap(px(16.)).child(rail).child(panel).child(reset).child(done);
-        page.child(caption).child(div().flex().flex_wrap().items_start().gap(px(24.)).child(div().flex_1().min_w(px(320.)).child(stage)).child(controls)).into_any_element()
+        let controls = div().flex().flex_col().gap(px(16.)).child(rail).child(panel).child(reset).child(done);
+        page.child(caption).child(ui.stage_body(stage, controls)).into_any_element()
     }
 }
 

@@ -540,8 +540,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Entscheidungen stehen in [`native/DESIGN.md`](native/DESIGN.md), der Vertrag in
   `.impeccable/surfaces/native-sondra-app-src-shell-rs.md`; die Website behält ihre Welt in `DESIGN.md`.
   Für jeden Edit: GPUI misst Text unter `max_w` in einer schrumpfenden Flex-Spalte falsch und `line_clamp`
-  schneidet mitten im Wort — Text, der umbrechen soll, bekommt eine bekannte Breite, Kachelhinweise brechen
-  frei um. Benennen Rack und Seite denselben Knopf („Umwandeln“), findet `Snapshot::find` den auf der
+  schneidet mitten im Wort — Text, der umbrechen soll, bekommt eine bekannte Breite (auch eine umbrechende
+  Pillenzeile in einer gestreckten Spalte), Kachelhinweise brechen frei um. Werkzeugseiten bauen auf
+  `ui.tool_body`/`ui.setting` bzw. `ui.stage_body`, nie mit eigener Spaltenmechanik. Benennen Rack und Seite denselben Knopf („Umwandeln“), findet `Snapshot::find` den auf der
   Seite; `find_in_navigation` den im Rack. **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
   Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
   gestrichen, sobald etwas davon wegfällt. Auf Windows nur in der CI gelaufen
