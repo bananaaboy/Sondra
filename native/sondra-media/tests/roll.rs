@@ -147,3 +147,28 @@ fn the_dynamics_lane_sets_what_sounds_in_a_step_and_the_octave_buttons_stay_in_r
     assert_eq!(notes_to_cells(&[note(0, 3, 0), note(2, 1, 7), note(15, 1, 0)], 16).iter().filter(|c| **c).count(), 3);
     assert!(notes_to_cells(&[note(40, 1, 0)], 16).iter().all(|c| !c), "a note past the end is no step");
 }
+
+#[test]
+fn the_spice_buttons_draw_what_the_website_draws() {
+    use sondra_media::roll::{generate, Spice};
+    let arp = generate(Spice::Arpeggio, 16);
+    assert_eq!(arp.len(), 8);
+    assert_eq!(arp.iter().map(|n| n.step).collect::<Vec<_>>(), [0, 2, 4, 6, 8, 10, 12, 14]);
+    assert_eq!(arp.iter().map(|n| n.semitone as i32).collect::<Vec<_>>(), [0, 3, 7, 12, 7, 3, 0, -5]);
+    assert!(arp.iter().all(|n| n.length == 2));
+    assert_eq!(arp[0].velocity, Some(0.95));
+    assert_eq!(arp[1].velocity, Some(0.72));
+    // Fewer steps, fewer notes.
+    assert_eq!(generate(Spice::Arpeggio, 8).len(), 4);
+    let chords = generate(Spice::Chords, 16);
+    assert_eq!(chords.len(), 12);
+    assert_eq!(chords.iter().filter(|n| n.step == 4).map(|n| n.semitone as i32).collect::<Vec<_>>(), [-2, 2, 5]);
+    // A chord that would run over the end is cut to it; one that begins after it is left out.
+    let short = generate(Spice::Chords, 6);
+    assert_eq!(short.len(), 6);
+    assert!(short.iter().filter(|n| n.step == 4).all(|n| n.length == 2));
+    let bass = generate(Spice::Bass, 16);
+    assert_eq!(bass.len(), 6);
+    assert_eq!(generate(Spice::Bass, 7).len(), 3, "steps 0, 3 and 6 only");
+    assert_eq!(bass[0].semitone, -12.0);
+}

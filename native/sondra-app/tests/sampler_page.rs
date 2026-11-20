@@ -318,4 +318,16 @@ fn a_pads_piano_roll_sets_lengthens_moves_and_takes_away_notes_with_the_pointer(
     let pattern = w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().clone());
     assert!(!pattern.notes.contains_key("p1"));
     assert!(pattern.cells["p1"][9] && pattern.cells["p1"].iter().filter(|c| **c).count() == 1);
+    // „Spice“: a chord progression and an arpeggio drawn in one press, as on the website.
+    if w.tree().find(Role::Button, "Akkorde zeichnen").is_none() {
+        w.press(Role::Button, "Klavierrolle für Pad 1");
+    }
+    let steps = w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().steps);
+    w.press(Role::Button, "Akkorde zeichnen");
+    let chords = w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes());
+    assert_eq!(chords.len(), 3 * (steps / 4).min(4), "three notes for each chord that fits");
+    w.press(Role::Button, "Arpeggio zeichnen");
+    let arp = w.shell.read_with(w.cx, |s, _| s.sampler_roll_notes());
+    assert_eq!(arp.len(), steps / 2);
+
 }

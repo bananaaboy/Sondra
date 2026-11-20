@@ -244,6 +244,44 @@ pub fn shift_octave(notes: &[RollNote], delta: i32) -> Vec<RollNote> {
     notes.iter().map(|n| RollNote { semitone: (n.semitone + f64::from(delta)).clamp(-12.0, 12.0), ..*n }).collect()
 }
 
+/// What the „Spice“ buttons draw (`generateMelody` in `StepSequencer.tsx`, rule for rule).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Spice {
+    /// A broken minor chord up and down, a note every second step.
+    Arpeggio,
+    /// A bass line below the pad's pitch.
+    Bass,
+    /// Four sustained chords.
+    Chords,
+}
+
+pub fn generate(kind: Spice, steps: usize) -> Vec<RollNote> {
+    let note = |step: usize, length: usize, semitone: i32, velocity: f64| RollNote { step, length, semitone: f64::from(semitone), velocity: Some(velocity) };
+    match kind {
+        Spice::Arpeggio => {
+            const PITCHES: [i32; 8] = [0, 3, 7, 12, 7, 3, 0, -5];
+            (0..steps / 2).map(|i| note(i * 2, 2, PITCHES[i % PITCHES.len()], if i % 2 == 0 { 0.95 } else { 0.72 })).collect()
+        }
+        Spice::Bass => [(0, 3, -12, 1.0), (3, 1, -12, 0.75), (6, 2, -9, 0.9), (8, 3, -5, 0.95), (12, 2, -7, 0.85), (14, 2, -5, 0.8)]
+            .into_iter()
+            .filter(|(step, ..)| *step < steps)
+            .map(|(step, length, semitone, velocity)| note(step, length, semitone, velocity))
+            .collect(),
+        Spice::Chords => {
+            let mut out = Vec::new();
+            for (step, length, tones) in [(0usize, 4usize, [0, 3, 7]), (4, 4, [-2, 2, 5]), (8, 4, [-4, 0, 3]), (12, 4, [-5, -1, 2])] {
+                if step >= steps {
+                    continue;
+                }
+                for tone in tones {
+                    out.push(note(step, length.min(steps - step), tone, 0.88));
+                }
+            }
+            out
+        }
+    }
+}
+
 /// Back to steps: every note's start becomes a step at the pad's pitch.
 pub fn notes_to_cells(notes: &[RollNote], steps: usize) -> Vec<bool> {
     let mut cells = vec![false; steps];

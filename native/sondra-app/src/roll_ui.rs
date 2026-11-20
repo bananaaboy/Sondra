@@ -96,6 +96,20 @@ impl Shell {
         cx.notify();
     }
 
+    /// The „Spice“ buttons: a chord progression or an arpeggio is drawn in place of what stands there (the
+    /// Zurück-Knopf of the page takes the old steps back as long as the roll is open).
+    pub fn sampler_roll_spice(&mut self, kind: roll::Spice, cx: &mut Context<Self>) {
+        let steps = self.sampler.pattern.steps;
+        let made = roll::generate(kind, steps);
+        let first = made.first().map(|n| n.semitone).unwrap_or(0.0);
+        if let Some(notes) = self.roll_notes() {
+            *notes = made;
+        }
+        let index = self.sampler.selected;
+        self.sampler_audition(index, first, cx);
+        cx.notify();
+    }
+
     pub fn sampler_roll_scale(&mut self, scale: Scale, cx: &mut Context<Self>) {
         if let Some(view) = self.sampler.roll.as_mut() {
             view.scale = scale;
@@ -250,6 +264,14 @@ impl Shell {
                 .gap(px(8.))
                 .child(ui.button("rolle-oktave-hoch", "Eine Oktave höher").small().on_click(move |_, app| up.update(app, |sh, cx| sh.sampler_roll_octave(12, cx))))
                 .child(ui.button("rolle-oktave-tief", "Eine Oktave tiefer").small().on_click(move |_, app| down.update(app, |sh, cx| sh.sampler_roll_octave(-12, cx))))
+                .child(ui.button("rolle-akkorde", "Akkorde zeichnen").small().on_click({
+                    let me = me.clone();
+                    move |_, app| me.update(app, |sh, cx| sh.sampler_roll_spice(roll::Spice::Chords, cx))
+                }))
+                .child(ui.button("rolle-arpeggio", "Arpeggio zeichnen").small().on_click({
+                    let me = me.clone();
+                    move |_, app| me.update(app, |sh, cx| sh.sampler_roll_spice(roll::Spice::Arpeggio, cx))
+                }))
                 .child(ui.button("rolle-leeren", "Alle Noten löschen").small().on_click(move |_, app| clear.update(app, |sh, cx| sh.sampler_roll_clear(cx))))
                 .child(ui.button("rolle-zurueck", "Zurück zu Schritten").small().accessible_name("Noten zurück in Schritte wandeln").on_click(move |_, app| back.update(app, |sh, cx| sh.sampler_roll_close(cx)))),
         );
