@@ -45,6 +45,7 @@ pub mod onsets;
 pub mod pattern;
 pub mod roll;
 pub mod pitch;
+pub mod project;
 pub mod presets;
 pub mod run;
 pub mod separation;

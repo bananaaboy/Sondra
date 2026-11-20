@@ -139,3 +139,59 @@ fn a_kept_session_is_offered_at_the_next_start_and_never_loaded_by_itself(cx: &m
     let w = open(cx, memory);
     assert!(w.shell.read_with(w.cx, |s, _| s.session_offer()).is_none());
 }
+
+fn wait_said(w: &mut Window, what: &str) -> Result<String, String> {
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if let Some(said) = w.shell.read_with(w.cx, |s, _| s.session_said()) {
+            return said;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    panic!("{what}: nothing was said");
+}
+
+#[gpui::test]
+fn the_session_is_saved_as_a_project_the_website_opens_and_a_project_opens_its_files_and_its_tool(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    std::env::set_var("SONDRA_DOWNLOADS", dir.path().join("Downloads"));
+    std::env::set_var("SONDRA_DATA", dir.path().join("Daten"));
+    let (a, b) = (dir.path().join("lied.wav"), dir.path().join("zweites.wav"));
+    song(&a);
+    song(&b);
+    let mut w = open(cx, dir.path().join("Sitzung.json"));
+    w.shell.update(w.cx, |s, cx| s.session_add(vec![a.clone(), b.clone()], cx));
+    w.draw();
+    w.press(Role::Button, "Dateien der Sitzung, 2");
+    w.press(Role::Button, "Die Sitzung als Projektdatei speichern");
+    let said = wait_said(&mut w, "save").expect("saved");
+    assert!(said.starts_with("Projekt gespeichert:") && said.contains("(2 Dateien)"), "{said}");
+    let project = dir.path().join("Downloads").join("lied.sondra");
+    assert!(project.is_file(), "beside what Sondra makes");
+    // The archive is the website's: its manifest names both files.
+    let read = sondra_media::project::read(&std::fs::read(&project).unwrap(), "lied.sondra").unwrap();
+    assert_eq!(read.assets.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), ["lied.wav", "zweites.wav"]);
+
+    // Opening it (a double click, or a drop): its files are in the session again, in a folder of their own, and the
+    // tool that was open opens.
+    let mut w = open(cx, dir.path().join("Sitzung2.json"));
+    w.shell.update(w.cx, |s, cx| s.open_paths(vec![project.clone()], cx));
+    let said = wait_said(&mut w, "open").expect("opened");
+    assert_eq!(said, "Projekt geöffnet: 2 Dateien");
+    let files = w.shell.read_with(w.cx, |s, _| s.session_files());
+    assert_eq!(names(files.clone()), ["lied.wav", "zweites.wav"]);
+    assert!(files[0].starts_with(dir.path().join("Daten").join("Projekte")));
+    assert_eq!(std::fs::read(&files[0]).unwrap(), std::fs::read(&a).unwrap());
+    assert!(w.tree().find(Role::Button, "Dateien der Sitzung, 2, schließen").is_some(), "the list is open");
+
+    // A file that is no project says so in words and takes nothing.
+    let broken = dir.path().join("kaputt.sondra");
+    std::fs::write(&broken, b"nichts").unwrap();
+    let mut w = open(cx, dir.path().join("Sitzung3.json"));
+    w.shell.update(w.cx, |s, cx| s.open_paths(vec![broken], cx));
+    let said = wait_said(&mut w, "broken").unwrap_err();
+    assert!(said.contains("kein gültiges ZIP"), "{said}");
+    assert!(w.shell.read_with(w.cx, |s, _| s.session_files()).is_empty());
+    assert!(w.labels().iter().any(|l| l.contains("kein gültiges ZIP")), "said where the person is");
+}

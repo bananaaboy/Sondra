@@ -144,6 +144,16 @@ Section "Sondra" SecMain
   WriteRegStr HKLM "Software\Classes\Sondra.NativListe\DefaultIcon" "" "$INSTDIR\sondra.exe,0"
   WriteRegStr HKLM "Software\Classes\Sondra.NativListe\shell\open\command" "" '"$INSTDIR\sondra.exe" "%1"'
 
+  ; The projects (`.sondra`): Sondra's too, but only where nobody has taken the ending yet — the Electron app, if it
+  ; is installed beside this one, owns it and keeps it.
+  ReadRegStr $0 HKLM "Software\Classes\.sondra" ""
+  ${If} $0 == ""
+    WriteRegStr HKLM "Software\Classes\.sondra" "" "Sondra.NativProjekt"
+  ${EndIf}
+  WriteRegStr HKLM "Software\Classes\Sondra.NativProjekt" "" "Sondra-Projekt"
+  WriteRegStr HKLM "Software\Classes\Sondra.NativProjekt\DefaultIcon" "" "$INSTDIR\sondra.exe,0"
+  WriteRegStr HKLM "Software\Classes\Sondra.NativProjekt\shell\open\command" "" '"$INSTDIR\sondra.exe" "%1"'
+
   ; Media: only offered under „Öffnen mit“.
   WriteRegStr HKLM "Software\Classes\Sondra.NativDatei" "" "Datei für Sondra"
   WriteRegStr HKLM "Software\Classes\Sondra.NativDatei\shell\open\command" "" '"$INSTDIR\sondra.exe" "%1"'
@@ -169,6 +179,11 @@ Section "Uninstall"
   DeleteRegKey HKLM "Software\Classes\Applications\sondra.exe"
   DeleteRegKey HKLM "Software\Classes\Sondra.NativDatei"
   DeleteRegKey HKLM "Software\Classes\Sondra.NativListe"
+  DeleteRegKey HKLM "Software\Classes\Sondra.NativProjekt"
+  ReadRegStr $0 HKLM "Software\Classes\.sondra" ""
+  ${If} $0 == "Sondra.NativProjekt"
+    DeleteRegKey HKLM "Software\Classes\.sondra"
+  ${EndIf}
   ; The ending only if it is still ours (another program may have taken it since).
   ReadRegStr $0 HKLM "Software\Classes\.sondra-liste" ""
   ${If} $0 == "Sondra.NativListe"

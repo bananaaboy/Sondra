@@ -383,6 +383,8 @@ jobs:
           Check ($arp -and $arp.QuietUninstallString -like '*Deinstallieren.exe*/S') 'and a quiet uninstall'
           $list = Get-ItemProperty 'HKLM:\Software\Classes\.sondra-liste' -ErrorAction SilentlyContinue
           Check ($list -and $list.'(default)' -eq 'Sondra.NativListe') 'the ending .sondra-liste is Sondra''s'
+          $project = Get-ItemProperty 'HKLM:\Software\Classes\.sondra' -ErrorAction SilentlyContinue
+          Check ($project -and $project.'(default)' -eq 'Sondra.NativProjekt') 'the ending .sondra (projects) is Sondra''s where nobody had it'
           $mp4 = Get-ItemProperty 'HKLM:\Software\Classes\.mp4' -ErrorAction SilentlyContinue
           Check (-not ($mp4 -and $mp4.'(default)' -like 'Sondra*')) 'no media ending is taken over'
           $with = Get-Item 'HKLM:\Software\Classes\.mp4\OpenWithProgids' -ErrorAction SilentlyContinue
@@ -418,6 +420,7 @@ jobs:
           Check (-not (Test-Path "$dir\sondra.exe")) 'the program is gone'
           Check (-not (Test-Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SondraNativ')) 'Apps and Features lists it no more'
           Check (-not (Test-Path 'HKLM:\Software\Classes\.sondra-liste')) 'the ending is let go'
+          Check (-not (Test-Path 'HKLM:\Software\Classes\.sondra')) 'the ending .sondra is let go as well'
           Check (-not (Test-Path 'HKLM:\Software\Classes\Applications\sondra.exe')) 'the Open with entry is gone'
           if ($failures.Count -gt 0) { "$($failures.Count) checks failed"; exit 1 }
           'all checks passed'

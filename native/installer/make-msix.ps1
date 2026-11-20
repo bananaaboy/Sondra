@@ -43,7 +43,8 @@ function Assoc($id, $text, $list) { "<uap:Extension Category=`"windows.fileTypeA
 $extensions = (Assoc 'sondraton' 'Ton' @('mp3', 'wav', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'aif', 'aiff', 'wma')) +
   (Assoc 'sondravideo' 'Video' @('mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi')) +
   (Assoc 'sondrabild' 'Bild' @('png', 'jpg', 'jpeg', 'webp', 'gif')) +
-  (Assoc 'sondraliste' 'Geteilte Merkliste' @('sondra-liste'))
+  (Assoc 'sondraliste' 'Geteilte Merkliste' @('sondra-liste')) +
+  (Assoc 'sondraprojekt' 'Sondra-Projekt' @('sondra'))
 
 @"
 <?xml version="1.0" encoding="utf-8"?>

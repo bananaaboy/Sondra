@@ -26,6 +26,8 @@ pub struct Session {
     pub open: bool,
     /// What the last session held, offered at the start.
     pub offer: Option<Vec<PathBuf>>,
+    /// What the last save or open of a project said.
+    pub said: Option<Result<String, String>>,
     store: Option<FileStore>,
 }
 
@@ -207,6 +209,14 @@ impl Shell {
         )
     }
 
+    /// What the last save or open of a project said, as a line.
+    pub(crate) fn session_said_line(&self, ui: &Ui) -> Option<AnyElement> {
+        match self.session.said.as_ref()? {
+            Ok(text) => Some(ui.prose(text.clone()).into_any_element()),
+            Err(text) => Some(ui.notice(NoticeKind::Warning, text.clone()).into_any_element()),
+        }
+    }
+
     /// The files of the session, one line each: the order, the way out, and the tools that take it.
     pub(crate) fn session_panel(&self, ui: Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
         if !self.session.open || self.session.files.is_empty() {
@@ -269,11 +279,116 @@ impl Shell {
                 shell.session.save();
                 cx.notify();
             })))
+            .child(ui.button("sitzung-projekt", "Als Projekt speichern").small().accessible_name("Die Sitzung als Projektdatei speichern").on_click({
+                let me = me.clone();
+                move |_, app| me.update(app, |shell, cx| shell.session_save_project(cx))
+            }))
             .child(ui.button("sitzung-leeren", "Alle entfernen").small().ghost().on_click(move |_, app| clear.update(app, |shell, cx| {
                 shell.session.clear();
                 cx.notify();
             })))
             .child(ui.hint(if keeping { "Beim nächsten Start wird die Liste angeboten, nie von selbst geladen. Die Dateien bleiben, wo sie sind." } else { "Die Dateien bleiben, wo sie sind; nichts wird kopiert." }));
-        Some(div().flex().flex_col().gap(px(8.)).child(ui.subheading("Dateien der Sitzung")).child(list).child(foot).into_any_element())
+        let mut panel = div().flex().flex_col().gap(px(8.)).child(ui.subheading("Dateien der Sitzung")).child(list).child(foot);
+        panel = panel.children(self.session_said_line(&ui));
+        Some(panel.into_any_element())
     }
+}
+
+/* Projects: the session as a `.sondra` file the website opens, and the website's projects opened here ------------- */
+
+impl Shell {
+    /// Writes the files of the session as a project in the folder for what Sondra makes, never over one that is there.
+    pub fn session_save_project(&mut self, cx: &mut Context<Self>) {
+        if self.session.files.is_empty() {
+            return;
+        }
+        let files = self.session.files.clone();
+        let panel = self.panel().meta().id;
+        let dir = crate::store::downloads_dir();
+        let base = files[0].file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Sondra-Projekt".into());
+        self.session.said = None;
+        Self::in_background(
+            cx,
+            move || -> Result<(PathBuf, usize), String> {
+                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                let out = sondra_media::run::unique_path(&dir, &base, "sondra");
+                let date = crate::zip_ui::file_date(&files[0]);
+                let n = sondra_media::project::write(&out, &files, panel, date)?;
+                Ok((out, n))
+            },
+            |shell, result, cx| {
+                shell.session.said = Some(result.map(|(path, n)| format!("Projekt gespeichert: {} ({n} {})", path.display(), if n == 1 { "Datei" } else { "Dateien" })));
+                cx.notify();
+            },
+        );
+        cx.notify();
+    }
+
+    /// Opens a `.sondra` project of the website (or of this program): its files are put in a folder of their own
+    /// beside Sondra's data, the session holds them, and the tool that was open is opened.
+    pub fn session_open_project(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let target = crate::store::data_dir().unwrap_or_else(std::env::temp_dir).join("Projekte");
+        self.session.said = None;
+        Self::in_background(
+            cx,
+            move || -> Result<(Vec<PathBuf>, Option<String>), String> {
+                let bytes = std::fs::read(&path).map_err(|e| format!("{name}: {e}"))?;
+                let project = sondra_media::project::read(&bytes, &name)?;
+                let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Projekt".into());
+                let folder = unique_dir(&target, &sondra_media::project::entry_safe(&stem));
+                std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+                let mut files = Vec::new();
+                for (n, asset) in project.assets.iter().enumerate() {
+                    let file = folder.join(format!("{}", sondra_media::project::entry_safe(&asset.name)));
+                    let file = if file.exists() { folder.join(format!("{n}_{}", sondra_media::project::entry_safe(&asset.name))) } else { file };
+                    std::fs::write(&file, &asset.bytes).map_err(|e| e.to_string())?;
+                    files.push(file);
+                }
+                Ok((files, project.panel))
+            },
+            |shell, result, cx| {
+                match result {
+                    Ok((files, panel)) => {
+                        let n = files.len();
+                        shell.session.add(files);
+                        shell.session.open = n > 0;
+                        shell.session.said = Some(Ok(format!("Projekt geöffnet: {n} {}", if n == 1 { "Datei" } else { "Dateien" })));
+                        if let Some(panel) = panel.as_deref().and_then(Panel::from_id).filter(|p| *p != Panel::Start) {
+                            shell.go(panel, cx);
+                        }
+                    }
+                    Err(e) => shell.session.said = Some(Err(e)),
+                }
+                cx.notify();
+            },
+        );
+        cx.notify();
+    }
+
+    /// The file dialog for „Projekt öffnen“.
+    pub fn session_choose_project(&mut self, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(gpui::PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(mut paths))) = answer.await {
+                if let Some(path) = paths.pop() {
+                    this.update(cx, |shell, cx| shell.session_open_project(path, cx)).ok();
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// For tests: what the last save or open said.
+    pub fn session_said(&self) -> Option<Result<String, String>> {
+        self.session.said.clone()
+    }
+}
+
+fn unique_dir(parent: &Path, stem: &str) -> PathBuf {
+    let first = parent.join(stem);
+    if !first.exists() {
+        return first;
+    }
+    (2..).map(|n| parent.join(format!("{stem} ({n})"))).find(|p| !p.exists()).expect("a free name")
 }

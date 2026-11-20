@@ -269,6 +269,11 @@ impl Shell {
     pub fn open_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
         // An address like the website's: `sondra #umwandeln` opens that tool (a file called that is
         // never taken for one — a real path wins).
+        // A project (`.sondra`) is opened as one: its files come into the session and its tool opens.
+        if let Some(project) = paths.iter().find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("sondra"))) {
+            self.session_open_project(project.clone(), cx);
+            return;
+        }
         if let [only] = paths.as_slice() {
             let text = only.to_string_lossy();
             if text.starts_with('#') && !only.exists() {
@@ -815,6 +820,12 @@ impl Shell {
                     )
                     .child({
                         let me = cx.entity();
+                        ui.button("projekt-oeffnen", "Projekt öffnen").on_click(move |_, app| {
+                            me.update(app, |shell, cx| shell.session_choose_project(cx));
+                        })
+                    })
+                    .child({
+                        let me = cx.entity();
                         ui.button("von-adresse", "Von Adresse laden")
                             .on_click(move |_, app| {
                                 me.update(app, |shell, cx| shell.go(Panel::Downloader, cx));
@@ -834,6 +845,10 @@ impl Shell {
             block = block
                 .child(div().flex().gap(px(8.)).child(ui.value(text)))
                 .child(ui.prose("Wählen Sie unten, was damit geschehen soll."));
+        }
+        // What a project's save or open said, where the person is (the list under the header says it when it is open).
+        if !self.session.open {
+            block = block.children(self.session_said_line(&ui));
         }
         block.into_any_element()
     }
