@@ -484,6 +484,16 @@ jobs:
           "CC=clang-cl" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           "CXX=clang-cl" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
+      # What the compiler said while whisper.cpp was built stays in cargo's file for the build script, not in the log.
+      - name: What failed in whisper.cpp
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem native/target/release/build -Filter output -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'whisper-rs-sys' } | ForEach-Object {
+              Write-Host "== $($_.FullName)"
+              Select-String -Path $_.FullName -Pattern 'error|FAILED|undefined|cannot' -Context 0,2 | Select-Object -First 60 | ForEach-Object { $_.ToString() }
+            }
       # If it builds, the two ways to install it for this processor are built as well — the setup (NSIS: the same script,
       # the Arm64 program) and the Store package (MSIX with an Arm64 identity) — and the setup is run: installed
       # silently, started, removed. Still only information; what is green here goes into the release afterwards.
