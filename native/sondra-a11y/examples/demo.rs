@@ -157,9 +157,12 @@ fn main() {
         )
         .expect("a window opens");
         cx.activate(true);
+        // The demo ends by itself so a forgotten one does not hang a run — but late enough for the check:
+        // Windows PowerShell 5.1 and its UI Automation client took over 100 s to start on a busy runner
+        // (run 103), and the window was gone before the first question. The workflow stops it afterwards.
         cx.spawn(async move |cx| {
             cx.background_executor()
-                .timer(Duration::from_secs(40))
+                .timer(Duration::from_secs(300))
                 .await;
             cx.update(|cx| cx.quit()).ok();
         })
