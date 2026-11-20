@@ -95,7 +95,7 @@ pub(crate) fn press(visual: Stateful<Div>, handler: Option<Handler>) -> Stateful
 pub enum ButtonKind {
     /// Filled ink: the one action a section asks for.
     Primary,
-    /// Field white with a rule ring.
+    /// A soft tint with a hairline edge.
     Quiet,
     /// A word in running text, underlined.
     Ghost,
@@ -235,7 +235,7 @@ impl RenderOnce for Button {
     }
 }
 
-/// A filter that is on or off: a kind of file, one of four ratios. On is filled ink, without a ring.
+/// A filter that is on or off: a kind of file, one of four ratios. On is the ink wash with an ink edge and ink text.
 #[derive(IntoElement)]
 pub struct Chip {
     ui: Ui,
@@ -408,7 +408,7 @@ impl RenderOnce for Tile {
                     .child(
                         div()
                             .text_size(px(size::SMALL))
-                            // Measured: `muted` on `panel_soft` holds Lc 63.5 in the dark theme.
+                            // Measured: `muted` on `panel_soft` holds Lc 63.1 in the dark theme.
                             .text_color(c.muted)
                             // No clamp: GPUI's clamp cut the second line off mid-word. A hint is
                             // written short instead, and a row of tiles takes the tallest one's height.

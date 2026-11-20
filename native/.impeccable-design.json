@@ -1,0 +1,694 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-20T15:00:00.000Z",
+  "title": "Design System: Sondra nativ",
+  "extensions": {
+    "colorMeta": {
+      "room": {
+        "role": "neutral",
+        "displayName": "Raum",
+        "canonical": "#050806",
+        "light": "#e7ede8",
+        "purpose": "Grund des Fensters und des Racks; die dunkelste Stufe.",
+        "tonalRamp": [
+          "#080c0a",
+          "#222623",
+          "#3e4340",
+          "#5d635f",
+          "#7e8480",
+          "#a1a7a3",
+          "#c5cbc7",
+          "#eaf0ec"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Platte",
+        "canonical": "#111a14",
+        "light": "#f9fbf9",
+        "purpose": "Die Leinwand, auf der jede Seite liegt; Grund der Dialoge.",
+        "tonalRamp": [
+          "#060d08",
+          "#1e2821",
+          "#3b453e",
+          "#5a645d",
+          "#7a867e",
+          "#9da9a0",
+          "#c1cdc4",
+          "#e6f2e9"
+        ]
+      },
+      "plate-edge": {
+        "role": "neutral",
+        "displayName": "Streiflicht",
+        "canonical": "#223328",
+        "light": "#ffffff",
+        "purpose": "1-px-Kante nur oben an der Platte; Rand von Menü und Dialog.",
+        "tonalRamp": [
+          "#020f06",
+          "#19291f",
+          "#35473b",
+          "#54675a",
+          "#75887b",
+          "#97ab9d",
+          "#bacfc1",
+          "#dff5e6"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Feld",
+        "canonical": "#152019",
+        "light": "#ffffff",
+        "purpose": "Textfelder und Menüs, eine Stufe über der Platte.",
+        "tonalRamp": [
+          "#050e08",
+          "#1d2821",
+          "#39453d",
+          "#58655c",
+          "#79867d",
+          "#9ba9a0",
+          "#bfcdc4",
+          "#e4f3e9"
+        ]
+      },
+      "panel-soft": {
+        "role": "neutral",
+        "displayName": "Leise Tönung",
+        "canonical": "#18251d",
+        "light": "#e6f1e9",
+        "purpose": "Kacheln, Einstieg, Einstellungsspalte, leise Knöpfe, Chips, Hover der Rack-Plätze.",
+        "tonalRamp": [
+          "#040e07",
+          "#1b2920",
+          "#38463d",
+          "#57655c",
+          "#77877d",
+          "#9aaa9f",
+          "#bdcec3",
+          "#e2f4e8"
+        ]
+      },
+      "panel-mid": {
+        "role": "neutral",
+        "displayName": "Mittlere Tönung",
+        "canonical": "#1e2f25",
+        "light": "#d8e9dd",
+        "purpose": "Hover von Kachel, Chip, leisem Knopf und Menüzeile; gewählter Reiter.",
+        "tonalRamp": [
+          "#020f07",
+          "#192920",
+          "#35473c",
+          "#54675b",
+          "#74887c",
+          "#97ab9e",
+          "#bacfc2",
+          "#dff5e7"
+        ]
+      },
+      "panel-strong": {
+        "role": "neutral",
+        "displayName": "Starke Tönung",
+        "canonical": "#273b2f",
+        "light": "#c8e1cf",
+        "purpose": "Grund des Tooltips im schmalen Rack.",
+        "tonalRamp": [
+          "#010f06",
+          "#172a1f",
+          "#33483b",
+          "#52675a",
+          "#72897b",
+          "#95ac9d",
+          "#b8d0c1",
+          "#ddf6e6"
+        ]
+      },
+      "panel-cool": {
+        "role": "tertiary",
+        "displayName": "Nicht lokal",
+        "canonical": "#13242b",
+        "light": "#e5eff3",
+        "purpose": "Genau eine Aussage: hier läuft etwas nicht auf diesem Gerät.",
+        "tonalRamp": [
+          "#010d14",
+          "#17282f",
+          "#33454d",
+          "#52656d",
+          "#72868f",
+          "#94a9b2",
+          "#b8cdd6",
+          "#ddf3fc"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Projektorlicht",
+        "canonical": "#a6ecb9",
+        "light": "#0b4a22",
+        "purpose": "Die einzige gesättigte Farbe: Hauptaktion (einmal je Bildschirm), Ghost-Wort, Fokusring, Fortschritt, Symbol des gewählten Platzes, Wortmarke.",
+        "tonalRamp": [
+          "#001400",
+          "#003108",
+          "#005026",
+          "#2d7145",
+          "#509365",
+          "#73b787",
+          "#97dcaa",
+          "#bcffcf"
+        ]
+      },
+      "ink-hover": {
+        "role": "primary",
+        "displayName": "Projektorlicht, nah",
+        "canonical": "#c3f4d0",
+        "light": "#073517",
+        "purpose": "Nur der Hover gefüllter Minze.",
+        "tonalRamp": [
+          "#001200",
+          "#002e14",
+          "#204d30",
+          "#406d4e",
+          "#618f6e",
+          "#83b290",
+          "#a7d7b4",
+          "#ccfdd9"
+        ]
+      },
+      "on-ink": {
+        "role": "primary",
+        "displayName": "Auf dem Licht",
+        "canonical": "#04100a",
+        "light": "#ffffff",
+        "purpose": "Text auf gefüllter Minze.",
+        "tonalRamp": [
+          "#030e08",
+          "#1b2922",
+          "#37463e",
+          "#56665d",
+          "#76877e",
+          "#99aaa1",
+          "#bccec5",
+          "#e1f4ea"
+        ]
+      },
+      "ink-wash": {
+        "role": "primary",
+        "displayName": "Verdünntes Licht",
+        "canonical": "#1c3726",
+        "light": "#d3eadb",
+        "purpose": "Gewählter Rack-Platz, gewählter Chip, Symbolfeld der Kachel, Ghost-Hover, Einstieg beim Darüberziehen.",
+        "tonalRamp": [
+          "#001004",
+          "#102c1b",
+          "#2e4937",
+          "#4d6956",
+          "#6d8b77",
+          "#8fae99",
+          "#b3d2bc",
+          "#d8f8e1"
+        ]
+      },
+      "prose": {
+        "role": "neutral",
+        "displayName": "Fliesstext",
+        "canonical": "#e6eee8",
+        "light": "#111a14",
+        "purpose": "Text und Überschriften.",
+        "tonalRamp": [
+          "#080d09",
+          "#212722",
+          "#3d443f",
+          "#5c635e",
+          "#7d847f",
+          "#a0a7a2",
+          "#c4cbc6",
+          "#e9f1eb"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Zurückgenommen",
+        "canonical": "#abc0af",
+        "light": "#4e6355",
+        "purpose": "Hinweise, Zusammenfassungen, nicht gewählte Rack-Plätze. Auf Tönungen erst messen.",
+        "tonalRamp": [
+          "#020f05",
+          "#192a1d",
+          "#354739",
+          "#546758",
+          "#748878",
+          "#97ab9b",
+          "#bad0be",
+          "#dff5e3"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Haarlinie",
+        "canonical": "#253629",
+        "light": "#d5dfd8",
+        "purpose": "Zwischen Zeilen, unter dem Seitenkopf, Rand leiser Knöpfe und Chips, Grund des Fortschrittsbalkens.",
+        "tonalRamp": [
+          "#020f05",
+          "#192a1d",
+          "#354739",
+          "#546758",
+          "#758879",
+          "#97ab9b",
+          "#bbd0bf",
+          "#e0f5e4"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Kante",
+        "canonical": "#4d6656",
+        "light": "#a7bca9",
+        "purpose": "Rand eines Feldes in Ruhe; Hover-Rand leiser Bedienelemente.",
+        "tonalRamp": [
+          "#001005",
+          "#142b1d",
+          "#304839",
+          "#4f6858",
+          "#708a79",
+          "#92ad9b",
+          "#b5d1bf",
+          "#daf7e4"
+        ]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Blass",
+        "canonical": "#7f9686",
+        "light": "#799081",
+        "purpose": "Dritter Textrang; Punkt eines Rack-Platzes ohne Symbol.",
+        "tonalRamp": [
+          "#010f05",
+          "#162a1d",
+          "#33483a",
+          "#526759",
+          "#728979",
+          "#94ac9c",
+          "#b8d0bf",
+          "#ddf6e4"
+        ]
+      },
+      "stage": {
+        "role": "neutral",
+        "displayName": "Bühne",
+        "canonical": "#0b0e0f",
+        "light": "#15181a",
+        "purpose": "Fläche der Editoren und des Players, in beiden Themen dunkel.",
+        "tonalRamp": [
+          "#090c0d",
+          "#222627",
+          "#3f4344",
+          "#5e6263",
+          "#7f8384",
+          "#a2a6a7",
+          "#c5cacb",
+          "#ebeff1"
+        ]
+      },
+      "stage-soft": {
+        "role": "neutral",
+        "displayName": "Bühne, Feld",
+        "canonical": "#151a1b",
+        "light": "#1d2124",
+        "purpose": "Flächen auf der Bühne.",
+        "tonalRamp": [
+          "#080c0d",
+          "#212627",
+          "#3d4344",
+          "#5c6264",
+          "#7d8485",
+          "#a0a6a8",
+          "#c4cbcc",
+          "#e9f0f1"
+        ]
+      },
+      "stage-line": {
+        "role": "neutral",
+        "displayName": "Bühnenlinie",
+        "canonical": "#515a5d",
+        "light": "#515a5d",
+        "purpose": "Linien und Gitter auf der Bühne.",
+        "tonalRamp": [
+          "#060c0f",
+          "#1f2729",
+          "#3b4447",
+          "#5a6366",
+          "#7b8487",
+          "#9da7aa",
+          "#c1cbcf",
+          "#e6f1f4"
+        ]
+      },
+      "stage-ink": {
+        "role": "neutral",
+        "displayName": "Bühnentext",
+        "canonical": "#eef1f0",
+        "light": "#eef1f0",
+        "purpose": "Text auf der Bühne.",
+        "tonalRamp": [
+          "#0a0c0b",
+          "#232625",
+          "#404342",
+          "#5f6261",
+          "#808382",
+          "#a3a6a5",
+          "#c7cac9",
+          "#ecefee"
+        ]
+      },
+      "stage-muted": {
+        "role": "neutral",
+        "displayName": "Bühnentext, leise",
+        "canonical": "#aab5b2",
+        "light": "#aab5b2",
+        "purpose": "Sekundärtext auf der Bühne.",
+        "tonalRamp": [
+          "#060d0b",
+          "#1e2725",
+          "#3b4442",
+          "#5a6461",
+          "#7b8582",
+          "#9da8a5",
+          "#c1ccc9",
+          "#e6f1ee"
+        ]
+      },
+      "stage-accent": {
+        "role": "primary",
+        "displayName": "Bühnenlicht",
+        "canonical": "#8fe0a6",
+        "light": "#8fe0a6",
+        "purpose": "Die eine Farbe der Bühne: gespielter Teil, eingeschalteter Schalter, Überblendmarke.",
+        "tonalRamp": [
+          "#001500",
+          "#003302",
+          "#005221",
+          "#1e7340",
+          "#459660",
+          "#6aba82",
+          "#8edfa5",
+          "#b3ffc9"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Überschrift des Einstiegs auf der Startseite (36 px)."
+      },
+      "headline": {
+        "displayName": "Seitentitel",
+        "purpose": "Titel im Seitenkopf (26 px; der Vertrag sagte 28)."
+      },
+      "title": {
+        "displayName": "Abschnitt",
+        "purpose": "Überschrift eines Abschnitts (17 px)."
+      },
+      "body": {
+        "displayName": "Fliesstext",
+        "purpose": "Text, Knöpfe, Rack-Plätze; höchstens 640 px breit."
+      },
+      "small": {
+        "displayName": "Klein",
+        "purpose": "Hinweise, Chips, Felder, kleine Knöpfe; mittel auf Chips."
+      },
+      "label": {
+        "displayName": "Zähler",
+        "purpose": "Nur die Zahl im Zähler am Rack-Platz (11 px fett)."
+      },
+      "value": {
+        "displayName": "Rollenetikett",
+        "purpose": "Messwerte, Dateinamen, Zeiten — nur Eingetragenes."
+      },
+      "wordmark": {
+        "displayName": "Wortmarke",
+        "purpose": "Nur das Wort „Sondra“, in Minze; im schmalen Rack das „S“ in 28 px."
+      }
+    },
+    "shadows": [
+      {
+        "name": "plate",
+        "value": "0 6px 24px -6px rgba(0,0,0,0.45)",
+        "purpose": "Nur die Platte, dunkles Thema; dazu 1 px plate-edge nur oben (Streiflicht)."
+      },
+      {
+        "name": "plate-light",
+        "value": "0 6px 24px -6px rgba(0,0,0,0.07)",
+        "purpose": "Dieselbe Platte im hellen Thema — ein Hauch."
+      },
+      {
+        "name": "float",
+        "value": "0 12px 32px -4px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.18)",
+        "purpose": "Was über der Platte schwebt: Menü und Dialog, mit Rand in plate-edge."
+      },
+      {
+        "name": "scrim",
+        "value": "rgba(0,0,0,0.55)",
+        "purpose": "Schleier unter einem Dialog."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 2px var(canvas), 0 0 0 4px var(ink)",
+        "purpose": "Fokus jedes Bauteils; nie das Blau des Systems."
+      }
+    ],
+    "motion": [
+      {
+        "name": "fast",
+        "value": "130ms",
+        "purpose": "Rückmeldung auf Druck und Hover."
+      },
+      {
+        "name": "base",
+        "value": "240ms",
+        "purpose": "Ein neuer Zustand kommt an (schwebende Leiste, 16 px von unten)."
+      },
+      {
+        "name": "slow",
+        "value": "420ms",
+        "purpose": "Ein zurückgelegter Weg: ein Werkzeug von der Seite; das Saallicht."
+      },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 0.72, 0.28, 1)",
+        "purpose": "Vorgabe für jeden Eintritt und das Saallicht."
+      },
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Exponentiell für Weiteres. Keine Federn."
+      },
+      {
+        "name": "stagger",
+        "value": "30ms je Nachbar, höchstens 240ms",
+        "purpose": "Gestaffelte Listen."
+      },
+      {
+        "name": "saallicht",
+        "value": "Rack-Deckkraft 1 → 0.32 über 420ms ease-out",
+        "purpose": "Während ein Film läuft; zurück bei Zeiger oder Fokus im Rack."
+      },
+      {
+        "name": "changeover-cue",
+        "value": "zwei Pulse à 0,5 s in den letzten 2 s vor „Nächste Folge“",
+        "purpose": "Ring 18 px, 2 px stage-accent, Füllung 40 %, oben rechts im Bild."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "rack-compact",
+        "value": "<980px Fensterbreite"
+      },
+      {
+        "name": "shell-1440",
+        "value": "1600px Fensterbreite"
+      },
+      {
+        "name": "shell-1680",
+        "value": "1920px Fensterbreite"
+      },
+      {
+        "name": "shell-1840",
+        "value": "2400px Fensterbreite"
+      },
+      {
+        "name": "tiles-3",
+        "value": "640px innere Breite"
+      },
+      {
+        "name": "tiles-4",
+        "value": "920px innere Breite"
+      },
+      {
+        "name": "tiles-5",
+        "value": "1200px innere Breite"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Die Hauptaktion der Seite, gefüllte Minze, genau einmal je Bildschirm.",
+      "html": "<button class=\"ds-btn-primary\">Datei auswählen</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;height:32px;padding:0 14px;border:none;border-radius:8px;background:#a6ecb9;color:#04100a;font:600 14px/1 Barlow,'Segoe UI',sans-serif;cursor:pointer;white-space:nowrap;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-btn-primary:hover{background:#c3f4d0}.ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 2px #111a14, 0 0 0 4px #a6ecb9}.ds-btn-primary:disabled{opacity:.4;cursor:not-allowed}"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Die Vorgabe: leise Tönung mit Haarlinie.",
+      "html": "<button class=\"ds-btn-quiet\">Projekt öffnen</button>",
+      "css": ".ds-btn-quiet{display:inline-flex;align-items:center;height:32px;padding:0 14px;border:1px solid #253629;border-radius:8px;background:#18251d;color:#e6eee8;font:500 14px/1 Barlow,'Segoe UI',sans-serif;cursor:pointer;white-space:nowrap;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1),border-color 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-btn-quiet:hover{background:#1e2f25;border-color:#4d6656}.ds-btn-quiet:focus-visible{outline:none;box-shadow:0 0 0 2px #111a14, 0 0 0 4px #a6ecb9}.ds-btn-quiet:disabled{opacity:.4;cursor:not-allowed}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Ein Wort in Minze ohne Grund.",
+      "html": "<button class=\"ds-btn-ghost\">Ordner mit Serien öffnen</button>",
+      "css": ".ds-btn-ghost{display:inline-flex;align-items:center;height:32px;padding:0 6px;border:none;border-radius:8px;background:transparent;color:#a6ecb9;font:500 14px/1 Barlow,'Segoe UI',sans-serif;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-btn-ghost:hover{background:#1c3726}.ds-btn-ghost:focus-visible{outline:none;box-shadow:0 0 0 2px #111a14, 0 0 0 4px #a6ecb9}"
+    },
+    {
+      "name": "Choice Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Ein Filter, an oder aus; gewählt ist verdünntes Licht, nicht gefülltes.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\" aria-pressed=\"true\">Alle</button><button class=\"ds-chip\" aria-pressed=\"false\">Ton</button><button class=\"ds-chip\" aria-pressed=\"false\">Video</button></div>",
+      "css": ".ds-chips{display:flex;gap:6px}.ds-chip{display:inline-flex;align-items:center;height:28px;padding:0 12px;border:1px solid #253629;border-radius:999px;background:#18251d;color:#e6eee8;font:500 13px/1 Barlow,'Segoe UI',sans-serif;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-chip:hover{background:#1e2f25;border-color:#4d6656}.ds-chip[aria-pressed=true]{background:#1c3726;border-color:#a6ecb9;color:#a6ecb9;font-weight:600}.ds-chip:focus-visible{outline:none;box-shadow:0 0 0 2px #111a14, 0 0 0 4px #a6ecb9}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Ein Feld eine Stufe über der Platte; Barlow, Courier nur für Werte.",
+      "html": "<input class=\"ds-input\" placeholder=\"Werkzeug suchen…\">",
+      "css": ".ds-input{height:32px;padding:6px 10px;border:1px solid #4d6656;border-radius:8px;background:#152019;color:#e6eee8;font:400 13px/1.3 Barlow,'Segoe UI',sans-serif;min-width:240px}.ds-input::placeholder{color:#abc0af}.ds-input:focus{outline:none;border-color:#a6ecb9}"
+    },
+    {
+      "name": "Rack",
+      "kind": "nav",
+      "refersTo": "rack",
+      "description": "Die Navigation links auf dem Raum: Plätze mit Symbol, Gruppen unter ihrem Namen; der gewählte Platz ist beleuchtet.",
+      "html": "<nav class=\"ds-rack\"><div class=\"ds-rack-mark\">Sondra</div><a class=\"ds-rack-item\" aria-current=\"page\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.35\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2.5 7.5 8 3l5.5 4.5V13h-11z\"/></svg>Start</a><a class=\"ds-rack-item\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.35\" stroke-linecap=\"round\"><path d=\"M4 2.5h8v11l-4-3-4 3z\"/></svg>Merkliste<span class=\"ds-rack-count\">2</span></a><div class=\"ds-rack-head\">Ton</div><a class=\"ds-rack-item\"><svg viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.35\" stroke-linecap=\"round\"><path d=\"M3 5v6M6 3v10M9 6v4M12 4v8\"/></svg>Mischen</a></nav>",
+      "css": ".ds-rack{width:224px;padding:0 10px 12px;background:#050806;display:flex;flex-direction:column;gap:2px;font-family:Barlow,'Segoe UI',sans-serif}.ds-rack-mark{height:52px;display:flex;align-items:center;padding:0 10px;font:300 26px 'Cormorant Garamond',Georgia,serif;color:#a6ecb9}.ds-rack-head{padding:16px 10px 4px;font:600 12px/1 Barlow,'Segoe UI',sans-serif;color:#abc0af}.ds-rack-item{display:flex;align-items:center;gap:10px;height:30px;padding:0 10px;border-radius:8px;color:#abc0af;font:500 14px/1 Barlow,'Segoe UI',sans-serif;cursor:pointer;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1),color 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-rack-item:hover{background:#18251d;color:#e6eee8}.ds-rack-item[aria-current]{background:#1c3726;color:#e6eee8;font-weight:600}.ds-rack-item[aria-current] svg{color:#a6ecb9}.ds-rack-item:focus-visible{outline:none;box-shadow:0 0 0 2px #050806,0 0 0 4px #a6ecb9}.ds-rack-count{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#a6ecb9;color:#04100a;font:700 11px/18px Barlow,'Segoe UI',sans-serif;text-align:center}"
+    },
+    {
+      "name": "Tool Tile",
+      "kind": "card",
+      "refersTo": "tile",
+      "description": "Ein Werkzeug als Kachel: die Tönung ist die Kante, kein Rahmen, kein Schatten.",
+      "html": "<button class=\"ds-tile\"><span class=\"ds-tile-mark\"><svg viewBox=\"0 0 16 16\" width=\"17\" height=\"17\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.35\" stroke-linecap=\"round\"><path d=\"M3 5v6M6 3v10M9 6v4M12 4v8\"/></svg></span><span class=\"ds-tile-text\"><span class=\"ds-tile-title\">Ton schneiden</span><span class=\"ds-tile-hint\">Ausschnitt wählen, behalten oder herausschneiden</span></span></button>",
+      "css": ".ds-tile{display:flex;align-items:flex-start;gap:12px;width:260px;padding:12px 14px;border:none;border-radius:12px;background:#18251d;text-align:left;cursor:pointer;font-family:Barlow,'Segoe UI',sans-serif;transition:background 130ms cubic-bezier(0.22, 0.72, 0.28, 1)}.ds-tile:hover{background:#1e2f25}.ds-tile:focus-visible{outline:none;box-shadow:0 0 0 2px #111a14, 0 0 0 4px #a6ecb9}.ds-tile-mark{flex:none;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#1c3726;color:#a6ecb9}.ds-tile-text{display:flex;flex-direction:column;gap:2px}.ds-tile-title{font:600 14px/18px Barlow,'Segoe UI',sans-serif;color:#e6eee8}.ds-tile-hint{font:400 13px/17px Barlow,'Segoe UI',sans-serif;color:#abc0af}"
+    },
+    {
+      "name": "Page Head",
+      "kind": "custom",
+      "refersTo": "plate",
+      "description": "Titel und Zusammenfassung einer Seite auf der Platte, auf das Lesemass gehalten, mit Haarlinie darunter.",
+      "html": "<div class=\"ds-plate\"><header class=\"ds-head\"><h1>Tonart und Akkorde</h1><p>Hört in ein Stück hinein und sagt, in welcher Tonart es steht, wie schnell es ist und welche Akkorde darin folgen.</p></header></div>",
+      "css": ".ds-plate{background:#111a14;border-radius:14px;border-top:1px solid #223328;box-shadow:0 6px 24px -6px rgba(0,0,0,.45);padding:28px 32px 32px}.ds-head{display:flex;flex-direction:column;gap:8px;padding-bottom:20px;border-bottom:1px solid #253629}.ds-head h1{margin:0;font:600 26px/1.15 Barlow,'Segoe UI',sans-serif;color:#e6eee8}.ds-head p{margin:0;max-width:640px;font:400 14px/1.5 Barlow,'Segoe UI',sans-serif;color:#abc0af}"
+    },
+    {
+      "name": "Not-Local Notice",
+      "kind": "custom",
+      "refersTo": "notice-not-local",
+      "description": "Die eine Aussage auf der kühlen Tönung: hier läuft etwas nicht lokal.",
+      "html": "<div class=\"ds-notice\" role=\"status\"><span class=\"ds-notice-mark\">●</span><span>Was Sie in Drive speichern, verlässt dieses Gerät.</span></div>",
+      "css": ".ds-notice{display:flex;gap:12px;padding:12px 14px;border:1px solid #a6ecb9;border-radius:12px;background:#13242b;color:#e6eee8;font:600 13px/1.4 Barlow,'Segoe UI',sans-serif;max-width:520px}.ds-notice-mark{width:14px;color:#a6ecb9;font-weight:700}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Die Vorführkabine",
+    "overview": "Sondra ist die Kabine hinter der Leinwand. Der Raum ist dunkel; beleuchtet ist nur, woran gerade gearbeitet wird — die Platte („Leinwand“), auf der die Seite liegt, 8 px vom Fensterrand eingerückt, eine Stufe heller als der Raum, mit einem Streiflicht nur an der Oberkante. Links im Raum steht das Rack: Wortmarke, die sechs Aufgaben, die drei Werkzeuggruppen als Listen unter ihrem Namen, unten Sitzung, Drive, „Was ist neu“ und das Thema. Minze ist das Licht des Projektors: sie markiert, was man tun kann und wo man ist, und nirgends schmückt sie.\n\nDunkel ist die Vorgabe (`Mode::Dark`, Wunsch des Nutzers vom 20.11.2026); hell ist dieselbe Kabine mit Saallicht an, einen Klick entfernt im Fuss des Racks. Die Dichte ist die eines Schreibtischprogramms: Bedienelemente 28 bis 32 px hoch, Text 13 bis 14 px, Seitentitel weit darüber — der Rang kommt aus dem Grössenabstand, nicht aus der Farbe. Werte, Dateinamen und Zeiten stehen in Courier Prime wie die getippte Beschriftung einer Filmrolle.\n\nAusdrücklich verworfen: die Website mit Kopfzeile und Reiterreihe als Kategorie-Vorgabe, der Neon-auf-Schwarz-Klon eines Streamingdienstes, und Kino als Kostüm — kein Filmstreifen, keine Perforation, keine Leuchtschrift. Was aus der Kabine kommt, kommt als Funktion: das Saallicht, das beim Abspielen dunkler wird, und die Überblendmarke vor „Nächste Folge“.",
+    "keyCharacteristics": [
+      "Drei Stufen Waldschwarz: Raum < Platte < Feld; die Platte ist das Beleuchtete.",
+      "Minze als einzige gesättigte Farbe; gefüllt genau einmal je Bildschirm, für die Hauptaktion der Seite.",
+      "Barlow für die Oberfläche, Courier Prime für Eingetragenes, Cormorant Garamond für das eine Wort „Sondra“.",
+      "Rang durch Grösse: 36 / 26 / 17 / 14 / 13 / 11 px.",
+      "Flach auf der Platte; Tiefe hat nur die Platte selbst und was über ihr schwebt.",
+      "Bewegung sagt, woher etwas kommt; das Saallicht ist die eine Signatur."
+    ],
+    "rules": [
+      {
+        "name": "Die Projektor-Regel",
+        "body": "Minze markiert, was man tun kann und wo man ist — nie Schmuck. Gefüllt wird sie genau einmal je Bildschirm: die Hauptaktion der Seite („Datei auswählen“ im Einstieg, „Datei wählen“ auf einer Werkzeugseite). Gewähltes ist verdünntes Licht (`ink-wash`), nicht gefülltes.",
+        "section": "colors"
+      },
+      {
+        "name": "Die Eine-Aussage-Regel",
+        "body": "`panel-cool` sagt nur: hier läuft etwas nicht lokal. Keine zweite Verwendung, kein Rot in der Palette.",
+        "section": "colors"
+      },
+      {
+        "name": "Die Bühnen-Regel",
+        "body": "Die Bühne ist neutral und in beiden Themen dunkel; ihre einzige Farbe ist `stage-accent` — der gespielte Teil, ein eingeschalteter Schalter, die Überblendmarke.",
+        "section": "colors"
+      },
+      {
+        "name": "Die Mess-Regel",
+        "body": "Kontrast wird nach APCA gemessen (`sondra-ui/tests/contrast.rs`), in beiden Themen, auf dem Grund, auf dem das Ding wirklich steht: Fliesstext ≥ Lc 75, Sekundärtext ≥ 60, Überschriften ≥ 45, Nicht-Text ≥ 15. `muted` auf einer Tönung ist die Falle dieser Palette — auf `panel-mid` im Dunkeln misst er nur noch Lc 61,4; noch eine Stufe dunkler, und er fällt.",
+        "section": "colors"
+      },
+      {
+        "name": "Die Grössenabstand-Regel",
+        "body": "Rang kommt aus der Grösse, nicht aus der Farbe: zwischen Body (14) und Headline (26) liegt fast das Doppelte. Überschriften stehen in `prose`, nicht in Minze.",
+        "section": "typography"
+      },
+      {
+        "name": "Die Rollenetikett-Regel",
+        "body": "Courier Prime nur für das, was die Maschine eingetragen hat. Ein Feld setzt in Barlow und schaltet Courier nur ausdrücklich ein (`value_face`), wenn sein Inhalt ein Wert ist. Nie Mono als Kostüm für „technisch“.",
+        "section": "typography"
+      },
+      {
+        "name": "Die Ein-Wort-Regel",
+        "body": "Cormorant Garamond setzt nur „Sondra“ (26 px im Rack, im schmalen Rack das „S“ in 28 px), in Minze. Keine zweite Verwendung.",
+        "section": "typography"
+      },
+      {
+        "name": "Die Ganze-Zellen-Regel",
+        "body": "Ein Raster packt in ganzen Zellen um; eine Kachel wird nicht über rund 260 px gestreckt.",
+        "section": "layout"
+      },
+      {
+        "name": "Die Daneben-Regel",
+        "body": "Eine Werkzeugseite stellt ihre Einstellungen in eine Spalte von 320 px auf `panel-soft` links neben die Arbeitsfläche (`harmony_page.rs` ist das Muster); die Arbeitsfläche hält mindestens 320 px und trägt die Hauptaktion oben.",
+        "section": "layout"
+      },
+      {
+        "name": "Die Beleuchtete-Platte-Regel",
+        "body": "Die Platte ist das einzige Ding im Ruhezustand mit Schatten. Kacheln, Einstieg, Einstellungsspalte: Tönung, kein Rahmen, kein Schatten.",
+        "section": "elevation"
+      },
+      {
+        "name": "Die Schwebe-Regel",
+        "body": "Ein Schatten heisst „schwebt über der Platte“. Was nicht schwebt, bekommt keinen.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** füllen Sie Minze genau einmal je Bildschirm — die Hauptaktion der Seite; Gewähltes ist `ink-wash`.",
+      "**Do** runden Sie nur über `theme::radius` (16 / 14 / 12 / 8 / Pille).",
+      "**Do** setzen Sie Werte, Dateinamen und Zeiten mit `ui.value` in Courier Prime, alles andere in Barlow.",
+      "**Do** halten Sie Fliesstext und Zusammenfassungen auf 640 px (`MEASURE`).",
+      "**Do** stellen Sie auf Werkzeugseiten die Einstellungen in eine 320-px-Spalte auf `panel-soft` neben die Arbeitsfläche.",
+      "**Do** messen Sie jede neue Paarung von Text und Grund in `tests/contrast.rs`, in beiden Themen.",
+      "**Do** hüllen Sie jedes Bauteil in `accessible(…)` mit Name und Rolle und geben Sie ihm einen Fokusring."
+    ],
+    "donts": [
+      "**Don't** geben Sie Kacheln, Blöcken oder der Einstellungsspalte einen Rahmen oder Schatten — die Tönung ist die Kante.",
+      "**Don't** setzen Sie Schatten auf etwas, das nicht über der Platte schwebt.",
+      "**Don't** verwenden Sie `panel-cool` für etwas anderes als „läuft nicht lokal“.",
+      "**Don't** färben Sie Überschriften in Minze, um Rang zu erzeugen — Rang kommt aus der Grösse.",
+      "**Don't** kostümieren Sie die Kabine: kein Filmstreifen, keine Perforation, keine Leuchtschrift. Kino-Geräte kommen nur als Funktion vor (Saallicht, Überblendmarke).",
+      "**Don't** verwenden Sie Mono als Kostüm für „technisch“.",
+      "**Don't** setzen Sie Eyebrows oder Versalien-Vorzeilen über eine Überschrift."
+    ]
+  }
+}

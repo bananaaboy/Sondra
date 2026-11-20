@@ -864,9 +864,9 @@ impl Shell {
                 stage.child(div().flex().flex_col().items_center().gap(px(6.)).child(div().text_color(c.stage_ink).text_size(px(size::SUBHEADING)).child(name.clone())).child(div().text_color(c.stage_muted).child("Ton")))
             }
         };
-        // The changeover cue of a projection booth: in the eight seconds before „Nächste Folge“ is offered, a
+        // The changeover cue of a projection booth: in the last two seconds before „Nächste Folge“ is offered, a
         // ring in the picture's upper right corner flashes twice — the reel is about to end. It is gone the
-        // moment the button comes.
+        // moment the button comes. (The eight seconds ahead only bound the search for when the offer comes.)
         let cue_lead = 8.0;
         let cue = p.settings.skip_opening && video && has_next && !offer_next && duration > 0.0
             && sondra_player::next_offered(position + cue_lead, duration);
