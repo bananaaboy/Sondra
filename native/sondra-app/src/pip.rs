@@ -98,8 +98,10 @@ impl Shell {
                     ..Default::default()
                 },
                 move |window, cx| {
-                    sondra_a11y::attach(window, cx);
+                    // A window of the test platform is no real window (the system's handle is asked for and it panics):
+                    // only a real one gets the accessibility bridge and the place above the others.
                     if let Some(handle) = crate::system::window_handle(window) {
+                        sondra_a11y::attach(window, cx);
                         sondra_tray::set_always_on_top(handle, true);
                     }
                     // The window follows the player: a new picture, a pause.

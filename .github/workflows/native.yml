@@ -462,11 +462,14 @@ jobs:
             ./rustup-init.exe -y --default-toolchain stable --profile minimal
             "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
           }
-      # Speech recognition is built from whisper.cpp: bindgen needs libclang for this processor.
-      - name: LLVM for whisper.cpp
+      # Speech recognition is built from whisper.cpp: bindgen needs libclang for this processor. The package of
+      # Chocolatey is the x64 one, whose libclang.dll an Arm64 build cannot load — LLVM's own Arm64 installer is taken.
+      - name: LLVM for whisper.cpp (Arm64)
         shell: pwsh
         run: |
-          choco install llvm --no-progress -y
+          $installer = Join-Path $env:RUNNER_TEMP 'llvm-woa64.exe'
+          Invoke-WebRequest 'https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-woa64.exe' -OutFile $installer
+          Start-Process -FilePath $installer -ArgumentList '/S' -Wait
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
 
