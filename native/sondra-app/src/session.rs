@@ -28,6 +28,9 @@ pub struct Session {
     pub offer: Option<Vec<PathBuf>>,
     /// What the last save or open of a project said.
     pub said: Option<Result<String, String>>,
+    /// The file whose name is being changed (its place in the list), and what was wrong with the last name typed.
+    pub renaming: Option<usize>,
+    pub rename_problem: Option<String>,
     store: Option<FileStore>,
 }
 
@@ -48,6 +51,31 @@ pub fn accepts(panel: Panel) -> &'static [AssetKind] {
         Panel::Player => &[Video, Audio],
         _ => &[],
     }
+}
+
+/// A new name for a file: the stem as typed, the ending kept (`renamedFile` in `src/lib/format.ts`). Refused, not quietly
+/// changed, when Windows would refuse it — the person sees why and what to type instead.
+pub fn renamed_file(stem: &str, previous: &str) -> Result<String, String> {
+    let collapsed = stem.split_whitespace().collect::<Vec<_>>().join(" ");
+    let clean = collapsed.trim().trim_end_matches(['.', ' ']).to_string();
+    if clean.is_empty() {
+        return Err("Der Name darf nicht leer sein.".into());
+    }
+    if let Some(bad) = clean.chars().find(|c| "\\/:*?\"<>|".contains(*c) || (*c as u32) < 0x20) {
+        return Err(if (bad as u32) < 0x20 { "Steuerzeichen gehen nicht in einem Dateinamen.".into() } else { format!("„{bad}“ geht nicht — Windows erlaubt \\ / : * ? \" < > | nicht in Dateinamen.") });
+    }
+    let lower = clean.to_lowercase();
+    let reserved = matches!(lower.as_str(), "con" | "prn" | "aux" | "nul") || ((lower.starts_with("com") || lower.starts_with("lpt")) && lower.len() == 4 && lower.ends_with(|c: char| ('1'..='9').contains(&c)));
+    if reserved {
+        return Err(format!("„{clean}“ ist unter Windows ein reservierter Name."));
+    }
+    // The ending of the old name: a dot and up to eight characters without spaces or dots, after at least one.
+    let extension = previous.rfind('.').filter(|i| *i > 0).map(|i| &previous[i..]).filter(|e| (2..=9).contains(&e.chars().count()) && !e[1..].contains(['.', '/', '\\']) && !e.contains(char::is_whitespace)).unwrap_or("");
+    let name = format!("{clean}{extension}");
+    if name.chars().count() > 200 {
+        return Err("Höchstens 200 Zeichen.".into());
+    }
+    Ok(name)
 }
 
 impl Session {
@@ -209,6 +237,29 @@ impl Shell {
         )
     }
 
+    /// The field for a new name, with its buttons and what was wrong with the last name typed.
+    fn session_rename_editor(&self, ui: &Ui, cx: &mut Context<Self>) -> AnyElement {
+        let (save, cancel) = (cx.entity(), cx.entity());
+        let mut editor = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(div().w(px(280.)).child(self.session_rename.clone()))
+                    .child(ui.button("sitzung-name-speichern", "Speichern").small().primary().on_click(move |_, app| save.update(app, |shell, cx| shell.session_commit_rename(cx))))
+                    .child(ui.button("sitzung-name-lassen", "Abbrechen").small().on_click(move |_, app| cancel.update(app, |shell, cx| shell.session_cancel_rename(cx)))),
+            );
+        if let Some(problem) = &self.session.rename_problem {
+            editor = editor.child(ui.notice(NoticeKind::Warning, problem.clone()));
+        }
+        editor.into_any_element()
+    }
+
     /// What the last save or open of a project said, as a line.
     pub(crate) fn session_said_line(&self, ui: &Ui) -> Option<AnyElement> {
         match self.session.said.as_ref()? {
@@ -247,7 +298,7 @@ impl Shell {
                 .py(px(8.))
                 .border_t_1()
                 .border_color(c.line)
-                .child(div().flex().flex_col().gap(px(4.)).child(ui.value(name.clone())).child(tools))
+                .child(div().flex().flex_col().gap(px(4.)).child(if self.session.renaming == Some(n) { self.session_rename_editor(&ui, cx) } else { ui.value(name.clone()).into_any_element() }).child(tools))
                 .child(
                     div()
                         .flex()
@@ -260,6 +311,10 @@ impl Shell {
                             shell.session.shift(n, false);
                             cx.notify();
                         })))
+                        .child(ui.button(format!("sitzung-umbenennen-{n}"), "Umbenennen").small().ghost().accessible_name(format!("{name} umbenennen")).on_click({
+                            let me = me.clone();
+                            move |_, app| me.update(app, |shell, cx| shell.session_start_rename(n, cx))
+                        }))
                         .child(ui.button(format!("sitzung-weg-{n}"), "Entfernen").small().ghost().accessible_name(format!("{name} aus der Sitzung nehmen")).on_click(move |_, app| away.update(app, |shell, cx| {
                             shell.session.remove(n);
                             cx.notify();
@@ -291,6 +346,61 @@ impl Shell {
         let mut panel = div().flex().flex_col().gap(px(8.)).child(ui.subheading("Dateien der Sitzung")).child(list).child(foot);
         panel = panel.children(self.session_said_line(&ui));
         Some(panel.into_any_element())
+    }
+}
+
+impl Shell {
+    /// The name of file `index` goes into the field, ready to be changed.
+    pub fn session_start_rename(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(path) = self.session.files.get(index) else { return };
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let stem = match name.rfind('.') {
+            Some(i) if i > 0 && name.len() - i <= 9 => name[..i].to_string(),
+            _ => name,
+        };
+        self.session_rename.update(cx, |field, cx| field.set_text(stem, cx));
+        self.session.renaming = Some(index);
+        self.session.rename_problem = None;
+        cx.notify();
+    }
+
+    pub fn session_cancel_rename(&mut self, cx: &mut Context<Self>) {
+        self.session.renaming = None;
+        self.session.rename_problem = None;
+        cx.notify();
+    }
+
+    /// Renames the file on the disk where it lies (the ending stays), if Windows would take the name and no other
+    /// file has it. The list follows; nothing else of the session changes.
+    pub fn session_commit_rename(&mut self, cx: &mut Context<Self>) {
+        let Some(index) = self.session.renaming else { return };
+        let Some(path) = self.session.files.get(index).cloned() else { return };
+        let typed = self.session_rename.read(cx).text().to_string();
+        let previous = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let outcome = renamed_file(&typed, &previous).and_then(|name| {
+            if name == previous {
+                return Ok(None);
+            }
+            let target = path.with_file_name(&name);
+            // Another file with that name — but the same file under another spelling of the same letters is fine.
+            if target.exists() && !previous.eq_ignore_ascii_case(&name) {
+                return Err(format!("Es gibt schon eine Datei „{name}“ in diesem Ordner."));
+            }
+            std::fs::rename(&path, &target).map_err(|e| format!("Das Umbenennen ging nicht: {e}"))?;
+            Ok(Some(target))
+        });
+        match outcome {
+            Ok(target) => {
+                if let Some(target) = target {
+                    self.session.files[index] = target;
+                    self.session.save();
+                }
+                self.session.renaming = None;
+                self.session.rename_problem = None;
+            }
+            Err(problem) => self.session.rename_problem = Some(problem),
+        }
+        cx.notify();
     }
 }
 

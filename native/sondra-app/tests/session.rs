@@ -195,3 +195,55 @@ fn the_session_is_saved_as_a_project_the_website_opens_and_a_project_opens_its_f
     assert!(w.shell.read_with(w.cx, |s, _| s.session_files()).is_empty());
     assert!(w.labels().iter().any(|l| l.contains("kein gültiges ZIP")), "said where the person is");
 }
+
+#[test]
+fn a_new_name_keeps_the_ending_and_is_refused_where_windows_would_refuse_it() {
+    use sondra_app::session::renamed_file;
+    assert_eq!(renamed_file("Neues  Lied ", "alt.wav").unwrap(), "Neues Lied.wav");
+    assert_eq!(renamed_file("Ohne Endung", "alt").unwrap(), "Ohne Endung");
+    assert_eq!(renamed_file("Punkte...", "a.mp3").unwrap(), "Punkte.mp3");
+    assert_eq!(renamed_file("", "a.wav").unwrap_err(), "Der Name darf nicht leer sein.");
+    assert_eq!(renamed_file("a:b", "a.wav").unwrap_err(), "„:“ geht nicht — Windows erlaubt \\ / : * ? \" < > | nicht in Dateinamen.");
+    assert_eq!(renamed_file("a\u{1}b", "a.wav").unwrap_err(), "Steuerzeichen gehen nicht in einem Dateinamen.");
+    for reserved in ["con", "NUL", "com3", "Lpt9"] {
+        assert!(renamed_file(reserved, "a.wav").unwrap_err().contains("reservierter Name"), "{reserved}");
+    }
+    assert!(renamed_file("com10", "a.wav").is_ok(), "only COM1 to COM9");
+    assert_eq!(renamed_file(&"x".repeat(250), "a.wav").unwrap_err(), "Höchstens 200 Zeichen.");
+}
+
+#[gpui::test]
+fn a_file_of_the_session_is_renamed_on_the_disk_where_it_lies(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let (a, b) = (dir.path().join("alt.wav"), dir.path().join("belegt.wav"));
+    song(&a);
+    song(&b);
+    let mut w = open(cx, dir.path().join("Sitzung.json"));
+    w.shell.update(w.cx, |s, cx| s.session_add(vec![a.clone()], cx));
+    w.draw();
+    w.press(Role::Button, "Dateien der Sitzung, 1");
+    w.press(Role::Button, "alt.wav umbenennen");
+    assert!(w.tree().find(Role::Button, "Speichern").is_some(), "the field is there");
+    let type_name = |w: &mut Window, text: &str| {
+        let field = w.tree().find(Role::TextInput, "Neuer Name der Datei").unwrap().id;
+        w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: field, data: None }, window, cx));
+        w.cx.simulate_keystrokes("ctrl-a");
+        w.cx.simulate_input(text);
+        w.draw();
+    };
+    // A name another file has: said, nothing renamed.
+    type_name(&mut w, "belegt");
+    w.press(Role::Button, "Speichern");
+    assert!(w.labels().iter().any(|l| l.contains("Es gibt schon eine Datei „belegt.wav“")), "{:?}", w.labels());
+    assert!(a.exists());
+    // A name Windows refuses.
+    type_name(&mut w, "a/b");
+    w.press(Role::Button, "Speichern");
+    assert!(w.labels().iter().any(|l| l.contains("geht nicht")));
+    // A good name: the file on the disk and the list follow, the ending stays.
+    type_name(&mut w, "Neues Lied");
+    w.press(Role::Button, "Speichern");
+    assert!(!a.exists() && dir.path().join("Neues Lied.wav").is_file());
+    assert_eq!(names(w.shell.read_with(w.cx, |s, _| s.session_files())), ["Neues Lied.wav"]);
+    assert!(w.tree().find(Role::Button, "Neues Lied.wav umbenennen").is_some(), "the field is closed again");
+}

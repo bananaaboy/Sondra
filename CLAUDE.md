@@ -506,12 +506,11 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   USB über `nusb`), außerdem „Liste empfangen“, „Was ist neu“, schwebende Karten,
   Einzel-Instanz, Gong und Wachhalten beim Laden. **Stand 20.11.2026:** dazu nativ Systemmeldungen und Tray-Symbol (`sondra-tray`, ein Klick auf die
   Meldung öffnet die Serie), **Bild im Bild** (kleines Fenster, das oben bleibt und die Uhr des Players hält) und
-  **Immer im Vordergrund**, die **Sitzung** (Dateien der Kopfzeile, Reihenfolge, an Werkzeuge weiterreichen, auf Wunsch
+  **Immer im Vordergrund**, die **Sitzung** (Dateien der Kopfzeile, Reihenfolge, Umbenennen, an Werkzeuge weiterreichen, auf Wunsch
   behalten und beim Start angeboten; `.sondra`-Projekte im Format der Website lesen und schreiben, `sondra-media::project`),
   Pads übereinander, **MIDI-Controller** (`sondra-midi`, winmm), „Akkorde/Arpeggio zeichnen“, „Lokale KI“ (Rauschprofil
   von selbst), das Thema bleibt und folgt dem System, Download anhalten, auf anderem Gerät abspielen, `sondra #umwandeln`.
-  **Noch nicht:** ein eigenes `.onnx`-Modell (Spuren trennen), die große Ansicht der Klavierrolle, Umbenennen in der
-  Sitzung; das Store-Paket (MSIX) und Arm64 werden in der CI gebaut (Jobs „store“ und „arm64“, nur zur Auskunft).
+  **Noch nicht:** ein eigenes `.onnx`-Modell (Spuren trennen), die große Ansicht der Klavierrolle; das Store-Paket (MSIX) und Arm64 werden in der CI gebaut (Jobs „store“ und „arm64“, nur zur Auskunft).
   Auch noch nicht: ein eigenes Fenster für das Handy. **Setup**
   (`native/installer/sondra.nsi`, NSIS, für alle Benutzer, FFmpeg daneben, Apps & Features, `.sondra-liste`, Öffnen mit)
   installiert, startet mit einem Film und deinstalliert sich in der CI (Lauf 76 grün, 19.11.2026), mit Symbol in der .exe.

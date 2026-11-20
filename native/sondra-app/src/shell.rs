@@ -58,6 +58,8 @@ pub struct Shell {
     unfolded: HashSet<Group>,
     /// Files chosen or dropped; what to do with them is chosen among the tools.
     pub(crate) session: crate::session::Session,
+    /// The field for a new name of a file of the session.
+    pub(crate) session_rename: Entity<TextField>,
     pub(crate) focus: FocusHandle,
     /// The first entry of whatever menu is open takes the focus when it opens.
     menu_focus: FocusHandle,
@@ -174,6 +176,13 @@ impl Shell {
         let folder = FolderState::new(cx, colors);
         let download = DownloadState::new(cx, colors);
         let devices = DevicesState::new(cx, colors);
+        let session_rename = cx.new(|cx| TextField::new(cx, colors, "Neuer Name der Datei").max_chars(190));
+        cx.subscribe(&session_rename, |shell, _, event: &FieldEvent, cx| {
+            if *event == FieldEvent::Submitted {
+                shell.session_commit_rename(cx);
+            }
+        })
+        .detach();
         let convert = ConvertState::new(cx, colors);
         let palette = crate::palette::Palette::new(cx, colors);
         crate::palette::subscribe(&palette.field, cx);
@@ -215,6 +224,7 @@ impl Shell {
             chosen_group: None,
             unfolded: HashSet::new(),
             session: Default::default(),
+            session_rename,
             focus: cx.focus_handle(),
             menu_focus: cx.focus_handle().tab_stop(true),
             focus_menu: false,
@@ -461,6 +471,7 @@ impl Shell {
             self.download.input.clone(),
             self.convert.name.clone(),
             self.devices.rename.clone(),
+            self.session_rename.clone(),
             self.devices.text.clone(),
             self.devices.servers.stun.clone(),
             self.devices.servers.turn.clone(),
