@@ -47,6 +47,7 @@ pub mod old_app;
 pub mod pip;
 pub mod player_page;
 pub mod sampler_page;
+pub mod session;
 pub mod shell;
 pub mod receive_window;
 pub mod roll_ui;

@@ -57,7 +57,7 @@ pub struct Shell {
     /// Groups whose rest of tiles is shown.
     unfolded: HashSet<Group>,
     /// Files chosen or dropped; what to do with them is chosen among the tools.
-    picked: Vec<PathBuf>,
+    pub(crate) session: crate::session::Session,
     pub(crate) focus: FocusHandle,
     /// The first entry of whatever menu is open takes the focus when it opens.
     menu_focus: FocusHandle,
@@ -214,7 +214,7 @@ impl Shell {
             search,
             chosen_group: None,
             unfolded: HashSet::new(),
-            picked: Vec::new(),
+            session: Default::default(),
             focus: cx.focus_handle(),
             menu_focus: cx.focus_handle().tab_stop(true),
             focus_menu: false,
@@ -536,10 +536,7 @@ impl Shell {
     }
 
     fn take_files(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
-        if !paths.is_empty() {
-            self.picked = paths;
-            cx.notify();
-        }
+        self.session_add(paths, cx);
     }
 }
 
@@ -573,6 +570,7 @@ impl Shell {
                     .flex()
                     .items_center()
                     .gap(px(8.))
+                    .children(self.session_header_button(&ui, cx))
                     .children(self.drive_header_button(&ui, cx))
                     .child({
                         let me = me.clone();
@@ -824,8 +822,8 @@ impl Shell {
                     })
                     .child(ui.hint("oder hierher ziehen")),
             );
-        if !self.picked.is_empty() {
-            let names: Vec<String> = self.picked.iter().map(file_name).collect();
+        if !self.session.files.is_empty() {
+            let names: Vec<String> = self.session.files.iter().map(file_name).collect();
             let shown = names.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
             let more = names.len().saturating_sub(3);
             let text = if more == 0 {
@@ -861,7 +859,8 @@ impl Shell {
                     .or_else(|| sondra_ui::panel_icon(panel.meta().id)),
             )
             .on_click(move |_, app| {
-                me.update(app, |shell, cx| shell.go(panel, cx));
+                // What the person chose goes to the tool they pick, if it takes such files.
+                me.update(app, |shell, cx| shell.session_hand_over(panel, None, cx));
             });
         // A list arrives as a list: the tiles follow one another, 30 ms apart.
         motion::enter(
@@ -1229,6 +1228,8 @@ impl Render for Shell {
             .gap(px(8.))
             .child(self.header(ui, cx))
             .children(self.news_banner(ui, cx))
+            .children(self.session_offer_line(ui, cx))
+            .children(self.session_panel(ui, cx))
             .child(self.tab_row(ui, inner, cx))
             .child(ui.rule());
 
