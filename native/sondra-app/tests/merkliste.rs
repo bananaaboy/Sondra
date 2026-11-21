@@ -276,9 +276,9 @@ fn the_page_opens_on_a_shelf_of_posters_and_a_poster_opens_its_series(cx: &mut T
     let tree = w.tree();
     assert_eq!(tree.find(Role::Button, "Als Poster").unwrap().toggled, Some(true));
     assert_eq!(tree.find(Role::Button, "Als Liste").unwrap().toggled, Some(false));
-    // A poster says what a line says, and has no step forward of its own: that is one click further.
+    // A poster says what a line says, and has its step forward, as on the website.
     assert_eq!(said(&tree, Role::ListItem, "Frieren"), "Staffel 1, Folge 4. 3/12. noch 9 · 3 Std. 36 Min.");
-    assert!(tree.find(Role::Button, "Staffel 1, Folge 4 von Frieren als gesehen markieren").is_none());
+    assert!(tree.find(Role::Button, "Staffel 1, Folge 4 von Frieren als gesehen markieren").is_some());
     w.press(Role::ListItem, "Frieren");
     assert!(w.tree().find(Role::Button, "Folge 4 gesehen").is_some());
     w.press(Role::Button, "Zurück zur Merkliste");
@@ -381,13 +381,59 @@ fn the_planner_says_how_much_there_is_to_watch_to_a_chosen_point_and_when_it_is_
     let said: Vec<String> = ["9 Folgen"].iter().map(|s| s.to_string()).collect();
     let found = said.iter().all(|s| tree.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with(s.as_str()))));
     assert!(found, "nine episodes are left to watch: {:?}", tree.nodes.iter().filter_map(|n| n.label.as_ref().map(|l| l.to_string())).filter(|l| l.contains("Folge") || l.contains("Bis")).collect::<Vec<_>>());
-    // A pace gives a day.
-    w.press(Role::Button, "3 am Tag");
-    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Fertig "))));
-    // The end of the season, from the last episode, is reached: nothing to watch.
-    w.press(Role::Button, "Ziel Ende Staffel 1");
+    // A pace gives a day: two a day (the start), then three, then a week.
+    let says = |w: &Window, start: &str| w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with(start)));
+    assert!(says(&w, "→ "), "a day for the pace");
+    w.press(Role::Button, "Folgen weiter");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "3")));
+    w.press(Role::Button, "pro Woche");
+    assert_eq!(w.tree().find(Role::Button, "pro Woche").unwrap().toggled, Some(true));
+    // A day gives a pace.
+    w.shell.update(w.cx, |shell, cx| shell.planner_day_field().update(cx, |f, cx| f.set_text("24.12.2099", cx)));
+    w.draw();
+    assert!(says(&w, "→ ") && w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains(" am Tag ("))), "a pace for the day");
+    // Any episode: Staffel 1, Folge 6 → episodes 4, 5, 6.
+    w.press(Role::Button, "Ziel in Staffel 1");
+    for _ in 0..7 {
+        w.press(Role::Button, "Folge zurück");
+    }
+    w.press(Role::Button, "Folge weiter");
+    assert!(w.tree().find(Role::Heading, "Bis Staffel 1, Folge 6").is_some());
+    assert!(says(&w, "3 Folgen"));
+    // „Genauer rechnen“ holds the speed.
+    w.press(Role::Button, "Genauer rechnen");
     w.press(Role::Button, "Planer Tempo 2×");
     assert_eq!(w.tree().find(Role::Button, "Planer Tempo 2×").unwrap().toggled, Some(true));
+    // „Als Ziel merken“ keeps the point on the series, and the page says how much is left.
+    w.press(Role::Button, "Als Ziel merken");
+    assert!(says(&w, "Ziel: Staffel 1, Folge 6 — noch 3 Folgen"));
+    let back = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    let goal = back.items.iter().find(|i| i.id == "fr").unwrap().goal.clone().unwrap();
+    assert_eq!((goal.season, goal.episode, goal.by.as_deref()), (1, 6, Some("2099-12-24")));
+    w.press(Role::Button, "Ziel entfernen");
+    assert!(!says(&w, "Ziel: "));
+}
+
+#[gpui::test]
+fn the_list_says_how_much_is_going_on_and_filters_by_tag_and_open_episodes(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut stored = list(3);
+    stored.items[0].tags = Some(vec!["Anime".into()]);
+    stored.items[0].rating = Some(5);
+    let mut w = open_as(cx, Some(&stored), dir.path(), false);
+    let says = |w: &Window, text: &str| w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == text));
+    assert!(says(&w, "1 am Schauen · 5 Folgen gesehen"), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    assert!(w.tree().find(Role::Button, "Ordner mit Folgen wählen").is_some());
+    assert!(says(&w, "Nur auf diesem Gerät gespeichert."));
+    w.press(Role::Button, "Tag Anime");
+    assert!(w.tree().find(Role::ListItem, "Frieren").is_some());
+    assert!(w.tree().find(Role::ListItem, "Mob Psycho 100").is_none(), "only the tagged series");
+    w.press(Role::Button, "Alle Tags");
+    assert!(w.tree().find(Role::ListItem, "Mob Psycho 100").is_some());
+    // „Nur offene Folgen“ leaves out what is seen to the end.
+    w.press(Role::Button, "Nur Serien mit noch ungesehenen Folgen anzeigen");
+    assert!(w.tree().find(Role::ListItem, "Dark").is_none());
+    assert!(w.tree().find(Role::ListItem, "Frieren").is_some());
 }
 
 #[gpui::test]

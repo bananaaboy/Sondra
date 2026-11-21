@@ -995,6 +995,63 @@ impl Shell {
     }
 }
 
+impl Shell {
+    /// Under the stands: the folder the list plays from, „Nur offene Folgen“, the tags, and where the list lies.
+    pub(crate) fn merk_filters(&self, ui: Ui, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        let state = &self.merk;
+        let mut row = div().flex().flex_wrap().items_center().gap(px(6.));
+        // The folder the episodes lie in, as on the website: a pill that names it, or one that asks for it.
+        let in_folder = self.folder.scan.as_ref().map(|scan| {
+            let series = sondra_merk::folder::folder_series(&scan.files, &state.items).len();
+            (if scan.drive { "Google Drive".to_string() } else { format!("„{}“", scan.name) }, series)
+        });
+        {
+            let me = me.clone();
+            let label = match &in_folder {
+                Some((name, n)) if *n > 0 => format!("{name} · {n} {} darin", if *n == 1 { "Serie" } else { "Serien" }),
+                Some((name, _)) => format!("{name} · keine Serie darin"),
+                None => "Ordner mit Folgen wählen".to_string(),
+            };
+            row = row.child(ui.chip("merk-ordner", label, in_folder.as_ref().is_some_and(|(_, n)| *n > 0)).on_click(move |_, app| me.update(app, |shell, cx| shell.go(crate::nav::Panel::Folder, cx))));
+        }
+        if self.drive.as_ref().is_some_and(|d| d.configured) && !in_folder.as_ref().is_some_and(|(n, _)| n == "Google Drive") {
+            let me = me.clone();
+            row = row.child(ui.chip("merk-drive-einbeziehen", "Google Drive einbeziehen", false).on_click(move |_, app| me.update(app, |shell, cx| {
+                shell.open_drive_folder(cx);
+            })));
+        }
+        {
+            let me = me.clone();
+            row = row.child(ui.chip("nur-offene", "Nur offene Folgen", state.filter.only_open).accessible_name("Nur Serien mit noch ungesehenen Folgen anzeigen").on_click(move |_, app| Shell::merk_do(&me, app, |m| m.filter.only_open = !m.filter.only_open)));
+        }
+        let tags = sondra_merk::view::all_tags(&state.items);
+        if !tags.is_empty() {
+            let me2 = me.clone();
+            row = row.child(ui.chip("alle-tags", "Alle Tags", state.filter.tag.is_none()).on_click(move |_, app| Shell::merk_do(&me2, app, |m| m.filter.tag = None)));
+            for tag in tags {
+                let me = me.clone();
+                let on = state.filter.tag.as_deref() == Some(tag.as_str());
+                let t = tag.clone();
+                row = row.child(ui.chip(format!("tag-{tag}"), format!("# {tag}"), on).accessible_name(format!("Tag {tag}")).on_click(move |_, app| {
+                    let t = t.clone();
+                    Shell::merk_do(&me, app, move |m| m.filter.tag = if m.filter.tag.as_deref() == Some(t.as_str()) { None } else { Some(t) })
+                }));
+            }
+        }
+        let lies = if self.merk_drive.on {
+            "Über Google Drive abgeglichen — alle Ihre Geräte mit demselben Konto haben dieselbe Liste."
+        } else if self.anytype.link.as_ref().is_some_and(|l| l.connected()) {
+            "Mit Anytype abgeglichen."
+        } else if self.drive.as_ref().is_some_and(|d| d.configured) {
+            "Nur auf diesem Gerät gespeichert. Über Google Drive teilen es alle Ihre Geräte (Mehr → Über Google Drive abgleichen)."
+        } else {
+            "Nur auf diesem Gerät gespeichert."
+        };
+        div().flex().flex_col().gap(px(8.)).child(row).child(ui.hint(lies)).into_any_element()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

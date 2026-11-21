@@ -84,6 +84,8 @@ pub struct MerkState {
     /// The series looked at online right now, and what the look said.
     pub checking: Option<String>,
     pub checked_said: Option<(String, String)>,
+    /// „Bis zum“ in the planner.
+    pub plan_by: Entity<TextField>,
 }
 
 /// How far a series is, as the account on AniList is told (`syncProgressToTrackers`).
@@ -115,6 +117,8 @@ impl MerkState {
     pub fn new(cx: &mut Context<Shell>, colors: sondra_ui::Colors) -> MerkState {
         let search = cx.new(|cx| TextField::new(cx, colors, "Merkliste durchsuchen").placeholder("Serie suchen…"));
         let add = cx.new(|cx| TextField::new(cx, colors, "Name der neuen Serie").placeholder("Name der Serie").max_chars(200));
+        let plan_by = cx.new(|cx| TextField::new(cx, colors, "Bis zum Tag").placeholder("TT.MM.JJJJ").max_chars(10));
+        cx.subscribe(&plan_by, |_: &mut Shell, _, _: &FieldEvent, cx| cx.notify()).detach();
         cx.subscribe(&search, |shell: &mut Shell, field, event: &FieldEvent, cx| {
             if *event == FieldEvent::Changed {
                 shell.merk.filter.query = field.read(cx).text().to_string();
@@ -165,6 +169,7 @@ impl MerkState {
             series_more: false,
             checking: None,
             checked_said: None,
+            plan_by,
         }
     }
 
@@ -478,7 +483,14 @@ impl Shell {
         let state = &self.merk;
         let c = ui.c;
 
-        let mut head = div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(ui.heading("Merkliste"));
+        // The heading says at a glance how much is going on: „9 am Schauen · 419 Folgen gesehen“.
+        let mut title = div().flex().flex_col().gap(px(4.)).child(ui.heading("Merkliste"));
+        if !state.items.is_empty() {
+            let watching = state.items.iter().filter(|i| i.status == Status::Watching).count();
+            let seen: usize = state.items.iter().map(watched_total).sum();
+            title = title.child(ui.hint(format!("{watching} am Schauen · {seen} {} gesehen", if seen == 1 { "Folge" } else { "Folgen" })));
+        }
+        let mut head = div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(title);
         let mut actions = div().flex().flex_wrap().items_center().gap(px(10.));
         if state.items.len() >= SEARCH_FROM {
             actions = actions.child(div().w(px(240.)).child(state.search.clone()));
@@ -593,6 +605,7 @@ impl Shell {
             views = views.child(ui.chip(format!("ansicht-{label}"), label, state.view == view).on_click(move |_, app| Self::merk_do(&me, app, move |m| m.view = view)));
         }
         page = page.child(div().flex().flex_wrap().items_center().justify_between().gap(px(12.)).child(pills).child(views));
+        page = page.child(self.merk_filters(ui, cx));
 
         let sections = groups(&state.items, &state.filter, state.sort);
         if sections.is_empty() {
@@ -977,15 +990,58 @@ impl Shell {
             .text_size(px(size::SUBHEADING))
             .font_weight(gpui::FontWeight::SEMIBOLD)
             .text_color(c.muted)
-            .child(item.title.clone())
+            // A known width, so a long title breaks onto lines instead of running off the poster.
+            .child(div().w(px(picture * 0.76)).text_center().child(item.title.clone()))
             .into_any_element()
         };
+        // On the poster, as on the website: the rating at the top left, how much is seen at the top right.
+        let badge = |text: String| div().px(px(8.)).py(px(2.)).rounded(px(sondra_ui::radius::PILL)).bg(gpui::rgba(0x000000b8)).text_color(gpui::white()).text_size(px(size::MICRO)).font_weight(gpui::FontWeight::SEMIBOLD).child(text);
+        let mut marks = div().absolute().top(px(6.)).left(px(6.)).right(px(6.)).flex().justify_between();
+        marks = marks.child(match item.rating.filter(|r| *r > 0) {
+            Some(r) => badge(format!("★ {r}")).into_any_element(),
+            None => div().into_any_element(),
+        });
+        if let Some(f) = progress.fraction {
+            marks = marks.child(badge(format!("{} %", (f * 100.0).round() as i64)));
+        }
+        let poster = div().relative().child(poster).child(marks).into_any_element();
+        let seasons = seasons_of(item).iter().filter(|x| x.number > 0).count();
+        let mut facts = div().flex().flex_wrap().items_center().gap(px(6.)).text_size(px(size::MICRO)).text_color(c.prose);
+        if seasons > 0 {
+            facts = facts.child(format!("{seasons} {}", if seasons == 1 { "Staffel" } else { "Staffeln" }));
+        }
+        if let Some(source) = crate::merk_edit::source_label(&item.url) {
+            facts = facts.child(format!("· {source}"));
+        }
+        if item.online_available.as_ref().is_some_and(|o| o.has_new == Some(true)) {
+            facts = facts.child(div().px(px(6.)).rounded(px(sondra_ui::radius::PILL)).bg(c.ink).text_color(c.on_ink).font_weight(gpui::FontWeight::SEMIBOLD).child("Neu"));
+        }
+        if let Some(goal) = &item.goal {
+            let left = sondra_merk::plan::watch_plan(item, sondra_merk::plan::PlanPoint { season: goal.season, episode: goal.episode }, sondra_merk::plan::PlanOptions { from_stand: true, speed: 1.0, skip_opening: 0.0 }).episodes;
+            if left > 0 {
+                facts = facts.child(format!("· Ziel · noch {left}"));
+            }
+        }
+        let mut line = div().flex().items_center().justify_between().gap(px(6.)).child(div().flex_1().min_w(px(0.)).text_size(px(size::SMALL)).text_color(c.prose).truncate().child(stand.clone()));
+        if !caught_up(&seasons_of(item)) && item.episode.is_some_and(|e| e != 0) {
+            let (me, id) = (me.clone(), item.id.clone());
+            line = line.child(
+                ui.button(format!("kachel-plus-eins-{}", item.id), "+1")
+                    .small()
+                    .accessible_name(format!("{stand} von {} als gesehen markieren", item.title))
+                    .on_click(move |_, app| {
+                        let id = id.clone();
+                        Self::merk_do(&me, app, move |m| m.advance(&id))
+                    }),
+            );
+        }
         let words = div()
             .flex()
             .flex_col()
-            .gap(px(2.))
+            .gap(px(3.))
             .child(div().text_color(c.ink).font_weight(gpui::FontWeight::SEMIBOLD).truncate().child(item.title.clone()))
-            .child(div().text_size(px(size::SMALL)).text_color(c.prose).truncate().child(stand.clone()))
+            .child(line)
+            .child(facts)
             .child(div().pt(px(4.)).child(ui.bar(format!("kachel-{}", item.id), fraction, format!("{}: gesehen", item.title))))
             .into_any_element();
         let id = item.id.clone();

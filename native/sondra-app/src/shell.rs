@@ -428,6 +428,7 @@ impl Shell {
             self.search.clone(),
             self.merk.search.clone(),
             self.merk.add.clone(),
+            self.merk.plan_by.clone(),
             self.folder.search.clone(),
             self.download.input.clone(),
             self.convert.name.clone(),
