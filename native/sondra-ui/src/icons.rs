@@ -59,7 +59,7 @@ impl AssetSource for Assets {
 }
 
 /// The marks of the window's own chrome, drawn here on the same 16 × 16 grid and stroke as the tools'.
-const UI_MARKS: [(&str, &str); 5] = [
+const UI_MARKS: [(&str, &str); 7] = [
     // A crescent: the lights go down.
     ("dunkel", "<path d=\"M13 9.6A5.5 5.5 0 1 1 6.4 3a4.3 4.3 0 0 0 6.6 6.6z\"/>"),
     // A disc with rays: the lights go up.
@@ -68,11 +68,15 @@ const UI_MARKS: [(&str, &str); 5] = [
     ("dateien", "<path d=\"M5.5 2.5h4l3 3v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z\"/><path d=\"M9.5 2.5v3h3\"/><path d=\"M3 5v8.5a1 1 0 0 0 1 1h6\"/>"),
     // A cloud: Google Drive.
     ("drive", "<path d=\"M4.6 12.5h7a2.7 2.7 0 0 0 .3-5.4 3.9 3.9 0 0 0-7.5-.9A3.2 3.2 0 0 0 4.6 12.5z\"/>"),
+    // A cross: close.
+    ("schliessen", "<path d=\"M4 4l8 8M12 4l-8 8\"/>"),
+    // A bell: the notifications.
+    ("glocke", "<path d=\"M4 11.5V7.5a4 4 0 0 1 8 0v4l1 1.2H3z\"/><path d=\"M6.6 14a1.5 1.5 0 0 0 2.8 0\"/>"),
     // A small spark: what is new in this version.
     ("neu", "<path d=\"M8 2v3.2M8 10.8V14M2 8h3.2M10.8 8H14M4 4l2 2M10 10l2 2M4 12l2-2M10 6l2-2\"/>"),
 ];
 
-/// A mark of the window's chrome: `dunkel`, `hell`, `dateien`, `drive`, `neu`.
+/// A mark of the window's chrome: `dunkel`, `hell`, `dateien`, `drive`, `neu`, `schliessen`, `glocke`.
 pub fn ui_icon(id: &str) -> SharedString {
     format!("icons/ui/{id}.svg").into()
 }

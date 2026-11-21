@@ -2,10 +2,10 @@
 ; Apps & Features, so both can be installed and nothing of the other is touched. Built by the workflow
 ; „Native“ (job app):
 ;
-;   makensis -DVERSION=1.2.3 -DEXE=sondra.exe -DFFMPEG=ffmpeg-dir -DOUT=Sondra-Nativ-Setup.exe sondra.nsi
+;   makensis -DVERSION=1.2.3 -DEXE=sondra.exe -DFFMPEG=ffmpeg-dir -DYTDLP=yt-dlp.exe -DOUT=Sondra-Nativ-Setup.exe sondra.nsi
 ;
-; What it does: for all users (Program Files, one elevation), the program, FFmpeg beside it (Sondra looks
-; there first), the licence texts, a Start-menu entry, an entry in Apps & Features with its uninstaller, the
+; What it does: for all users (Program Files, one elevation), the program, FFmpeg and yt-dlp beside it
+; (Sondra looks there first; yt-dlp so „Herunterladen“ works from the first start), the licence texts, a Start-menu entry, an entry in Apps & Features with its uninstaller, the
 ; ending .sondra-liste (the lists people send each other) and „Öffnen mit“ for media — Sondra is added to the
 ; list of programs an extension offers and takes over none. Silent with /S; /D=folder chooses the folder.
 ; Never signed here: the unsigned setup is what Windows SmartScreen asks about, and the Store package comes later.
@@ -114,6 +114,9 @@ Section "Sondra" SecMain
   File "/oname=sondra.exe" "${EXE}"
   File "${FFMPEG}\ffmpeg.exe"
   File "${FFMPEG}\ffprobe.exe"
+!ifdef YTDLP
+  File "/oname=yt-dlp.exe" "${YTDLP}"
+!endif
   SetOutPath "$INSTDIR\Lizenzen"
   File "${LICENSES}\*.txt"
   SetOutPath "$INSTDIR"
@@ -170,6 +173,7 @@ Section "Uninstall"
   Delete "$INSTDIR\sondra.exe"
   Delete "$INSTDIR\ffmpeg.exe"
   Delete "$INSTDIR\ffprobe.exe"
+  Delete "$INSTDIR\yt-dlp.exe"
   Delete "$INSTDIR\Lizenzen\*.txt"
   RMDir "$INSTDIR\Lizenzen"
   Delete "$INSTDIR\Deinstallieren.exe"

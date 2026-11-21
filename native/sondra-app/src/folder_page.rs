@@ -1173,13 +1173,14 @@ impl Shell {
         div()
             .flex()
             .flex_col()
-            .items_start()
-            .gap(px(14.))
-            .max_w(px(640.))
-            .child(ui.heading("Ordner"))
-            .child(ui.subheading("Ihre Dateien, aus einem Ordner"))
-            .child(ui.prose("Wählen Sie einen Ordner auf diesem Computer. Sondra zeigt, was darin liegt, und Sie wählen aus, was abgespielt, bearbeitet oder gespeichert wird. Gelesen wird nur, was Sie ansehen; gesendet wird nichts."))
-            .child(ways)
+            .gap(px(20.))
+            .child(ui.page_head("Ordner", "Die Dateien eines Ordners auf diesem Computer: ansehen, auswählen, abspielen, bearbeiten. Gelesen wird nur, was Sie ansehen; gesendet wird nichts."))
+            .child(ui.empty(
+                "ordner-leer",
+                "Ihre Dateien, aus einem Ordner",
+                "Wählen Sie einen Ordner, und Sondra zeigt, was darin liegt — Filme mit Vorschaubild, Serien unter ihrem Namen.",
+                vec![ways.into_any_element()],
+            ))
             .into_any_element()
     }
 }

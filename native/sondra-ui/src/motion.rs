@@ -92,6 +92,38 @@ where
         .into_any_element()
 }
 
+/// `enter` for what floats (`absolute`): the same way in, but moved by its margins, so its own position
+/// stays — `enter` makes an element `relative`, and a layer that was absolute then left the window (the
+/// dialogs and the drawer were laid out off-screen, 21.11.2026).
+pub fn enter_floating<E>(element: E, id: impl Into<ElementId>, from: (f32, f32), delay: Duration, duration: Duration) -> AnyElement
+where
+    E: Styled + ParentElement + IntoElement + 'static,
+{
+    if reduced() {
+        return element.into_any_element();
+    }
+    let total = delay + duration;
+    element
+        .with_animation(id, Animation::new(total), move |element, elapsed| {
+            let t = progress(elapsed, total, delay, duration);
+            element.ml(px(from.0 * (1.0 - t))).mt(px(from.1 * (1.0 - t))).opacity(t)
+        })
+        .into_any_element()
+}
+
+/// Only the opacity: a layer that fades in where it is.
+pub fn fade<E>(element: E, id: impl Into<ElementId>, duration: Duration) -> AnyElement
+where
+    E: Styled + ParentElement + IntoElement + 'static,
+{
+    if reduced() {
+        return element.into_any_element();
+    }
+    element
+        .with_animation(id, Animation::new(duration), move |element, elapsed| element.opacity(progress(elapsed, duration, Duration::ZERO, duration)))
+        .into_any_element()
+}
+
 /// The stagger of a list: 30 ms between neighbours, never more than 240 ms in all.
 pub fn stagger(index: usize) -> Duration {
     Duration::from_millis((index as u64 * 30).min(240))

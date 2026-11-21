@@ -191,7 +191,7 @@ impl Shell {
         }
         let Some(report) = n.report else {
             if n.file.is_none() {
-                work = work.child(ui.hint("Noch keine Datei gewählt. Gemessen wird gleich nach der Wahl; Ziel und Format links gelten dann."));
+                work = work.child(ui.empty("lautstaerke-leer", "Noch keine Datei gewählt", "Gemessen wird gleich nach der Wahl, nach EBU R128. Ziel und Format links gelten dann.", vec![]));
             }
             return page.child(ui.tool_body(settings_col, work)).into_any_element();
         };

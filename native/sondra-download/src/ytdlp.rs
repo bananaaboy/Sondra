@@ -154,9 +154,15 @@ pub struct Tool {
     pub version: String,
 }
 
-/// Where yt-dlp is looked for, in order: Sondra's own copy, WinGet's, the path.
+/// Where yt-dlp is looked for, in order: Sondra's own copy (fetched and kept up to date on request), the one
+/// the setup put beside the program (so it is there from the first start), WinGet's, the path.
 pub fn candidates(data_dir: &Path, system: bool) -> Vec<PathBuf> {
     let mut list = vec![data_dir.join(own_name())];
+    if system {
+        if let Some(dir) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf)) {
+            list.push(dir.join(own_name()));
+        }
+    }
     if cfg!(windows) && system {
         if let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) {
             list.push(local.join("Microsoft").join("WinGet").join("Links").join("yt-dlp.exe"));

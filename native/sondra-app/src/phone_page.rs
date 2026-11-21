@@ -689,7 +689,11 @@ impl Shell {
             block = block.child(ui.notice(NoticeKind::Info, said.clone()));
         }
 
-        page = page.child(div().flex().flex_wrap().items_start().gap(px(32.)).child(div().flex().flex_col().flex_none().w(px(420.)).gap(px(4.)).child(ui.subheading("So geht es")).child(steps)).child(block));
+        // While the phone is shown its picture comes first: where the two columns do not fit side by side, the
+        // steps (all ticked by then) would otherwise push the phone below the window's edge.
+        let how = div().flex().flex_col().flex_none().w(px(420.)).gap(px(4.)).child(ui.subheading("So geht es")).child(steps);
+        let row = div().flex().flex_wrap().items_start().gap(px(32.));
+        page = page.child(if matches!(p.phase, Phase::Running) { row.child(block).child(how) } else { row.child(how).child(block) });
         let _ = size::SMALL;
         let _ = point(px(0.), px(0.));
         page.into_any_element()

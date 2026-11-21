@@ -52,6 +52,11 @@ pub struct Shell {
     pub(crate) focus: FocusHandle,
     /// One handle per place in the rack, in the order of `PANELS`: Up and Down walk them.
     rack_focus: Vec<FocusHandle>,
+    /// Since when a dialog or the drawer is open: their way in is drawn frame by frame for a moment —
+    /// an animation inside a deferred layer asks for no frames of its own and stayed invisible.
+    layer_since: Option<std::time::Instant>,
+    /// The notifications drawer: open or not, and its log.
+    pub(crate) inbox: crate::inbox::Inbox,
     /// „Saallicht“: whether the house lights are down (a film plays), and since when — the rack fades.
     house: (bool, std::time::Instant),
     /// The pointer rests on the rack: the lights come back (through the same fade).
@@ -215,6 +220,8 @@ impl Shell {
                 .map(|_| cx.focus_handle().tab_stop(true))
                 .collect(),
             house: (false, std::time::Instant::now() - motion::SLOW),
+            inbox: Default::default(),
+            layer_since: None,
             rack_hovered: false,
             merk,
             folder,
@@ -363,7 +370,7 @@ impl Shell {
     }
 
     /// What waits, as a notification would say it (title, line), the announced episodes first.
-    fn attention_lines(&self) -> Vec<(String, String)> {
+    pub(crate) fn attention_lines(&self) -> Vec<(String, String)> {
         let mut lines: Vec<(String, String)> = self.news_rounds.notes.iter().map(|n| (format!("Neue Folge: {}", n.title), format!("Staffel {}, Folge {} ist auf AniWorld erschienen.", n.season, n.episode))).collect();
         if let Some(e) = &self.devices.engine {
             for t in e.snapshot().transfers.iter().filter(|t| t.state == sondra_devices::engine::State::Asking) {
@@ -532,9 +539,9 @@ impl Shell {
                         div().mx(px(6.)).my(px(10.)).h(px(1.)).bg(c.line).into_any_element()
                     } else {
                         div()
-                            .pt(px(16.))
-                            .pb(px(4.))
-                            .px(px(10.))
+                            .pt(px(12.))
+                            .pb(px(2.))
+                            .px(px(12.))
                             .child(ui.rack_heading(*label))
                             .into_any_element()
                     });
@@ -571,12 +578,26 @@ impl Shell {
         if let Some(drive) = self.drive_header_button(&ui, compact, cx) {
             foot = foot.child(drive);
         }
-        let news = me.clone();
-        foot = foot
+        let (news, bell) = (me.clone(), me.clone());
+        let waiting = self.inbox_count();
+        // The small things at the foot as a row of marks (each with its name for the screen reader and as a
+        // tooltip) — four full lines left the rack too short for its places on a laptop.
+        let marks = div()
+            .flex()
+            .when(compact, |d| d.flex_col())
+            .items_center()
+            .gap(px(4.))
+            .child(
+                ui.rack_item("mitteilungen-glocke", "Mitteilungen", self.inbox.open)
+                    .icon(Some(sondra_ui::ui_icon("glocke")))
+                    .compact(true)
+                    .count(Some(waiting))
+                    .on_click(move |_, app| bell.update(app, |shell, cx| shell.toggle_inbox(cx))),
+            )
             .child(
                 ui.rack_item("version", format!("Was ist neu · {version}"), false)
                     .icon(Some(sondra_ui::ui_icon("neu")))
-                    .compact(compact)
+                    .compact(true)
                     .accessible_name(format!("Was ist neu, Version {version}"))
                     .on_click(move |_, app| {
                         news.update(app, |shell, cx| {
@@ -589,11 +610,13 @@ impl Shell {
             .child(
                 ui.rack_item("thema", theme_label, false)
                     .icon(Some(sondra_ui::ui_icon(theme_icon)))
-                    .compact(compact)
+                    .compact(true)
                     .on_click(move |_, app| {
                         me.update(app, |shell, cx| shell.choose_mode(to_mode, cx));
                     }),
-            );
+            )
+            .when(!compact, |d| d.child(div().flex_1().text_right().text_size(px(size::MICRO)).text_color(c.muted).child(version.clone())));
+        foot = foot.child(marks);
 
         let head = div()
             .flex_none()
@@ -602,7 +625,9 @@ impl Shell {
             .items_center()
             .px(px(if compact { 0. } else { 20. }))
             .when(compact, |d| d.justify_center())
-            .child(if compact { ui.wordmark_initial() } else { ui.wordmark() });
+            .gap(px(10.))
+            .child(ui.mark(if compact { 32. } else { 28. }))
+            .when(!compact, |d| d.child(ui.wordmark()));
 
         div()
             .id("rack")
@@ -628,13 +653,21 @@ impl Shell {
 
     fn rack_place(&self, ui: Ui, panel: Panel, compact: bool, cx: &mut Context<Self>) -> AnyElement {
         let me = cx.entity();
-        ui.rack_item(format!("reiter-{}", panel.slug()), panel.label(), panel == self.panel)
+        let item = ui
+            .rack_item(format!("reiter-{}", panel.slug()), panel.label(), panel == self.panel)
             .icon(sondra_ui::panel_icon(panel.meta().id))
             .compact(compact)
             .count(self.rack_count(panel))
             .focus_handle(self.rack_focus[panel.index()].clone())
-            .on_click(move |_, app| me.update(app, |shell, cx| shell.go(panel, cx)))
-            .into_any_element()
+            .on_click(move |_, app| me.update(app, |shell, cx| shell.go(panel, cx)));
+        // At the start the rack fills from the top, place by place; after that it stands still.
+        motion::enter(
+            div().w_full().child(item),
+            SharedString::from(format!("rack-ein-{}", panel.slug())),
+            (-10.0, 0.0),
+            motion::stagger(panel.index()),
+            motion::BASE,
+        )
     }
 
     /// What waits at a place: devices that offer files wait under „Geräte“.
@@ -939,13 +972,21 @@ impl Shell {
             return watching;
         }
         let me = cx.entity();
+        let to_list = cx.entity();
         div()
             .flex()
-            .flex_wrap()
-            .items_center()
-            .gap(px(8.))
-            .child(ui.hint("Noch keine Serie am Schauen."))
-            .child(ui.button("start-ordner", "Ordner mit Serien öffnen").ghost().small().on_click(move |_, app| me.update(app, |shell, cx| shell.go(Panel::Folder, cx))))
+            .flex_col()
+            .gap(px(14.))
+            .child(ui.subheading("Filme und Serien"))
+            .child(ui.empty(
+                "start-serien",
+                "Noch keine Serie am Schauen",
+                "Wählen Sie einen Ordner mit Ihren Folgen, oder tippen Sie eine Serie ein — hier steht dann, wo Sie weiterschauen.",
+                vec![
+                    ui.button("start-ordner", "Ordner mit Serien öffnen").on_click(move |_, app| me.update(app, |shell, cx| shell.go(Panel::Folder, cx))).into_any_element(),
+                    ui.button("start-merkliste", "Zur Merkliste").ghost().on_click(move |_, app| to_list.update(app, |shell, cx| shell.go(Panel::Merkliste, cx))).into_any_element(),
+                ],
+            ))
             .into_any_element()
     }
 
@@ -1113,10 +1154,41 @@ impl Render for Shell {
             motion::BASE,
         ).into_any_element() };
 
-        let overlay = if self.palette.open || self.palette.help { self.palette_overlay(ui, cx) } else if self.panel == Panel::Start && self.old_app.open { self.old_app_overlay(ui, cx) } else if self.licenses_open { self.licenses_overlay(ui, cx) } else if self.whats_new_open { self.whats_new_overlay(ui, cx) } else if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else if self.panel == Panel::Player { self.player_overlay(ui, cx) } else if self.panel == Panel::Merkliste { self.stats_overlay(ui, cx).or_else(|| self.share_overlay(ui, cx)).or_else(|| self.anytype_overlay(ui, cx)).or_else(|| self.anilist_overlay(ui, cx)).or_else(|| self.receive_overlay(ui, cx)).or_else(|| self.history_overlay(ui, cx)).or_else(|| self.dice_overlay(ui, cx)) } else { None };
+        // The window's one open dialog. Each step asks only when its own thing is open and falls through when it
+        // has nothing to show — before, an open flag whose dialog had nothing to show (the offer of the old
+        // app with nothing found) swallowed every dialog after it, and „Was ist neu“ opened unseen.
+        let overlay = None
+            .or_else(|| if self.palette.open || self.palette.help { self.palette_overlay(ui, cx) } else { None })
+            .or_else(|| if self.panel == Panel::Start && self.old_app.open { self.old_app_overlay(ui, cx) } else { None })
+            .or_else(|| if self.licenses_open { self.licenses_overlay(ui, cx) } else { None })
+            .or_else(|| if self.whats_new_open { self.whats_new_overlay(ui, cx) } else { None })
+            .or_else(|| if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else { None })
+            .or_else(|| if self.panel == Panel::Player { self.player_overlay(ui, cx) } else { None })
+            .or_else(|| {
+                if self.panel != Panel::Merkliste {
+                    return None;
+                }
+                self.stats_overlay(ui, cx)
+                    .or_else(|| self.share_overlay(ui, cx))
+                    .or_else(|| self.anytype_overlay(ui, cx))
+                    .or_else(|| self.anilist_overlay(ui, cx))
+                    .or_else(|| self.receive_overlay(ui, cx))
+                    .or_else(|| self.history_overlay(ui, cx))
+                    .or_else(|| self.dice_overlay(ui, cx))
+            });
         // A film that goes on behind another tool says so, and can be stopped from here.
         let mini = if self.panel != Panel::Player { self.player_mini(ui, cx) } else { None };
         let floating = self.floating_cards(ui, cx);
+        let drawer = if immersive { None } else { self.inbox_drawer(ui, rack_w + 12.0, cx) };
+        match (overlay.is_some() || drawer.is_some(), self.layer_since) {
+            (true, None) => self.layer_since = Some(std::time::Instant::now()),
+            (false, Some(_)) => self.layer_since = None,
+            _ => {}
+        }
+        if self.layer_since.is_some_and(|at| at.elapsed() < std::time::Duration::from_millis(600)) {
+            let me = cx.entity_id();
+            window.on_next_frame(move |_, cx| cx.notify(me));
+        }
         // What stands above every page: a line about a new version, the offer of the last session, the
         // files of the session when they are open.
         let above: Vec<AnyElement> = self
@@ -1209,6 +1281,10 @@ impl Render for Shell {
                             return;
                         }
                     }
+                    if event.keystroke.key == "escape" && me.read(app).inbox.open {
+                        me.update(app, |shell, cx| shell.toggle_inbox(cx));
+                        return;
+                    }
                     if event.keystroke.key == "escape" && me.read(app).merk.more {
                         me.update(app, |shell, cx| {
                             shell.merk.more = false;
@@ -1247,6 +1323,9 @@ impl Render for Shell {
                                 .overflow_y_scroll()
                                 .flex()
                                 .justify_center()
+                                // Not stretched: a stretched column is as tall as the plate, and the plate
+                                // then had nothing to scroll — the wheel did nothing on a long page.
+                                .items_start()
                                 .child(
                                     div()
                                         .w_full()
@@ -1263,7 +1342,8 @@ impl Render for Shell {
                         ).into_any_element() })
                 .children(overlay)
                 .children(mini)
-                .children(floating),
+                .children(floating)
+                .children(drawer),
         )
     }
 }

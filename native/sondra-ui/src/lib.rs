@@ -2,6 +2,7 @@
 //! `src/styles/theme.css`); the components are drawn from them and every one of them is readable to a
 //! screen reader (`sondra-a11y`) — a control without a name and a role is not finished.
 
+pub mod art;
 pub mod dialog;
 pub mod fonts;
 pub mod icons;

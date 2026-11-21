@@ -85,6 +85,9 @@ impl Shell {
                 }
             },
             move |shell, result, cx| {
+                if let Ok(Some((version, _))) = &result {
+                    shell.note(format!("Sondra {version} ist bereit"), "Die neue Fassung ist geladen und geprüft.", None);
+                }
                 shell.update.status = match result {
                     Ok(None) => Status::Current,
                     Ok(Some((version, file))) => Status::Ready { version, file },

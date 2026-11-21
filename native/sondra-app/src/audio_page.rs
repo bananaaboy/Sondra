@@ -392,7 +392,7 @@ impl Shell {
 
         // The waveform.
         let peaks = editor.peaks(480);
-        let mut columns = div().relative().flex().items_center().h(px(140.)).w_full().bg(c.stage);
+        let mut columns = div().relative().flex().items_center().h(px(160.)).w_full().rounded(px(sondra_ui::radius::CARD)).overflow_hidden().bg(c.stage);
         for (lo, hi) in &peaks {
             let up = (hi * 62.0).max(1.0);
             let down = (-lo * 62.0).max(1.0);

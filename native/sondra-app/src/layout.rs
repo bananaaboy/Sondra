@@ -16,8 +16,8 @@ pub fn shell_width(window: f32) -> f32 {
 pub const GUTTER: f32 = 32.0;
 
 /// The rack on the left, and the rack of a narrow window (the marks alone).
-pub const RACK: f32 = 224.0;
-pub const RACK_COMPACT: f32 = 60.0;
+pub const RACK: f32 = 248.0;
+pub const RACK_COMPACT: f32 = 68.0;
 
 /// Below this window width the rack shows only the marks.
 pub const RACK_NARROW_BELOW: f32 = 980.0;

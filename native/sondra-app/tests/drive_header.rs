@@ -106,7 +106,10 @@ fn a_sign_in_that_fails_says_why_and_can_be_tried_again(cx: &mut TestAppContext)
 }
 
 #[gpui::test]
-fn without_a_google_client_there_is_no_drive_button(cx: &mut TestAppContext) {
+fn without_a_google_client_the_rack_says_drive_is_not_set_up(cx: &mut TestAppContext) {
+    // A build without a Google client cannot sign in; the rack says so instead of hiding Drive, so nobody
+    // looks for a button that is not there.
     let w = open(cx, None);
-    assert!(!w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Drive"))));
+    assert!(w.tree().find(Role::Button, "Google Drive ist in dieser Fassung nicht eingerichtet").is_some());
+    assert!(w.tree().find(Role::Button, "Bei Google Drive anmelden").is_none());
 }

@@ -126,24 +126,25 @@ impl Mode {
     }
 }
 
-/// Type at desktop size: 14 px for running text and controls, 13 px for dense chrome, and page titles far
-/// above them — rank by scale contrast, not by colour.
+/// Type at desktop size: 15 px for running text and controls, 14 px for dense chrome, and page titles far
+/// above them — rank by scale contrast, not by colour. (Barlow is narrow and sits small: at 14/13 px the
+/// window read as „sehr klein“, the user's word on 21.11.2026.)
 pub mod size {
-    pub const MICRO: f32 = 11.0;
-    pub const SMALL: f32 = 13.0;
-    pub const BODY: f32 = 14.0;
-    pub const SUBHEADING: f32 = 17.0;
-    pub const HEADING_SM: f32 = 26.0;
-    pub const HEADING: f32 = 36.0;
+    pub const MICRO: f32 = 12.0;
+    pub const SMALL: f32 = 14.0;
+    pub const BODY: f32 = 15.0;
+    pub const SUBHEADING: f32 = 19.0;
+    pub const HEADING_SM: f32 = 28.0;
+    pub const HEADING: f32 = 38.0;
 }
 
 /// Rounding, only through these: the plate and blocks take `CARD`; controls take `NAV`; the window's
 /// floating things take `DIALOG`.
 pub mod radius {
-    pub const DIALOG: f32 = 16.0;
-    pub const CARD: f32 = 12.0;
-    pub const PLATE: f32 = 14.0;
-    pub const NAV: f32 = 8.0;
+    pub const DIALOG: f32 = 20.0;
+    pub const CARD: f32 = 14.0;
+    pub const PLATE: f32 = 16.0;
+    pub const NAV: f32 = 10.0;
     pub const PILL: f32 = 999.0;
 }
 

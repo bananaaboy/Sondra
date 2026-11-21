@@ -766,14 +766,12 @@ impl Shell {
             ui.button("ordner-waehlen", "Ordner mit Serien wählen").primary().on_click(move |_, app| me.update(app, |shell, cx| shell.go(Panel::Folder, cx)))
         };
         let type_one = ui.button("eine-serie-tippen", "Eine Serie eintippen").on_click(move |_, app| Self::merk_do(&me, app, |m| m.adding = true));
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(14.))
-            .child(ui.subheading("Noch nichts auf der Merkliste"))
-            .child(ui.prose("Wählen Sie einen Ordner mit Ihren Serien, oder tippen Sie den Namen einer Serie ein. Sondra merkt sich, wie weit Sie sind."))
-            .child(div().flex().flex_wrap().gap(px(8.)).child(to_folder).child(type_one))
-            .into_any_element()
+        ui.empty(
+            "merkliste-leer",
+            "Noch nichts auf der Merkliste",
+            "Wählen Sie einen Ordner mit Ihren Serien, oder tippen Sie den Namen einer Serie ein. Sondra merkt sich, wie weit Sie sind.",
+            vec![to_folder.into_any_element(), type_one.into_any_element()],
+        )
     }
 
     /// One series as a line: where it stands, the bar, what is left, the step forward.

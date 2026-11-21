@@ -57,22 +57,71 @@ impl Dialog {
 }
 
 impl RenderOnce for Dialog {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let c = self.ui.c;
         let close_dim = self.on_close.clone();
         let close_key = self.on_close.clone();
+        let close_head = self.on_close.clone();
         let (first, last) = (self.first.clone(), self.last.clone());
 
-        let mut card = div()
-            .id(gpui::ElementId::Name(format!("{}-karte", self.id).into()))
-            .w(px(self.width))
-            .max_w(gpui::relative(0.92))
-            .max_h(gpui::relative(0.9))
+        // Sized by the window, not by a wrapper: on a small window the card keeps 16 px to each edge and
+        // its body scrolls between a head and a foot that stay.
+        let viewport = window.viewport_size();
+        let (vw, vh): (f32, f32) = (viewport.width.into(), viewport.height.into());
+        let width = self.width.min(vw - 32.0).max(280.0);
+        let max_height = (vh - 48.0).max(240.0);
+
+        let mut head = div()
+            .flex_none()
+            .flex()
+            .items_start()
+            .justify_between()
+            .gap(px(16.))
+            .px(px(24.))
+            .pt(px(22.))
+            .pb(px(14.))
+            .child(div().flex_1().min_w_0().child(self.ui.heading_at(self.title.clone(), 22.0, gpui::FontWeight::SEMIBOLD, 1.25)));
+        if let Some(close) = close_head {
+            let close_button = div()
+                .id(gpui::ElementId::Name(format!("{}-zu", self.id).into()))
+                .flex_none()
+                .size(px(34.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(radius::PILL))
+                .text_color(c.muted)
+                .cursor_pointer()
+                .hover(move |s| s.bg(c.panel_mid).text_color(c.prose))
+                .child(gpui::svg().path(crate::icons::ui_icon("schliessen")).size(px(16.)).text_color(c.muted))
+                .on_click({
+                    let close = close.clone();
+                    move |_, window, cx| close(window, cx)
+                });
+            head = head.child(
+                accessible(gpui::ElementId::Name(format!("{}-schliessen", self.id).into()), Role::Button, close_button)
+                    .label("Fenster schliessen")
+                    .on_activate(move |window, cx| close(window, cx)),
+            );
+        }
+        let body = div()
+            .id(gpui::ElementId::Name(format!("{}-inhalt", self.id).into()))
+            .flex_1()
+            .min_h_0()
             .overflow_y_scroll()
             .flex()
             .flex_col()
             .gap(px(16.))
-            .p(px(24.))
+            .px(px(24.))
+            .pb(px(if self.actions.is_empty() { 24. } else { 18. }))
+            .children(self.body);
+
+        let mut card = div()
+            .id(gpui::ElementId::Name(format!("{}-karte", self.id).into()))
+            .w(px(width))
+            .max_h(px(max_height))
+            .flex()
+            .flex_col()
             .rounded(px(radius::DIALOG))
             .bg(c.canvas)
             .border_1()
@@ -81,6 +130,7 @@ impl RenderOnce for Dialog {
             .text_size(px(size::BODY))
             .text_color(c.prose)
             .shadow(crate::ui::float_shadow())
+            .overflow_hidden()
             // A click on the card is not a click on the dim.
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_key_down(move |event, window, cx| match event.keystroke.key.as_str() {
@@ -104,15 +154,30 @@ impl RenderOnce for Dialog {
                 }
                 _ => {}
             })
-            .child(self.ui.heading(self.title.clone()))
-            .children(self.body);
+            .child(head)
+            .child(body);
         if !self.actions.is_empty() {
-            card = card.child(div().flex().flex_wrap().items_center().gap(px(10.)).children(self.actions));
+            // The foot stays while the body scrolls: a hairline over it, the answers at its right.
+            card = card.child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_end()
+                    .gap(px(10.))
+                    .px(px(24.))
+                    .py(px(16.))
+                    .border_t_1()
+                    .border_color(c.line)
+                    .bg(c.raised)
+                    .children(self.actions),
+            );
         }
         let card = accessible(gpui::ElementId::Name(self.id.clone()), Role::Dialog, card).label(self.title.clone());
 
         deferred(
-            motion::enter(
+            motion::fade(
                 div()
                     .id(gpui::ElementId::Name(format!("{}-dunkel", self.id).into()))
                     .absolute()
@@ -133,13 +198,11 @@ impl RenderOnce for Dialog {
                     .child(motion::enter(
                         div().child(card),
                         gpui::ElementId::Name(format!("{}-auf", self.id).into()),
-                        (0.0, 12.0),
+                        (0.0, 16.0),
                         std::time::Duration::ZERO,
                         motion::BASE,
                     )),
                 gpui::ElementId::Name(format!("{}-dunkel-ein", self.id).into()),
-                (0.0, 0.0),
-                std::time::Duration::ZERO,
                 motion::FAST,
             ),
         )
@@ -154,7 +217,7 @@ impl Ui {
             ui: *self,
             id: id.into(),
             title: title.into(),
-            width: 520.0,
+            width: 560.0,
             body: Vec::new(),
             actions: Vec::new(),
             on_close: None,

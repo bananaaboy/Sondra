@@ -225,7 +225,17 @@ impl crate::shell::Shell {
     /// The button in the header: „Drive anmelden“ while signed out (the click opens the browser), a quiet „Drive“ once
     /// signed in. Not there where no Google client is built in.
     pub(crate) fn drive_header_button(&self, ui: &sondra_ui::Ui, compact: bool, cx: &mut gpui::Context<Self>) -> Option<gpui::AnyElement> {
-        let drive = self.drive.as_ref().filter(|d| d.configured)?;
+        // A build without Google's credentials has no Drive. It says so where Drive would stand, instead of
+        // every Drive feature vanishing without a word (as it did in the native builds of the CI).
+        let Some(drive) = self.drive.as_ref().filter(|d| d.configured) else {
+            let item = ui
+                .rack_item("drive-kopf", "Drive nicht eingerichtet", false)
+                .icon(Some(sondra_ui::ui_icon("drive")))
+                .compact(compact)
+                .disabled(true)
+                .accessible_name("Google Drive ist in dieser Fassung nicht eingerichtet");
+            return Some(gpui::IntoElement::into_any_element(item));
+        };
         let me = cx.entity();
         let connected = (drive.connected)();
         let label = if self.drive_signing {

@@ -757,7 +757,7 @@ impl Shell {
             .child(div().flex().items_baseline().justify_between().gap(px(12.)).child(div().truncate().child(ui.value(name))).child(div().font_family(family::VALUE).text_size(px(size::SMALL)).child(format!("{} / {}", clock(position), if duration > 0.0 { clock(duration) } else { "—".into() }))))
             .child(ui.bar("mini-stelle", if duration > 0.0 { Some((position / duration) as f32) } else { None }, "Stelle im Film"))
             .child(div().flex().gap(px(8.)).child(toggle).child(back));
-        Some(sondra_ui::motion::enter(bar, "mini-leiste", (0.0, 16.0), std::time::Duration::ZERO, sondra_ui::motion::BASE))
+        Some(sondra_ui::motion::enter_floating(bar, "mini-leiste", (0.0, 16.0), std::time::Duration::ZERO, sondra_ui::motion::BASE))
     }
 
     /// Keeps the window's screen mode and the player's size in step. The player says what it wants
@@ -817,9 +817,8 @@ impl Shell {
             let mut ways = div().flex().flex_wrap().gap(px(10.));
             ways = ways.child(ui.button("medien-waehlen", "Datei wählen").primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.choose_media(cx))));
             return page
-                .child(ui.heading("Abspielen"))
-                .child(ui.prose("Filme und Musik von diesem Computer. Sondra spielt sie direkt von der Platte, ohne sie zu kopieren, und merkt sich, wo Sie aufgehört haben."))
-                .child(ways)
+                .child(ui.page_head("Abspielen", "Filme und Musik von diesem Computer. Sondra spielt sie direkt von der Platte, ohne sie zu kopieren, und merkt sich, wo Sie aufgehört haben."))
+                .child(ui.empty("abspielen-leer", "Noch nichts zum Abspielen", "Wählen Sie einen Film oder ein Lied, oder ziehen Sie Dateien hierher. Eine Untertitel-Datei mit gleichem Namen kommt von selbst mit.", vec![ways.into_any_element()]))
                 .child(self.player_queue(ui, cx))
                 .into_any_element();
         };

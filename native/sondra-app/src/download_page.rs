@@ -423,7 +423,10 @@ impl Shell {
                 let in_queue = d.running_queue;
                 match answer {
                     Ok((path, size)) => {
+                        let line = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| title.clone());
                         d.done.insert(0, Loaded { title, path, size });
+                        shell.note("Geladen", line, Some(crate::nav::Panel::Downloader));
+                        let d = &mut shell.download;
                         d.found = None;
                         if !in_queue {
                             d.input.update(cx, |f, cx| f.set_text("", cx));

@@ -472,7 +472,7 @@ impl Shell {
         page = page.child(div().flex().flex_wrap().items_center().gap(px(12.)).child(choose));
         let (Some(file), Some((w, h))) = (&v.file, v.source) else {
             if v.file.is_none() {
-                page = page.child(ui.hint("Noch kein Video gewählt. Danach steht es hier auf der Bühne, die Werkzeuge rechts daneben."));
+                page = page.child(ui.empty("video-leer", "Noch kein Video gewählt", "Danach steht es hier auf der Bühne mit seiner Zeitleiste, die Werkzeuge rechts daneben. Auch grosse Filme.", vec![]));
             }
             return page.into_any_element();
         };
@@ -526,7 +526,7 @@ impl Shell {
         let total = v.duration.max(0.001);
         let frac = |t: f64| (t / total).clamp(0.0, 1.0) as f32;
         let measure = v.bounds.clone();
-        let mut track = div().relative().h(px(48.)).w_full().bg(c.stage).rounded(px(0.)).overflow_hidden();
+        let mut track = div().relative().h(px(52.)).w_full().bg(c.stage).rounded(px(sondra_ui::radius::NAV)).overflow_hidden();
         track = track.child(canvas(move |b, _, _| measure.set(b), |_, _, _, _| {}).absolute().size_full());
         track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(ops.start))).w(gpui::relative(frac(end) - frac(ops.start))).bg(c.stage_accent).opacity(0.35));
         track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(ops.start))).w(px(4.)).bg(c.stage_accent));

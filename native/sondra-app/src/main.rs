@@ -1,5 +1,9 @@
 //! Sondra, the native app. A window with the header, the row of tabs and the start page.
 
+// A window program, not a console one: without this Windows opened a black command window beside Sondra
+// at every start. Debug builds keep the console for their log lines.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use gpui::{prelude::*, px, size, App, Application, Bounds, WindowBounds, WindowOptions};
 use sondra_a11y::{attach, set_window_title};
 use sondra_app::shell::Shell;

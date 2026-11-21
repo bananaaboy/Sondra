@@ -306,7 +306,7 @@ impl Shell {
         page = page.child(div().flex().flex_wrap().items_center().gap(px(12.)).child(choose));
         let (Some(path), Some((w, h))) = (i.current(), i.dims) else {
             if i.files.is_empty() {
-                page = page.child(ui.hint("Noch kein Bild gewählt. Danach steht es hier auf der Bühne, die Werkzeuge rechts daneben."));
+                page = page.child(ui.empty("bilder-leer", "Noch kein Bild gewählt", "Danach steht es hier auf der Bühne, die Werkzeuge rechts daneben. Mehrere Bilder bekommen dieselben Schritte.", vec![]));
             }
             return page.into_any_element();
         };

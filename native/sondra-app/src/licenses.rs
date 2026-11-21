@@ -22,7 +22,7 @@ pub const COMPONENTS: [(&str, &str, &str, &str); 9] = [
     ("GPUI (Zed Industries)", "Apache-2.0", "https://github.com/zed-industries/zed", "Die Oberfläche."),
     ("scrcpy-Server 3.3.3 (Genymobile)", "Apache-2.0", "https://github.com/Genymobile/scrcpy", "Liegt unverändert bei und wird nur für die Dauer der Verbindung auf das Handy gelegt; der Text steht unten."),
     ("webrtc-rs", "MIT oder Apache-2.0", "https://github.com/webrtc-rs/webrtc", "Die direkte Verbindung zwischen Ihren Geräten."),
-    ("yt-dlp", "Unlicense (gemeinfrei)", "https://github.com/yt-dlp/yt-dlp", "Nicht mitgeliefert: Sondra holt es nur auf Ihren Klick von yt-dlp selbst und prüft es gegen die veröffentlichte Prüfsumme."),
+    ("yt-dlp", "Unlicense (gemeinfrei)", "https://github.com/yt-dlp/yt-dlp", "Liegt dem Setup bei (die Windows-Fassung von yt-dlp, beim Bauen gegen die veröffentlichte Prüfsumme geprüft), damit Herunterladen vom ersten Start an geht. Eine neuere Fassung holt Sondra nur auf Ihren Klick."),
     ("Barlow, Courier Prime, Cormorant", "SIL Open Font License 1.1", "https://fonts.google.com", "Die Schriften der Oberfläche."),
 ];
 

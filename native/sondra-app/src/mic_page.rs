@@ -344,7 +344,7 @@ impl Shell {
                 let me = me.clone();
                 ui.button("mikrofon-einschalten", "Mikrofon einschalten").primary().on_click(move |_, app| me.update(app, |shell, cx| shell.mic_enable(None, cx)))
             };
-            let work = div().flex().flex_col().gap(px(20.)).child(div().flex().child(button)).child(ui.hint("Das Mikrofon wird erst auf diesen Knopf geöffnet und beim Verlassen des Werkzeugs wieder freigegeben."));
+            let work = div().flex().flex_col().gap(px(20.)).child(ui.empty("mikrofon-leer", "Mikrofon einschalten", "Es wird erst auf diesen Knopf geöffnet und beim Verlassen des Werkzeugs wieder freigegeben. Zwei kurze Aufnahmen genügen.", vec![button.into_any_element()]));
             return page.child(ui.tool_body(vec![purpose], work)).into_any_element();
         }
 

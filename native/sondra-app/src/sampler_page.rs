@@ -601,7 +601,7 @@ impl Shell {
 
         // The waveform with its cuts; a press chooses the pad under it.
         let total = audio.seconds();
-        let mut columns = div().relative().flex().items_center().h(px(120.)).w_full().bg(c.stage);
+        let mut columns = div().relative().flex().items_center().h(px(140.)).w_full().rounded(px(sondra_ui::radius::CARD)).overflow_hidden().bg(c.stage);
         for (lo, hi) in &s.peaks {
             let up = (hi * 52.0).max(1.0);
             let down = (-lo * 52.0).max(1.0);

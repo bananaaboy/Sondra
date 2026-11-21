@@ -36,6 +36,7 @@ pub mod palette;
 pub mod planner;
 pub mod harmony_page;
 pub mod images_page;
+pub mod inbox;
 pub mod instance;
 pub mod mix_page;
 pub mod updater;

@@ -127,6 +127,7 @@ impl Shell {
         if stack.is_empty() {
             return None;
         }
-        Some(div().absolute().bottom(px(16.)).left(px(16.)).flex().flex_col().gap(px(8.)).children(stack).into_any_element())
+        // Top right, over the plate: the foot of the window belongs to the rack and the player's small bar.
+        Some(div().absolute().top(px(20.)).right(px(24.)).flex().flex_col().gap(px(8.)).children(stack).into_any_element())
     }
 }

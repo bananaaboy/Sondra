@@ -385,7 +385,7 @@ impl Shell {
         let model = model_by_id(s.model);
         let settings = vec![ui.setting("Genauigkeit", models, Some(model.hint)), ui.setting("Sprache", languages, None)];
         if s.path.is_none() {
-            work = work.child(ui.hint("Noch keine Datei gewählt. Genauigkeit und Sprache links gelten für die nächste."));
+            work = work.child(ui.empty("untertitel-leer", "Noch keine Datei gewählt", "Ein Film oder eine Aufnahme wird auf diesem Computer abgehört. Genauigkeit und Sprache links gelten für die nächste Datei.", vec![]));
             return page.child(ui.tool_body(settings, work)).into_any_element();
         }
 

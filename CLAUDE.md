@@ -525,9 +525,10 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Fenster, „Neu auf AniWorld“ auf der Serienseite), Verlauf und Würfeln in der Merkliste, **Klicks entfernen**,
   Rückwärts drehen und Bittiefe im Ton-Editor, **eigener STUN/TURN-Server** (Passwort verdeckt: `TextField::secret`).
   **yt-dlp** (19.11.2026, `sondra-download::ytdlp`): Adressen ohne eigene Quelle laufen über yt-dlp, wenn es da ist
-  (eigene Kopie, WinGet, PATH); sonst steht auf der Herunterladen-Seite das Angebot „yt-dlp laden“ — geholt wird es nur auf
-  den Klick, von yt-dlps Releases, gegen die veröffentlichte SHA-256 (passt sie nicht, bleibt nichts liegen); nie
-  `--no-check-certificates`. Geprüft gegen ein Stand-in (`fake-ytdlp`), nie gegen das echte yt-dlp.
+  (eigene Kopie, **die mit dem Setup neben `sondra.exe` gelegte** — seit dem 21.11.2026 liegt yt-dlp Setup und
+  portabler Fassung bei, die CI holt es von yt-dlps Releases und prüft es gegen die veröffentlichte SHA-256, sonst wird
+  nichts beigelegt —, WinGet, PATH); fehlt es trotzdem, steht auf der Herunterladen-Seite „yt-dlp laden“ — geholt wird es
+  nur auf den Klick, ebenso geprüft (passt die Summe nicht, bleibt nichts liegen); nie `--no-check-certificates`. Geprüft gegen ein Stand-in (`fake-ytdlp`), nie gegen das echte yt-dlp.
   **Nichts davon ist an einem echten Handy oder mit echter Tonkarte gelaufen** — das Handy
   wird gegen ein nachgebautes Handy geprüft (`sondra_mirror::fake`).
   Die Testdateien schreibt der Serializer der Website
@@ -543,7 +544,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   schneidet mitten im Wort — Text, der umbrechen soll, bekommt eine bekannte Breite (auch eine umbrechende
   Pillenzeile in einer gestreckten Spalte), Kachelhinweise brechen frei um. Werkzeugseiten bauen auf
   `ui.tool_body`/`ui.setting` bzw. `ui.stage_body`, nie mit eigener Spaltenmechanik. Benennen Rack und Seite denselben Knopf („Umwandeln“), findet `Snapshot::find` den auf der
-  Seite; `find_in_navigation` den im Rack. **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`; Aufbau: `native/README.md`. Die Electron-App und die
+  Seite; `find_in_navigation` den im Rack. **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`;
+  was nativ gegenüber der Electron-App wirklich fehlt, Knopf für Knopf am Code nachgesehen (21.11.2026):
+  `native/VERGLEICH-ELECTRON.md` — ist etwas davon gebaut, dort streichen; Aufbau: `native/README.md`. Die Electron-App und die
   Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
   gestrichen, sobald etwas davon wegfällt. Auf Windows nur in der CI gelaufen
   (windows-latest), nie auf dem Rechner eines Menschen. Der Dienst-Kern schreibt die Liste nicht; das Fenster

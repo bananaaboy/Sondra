@@ -183,8 +183,17 @@ impl Shell {
             this.update(cx, |shell, cx| {
                 shell.convert.run = None;
                 shell.convert_watch = None;
+                let (ok, failed) = (made.iter().filter(|m| m.result.is_ok()).count(), made.iter().filter(|m| m.result.is_err()).count());
                 shell.convert.made = made;
                 shell.convert.zip = None;
+                if ok + failed > 0 {
+                    let text = match (ok, failed) {
+                        (1, 0) => "Eine Datei ist fertig.".to_string(),
+                        (n, 0) => format!("{n} Dateien sind fertig."),
+                        (n, f) => format!("{n} fertig, {f} nicht umgewandelt."),
+                    };
+                    shell.note("Umgewandelt", text, Some(crate::nav::Panel::Converter));
+                }
                 cx.notify();
             })
             .ok();
@@ -248,7 +257,7 @@ impl Shell {
         }
         let mut work = div().flex().flex_col().gap(px(20.)).child(head);
         if s.files.is_empty() {
-            work = work.child(ui.hint("Noch keine Datei gewählt. Vorlage und Format links gelten für die nächsten."));
+            work = work.child(ui.empty("umwandeln-leer", "Noch keine Datei gewählt", "Wählen Sie eine oder mehrere Dateien, oder ziehen Sie sie hierher. Vorlage und Format links gelten für die nächsten.", vec![]));
         }
 
         // Templates, then formats.

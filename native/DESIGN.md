@@ -28,35 +28,35 @@ colors:
 typography:
   display:
     fontFamily: "Barlow, 'Segoe UI', sans-serif"
-    fontSize: "36px"
+    fontSize: "38px"
     fontWeight: 600
     lineHeight: 1.1
   headline:
     fontFamily: "Barlow, 'Segoe UI', sans-serif"
-    fontSize: "26px"
+    fontSize: "28px"
     fontWeight: 600
     lineHeight: 1.15
   title:
     fontFamily: "Barlow, 'Segoe UI', sans-serif"
-    fontSize: "17px"
+    fontSize: "19px"
     fontWeight: 600
     lineHeight: 1.3
   body:
     fontFamily: "Barlow, 'Segoe UI', sans-serif"
-    fontSize: "14px"
+    fontSize: "15px"
     fontWeight: 400
     lineHeight: 1.5
   small:
     fontFamily: "Barlow, 'Segoe UI', sans-serif"
-    fontSize: "13px"
+    fontSize: "14px"
     fontWeight: 400
   label:
     fontFamily: "Barlow, 'Segoe UI', sans-serif"
-    fontSize: "11px"
+    fontSize: "12px"
     fontWeight: 700
   value:
     fontFamily: "'Courier Prime', ui-monospace, monospace"
-    fontSize: "13px"
+    fontSize: "14px"
     fontWeight: 400
     fontFeature: "tabular-nums"
   wordmark:
@@ -64,10 +64,10 @@ typography:
     fontSize: "26px"
     fontWeight: 300
 rounded:
-  dialog: "16px"
-  plate: "14px"
-  card: "12px"
-  nav: "8px"
+  dialog: "20px"
+  plate: "16px"
+  card: "14px"
+  nav: "10px"
   pill: "999px"
 spacing:
   "0.5": "2px"
@@ -87,8 +87,8 @@ components:
     textColor: "{colors.on-ink}"
     typography: "{typography.body}"
     rounded: "{rounded.nav}"
-    padding: "0 14px"
-    height: "32px"
+    padding: "0 16px"
+    height: "38px"
   button-primary-hover:
     backgroundColor: "{colors.ink-hover}"
     textColor: "{colors.on-ink}"
@@ -97,8 +97,8 @@ components:
     textColor: "{colors.prose}"
     typography: "{typography.body}"
     rounded: "{rounded.nav}"
-    padding: "0 14px"
-    height: "32px"
+    padding: "0 16px"
+    height: "38px"
   button-quiet-hover:
     backgroundColor: "{colors.panel-mid}"
     textColor: "{colors.prose}"
@@ -107,22 +107,22 @@ components:
     textColor: "{colors.ink}"
     typography: "{typography.body}"
     rounded: "{rounded.nav}"
-    padding: "0 6px"
-    height: "32px"
+    padding: "0 8px"
+    height: "38px"
   button-ghost-hover:
     backgroundColor: "{colors.ink-wash}"
     textColor: "{colors.ink}"
   button-sm:
     typography: "{typography.small}"
-    padding: "0 10px"
-    height: "28px"
+    padding: "0 12px"
+    height: "32px"
   chip:
     backgroundColor: "{colors.panel-soft}"
     textColor: "{colors.prose}"
     typography: "{typography.small}"
     rounded: "{rounded.pill}"
-    padding: "0 12px"
-    height: "28px"
+    padding: "0 14px"
+    height: "32px"
   chip-selected:
     backgroundColor: "{colors.ink-wash}"
     textColor: "{colors.ink}"
@@ -261,16 +261,16 @@ Waldschwarz in Stufen, ein Grünton als Licht, eine kühle Tönung für eine ein
 **Character:** Barlow ist die Beschriftung an den Geräten der Kabine — kompakt, technisch ohne Kostüm. Courier Prime ist das getippte Etikett auf der Rolle. Alle drei Schriften sind eingebettet (`fonts.rs`, SIL OFL 1.1).
 
 ### Hierarchy
-- **Display** (600, 36 px, 1,1): die Überschrift des Einstiegs auf der Startseite.
-- **Headline** (600, 26 px, 1,15): der Titel einer Seite im Seitenkopf (`page_head`). Der Vertrag sagte 28 px; gebaut und behalten sind 26.
-- **Title** (600, 17 px, 1,3): die Überschrift eines Abschnitts („Werkzeuge“, „Heute weiterschauen“).
-- **Body** (400, 14 px, 1,5): Fliesstext, Knöpfe, Plätze im Rack; Gruppenüberschriften innerhalb eines Abschnitts in derselben Grösse halbfett. Fliesstext höchstens 640 px breit (`MEASURE`, rund 70 Zeichen).
-- **Small** (400, 13 px; mittel 500 auf Chips und Reitern): Hinweise, Chips, Felder, kleine Knöpfe, Tooltips.
-- **Label** (700, 11 px): nur die Zahl im Zähler am Rand eines Rack-Platzes.
-- **Value** (Courier Prime 400, 13 px): Messwerte, Dateinamen, Zeiten, Zählungen neben Gruppennamen.
+- **Display** (600, 38 px, 1,1): die Überschrift des Einstiegs auf der Startseite.
+- **Headline** (600, 28 px, 1,15): der Titel einer Seite im Seitenkopf (`page_head`).
+- **Title** (600, 19 px, 1,3): die Überschrift eines Abschnitts („Werkzeuge“, „Heute weiterschauen“).
+- **Body** (400, 15 px, 1,5): Fliesstext, Knöpfe, Plätze im Rack; Gruppenüberschriften innerhalb eines Abschnitts in derselben Grösse halbfett. Fliesstext höchstens 680 px breit (`MEASURE`, rund 70 Zeichen).
+- **Small** (400, 14 px, Zeilenhöhe 1,45; mittel 500 auf Chips und Reitern): Hinweise, Chips, Felder, kleine Knöpfe, Tooltips.
+- **Label** (700, 12 px): nur die Zahl im Zähler am Rand eines Rack-Platzes.
+- **Value** (Courier Prime 400, 14 px): Messwerte, Dateinamen, Zeiten, Zählungen neben Gruppennamen.
 
 ### Named Rules
-**Die Grössenabstand-Regel.** Rang kommt aus der Grösse, nicht aus der Farbe: zwischen Body (14) und Headline (26) liegt fast das Doppelte. Überschriften stehen in `prose`, nicht in Minze.
+**Die Grössenabstand-Regel.** Rang kommt aus der Grösse, nicht aus der Farbe: zwischen Body (15) und Headline (28) liegt fast das Doppelte. Überschriften stehen in `prose`, nicht in Minze.
 
 **Die Rollenetikett-Regel.** Courier Prime nur für das, was die Maschine eingetragen hat. Ein Feld setzt in Barlow und schaltet Courier nur ausdrücklich ein (`value_face`), wenn sein Inhalt ein Wert ist. Nie Mono als Kostüm für „technisch“.
 
@@ -307,44 +307,49 @@ Hybrid, und sparsam. Auf der Platte ist alles flach; getrennt wird mit Tönung, 
 
 ## Shapes
 
-Gerundet, und nur über die Tokens (`theme::radius`): Dialoge 16 px, die Platte 14 px, Blöcke, Kacheln, Menüs, Einstellungsspalte und Hinweis 12 px, Bedienelemente — Knöpfe, Felder, Rack-Plätze, Menüzeilen, das Symbolfeld einer Kachel — 8 px, Chips, Zähler und Fortschrittsbalken als Pille. Der Vertrag nannte für die Platte 16 px; gebaut sind 14, eine Stufe zwischen Block und Dialog. Ränder sind 1 px Haarlinien; der einzige 2-px-Rand ist die Überblendmarke.
+Gerundet, und nur über die Tokens (`theme::radius`): Dialoge und das Mitteilungsfach 20 px, die Platte 16 px, Blöcke, Kacheln, Menüs, Einstellungsspalte, Hinweis und Bühnen (Wellen, Spuren, Pads) 14 px, Bedienelemente — Knöpfe, Felder, Rack-Plätze, Menüzeilen, das Symbolfeld einer Kachel — 10 px, Chips, Zähler, Fortschrittsbalken und der Schliessen-Knopf eines Dialogs als Pille. **Nichts ist ganz eckig** (Wunsch vom 21.11.2026: „keine komplett eckigen Kasten“) — auch die Zeitflächen nicht, anders als auf der Website. Ränder sind 1 px Haarlinien; der einzige 2-px-Rand ist die Überblendmarke.
 
 Symbole sind Striche auf einem 16er-Raster (Strichstärke 1,35, runde Enden; `icons.rs`, aus den Daten der Website), 16 px im Rack, 17 px auf einem Feld von 32 px in der Kachel, und nehmen die Textfarbe an.
 
 ## Components
 
 ### Buttons
-- **Shape:** sanft gerundet (8 px), 32 px hoch, klein 28 px.
-- **Primary:** gefüllte Minze, Text `on-ink` halbfett, 14 px Seitenrand; Hover `ink-hover`. Genau einmal je Bildschirm; `primary_when(on)` macht einen Knopf nur so lange zur Hauptaktion, wie es noch nichts anderes zu tun gibt.
+- **Shape:** gerundet (10 px), 38 px hoch, klein 32 px.
+- **Primary:** gefüllte Minze, Text `on-ink` halbfett, 16 px Seitenrand; Hover `ink-hover`. Genau einmal je Bildschirm; `primary_when(on)` macht einen Knopf nur so lange zur Hauptaktion, wie es noch nichts anderes zu tun gibt.
 - **Quiet (Vorgabe):** `panel-soft` mit Haarlinie, Text `prose` mittel; Hover `panel-mid` mit `rule`-Rand.
-- **Ghost:** ein Wort in Minze ohne Grund, 6 px Seitenrand; Hover `ink-wash`.
+- **Ghost:** ein Wort in Minze ohne Grund, 8 px Seitenrand; Hover `ink-wash`.
 - **Hover / Focus / Deaktiviert:** Fokusring wie oben; deaktiviert 40 % Deckkraft und nicht drückbar. Enter und Leertaste lösen aus wie ein Klick.
 
 ### Chips
-- **Style:** Pille, 28 px hoch, 12 px Seitenrand, 13 px mittel; `panel-soft` mit Haarlinie, Hover `panel-mid`.
+- **Style:** Pille, 32 px hoch, 14 px Seitenrand, 14 px mittel; `panel-soft` mit Haarlinie, Hover `panel-mid`.
 - **State:** gewählt ist verdünntes Licht — `ink-wash`, Rand und Wort in Minze, halbfett. Die gefüllte Fläche bleibt der Hauptaktion.
 
 ### Cards / Containers
-- **Kachel:** `panel-soft`, 12 px Rundung, 12 × 14 px Innenrand, kein Rahmen, kein Schatten; Hover `panel-mid`. Links ein Symbolfeld (32 px, 8 px Rundung, `ink-wash`, Symbol in Minze), rechts Titel (14 px halbfett, `prose`) und Hinweis (13 px `muted`, höchstens zwei Zeilen, kurz geschrieben statt abgeschnitten).
-- **Einstieg:** `panel-soft`, 12 px Rundung, 26 × 28 px Innenrand; nimmt überall Dateien an und zeigt das beim Darüberziehen mit `ink-wash` und Minze-Rand.
-- **Einstellungsspalte:** 320 px, `panel-soft`, 12 px Rundung, 16 px Innenrand.
+- **Kachel:** `panel-soft`, 14 px Rundung, 14 × 16 px Innenrand, kein Rahmen, kein Schatten; Hover `panel-mid`. Links ein Symbolfeld (36 px, 10 px Rundung, `ink-wash`, Symbol in Minze), rechts Titel (15 px halbfett, `prose`) und Hinweis (14 px `muted`, höchstens zwei Zeilen, kurz geschrieben statt abgeschnitten).
+- **Einstieg:** `panel-soft`, 14 px Rundung, 26 × 28 px Innenrand; nimmt überall Dateien an und zeigt das beim Darüberziehen mit `ink-wash` und Minze-Rand.
+- **Einstellungsspalte:** 340 px, `panel-soft`, 14 px Rundung, 16 px Innenrand; Steuerung und Hinweis darin haben eine feste Breite (GPUI misst sonst falsch und lässt Lücken).
+- **Leerer Zustand** (`ui.empty`, `art.rs`): `panel-soft`, 14 px Rundung; links die Sondra-Balken (`bars_art`: die fünf Balken des Zeichens, getönt, der mittlere in Minze, gleiten gestaffelt um 70 ms herein), rechts Titel (19 px), ein Satz in `muted` und die Handlungen. Steht überall, wo eine Seite sonst leer wäre — Werkzeug ohne Datei, leere Merkliste, Ordner ohne Ordner, Start ohne Serie. Nie leere Fläche mit einem einzelnen Satz.
 
 ### Inputs / Fields
-- **Style:** `raised`, Rand `rule`, 8 px Rundung, 6 × 10 px Innenrand, 13 px Barlow.
+- **Style:** `raised`, Rand `rule`, 10 px Rundung, 8 × 12 px Innenrand, 14 px Barlow.
 - **Focus:** der Rand wird Minze.
 - **Wert:** Courier Prime nur mit `value_face`.
 
 ### Navigation
-- **Rack-Platz:** Symbol und Name, 30 px hoch, 8 px Rundung, 14 px. In Ruhe `muted` mittel; Hover `panel-soft` mit `prose`; gewählt `ink-wash`, Name `prose` halbfett, Symbol in Minze. Wartet dort etwas, steht ein Zähler am Rand (Pille, Minze, 11 px fett); im schmalen Rack sitzt er oben rechts am Symbol.
+- **Rack-Platz:** Symbol (18 px) und Name, 34 px hoch, 10 px Rundung, 15 px; schmales Rack 68 px. In Ruhe `muted` mittel; Hover `panel-soft` mit `prose`; gewählt `ink-wash`, Name `prose` halbfett, Symbol in Minze. Wartet dort etwas, steht ein Zähler am Rand (Pille, Minze, 11 px fett); im schmalen Rack sitzt er oben rechts am Symbol.
 - **Gruppenname:** klein, halbfett, `muted` — eine Beschriftung über einer Liste, keine Seitenüberschrift.
-- **Fuss:** durch eine Haarlinie getrennt; dieselben Plätze, nie gewählt.
+- **Kopf:** das Sondra-Zeichen (`art::mark`: das dunkelgrüne Quadrat mit den fünf weissen Balken, wie das Programmsymbol) und daneben die Wortmarke; im schmalen Rack nur das Zeichen.
+- **Fuss:** durch eine Haarlinie getrennt; Drive als Platz, darunter eine Reihe kleiner Marken — Mitteilungen (mit Zähler), Was ist neu, hell/dunkel — und die Version.
 
 ### Notice
 Zustand ist eine Marke am Rand, kein Kasten: `●` für eine Aussage, `!` für eine Warnung, in Minze fett vor dem Satz (13 px `prose`). Nur die Art „nicht lokal“ bekommt eine Fläche: `panel-cool`, 12 px Rundung, Minze-Rand, halbfett.
 
 ### Menu und Dialog
-- **Menü:** `raised`, 12 px Rundung, Rand `plate-edge`, Schwebeschatten, mindestens 240 px; Zeilen 8 px gerundet, Hover `panel-mid`, gewählt `ink-wash`.
-- **Dialog:** `canvas`, 16 px Rundung, Rand `plate-edge`, Schwebeschatten über einem Schleier; 16 px zwischen den Teilen.
+- **Menü:** `raised`, 14 px Rundung, Rand `plate-edge`, Schwebeschatten, mindestens 260 px, 8 px Innenrand; Zeilen 10 px gerundet, 12 × 8 px Innenrand, Hover `panel-mid`, gewählt `ink-wash`.
+- **Dialog:** `canvas`, 20 px Rundung, Rand `plate-edge`, Schwebeschatten über einem Schleier. Kopf mit Titel (22 px) und rundem Schliessen-Knopf; der Inhalt scrollt für sich, der Fuss mit den Handlungen steht rechts auf `raised` unter einer Haarlinie. Breite höchstens Fenster − 32 px, Höhe höchstens Fenster − 48 px — so passt er auch ins schmale Fenster. Der Schleier blendet ein, die Karte rückt 16 px von unten heran.
+
+### Mitteilungsfach
+Die Glocke im Fuss des Racks öffnet ein Fach links unten neben dem Rack (360 px breit, höchstens 560 px hoch, 20 px Rundung, Schwebeschatten): oben „Wartet auf Sie“ (Angebote von Geräten, neue Folgen, Updates), darunter „Zuletzt“ (fertige Downloads, Umwandlungen, eine bereite Fassung). Jede Zeile ist ein Knopf zur Stelle, um die es geht, und kommt gestaffelt herein. Leer: „Alles ruhig“ mit den Sondra-Balken. Klick daneben oder Escape schliesst; „Leeren“ räumt „Zuletzt“. Der Zähler an der Glocke zählt, was seit dem letzten Öffnen dazukam.
 
 ### Fortschrittsbalken
 4 px hoch, Pille, Grund `line`, gespielter Teil in Minze; ohne bekannten Anteil nur der Grund.
@@ -356,7 +361,7 @@ Während auf der Seite „Abspielen“ ein Film läuft, wird das Licht im Saal h
 In den letzten zwei Sekunden, bevor „Nächste Folge“ angeboten wird, blinkt oben rechts im Bild zweimal ein Ring (18 px, 2-px-Rand in `stage-accent`, Füllung zu 40 %), wie die Überblendmarke auf einer Filmrolle. Sobald der Knopf kommt, ist er weg. Nur bei Videos mit einer nächsten Datei.
 
 ### Motion
-Drei Dauern, zwei Kurven, keine Federn (`motion.rs`): 130 ms für Rückmeldung auf Druck und Hover, 240 ms für einen neuen Zustand, 420 ms für einen zurückgelegten Weg (ein Werkzeug kommt von der Seite, das Saallicht). `ease-out` ist die Vorgabe, `ease-settle` für Weiteres. Nur Eintritte: einblenden und dabei vom Herkunftsort heranrücken; Listen gestaffelt um 30 ms, zusammen höchstens 240 ms. Die schwebende Leiste kommt 16 px von unten. Weniger Bewegung im System heisst keine.
+Drei Dauern, zwei Kurven, keine Federn (`motion.rs`): 130 ms für Rückmeldung auf Druck und Hover, 240 ms für einen neuen Zustand, 420 ms für einen zurückgelegten Weg (ein Werkzeug kommt von der Seite, das Saallicht). `ease-out` ist die Vorgabe, `ease-settle` für Weiteres. Nur Eintritte: einblenden und dabei vom Herkunftsort heranrücken; Listen gestaffelt um 30 ms, zusammen höchstens 240 ms. Die schwebende Leiste kommt 16 px von unten. Was über dem Blatt schwebt (Dialog, Fach, Leiste), rückt über Ränder heran, nie über eine relative Verschiebung (`enter_floating`, `fade`) — sonst landet eine absolute Ebene neben dem Fenster. Die Einstellungsspalte eines Werkzeugs kommt von links, die Arbeit 60 ms später von unten; die Plätze im Rack fallen beim Start gestaffelt herein. Weniger Bewegung im System heisst keine.
 
 ## Do's and Don'ts
 

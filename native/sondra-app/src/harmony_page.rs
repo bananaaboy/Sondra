@@ -286,7 +286,7 @@ impl Shell {
         }
         let Some(heard) = &h.heard else {
             if h.file.is_none() {
-                page = page.child(ui.hint("Noch kein Stück gewählt. Die Einstellungen links gelten für das nächste."));
+                page = page.child(ui.empty("tonart-leer", "Noch kein Stück gewählt", "Sondra hört hinein und sagt Tonart, Tempo und Akkorde. Die Einstellungen links gelten für das nächste Stück.", vec![]));
             }
             return done(page);
         };

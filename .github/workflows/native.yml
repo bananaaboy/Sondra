@@ -257,6 +257,11 @@ jobs:
           save-always: true
       - run: choco install ffmpeg --no-progress -y
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
+        # Google Drive is compiled in (`drive_hub.rs`, `option_env!`): without these the program had no Drive
+        # at all — no sign-in, no Merkliste über Drive, no Geräte.
+        env:
+          SONDRA_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+          SONDRA_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       - name: Start the app, photograph it and drive it through UI Automation
         shell: pwsh
         run: |
@@ -342,7 +347,18 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $setup = Join-Path $PWD 'Sondra-Nativ-Setup.exe'
           $licenses = (Resolve-Path desktop/lizenzen).Path
-          & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
+          # yt-dlp goes into the setup, so „Herunterladen“ works from the first start: the release's own
+          # Windows build, checked against the SHA-256 it publishes — never bundled when the sums differ.
+          $ytdir = Join-Path $env:RUNNER_TEMP 'ytdlp'
+          New-Item -ItemType Directory -Force -Path $ytdir | Out-Null
+          $ytdlp = Join-Path $ytdir 'yt-dlp.exe'
+          Invoke-WebRequest 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile $ytdlp
+          $sums = (Invoke-WebRequest 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS').Content
+          $want = ($sums -split "`n" | Where-Object { $_ -match '\syt-dlp\.exe\s*$' } | Select-Object -First 1) -replace '\s.*$', ''
+          $have = (Get-FileHash $ytdlp -Algorithm SHA256).Hash.ToLower()
+          Check ($want -and $have -eq $want.ToLower()) "yt-dlp to bundle, SHA-256 as published: $have"
+          if ($have -ne $want.ToLower()) { Remove-Item $ytdlp }
+          & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DYTDLP=$ytdlp" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
           Check ($LASTEXITCODE -eq 0 -and (Test-Path $setup)) ("the setup is built: {0:N1} MB" -f ((Get-Item $setup).Length / 1MB))
 
           # The page the installed program looks at for a newer version (`updater.rs`): the flat YAML
@@ -358,7 +374,7 @@ jobs:
           $portable = Join-Path $PWD 'portabel'
           New-Item -ItemType Directory -Force -Path $portable | Out-Null
           Copy-Item $exe "$portable\sondra.exe"
-          Copy-Item "$ffdir\ffmpeg.exe", "$ffdir\ffprobe.exe" $portable
+          Copy-Item "$ffdir\ffmpeg.exe", "$ffdir\ffprobe.exe", $ytdlp $portable
           Copy-Item $licenses "$portable\Lizenzen" -Recurse
           Set-Content "$portable\portable.txt" 'Sondra portabel: Die Daten liegen im Ordner Sondra-Daten neben dem Programm.'
           Compress-Archive -Path "$portable\*" -DestinationPath (Join-Path $PWD 'Sondra-Nativ-Portabel.zip') -Force
@@ -376,7 +392,7 @@ jobs:
           $dir = 'C:\SondraNativTest'
           $i = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$dir" -Wait -PassThru
           Check ($i.ExitCode -eq 0) "the silent install ends well (exit code $($i.ExitCode))"
-          foreach ($f in @('sondra.exe', 'ffmpeg.exe', 'ffprobe.exe', 'Deinstallieren.exe', 'Lizenzen\GPL-2.0.txt')) { Check (Test-Path "$dir\$f") "installed: $f" }
+          foreach ($f in @('sondra.exe', 'ffmpeg.exe', 'ffprobe.exe', 'yt-dlp.exe', 'Deinstallieren.exe', 'Lizenzen\GPL-2.0.txt')) { Check (Test-Path "$dir\$f") "installed: $f" }
           $arp = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\SondraNativ' -ErrorAction SilentlyContinue
           Check ($arp -and $arp.DisplayVersion -eq $version) "Apps and Features lists it at $version"
           Check ($arp -and $arp.InstallLocation -eq $dir) 'with its folder'
@@ -523,6 +539,11 @@ jobs:
             ,@("#if defined(_MSC_VER) || (defined(__CUDACC__) && __CUDACC_VER_MAJOR__ <= 11)", "#if (defined(_MSC_VER) && !defined(__clang__)) || (defined(__CUDACC__) && __CUDACC_VER_MAJOR__ <= 11)")
             ,@("#if defined(__ARM_NEON) && !defined(_MSC_VER) && !(defined(__CUDACC__)", "#if defined(__ARM_NEON) && !(defined(_MSC_VER) && !defined(__clang__)) && !(defined(__CUDACC__)"))
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
+        # Google Drive is compiled in (`drive_hub.rs`, `option_env!`): without these the program had no Drive
+        # at all — no sign-in, no Merkliste über Drive, no Geräte.
+        env:
+          SONDRA_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+          SONDRA_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       # What the compiler said while whisper.cpp was built stays in cargo's file for the build script, not in the log.
       - name: What failed in whisper.cpp
         if: failure()
@@ -585,6 +606,11 @@ jobs:
           save-always: true
       - run: choco install ffmpeg --no-progress -y
       - run: cargo build --release --locked --bin sondra -p sondra-app --manifest-path native/Cargo.toml
+        # Google Drive is compiled in (`drive_hub.rs`, `option_env!`): without these the program had no Drive
+        # at all — no sign-in, no Merkliste über Drive, no Geräte.
+        env:
+          SONDRA_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+          SONDRA_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       - name: Build, install and start the Store package (MSIX)
         shell: pwsh
         env:

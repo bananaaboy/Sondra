@@ -320,7 +320,7 @@ impl Shell {
             return page.child(ui.tool_body(settings, div().flex().flex_col().gap(px(20.)).child(files).child(ui.prose("Liest den Ton …")))).into_any_element();
         }
         if m.voice.is_none() || m.music.is_none() {
-            return page.child(ui.tool_body(settings, div().flex().flex_col().gap(px(20.)).child(files).child(ui.hint("Mit beiden Dateien beginnt das Mischen. Was links eingestellt ist, gilt dann.")))).into_any_element();
+            return page.child(ui.tool_body(settings, div().flex().flex_col().gap(px(20.)).child(files).child(ui.empty("mischen-leer", "Stimme und Musik wählen", "Mit beiden Dateien beginnt das Mischen: die Musik tritt zurück, sobald jemand spricht. Was links eingestellt ist, gilt dann.", vec![])))).into_any_element();
         }
         let mut result = div().flex().flex_col().gap(px(14.)).child(files);
         if let Some(mixed) = &m.mixed {

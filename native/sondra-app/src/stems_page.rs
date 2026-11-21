@@ -416,7 +416,7 @@ impl Shell {
         }
         let Some(original) = &s.original else {
             if s.path.is_none() && !s.reading {
-                work = work.child(ui.hint("Noch kein Lied gewählt. Was links eingestellt ist, gilt für das nächste."));
+                work = work.child(ui.empty("spuren-leer", "Noch kein Lied gewählt", "Gesang, Schlagzeug, Bass und der Rest kommen als eigene Spuren heraus. Was links eingestellt ist, gilt für das nächste Lied.", vec![]));
             }
             return page.child(ui.tool_body(settings, work)).into_any_element();
         };

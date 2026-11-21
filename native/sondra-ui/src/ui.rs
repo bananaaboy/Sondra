@@ -15,10 +15,10 @@ use sondra_a11y::{accessible, Role};
 use crate::theme::{family, radius, size, Colors};
 
 /// The reading measure of running text: about 70 characters of 14 px Barlow.
-pub const MEASURE: f32 = 640.0;
+pub const MEASURE: f32 = 680.0;
 
 /// The width of a tool's settings column.
-pub const SETTINGS_WIDTH: f32 = 320.0;
+pub const SETTINGS_WIDTH: f32 = 340.0;
 
 /// The palette a part of the interface is drawn in.
 #[derive(Clone, Copy)]
@@ -172,9 +172,9 @@ impl RenderOnce for Button {
                 .clone(),
         };
         let (text_size, pad_x, height) = if self.small {
-            (size::SMALL, 10.0, 28.0)
+            (size::SMALL, 12.0, 32.0)
         } else {
-            (size::BODY, 14.0, 32.0)
+            (size::BODY, 16.0, 38.0)
         };
 
         let mut visual = div()
@@ -276,8 +276,8 @@ impl RenderOnce for Chip {
             .track_focus(&focus)
             .flex()
             .items_center()
-            .h(px(28.))
-            .px(px(12.))
+            .h(px(32.))
+            .px(px(14.))
             .rounded(px(radius::PILL))
             .text_size(px(size::SMALL))
             .font_family(family::SANS)
@@ -361,9 +361,9 @@ impl RenderOnce for Tile {
             .group(self.id.clone())
             .flex()
             .items_start()
-            .gap(px(12.))
-            .px(px(14.))
-            .py(px(12.))
+            .gap(px(14.))
+            .px(px(16.))
+            .py(px(14.))
             .rounded(px(radius::CARD))
             .bg(c.panel_soft)
             // No frame at rest — the tint is the edge; the hover lifts it a step.
@@ -372,7 +372,7 @@ impl RenderOnce for Tile {
             .child(
                 div()
                     .flex_none()
-                    .size(px(32.))
+                    .size(px(36.))
                     .flex()
                     .items_center()
                     .justify_center()
@@ -385,7 +385,7 @@ impl RenderOnce for Tile {
                     .child(match &self.icon {
                         Some(path) => gpui::svg()
                             .path(path.clone())
-                            .size(px(17.))
+                            .size(px(19.))
                             .text_color(c.ink)
                             .into_any_element(),
                         None => self.symbol.clone().into_any_element(),
@@ -404,7 +404,7 @@ impl RenderOnce for Tile {
                             .text_size(px(size::BODY))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(c.prose)
-                            .line_height(px(18.))
+                            .line_height(px(20.))
                             .child(self.title.clone()),
                     )
                     // At most two lines: a hint is a hint, not a paragraph.
@@ -415,7 +415,7 @@ impl RenderOnce for Tile {
                             .text_color(c.muted)
                             // No clamp: GPUI's clamp cut the second line off mid-word. A hint is
                             // written short instead, and a row of tiles takes the tallest one's height.
-                            .line_height(px(17.))
+                            .line_height(px(19.))
                             .child(self.hint.clone()),
                     ),
             );
@@ -485,8 +485,8 @@ impl RenderOnce for Tab {
             .track_focus(&focus)
             .flex()
             .items_center()
-            .h(px(28.))
-            .px(px(12.))
+            .h(px(32.))
+            .px(px(14.))
             .rounded(px(radius::NAV))
             .text_size(px(size::SMALL))
             .font_family(family::SANS)
@@ -597,7 +597,7 @@ impl RenderOnce for RackItem {
         let selected = self.selected;
         let mark = div()
             .flex_none()
-            .size(px(18.))
+            .size(px(20.))
             .flex()
             .items_center()
             .justify_center()
@@ -605,7 +605,7 @@ impl RenderOnce for RackItem {
             .child(match &self.icon {
                 Some(path) => gpui::svg()
                     .path(path.clone())
-                    .size(px(16.))
+                    .size(px(18.))
                     .text_color(if selected { c.ink } else { c.muted })
                     .into_any_element(),
                 None => div()
@@ -620,8 +620,8 @@ impl RenderOnce for RackItem {
             .relative()
             .flex()
             .items_center()
-            .gap(px(10.))
-            .h(px(30.))
+            .gap(px(12.))
+            .h(px(34.))
             .rounded(px(radius::NAV))
             .font_family(family::SANS)
             .text_size(px(size::BODY))
@@ -629,11 +629,11 @@ impl RenderOnce for RackItem {
             .focus(move |s| s.shadow(focus_ring(&c)))
             .child(mark);
         visual = if self.compact {
-            visual.w(px(36.)).justify_center()
+            visual.w(px(44.)).justify_center()
         } else {
             visual
                 .w_full()
-                .px(px(10.))
+                .px(px(12.))
                 .child(div().flex_1().min_w_0().overflow_hidden().text_ellipsis().child(self.label.clone()))
         };
         if let Some(n) = self.count {
@@ -758,14 +758,15 @@ impl RenderOnce for Notice {
             .child(div().flex_1().child(self.text.clone()));
         if self.kind == NoticeKind::NotLocal {
             row = row
-                .px(px(14.))
-                .py(px(12.))
+                .px(px(16.))
+                .py(px(14.))
                 .rounded(px(radius::CARD))
                 .bg(c.panel_cool)
                 .border_1()
                 .border_color(c.ink)
                 .font_weight(FontWeight::SEMIBOLD);
         }
+        let row = crate::motion::enter(row, eid(format!("hinweis-ein-{}", self.text)), (0.0, 6.0), std::time::Duration::ZERO, crate::motion::FAST);
         let role = if self.kind == NoticeKind::Warning {
             Role::Alert
         } else {
@@ -859,7 +860,7 @@ impl Ui {
             eid(format!("rack-gruppe-{text}")),
             Role::Label,
             div()
-                .text_size(px(12.))
+                .text_size(px(size::SMALL))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(self.c.muted)
                 .child(text.clone()),
@@ -945,7 +946,7 @@ impl Ui {
         self.heading_at(text, size::BODY, FontWeight::SEMIBOLD, 1.4)
     }
 
-    fn heading_at(
+    pub(crate) fn heading_at(
         &self,
         text: impl Into<SharedString>,
         px_size: f32,
@@ -991,24 +992,24 @@ impl Ui {
         if settings.is_empty() {
             return work.into_any_element();
         }
+        // The settings slide in from the rack's side, the work rises a little after them.
+        let column = div()
+            .flex_none()
+            .w(px(SETTINGS_WIDTH))
+            .p(px(20.))
+            .rounded(px(radius::CARD))
+            .bg(self.c.panel_soft)
+            .flex()
+            .flex_col()
+            .gap(px(22.))
+            .children(settings);
         div()
             .flex()
             .flex_wrap()
             .items_start()
             .gap(px(28.))
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(SETTINGS_WIDTH))
-                    .p(px(16.))
-                    .rounded(px(radius::CARD))
-                    .bg(self.c.panel_soft)
-                    .flex()
-                    .flex_col()
-                    .gap(px(18.))
-                    .children(settings),
-            )
-            .child(work)
+            .child(crate::motion::enter(div().flex_none().child(column), "einstellungen-ein", (-14.0, 0.0), std::time::Duration::ZERO, crate::motion::BASE))
+            .child(crate::motion::enter(div().flex_1().min_w(px(320.)).child(work), "arbeit-ein", (0.0, 10.0), std::time::Duration::from_millis(60), crate::motion::BASE))
             .into_any_element()
     }
 
@@ -1023,10 +1024,11 @@ impl Ui {
             .gap(px(24.))
             .child(div().flex_1().min_w(px(360.)).flex().flex_col().gap(px(12.)).child(work))
             .child(
+                // The inspector comes in from the right, the side it stands on.
                 div()
                     .flex_none()
                     .w(px(SETTINGS_WIDTH + 20.))
-                    .p(px(16.))
+                    .p(px(20.))
                     .rounded(px(radius::CARD))
                     .bg(self.c.panel_soft)
                     .flex()
@@ -1039,29 +1041,35 @@ impl Ui {
 
     /// What a tool with a stage asks for before there is anything on it: the way in and one line.
     pub fn stage_empty(&self, pick: impl IntoElement, line: &str) -> AnyElement {
-        div().flex().flex_col().gap(px(12.)).child(div().flex().child(pick)).child(self.hint(line.to_string())).into_any_element()
+        // The first sentence is the title, the rest says what comes; the way in is the panel's action.
+        let (title, rest) = match line.split_once(". ") {
+            Some((first, rest)) => (first.to_string(), rest.to_string()),
+            None => (line.trim_end_matches('.').to_string(), String::new()),
+        };
+        let id: String = title.chars().filter(|c| c.is_alphanumeric()).collect();
+        self.empty(format!("buehne-{id}"), title, rest, vec![pick.into_any_element()])
     }
 
     /// One setting in the settings column: its name, the control, and a line on what it does.
     pub fn setting(&self, title: impl Into<SharedString>, control: impl IntoElement, hint: Option<&str>) -> AnyElement {
         // The control at the column's width too: a row of pills that wraps, measured without one, was given
         // the height of more rows than it draws.
-        let mut row = div().w_full().flex().flex_col().gap(px(8.)).child(self.title(title)).child(div().w(px(SETTINGS_WIDTH - 32.)).child(control));
+        let mut row = div().w_full().flex().flex_col().gap(px(10.)).child(self.title(title)).child(div().w(px(SETTINGS_WIDTH - 40.)).child(control));
         if let Some(hint) = hint {
             // A known width: a stretched text in a column was measured at a narrower one, and the column
             // kept the height of four lines for two.
-            row = row.child(div().w(px(SETTINGS_WIDTH - 32.)).child(self.hint(hint.to_string())));
+            row = row.child(div().w(px(SETTINGS_WIDTH - 40.)).child(self.hint(hint.to_string())));
         }
         row.into_any_element()
     }
 
     /// A line in the settings column, outside a `setting`: at the column's width, measured right.
     pub fn setting_note(&self, text: impl Into<SharedString>) -> AnyElement {
-        div().w(px(SETTINGS_WIDTH - 32.)).child(self.hint(text)).into_any_element()
+        div().w(px(SETTINGS_WIDTH - 40.)).child(self.hint(text)).into_any_element()
     }
 
     /// Prose a step back: the summary under a title.
-    fn muted_prose(&self, text: impl Into<SharedString>) -> AnyElement {
+    pub(crate) fn muted_prose(&self, text: impl Into<SharedString>) -> AnyElement {
         let text: SharedString = text.into();
         accessible(
             eid(format!("text-{text}")),
