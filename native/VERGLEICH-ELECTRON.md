@@ -35,21 +35,21 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
 | ✗ | **„Mehr Angaben“ beim Hinzufügen**: Staffeln, Folgen je Staffel, Filme, Cover, Tags, Status | Es gibt ein Feld, „Wie weit sind Sie?“ und das Suchen bei AniList |
-| ✗ | **„Bearbeiten“ einer Serie**, das ganze Formular: Titel, Adresse, Zahl der Staffeln, Folgen je Staffel, Filme, **Minuten je Folge und je Film**, **Ausnahmen je Folge**, Vorspannlänge der Serie, Tags, **Bewertung (Sterne)**, **Notiz**, „Gerade bei Staffel/Folge“ | Auf der Serienseite lassen sich nur der Stand (Pillen) und je Staffel die Folgenzahl ändern. **Titel, Länge, Bewertung, Notiz, Tags und Adresse lassen sich nativ nicht ändern** |
-| ✗ | **Cover wählen**: aus einer Datei, über eine Adresse, „Cover & Staffeln abrufen“ (AniList) | Cover kommen nur über AniList beim Hinzufügen und über übernommene Listen |
+| ✓ | **„Bearbeiten“ einer Serie**, das ganze Formular: Titel, Adresse, Zahl der Staffeln, Folgen je Staffel, Filme, **Minuten je Folge und je Film**, **Ausnahmen je Folge**, Vorspannlänge der Serie, Tags, **Bewertung (Sterne)**, **Notiz**, „Gerade bei Staffel/Folge“ | Nativ seit 21.11.2026 (Fenster „Serie bearbeiten“): Name, Adresse, Bewertung, Tags, Notiz, Minuten je Folge und je Film, Vorspann, Cover (Adresse oder Bild vom Gerät), Format. Staffelzahlen, Ausnahmen und „Gerade bei“ stehen im Staffelfenster |
+| ◐ | **Cover wählen**: aus einer Datei, über eine Adresse, „Cover & Staffeln abrufen“ (AniList) | Nativ seit 21.11.2026: Adresse oder „Bild vom Gerät“ (verkleinert auf 720 px). „Cover & Staffeln abrufen“ fehlt noch |
 | ✗ | **Ausschnitt des Covers** (`FrameEditor`: ziehen, Pfeiltasten, Zoom mit Plus/Minus) | Gezeichnet wird der Ausschnitt, ändern kann man ihn nicht |
-| ✗ | **Kachelformat je Serie**: Filmposter 2:3 oder Manga 5:7 | Gelesen wird es, wählen kann man es nicht |
-| ✗ | **Teile einer Staffel** anlegen, benennen, mit eigenem Cover | Teile werden gelesen und mitgezählt, bearbeiten kann man sie nicht |
-| ✗ | **Cover je Staffel und je Teil** | — |
+| ✓ | **Kachelformat je Serie**: Filmposter 2:3 oder Manga 5:7 | Nativ seit 21.11.2026 im Fenster „Serie bearbeiten“ |
+| ◐ | **Teile einer Staffel** anlegen, benennen, mit eigenem Cover | „In Teile teilen“ nativ seit 21.11.2026; Teile benennen und eigene Cover fehlen noch |
+| ◐ | **Cover je Staffel und je Teil** | Je Staffel nativ seit 21.11.2026 (Staffelfenster); je Teil noch nicht |
 
 ### Serienseite
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **Grosses Cover** im Kopf der Serie | Die Seite zeigt den Titel ohne Bild |
-| ✗ | **„Folge n laden“ / „Nächste Folgen laden …“** (übergibt Adresse, Staffel, Folge und Einstellungen an „Herunterladen“) | Man muss die Adresse selbst in „Herunterladen“ eintragen |
+| ✓ | **Grosses Cover** im Kopf der Serie | Nativ seit 21.11.2026, dazu Quelle, „zuletzt …“, Stand, Sterne, Tags und Notiz |
+| ◐ | **„Folge n laden“ / „Nächste Folgen laden …“** (übergibt Adresse, Staffel, Folge und Einstellungen an „Herunterladen“) | „Folge n laden“ nativ seit 21.11.2026 (unter „Mehr“, öffnet „Herunterladen“ mit der Adresse der Folge); „Nächste Folgen laden …“ fehlt noch |
 | ✗ | **Als Stream abspielen** ohne Download („Folge sofort ohne vorherigen Download im Player abspielen“) | „Folge n abspielen“ gibt es nur, wenn die Datei im gelesenen Ordner liegt |
 | ✗ | **Einstellungen je Serie zum Laden**: „Laden als“ (Video mit Ton / Nur Ton), Sprache (Deutsch synchronisiert, OmU, englische Untertitel, beste Fassung), Qualität (bis 4K, 320/192/128 kbps), „Untertitel dazu erstellen“ | — |
-| ✗ | **„Online nach Neuem suchen“** als Knopf auf der Serie | Geprüft wird nur im Hintergrund, alle drei Stunden, wenn „Neue Folgen melden“ an ist |
+| ✓ | **„Online nach Neuem suchen“** als Knopf auf der Serie | Nativ seit 21.11.2026 unter „Mehr“ |
 | ✗ | **„Im Ordner: Staffel 1: 1–3“** und im Staffelfenster der Strich unter jeder Folge, die im Ordner liegt | — |
 | ✗ | **„Als ungesehen markieren“** als eigener Befehl | Ein zweiter Klick auf ein Häkchen nimmt es zurück |
 
@@ -222,6 +222,92 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | — | Android-App, Website, Offline-Service-Worker | Gehören nicht zur Windows-App |
 
 ---
+
+## Nachtrag: im Browser geprüft (21.11.2026)
+
+Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingebauten Chromium Seite für Seite durchgeklickt. Es lief einmal mit einer Beispiel-Merkliste und einmal mit einer Testdatei (Film, Ton, Bild) in jedem Werkzeug. Jedes Menü und jedes Fenster, das sich ohne Folgen öffnen liess, wurde aufgemacht. Jeder Text und jeder Knopfname wurde mit dem Rust-Code abgeglichen. Was dabei **zusätzlich** zur Liste oben fehlt:
+
+**Rahmen**
+- ✗ **Tastenkürzel-Übersicht** wie in Electron: 45 Einträge in Gruppen (Allgemein, Ton & Schnitt, Sampler, Player, Video & Bild, Maus & Gesten) mit einem Suchfeld. Nativ ist die Übersicht kürzer und hat keine Suche.
+- ✗ **Player-Tasten**: J/L (10 s zurück/vor), `,`/`.` (Bild für Bild), `<`/`>` (Tempo), 0–9 (zu 0–90 % springen), A/B (Schleife).
+- ✗ **Bilder**: die Leertaste gedrückt halten zeigt das Original.
+- ✗ **Visualizer**: ein Klick wechselt zwischen Balken, Welle und Kreis.
+- ✗ **„Protokoll“**: was Sondra gerade tut, zum Nachlesen.
+- ✗ **Sitzungsmenü**: „Weitere Datei öffnen“, „Alle n als ZIP speichern“ mit eigenem Namen, „Alles verwerfen“ und die Zeile „2,9 MB auf diesem Gerät gespeichert, nichts davon gesendet“.
+
+**Merkliste**
+- ✗ **Kopfzeile mit Zahlen**: „2 am Schauen · 1 später“.
+- ✗ **„Alle Tags“** als Filter.
+- ✗ **„Nur offene Folgen“**.
+- ✗ **Ordner-Pille** („Ordner mit Folgen wählen“).
+- ✗ **Wo die Liste liegt**: „Nur auf diesem Gerät gespeichert. Über Google Drive teilen es alle Ihre Geräte.“
+- ◐ **„Mehr“ einer Serie**: „Folge n laden“, „Nächste Folgen laden …“, „Online nach Neuem suchen“, „Empfehlen“. **Nativ seit 21.11.2026:** „Folge n laden“, „Online nach Neuem suchen“, „Empfehlen“, „Von der Merkliste entfernen“; „Nächste Folgen laden …“ fehlt noch.
+- ◐ **Staffelkarten** mit Cover und „10 von 39, weiter mit Folge 11“. Ein Klick klappt die Folgen auf, jede mit ihrer Dauer („Folge 1, gesehen (47 Min.)“). Dazu ein Zähler „Anzahl Folgen“, „Noch 29 Folgen (11,6 Std.) · fertig bei 1/Tag: So., 20. Dez.“ und „Folge 11 laden“ je Staffel. Für die Filme gibt es „Filme bearbeiten: Anzahl, Name, Cover“. **Nativ seit 21.11.2026:** je Staffel „Staffel bearbeiten“ mit Fenster: Cover, „n Folgen gesehen“, „Weiter mit Folge n“, „Hier weiterschauen“, Abhaken (mit Umschalt bis dort), „Alle gesehen“, „Zurücksetzen“, Anzahl, Name, Cover, „In Teile teilen“, Staffel entfernen und Ausnahmen der Dauer. Noch fehlt: die Karte selbst mit Cover und Dauer je Folge.
+- ✗ **Planer**: das Ziel als Staffel (Auswahl) und Folge (−/+), „am Tag“ oder „pro Woche“, ein Datumsfeld „Bis zum“ und „Als Ziel merken“. Danach steht oben „Ziel: Staffel 4, Folge 39 — noch 29 Folgen“ und beim Planer „Steht auf der Merkliste bei dieser Serie.“
+
+**Herunterladen**
+- ✗ **Zwischenablage**: „In der Zwischenablage: aniworld.to/… — Einfügen und nachsehen / Nicht jetzt“.
+- ✗ **„Merken“**: die Adresse auf die Merkliste.
+- ✗ **„.txt / .m3u mit Links hier ablegbar“**.
+- ✗ **„alle zeigen“**: die Liste der Portale, die gehen.
+- ✗ **Einstellungen**: Fenster „Download-Einstellungen“ (siehe Abschnitt 5) und „Ton bei Fertigstellung abspielen“ samt Erklärung.
+
+**Umwandeln (mit Datei)**
+- ✗ **„Zielformat“** als Menü.
+- ✗ **„Zuschneiden“**: nur einen Ausschnitt umwandeln.
+- ✗ **„Mehrere Dateien auf einmal“** als Schalter.
+- ✗ **Abtastrate**: Wie Quelle, 22,05 / 32 / 44,1 / 48 kHz.
+- ✗ **Kanäle**: Wie Quelle, Mono, Stereo.
+
+**Video (mit Datei)**
+- ✗ **Rückgängig/Wiederholen** und **„Fertigstellen“**.
+- ✗ **„Ton im Vorhören“** an/aus.
+- ✗ **Tempo „Feiner“** als Regler, mit „Länge danach“.
+
+**Bilder (mit Datei)**
+- ✗ **Rückgängig/Wiederholen**.
+- ✗ **Zoom**: „Passend“ / „Grösser“.
+- ✗ **„Vergleichen“**.
+- ✗ **„Ausschnitt aufheben“**.
+
+**Ton (mit Datei)**
+- ✗ **Stopp**, **Schleife**, **Zoom hinein/heraus**.
+- ✗ **„Datei zum Anhängen“**.
+- ✗ **Tonhöhe ±12 Halbtöne** mit „Tonhöhe übernehmen“ / „Tempo übernehmen“.
+- ✗ **„Tempo klopfen“** (Tippen oder T).
+- ✗ **Verlauf als Liste**, jeder Schritt mit Strg+Z zurückzunehmen.
+
+**Mischen (mit Datei)**
+- ✗ **Vorlagen**: Podcast / Talk, Radio / Moderation, Hintergrund / Dezent, Voiceover / Stark.
+- ✗ **Vergleich** „Gemischt“ ↔ „Ohne Absenken“.
+- ✗ **„In die Sitzung übernehmen“**.
+- ✗ **Name des ZIP** für die Einzelspuren.
+
+**Spuren trennen (mit Datei)**
+- ✗ **Mittenschärfe** und **Maskenhärte** als Regler.
+- — WebGPU: nativ nicht nötig.
+
+**Lautstärke (mit Datei)**
+- ✗ **Messart**: Lautheit (LUFS) oder Spitzenpegel (dBFS).
+- ✗ **„Übersteuerung verhindern“**.
+- ✗ **„Limiter statt zurücknehmen“**.
+- ✗ **Obergrenze True Peak**.
+- ✗ **„Mehrere Dateien auf einmal“** (Ergebnis als ZIP).
+- ✗ **„Nur messen“**.
+
+**Zerschneiden (mit Datei)**
+- ✗ **„Am Zeiger teilen“** und **„Als 1 Pad“**.
+- ✗ **Zoom**.
+- ✗ **Pads ↔ Piano-Roll** umschalten.
+- ✗ **1 oder 2 Takte**.
+- ✗ **„Grundbeat vorschlagen“** und **„Pads jetzt anlegen“**.
+- ✗ **Export**: „Einzelnes Pattern“ oder „Song-Kette“, dazu „In die Sitzung“.
+- ✗ **Je Pad**: stumm, Löschen, „Auf alle übertragen“, Anfang −10/+10 ms, „Halbieren“, „Mit nächstem verbinden“, „So hören, wie es exportiert wird“.
+
+**Tonart (mit Datei)**
+- ✗ **„Einfach“ / „Detail“** als Ansicht.
+
+Die vollständigen Rohlisten liegen bei diesem Lauf als Datei im Arbeitsordner der Sitzung. Die Bildschirmfotos jeder Seite und jedes geöffneten Menüs liegen dort ebenfalls.
 
 ## Was nativ mehr kann als Electron
 

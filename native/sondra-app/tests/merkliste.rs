@@ -251,7 +251,9 @@ fn removing_a_series_can_be_undone_and_is_noted_on_the_file(cx: &mut TestAppCont
     let dir = tempfile::tempdir().unwrap();
     let mut w = open(cx, Some(&list(3)), dir.path());
     w.press(Role::ListItem, "Dark");
-    w.press(Role::Button, "Von der Merkliste entfernen");
+    // Removing is behind „Mehr“ on the page of the series, as on the website.
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Von der Merkliste entfernen");
     let tree = w.tree();
     assert!(tree.find(Role::Heading, "Merkliste").is_some(), "the page closed");
     assert!(tree.find(Role::ListItem, "Dark").is_none());
@@ -750,4 +752,110 @@ fn the_history_takes_an_episode_back_and_the_dice_pick_a_series_to_open(cx: &mut
     assert!(w.tree().find(Role::Heading, "Frieren").is_some(), "the only series is the pick");
     w.press(Role::Button, "Serie öffnen");
     assert!(w.tree().find(Role::Button, "Zurück zur Merkliste").is_some(), "its page is open");
+}
+
+#[gpui::test]
+fn bearbeiten_changes_name_rating_tags_and_lengths_and_writes_the_file(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.press(Role::ListItem, "Frieren");
+    w.press(Role::Button, "Bearbeiten");
+    assert!(w.tree().find(Role::Dialog, "Serie bearbeiten").is_some(), "the form opens as a window");
+    // Typing goes into the fields of the form.
+    w.shell.update(w.cx, |shell, cx| {
+        let f = |n: &str| shell.edit_field(n).unwrap();
+        let (title, tags, minutes, opening, notes) = (f("title"), f("tags"), f("minutes"), f("opening"), f("notes"));
+        title.update(cx, |t, cx| t.set_text("Frieren – Nach dem Ende der Reise", cx));
+        tags.update(cx, |t, cx| t.set_text("Anime, Favorit, anime", cx));
+        minutes.update(cx, |t, cx| t.set_text("25", cx));
+        opening.update(cx, |t, cx| t.set_text("1:20", cx));
+        notes.update(cx, |t, cx| t.set_text("Mit Mia", cx));
+    });
+    w.draw();
+    w.press(Role::Button, "4 von 5 Sternen");
+    w.press(Role::Button, "Manga (5:7)");
+    w.press(Role::Button, "Speichern");
+    assert!(w.tree().find(Role::Dialog, "Serie bearbeiten").is_none(), "saving shuts the form");
+    assert!(w.tree().find(Role::Heading, "Frieren – Nach dem Ende der Reise").is_some(), "the page has the new name");
+    let back = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    let fr = back.items.iter().find(|i| i.id == "fr").unwrap();
+    assert_eq!(fr.title, "Frieren – Nach dem Ende der Reise");
+    assert_eq!(fr.rating, Some(4));
+    assert_eq!(fr.tags.as_deref(), Some(&["Anime".to_string(), "Favorit".to_string()][..]));
+    assert_eq!(fr.episode_duration, Some(25));
+    assert_eq!(fr.opening, Some(80));
+    assert_eq!(fr.notes.as_deref(), Some("Mit Mia"));
+    assert_eq!(fr.tile_format.as_deref(), Some("manga"));
+
+    // A mistake stays in the form and says what is wrong.
+    w.press(Role::Button, "Bearbeiten");
+    w.shell.update(w.cx, |shell, cx| {
+        let f = shell.edit_field("minutes").unwrap();
+        f.update(cx, |t, cx| t.set_text("viel", cx));
+    });
+    w.draw();
+    w.press(Role::Button, "Speichern");
+    assert!(w.tree().find(Role::Dialog, "Serie bearbeiten").is_some());
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Minuten pro Folge: bitte eine Zahl"))));
+    w.press(Role::Button, "Abbrechen");
+    assert!(w.tree().find(Role::Dialog, "Serie bearbeiten").is_none());
+}
+
+#[gpui::test]
+fn the_window_of_a_season_ticks_all_resets_names_and_keeps_other_lengths(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.press(Role::ListItem, "Frieren");
+    w.press(Role::Button, "Staffel 1 bearbeiten: Anzahl, Name, Cover, Teile");
+    assert!(w.tree().find(Role::Dialog, "Frieren · Staffel 1").is_some());
+    w.press(Role::Button, "Alle gesehen");
+    let back = |_: &Window| read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap().items.into_iter().find(|i| i.id == "fr").unwrap();
+    assert_eq!(back(&w).seasons.unwrap()[0].watched, (1..=12).collect::<Vec<_>>());
+    assert_eq!(back(&w).status, sondra_merk::Status::Done, "everything seen: done");
+    w.press(Role::Button, "Zurücksetzen");
+    assert!(back(&w).seasons.unwrap()[0].watched.is_empty());
+
+    // An episode of another length, a name and a count.
+    w.shell.update(w.cx, |shell, cx| {
+        let f = |n: &str| shell.season_field(n).unwrap();
+        let (ep, min, name, count) = (f("exc_episode"), f("exc_minutes"), f("name"), f("count"));
+        ep.update(cx, |t, cx| t.set_text("1", cx));
+        min.update(cx, |t, cx| t.set_text("47", cx));
+        name.update(cx, |t, cx| t.set_text("Die Reise", cx));
+        count.update(cx, |t, cx| t.set_text("28", cx));
+    });
+    w.draw();
+    w.press(Role::Button, "+ Ausnahme");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Folge 1: 47 Min."))));
+    w.press(Role::Button, "Übernehmen");
+    let fr = back(&w);
+    assert_eq!(fr.durations.as_ref().and_then(|d| d.get("1:1")).and_then(|v| v.as_i64()), Some(47));
+    assert_eq!(fr.seasons.as_ref().unwrap()[0].title.as_deref(), Some("Die Reise"));
+    assert_eq!(fr.seasons.as_ref().unwrap()[0].episodes, Some(28));
+    w.press(Role::Button, "Ausnahme für Folge 1 entfernen");
+    assert!(back(&w).durations.is_none());
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Dialog, "Frieren · Die Reise").is_none());
+}
+
+#[gpui::test]
+fn seasons_and_films_are_added_on_the_page_and_removing_is_behind_mehr(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.press(Role::ListItem, "Frieren");
+    w.press(Role::Button, "Staffel hinzufügen");
+    assert!(w.tree().find(Role::Heading, "Staffel 2").is_some());
+    w.press(Role::Button, "Filme hinzufügen");
+    assert!(w.tree().find(Role::Heading, "Filme").is_some());
+    assert!(w.tree().find(Role::Button, "Filme hinzufügen").is_none(), "films are there once");
+    let fr = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap().items.into_iter().find(|i| i.id == "fr").unwrap();
+    let numbers: Vec<i64> = fr.seasons.unwrap().iter().map(|s| s.number).collect();
+    assert_eq!(numbers, vec![1, 2, 0]);
+    // The season window can take a season away again.
+    w.press(Role::Button, "Staffel 2 bearbeiten: Anzahl, Name, Cover, Teile");
+    w.press(Role::Button, "Staffel 2 entfernen");
+    assert!(w.tree().find(Role::Heading, "Staffel 2").is_none());
+    w.press(Role::Button, "Mehr");
+    assert!(w.tree().find(Role::MenuItem, "Empfehlen").is_some());
+    assert!(w.tree().find(Role::MenuItem, "Von der Merkliste entfernen").is_some());
 }

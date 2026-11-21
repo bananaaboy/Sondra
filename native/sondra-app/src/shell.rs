@@ -36,7 +36,7 @@ use crate::player_page::PlayerState;
 use crate::nav::{slide_from, Entry, Panel, ENTRIES};
 
 pub struct Shell {
-    mode: Mode,
+    pub(crate) mode: Mode,
     panel: Panel,
     /// Where the tool came from, for the side it slides in from.
     from: Panel,
@@ -1168,7 +1168,9 @@ impl Render for Shell {
                 if self.panel != Panel::Merkliste {
                     return None;
                 }
-                self.stats_overlay(ui, cx)
+                self.edit_overlay(ui, cx)
+                    .or_else(|| self.season_overlay(ui, cx))
+                    .or_else(|| self.stats_overlay(ui, cx))
                     .or_else(|| self.share_overlay(ui, cx))
                     .or_else(|| self.anytype_overlay(ui, cx))
                     .or_else(|| self.anilist_overlay(ui, cx))

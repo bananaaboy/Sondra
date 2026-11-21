@@ -75,6 +75,15 @@ pub struct MerkState {
     pub before_import: Option<(Vec<Item>, Removed)>,
     /// Progress made since the account on AniList was last told (the shell sends it, when the person asked for that).
     pub tracker: Vec<TrackerEntry>,
+    /// The form behind „Bearbeiten“, while it is open.
+    pub edit: Option<crate::merk_edit::EditFields>,
+    /// The window of one season, while it is open.
+    pub season_window: Option<crate::merk_edit::SeasonFields>,
+    /// „Mehr“ on the page of a series is open.
+    pub series_more: bool,
+    /// The series looked at online right now, and what the look said.
+    pub checking: Option<String>,
+    pub checked_said: Option<(String, String)>,
 }
 
 /// How far a series is, as the account on AniList is told (`syncProgressToTrackers`).
@@ -151,6 +160,11 @@ impl MerkState {
             add_searching: false,
             before_import: None,
             tracker: Vec::new(),
+            edit: None,
+            season_window: None,
+            series_more: false,
+            checking: None,
+            checked_said: None,
         }
     }
 
@@ -289,7 +303,7 @@ impl MerkState {
     }
 
     /// Changes one entry and notes the change as made now (`updateMerkItem`).
-    fn change(&mut self, id: &str, change: impl FnOnce(&mut Item)) {
+    pub(crate) fn change(&mut self, id: &str, change: impl FnOnce(&mut Item)) {
         let Some(item) = self.items.iter_mut().find(|i| i.id == id) else { return };
         let before = watched_total(item);
         change(item);
@@ -444,7 +458,7 @@ impl Shell {
     }
 
     /// Runs a change of the list and draws again.
-    fn merk_do(me: &Entity<Shell>, app: &mut App, change: impl FnOnce(&mut MerkState)) {
+    pub(crate) fn merk_do(me: &Entity<Shell>, app: &mut App, change: impl FnOnce(&mut MerkState)) {
         me.update(app, |shell, cx| {
             change(&mut shell.merk);
             cx.notify();
@@ -1065,11 +1079,12 @@ impl Shell {
         actions = actions.child({
             let me = me.clone();
             let id = item.id.clone();
-            ui.button("serie-entfernen", "Von der Merkliste entfernen").on_click(move |_, app| {
+            ui.button("serie-bearbeiten", "Bearbeiten").on_click(move |_, app| {
                 let id = id.clone();
-                Self::merk_do(&me, app, move |m| m.remove(&id))
+                me.update(app, |shell, cx| shell.edit_open(&id, cx))
             })
         });
+        actions = actions.child(self.series_more(ui, item, cx));
 
         let news = sondra_merk::progress::online_news(item, None).map(|news| {
             let me = me.clone();
@@ -1094,14 +1109,7 @@ impl Shell {
             .flex_col()
             .gap(px(20.))
             .child(div().flex().child(back))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.))
-                    .child(ui.heading(item.title.clone()))
-                    .child(ui.prose(facts.join(" · "))),
-            )
+            .child(self.merk_series_head(ui, item, facts.join(" · "), cx))
             .child(stands)
             .child(actions);
         if let Some(news) = news {
@@ -1111,6 +1119,7 @@ impl Shell {
         if let Some(planner) = self.planner_block(ui, item, cx) {
             page = page.child(planner);
         }
+        page = page.child(self.seasons_heading(ui, item, cx));
         for season in seasons_of(item) {
             page = page.child(self.season_block(ui, item, &season, cx));
         }
@@ -1208,7 +1217,19 @@ impl Shell {
                     .border_b_1()
                     .border_color(c.line)
                     .child(ui.subheading(name.clone()))
-                    .child(ui.value(count)),
+                    .child(ui.value(count))
+                    .child(div().flex_1())
+                    .child({
+                        let (me, id) = (me.clone(), item.id.clone());
+                        ui.button(format!("staffel-oeffnen-{number}"), if number == 0 { "Filme bearbeiten" } else { "Staffel bearbeiten" })
+                            .small()
+                            .ghost()
+                            .accessible_name(format!("{name} bearbeiten: Anzahl, Name, Cover, Teile"))
+                            .on_click(move |_, app| {
+                                let id = id.clone();
+                                me.update(app, |shell, cx| shell.season_open(&id, number, cx))
+                            })
+                    }),
             )
             .child(stepper)
             .child(grid)
