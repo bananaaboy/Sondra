@@ -102,7 +102,7 @@ fn an_empty_player_offers_a_file_and_a_film_plays_with_its_picture_and_controls(
     let path = film(tmp.path(), "Frieren S01E01.mp4", 4);
     let mut w = open(cx);
     assert!(w.tree().find(Role::Heading, "Abspielen").is_some());
-    assert!(w.tree().find(Role::Button, "Datei wählen").is_some());
+    assert!(w.tree().find(Role::Button, "Dateien auswählen").is_some());
     w.shell.update(w.cx, |shell, cx| shell.play_files(vec![path], cx));
     w.watch(1.2);
     let tree = w.tree();
@@ -181,7 +181,7 @@ fn what_is_not_a_film_is_said_and_a_missing_file_is_too(cx: &mut TestAppContext)
     w.shell.update(w.cx, |shell, cx| shell.play_files(vec![text], cx));
     w.draw();
     assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("nichts, was sich abspielen lässt"))));
-    assert!(w.tree().find(Role::Button, "Datei wählen").is_some(), "and the way in stays");
+    assert!(w.tree().find(Role::Button, "Dateien auswählen").is_some(), "and the way in stays");
 }
 
 #[gpui::test]

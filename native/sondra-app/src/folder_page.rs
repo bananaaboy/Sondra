@@ -382,6 +382,14 @@ impl Shell {
                 })
             }));
         }
+        // Where the files come from, how many there are, and reading again.
+        let source = if scan.drive { "Google Drive".to_string() } else { format!("„{}“", scan.name) };
+        let heading = div()
+            .flex()
+            .flex_col()
+            .gap(px(4.))
+            .child(ui.heading("Ordner"))
+            .child(ui.hint(format!("{source} · {} {}{}", scan.files.len(), if scan.files.len() == 1 { "Datei" } else { "Dateien" }, if scan.truncated { " (nur die ersten)" } else { "" })));
         page = page.child(
             div()
                 .flex()
@@ -389,21 +397,35 @@ impl Shell {
                 .items_center()
                 .justify_between()
                 .gap(px(12.))
-                .child(ui.heading("Ordner"))
+                .child(heading)
                 .child({
                     let mut right = div().flex().flex_wrap().items_center().gap(px(8.));
                     if f.bin_count > 0 {
                         let me = me.clone();
                         right = right.child(ui.button("papierkorb-ansehen", format!("Papierkorb ({})", f.bin_count)).small().ghost().on_click(move |_, app| me.update(app, |shell, cx| shell.open_bin(cx))));
                     }
-                    if self.drive.as_ref().is_some_and(|d| d.configured) {
+                    {
+                        let me = me.clone();
+                        let drive = scan.drive;
+                        right = right.child(ui.button("neu-einlesen", "Neu einlesen").small().on_click(move |_, app| me.update(app, |shell, cx| {
+                            if drive {
+                                shell.open_drive_folder(cx);
+                            } else if let Some(root) = shell.folder.root.clone() {
+                                shell.open_folder(root, cx);
+                            }
+                        })));
+                    }
+                    if self.drive.as_ref().is_some_and(|d| d.configured) && !scan.drive {
                         let me = me.clone();
                         right = right.child(ui.button("ordner-aus-drive", "Aus Google Drive").small().ghost().on_click(move |_, app| me.update(app, |shell, cx| shell.open_drive_folder(cx))));
                     }
                     let me = me.clone();
-                    right.child(ui.button("anderer-ordner", "Anderen Ordner wählen").small().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_folder(cx))))
+                    right.child(ui.button("anderer-ordner", if scan.drive { "Ordner auf diesem Gerät" } else { "Anderen Ordner wählen" }).small().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_folder(cx))))
                 }),
         );
+        if scan.drive {
+            page = page.child(div().w(px(640.)).child(ui.hint("Der Ordner „Sondra“ in Ihrem Google Drive. Sondra sieht dort nur, was es selbst abgelegt hat — Heruntergeladenes, Dateien, Projekte. Filme spielen direkt aus Drive; was Sie zu Ende schauen, hakt die Merkliste ab. Gelöschtes landet im Papierkorb von Drive.")));
+        }
         page = page.child(steps);
 
         // What just happened, with the way back.
@@ -673,6 +695,7 @@ impl Shell {
                 Self::folder_do(&me, app, |f| f.shown += PAGE)
             })));
         }
+        page = page.child(ui.hint("Klick wählt, Strg dazu, Umschalt einen Bereich; ▶ auf einer Kachel spielt sie ab, „Abspielen“ unten die Auswahl."));
         page.into_any_element()
     }
 

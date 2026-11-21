@@ -465,7 +465,12 @@ fn the_series_on_the_list_continue_from_where_they_stand_and_play_the_unseen_one
     // Put on the list from the folder, then „Weiterschauen“ stands where the list stands: the first episode.
     w.press(Role::Button, "Frieren auf die Merkliste");
     assert!(w.tree().find(Role::Heading, "Weiterschauen").is_some() || w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "Weiterschauen")));
-    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Staffel 1 · Folge 1 · 3 Folgen hier ungesehen"))), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    // As on the website: where it goes on, the file, and how many come after it.
+    let said = |w: &Window, text: &str| w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == text));
+    assert!(said(&w, "Staffel 1 · Folge 1"), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    assert!(said(&w, "Frieren S01E01.mkv"));
+    assert!(said(&w, "danach 2 weitere aus dem Ordner"));
+    assert!(w.tree().find(Role::Button, "„Frieren“ in der Merkliste öffnen").is_some());
     w.press(Role::Button, "Frieren: Staffel 1 · Folge 1 abspielen");
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv"]);

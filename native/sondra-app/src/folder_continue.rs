@@ -10,8 +10,10 @@ use sondra_ui::{radius, Ui};
 use crate::nav::Panel;
 use crate::shell::Shell;
 
-/// How many series are offered at once.
-const SHOWN: usize = 3;
+/// How many series are offered at once (as on the website).
+const SHOWN: usize = 6;
+/// The width of one card; three stand in a row on a laptop.
+const CARD_W: f32 = 300.0;
 
 impl Shell {
     pub(crate) fn continue_here(&self) -> Vec<FolderSeries> {
@@ -23,9 +25,19 @@ impl Shell {
 
     /// Plays the episode the list stands at and the unseen ones after it that lie in the folder.
     pub(crate) fn continue_play(&mut self, item_id: &str, cx: &mut Context<Self>) {
-        let Some(root) = self.folder.root.clone() else { return };
         let Some(series) = self.continue_here().into_iter().find(|s| s.item == item_id) else { return };
-        let files = series.queue.iter().filter(|e| e.file.drive.is_none()).map(|e| root.join(e.file.path.replace('/', std::path::MAIN_SEPARATOR_STR))).collect::<Vec<_>>();
+        // Episodes in Drive play from Drive where they lie; those on this computer from the folder.
+        let in_drive: Vec<sondra_devices::engine::PlayItem> = series
+            .queue
+            .iter()
+            .filter_map(|e| e.file.drive.as_ref().map(|d| sondra_devices::engine::PlayItem { id: d.id.clone(), name: e.file.name.clone(), size: e.file.size, mime: d.mime.clone() }))
+            .collect();
+        if !in_drive.is_empty() {
+            self.play_drive_films(in_drive, cx);
+            return;
+        }
+        let Some(root) = self.folder.root.clone() else { return };
+        let files = series.queue.iter().map(|e| root.join(e.file.path.replace('/', std::path::MAIN_SEPARATOR_STR))).collect::<Vec<_>>();
         if files.is_empty() {
             return;
         }
@@ -44,42 +56,59 @@ impl Shell {
         }
         let me = cx.entity();
         let c = ui.c;
-        let mut section = div().flex().flex_col().gap(px(4.)).p(px(16.)).rounded(px(radius::CARD)).bg(c.panel_soft).child(ui.subheading("Weiterschauen"));
+        let mut cards = div().flex().flex_wrap().gap(px(10.));
         for (n, s) in series.iter().enumerate() {
             let Some(item) = self.merk.items.iter().find(|i| i.id == s.item) else { continue };
             let (play, open) = (me.clone(), me.clone());
             let (id_play, id_open) = (s.item.clone(), s.item.clone());
-            let place = if s.next.season == 0 { format!("Film {}", s.next.episode) } else { format!("Staffel {} · Folge {}", s.next.season, s.next.episode) };
-            let here = s.episodes.iter().filter(|e| !e.seen).count();
-            section = section.child(
+            let total = sondra_merk::progress::seasons_of(item).into_iter().find(|x| x.number == s.next.season).and_then(|x| x.episodes);
+            let place = if s.next.season == 0 {
+                format!("Film {}", s.next.episode)
+            } else {
+                format!("Staffel {} · Folge {}{}", s.next.season, s.next.episode, total.map(|t| format!(" von {t}")).unwrap_or_default())
+            };
+            let more = s.queue.len().saturating_sub(1);
+            let file = s.queue.first().map(|e| e.file.name.clone()).unwrap_or_default();
+            cards = cards.child(
                 div()
+                    .w(px(CARD_W))
                     .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.))
-                    .py(px(8.))
-                    .when(n > 0, |d| d.border_t_1().border_color(c.line))
+                    .flex_col()
+                    .gap(px(10.))
+                    .p(px(14.))
+                    .rounded(px(radius::CARD))
+                    .bg(c.panel_soft)
                     .child(
                         div()
                             .flex()
                             .flex_col()
+                            .gap(px(2.))
                             .min_w(px(0.))
-                            .child(ui.button(format!("weiter-serie-{n}"), item.title.clone()).ghost().accessible_name(format!("{} in der Merkliste öffnen", item.title)).on_click(move |_, app| {
+                            .child(ui.button(format!("weiter-serie-{n}"), item.title.clone()).ghost().accessible_name(format!("„{}“ in der Merkliste öffnen", item.title)).on_click(move |_, app| {
                                 let id = id_open.clone();
                                 open.update(app, |shell, cx| {
                                     shell.merk.open = Some(id);
                                     shell.go(Panel::Merkliste, cx);
                                 })
                             }))
-                            .child(ui.hint(format!("{place} · {here} {} hier ungesehen", if here == 1 { "Folge" } else { "Folgen" }))),
+                            .child(ui.prose(place.clone()))
+                            .child(div().w(px(CARD_W - 28.)).truncate().child(ui.value(file))),
                     )
-                    .child(ui.button(format!("weiter-abspielen-{n}"), "Abspielen").small().primary().accessible_name(format!("{}: {place} abspielen", item.title)).on_click(move |_, app| {
-                        let id = id_play.clone();
-                        play.update(app, |shell, cx| shell.continue_play(&id, cx))
-                    })),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(12.))
+                            .child(ui.button(format!("weiter-abspielen-{n}"), "Abspielen").small().primary().accessible_name(format!("{}: {place} abspielen", item.title)).on_click(move |_, app| {
+                                let id = id_play.clone();
+                                play.update(app, |shell, cx| shell.continue_play(&id, cx))
+                            }))
+                            .child(ui.hint(if more > 0 { format!("danach {more} weitere aus dem Ordner") } else { "die letzte ungesehene hier".to_string() })),
+                    ),
             );
         }
+        let section = div().flex().flex_col().gap(px(10.)).child(ui.subheading("Weiterschauen")).child(cards);
         Some(section.into_any_element())
     }
 }

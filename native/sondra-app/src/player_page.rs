@@ -814,11 +814,31 @@ impl Shell {
         }
         let Some(playback) = &p.playback else {
             let me2 = me.clone();
-            let mut ways = div().flex().flex_wrap().gap(px(10.));
-            ways = ways.child(ui.button("medien-waehlen", "Datei wählen").primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.choose_media(cx))));
+            let c = ui.c;
+            let mut ways = div().flex().flex_wrap().items_center().gap(px(10.));
+            ways = ways.child(ui.button("medien-waehlen", "Dateien auswählen").primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.choose_media(cx))));
+            let mut formats = div().flex().flex_wrap().gap(px(6.));
+            for f in ["MP4", "MKV", "AVI", "MOV", "WEBM", "MP3", "FLAC", "WAV"] {
+                formats = formats.child(div().px(px(10.)).py(px(3.)).rounded(px(sondra_ui::radius::PILL)).bg(c.panel_mid).font_family(sondra_ui::family::VALUE).text_size(px(sondra_ui::size::MICRO)).text_color(c.prose).child(f));
+            }
+            // What the player does, in three short blocks — each true of this program.
+            let mut facts = div().flex().flex_wrap().gap(px(12.));
+            for (title, text) in [
+                ("Direkt von der Platte", "Kein Kopieren, kein Hochladen: auch riesige 4K-Filme und Mehrkanal-Ton beginnen sofort."),
+                ("Untertitel von selbst", "Eine .srt- oder .vtt-Datei mit gleichem Namen im selben Ordner kommt mit; Spuren im Film lassen sich wählen."),
+                ("Klang und Tempo", "Entzerrer mit Voreinstellungen, Nachtmodus, Karaoke, Tempo von 0,25× bis 3×, Lesezeichen und Schlaf-Timer."),
+            ] {
+                facts = facts.child(div().w(px(260.)).flex().flex_col().gap(px(4.)).p(px(14.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.title(title)).child(div().w(px(232.)).child(ui.hint(text))));
+            }
             return page
                 .child(ui.page_head("Abspielen", "Filme und Musik von diesem Computer. Sondra spielt sie direkt von der Platte, ohne sie zu kopieren, und merkt sich, wo Sie aufgehört haben."))
-                .child(ui.empty("abspielen-leer", "Noch nichts zum Abspielen", "Wählen Sie einen Film oder ein Lied, oder ziehen Sie Dateien hierher. Eine Untertitel-Datei mit gleichem Namen kommt von selbst mit.", vec![ways.into_any_element()]))
+                .child(ui.empty(
+                    "abspielen-leer",
+                    "Video oder Musik hierher ziehen",
+                    "Mehrere Dateien werden zu einer Wiedergabeliste. Eine Untertitel-Datei mit gleichem Namen kommt von selbst mit.",
+                    vec![formats.into_any_element(), ways.into_any_element()],
+                ))
+                .child(facts)
                 .child(self.player_queue(ui, cx))
                 .into_any_element();
         };
