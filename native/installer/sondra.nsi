@@ -24,6 +24,10 @@ Unicode true
 !ifndef FFMPEG
   !error "-DFFMPEG=folder with ffmpeg.exe and ffprobe.exe is needed"
 !endif
+; yt-dlp belongs to the program like FFmpeg does (get-ytdlp.ps1 fetches and checks it).
+!ifndef YTDLP
+  !error "-DYTDLP=path to yt-dlp.exe is needed (installer/get-ytdlp.ps1)"
+!endif
 !ifndef LICENSES
   !define LICENSES "..\..\desktop\lizenzen"
 !endif
@@ -114,9 +118,7 @@ Section "Sondra" SecMain
   File "/oname=sondra.exe" "${EXE}"
   File "${FFMPEG}\ffmpeg.exe"
   File "${FFMPEG}\ffprobe.exe"
-!ifdef YTDLP
   File "/oname=yt-dlp.exe" "${YTDLP}"
-!endif
   SetOutPath "$INSTDIR\Lizenzen"
   File "${LICENSES}\*.txt"
   SetOutPath "$INSTDIR"

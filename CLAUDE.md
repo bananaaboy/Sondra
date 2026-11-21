@@ -525,9 +525,9 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Fenster, „Neu auf AniWorld“ auf der Serienseite), Verlauf und Würfeln in der Merkliste, **Klicks entfernen**,
   Rückwärts drehen und Bittiefe im Ton-Editor, **eigener STUN/TURN-Server** (Passwort verdeckt: `TextField::secret`).
   **yt-dlp** (19.11.2026, `sondra-download::ytdlp`): Adressen ohne eigene Quelle laufen über yt-dlp, wenn es da ist
-  (eigene Kopie, **die mit dem Setup neben `sondra.exe` gelegte** — seit dem 21.11.2026 liegt yt-dlp Setup und
-  portabler Fassung bei, die CI holt es von yt-dlps Releases und prüft es gegen die veröffentlichte SHA-256, sonst wird
-  nichts beigelegt —, WinGet, PATH); fehlt es trotzdem, steht auf der Herunterladen-Seite „yt-dlp laden“ — geholt wird es
+  (eigene Kopie, **die mit dem Setup neben `sondra.exe` gelegte** — seit dem 21.11.2026 gehört yt-dlp zum Programm wie
+  FFmpeg: in jedem Setup (x64, Arm64), der portablen Fassung und jedem Store-Paket (`installer/get-ytdlp.ps1` holt
+  yt-dlps eigene Windows-Fassung und prüft sie gegen die veröffentlichte SHA-256; passt sie nicht, bricht der Bau ab) —, WinGet, PATH); fehlt es trotzdem, steht auf der Herunterladen-Seite „yt-dlp laden“ — geholt wird es
   nur auf den Klick, ebenso geprüft (passt die Summe nicht, bleibt nichts liegen); nie `--no-check-certificates`. Geprüft gegen ein Stand-in (`fake-ytdlp`), nie gegen das echte yt-dlp.
   **Nichts davon ist an einem echten Handy oder mit echter Tonkarte gelaufen** — das Handy
   wird gegen ein nachgebautes Handy geprüft (`sondra_mirror::fake`).

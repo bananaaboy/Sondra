@@ -347,17 +347,8 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $setup = Join-Path $PWD 'Sondra-Nativ-Setup.exe'
           $licenses = (Resolve-Path desktop/lizenzen).Path
-          # yt-dlp goes into the setup, so „Herunterladen“ works from the first start: the release's own
-          # Windows build, checked against the SHA-256 it publishes — never bundled when the sums differ.
-          $ytdir = Join-Path $env:RUNNER_TEMP 'ytdlp'
-          New-Item -ItemType Directory -Force -Path $ytdir | Out-Null
-          $ytdlp = Join-Path $ytdir 'yt-dlp.exe'
-          Invoke-WebRequest 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile $ytdlp
-          $sums = (Invoke-WebRequest 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS').Content
-          $want = ($sums -split "`n" | Where-Object { $_ -match '\syt-dlp\.exe\s*$' } | Select-Object -First 1) -replace '\s.*$', ''
-          $have = (Get-FileHash $ytdlp -Algorithm SHA256).Hash.ToLower()
-          Check ($want -and $have -eq $want.ToLower()) "yt-dlp to bundle, SHA-256 as published: $have"
-          if ($have -ne $want.ToLower()) { Remove-Item $ytdlp }
+          # yt-dlp goes in like FFmpeg: yt-dlp's own release, checked against its published SHA-256.
+          $ytdlp = & ./native/installer/get-ytdlp.ps1 -Out (Join-Path $env:RUNNER_TEMP 'ytdlp')
           & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DYTDLP=$ytdlp" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
           Check ($LASTEXITCODE -eq 0 -and (Test-Path $setup)) ("the setup is built: {0:N1} MB" -f ((Get-Item $setup).Length / 1MB))
 
@@ -570,18 +561,19 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $setup = Join-Path $PWD 'Sondra-Nativ-Arm64-Setup.exe'
           $licenses = (Resolve-Path desktop/lizenzen).Path
-          & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
+          $ytdlp = & ./native/installer/get-ytdlp.ps1 -Out (Join-Path $env:RUNNER_TEMP 'ytdlp') -Arch arm64
+          & $makensis /V2 "/DVERSION=$version" "/DEXE=$exe" "/DFFMPEG=$ffdir" "/DYTDLP=$ytdlp" "/DLICENSES=$licenses" "/DOUT=$setup" (Resolve-Path native/installer/sondra.nsi).Path
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $setup)) { throw 'Das Setup ist nicht gebaut.' }
           $dir = 'C:\SondraNativArm'
           $i = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$dir" -Wait -PassThru
           if ($i.ExitCode -ne 0) { throw "Das Setup endet mit $($i.ExitCode)." }
-          if (-not (Test-Path "$dir\sondra.exe")) { throw 'sondra.exe ist nicht installiert.' }
+          foreach ($f in 'sondra.exe', 'ffmpeg.exe', 'yt-dlp.exe') { if (-not (Test-Path "$dir\$f")) { throw "$f ist nicht installiert." } }
           $p = Start-Process -FilePath "$dir\sondra.exe" -PassThru
           Start-Sleep -Seconds 8
           if ($p.HasExited) { throw 'Das installierte Programm läuft nicht.' }
           Stop-Process -Id $p.Id -Force
           Start-Process -FilePath "$dir\Deinstallieren.exe" -ArgumentList '/S' -Wait
-          ./native/installer/make-msix.ps1 -Exe $exe -FFmpegDir $ffdir -Licenses $licenses -Version $version -Out (Join-Path $PWD 'Sondra-Nativ-Arm64-Store.msix') -Arch arm64
+          ./native/installer/make-msix.ps1 -Exe $exe -FFmpegDir $ffdir -YtDlp $ytdlp -Licenses $licenses -Version $version -Out (Join-Path $PWD 'Sondra-Nativ-Arm64-Store.msix') -Arch arm64
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -624,7 +616,8 @@ jobs:
           $real = Get-ChildItem 'C:\ProgramData\chocolatey\lib\ffmpeg' -Recurse -Filter ffmpeg.exe | Select-Object -First 1
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $out = Join-Path $PWD 'Sondra-Nativ-Store.msix'
-          ./native/installer/make-msix.ps1 -Exe $exe -FFmpegDir $real.Directory.FullName -Licenses (Resolve-Path desktop/lizenzen).Path -Version $version -Out $out
+          $ytdlp = & ./native/installer/get-ytdlp.ps1 -Out (Join-Path $env:RUNNER_TEMP 'ytdlp')
+          ./native/installer/make-msix.ps1 -Exe $exe -FFmpegDir $real.Directory.FullName -YtDlp $ytdlp -Licenses (Resolve-Path desktop/lizenzen).Path -Version $version -Out $out
 
           # What the Store will read: identity and what the program opens.
           $unpacked = Join-Path $env:RUNNER_TEMP 'msix-read'
@@ -634,6 +627,7 @@ jobs:
           $identity = $manifest.Package.Identity
           Write-Host "Identity: $($identity.Name) · $($identity.Publisher) · $($identity.Version)"
           if (-not (Select-String -Path (Join-Path $unpacked 'AppxManifest.xml') -Pattern '.sondra-liste')) { throw 'Die geteilte Merkliste fehlt im Manifest.' }
+          foreach ($f in 'ffmpeg.exe', 'yt-dlp.exe') { if (-not (Test-Path (Join-Path $unpacked $f))) { throw "$f fehlt im Store-Paket." } }
           if (Test-Path (Join-Path $unpacked 'Deinstallieren.exe')) { throw 'Im Store-Paket darf kein eigener Deinstallierer liegen (er hielte das Programm für installiert und suchte selbst nach Updates).' }
 
           # Sign with a certificate made for this run, trust it, install, start, remove.

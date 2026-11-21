@@ -29,7 +29,10 @@ pub const UPDATE_AFTER: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// The program's file on this system, as the release names it.
 pub const fn asset_name() -> &'static str {
-    if cfg!(windows) {
+    if cfg!(all(windows, target_arch = "aarch64")) {
+        // yt-dlp's own build for Windows on Arm (the setup bundles the same one, `installer/get-ytdlp.ps1`).
+        "yt-dlp_arm64.exe"
+    } else if cfg!(windows) {
         "yt-dlp.exe"
     } else if cfg!(target_os = "macos") {
         "yt-dlp_macos"

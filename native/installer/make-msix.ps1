@@ -1,17 +1,21 @@
-# The native program as an MSIX package for the Microsoft Store: the program, FFmpeg and the licences in a folder,
+# The native program as an MSIX package for the Microsoft Store: the program, FFmpeg, yt-dlp and the licences in a folder,
 # a manifest that says who it is and what it opens, tiles made from the icon, `makeappx pack`. The Store signs the
 # package itself; the unsigned setup it refuses. The identity comes from Partner Center (the repository variables
 # STORE_IDENTITY_NAME, STORE_PUBLISHER, STORE_PUBLISHER_NAME, STORE_DISPLAY_NAME); without them test values make a
 # package that proves the build and is not for submitting.
 #
-#   make-msix.ps1 -Exe <sondra.exe> -FFmpegDir <folder with ffmpeg.exe and ffprobe.exe> -Licenses <folder> `
-#                 -Version 1.2.3 -Out <file.msix>
+#   make-msix.ps1 -Exe <sondra.exe> -FFmpegDir <folder with ffmpeg.exe and ffprobe.exe> -YtDlp <yt-dlp.exe> `
+#                 -Licenses <folder> -Version 1.2.3 -Out <file.msix>
+#
+# yt-dlp lies in the package because the Store allows no program fetched later (policy 10.2.2): bundled, it is part
+# of what the Store checks, and „Herunterladen“ works without anything to install.
 #
 # There is no uninstaller in the package, which is how the program knows it is not to look for updates itself: the
 # Store updates the package (`updater::is_installed`).
 param(
   [Parameter(Mandatory)] [string] $Exe,
   [Parameter(Mandatory)] [string] $FFmpegDir,
+  [Parameter(Mandatory)] [string] $YtDlp,
   [Parameter(Mandatory)] [string] $Licenses,
   [Parameter(Mandatory)] [string] $Version,
   [Parameter(Mandatory)] [string] $Out,
@@ -30,6 +34,7 @@ Remove-Item $layout -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path "$layout\Assets" | Out-Null
 Copy-Item $Exe "$layout\sondra.exe"
 Copy-Item "$FFmpegDir\ffmpeg.exe", "$FFmpegDir\ffprobe.exe" $layout
+Copy-Item $YtDlp "$layout\yt-dlp.exe"
 Copy-Item $Licenses "$layout\Lizenzen" -Recurse
 
 # The tiles, from the 512 px icon (the same plain-Node drawing the other package uses).
