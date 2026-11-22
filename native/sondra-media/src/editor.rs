@@ -48,6 +48,8 @@ pub enum Op {
     Reverse,
     /// Clicks and crackle out, over the whole file (`declick.ts`).
     RemoveClicks(crate::declick::ClickStrength),
+    /// Only the selection stays („Ausschnitt behalten“).
+    Keep,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -62,6 +64,8 @@ pub struct Editor {
     redo: Vec<(String, AudioData)>,
     clipboard: Option<AudioData>,
     noise: Option<Vec<f32>>,
+    /// The take as it was opened, for „Zurück zum Original“ however long the history is.
+    original: AudioData,
 }
 
 fn seconds(s: f64) -> String {
@@ -74,7 +78,7 @@ fn db(v: f64) -> String {
 
 impl Editor {
     pub fn new(audio: AudioData) -> Editor {
-        Editor { audio, undo: Vec::new(), redo: Vec::new(), clipboard: None, noise: None }
+        Editor { original: audio.clone(), audio, undo: Vec::new(), redo: Vec::new(), clipboard: None, noise: None }
     }
 
     pub fn audio(&self) -> &AudioData {
@@ -255,9 +259,77 @@ impl Editor {
             Op::ToStereo => ("Zu Stereo verdoppelt".into(), effects::set_channels(&self.audio, 2)),
             Op::Swap => ("Links und rechts getauscht".into(), edit::channel_trick(&self.audio, Trick::Swap)),
             Op::Resample(rate) => (format!("Abtastrate {rate} Hz"), edit::resample_audio(&self.audio, rate)),
+            Op::Keep => {
+                if whole {
+                    return Err("Wählen Sie zuerst den Ausschnitt, der bleiben soll.".into());
+                }
+                (format!("Ausschnitt behalten ({} bis {} s)", seconds(from), seconds(to)), effects::copy_range(&self.audio, from, to))
+            }
         };
         self.commit(label.clone(), next);
         Ok(label)
+    }
+
+    /// „Datei zum Anhängen“: another take after this one, brought to its rate and channels, with a short
+    /// crossfade (30 ms) where they meet.
+    pub fn append(&mut self, other: &AudioData, name: &str) -> Result<String, String> {
+        if other.frames() == 0 {
+            return Err("In dieser Datei ist kein Ton.".into());
+        }
+        let rate = self.audio.sample_rate;
+        let mut other = if other.sample_rate == rate { other.clone() } else { edit::resample_audio(other, rate) };
+        let channels = self.audio.channels.len().max(1);
+        if other.channels.len() != channels {
+            other = effects::set_channels(&other, channels);
+        }
+        let fade = ((rate as f64 * 0.03) as usize).min(self.audio.frames()).min(other.frames());
+        let mut next = self.audio.clone();
+        for (c, channel) in next.channels.iter_mut().enumerate() {
+            let incoming = &other.channels[c.min(other.channels.len() - 1)];
+            let start = channel.len() - fade;
+            for i in 0..fade {
+                let t = (i as f32 + 0.5) / fade.max(1) as f32;
+                channel[start + i] = channel[start + i] * (1.0 - t) + incoming[i] * t;
+            }
+            channel.extend_from_slice(&incoming[fade..]);
+        }
+        let label = format!("„{name}“ angehängt ({} s)", seconds(edit::duration_of(&other)));
+        self.commit(label.clone(), next);
+        Ok(label)
+    }
+
+    /// „Zurück zum Original“: the take as it was opened; the way back is an undo.
+    pub fn reset(&mut self) -> Option<String> {
+        if self.audio == self.original {
+            return None;
+        }
+        let original = self.original.clone();
+        self.commit("Zurück zum Original".into(), original);
+        Some("Zurück zum Original".into())
+    }
+
+    /// The waveform of a stretch (`from` to `to` seconds) in `columns` columns — for a zoomed view.
+    pub fn peaks_in(&self, from: f64, to: f64, columns: usize) -> Vec<(f32, f32)> {
+        let rate = self.audio.sample_rate as f64;
+        let n = self.audio.frames();
+        let (a, b) = (((from.max(0.0) * rate) as usize).min(n), ((to * rate).ceil() as usize).min(n));
+        if b <= a || columns == 0 {
+            return vec![(0.0, 0.0); columns];
+        }
+        let span = b - a;
+        (0..columns)
+            .map(|c| {
+                let (x, y) = (a + c * span / columns, (a + (c + 1) * span / columns).max(a + c * span / columns + 1).min(b));
+                let (mut lo, mut hi) = (0f32, 0f32);
+                for channel in &self.audio.channels {
+                    for v in &channel[x..y] {
+                        lo = lo.min(*v);
+                        hi = hi.max(*v);
+                    }
+                }
+                (lo, hi)
+            })
+            .collect()
     }
 
     /// The waveform in `columns` columns: the lowest and the highest value in each, over all channels.
@@ -279,5 +351,34 @@ impl Editor {
                 (lo, hi)
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod more_tests {
+    use super::*;
+
+    fn tone(seconds: f64, rate: u32, channels: usize) -> AudioData {
+        let n = (seconds * rate as f64) as usize;
+        AudioData { channels: (0..channels).map(|_| (0..n).map(|i| ((i as f32) * 0.05).sin() * 0.5).collect()).collect(), sample_rate: rate }
+    }
+
+    #[test]
+    fn keep_append_and_reset_do_what_the_website_does() {
+        let mut e = Editor::new(tone(2.0, 8000, 2));
+        assert!(e.apply(Op::Keep, None).is_err(), "keeping needs a selection");
+        e.apply(Op::Keep, Some((0.5, 1.0))).unwrap();
+        assert_eq!(e.audio().frames(), 4000);
+        // Another take, at another rate and in mono, comes after it in this one's shape.
+        e.append(&tone(1.0, 16000, 1), "zwei.wav").unwrap();
+        assert_eq!(e.audio().channels.len(), 2);
+        let expected = 4000 + 8000 - (8000.0 * 0.03) as usize;
+        assert!((e.audio().frames() as i64 - expected as i64).abs() <= 2, "{}", e.audio().frames());
+        assert_eq!(e.reset().as_deref(), Some("Zurück zum Original"));
+        assert_eq!(e.audio().frames(), 16000);
+        assert!(e.reset().is_none(), "nothing to go back to");
+        assert!(e.undo().is_some(), "the way back from the original is an undo");
+        // A zoomed view has its columns over the stretch alone.
+        assert_eq!(e.peaks_in(0.0, 0.5, 10).len(), 10);
     }
 }

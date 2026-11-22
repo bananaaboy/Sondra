@@ -52,11 +52,17 @@ pub struct AudioState {
     ticking: bool,
     /// How deep a saved WAV is.
     pub bits: sondra_media::audio::WavBits,
+    /// The stretch the wave shows (zoomed in), `None` for all of it.
+    pub view: Option<(f64, f64)>,
+    /// „In Schleife spielen“.
+    pub looping: bool,
+    /// „Tempo klopfen“: the last taps.
+    pub taps: Vec<std::time::Instant>,
 }
 
 impl AudioState {
     pub fn new() -> AudioState {
-        AudioState { path: None, editor: None, selection: None, tool: Tool::Cut, busy: None, error: None, said: None, player: None, made: Vec::new(), bounds: Rc::new(Cell::new(Bounds::default())), anchor: None, ticking: false, bits: sondra_media::audio::WavBits::Pcm16 }
+        AudioState { path: None, editor: None, selection: None, tool: Tool::Cut, busy: None, error: None, said: None, player: None, made: Vec::new(), bounds: Rc::new(Cell::new(Bounds::default())), anchor: None, ticking: false, bits: sondra_media::audio::WavBits::Pcm16, view: None, looping: false, taps: Vec::new() }
     }
 }
 
@@ -149,7 +155,137 @@ impl Shell {
             return 0.0;
         }
         let (left, x): (f32, f32) = (bounds.origin.x.into(), x.into());
-        ((x - left) / width).clamp(0.0, 1.0) as f64 * self.audio_seconds()
+        let (from, to) = self.audio_view();
+        from + ((x - left) / width).clamp(0.0, 1.0) as f64 * (to - from)
+    }
+
+    /// The stretch the wave shows.
+    pub fn audio_view(&self) -> (f64, f64) {
+        let total = self.audio_seconds();
+        self.audio.view.map(|(a, b)| (a.clamp(0.0, total), b.clamp(0.0, total))).filter(|(a, b)| b - a > 0.01).unwrap_or((0.0, total))
+    }
+
+    /// Zooms in (`factor` < 1) or out around a place; all of it again when it would show everything.
+    pub fn audio_zoom(&mut self, factor: f64, around: Option<f64>, cx: &mut Context<Self>) {
+        let total = self.audio_seconds();
+        if total <= 0.0 {
+            return;
+        }
+        let (from, to) = self.audio_view();
+        let at = around.unwrap_or((from + to) / 2.0);
+        let span = ((to - from) * factor).clamp(0.05_f64.min(total), total);
+        if span >= total - 1e-9 {
+            self.audio.view = None;
+        } else {
+            let share = if to > from { (at - from) / (to - from) } else { 0.5 };
+            let start = (at - span * share).clamp(0.0, total - span);
+            self.audio.view = Some((start, start + span));
+        }
+        cx.notify();
+    }
+
+    /// Moves a zoomed view sideways by a share of what it shows.
+    pub fn audio_pan(&mut self, share: f64, cx: &mut Context<Self>) {
+        let total = self.audio_seconds();
+        let Some((from, to)) = self.audio.view else { return };
+        let span = to - from;
+        let start = (from + span * share).clamp(0.0, (total - span).max(0.0));
+        self.audio.view = Some((start, start + span));
+        cx.notify();
+    }
+
+    /// „Tempo klopfen“: the beats per minute of the last taps (at least four), or `None`.
+    pub fn audio_tap(&mut self, cx: &mut Context<Self>) -> Option<f64> {
+        let now = std::time::Instant::now();
+        // A pause of over two seconds starts counting anew.
+        if self.audio.taps.last().is_some_and(|t| now.duration_since(*t).as_secs_f64() > 2.0) {
+            self.audio.taps.clear();
+        }
+        self.audio.taps.push(now);
+        if self.audio.taps.len() > 12 {
+            self.audio.taps.remove(0);
+        }
+        cx.notify();
+        self.audio_bpm()
+    }
+
+    pub fn audio_bpm(&self) -> Option<f64> {
+        let t = &self.audio.taps;
+        if t.len() < 4 {
+            return None;
+        }
+        let span = t.last()?.duration_since(*t.first()?).as_secs_f64();
+        (span > 0.0).then(|| 60.0 * (t.len() - 1) as f64 / span)
+    }
+
+    /// „Datei zum Anhängen“: another file after this one.
+    pub(crate) fn audio_choose_append(&mut self, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = answer.await {
+                if let Some(path) = paths.into_iter().next() {
+                    this.update(cx, |shell, cx| shell.audio_append(path, cx)).ok();
+                }
+            }
+        })
+        .detach();
+    }
+
+    pub fn audio_append(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        let Some(ffmpeg) = sondra_media::ffmpeg::Ffmpeg::locate() else {
+            self.audio.error = Some("FFmpeg ist nicht da.".into());
+            cx.notify();
+            return;
+        };
+        let rate = self.audio.editor.as_ref().map(|e| e.audio().sample_rate);
+        self.audio.busy = Some("Liest die Datei zum Anhängen …");
+        cx.notify();
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        Self::in_background(cx, move || sondra_media::audio::decode_file(&ffmpeg, &path, rate).map_err(|e| e.to_string()), move |shell, decoded, cx| {
+            shell.audio.busy = None;
+            match decoded.and_then(|audio| shell.audio.editor.as_mut().ok_or_else(|| "Es ist keine Datei offen.".to_string()).and_then(|e| e.append(&audio, &name))) {
+                Ok(said) => {
+                    shell.audio.said = Some(said);
+                    shell.audio.error = None;
+                    shell.audio.view = None;
+                }
+                Err(e) => shell.audio.error = Some(e),
+            }
+            cx.notify();
+        });
+    }
+
+    /// „Zurück zum Original“.
+    pub fn audio_reset(&mut self, cx: &mut Context<Self>) {
+        if let Some(said) = self.audio.editor.as_mut().and_then(|e| e.reset()) {
+            self.audio.said = Some(said);
+            self.audio.selection = None;
+            self.audio.view = None;
+        }
+        cx.notify();
+    }
+
+    /// The keys of the editor (as on the website): Space plays, Strg+Z/Strg+Umschalt+Z (or Strg+Y) undo
+    /// and redo, Strg+X/C/V cut, copy, paste, Entf removes the selection, T taps the tempo.
+    pub fn audio_key(&mut self, key: &str, control: bool, shift: bool, cx: &mut Context<Self>) -> bool {
+        if self.audio.editor.is_none() {
+            return false;
+        }
+        match (control, shift, key) {
+            (false, false, "space") => self.audio_play(cx),
+            (true, false, "z") => self.audio_undo(cx),
+            (true, true, "z") | (true, false, "y") => self.audio_redo(cx),
+            (true, false, "x") | (false, false, "delete") if self.audio.selection.is_some() => self.audio_do(Op::Cut, cx),
+            (true, false, "c") if self.audio.selection.is_some() => self.audio_copy(cx),
+            (true, false, "v") => self.audio_do(Op::Paste, cx),
+            (false, false, "t") => {
+                self.audio_tap(cx);
+            }
+            (false, false, "+") | (false, true, "=") => self.audio_zoom(0.5, None, cx),
+            (false, false, "-") => self.audio_zoom(2.0, None, cx),
+            _ => return false,
+        }
+        true
     }
 
     /// Does one edit away from the window, then puts the take back.
@@ -273,6 +409,13 @@ impl Shell {
             let alive = this.update(cx, |shell, cx| {
                 if shell.audio.player.as_ref().is_some_and(ClipPlayer::finished) {
                     shell.audio.player = None;
+                    // „In Schleife spielen“: the same stretch again.
+                    if shell.audio.looping {
+                        if let Some(editor) = &shell.audio.editor {
+                            let (from, to) = shell.audio.selection.unwrap_or((0.0, editor.audio().seconds()));
+                            shell.audio.player = Some(ClipPlayer::start(editor.audio(), from, to));
+                        }
+                    }
                 }
                 let alive = shell.audio.player.is_some();
                 if !alive {
@@ -386,12 +529,28 @@ impl Shell {
         }
         {
             let me = me.clone();
+            let on = a.looping;
+            bar = bar.child(ui.chip("ton-schleife", "In Schleife spielen", on).on_click(move |_, app| me.update(app, |shell, cx| {
+                shell.audio.looping = !on;
+                cx.notify();
+            })));
+        }
+        {
+            let (zin, zout) = (me.clone(), me.clone());
+            bar = bar
+                .child(ui.button("ton-hinein", "+").small().accessible_name("Hineinzoomen (oder Mausrad)").on_click(move |_, app| zin.update(app, |shell, cx| shell.audio_zoom(0.5, None, cx))))
+                .child(ui.button("ton-heraus", "−").small().accessible_name("Herauszoomen").disabled(a.view.is_none()).on_click(move |_, app| zout.update(app, |shell, cx| shell.audio_zoom(2.0, None, cx))));
+        }
+        {
+            let me = me.clone();
             bar = bar.child(ui.button("ton-andere", "Andere Datei").small().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_audio_file(cx))));
         }
         page = page.child(bar);
 
         // The waveform.
-        let peaks = editor.peaks(480);
+        let (view_from, view_to) = self.audio_view();
+        let span = (view_to - view_from).max(1e-6);
+        let peaks = if a.view.is_some() { editor.peaks_in(view_from, view_to, 480) } else { editor.peaks(480) };
         let mut columns = div().relative().flex().items_center().h(px(160.)).w_full().rounded(px(sondra_ui::radius::CARD)).overflow_hidden().bg(c.stage);
         for (lo, hi) in &peaks {
             let up = (hi * 62.0).max(1.0);
@@ -401,11 +560,19 @@ impl Shell {
         let measure = a.bounds.clone();
         columns = columns.child(canvas(move |b, _, _| measure.set(b), |_, _, _, _| {}).absolute().size_full());
         if let Some((from, to)) = a.selection {
-            columns = columns.child(div().absolute().top_0().bottom_0().left(gpui::relative((from / total) as f32)).w(gpui::relative(((to - from) / total) as f32)).bg(c.stage_accent).opacity(0.35));
+            // In the view's terms, cut to what is in view.
+            let (f, t) = (((from - view_from) / span).clamp(0.0, 1.0), ((to - view_from) / span).clamp(0.0, 1.0));
+            if t > f {
+                columns = columns.child(div().absolute().top_0().bottom_0().left(gpui::relative(f as f32)).w(gpui::relative((t - f) as f32)).bg(c.stage_accent).opacity(0.35));
+            }
         }
         if let Some(player) = &a.player {
-            columns = columns.child(div().absolute().top_0().bottom_0().left(gpui::relative((player.position() / total).clamp(0.0, 1.0) as f32)).w(px(2.)).bg(c.stage_accent));
+            let at = (player.position() - view_from) / span;
+            if (0.0..=1.0).contains(&at) {
+                columns = columns.child(div().absolute().top_0().bottom_0().left(gpui::relative(at as f32)).w(px(2.)).bg(c.stage_accent));
+            }
         }
+        let _ = total;
         let (down, drag, up) = (me.clone(), me.clone(), me.clone());
         let stage = div()
             .id("welle")
@@ -430,6 +597,28 @@ impl Shell {
                 }
             })
             .on_mouse_up(MouseButton::Left, move |_, _, app| up.update(app, |shell, _| shell.audio.anchor = None))
+            // The wheel zooms around the pointer; with Shift it moves the view sideways.
+            .on_scroll_wheel({
+                let me = me.clone();
+                move |event, _, app| {
+                    let lines: f32 = match event.delta {
+                        gpui::ScrollDelta::Lines(l) => if l.y != 0.0 { l.y } else { l.x },
+                        gpui::ScrollDelta::Pixels(p) => f32::from(if p.y != px(0.) { p.y } else { p.x }) / 40.0,
+                    };
+                    if lines == 0.0 {
+                        return;
+                    }
+                    let (x, shift) = (event.position.x, event.modifiers.shift);
+                    me.update(app, |shell, cx| {
+                        if shift {
+                            shell.audio_pan(-(lines as f64) * 0.1, cx);
+                        } else {
+                            let at = shell.audio_at(x);
+                            shell.audio_zoom(if lines > 0.0 { 0.8 } else { 1.25 }, Some(at), cx);
+                        }
+                    })
+                }
+            })
             .child(columns);
         let says = match a.selection {
             Some((from, to)) => format!("Auswahl {} bis {} ({} s)", clock(from), clock(to), db(to - from).replace(" ", "")),
@@ -484,7 +673,18 @@ impl Shell {
                     .child(group("Ganze Datei", vec![
                         op("stille-einfuegen-halb".into(), "0,5 s Stille einfügen".into(), Op::InsertSilence(0.5)).into_any_element(),
                         op("stille-einfuegen".into(), "1 s Stille einfügen".into(), Op::InsertSilence(1.0)).into_any_element(),
-                        op("stille-entfernen".into(), "Stille entfernen".into(), Op::RemoveSilence { threshold_db: -50.0 }).into_any_element(),
+                        op("ausschnitt-behalten".into(), "Ausschnitt behalten".into(), Op::Keep).disabled(busy || a.selection.is_none()).into_any_element(),
+                        op("stille-entfernen".into(), "Stille entfernen (−45 dB)".into(), Op::RemoveSilence { threshold_db: -45.0 }).into_any_element(),
+                        op("stille-aggressiv".into(), "Stille entfernen, aggressiv (−25 dB)".into(), Op::RemoveSilence { threshold_db: -25.0 }).into_any_element(),
+                        op("stille-nur".into(), "Nur echte Stille (−60 dB)".into(), Op::RemoveSilence { threshold_db: -60.0 }).into_any_element(),
+                        {
+                            let me = me.clone();
+                            ui.button("datei-anhaengen", "Datei anhängen …").small().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.audio_choose_append(cx))).into_any_element()
+                        },
+                        {
+                            let me = me.clone();
+                            ui.button("zum-original", "Zurück zum Original").small().ghost().disabled(busy || !editor.can_undo()).on_click(move |_, app| me.update(app, |shell, cx| shell.audio_reset(cx))).into_any_element()
+                        },
                         op("rueckwaerts".into(), "Rückwärts drehen".into(), Op::Reverse).into_any_element(),
                     ]));
             }
@@ -538,7 +738,14 @@ impl Shell {
                         let label = format!("{}{} Halbtöne", if *n > 0.0 { "+" } else { "−" }, n.abs());
                         op(format!("tonhoehe-{n}"), label, Op::Pitch(*n)).into_any_element()
                     }).collect()))
-                    .child(group("Tempo", [0.5, 0.75, 0.9, 1.1, 1.25, 1.5, 2.0].iter().map(|t: &f64| op(format!("tempo-{t}"), format!("{}×", format!("{t}").replace('.', ",")), Op::Tempo(*t)).into_any_element()).collect()));
+                    .child(group("Tempo", [0.5, 0.75, 0.9, 1.1, 1.25, 1.5, 2.0].iter().map(|t: &f64| op(format!("tempo-{t}"), format!("{}×", format!("{t}").replace('.', ",")), Op::Tempo(*t)).into_any_element()).collect()))
+                    .child({
+                        let me = me.clone();
+                        let bpm = self.audio_bpm().map_or("Im Takt tippen, oder T auf der Tastatur.".to_string(), |b| format!("Etwa {} BPM", b.round() as i64));
+                        div().flex().flex_col().gap(px(8.)).child(ui.title("Tempo klopfen")).child(div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.button("tempo-tippen", "Tippen").small().on_click(move |_, app| me.update(app, |shell, cx| {
+                            shell.audio_tap(cx);
+                        }))).child(ui.value(bpm)))
+                    });
             }
             Tool::Output => {
                 let save = |format_id: &'static str, label: &str| {

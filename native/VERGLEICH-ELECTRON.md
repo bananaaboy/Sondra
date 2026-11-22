@@ -141,17 +141,17 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ Schnitt, Drehen, Spiegeln, Ausschnitt, Größe, Farbe, Looks, Schärfen, Entrauschen, Stabilisieren, Blenden, Tempo, Rückwärts, Ton unterlegen, Ton herausziehen, GIF, WebP, Standbild
 
 ### Ton-Editor
-- ✗ **Datei hinten anfügen** (mit Überblendung)
-- ✗ **Zoomen** (Mausrad, Umschalt + Mausrad schiebt)
-- ✗ **„Ausschnitt behalten“** (alles andere weg) und **„Neu aus Auswahl“**
+- ✓ **Datei hinten anfügen** (mit Überblendung)
+- ✓ **Zoomen** (Mausrad, Umschalt + Mausrad schiebt)
+- ✓ **„Ausschnitt behalten“** (alles andere weg) und **„Neu aus Auswahl“**
 - ✗ **Einfügen „Am Ende“ / „An der Abspielstelle“ / „Auswahl ersetzen“** (Rust fügt nur auf eine Art ein)
-- ✗ **In Schleife spielen**
-- ✗ **Tempo klopfen** (T)
+- ✓ **In Schleife spielen**
+- ✓ **Tempo klopfen** (T)
 - ✗ **3-Band-Entzerrer**. Rust hat feste Klangfarben (Wärmer, Heller, Dünner) und Hoch-/Tiefpass
 - ✗ **„Aus der Auswahl lernen“** (Rauschprofil von einer gewählten Stelle; Rust lernt es von selbst)
-- ✗ **Stille entfernen mit Schwelle** (−25 / −45 / −60 dB)
-- ✗ **„Zurück zum Original“**
-- ✗ **Tastenkürzel** (Leertaste, Strg+X/C/V/Z)
+- ✓ **Stille entfernen mit Schwelle** (−25 / −45 / −60 dB)
+- ✓ **„Zurück zum Original“**
+- ✓ **Tastenkürzel** (Leertaste, Strg+X/C/V/Z)
 
 ### Zerschneiden (Pads und Pattern)
 - ✗ **Pattern-Plätze** („Aktuelles Pattern in den nächsten Slot kopieren“) und „Noten zurück in Step-Schritte“
@@ -271,10 +271,10 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✗ **„Ausschnitt aufheben“**.
 
 **Ton (mit Datei)**
-- ✗ **Stopp**, **Schleife**, **Zoom hinein/heraus**.
-- ✗ **„Datei zum Anhängen“**.
+- ✓ **Stopp**, **Schleife**, **Zoom hinein/heraus**.
+- ✓ **„Datei zum Anhängen“**.
 - ✗ **Tonhöhe ±12 Halbtöne** mit „Tonhöhe übernehmen“ / „Tempo übernehmen“.
-- ✗ **„Tempo klopfen“** (Tippen oder T).
+- ✓ **„Tempo klopfen“** (Tippen oder T).
 - ✗ **Verlauf als Liste**, jeder Schritt mit Strg+Z zurückzunehmen.
 
 **Mischen (mit Datei)**

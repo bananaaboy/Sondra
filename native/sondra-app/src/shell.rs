@@ -1268,6 +1268,15 @@ impl Render for Shell {
                         app.stop_propagation();
                         return;
                     }
+                    // „Ton bearbeiten“: Space, Strg+Z/Y/X/C/V, Entf, T and the zoom, as on the website (not in a field).
+                    if !(m.alt || m.platform) && me.read(app).panel == Panel::Audio && !window.context_stack().iter().any(|c| c.contains("SondraTextField")) {
+                        let key = event.keystroke.key.clone();
+                        let (control, shift) = (m.control, m.shift);
+                        if me.update(app, |shell, cx| shell.audio_key(&key, control, shift, cx)) {
+                            app.stop_propagation();
+                            return;
+                        }
+                    }
                     // „Zerschneiden“: sixteen keys play sixteen pads, 1 2 3 4 / Q W E R / A S D F / Y X C V.
                     if !(m.control || m.alt || m.platform || m.shift) && me.read(app).panel == Panel::Sampler {
                         let key = event.keystroke.key.clone();

@@ -264,3 +264,44 @@ fn the_file_turns_backwards_and_a_wav_is_written_at_the_chosen_depth(cx: &mut Te
     assert_eq!(u16::from_le_bytes([bytes[34], bytes[35]]), 24, "the depth in the header");
     assert_eq!(bytes.len(), 44 + 32000 * 2 * 3);
 }
+
+#[gpui::test]
+fn zoom_keep_keys_and_the_way_back_to_the_original(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Probe.wav"));
+    // Zoomed in, a drag over the whole wave is a stretch of what is in view only.
+    w.press(Role::Button, "Hineinzoomen (oder Mausrad)");
+    let view = w.shell.read_with(w.cx, |s, _| s.audio_view());
+    assert!((view.0 - 1.0).abs() < 1e-6 && (view.1 - 3.0).abs() < 1e-6, "{view:?}");
+    let b = w.shell.read_with(w.cx, |s, _| s.audio_bounds());
+    let at = |f: f32| point(b.origin.x + b.size.width * f, b.origin.y + b.size.height / 2.0);
+    w.cx.simulate_mouse_down(at(0.0), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_move(at(0.5), Some(MouseButton::Left), Modifiers::default());
+    w.cx.simulate_mouse_up(at(0.5), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let (from, to) = w.shell.read_with(w.cx, |s, _| s.audio_selection()).unwrap();
+    assert!((from - 1.0).abs() < 0.02 && (to - 2.0).abs() < 0.02, "{from} {to}");
+    w.press(Role::Button, "Herauszoomen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.audio_view()), (0.0, 4.0));
+    // „Ausschnitt behalten“: only the second second is left.
+    w.press(Role::Button, "Ausschnitt behalten");
+    w.settle();
+    assert!((w.frames() as f64 - 8000.0).abs() < 200.0, "{}", w.frames());
+    // The keys: Strg+Z takes it back, Strg+Umschalt+Z does it again.
+    w.cx.simulate_keystrokes("ctrl-z");
+    w.draw();
+    assert_eq!(w.frames(), 32000);
+    w.cx.simulate_keystrokes("ctrl-shift-z");
+    w.draw();
+    assert!((w.frames() as f64 - 8000.0).abs() < 200.0);
+    // „Zurück zum Original“.
+    w.press(Role::Button, "Zurück zum Original");
+    assert_eq!(w.frames(), 32000);
+    // Tempo by tapping: four taps give a number.
+    for _ in 0..4 {
+        w.cx.simulate_keystrokes("t");
+        std::thread::sleep(std::time::Duration::from_millis(120));
+    }
+    w.press(Role::Button, "Werkzeug Tonhöhe und Tempo");
+    assert!(w.said(" BPM"), "{:?}", w.labels().into_iter().filter(|l| l.contains("BPM") || l.contains("tippen")).collect::<Vec<_>>());
+}
