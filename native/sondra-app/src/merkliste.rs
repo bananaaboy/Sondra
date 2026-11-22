@@ -79,6 +79,8 @@ pub struct MerkState {
     pub frame_drag: Option<crate::merk_edit::FrameDrag>,
     /// „Folge n abspielen“ as a stream: the series being looked up, and what it said.
     pub streaming: Option<String>,
+    /// „Nächste Folgen laden …“ is open for this series.
+    pub next_open: Option<String>,
     pub stream_said: Option<String>,
     /// The list as it was before a file was read in, to take it back.
     pub before_import: Option<(Vec<Item>, Removed)>,
@@ -179,6 +181,7 @@ impl MerkState {
             add_more: None,
             frame_drag: None,
             streaming: None,
+            next_open: None,
             stream_said: None,
             series_more: false,
             checking: None,

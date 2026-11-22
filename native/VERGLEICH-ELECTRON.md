@@ -46,7 +46,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
 | ✓ | **Grosses Cover** im Kopf der Serie | Nativ seit 21.11.2026, dazu Quelle, „zuletzt …“, Stand, Sterne, Tags und Notiz |
-| ◐ | **„Folge n laden“ / „Nächste Folgen laden …“** (übergibt Adresse, Staffel, Folge und Einstellungen an „Herunterladen“) | „Folge n laden“ nativ seit 21.11.2026 (unter „Mehr“, öffnet „Herunterladen“ mit der Adresse der Folge); „Nächste Folgen laden …“ fehlt noch |
+| ✓ | **„Folge n laden“ / „Nächste Folgen laden …“** (übergibt Adresse, Staffel, Folge und Einstellungen an „Herunterladen“) | Nativ seit 22.11.2026 beides unter „Mehr“: „Nächste Folgen laden …“ bietet die nächste, 3, 5 oder alle offenen Folgen an und gibt sie mit den Einstellungen der Serie als Liste an „Herunterladen“ |
 | ✓ | **Als Stream abspielen** ohne Download („Folge sofort ohne vorherigen Download im Player abspielen“) | Nativ seit 22.11.2026: liegt die Folge in keinem Ordner, spielt „Folge n abspielen“ sie von ihrer Adresse (die beste Quelle, mit Referer des Hosters); nichts wird gespeichert, ab 90 % wird abgehakt |
 | ✓ | **Einstellungen je Serie zum Laden**: „Laden als“ (Video mit Ton / Nur Ton), Sprache (Deutsch synchronisiert, OmU, englische Untertitel, beste Fassung), Qualität (bis 4K, 320/192/128 kbps), „Untertitel dazu erstellen“ | Nativ seit 22.11.2026 im Formular „Bearbeiten“ unter „Herunterladen“ (gilt sofort, reist mit der Liste); „Folge n laden“ nimmt sie mit |
 | ✓ | **„Online nach Neuem suchen“** als Knopf auf der Serie | Nativ seit 21.11.2026 unter „Mehr“ |
@@ -242,7 +242,7 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✓ **„Nur offene Folgen“**.
 - ✓ **Ordner-Pille** („Ordner mit Folgen wählen“).
 - ✓ **Wo die Liste liegt**: „Nur auf diesem Gerät gespeichert. Über Google Drive teilen es alle Ihre Geräte.“
-- ◐ **„Mehr“ einer Serie**: „Folge n laden“, „Nächste Folgen laden …“, „Online nach Neuem suchen“, „Empfehlen“. **Nativ seit 21.11.2026:** „Folge n laden“, „Online nach Neuem suchen“, „Empfehlen“, „Von der Merkliste entfernen“; „Nächste Folgen laden …“ fehlt noch.
+- ✓ **„Mehr“ einer Serie**: „Folge n laden“, „Nächste Folgen laden …“, „Online nach Neuem suchen“, „Empfehlen“. **Nativ seit 21.11.2026:** „Folge n laden“, „Online nach Neuem suchen“, „Empfehlen“, „Von der Merkliste entfernen“; „Nächste Folgen laden …“ seit 22.11.2026.
 - ◐ **Staffelkarten** mit Cover und „10 von 39, weiter mit Folge 11“. Ein Klick klappt die Folgen auf, jede mit ihrer Dauer („Folge 1, gesehen (47 Min.)“). Dazu ein Zähler „Anzahl Folgen“, „Noch 29 Folgen (11,6 Std.) · fertig bei 1/Tag: So., 20. Dez.“ und „Folge 11 laden“ je Staffel. Für die Filme gibt es „Filme bearbeiten: Anzahl, Name, Cover“. **Nativ seit 21.11.2026:** je Staffel „Staffel bearbeiten“ mit Fenster: Cover, „n Folgen gesehen“, „Weiter mit Folge n“, „Hier weiterschauen“, Abhaken (mit Umschalt bis dort), „Alle gesehen“, „Zurücksetzen“, Anzahl, Name, Cover, „In Teile teilen“, Staffel entfernen und Ausnahmen der Dauer. Noch fehlt: die Karte selbst mit Cover und Dauer je Folge.
 - ✓ **Planer**: das Ziel als Staffel (Auswahl) und Folge (−/+), „am Tag“ oder „pro Woche“, ein Datumsfeld „Bis zum“ und „Als Ziel merken“. Danach steht oben „Ziel: Staffel 4, Folge 39 — noch 29 Folgen“ und beim Planer „Steht auf der Merkliste bei dieser Serie.“
 

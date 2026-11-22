@@ -1231,6 +1231,16 @@ impl Shell {
                 })
             }).into_any_element());
         }
+        if !item.url.trim().is_empty() && !sondra_merk::progress::caught_up(&seasons_of(item)) {
+            let (me, id) = (me.clone(), item.id.clone());
+            items.push(ui.menu_item("naechste-folgen-laden", "Nächste Folgen laden …", false).on_click(move |_, app| {
+                let id = id.clone();
+                Shell::merk_do(&me, app, move |m| {
+                    m.series_more = false;
+                    m.next_open = Some(id);
+                })
+            }).into_any_element());
+        }
         if sondra_extract::aniworld::is_aniworld_url(&item.url) {
             let (me, id) = (me.clone(), item.id.clone());
             let busy = self.merk.checking.is_some();

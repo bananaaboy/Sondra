@@ -1120,6 +1120,18 @@ fn a_series_keeps_how_it_is_loaded_and_folge_laden_takes_it_along(cx: &mut TestA
     w.press(Role::MenuItem, "Folge 4 laden");
     let (audio, _, kbps, subtitles, language) = w.cx.read_entity(&w.shell, |s, _| s.download_settings_now());
     assert_eq!((audio, kbps, subtitles, language.as_str()), (true, Some(192), true, "3"), "„Herunterladen“ loads it the series' way");
+
+    // „Nächste Folgen laden …“: a few or all open episodes go to „Herunterladen“ as a list.
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Merkliste, cx));
+    w.draw();
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Nächste Folgen laden …");
+    assert!(w.tree().find(Role::Dialog, "Nächste Folgen laden").is_some());
+    assert!(w.tree().find(Role::Button, "Alle offenen Folgen (25)").is_some(), "4 to 28");
+    w.press(Role::Button, "Nächste 3 Folgen (4–6)");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Downloader);
+    let typed = w.cx.update(|_, app| w.shell.read(app).download_input_now(app));
+    assert_eq!(typed, "https://aniworld.to/anime/stream/frieren/staffel-1/episode-4, https://aniworld.to/anime/stream/frieren/staffel-1/episode-5, https://aniworld.to/anime/stream/frieren/staffel-1/episode-6");
 }
 
 #[gpui::test]

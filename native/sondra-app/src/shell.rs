@@ -1276,6 +1276,7 @@ impl Render for Shell {
                 }
                 self.edit_overlay(ui, cx)
                     .or_else(|| self.season_overlay(ui, cx))
+                    .or_else(|| self.next_episodes_overlay(ui, cx))
                     .or_else(|| self.stats_overlay(ui, cx))
                     .or_else(|| self.share_overlay(ui, cx))
                     .or_else(|| self.anytype_overlay(ui, cx))

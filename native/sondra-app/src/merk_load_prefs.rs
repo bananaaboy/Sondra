@@ -7,6 +7,7 @@ use gpui::{div, prelude::*, px, AnyElement, Context};
 use sondra_merk::Item;
 use sondra_ui::Ui;
 
+
 use crate::download_options::{DownloadOptions, What};
 use crate::shell::Shell;
 
@@ -84,7 +85,84 @@ pub fn prefs_of(o: &DownloadOptions, language: &str) -> serde_json::Value {
     })
 }
 
+/// The episodes still open from where a season stands: up to its end, or the next five when its length is unknown.
+pub fn open_episodes(season: &sondra_merk::Season) -> Vec<i64> {
+    let from = sondra_merk::progress::season_progress(season).next.max(1);
+    match season.episodes {
+        Some(total) => (from..=total).filter(|e| !season.watched.contains(e)).collect(),
+        None => (from..from + 5).collect(),
+    }
+}
+
 impl Shell {
+    /// „Nächste Folgen laden …“: the first `count` open episodes of the season the series stands at go to
+    /// „Herunterladen“ as a list, with the series' settings; „Alle laden“ there loads them.
+    pub fn load_next_episodes(&mut self, id: &str, count: usize, cx: &mut Context<Self>) {
+        let Some(item) = self.merk.items.iter().find(|i| i.id == id) else { return };
+        let Some(season) = sondra_merk::progress::seasons_of(item).into_iter().find(|s| s.number == item.season) else { return };
+        let addresses: Vec<String> = open_episodes(&season).into_iter().take(count).map(|e| crate::merk_edit::episode_address(&item.url, season.number, e)).collect();
+        if addresses.is_empty() {
+            return;
+        }
+        self.merk.next_open = None;
+        self.take_series_prefs(id);
+        self.go(crate::nav::Panel::Downloader, cx);
+        self.download_set_input(&addresses.join(", "), cx);
+        self.find_address(cx);
+    }
+
+    /// The window of „Nächste Folgen laden …“.
+    pub(crate) fn next_episodes_overlay(&self, ui: Ui, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let id = self.merk.next_open.clone()?;
+        let item = self.merk.items.iter().find(|i| i.id == id)?;
+        let season = sondra_merk::progress::seasons_of(item).into_iter().find(|s| s.number == item.season)?;
+        let open = open_episodes(&season);
+        let first = *open.first()?;
+        let me = cx.entity();
+        let unit = if season.number == 0 { "Film" } else { "Folge" };
+        let mut offers: Vec<(usize, String, bool)> = Vec::new();
+        let place = if season.number == 0 { format!("Film {first}") } else { format!("Staffel {}, Folge {first}", season.number) };
+        offers.push((1, format!("Nächste Folge ({place})"), false));
+        for n in [3usize, 5] {
+            if open.len() >= n - 1 && open.len() > 1 {
+                offers.push((n, format!("Nächste {n} Folgen ({first}–{})", open[(n - 1).min(open.len() - 1)]), false));
+            }
+        }
+        if open.len() > 1 {
+            offers.push((open.len(), format!("Alle offenen Folgen ({})", open.len()), true));
+        }
+        let mut choices = div().flex().flex_col().gap(px(8.)).child(ui.prose(format!("Wie viele von „{}“ (ab {unit} {first}) sollen in die Warteschlange von „Herunterladen“?", item.title)));
+        for (n, label, primary) in offers {
+            let (me, id) = (me.clone(), id.clone());
+            let button = ui.button(format!("naechste-{n}"), label).on_click(move |_, app| {
+                let id = id.clone();
+                me.update(app, |shell, cx| shell.load_next_episodes(&id, n, cx))
+            });
+            choices = choices.child(if primary { button.primary() } else { button.ghost() });
+        }
+        let close = me.clone();
+        let away = me.clone();
+        Some(
+            ui.dialog("naechste-folgen", "Nächste Folgen laden")
+                .width(520.)
+                .child(choices)
+                .action(ui.button("naechste-abbrechen", "Abbrechen").ghost().on_click(move |_, app| close.update(app, |shell, cx| {
+                    shell.merk.next_open = None;
+                    cx.notify();
+                })))
+                .on_close(move |_, app| away.update(app, |shell, cx| {
+                    shell.merk.next_open = None;
+                    cx.notify();
+                }))
+                .into_any_element(),
+        )
+    }
+
+    /// For tests: what stands in the field of „Herunterladen“.
+    pub fn download_input_now(&self, cx: &gpui::App) -> String {
+        self.download.input.read(cx).text().to_string()
+    }
+
     /// For tests: what „Herunterladen“ is set to: what to load, the height, kbit/s, subtitles after, the language.
     pub fn download_settings_now(&self) -> (bool, Option<u32>, Option<u32>, bool, String) {
         let o = &self.download.options;
