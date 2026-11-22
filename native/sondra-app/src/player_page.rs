@@ -76,7 +76,13 @@ pub struct PlayerState {
     pub activity: std::time::Instant,
     track: usize,
     /// The subtitles of a file beside the film, and which source is shown.
-    external_cues: Vec<Cue>,
+    pub(crate) external_cues: Vec<Cue>,
+    /// The name of a subtitle file chosen by hand.
+    pub subtitle_name: Option<String>,
+    /// The clock shows what is left, not what has run (a click on it).
+    pub show_remaining: bool,
+    /// What „Als Cover festlegen“ said.
+    pub cover_said: Option<String>,
     pub subtitle: Subtitle,
     pub subtitle_error: Option<String>,
     /// The film ended on „Ende des Titels“: it stays ended, the next one does not begin.
@@ -172,6 +178,9 @@ impl PlayerState {
             activity: std::time::Instant::now(),
             track: 0,
             external_cues: Vec::new(),
+            subtitle_name: None,
+            show_remaining: false,
+            cover_said: None,
             subtitle: Subtitle::Off,
             subtitle_error: None,
             stay_ended: false,
@@ -196,7 +205,7 @@ impl PlayerState {
         }
     }
 
-    fn current_path(&self) -> Option<&PathBuf> {
+    pub(crate) fn current_path(&self) -> Option<&PathBuf> {
         self.queue.get(self.index)
     }
 
@@ -227,6 +236,8 @@ impl PlayerState {
         self.error = None;
         self.cues.clear();
         self.external_cues.clear();
+        self.subtitle_name = None;
+        self.cover_said = None;
         self.subtitle = Subtitle::Off;
         self.subtitle_error = None;
         self.tracks_open = false;
@@ -1025,7 +1036,11 @@ impl Shell {
         } else {
             controls = controls.child(toggle);
         }
-        controls = controls.child(div().font_family(family::VALUE).text_size(px(size::SMALL)).text_color(c.prose).child(format!("{} / {}", clock(position), if duration > 0.0 { clock(duration) } else { "—".into() })));
+        {
+            let me = me.clone();
+            let remaining = p.show_remaining;
+            controls = controls.child(ui.button("zeit", p.time_text(position, duration)).small().ghost().accessible_name(if remaining { "Restzeit — umschalten auf Laufzeit" } else { "Laufzeit — umschalten auf Restzeit" }).on_click(move |_, app| Self::player_do(&me, app, move |p| p.show_remaining = !remaining)));
+        }
         let rate_button = {
             let me = me.clone();
             let rate = playback.rate();
@@ -1131,7 +1146,22 @@ impl Shell {
             let on = self.pip_open();
             ui.chip("bild-im-bild", "Bild im Bild", on).accessible_name(if on { "Bild im Bild beenden" } else { "Bild im Bild" }).on_click(move |_, app| me.update(app, |shell, cx| shell.pip_switch(cx)))
         };
-        let bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(look_button).child(marks_button).child(sleep_button).child(sizes).child(pin).child(pip).child(mute).child(volume);
+        let mut bottom = div().flex().flex_wrap().items_center().gap(px(14.)).child(rate_button).child(tracks_button).child(look_button).child(marks_button).child(sleep_button).child(sizes).child(pin).child(pip).child(mute).child(volume);
+        {
+            let is_video = p.current_path().and_then(|f| f.file_name()).and_then(|f| player_kind(&f.to_string_lossy(), "")) == Some(Kind::Video);
+            let (sound, film) = (me.clone(), me.clone());
+            bottom = bottom.child(ui.button("im-ton-editor", "Im Ton-Editor öffnen").small().ghost().on_click(move |_, app| sound.update(app, |shell, cx| shell.player_open_in(crate::nav::Panel::Audio, cx))));
+            if is_video {
+                bottom = bottom.child(ui.button("im-video-editor", "Im Video-Editor öffnen").small().ghost().on_click(move |_, app| film.update(app, |shell, cx| shell.player_open_in(crate::nav::Panel::Video, cx))));
+                if self.player_series().is_some() {
+                    let me = me.clone();
+                    bottom = bottom.child(ui.button("als-cover", "Als Cover festlegen").small().ghost().accessible_name("Dieses Bild als Cover der Serie auf der Merkliste festlegen").on_click(move |_, app| me.update(app, |shell, cx| shell.player_still_as_cover(cx))));
+                }
+            }
+            if let Some(said) = &p.cover_said {
+                bottom = bottom.child(ui.hint(said.clone()));
+            }
+        }
         if immersive {
             // The picture is all there is. The controls lie over its foot and go when nobody asks for them.
             let dialogs = p.marks_open || p.sleep_open || p.tracks_open || p.look_open;
@@ -1497,7 +1527,12 @@ impl Shell {
             }
             if !p.external_cues.is_empty() {
                 let me = me.clone();
-                chips = chips.child(ui.chip("untertitel-datei", "Datei neben dem Film", p.subtitle == Subtitle::File).on_click(move |_, app| Self::player_do(&me, app, |p| p.choose_subtitle(Subtitle::File))));
+                let label = p.subtitle_name.clone().unwrap_or_else(|| "Datei neben dem Film".into());
+                chips = chips.child(ui.chip("untertitel-datei", label, p.subtitle == Subtitle::File).on_click(move |_, app| Self::player_do(&me, app, |p| p.choose_subtitle(Subtitle::File))));
+            }
+            {
+                let me = me.clone();
+                chips = chips.child(ui.button("untertitel-laden", "Datei laden …").small().ghost().accessible_name("Untertitel-Datei laden (.srt, .vtt)").on_click(move |_, app| me.update(app, |shell, cx| shell.player_choose_subtitle_file(cx))));
             }
             for stream in playback.probe().streams.iter().filter(|s| s.kind == "subtitle") {
                 let me = me.clone();
@@ -1624,10 +1659,20 @@ impl Shell {
                 first: n == 0,
                 tile: None,
                 selected: current,
-                body: vec![
-                    div().flex_1().min_w(px(0.)).child(ui.value(label)).into_any_element(),
-                    div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(says).into_any_element(),
-                ],
+                body: {
+                    let mut body = vec![
+                        div().flex_1().min_w(px(0.)).child(ui.value(label.clone())).into_any_element(),
+                        div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(says).into_any_element(),
+                    ];
+                    if n != p.index {
+                        let (next, out) = (me.clone(), me.clone());
+                        if n != p.index + 1 {
+                            body.push(ui.button(format!("als-naechstes-{n}"), "Als Nächstes").small().ghost().accessible_name(format!("{label} als Nächstes")).on_click(move |_, app| Self::player_do(&next, app, move |p| p.queue_next(n))).into_any_element());
+                        }
+                        body.push(ui.button(format!("aus-liste-{n}"), "Entfernen").small().ghost().accessible_name(format!("{label} aus der Liste nehmen")).on_click(move |_, app| Self::player_do(&out, app, move |p| p.queue_remove(n))).into_any_element());
+                    }
+                    body
+                },
                 keys_pass: false,
                 on_open: std::rc::Rc::new(move |_, app| Self::player_do(&me, app, move |p| p.start(n))),
             });

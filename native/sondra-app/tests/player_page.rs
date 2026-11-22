@@ -243,6 +243,46 @@ fn a_file_named_like_an_episode_is_ticked_off_at_ninety_percent_and_can_be_taken
     w.watch(0.5);
     let stored = read_shared(&std::fs::read(&list).unwrap(), &mut Ids::system()).unwrap();
     assert_eq!(stored.items[0].seasons.as_ref().unwrap()[0].watched, vec![1], "taken back, it stays taken back");
+    // The picture of the moment becomes the cover of the series.
+    w.press(Role::Button, "Dieses Bild als Cover der Serie auf der Merkliste festlegen");
+    let limit = std::time::Instant::now() + Duration::from_secs(20);
+    while std::time::Instant::now() < limit && !w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("jetzt das Cover von „Frieren“"))) {
+        w.cx.run_until_parked();
+        w.watch(0.1);
+    }
+    let cover = w.shell.read_with(w.cx, |s, _| s.merk_items()[0].cover.clone()).unwrap_or_default();
+    assert!(cover.starts_with("data:image/jpeg;base64,"), "{} — {:?}", &cover[..cover.len().min(40)], w.tree().nodes.iter().filter_map(|n| n.label.as_ref().map(|l| l.to_string())).filter(|l| l.contains("Cover") || l.contains("Bild")).collect::<Vec<_>>());
+}
+
+#[gpui::test]
+fn the_list_is_edited_the_clock_turns_round_a_subtitle_is_loaded_by_hand_and_the_film_goes_to_an_editor(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3).map(|n| film(tmp.path(), &format!("Clip {n}.mp4"), 3)).collect();
+    let srt = tmp.path().join("eigene.srt");
+    std::fs::write(&srt, "1\n00:00:00,100 --> 00:00:02,500\nVon Hand.\n").unwrap();
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(files.clone(), cx));
+    w.watch(0.4);
+    // „Als Nächstes“ puts the third right after the first; the one that plays has no such buttons.
+    assert!(w.tree().find(Role::Button, "Clip 1.mp4 als Nächstes").is_none());
+    w.press(Role::Button, "Clip 3.mp4 als Nächstes");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Clip 1.mp4", "Clip 3.mp4", "Clip 2.mp4"]);
+    w.press(Role::Button, "Clip 2.mp4 aus der Liste nehmen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Clip 1.mp4", "Clip 3.mp4"]);
+    // The clock: a click shows what is left.
+    w.press(Role::Button, "Laufzeit — umschalten auf Restzeit");
+    assert!(w.tree().find(Role::Button, "Restzeit — umschalten auf Laufzeit").is_some());
+    // A subtitle file by hand.
+    w.shell.update(w.cx, |s, cx| s.player_load_subtitle(&srt, cx)).unwrap();
+    w.watch(0.2);
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.player_cues()), 1);
+    // Into the sound editor: the file goes there by the session, and the film here pauses.
+    w.press(Role::Button, "Im Ton-Editor öffnen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Audio);
+    assert!(w.shell.read_with(w.cx, |s, _| s.session_files()).contains(&files[0]));
 }
 
 #[gpui::test]

@@ -96,11 +96,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ✗ | **Feste Länge des Vorspanns** einstellen (Zahnrad → Vorspann), **„Für diese Folge ausblenden“** | — |
 | ✓ | **Tasten** S (Vorspann), N (Nächste Folge), P (Vorherige), C (Untertitel an/aus), **Umschalt + ←/→ zu den Lesezeichen** | ◐ Umschalt + ←/→ gibt es. S, N, P, C fehlen |
 | ✓ | **A-B-Schleife** | Nativ seit 22.11.2026 unter „Bild und Ton“ → Wiedergabe |
-| ✗ | **Standbild als Merkliste-Cover** („Als Cover festlegen“) | — |
-| ✗ | **„Im Ton-Editor öffnen“ / „Im Video-Editor öffnen“** aus dem Player | — |
-| ✗ | **Warteschlange bearbeiten**: „Als Nächstes“, „Aus der Liste nehmen“, „Vorheriges“ | Die Liste ersetzt sich beim nächsten Abspielen |
-| ✗ | **Untertitel-Datei von Hand laden** (.srt/.vtt über einen Dateidialog) | Untertitel kommen nur aus einer Datei neben dem Film oder aus Spuren im Film |
-| ✗ | **Laufzeit/Restzeit umschalten** (Klick auf die Zeit) | — |
+| ✓ | **Standbild als Merkliste-Cover** („Als Cover festlegen“) | Nativ seit 22.11.2026 (bei einer Folge einer Serie der Merkliste, 720 px, JPEG) |
+| ✓ | **„Im Ton-Editor öffnen“ / „Im Video-Editor öffnen“** aus dem Player | Nativ seit 22.11.2026: über die Sitzung, der Film hier hält an |
+| ✓ | **Warteschlange bearbeiten**: „Als Nächstes“, „Aus der Liste nehmen“, „Vorheriges“ | Nativ seit 22.11.2026 („Zurück“ war schon da) |
+| ✓ | **Untertitel-Datei von Hand laden** (.srt/.vtt über einen Dateidialog) | Nativ seit 22.11.2026 („Ton und Untertitel“ → „Datei laden …“) |
+| ✓ | **Laufzeit/Restzeit umschalten** (Klick auf die Zeit) | Nativ seit 22.11.2026 |
 | ✗ | **Kapitel auf der Zeitleiste** (aus der Datei) beim Darüberfahren | — |
 | ◐ | Entzerrer: Electron hat eine eigene Schublade mit Fader-Ansicht und Listenansicht und einen Schalter zum Umgehen (Bypass) | Fünf Bänder und fünf Voreinstellungen sind im Fenster „Bild und Ton“, die Schublade und Bypass fehlen |
 | ✓ | Kino, Fenster füllen, Vollbild, Bild im Bild, Immer im Vordergrund, Qualität, Tonspur, Untertitel (Grösse, Grund), Bild (Einpassen/Füllen/Strecken, Helligkeit, Kontrast, Sättigung, Spiegeln), Verstärkung bis 300 %, Nachtmodus, Karaoke, Visualizer, Schlaf-Timer, Lesezeichen, Kapitel kopieren, Weiter bei, Abhaken ab 90 % | nativ da |
