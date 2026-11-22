@@ -10,6 +10,7 @@ pub mod convert_page;
 pub mod download_options;
 pub mod download_more;
 pub mod download_page;
+pub mod download_season;
 pub mod drive_hub;
 pub mod covers;
 pub mod crop_ui;

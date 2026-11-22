@@ -68,6 +68,8 @@ pub struct DownloadState {
     pub language: String,
     /// What „Stream sofort abspielen“ said when it could not.
     pub stream_said: Option<String>,
+    /// A season or series page that was found: its episodes to choose among.
+    pub season: Option<crate::download_season::SeasonChoice>,
     /// More than one address was pasted: what was found behind each, waiting to be loaded in turn.
     pub queue: Vec<Found>,
     /// Loading the queue: the next one starts when this one is done.
@@ -247,6 +249,7 @@ impl DownloadState {
             allow_private: false,
             language: String::new(),
             stream_said: None,
+            season: None,
             queue: Vec::new(),
             running_queue: false,
             failed: Vec::new(),
@@ -307,6 +310,7 @@ impl Shell {
         d.error = None;
         d.offer_tool = None;
         d.found = None;
+        d.season = None;
         d.queue.clear();
         d.failed.clear();
         if addresses.len() > 1 {
@@ -337,15 +341,23 @@ impl Shell {
             cx,
             {
                 let address = address.clone();
-                move || find_or_portal(factory().as_ref(), &address, &language, &ytdlp_dir, system)
+                move || {
+                    let fetch = factory();
+                    // A season or series page is a list of episodes to choose among, not one to load.
+                    if let Some(season) = crate::download_season::look_at_season(fetch.as_ref(), address.trim()) {
+                        return Ok(Err(Box::new(season)));
+                    }
+                    find_or_portal(fetch.as_ref(), &address, &language, &ytdlp_dir, system).map(Ok)
+                }
             },
             move |shell, answer, cx| {
                 let d = &mut shell.download;
                 d.finding = false;
                 match answer {
+                    Ok(Err(season)) => d.season = Some(*season),
                     // One source is shown for loading; several (a list of videos) wait as a list.
-                    Ok(mut found) if found.len() == 1 => d.found = found.pop(),
-                    Ok(found) => d.queue = found,
+                    Ok(Ok(mut found)) if found.len() == 1 => d.found = found.pop(),
+                    Ok(Ok(found)) => d.queue = found,
                     Err((error, can_fetch)) => {
                         d.error = Some(error);
                         // Fetching yt-dlp is offered, never done by itself.
@@ -691,6 +703,11 @@ impl Shell {
                     .child(ui.prose("Mit yt-dlp, einem freien Programm, lassen sich viele weitere Seiten laden. Sondra holt es nur auf Ihren Klick von yt-dlp selbst (rund 18 MB) und prüft es gegen die veröffentlichte Prüfsumme. Danach läuft es auf diesem Computer; die Adresse geht an die Seite, bei der das Video liegt."))
                     .child(div().flex().child(ui.button("ytdlp-laden", if d.installing { "Lädt yt-dlp …" } else { "yt-dlp laden" }).primary().disabled(d.installing).on_click(move |_, app| me_install.update(app, |shell, cx| shell.install_ytdlp(cx))))),
             );
+        }
+
+        // A season page: its episodes to choose among.
+        if let Some(card) = self.season_card(&ui, cx) {
+            work = work.child(card);
         }
 
         // What was found.

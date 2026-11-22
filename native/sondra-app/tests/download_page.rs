@@ -407,3 +407,43 @@ fn a_loaded_file_goes_into_the_session_is_kept_under_zuletzt_and_links_come_from
     let field = w.tree().find(Role::TextInput, "Adresse").and_then(|n| n.value.as_ref().map(|v| v.to_string())).unwrap_or_default();
     assert!(field.contains("/a.mp3") && field.contains("/b.mp3"), "{field}");
 }
+
+#[gpui::test]
+fn a_season_page_shows_its_episodes_to_choose_one_from_one_or_all(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let row = |n: u32| format!(r#"<tr data-episode-id="{n}"><td><meta itemprop="episodeNumber" content="{n}" /><a href="/anime/stream/frieren/staffel-1/episode-{n}">Folge {n}</a></td></tr>"#);
+    let page = format!(
+        r#"<div class="series-title"><h1 itemprop="name"><span>Frieren</span></h1></div><a href="/anime/stream/frieren/staffel-1">1</a><a href="/anime/stream/frieren/staffel-2">2</a><a href="/anime/stream/frieren/filme">Filme</a>{}{}{}"#,
+        row(1),
+        row(2),
+        row(3)
+    );
+    let mut w = open(cx, tmp.path());
+    let pages = page.clone();
+    w.shell.update(w.cx, |shell, _| {
+        shell.download_with(
+            Arc::new(move || Box::new(sondra_extract::testing::Pages::new(&[("https://aniworld.to/anime/stream/frieren", pages.as_str()), ("https://aniworld.to/anime/stream/frieren/staffel-1", pages.as_str())]))),
+            true,
+            tmp.path().to_path_buf(),
+        )
+    });
+    w.type_address("https://aniworld.to/anime/stream/frieren");
+    w.press(Role::Button, "Suchen");
+    for _ in 0..80 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.cx.read_entity(&w.shell, |s, _| s.download_season_now()).is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.download_season_now()), Some(("Frieren".to_string(), 3, 2, true)), "a series page is a list of episodes, with its seasons and films");
+    assert!(w.tree().find(Role::Button, "Staffel 2").is_some() && w.tree().find(Role::Button, "Filme").is_some());
+    assert!(w.tree().find(Role::Button, "Laden").is_none(), "nothing to load as one");
+    w.press(Role::Button, "Folge 2 wählen");
+    assert!(w.tree().find(Role::Button, "Folge 2 laden").is_some());
+    w.press(Role::Button, "Ab Folge 2 laden (2)");
+    let typed = w.cx.update(|_, app| w.shell.read(app).download_input_now(app));
+    assert_eq!(typed, "https://aniworld.to/anime/stream/frieren/staffel-1/episode-2, https://aniworld.to/anime/stream/frieren/staffel-1/episode-3");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.download_season_now()), None, "the list goes on as a list of addresses");
+}
