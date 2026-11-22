@@ -36,6 +36,26 @@ impl Shell {
         self.player.queue.clone()
     }
 
+    /// „Stream sofort abspielen“ in „Herunterladen“: what was found plays at once, nothing is saved.
+    pub fn download_stream_now(&mut self, cx: &mut Context<Self>) {
+        let Some(found) = self.download.found.clone() else { return };
+        match best_stream(&found) {
+            Ok(stream) => {
+                let name = match &found {
+                    Found::Episode(ep) if ep.season > 0 => shown_name(&ep.series_title, ep.season as i64, ep.episode as i64),
+                    _ => format!("{}.mp4", stream.title.chars().map(|c| if r#"\/:*?"<>|"#.contains(c) { ' ' } else { c }).collect::<String>().trim()),
+                };
+                let shown = std::env::temp_dir().join("sondra-stream").join(name);
+                sondra_playback::register_stream(&shown, &stream.url, &stream.referer);
+                self.download.stream_said = None;
+                self.go(crate::nav::Panel::Player, cx);
+                self.play_files(vec![shown], cx);
+            }
+            Err(why) => self.download.stream_said = Some(why),
+        }
+        cx.notify();
+    }
+
     /// Plays the episode the series stands at, from its address, without loading it first.
     pub fn merk_stream_here(&mut self, id: &str, cx: &mut Context<Self>) {
         let Some(item) = self.merk.items.iter().find(|i| i.id == id) else { return };

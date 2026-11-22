@@ -115,7 +115,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ✓ | **AniWorld-Sprache**: Ger-Dub, Ger-Sub (OmU), Eng-Sub, Auto | Rust nimmt die erste verfügbare Fassung |
 | ✓ | **Dateinamen**: wie eine Office-Datei / neutral (`media_…`) / nur Zeichen | — |
 | ✗ | **„Wie viele gleichzeitig laden“** | — |
-| ◐ | **Was danach geschieht**: in die Sitzung legen, „Sofort als Datei speichern & zusätzlich in die Sitzung“, **direkt in Google Drive (ohne Sitzung)**, **„Nach Download sofort im Player abspielen“**, **„Stream sofort abspielen“** (abspielen, während geladen wird) | Nativ seit 22.11.2026: „In die Sitzung legen“, „Sofort abspielen“, „Untertitel erstellen“, „Direkt in Google Drive“ (die Datei liegt immer auch im Download-Ordner). „Stream sofort abspielen“ fehlt noch |
+| ✓ | **Was danach geschieht**: in die Sitzung legen, „Sofort als Datei speichern & zusätzlich in die Sitzung“, **direkt in Google Drive (ohne Sitzung)**, **„Nach Download sofort im Player abspielen“**, **„Stream sofort abspielen“** (abspielen, während geladen wird) | Nativ seit 22.11.2026: „In die Sitzung legen“, „Sofort abspielen“, „Untertitel erstellen“, „Direkt in Google Drive“ (die Datei liegt immer auch im Download-Ordner), und seit 22.11.2026 „Stream sofort abspielen“ neben „Laden“ (der Player liest die Quelle, nichts wird gespeichert) |
 | ✓ | **„Untertitel erstellen“ nach dem Laden** | Nativ seit 22.11.2026 (über das Werkzeug „Untertitel“) |
 | ✗ | **„Auf die Merkliste setzen“** mit Staffel, Folge und Einstellungen | — |
 | ✗ | **Folgenwähler**: „Staffel und Folge wählen“, „Stelle in der Liste wählen“, „Die ganze Staffel laden“, „Alle Filme laden“, „Ganz gesehen“ | ◐ Es gibt „Alle laden“ und die Quellen einzeln |

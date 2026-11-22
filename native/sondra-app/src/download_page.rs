@@ -66,6 +66,8 @@ pub struct DownloadState {
     pub allow_private: bool,
     /// The language chosen among those the page offers (its code), or none: the site's own order.
     pub language: String,
+    /// What „Stream sofort abspielen“ said when it could not.
+    pub stream_said: Option<String>,
     /// More than one address was pasted: what was found behind each, waiting to be loaded in turn.
     pub queue: Vec<Found>,
     /// Loading the queue: the next one starts when this one is done.
@@ -226,6 +228,7 @@ impl DownloadState {
             fetch: Arc::new(|| Box::new(UreqFetch::default())),
             allow_private: false,
             language: String::new(),
+            stream_said: None,
             queue: Vec::new(),
             running_queue: false,
             failed: Vec::new(),
@@ -716,8 +719,16 @@ impl Shell {
                     card = card.child(languages);
                 }
             }
-            let me3 = me.clone();
-            card = card.child(div().flex().child(ui.button("laden", "Laden").primary().disabled(d.job.is_some()).on_click(move |_, app| me3.update(app, |shell, cx| shell.start_download(cx)))));
+            let (me3, me4) = (me.clone(), me.clone());
+            let mut buttons = div().flex().flex_wrap().items_center().gap(px(8.)).child(ui.button("laden", "Laden").primary().disabled(d.job.is_some()).on_click(move |_, app| me3.update(app, |shell, cx| shell.start_download(cx))));
+            // „Stream sofort abspielen“: the player reads the source itself, nothing is saved.
+            if !matches!(found, Found::Portal { .. }) {
+                buttons = buttons.child(ui.button("stream-abspielen", "Stream sofort abspielen").accessible_name("Stream sofort abspielen, ohne zu laden").on_click(move |_, app| me4.update(app, |shell, cx| shell.download_stream_now(cx))));
+            }
+            if let Some(said) = &d.stream_said {
+                buttons = buttons.child(ui.hint(said.clone()));
+            }
+            card = card.child(buttons);
             work = work.child(card);
         }
 

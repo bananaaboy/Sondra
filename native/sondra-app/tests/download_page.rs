@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use accesskit::{Action, ActionRequest, TreeId};
-use gpui::{point, px, size, AvailableSpace, Entity, TestAppContext, VisualTestContext};
+use gpui::{point, px, size, AppContext as _, AvailableSpace, Entity, TestAppContext, VisualTestContext};
 use sondra_a11y::{attach_sink, run_action, Role, Snapshot};
 use sondra_app::nav::Panel;
 use sondra_app::shell::Shell;
@@ -139,6 +139,17 @@ fn an_address_of_a_file_is_found_loaded_into_the_folder_and_offered_to_play(cx: 
     w.draw();
     assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2, "an existing file is never replaced: the second got a number");
     assert_eq!(std::fs::metadata(tmp.path().join("lied.mp3")).unwrap().len(), 300_000);
+
+    // „Stream sofort abspielen“: the player reads the address, nothing is saved.
+    w.type_address(&format!("{base}/film.mp4"));
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    w.press(Role::Button, "Stream sofort abspielen, ohne zu laden");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Player);
+    let shown = w.cx.read_entity(&w.shell, |s, _| s.player_queue_now());
+    assert_eq!(sondra_playback::source_of(&shown[0]).0, std::path::PathBuf::from(format!("{base}/film.mp4")));
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2, "nothing was saved");
 }
 
 #[gpui::test]
