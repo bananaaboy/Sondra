@@ -73,6 +73,8 @@ pub struct MerkState {
     /// What „Suchen“ found for the name typed.
     pub add_found: Option<crate::anilist::Media>,
     pub add_searching: bool,
+    /// „Mehr Angaben“ when adding, while it is open.
+    pub add_more: Option<crate::merk_add_more::AddMore>,
     /// The list as it was before a file was read in, to take it back.
     pub before_import: Option<(Vec<Item>, Removed)>,
     /// Progress made since the account on AniList was last told (the shell sends it, when the person asked for that).
@@ -169,6 +171,7 @@ impl MerkState {
             tracker: Vec::new(),
             edit: None,
             season_window: None,
+            add_more: None,
             series_more: false,
             checking: None,
             checked_said: None,
@@ -567,10 +570,10 @@ impl Shell {
             if let Some(media) = &state.add_found {
                 page = page.child(ui.value(format!("{}{}{}", media.title, media.season_year.map_or(String::new(), |y| format!(" ({y})")), media.episodes.map_or(String::new(), |n| format!(" — {n} Folgen")))));
             }
-            // „Wie weit sind Sie?“: not begun, or the episode to watch next.
+            // „Wie weit sind Sie?“: not begun, or the episode to watch next (the long form asks it its own way).
             let (new, less, more) = (me.clone(), me.clone(), me.clone());
             let n = state.add_next;
-            page = page.child(
+            page = page.when(state.add_more.is_none(), |page| page.child(
                 div()
                     .flex()
                     .flex_wrap()
@@ -581,7 +584,8 @@ impl Shell {
                     .child(ui.button("add-weniger", "Eine Folge weniger").small().disabled(n <= 1).on_click(move |_, app| Self::merk_do(&less, app, |m| m.add_next = (m.add_next - 1).max(1))))
                     .child(ui.value(if n <= 1 { "Folge 1".to_string() } else { format!("Schon angefangen: weiter mit Folge {n}") }))
                     .child(ui.button("add-mehr", "Eine Folge mehr").small().on_click(move |_, app| Self::merk_do(&more, app, |m| m.add_next = (m.add_next + 1).min(999)))),
-            );
+            ));
+            page = page.child(self.add_more_section(&ui, cx));
         }
 
         if state.items.is_empty() {

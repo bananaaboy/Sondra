@@ -183,6 +183,54 @@ fn an_empty_list_says_what_to_do_and_a_typed_name_becomes_a_series(cx: &mut Test
 }
 
 #[gpui::test]
+fn more_details_when_adding_give_seasons_where_one_is_tags_and_a_stand(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, None, dir.path());
+    w.press(Role::Button, "Eine Serie eintippen");
+    let field = w.tree().find(Role::TextInput, "Name der neuen Serie").unwrap().id;
+    w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: field, data: None }, window, cx));
+    w.cx.simulate_input("https://aniworld.to/anime/stream/frieren/staffel-2/episode-4");
+    w.draw();
+    w.press(Role::Button, "Mehr Angaben: Staffeln, Cover, Tags …");
+    assert!(w.tree().find(Role::Button, "Eine Folge mehr").is_none(), "the long form asks where one is its own way");
+    w.shell.update(w.cx, |shell, cx| {
+        let f = |n: &str| shell.add_more_field(n).unwrap();
+        assert_eq!(f("at_season").read(cx).text(), "2", "the address names the season");
+        assert_eq!(f("at_episode").read(cx).text(), "4");
+        f("counts").update(cx, |t, cx| t.set_text("28, 12", cx));
+        f("tags").update(cx, |t, cx| t.set_text("Anime, #Favorit", cx));
+        f("films").update(cx, |t, cx| t.set_text("1", cx));
+    });
+    w.draw();
+    w.press(Role::Button, "Start-Status Pausiert");
+    w.press(Role::Button, "Manga (5:7)");
+    w.press(Role::Button, "Auf die Merkliste");
+    let back = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    let item = &back.items[0];
+    assert!(item.title.to_lowercase().contains("frieren"), "{}", item.title);
+    let seasons = item.seasons.as_ref().unwrap();
+    assert_eq!(seasons[0].watched.len(), 28, "the season before counts as seen");
+    assert_eq!(seasons[1].watched, vec![1, 2, 3]);
+    assert!(seasons.iter().any(|s| s.number == 0 && s.episodes == Some(1)));
+    assert_eq!(item.tags.as_deref(), Some(&["Anime".to_string(), "Favorit".to_string()][..]));
+    assert_eq!(item.status, sondra_merk::Status::Paused);
+    assert_eq!(item.tile_format.as_deref(), Some("manga"));
+    assert_eq!(item.url, "https://aniworld.to/anime/stream/frieren/staffel-2/episode-4");
+    assert!(w.tree().find(Role::Button, "Auf die Merkliste").is_none(), "the form closes");
+
+    // A mistake stays in the form.
+    w.press(Role::Button, "Serie hinzufügen");
+    w.press(Role::Button, "Mehr Angaben: Staffeln, Cover, Tags …");
+    w.shell.update(w.cx, |shell, cx| {
+        shell.add_more_field("seasons").unwrap().update(cx, |t, cx| t.set_text("3", cx));
+        shell.add_more_field("counts").unwrap().update(cx, |t, cx| t.set_text("12, 13", cx));
+    });
+    w.draw();
+    w.press(Role::Button, "Auf die Merkliste");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Bitte einen Namen"))));
+}
+
+#[gpui::test]
 fn a_long_list_has_a_search_and_a_file_that_is_no_list_is_left_alone(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let mut w = open(cx, Some(&list(8)), dir.path());

@@ -63,6 +63,8 @@ pub enum CoverFor {
     Series,
     Season,
     Part(usize),
+    /// The long form when adding a series.
+    Add,
 }
 
 /// A change to a series from the form, already read and checked.
@@ -461,7 +463,7 @@ impl Shell {
         cx.notify();
     }
 
-    fn pick_cover(&mut self, target: CoverFor, cx: &mut Context<Self>) {
+    pub(crate) fn pick_cover(&mut self, target: CoverFor, cx: &mut Context<Self>) {
         let answer = cx.prompt_for_paths(gpui::PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(paths))) = answer.await {
@@ -498,6 +500,15 @@ impl Shell {
                         field.update(cx, |f, cx| f.set_text(String::new(), cx));
                     }
                     s.problem = problem;
+                }
+            }
+            CoverFor::Add => {
+                if let Some(m) = &mut self.merk.add_more {
+                    if picked.is_some() {
+                        m.picked = picked;
+                        m.cover.update(cx, |f, cx| f.set_text(String::new(), cx));
+                    }
+                    m.problem = problem;
                 }
             }
             CoverFor::Series => {

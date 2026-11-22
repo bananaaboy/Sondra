@@ -34,7 +34,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 ### Serie hinzufügen und bearbeiten
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **„Mehr Angaben“ beim Hinzufügen**: Staffeln, Folgen je Staffel, Filme, Cover, Tags, Status | Es gibt ein Feld, „Wie weit sind Sie?“ und das Suchen bei AniList |
+| ✓ | **„Mehr Angaben“ beim Hinzufügen**: Staffeln, Folgen je Staffel, Filme, Cover, Tags, Status | Nativ seit 22.11.2026: unter dem Feld, mit Adresse (Staffel und Folge daraus), Tags, Cover (Adresse oder Bild vom Gerät), Poster/Manga, Start-Status, Staffeln, Folgen je Staffel oder unbekannt, Filme und „Gerade bei“ |
 | ✓ | **„Bearbeiten“ einer Serie**, das ganze Formular: Titel, Adresse, Zahl der Staffeln, Folgen je Staffel, Filme, **Minuten je Folge und je Film**, **Ausnahmen je Folge**, Vorspannlänge der Serie, Tags, **Bewertung (Sterne)**, **Notiz**, „Gerade bei Staffel/Folge“ | Nativ seit 21.11.2026 (Fenster „Serie bearbeiten“): Name, Adresse, Bewertung, Tags, Notiz, Minuten je Folge und je Film, Vorspann, Cover (Adresse oder Bild vom Gerät), Format. Staffelzahlen, Ausnahmen und „Gerade bei“ stehen im Staffelfenster |
 | ◐ | **Cover wählen**: aus einer Datei, über eine Adresse, „Cover & Staffeln abrufen“ (AniList) | Nativ seit 21.11.2026: Adresse oder „Bild vom Gerät“ (verkleinert auf 720 px). „Cover & Staffeln abrufen“ fehlt noch |
 | ✗ | **Ausschnitt des Covers** (`FrameEditor`: ziehen, Pfeiltasten, Zoom mit Plus/Minus) | Gezeichnet wird der Ausschnitt, ändern kann man ihn nicht |

@@ -31,6 +31,7 @@ pub mod anilist_window;
 pub mod lines;
 pub mod merk_dialogs;
 pub mod merk_drive;
+pub mod merk_add_more;
 pub mod merk_edit;
 pub mod merkliste;
 pub mod mic_page;
