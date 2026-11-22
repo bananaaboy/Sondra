@@ -50,11 +50,13 @@ pub struct DownloadOptions {
     pub direct_adjust: bool,
     /// How many addresses of a list are looked up at once (1–5).
     pub at_once: u8,
+    /// „Netzwerk“: the address of the adapter connections leave from; `None` is the system's choice.
+    pub network: Option<String>,
 }
 
 impl Default for DownloadOptions {
     fn default() -> Self {
-        DownloadOptions { what: What::Video, height: None, audio_kbps: Some(320), naming: Naming::Original, play_after: false, after_session: false, after_drive: false, after_subtitles: false, direct_adjust: false, at_once: 3 }
+        DownloadOptions { what: What::Video, height: None, audio_kbps: Some(320), naming: Naming::Original, play_after: false, after_session: false, after_drive: false, after_subtitles: false, direct_adjust: false, at_once: 3, network: None }
     }
 }
 
@@ -77,6 +79,13 @@ impl DownloadOptions {
         if let Some(mut store) = crate::store::FileStore::at_default("Herunterladen.json") {
             store.set_item(KEY, serde_json::to_string(self).unwrap_or_default());
         }
+    }
+
+    /// Makes the chosen adapter the one connections leave from (an address no longer there counts as automatic).
+    pub fn apply_network(&self) {
+        let chosen = self.network.as_deref().and_then(|a| a.parse::<std::net::IpAddr>().ok());
+        let there = chosen.filter(|ip| sondra_extract::net::adapters().iter().any(|a| a.address == *ip));
+        sondra_extract::net::set_bind_address(there);
     }
 
     /// What yt-dlp is to fetch.
@@ -217,8 +226,30 @@ impl crate::shell::Shell {
         )
     }
 
+    /// „Netzwerk“: automatic, or one of the adapters of this computer.
+    pub(crate) fn download_network_setting(&self, ui: &sondra_ui::Ui, cx: &mut gpui::Context<Self>) -> gpui::AnyElement {
+        use gpui::{div, prelude::*, px};
+        let now = self.download.options.network.clone();
+        let mut row = div().flex().flex_wrap().gap(px(6.));
+        {
+            let me = cx.entity();
+            row = row.child(ui.chip("netz-auto", "Automatisch (System)", now.is_none()).accessible_name("Netzwerk: Automatisch").on_click(move |_, app| me.update(app, |shell, cx| shell.set_download_options(|o| o.network = None, cx))));
+        }
+        for adapter in sondra_extract::net::adapters() {
+            let me = cx.entity();
+            let address = adapter.address.to_string();
+            let on = now.as_deref() == Some(address.as_str());
+            row = row.child(ui.chip(format!("netz-{address}"), format!("{} · {address}", adapter.name), on).accessible_name(format!("Netzwerk: {} ({address})", adapter.name)).on_click(move |_, app| {
+                let address = address.clone();
+                me.update(app, |shell, cx| shell.set_download_options(|o| o.network = Some(address), cx))
+            }));
+        }
+        ui.setting("Netzwerk", div().flex().flex_col().gap(px(8.)).child(row).child(ui.hint("Lädt über den gewählten Adapter, etwa ein Kabel neben dem WLAN. Automatisch nimmt, was das System wählt.")), None)
+    }
+
     pub(crate) fn set_download_options(&mut self, change: impl FnOnce(&mut DownloadOptions), cx: &mut gpui::Context<Self>) {
         change(&mut self.download.options);
+        self.download.options.apply_network();
         if self.download.options_kept {
             self.download.options.keep();
         }

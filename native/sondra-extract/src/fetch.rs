@@ -76,13 +76,15 @@ pub struct UreqFetch {
 impl Default for UreqFetch {
     fn default() -> Self {
         let base = |redirects: u32| {
-            ureq::Agent::config_builder()
-                .timeout_global(Some(Duration::from_secs(25)))
-                .http_status_as_error(false)
-                .max_redirects(redirects)
-                .max_redirects_will_error(false)
-                .build()
-                .into()
+            // From the adapter chosen under „Netzwerk“, if one is.
+            crate::net::agent(
+                ureq::Agent::config_builder()
+                    .timeout_global(Some(Duration::from_secs(25)))
+                    .http_status_as_error(false)
+                    .max_redirects(redirects)
+                    .max_redirects_will_error(false)
+                    .build(),
+            )
         };
         Self {
             following: base(10),

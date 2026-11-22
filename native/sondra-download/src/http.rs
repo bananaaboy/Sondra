@@ -10,7 +10,8 @@ use url::Url;
 use crate::DownloadError;
 
 pub(crate) fn agent(stall: Duration) -> ureq::Agent {
-    ureq::Agent::config_builder()
+    // From the adapter chosen under „Netzwerk“, if one is.
+    sondra_extract::net::agent(ureq::Agent::config_builder()
         .http_status_as_error(false)
         // Followed by hand, so that every hop is looked at.
         .max_redirects(0)
@@ -19,8 +20,7 @@ pub(crate) fn agent(stall: Duration) -> ureq::Agent {
         .timeout_recv_response(Some(Duration::from_secs(30)))
         // A stalled connection ends; time spent waiting for the bandwidth limit does not count.
         .timeout_per_read(Some(stall))
-        .build()
-        .into()
+        .build())
 }
 
 pub(crate) struct Opened {

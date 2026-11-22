@@ -120,7 +120,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ✓ | **„Auf die Merkliste setzen“** mit Staffel, Folge und Einstellungen | Nativ seit 22.11.2026: „Merken“ setzt Staffel und Folge der Adresse und die Einstellungen, mit denen gerade geladen wird |
 | ✓ | **Folgenwähler**: „Staffel und Folge wählen“, „Stelle in der Liste wählen“, „Die ganze Staffel laden“, „Alle Filme laden“, „Ganz gesehen“ | Nativ seit 22.11.2026: eine Serien- oder Staffelseite zeigt ihre Folgen als Nummern; „Folge n laden“, „Ab Folge n laden“, „Die ganze Staffel laden“ bzw. „Alle Filme laden“, die Staffeln und Filme als Pillen, fertig gesehene mit ✓ |
 | ✓ | **„Zuletzt geladen“** (Verlauf) | Nativ seit 22.11.2026: die letzten 30, mit Abspielen, Im Ordner zeigen, Wieder laden, Liste leeren |
-| ✗ | **Netzwerkadapter wählen** („Netzwerk: Automatisch (Windows-Standard)“) | — |
+| ✓ | **Netzwerkadapter wählen** („Netzwerk: Automatisch (Windows-Standard)“) | Nativ seit 22.11.2026: „Netzwerk“ in den Einstellungen von „Herunterladen“ — Automatisch oder ein Adapter dieses Computers; Nachschlagen und Laden verbinden sich dann von seiner Adresse (`sondra_extract::net`) |
 | ✓ | **Eine Datei mit Links ablegen** („Loslassen, um die Links aus der Datei zu übernehmen“) | Nativ seit 22.11.2026: .txt/.m3u/.csv ablegen oder „auswählen“ |
 | ✓ | **Hinweis auf erlaubtes Laden** („Bitte nur laden, was erlaubt ist“) | Nativ seit 22.11.2026 |
 | — | Brücke im Terminal, cobalt-Dienst, „Weitere Wege“, YouTube-Sperre im Browser | Unnötig: yt-dlp liegt jetzt dem Setup bei |

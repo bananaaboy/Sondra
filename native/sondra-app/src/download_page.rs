@@ -237,6 +237,8 @@ impl DownloadState {
             }
         })
         .detach();
+        let options = crate::download_options::DownloadOptions::load();
+        options.apply_network();
         DownloadState {
             input,
             folder: crate::store::downloads_dir(),
@@ -257,7 +259,7 @@ impl DownloadState {
             told: None,
             ytdlp_dir: crate::store::data_dir().unwrap_or_default(),
             ytdlp_releases: sondra_download::ytdlp::RELEASES.to_string(),
-            options: crate::download_options::DownloadOptions::load(),
+            options,
             options_kept: true,
             recent: crate::download_more::load_recent(),
             services_open: false,
@@ -281,6 +283,7 @@ impl Shell {
         self.download.ytdlp_system = false;
         // Nor on what was chosen here before; and what a test chooses is not kept.
         self.download.options = crate::download_options::DownloadOptions::default();
+        self.download.options.apply_network();
         self.download.options_kept = false;
     }
 
@@ -643,6 +646,7 @@ impl Shell {
             self.download_language_setting(&ui, cx),
             self.download_naming_setting(&ui, cx),
             self.download_direct_setting(&ui, cx),
+            self.download_network_setting(&ui, cx),
             self.download_after_setting(&ui, cx),
             ui.setting(
                 "Wenn es fertig ist",

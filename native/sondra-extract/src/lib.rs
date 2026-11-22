@@ -9,6 +9,7 @@ pub mod episode;
 pub mod fetch;
 pub mod hls;
 pub mod hosters;
+pub mod net;
 pub mod packer;
 pub mod stream;
 #[cfg(feature = "testing")]

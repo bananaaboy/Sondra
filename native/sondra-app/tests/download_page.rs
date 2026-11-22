@@ -184,6 +184,7 @@ fn a_pasted_list_is_found_address_by_address_and_loaded_in_turn(cx: &mut TestApp
     w.press(Role::Button, "1 gleichzeitig");
     assert_eq!(w.tree().find(Role::Button, "1 gleichzeitig").unwrap().toggled, Some(true));
     assert_eq!(w.tree().find(Role::Button, "Direkte Datei-Links: 1:1 übernehmen").unwrap().toggled, Some(true), "direct files come as they are");
+    assert_eq!(w.tree().find(Role::Button, "Netzwerk: Automatisch").unwrap().toggled, Some(true), "the system chooses the adapter unless asked");
     // Two files, one page with nothing behind it, and the first again: it counts once.
     w.shell.update(w.cx, |shell, cx| {
         shell.download_set_input(&format!("{base}/lied.mp3, {base}/lied.mp3?zweite=1; {base}/seite {base}/lied.mp3"), cx)
