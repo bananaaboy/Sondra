@@ -44,6 +44,67 @@ pub struct AddMore {
     pub manga: bool,
     pub status: Status,
     pub problem: Option<String>,
+    /// „Cover & Staffeln abrufen“: running, and what it said.
+    pub fetching: bool,
+    pub fetched: Option<String>,
+}
+
+/// What „Cover & Staffeln abrufen“ found, to fill into the form.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Filled {
+    pub title: Option<String>,
+    pub cover: Option<String>,
+    pub seasons: Option<i64>,
+    pub counts: Option<Vec<i64>>,
+    pub films: Option<i64>,
+}
+
+/// AniWorld's page first (seasons, films, cover, title), then AniList for what is still missing — as
+/// `fetchMetadataForInput` on the website.
+pub fn filled_from(online: Option<&sondra_extract::aniworld::OnlineInfo>, media: Option<&crate::anilist::Media>) -> Filled {
+    let mut out = Filled::default();
+    if let Some(info) = online {
+        if !info.series_title.trim().is_empty() {
+            out.title = Some(info.series_title.clone());
+        }
+        out.cover = info.cover_url.clone();
+        let mut regular: Vec<(i64, Option<i64>)> = info.seasons.iter().flatten().filter(|s| s.number > 0).map(|s| (i64::from(s.number), s.episodes.map(i64::from))).collect();
+        regular.sort();
+        if let Some(max) = regular.last().map(|s| s.0) {
+            out.seasons = Some(max);
+            out.counts = Some((1..=max).map(|n| regular.iter().find(|s| s.0 == n).and_then(|s| s.1).unwrap_or(12)).collect());
+        } else if info.max_season > 0 {
+            out.seasons = Some(i64::from(info.max_season));
+        }
+        out.films = info.seasons.iter().flatten().find(|s| s.number == 0).and_then(|s| s.episodes).map(i64::from).filter(|n| *n > 0);
+    }
+    if let Some(media) = media {
+        if out.cover.is_none() {
+            out.cover = media.cover_url.clone();
+        }
+        if out.counts.is_none() {
+            if let Some(n) = media.episodes {
+                out.seasons = Some(1);
+                out.counts = Some(vec![n]);
+            }
+        }
+    }
+    out
+}
+
+/// The sentence after fetching: „Geladen: 2 Staffeln (40 Folgen) + Cover“.
+pub fn fetched_sentence(f: &Filled) -> String {
+    match (&f.counts, &f.cover) {
+        (None, None) => "Dazu liess sich nichts finden. Die Angaben lassen sich von Hand eintragen.".into(),
+        (Some(c), cover) => format!(
+            "Geladen: {} {} ({} Folgen){}",
+            c.len(),
+            if c.len() == 1 { "Staffel" } else { "Staffeln" },
+            c.iter().sum::<i64>(),
+            if cover.is_some() { " + Cover" } else { "" }
+        ),
+        (None, Some(_)) => "Geladen: Cover".into(),
+    }
 }
 
 pub const STANDS: [(Status, &str); 5] = [(Status::Watching, "Am Schauen"), (Status::Later, "Später"), (Status::Paused, "Pausiert"), (Status::Done, "Fertig"), (Status::Dropped, "Abgebrochen")];
@@ -156,12 +217,68 @@ impl Shell {
             manga: false,
             status: Status::Watching,
             problem: None,
+            fetching: false,
+            fetched: None,
         };
         if is_address {
             let title = derive_link_title(&typed);
             self.merk.add.update(cx, |f, cx| f.set_text(title, cx));
         }
         self.merk.add_more = Some(more);
+        cx.notify();
+    }
+
+    /// „Cover & Staffeln abrufen“: asks AniWorld (for its address) and AniList (for the title), only on this click.
+    pub fn add_more_fetch(&mut self, cx: &mut Context<Self>) {
+        let Some(m) = self.merk.add_more.as_mut() else { return };
+        if m.fetching {
+            return;
+        }
+        let url = m.url.read(cx).text().trim().to_string();
+        let title = self.merk.add.read(cx).text().trim().to_string();
+        if url.is_empty() && title.is_empty() {
+            return;
+        }
+        m.fetching = true;
+        m.fetched = None;
+        let factory = self.download.fetch.clone();
+        Self::in_background(
+            cx,
+            move || {
+                let address = if url.is_empty() || url.starts_with("http") { url.clone() } else { format!("https://{url}") };
+                let online = if address.is_empty() { None } else { sondra_extract::aniworld::check_online_updates(factory().as_ref(), &address, true, chrono::Utc::now().timestamp_millis()) };
+                let name = online.as_ref().map(|o| o.series_title.clone()).filter(|t| !t.trim().is_empty()).unwrap_or_else(|| if title.is_empty() { derive_link_title(&address) } else { title.clone() });
+                let media = crate::anilist::search(&name, 1);
+                filled_from(online.as_ref(), media.as_ref())
+            },
+            |shell, filled, cx| {
+                let Some(m) = shell.merk.add_more.as_mut() else { return };
+                m.fetching = false;
+                m.fetched = Some(fetched_sentence(&filled));
+                let set = |f: &Entity<TextField>, text: String, cx: &mut Context<Shell>| f.update(cx, |f, cx| f.set_text(text, cx));
+                let (cover, seasons, counts, films) = (m.cover.clone(), m.seasons.clone(), m.counts.clone(), m.films.clone());
+                if let Some(c) = filled.cover {
+                    if cover.read(cx).text().trim().is_empty() && m.picked.is_none() {
+                        set(&cover, c, cx);
+                    }
+                }
+                if let Some(n) = filled.seasons {
+                    set(&seasons, n.to_string(), cx);
+                }
+                if let Some(c) = filled.counts {
+                    set(&counts, c.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", "), cx);
+                }
+                if let Some(n) = filled.films {
+                    set(&films, n.to_string(), cx);
+                }
+                if let Some(t) = filled.title {
+                    if shell.merk.add.read(cx).text().trim().is_empty() {
+                        shell.merk.add.update(cx, |f, cx| f.set_text(t, cx));
+                    }
+                }
+                cx.notify();
+            },
+        );
         cx.notify();
     }
 
@@ -275,11 +392,23 @@ impl Shell {
             cover_row = cover_row.child(ui.hint("Bild gewählt"));
         }
         let field = |w: f32, f: &Entity<TextField>| div().w(px(w)).child(f.clone());
+        let fetch_row = {
+            let me = me.clone();
+            let mut row = div().flex().flex_wrap().items_center().gap(px(10.)).child(
+                ui.button("neu-abrufen", if m.fetching { "Lädt …" } else { "Cover & Staffeln abrufen" })
+                    .small()
+                    .accessible_name("Cover & Staffeln abrufen")
+                    .disabled(m.fetching)
+                    .on_click(move |_, app| me.update(app, |shell, cx| shell.add_more_fetch(cx))),
+            );
+            row = row.child(ui.hint(m.fetched.clone().unwrap_or_else(|| "Fragt AniWorld (bei einer Adresse dort) und AniList nach dem Titel — nur auf diesen Klick.".into())));
+            row
+        };
         let mut body = div()
             .flex()
             .flex_col()
             .gap(px(16.))
-            .child(group("Adresse und Tags", div().flex().flex_wrap().gap(px(12.)).child(field(360., &m.url)).child(field(280., &m.tags)).into_any_element()))
+            .child(group("Adresse und Tags", div().flex().flex_col().gap(px(8.)).child(div().flex().flex_wrap().gap(px(12.)).child(field(360., &m.url)).child(field(280., &m.tags))).child(fetch_row).into_any_element()))
             .child(group("Cover und Format", div().flex().flex_col().gap(px(8.)).child(cover_row).child(shapes).into_any_element()))
             .child(group("Start-Status", stands.into_any_element()))
             .child(group(
@@ -350,6 +479,21 @@ mod tests {
         assert_eq!(seasons[1].watched, vec![1, 2, 3]);
         assert_eq!(item.url, "https://aniworld.to/anime/stream/frieren/staffel-2/episode-4");
         assert!(!item.title.is_empty());
+    }
+
+    #[test]
+    fn aniworld_gives_the_seasons_and_anilist_what_is_missing() {
+        use sondra_extract::aniworld::{OnlineInfo, SeasonCount};
+        let online = OnlineInfo { series_title: "Frieren".into(), max_season: 2, max_episode: 10, cover_url: None, description: None, has_movies: true, seasons: Some(vec![SeasonCount { number: 1, episodes: Some(28) }, SeasonCount { number: 2, episodes: Some(10) }, SeasonCount { number: 0, episodes: Some(1) }]), checked_at: 0 };
+        let media = crate::anilist::Media { id: 1, title: "Sousou no Frieren".into(), episodes: Some(28), status: None, cover_url: Some("https://c/x.jpg".into()), season_year: None };
+        let f = filled_from(Some(&online), Some(&media));
+        assert_eq!(f.counts, Some(vec![28, 10]));
+        assert_eq!((f.seasons, f.films), (Some(2), Some(1)));
+        assert_eq!(f.cover.as_deref(), Some("https://c/x.jpg"), "the cover from AniList when AniWorld had none");
+        assert_eq!(fetched_sentence(&f), "Geladen: 2 Staffeln (38 Folgen) + Cover");
+        let only = filled_from(None, Some(&media));
+        assert_eq!((only.seasons, only.counts), (Some(1), Some(vec![28])));
+        assert!(fetched_sentence(&filled_from(None, None)).starts_with("Dazu liess sich nichts"));
     }
 
     #[test]

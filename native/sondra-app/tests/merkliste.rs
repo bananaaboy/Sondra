@@ -652,6 +652,29 @@ fn suchen_asks_anilist_only_when_pressed_and_adds_the_series_with_its_length(cx:
     assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 1);
     w.press(Role::Button, "Hinzufügen");
     assert!(said(&w.tree(), Role::ListItem, "Frieren").contains("0/28. noch 28"), "{}", said(&w.tree(), Role::ListItem, "Frieren"));
+
+    // In the long form, „Cover & Staffeln abrufen“ asks on the click and fills in what it found.
+    w.press(Role::Button, "Serie hinzufügen");
+    let field = w.tree().find(Role::TextInput, "Name der neuen Serie").unwrap().id;
+    w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: field, data: None }, window, cx));
+    w.cx.simulate_input("Frieren");
+    w.draw();
+    w.press(Role::Button, "Mehr Angaben: Staffeln, Cover, Tags …");
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 1, "opening the form asks nobody");
+    w.press(Role::Button, "Cover & Staffeln abrufen");
+    for _ in 0..80 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Geladen"))) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 2);
+    w.shell.update(w.cx, |shell, cx| {
+        assert_eq!(shell.add_more_field("counts").unwrap().read(cx).text(), "28");
+        assert_eq!(shell.add_more_field("cover").unwrap().read(cx).text(), "https://example.invalid/c.jpg");
+    });
 }
 
 #[gpui::test]
