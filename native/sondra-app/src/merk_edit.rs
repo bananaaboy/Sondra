@@ -32,6 +32,25 @@ pub struct EditFields {
     /// A picture chosen on this computer, already made small (a data address).
     pub picked: Option<String>,
     pub problem: Option<String>,
+    /// The part of the cover the tile shows (`FrameEditor`), and where a drag on it began.
+    pub frame: Option<sondra_merk::CoverFrame>,
+    pub frame_drag: Option<(gpui::Point<gpui::Pixels>, sondra_merk::CoverFrame)>,
+}
+
+/// The frame in the middle, not zoomed.
+pub const CENTRE: sondra_merk::CoverFrame = sondra_merk::CoverFrame { x: 50.0, y: 50.0, zoom: 1.0 };
+
+/// The frame moved by a share of the tile (`dx`, `dy` in 0–1, as the picture is dragged) — dragged right, more of the
+/// left side shows. Whole percents, so a drag does not draw every fraction anew.
+pub fn frame_moved(start: sondra_merk::CoverFrame, dx: f64, dy: f64) -> sondra_merk::CoverFrame {
+    let travel = |zoom: f64| (zoom.max(1.0) * 1.5 - 1.0).max(0.25);
+    let at = |v: f64, d: f64| (v - d / travel(start.zoom) * 100.0).clamp(0.0, 100.0).round();
+    sondra_merk::CoverFrame { x: at(start.x, dx), y: at(start.y, dy), zoom: start.zoom }
+}
+
+/// The frame zoomed to `zoom` (1–3, in steps of 0.05).
+pub fn frame_zoomed(start: sondra_merk::CoverFrame, zoom: f64) -> sondra_merk::CoverFrame {
+    sondra_merk::CoverFrame { zoom: ((zoom * 20.0).round() / 20.0).clamp(1.0, 3.0), ..start }
 }
 
 /// What the window of one season holds while it is open.
@@ -78,6 +97,8 @@ pub struct Edit {
     pub film_duration: Option<i64>,
     pub opening: Option<i64>,
     pub cover: Option<String>,
+    /// The part of the cover the tile shows; `None` the middle.
+    pub frame: Option<sondra_merk::CoverFrame>,
     pub rating: i64,
     pub manga: bool,
 }
@@ -182,10 +203,9 @@ impl MerkState {
             item.episode_duration = edit.episode_duration;
             item.film_duration = edit.film_duration;
             item.opening = edit.opening;
-            if item.cover != edit.cover {
-                item.cover_frame = None;
-            }
             item.cover = edit.cover.filter(|c| !c.trim().is_empty());
+            // The frame belongs to the picture the form showed; the middle is no frame.
+            item.cover_frame = item.cover.as_ref().and(edit.frame).filter(|f| *f != CENTRE);
             item.rating = (edit.rating > 0).then_some(edit.rating.clamp(1, 5));
             item.tile_format = edit.manga.then(|| "manga".to_string());
         });
@@ -427,9 +447,103 @@ impl Shell {
             manga: item.tile_format.as_deref() == Some("manga"),
             picked: item.cover.clone().filter(|c| c.starts_with("data:")),
             problem: None,
+            frame: item.cover_frame,
+            frame_drag: None,
         };
         self.merk.edit = Some(fields);
         cx.notify();
+    }
+
+    /// Changes the frame of the cover in the form.
+    pub fn edit_frame(&mut self, change: impl FnOnce(sondra_merk::CoverFrame) -> sondra_merk::CoverFrame, cx: &mut Context<Self>) {
+        if let Some(f) = self.merk.edit.as_mut() {
+            f.frame = Some(change(f.frame.unwrap_or(CENTRE)));
+        }
+        cx.notify();
+    }
+
+    /// For tests: the frame the form holds.
+    pub fn edit_frame_now(&self) -> Option<sondra_merk::CoverFrame> {
+        self.merk.edit.as_ref().and_then(|f| f.frame)
+    }
+
+    /// The cover as the tile shows it, to drag into place, with buttons for the same (arrows, zoom, middle).
+    fn frame_editor(&self, ui: &Ui, f: &EditFields, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let typed = f.cover.read(cx).text().trim().to_string();
+        let src = if typed.is_empty() { f.picked.clone() } else { Some(typed) };
+        src.as_ref()?;
+        let (w, h) = (120.0f32, if f.manga { 168.0 } else { 180.0 });
+        let frame = f.frame.unwrap_or(CENTRE);
+        let picture = self.cover_element(cx, &src, Some(frame), w, h).unwrap_or_else(|| div().size_full().bg(ui.c.panel_mid).into_any_element());
+        let me = cx.entity();
+        let (down, moving, up, out) = (me.clone(), me.clone(), me.clone(), me.clone());
+        let tile = div()
+            .id("cover-ausschnitt")
+            .w(px(w))
+            .h(px(h))
+            .flex_none()
+            .rounded(px(radius::NAV))
+            .overflow_hidden()
+            .cursor_grab()
+            .child(picture)
+            .on_mouse_down(gpui::MouseButton::Left, move |e, _, app| down.update(app, |shell, _| {
+                if let Some(f) = shell.merk.edit.as_mut() {
+                    f.frame_drag = Some((e.position, f.frame.unwrap_or(CENTRE)));
+                }
+            }))
+            .on_mouse_move(move |e, _, app| moving.update(app, |shell, cx| {
+                let Some(f) = shell.merk.edit.as_mut() else { return };
+                let Some((from, start)) = f.frame_drag else { return };
+                let dx = f64::from(f32::from(e.position.x - from.x)) / f64::from(w);
+                let dy = f64::from(f32::from(e.position.y - from.y)) / f64::from(h);
+                let next = frame_moved(start, dx, dy);
+                if f.frame != Some(next) {
+                    f.frame = Some(next);
+                    cx.notify();
+                }
+            }))
+            .on_mouse_up(gpui::MouseButton::Left, move |_, _, app| up.update(app, |shell, _| {
+                if let Some(f) = shell.merk.edit.as_mut() {
+                    f.frame_drag = None;
+                }
+            }))
+            .on_mouse_up_out(gpui::MouseButton::Left, move |_, _, app| out.update(app, |shell, _| {
+                if let Some(f) = shell.merk.edit.as_mut() {
+                    f.frame_drag = None;
+                }
+            }));
+        let step = 0.1;
+        let button = |id: &str, label: &str, name: &str, change: fn(sondra_merk::CoverFrame, f64) -> sondra_merk::CoverFrame| {
+            let me = me.clone();
+            ui.button(id.to_string(), label.to_string()).small().ghost().accessible_name(name.to_string()).on_click(move |_, app| me.update(app, |shell, cx| shell.edit_frame(|f| change(f, step), cx)))
+        };
+        let controls = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .child(ui.hint("Ausschnitt: das Bild ziehen, oder:"))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(4.))
+                    .child(button("ausschnitt-links", "←", "Ausschnitt nach links", |f, s| frame_moved(f, s, 0.0)))
+                    .child(button("ausschnitt-rechts", "→", "Ausschnitt nach rechts", |f, s| frame_moved(f, -s, 0.0)))
+                    .child(button("ausschnitt-hoch", "↑", "Ausschnitt nach oben", |f, s| frame_moved(f, 0.0, s)))
+                    .child(button("ausschnitt-runter", "↓", "Ausschnitt nach unten", |f, s| frame_moved(f, 0.0, -s))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(4.))
+                    .child(button("ausschnitt-kleiner", "−", "Weniger zoomen", |f, _| frame_zoomed(f, f.zoom - 0.1)))
+                    .child(ui.value(format!("{} %", (frame.zoom * 100.0).round())))
+                    .child(button("ausschnitt-groesser", "+", "Mehr zoomen", |f, _| frame_zoomed(f, f.zoom + 0.1)))
+                    .child(button("ausschnitt-mitte", "Mitte", "Ausschnitt zurücksetzen", |_, _| CENTRE)),
+            );
+        Some(div().flex().flex_wrap().gap(px(16.)).child(tile).child(controls).into_any_element())
     }
 
     /// Reads the form; a mistake stays in the form and says what is wrong.
@@ -447,6 +561,7 @@ impl Shell {
                 film_duration: read_number(&text(&f.film_minutes), 1, 600, "Minuten pro Film")?,
                 opening: read_opening(&text(&f.opening))?,
                 cover: if cover_text.trim().is_empty() { f.picked.clone() } else { Some(cover_text.trim().to_string()) },
+                frame: f.frame,
                 rating: f.rating,
                 manga: f.manga,
             })
@@ -740,6 +855,7 @@ impl Shell {
                 cx.notify();
             })));
         }
+        let framer = self.frame_editor(&ui, f, cx);
         let shapes = {
             let (a, b) = (me.clone(), me.clone());
             div()
@@ -777,7 +893,7 @@ impl Shell {
                     .child(ui.hint("Leer heisst: die übliche Länge (24 Min. je Folge, 1:30 Vorspann). Folgen anderer Länge stehen im Fenster ihrer Staffel."))
                     .into_any_element(),
             ))
-            .child(group("Cover und Format", div().flex().flex_col().gap(px(10.)).child(cover_row).child(shapes).into_any_element()));
+            .child(group("Cover und Format", div().flex().flex_col().gap(px(10.)).child(cover_row).child(shapes).children(framer).into_any_element()));
         if let Some(p) = &f.problem {
             body = body.child(ui.notice(NoticeKind::Warning, p.clone()));
         }

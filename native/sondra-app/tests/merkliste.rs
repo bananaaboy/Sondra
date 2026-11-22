@@ -414,6 +414,23 @@ fn a_series_with_a_cover_gets_its_picture_on_the_shelf_and_in_the_list(cx: &mut 
     }
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_asked()), 2);
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.covers_ready()), 2);
+
+    // The part of the cover a tile shows is set in the form: zoom, move, and it travels with the list.
+    w.press(Role::ListItem, "Frieren");
+    w.press(Role::Button, "Bearbeiten");
+    assert!(w.tree().find(Role::Button, "Mehr zoomen").is_some(), "a cover has its frame to set");
+    w.press(Role::Button, "Mehr zoomen");
+    w.press(Role::Button, "Ausschnitt nach rechts");
+    let frame = w.cx.read_entity(&w.shell, |s, _| s.edit_frame_now()).unwrap();
+    assert!((frame.zoom - 1.6).abs() < 1e-9 && frame.x > 50.0, "{frame:?}");
+    w.press(Role::Button, "Speichern");
+    let back = read_shared(&std::fs::read(tmp.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    assert_eq!(back.items.iter().find(|i| i.id == "fr").unwrap().cover_frame, Some(frame));
+    w.press(Role::Button, "Bearbeiten");
+    w.press(Role::Button, "Ausschnitt zurücksetzen");
+    w.press(Role::Button, "Speichern");
+    let back = read_shared(&std::fs::read(tmp.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    assert_eq!(back.items.iter().find(|i| i.id == "fr").unwrap().cover_frame, None, "the middle is no frame");
 }
 
 #[gpui::test]
