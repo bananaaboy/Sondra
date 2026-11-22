@@ -61,6 +61,8 @@ pub struct SubtitlesState {
     pub made: Vec<PathBuf>,
     pub writing: bool,
     ticking: bool,
+    /// The line being corrected, and the field for it.
+    pub correcting: Option<(usize, gpui::Entity<sondra_ui::TextField>)>,
 }
 
 impl SubtitlesState {
@@ -78,6 +80,7 @@ impl SubtitlesState {
             made: Vec::new(),
             writing: false,
             ticking: false,
+            correcting: None,
         }
     }
 }
@@ -98,6 +101,55 @@ fn megabytes(bytes: u64) -> String {
 }
 
 impl Shell {
+    /// Opens one heard line for correcting.
+    pub fn subtitles_correct(&mut self, index: usize, cx: &mut Context<Self>) {
+        let Some(text) = self.subtitles.segments.get(index).map(|s| s.text.trim().to_string()) else { return };
+        let colors = self.mode.colors();
+        let field = cx.new(|cx| {
+            let mut f = sondra_ui::TextField::new(cx, colors, "Zeile korrigieren").max_chars(400);
+            f.set_text(text, cx);
+            f
+        });
+        cx.subscribe(&field, |shell: &mut Shell, _, event: &sondra_ui::FieldEvent, cx| match event {
+            sondra_ui::FieldEvent::Submitted => shell.subtitles_correct_done(true, cx),
+            sondra_ui::FieldEvent::Cancelled => shell.subtitles_correct_done(false, cx),
+            sondra_ui::FieldEvent::Changed => {}
+        })
+        .detach();
+        self.subtitles.correcting = Some((index, field));
+        cx.notify();
+    }
+
+    /// Takes the corrected line (or not); an emptied line is taken out.
+    pub fn subtitles_correct_done(&mut self, take: bool, cx: &mut Context<Self>) {
+        if let Some((index, field)) = self.subtitles.correcting.take() {
+            if take {
+                let text = field.read(cx).text().trim().to_string();
+                if text.is_empty() {
+                    if index < self.subtitles.segments.len() {
+                        self.subtitles.segments.remove(index);
+                    }
+                } else if let Some(segment) = self.subtitles.segments.get_mut(index) {
+                    segment.text = text;
+                }
+                self.subtitles.made.clear();
+            }
+        }
+        cx.notify();
+    }
+
+    /// For tests: lines as if they had been heard.
+    pub fn subtitles_put_segments(&mut self, path: PathBuf, segments: Vec<Segment>, cx: &mut Context<Self>) {
+        self.subtitles.path = Some(path);
+        self.subtitles.segments = segments;
+        cx.notify();
+    }
+
+    /// For tests: the field of the line being corrected.
+    pub fn subtitles_correcting_field(&self) -> Option<gpui::Entity<sondra_ui::TextField>> {
+        self.subtitles.correcting.as_ref().map(|(_, f)| f.clone())
+    }
+
     pub(crate) fn choose_subtitles_file(&mut self, cx: &mut Context<Self>) {
         let answer = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
         cx.spawn(async move |this, cx| {
@@ -402,7 +454,11 @@ impl Shell {
             } else {
                 b = b.child(div().flex().child(ui.button("modell-laden", format!("Modell laden ({})", megabytes(model.bytes))).primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.subtitles_fetch(cx)))));
             }
-            return page.child(ui.tool_body(settings, work.child(b))).into_any_element();
+            // Lines heard before stay correctable and can be saved even without the model.
+            if s.segments.is_empty() {
+                return page.child(ui.tool_body(settings, work.child(b))).into_any_element();
+            }
+            work = work.child(b);
         }
 
         // Start, progress, stop.
@@ -411,19 +467,37 @@ impl Shell {
             run = run.child(ui.prose(status)).child(ui.bar("untertitel-fortschritt", Some(share as f32), "Fortschritt")).child(ui.hint(format!("{} abgehört", clock(done))));
             let me2 = me.clone();
             run = run.child(div().flex().child(ui.button("untertitel-abbrechen", "Abbrechen").small().on_click(move |_, app| me2.update(app, |shell, cx| shell.subtitles_cancel(cx)))));
-        } else {
+        } else if present {
             let me2 = me.clone();
             run = run.child(div().flex().child(ui.button("untertitel-erzeugen", if s.segments.is_empty() { "Untertitel erzeugen" } else { "Neu erzeugen" }).primary().on_click(move |_, app| me2.update(app, |shell, cx| shell.subtitles_start(cx)))));
         }
         work = work.child(run);
 
-        // What was heard, as cues, as it comes.
+        // What was heard, line by line — each can be corrected before it is saved.
         if !s.segments.is_empty() {
             let mut list = div().flex().flex_col().gap(px(4.));
-            for cue in to_cues(&s.segments) {
-                list = list.child(div().flex().gap(px(12.)).child(div().w(px(70.)).child(ui.value(clock(cue.start)))).child(div().flex_1().child(ui.prose(cue.text.replace('\n', " ")))));
+            for (n, segment) in s.segments.iter().enumerate() {
+                let mut line = div().flex().items_center().gap(px(12.)).child(div().w(px(70.)).flex_none().child(ui.value(clock(segment.start))));
+                match &s.correcting {
+                    Some((at, field)) if *at == n => {
+                        let (take, away) = (me.clone(), me.clone());
+                        line = line
+                            .child(div().w(px(420.)).child(field.clone()))
+                            .child(ui.button(format!("zeile-uebernehmen-{n}"), "Übernehmen").small().primary().on_click(move |_, app| take.update(app, |shell, cx| shell.subtitles_correct_done(true, cx))))
+                            .child(ui.button(format!("zeile-abbrechen-{n}"), "Abbrechen").small().ghost().on_click(move |_, app| away.update(app, |shell, cx| shell.subtitles_correct_done(false, cx))));
+                    }
+                    _ => {
+                        let me = me.clone();
+                        line = line.child(div().w(px(440.)).child(ui.prose(segment.text.trim().to_string())));
+                        if !running {
+                            line = line.child(ui.button(format!("zeile-korrigieren-{n}"), "Korrigieren").small().ghost().accessible_name(format!("Zeile bei {} korrigieren", clock(segment.start))).on_click(move |_, app| me.update(app, |shell, cx| shell.subtitles_correct(n, cx))));
+                        }
+                    }
+                }
+                list = list.child(line);
             }
-            work = work.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Gehört")).child(list));
+            let _ = to_cues;
+            work = work.child(div().flex().flex_col().gap(px(10.)).child(ui.subheading("Gehört")).child(ui.hint("Jede Zeile lässt sich korrigieren, bevor sie gespeichert wird.")).child(list));
             if !running {
                 let save = |id: &'static str, label: &str, kind: &'static str| {
                     let me = me.clone();

@@ -187,7 +187,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - — WebGPU (gibt es nativ nicht; Rust rechnet auf der CPU oder mit ONNX Runtime)
 
 ### Untertitel
-- ✗ **Jede Zeile vor dem Speichern korrigieren** (Rust speichert, was erkannt wurde)
+- ✓ **Jede Zeile vor dem Speichern korrigieren** (Rust speichert, was erkannt wurde)
 - ◐ „Noch einmal erkennen“ gibt es als „Neu erzeugen“
 
 ### Tonart

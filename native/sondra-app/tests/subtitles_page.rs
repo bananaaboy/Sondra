@@ -133,3 +133,39 @@ fn a_real_voice_becomes_subtitles_that_are_written_beside_the_file(cx: &mut Test
     assert!(srt.contains(" --> "));
     assert!(file.exists(), "the recording is untouched");
 }
+
+#[gpui::test]
+fn a_heard_line_is_corrected_before_it_is_saved(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let file = tmp.path().join("Gespräch.wav");
+    std::fs::write(&file, b"RIFF").unwrap();
+    let mut w = open(cx, tmp.path().join("Modelle"), "http://127.0.0.1:9".into(), file.clone());
+    w.shell.update(w.cx, |shell, cx| {
+        shell.subtitles_put_segments(
+            file.clone(),
+            vec![
+                sondra_speech::Segment { start: 0.0, end: 2.0, text: " Hallo Wellt".into() },
+                sondra_speech::Segment { start: 2.0, end: 4.0, text: " Das bleibt.".into() },
+            ],
+            cx,
+        )
+    });
+    w.draw();
+    assert!(w.labels().iter().any(|l| l.contains("Jede Zeile lässt sich korrigieren")));
+    w.press(Role::Button, "Zeile bei 0:00 korrigieren");
+    w.shell.update(w.cx, |shell, cx| shell.subtitles_correcting_field().unwrap().update(cx, |f, cx| f.set_text("Hallo Welt", cx)));
+    w.draw();
+    w.press(Role::Button, "Übernehmen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.subtitles_segments()[0].text.clone()), "Hallo Welt");
+    w.press(Role::Button, "Als SRT");
+    for _ in 0..100 {
+        w.cx.run_until_parked();
+        w.draw();
+        if tmp.path().join("Gespräch.srt").exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let srt = std::fs::read_to_string(tmp.path().join("Gespräch.srt")).unwrap();
+    assert!(srt.contains("Hallo Welt") && !srt.contains("Wellt"), "{srt}");
+}
