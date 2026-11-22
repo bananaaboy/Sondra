@@ -21,13 +21,16 @@ pub struct Trim {
     pub on: bool,
     /// „Welcher Befehl dabei läuft“ is open.
     pub command: bool,
+    /// „Ausschnitt vorhören“ plays.
+    pub hearing: Option<crate::clip_player::ClipPlayer>,
+    pub heard_said: Option<String>,
 }
 
 impl Trim {
     pub fn new(cx: &mut Context<Shell>, colors: sondra_ui::Colors) -> Trim {
         let from = cx.new(|cx| TextField::new(cx, colors, "Startzeit in Sekunden").value_face().placeholder("0").max_chars(12));
         let to = cx.new(|cx| TextField::new(cx, colors, "Endzeit in Sekunden").value_face().placeholder("Ende").max_chars(12));
-        Trim { from, to, on: false, command: false }
+        Trim { from, to, on: false, command: false, hearing: None, heard_said: None }
     }
 }
 
@@ -192,7 +195,21 @@ impl Shell {
             })))
         });
         if t.on {
-            cut = cut.child(div().flex().gap(px(8.)).child(div().w(px(140.)).child(t.from.clone())).child(div().w(px(140.)).child(t.to.clone())));
+            let me = me.clone();
+            let playing = t.hearing.is_some();
+            cut = cut.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(div().w(px(140.)).child(t.from.clone()))
+                    .child(div().w(px(140.)).child(t.to.clone()))
+                    .child(ui.button("ausschnitt-vorhoeren", if playing { "Anhalten" } else { "Ausschnitt vorhören" }).small().disabled(self.convert.files.is_empty()).accessible_name("Ausschnitt vorhören").on_click(move |_, app| me.update(app, |shell, cx| shell.convert_hear_trim(cx)))),
+            );
+            if let Some(said) = &t.heard_said {
+                cut = cut.child(ui.hint(said.clone()));
+            }
         }
         out.push(ui.setting("Zuschneiden", cut, Some(if t.on { "Start und Ende in Sekunden oder als 1:30; leer heisst vom Anfang bzw. bis zum Ende." } else { "Bildgenau und verlustarm, nur der gewählte Teil." })));
         out
@@ -230,5 +247,61 @@ mod tests {
         assert_eq!(read_seconds("12,5"), Some(12.5));
         assert_eq!(read_seconds("eins"), None);
         assert_eq!(read_seconds(""), None);
+    }
+}
+
+impl Shell {
+    /// „Ausschnitt vorhören“: the sound of the chosen part of the first file, decoded and played; again, it stops.
+    pub fn convert_hear_trim(&mut self, cx: &mut Context<Self>) {
+        if self.convert.trim.hearing.take().is_some() {
+            cx.notify();
+            return;
+        }
+        if let Err(e) = self.convert_read_trim(cx) {
+            self.convert.trim.heard_said = Some(e);
+            cx.notify();
+            return;
+        }
+        let Some(file) = self.convert.files.first().cloned() else { return };
+        let (start, end) = (self.convert.settings.trim_start_seconds.unwrap_or(0.0), self.convert.settings.trim_end_seconds);
+        self.convert.trim.heard_said = Some("Liest den Ausschnitt …".into());
+        cx.notify();
+        Self::in_background(
+            cx,
+            move || -> Result<sondra_media::audio::AudioData, String> {
+                let ff = sondra_media::Ffmpeg::locate().ok_or("FFmpeg ist nicht da.")?;
+                // At most a minute is heard: enough to check where it begins and ends.
+                let length = end.map_or(60.0, |e| (e - start).min(60.0)).max(0.1);
+                let out = std::process::Command::new(ff.program())
+                    .args(["-v", "error", "-nostdin", "-ss", &format!("{start:.3}"), "-t", &format!("{length:.3}"), "-i"])
+                    .arg(&file)
+                    .args(["-vn", "-ac", "2", "-ar", "48000", "-f", "f32le", "-"])
+                    .stdin(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .output()
+                    .map_err(|e| e.to_string())?;
+                let floats: Vec<f32> = out.stdout.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+                if floats.len() < 2 {
+                    return Err("In diesem Ausschnitt ist kein Ton.".into());
+                }
+                let (left, right): (Vec<f32>, Vec<f32>) = floats.chunks_exact(2).map(|p| (p[0], p[1])).unzip();
+                Ok(sondra_media::audio::AudioData { channels: vec![left, right], sample_rate: 48000 })
+            },
+            |shell, answer, cx| {
+                match answer {
+                    Ok(audio) => {
+                        let seconds = audio.seconds();
+                        shell.convert.trim.hearing = Some(crate::clip_player::ClipPlayer::start(&audio, 0.0, seconds));
+                        shell.convert.trim.heard_said = Some(format!("Spielt {} s.", format!("{seconds:.1}").replace('.', ",")));
+                    }
+                    Err(e) => shell.convert.trim.heard_said = Some(e),
+                }
+                cx.notify();
+            },
+        );
+    }
+
+    pub fn convert_hearing(&self) -> bool {
+        self.convert.trim.hearing.is_some()
     }
 }

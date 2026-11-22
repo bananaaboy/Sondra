@@ -249,6 +249,22 @@ fn a_cut_the_sample_rate_the_channels_and_the_depth_are_chosen_as_on_the_website
     let bytes = std::fs::metadata(&made).unwrap().len();
     // One second of 16-bit mono at 22,05 kHz, and a header.
     assert!((44_100..46_000).contains(&bytes), "{bytes}");
+    // The result says how it compares with the source.
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("% gegenüber Quelle")) || n.description.as_ref().is_some_and(|l| l.contains("% gegenüber Quelle"))));
+    // The cut can be heard first.
+    w.press(Role::Button, "Ausschnitt vorhören");
+    for _ in 0..200 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.shell.read_with(w.cx, |s, _| s.convert_hearing()) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(w.shell.read_with(w.cx, |s, _| s.convert_hearing()));
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "Spielt 1,0 s.")));
+    w.press(Role::Button, "Ausschnitt vorhören");
+    assert!(!w.shell.read_with(w.cx, |s, _| s.convert_hearing()));
 
     // For a video the picture's settings stand there.
     w.shell.update(w.cx, |shell, cx| shell.convert_choose_format("mp4", cx));

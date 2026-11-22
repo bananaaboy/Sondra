@@ -128,11 +128,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 ## 6. Werkzeuge
 
 ### Umwandeln
-- ◐ **Ausschnitt**: Start- und Endzeit (nativ seit 22.11.2026), „Ausschnitt vorhören“ fehlt noch
+- ✓ **Ausschnitt**: Start- und Endzeit und „Ausschnitt vorhören“ (nativ seit 22.11.2026)
 - ✓ **Video-Einstellungen in der Oberfläche** (nativ seit 22.11.2026): Qualität (CRF), Geschwindigkeit/Preset („Langsamer heisst kleiner“), Höhe („Wie Quelle“, 1080, 720 …), **Hochformat 9:16**, **Bildrate**. ⚙ `sondra-media::convert` kennt alle Felder, die Oberfläche bietet nur Vorlage, Format und die Bitrate für Ton
 - ✓ **Ton**: variable Bitrate, Bittiefe (16/24/32 Float) (nativ seit 22.11.2026)
 - ✓ **„Was FFmpeg gemeldet hat“** und **„Welcher Befehl dabei läuft“** (nativ seit 22.11.2026), aufklappbar bei einem Fehler
-- ✗ Größe gegenüber der Quelle („Gegenüber Quelle“)
+- ✓ Größe gegenüber der Quelle („+12 % gegenüber Quelle“, nativ seit 22.11.2026)
 
 ### Video
 - ✓ **Wellenform** auf der Zeitleiste (nativ seit 22.11.2026)
@@ -254,9 +254,9 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✗ **Einstellungen**: Fenster „Download-Einstellungen“ (siehe Abschnitt 5) und „Ton bei Fertigstellung abspielen“ samt Erklärung.
 
 **Umwandeln (mit Datei)**
-- ✗ **„Zielformat“** als Menü.
+- ✓ **„Zielformat“**: nativ als Pillen nach Art (dieselbe Wahl, ein Klick weniger).
 - ✓ **„Zuschneiden“**: nur einen Ausschnitt umwandeln.
-- ✗ **„Mehrere Dateien auf einmal“** als Schalter.
+- ✓ **„Mehrere Dateien auf einmal“**: nativ ohne Schalter — der Dialog nimmt mehrere, und alle gewählten werden umgewandelt.
 - ✓ **Abtastrate**: Wie Quelle, 22,05 / 32 / 44,1 / 48 kHz.
 - ✓ **Kanäle**: Wie Quelle, Mono, Stereo.
 

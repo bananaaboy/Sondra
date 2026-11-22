@@ -22,6 +22,8 @@ pub struct Made {
     pub result: Result<(PathBuf, u64), String>,
     /// What FFmpeg said when it failed, for „Was FFmpeg gemeldet hat“.
     pub detail: Option<String>,
+    /// How big the source was, for „gegenüber Quelle“.
+    pub source_bytes: u64,
 }
 
 pub struct Run {
@@ -188,7 +190,8 @@ impl Shell {
                         }
                     });
                 let stop = cancel.is_cancelled();
-                made.push(Made { from: name, result, detail });
+                let source_bytes = std::fs::metadata(file).map_or(0, |m| m.len());
+                made.push(Made { from: name, result, detail, source_bytes });
                 if stop {
                     break;
                 }
@@ -392,7 +395,11 @@ impl Shell {
                             Some(crate::drive_hub::Line::Failed(why)) => format!(" · Drive: {why}"),
                             _ => String::new(),
                         };
-                        (path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default(), format!("{} · {}{drive_note}", path.display(), size_text(*bytes)), Some(path.clone()))
+                        let against = (made.source_bytes > 0).then(|| {
+                            let change = (*bytes as f64 / made.source_bytes as f64 - 1.0) * 100.0;
+                            format!(" · {}{} % gegenüber Quelle", if change >= 0.0 { "+" } else { "−" }, change.abs().round() as i64)
+                        }).unwrap_or_default();
+                        (path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default(), format!("{} · {}{against}{drive_note}", path.display(), size_text(*bytes)), Some(path.clone()))
                     }
                     Err(message) => (
                         made.from.clone(),
