@@ -102,8 +102,12 @@ fn a_video_is_cut_cropped_sped_up_and_written_its_sound_pulled_out_and_a_still_s
     w.press(Role::Button, "Werkzeug Ausschnitt");
     w.press(Role::Button, "Seitenverhältnis 1:1");
     w.settle(10);
+    // The film has sound: its wave lies under the timeline.
+    assert!(w.cx.read_entity(&w.shell, |s, _| s.video_wave_len()) > 100, "the wave of the sound is on the timeline");
     w.press(Role::Button, "Werkzeug Tempo");
     w.press(Role::Button, "Tempo 2×");
+    // The finer slider says what comes out: 6 s kept at 2× are 3 s.
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "Länge danach: 0:03")), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).filter(|l| l.contains("Länge")).collect::<Vec<_>>());
     // Written as an MP4 at 480p-or-less.
     w.press(Role::Button, "Werkzeug Speichern");
     w.press(Role::Button, "Qualität 480p");

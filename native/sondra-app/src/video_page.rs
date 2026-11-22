@@ -80,6 +80,10 @@ pub struct VideoState {
     pub crop_drag: Option<sondra_media::crop_drag::Drag>,
     /// „Rückgängig“ and „Wiederholen“ over the settings.
     pub history: crate::ops_history::OpsHistory<VideoOps>,
+    /// The sound of the whole film as a row of peaks (0 to 1), drawn on the timeline.
+    pub wave: Vec<f32>,
+    /// When the last still was asked for while an end is dragged (they are asked for at most every 150 ms).
+    pub last_drag_still: Option<std::time::Instant>,
 }
 
 /// What a press on the timeline grabbed: the place, or one end of what stays.
@@ -92,7 +96,7 @@ pub enum TimelineDrag {
 
 impl VideoState {
     pub fn new() -> VideoState {
-        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None, stage_bounds: Rc::new(Cell::new(Bounds::default())), crop_bounds: Rc::new(Cell::new(Bounds::default())), crop_drag: None, history: Default::default() }
+        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None, stage_bounds: Rc::new(Cell::new(Bounds::default())), crop_bounds: Rc::new(Cell::new(Bounds::default())), crop_drag: None, history: Default::default(), wave: Vec::new(), last_drag_still: None }
     }
 }
 
@@ -150,7 +154,42 @@ impl Shell {
             },
             Err(e) => v.error = Some(e),
         }
+        if self.video.has_audio {
+            self.video_wave(cx);
+        }
         self.video_still(cx);
+    }
+
+    /// The sound of the film as peaks for the timeline, read away from the window (8 kHz mono is plenty for that).
+    fn video_wave(&mut self, cx: &mut Context<Self>) {
+        let Some(path) = self.video.file.clone() else { return };
+        Self::in_background(
+            cx,
+            move || -> Option<Vec<f32>> {
+                let ff = Ffmpeg::locate()?;
+                let audio = sondra_media::audio::decode_file(&ff, &path, Some(8000)).ok()?;
+                let mono = sondra_media::audio::mix_to_mono(&audio);
+                const COLUMNS: usize = 400;
+                if mono.is_empty() {
+                    return None;
+                }
+                let per = mono.len().div_ceil(COLUMNS).max(1);
+                let peaks: Vec<f32> = mono.chunks(per).map(|c| c.iter().fold(0f32, |m, v| m.max(v.abs()))).collect();
+                let top = peaks.iter().copied().fold(0f32, f32::max).max(1e-6);
+                Some(peaks.into_iter().map(|p| p / top).collect())
+            },
+            move |shell, wave, cx| {
+                if let Some(wave) = wave {
+                    shell.video.wave = wave;
+                }
+                cx.notify();
+            },
+        );
+    }
+
+    /// For tests: how many columns the timeline's wave has.
+    pub fn video_wave_len(&self) -> usize {
+        self.video.wave.len()
     }
 
     /// Makes the stage's still anew, in the background; the latest asked-for one wins.
@@ -399,6 +438,8 @@ impl Shell {
             (false, false) => None,
         };
         self.video.drag = Some(grab.unwrap_or(TimelineDrag::Place));
+        // The press itself asks for no still; the drag that follows does (and the release in any case).
+        self.video.last_drag_still = Some(std::time::Instant::now());
         self.timeline_move(x, cx);
     }
 
@@ -424,6 +465,12 @@ impl Shell {
             }
         }
         v.made.clear();
+        // While an end is dragged, the stage follows it — a still at most every 150 ms (the latest wins).
+        if matches!(drag, TimelineDrag::Start | TimelineDrag::End) && self.video.last_drag_still.is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(150)) {
+            self.video.last_drag_still = Some(std::time::Instant::now());
+            self.video_still(cx);
+            return;
+        }
         cx.notify();
     }
 
@@ -566,6 +613,15 @@ impl Shell {
         let measure = v.bounds.clone();
         let mut track = div().relative().h(px(52.)).w_full().bg(c.stage).rounded(px(sondra_ui::radius::NAV)).overflow_hidden();
         track = track.child(canvas(move |b, _, _| measure.set(b), |_, _, _, _| {}).absolute().size_full());
+        if !v.wave.is_empty() {
+            // The sound under everything, so a cut can be set at a pause.
+            let mut wave = div().absolute().top_0().left_0().size_full().flex().items_center();
+            for peak in &v.wave {
+                let h = (peak * 44.0).max(1.0);
+                wave = wave.child(div().flex_1().h(px(h)).bg(c.stage_ink).opacity(0.28));
+            }
+            track = track.child(wave);
+        }
         track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(ops.start))).w(gpui::relative(frac(end) - frac(ops.start))).bg(c.stage_accent).opacity(0.35));
         track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(ops.start))).w(px(4.)).bg(c.stage_accent));
         track = track.child(div().absolute().top_0().bottom_0().left(gpui::relative(frac(end))).ml(px(-4.)).w(px(4.)).bg(c.stage_accent));
@@ -671,7 +727,29 @@ impl Shell {
                     }, cx)))));
             }
             VTool::Speed => {
-                panel = panel.child(steps("Tempo", "vtempo", [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0].iter().map(|x| (*x, format!("{}×", format!("{x}").replace('.', ",")))).collect(), ops.speed, |o, x| o.speed = x)).child(toggle("v-rueckwaerts", "Rückwärts", ops.reverse, |o, on| o.reverse = on));
+                let fine = {
+                    let me = me.clone();
+                    let speed = ops.speed;
+                    // „Feiner“: 0,25× to 4× in steps of 0,05, the length after it beside.
+                    let after = ((end - ops.start).max(0.0)) / speed.max(0.01);
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(6.))
+                        .child(ui.hint("Feiner"))
+                        .child(
+                            ui.slider("vtempo-fein", "Tempo fein", ((speed - 0.25) / 3.75) as f32)
+                                .width(260.)
+                                .step((0.05 / 3.75) as f32)
+                                .says(format!("{}×", format!("{speed:.2}").trim_end_matches('0').trim_end_matches('.').replace('.', ",")))
+                                .on_change(move |x, _, app| {
+                                    let value = ((0.25 + f64::from(x) * 3.75) / 0.05).round() * 0.05;
+                                    me.update(app, |shell, cx| shell.video_patch(move |s| s.ops.speed = value.clamp(0.25, 4.0), cx))
+                                }),
+                        )
+                        .child(ui.value(format!("Länge danach: {}", clock(after))))
+                };
+                panel = panel.child(steps("Tempo", "vtempo", [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0].iter().map(|x| (*x, format!("{}×", format!("{x}").replace('.', ",")))).collect(), ops.speed, |o, x| o.speed = x)).child(fine).child(toggle("v-rueckwaerts", "Rückwärts", ops.reverse, |o, on| o.reverse = on));
             }
             VTool::Colour => {
                 let mut looks = div().flex().flex_wrap().gap(px(6.));

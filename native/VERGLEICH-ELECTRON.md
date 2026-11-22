@@ -135,9 +135,9 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✗ Größe gegenüber der Quelle („Gegenüber Quelle“)
 
 ### Video
-- ✗ **Wellenform** auf der Zeitleiste
+- ✓ **Wellenform** auf der Zeitleiste (nativ seit 22.11.2026)
 - ✓ **Rückgängig / Wiederholen** (Strg+Z) (nativ seit 22.11.2026)
-- ✗ Vorschau des Bildes beim Ziehen von Anfang und Ende
+- ✓ Vorschau des Bildes beim Ziehen von Anfang und Ende (nativ seit 22.11.2026, höchstens alle 150 ms ein Standbild)
 - ✓ Schnitt, Drehen, Spiegeln, Ausschnitt, Größe, Farbe, Looks, Schärfen, Entrauschen, Stabilisieren, Blenden, Tempo, Rückwärts, Ton unterlegen, Ton herausziehen, GIF, WebP, Standbild
 
 ### Ton-Editor
@@ -263,7 +263,7 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 **Video (mit Datei)**
 - ◐ **Rückgängig/Wiederholen** (nativ seit 22.11.2026) und **„Fertigstellen“** (nativ heisst es „Video speichern“).
 - ✗ **„Ton im Vorhören“** an/aus.
-- ✗ **Tempo „Feiner“** als Regler, mit „Länge danach“.
+- ✓ **Tempo „Feiner“** als Regler, mit „Länge danach“ (nativ seit 22.11.2026).
 
 **Bilder (mit Datei)**
 - ✓ **Rückgängig/Wiederholen** (nativ seit 22.11.2026).
