@@ -16,6 +16,8 @@ pub enum Source {
     Screen,
     /// A window, by its title.
     Window(String),
+    /// A window of the X display, by its id (Linux).
+    X11Window(u32),
 }
 
 /// The arguments that tell FFmpeg what to grab, for this computer.
@@ -23,14 +25,19 @@ pub fn input_args(source: &Source, fps: u32) -> Vec<String> {
     let fps = fps.to_string();
     if cfg!(windows) {
         let target = match source {
-            Source::Screen => "desktop".to_owned(),
+            Source::Screen | Source::X11Window(_) => "desktop".to_owned(),
             Source::Window(title) => format!("title={title}"),
         };
         ["-f", "gdigrab", "-framerate", &fps, "-draw_mouse", "1", "-i", &target].iter().map(|s| (*s).to_owned()).collect()
     } else {
-        // Where there is no Windows (a developer's machine): the X display, whole.
+        // Where there is no Windows: the X display, whole, or one window of it (`-window_id`).
         let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0.0".into());
-        ["-f", "x11grab", "-framerate", &fps, "-i", &display].iter().map(|s| (*s).to_owned()).collect()
+        let mut args: Vec<String> = ["-f", "x11grab", "-framerate", &fps, "-draw_mouse", "1"].iter().map(|s| (*s).to_owned()).collect();
+        if let Source::X11Window(id) = source {
+            args.extend(["-window_id".to_owned(), format!("0x{id:x}")]);
+        }
+        args.extend(["-i".to_owned(), display]);
+        args
     }
 }
 

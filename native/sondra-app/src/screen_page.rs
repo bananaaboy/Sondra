@@ -62,6 +62,15 @@ fn clock(seconds: f64) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+/// The source of a chosen window: by its title on Windows, by its id on the X display under Linux.
+fn window_source(title: &str) -> Source {
+    #[cfg(target_os = "linux")]
+    if let Some((id, _)) = crate::system::x11_windows().into_iter().find(|(_, t)| t == title) {
+        return Source::X11Window(id);
+    }
+    Source::Window(title.to_string())
+}
+
 impl Shell {
     /// For tests: what FFmpeg reads instead of the screen, and where the file goes.
     pub fn screen_with(&mut self, input: Vec<String>, out_dir: PathBuf) {
@@ -104,7 +113,7 @@ impl Shell {
         };
         let input = s.input.clone().unwrap_or_else(|| input_args(&match &s.what {
             What::Screen => Source::Screen,
-            What::Window(title) => Source::Window(title.clone()),
+            What::Window(title) => window_source(title),
         }, s.fps));
         let dir = std::env::temp_dir().join(format!("Sondra-Aufnahme-{}", std::process::id()));
         let recorder = match Recorder::start(&ffmpeg, &input, s.fps, &dir) {
@@ -270,7 +279,7 @@ impl Shell {
                 }
                 side = side.child(list);
                 if s.windows.is_empty() {
-                    side = side.child(ui.hint(if cfg!(windows) { "Kein Fenster gefunden. Öffnen Sie das Fenster und suchen Sie erneut." } else { "Fenster lassen sich nur unter Windows wählen." }));
+                    side = side.child(ui.hint(if cfg!(windows) { "Kein Fenster gefunden. Öffnen Sie das Fenster und suchen Sie erneut." } else if cfg!(target_os = "linux") { "Kein Fenster gefunden. Unter Wayland ohne X lässt sich nur der ganze Bildschirm aufnehmen." } else { "Fenster lassen sich unter Windows und Linux wählen; hier nimmt Sondra den ganzen Bildschirm auf." }));
                 }
                 side = side.child(div().flex().child(ui.button("fenster-suchen", "Erneut suchen").small().on_click(move |_, app| refresh.update(app, |sh, cx| sh.screen_refresh(cx)))));
             }

@@ -146,10 +146,53 @@ pub fn visible_windows() -> Vec<String> {
         let _ = unsafe { EnumWindows(Some(each), LPARAM(&mut titles as *mut Vec<String> as isize)) };
         titles
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        x11_windows().into_iter().map(|(_, title)| title).collect()
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         Vec::new()
     }
+}
+
+/// The windows of the X display that a window manager lists (`_NET_CLIENT_LIST`), with their titles. Empty without X.
+#[cfg(target_os = "linux")]
+pub fn x11_windows() -> Vec<(u32, String)> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+    let Ok((conn, screen)) = x11rb::connect(None) else { return Vec::new() };
+    let root = conn.setup().roots[screen].root;
+    let atom = |name: &str| conn.intern_atom(false, name.as_bytes()).ok().and_then(|c| c.reply().ok()).map(|r| r.atom);
+    let (Some(list), Some(name), Some(utf8)) = (atom("_NET_CLIENT_LIST"), atom("_NET_WM_NAME"), atom("UTF8_STRING")) else { return Vec::new() };
+    let listed = conn.get_property(false, root, list, AtomEnum::WINDOW, 0, 4096).ok().and_then(|c| c.reply().ok()).and_then(|r| r.value32().map(|v| v.collect::<Vec<u32>>())).filter(|v| !v.is_empty());
+    // Without a window manager there is no such list: the windows shown at the top of the tree.
+    let ids = match listed {
+        Some(ids) => ids,
+        None => {
+            let Some(tree) = conn.query_tree(root).ok().and_then(|c| c.reply().ok()) else { return Vec::new() };
+            tree.children
+                .into_iter()
+                .filter(|w| conn.get_window_attributes(*w).ok().and_then(|c| c.reply().ok()).is_some_and(|a| a.map_state == x11rb::protocol::xproto::MapState::VIEWABLE))
+                .collect()
+        }
+    };
+    let mut out = Vec::new();
+    for id in ids {
+        let title = conn
+            .get_property(false, id, name, utf8, 0, 1024)
+            .ok()
+            .and_then(|c| c.reply().ok())
+            .map(|r| String::from_utf8_lossy(&r.value).into_owned())
+            .filter(|t| !t.is_empty())
+            .or_else(|| conn.get_property(false, id, AtomEnum::WM_NAME, AtomEnum::STRING, 0, 1024).ok().and_then(|c| c.reply().ok()).map(|r| String::from_utf8_lossy(&r.value).into_owned()));
+        if let Some(title) = title.filter(|t| !t.trim().is_empty()) {
+            if !out.iter().any(|(_, t): &(u32, String)| *t == title) {
+                out.push((id, title));
+            }
+        }
+    }
+    out
 }
 
 /// The native window handle (Windows), to bring the window forward from another thread.
@@ -187,5 +230,19 @@ pub fn set_always_on_top(window: &gpui::Window, on: bool) {
     #[cfg(not(windows))]
     {
         let _ = (window, on);
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod x11_tests {
+    /// Against a real X display when the test is given one (`SONDRA_X_TEST=1` with `DISPLAY` set and a window open,
+    /// as Xvfb with an xterm); otherwise there is nothing to look at.
+    #[test]
+    fn the_windows_of_an_x_display_are_listed_with_their_titles() {
+        if std::env::var("SONDRA_X_TEST").as_deref() != Ok("1") {
+            return;
+        }
+        let found = super::x11_windows();
+        assert!(found.iter().any(|(id, t)| *id != 0 && !t.trim().is_empty()), "{found:?}");
     }
 }

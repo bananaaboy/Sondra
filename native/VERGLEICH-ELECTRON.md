@@ -201,7 +201,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ „Mithören“ (sich selbst live über den Ausgang hören), nativ seit 22.11.2026
 
 ### Bildschirm aufnehmen
-- ✗ **Fenster unter Linux/macOS wählen** (Rust nur unter Windows, der Text sagt es)
+- ✓ **Fenster unter Linux/macOS wählen** — nativ seit 22.11.2026 unter Linux (X11): die Fenster aus `_NET_CLIENT_LIST` (ohne Fenstermanager aus dem Fensterbaum), aufgenommen mit `x11grab -window_id`; gegen Xvfb mit einem xterm geprüft (Liste und Aufnahme nur dieses Fensters). Unter Wayland ohne X und unter macOS (FFmpegs `avfoundation` kennt keine einzelnen Fenster) bleibt es der ganze Bildschirm, und die Seite sagt es.
 - ✓ Bildschirm oder Fenster, Ton des Rechners, Mikrofon, Bilder je Sekunde
 
 ## 7. Geräte und Handy

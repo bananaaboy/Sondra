@@ -60,5 +60,11 @@ fn the_grabber_is_the_one_of_this_computer() {
         assert!(window.contains(&"60".to_string()));
     } else {
         assert_eq!(screen[..2], ["-f", "x11grab"]);
+        assert!(!screen.contains(&"-window_id".to_string()), "the whole display");
+        // One window of the X display, by its id, before the display is named.
+        let one = input_args(&Source::X11Window(0x4a0_0007), 30);
+        let at = one.iter().position(|a| a == "-window_id").expect("a window id");
+        assert_eq!(one[at + 1], "0x4a00007");
+        assert!(at < one.iter().position(|a| a == "-i").unwrap());
     }
 }

@@ -51,6 +51,10 @@ tiny_http = "0.12"
 gpui = { version = "=0.2.2", features = ["test-support"] }
 accesskit = "0.25"
 
+# „Bildschirm aufnehmen“ lists the windows of an X display (the same crate GPUI draws with there).
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = "0.13"
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Power", "Win32_UI_WindowsAndMessaging"] }
 raw-window-handle = "0.6"
