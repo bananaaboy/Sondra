@@ -191,7 +191,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ◐ „Noch einmal erkennen“ gibt es als „Neu erzeugen“
 
 ### Tonart
-- ✗ **„Passt zu“** (Tonarten, die sich mischen lassen)
+- ✓ **„Passt zu“** (Tonarten, die sich mischen lassen)
 - ✓ Tonart, Camelot, Tempo, Akkorde, Melodie, MIDI
 
 ### Mikrofon
@@ -305,7 +305,7 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✗ **Je Pad**: stumm, Löschen, „Auf alle übertragen“, Anfang −10/+10 ms, „Halbieren“, „Mit nächstem verbinden“, „So hören, wie es exportiert wird“.
 
 **Tonart (mit Datei)**
-- ✗ **„Einfach“ / „Detail“** als Ansicht.
+- ✓ **„Einfach“ / „Detail“** als Ansicht.
 
 Die vollständigen Rohlisten liegen bei diesem Lauf als Datei im Arbeitsordner der Sitzung. Die Bildschirmfotos jeder Seite und jedes geöffneten Menüs liegen dort ebenfalls.
 

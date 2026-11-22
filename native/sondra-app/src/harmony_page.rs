@@ -45,6 +45,16 @@ pub struct HarmonyState {
     pub quantize: f64,
     pub exported: Vec<PathBuf>,
     pub error: Option<String>,
+    /// „Einfach“: only key, Camelot and tempo; „Detail“ adds the chords, the melody and the next-best keys.
+    pub simple: bool,
+}
+
+/// The Camelot keys that mix with this one: the relative key and the neighbours on the wheel.
+pub fn neighbours(camelot: &str) -> Vec<String> {
+    let (number, letter) = camelot.split_at(camelot.len().saturating_sub(1));
+    let (Ok(n), true) = (number.parse::<i32>(), letter == "A" || letter == "B") else { return Vec::new() };
+    let wrap = |v: i32| (v - 1).rem_euclid(12) + 1;
+    vec![format!("{n}{}", if letter == "A" { "B" } else { "A" }), format!("{}{letter}", wrap(n - 1)), format!("{}{letter}", wrap(n + 1))]
 }
 
 impl HarmonyState {
@@ -60,6 +70,7 @@ impl HarmonyState {
             shortest: 0.06,
             quantize: 0.0,
             exported: Vec::new(),
+            simple: false,
             error: None,
         }
     }
@@ -304,6 +315,40 @@ impl Shell {
             "Sicherheit bei der Tonart: {} %. Am nächsten kommt {alt} ({alt_camelot}); parallele Dur- und Moll-Tonarten enthalten dieselben zwölf Töne, welche von beiden gilt, entscheidet der Schwerpunkt.",
             (heard.key.confidence * 100.0).round() as i64
         )));
+        // „Passt zu“: the keys that mix with this one.
+        let mut fits = div().flex().flex_wrap().items_center().gap(px(8.)).child(ui.hint("Passt zu"));
+        for code in neighbours(&heard.key.camelot) {
+            fits = fits.child(div().px(px(10.)).py(px(3.)).rounded(px(sondra_ui::radius::PILL)).bg(c.panel_soft).font_family(sondra_ui::family::VALUE).text_size(px(size::SMALL)).child(code));
+        }
+        page = page.child(fits);
+        // „Einfach“ or „Detail“.
+        {
+            let (a, b) = (me.clone(), me.clone());
+            let simple = h.simple;
+            page = page.child(
+                div()
+                    .flex()
+                    .gap(px(6.))
+                    .child(ui.chip("tonart-einfach", "Einfach", simple).on_click(move |_, app| a.update(app, |shell, cx| {
+                        shell.harmony.simple = true;
+                        cx.notify();
+                    })))
+                    .child(ui.chip("tonart-detail", "Detail", !simple).on_click(move |_, app| b.update(app, |shell, cx| {
+                        shell.harmony.simple = false;
+                        cx.notify();
+                    }))),
+            );
+        }
+        if h.simple {
+            page = page.child(ui.hint("Tempo und Tonart. Für Akkorde, die Melodie und die nächstbesten Tonarten auf „Detail“ wechseln."));
+            return done(page);
+        }
+        // „Nächstbeste“: how close the other keys came.
+        let mut best = div().flex().flex_col().gap(px(4.)).child(ui.subheading("Nächstbeste"));
+        for score in heard.key.scores.iter().take(6) {
+            best = best.child(div().w(px(360.)).flex().justify_between().gap(px(12.)).child(ui.prose(format!("{} · {}", score.label, score.camelot))).child(ui.value(format!("{:.2}", score.score).replace('.', ","))));
+        }
+        page = page.child(best);
 
         // The chords.
         let spans: Vec<&ChordSpan> = heard.chords.iter().filter(|s| s.root.is_some()).collect();
@@ -384,4 +429,17 @@ pub enum Export {
     Chords,
     Melody,
     Both,
+}
+
+#[cfg(test)]
+mod neighbour_tests {
+    use super::*;
+
+    #[test]
+    fn the_wheel_gives_the_relative_key_and_both_neighbours() {
+        assert_eq!(neighbours("8A"), vec!["8B", "7A", "9A"]);
+        assert_eq!(neighbours("12B"), vec!["12A", "11B", "1B"]);
+        assert_eq!(neighbours("1A"), vec!["1B", "12A", "2A"]);
+        assert!(neighbours("x").is_empty());
+    }
 }
