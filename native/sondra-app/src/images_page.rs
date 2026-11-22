@@ -72,6 +72,26 @@ pub struct ImagesState {
     pub holding: bool,
     /// What „Alle als ZIP“ said.
     pub zip_said: Option<String>,
+    /// The zoom of the stage: `None` fits the picture in, else a factor of its pixels.
+    pub zoom: Option<f32>,
+}
+
+/// The zoom steps, as on the website.
+pub const ZOOMS: [f32; 5] = [0.25, 0.5, 1.0, 2.0, 4.0];
+
+/// The factor a picture of `w × h` is drawn at in a stage of `room`: fitted (never larger than its pixels) or chosen.
+pub fn zoom_factor(w: u32, h: u32, room: (f32, f32), zoom: Option<f32>) -> f32 {
+    let fit = (room.0 / w.max(1) as f32).min(room.1 / h.max(1) as f32).min(1.0);
+    zoom.unwrap_or(fit)
+}
+
+/// The next step from the factor shown now, smaller or larger.
+pub fn zoom_step(now: f32, larger: bool) -> f32 {
+    if larger {
+        ZOOMS.iter().copied().find(|z| *z > now + 0.01).unwrap_or(ZOOMS[ZOOMS.len() - 1])
+    } else {
+        ZOOMS.iter().copied().filter(|z| *z < now - 0.01).last().unwrap_or(ZOOMS[0])
+    }
 }
 
 impl ImagesState {
@@ -94,7 +114,7 @@ impl ImagesState {
             crop_bounds: Rc::new(Cell::new(Bounds::default())),
             crop_drag: None,
             history: Default::default(),
-            compare: false, holding: false, zip_said: None,
+            compare: false, holding: false, zip_said: None, zoom: None,
         }
     }
 
@@ -138,9 +158,15 @@ impl Shell {
         self.images_open_active(cx);
     }
 
+    /// For tests: the zoom of the stage (`None` is fitted).
+    pub fn images_zoom(&self) -> Option<f32> {
+        self.images.zoom
+    }
+
     fn images_open_active(&mut self, cx: &mut Context<Self>) {
         let i = &mut self.images;
         i.dims = None;
+        i.zoom = None;
         let Some(path) = i.current().cloned() else { return };
         i.ops.crop = None;
         i.aspect = "free";
@@ -398,8 +424,47 @@ impl Shell {
             Some(image) => {
                 // Held down (mouse or Space), the stage shows the original.
                 let (down, up, out) = (me.clone(), me.clone(), me.clone());
+                let stage_w: f32 = i.stage_bounds.get().size.width.into();
+                let room = (if stage_w > 1.0 { stage_w - 32.0 } else { 800.0 }, 460.0 - 72.0);
+                let factor = zoom_factor(ow, oh, room, i.zoom);
+                let (dw, dh) = (ow as f32 * factor, oh as f32 * factor);
+                // Larger than the stage, the picture scrolls inside it.
+                let picture = div()
+                    .id("bild-flaeche")
+                    .absolute()
+                    .top(px(16.))
+                    .left(px(16.))
+                    .right(px(16.))
+                    .bottom(px(56.))
+                    .overflow_scroll()
+                    .flex()
+                    .when(dw <= room.0, |d| d.justify_center())
+                    .when(dh <= room.1, |d| d.items_center())
+                    .child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Fill).w(px(dw)).h(px(dh)).flex_none());
+                let zoom_bar = {
+                    let (less, fit, more) = (me.clone(), me.clone(), me.clone());
+                    div()
+                        .absolute()
+                        .bottom(px(10.))
+                        .right(px(12.))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(ui.button("bild-kleiner", "−").small().ghost().accessible_name("Kleiner").on_click(move |_, app| less.update(app, |shell, cx| {
+                            shell.images.zoom = Some(zoom_step(factor, false));
+                            cx.notify();
+                        })))
+                        .child(ui.button("bild-passend", if i.zoom.is_none() { "Passend".to_string() } else { format!("{} %", (factor * 100.0).round()) }).small().ghost().accessible_name("Einpassen").on_click(move |_, app| fit.update(app, |shell, cx| {
+                            shell.images.zoom = None;
+                            cx.notify();
+                        })))
+                        .child(ui.button("bild-groesser", "+").small().ghost().accessible_name("Größer").on_click(move |_, app| more.update(app, |shell, cx| {
+                            shell.images.zoom = Some(zoom_step(factor, true));
+                            cx.notify();
+                        })))
+                };
                 stage
-                    .child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Contain).size_full())
+                    .child(picture)
                     .child(
                         div()
                             .id("bild-gedrueckt")
@@ -412,6 +477,7 @@ impl Shell {
                             .on_mouse_up_out(gpui::MouseButton::Left, move |_, _, app| out.update(app, |shell, cx| shell.images_hold(false, cx))),
                     )
                     .child(div().absolute().bottom(px(10.)).left(px(12.)).child(ui.hint(if i.holding { "Original" } else { "Gedrückt halten (oder Leertaste) für das Original" })))
+                    .child(zoom_bar)
             }
             None => stage.child(div().text_color(c.prose).child("Das Bild kommt …")),
         };

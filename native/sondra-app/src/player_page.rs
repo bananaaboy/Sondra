@@ -400,7 +400,15 @@ impl PlayerState {
             "l" => self.skip_by(10.0),
             "n" if self.index + 1 < self.queue.len() => self.start(self.index + 1),
             "p" if self.index > 0 => self.start(self.index - 1),
-            "s" => self.skip_by(self.settings.opening),
+            // S jumps to the end of the opening found by ear while it plays, else by the fixed length.
+            "s" => match self.intro_here {
+                crate::player_intro::IntroHere::Found { start, end } if self.playback.as_ref().is_some_and(|p| (start - 1.0..end).contains(&p.position())) => {
+                    if let Some(p) = self.playback.as_mut() {
+                        let _ = p.seek(end);
+                    }
+                }
+                _ => self.skip_by(self.settings.opening),
+            },
             "c" => self.toggle_captions(),
             "," => self.frame_step(false),
             "." => self.frame_step(true),

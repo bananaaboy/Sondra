@@ -249,4 +249,16 @@ fn settings_are_walked_back_and_forth_and_the_original_can_be_compared(cx: &mut 
     w.press(Role::Button, "Rückgängig (Strg+Z)");
     w.settle();
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.images_ops().rotate), 0);
+
+    // The zoom: fitted first, then in steps, and back to fitted.
+    assert!(w.tree().find(Role::Button, "Einpassen").is_some());
+    w.press(Role::Button, "Größer");
+    let zoom = w.cx.read_entity(&w.shell, |s, _| s.images_zoom()).expect("a step was chosen");
+    assert!(sondra_app::images_page::ZOOMS.contains(&zoom));
+    assert!(w.tree().find(Role::Button, "Einpassen").is_some());
+    w.press(Role::Button, "Kleiner");
+    let smaller = w.cx.read_entity(&w.shell, |s, _| s.images_zoom()).unwrap();
+    assert!(smaller < zoom, "{smaller} < {zoom}");
+    w.press(Role::Button, "Einpassen");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.images_zoom()), None);
 }
