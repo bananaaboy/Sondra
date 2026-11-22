@@ -483,74 +483,6 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
 
 ## Betrieb
 
-- **Sondra nativ** (`native/`, 18.11.2026, Entscheidung des Nutzers: „komplett
-  wechseln wie Discord“ — Electron raus, Rust und GPUI rein, FFmpeg nativ):
-  ein Rust-Workspace neben der bestehenden App, kein Ersatz über Nacht.
-  **Stand (19.11.2026):** der Dienst als Programm für die Befehlszeile (`sondra-core`,
-  `-daemon`, `-drive`, `-extract`, `-download`, `-service`, alles gegen nachgebaute Außenwelt) **und
-  ein Fenster** (`sondra-app`, Programm `sondra`): Kopfzeile, Reiter, Startseite, **Merkliste**
-  (Poster/Liste, Serienseite, +1, Entfernen mit Rückgängig; liest und schreibt dieselbe SQLite-Datei
-  wie die Website, eine fremde Datei wird nie überschrieben), **Ordner** (Platte lesen, Art/Suche/
-  Ordnung, Auswählen, Löschen nach Rückfrage in „Sondra-Papierkorb“ mit Fenster), **Abspielen**
-  (`sondra-playback`: FFmpeg in zwei Kindprogrammen, der gehörte Ton ist die Uhr; `sondra-audio`;
-  hakt ab 90 % ab, Vorspann/Nächste Folge, Untertitel) und **Herunterladen** (Adresse → Quelle →
-  Laden, Datei oder Folgenseite). Die Logik der Merkliste, des Ordners und des Players steht in
-  `sondra-merk` und `sondra-player` und ist gegen den Code der Website geprüft (`npm run
-  native:golden`); die Seiten sind in GPUIs Testfenster und auf echtem Windows über UI Automation
-  geprüft (CI „Native“: Jobs `app`, `uia`, `gallery`, `video`). **Stand 19.11.2026
-  abends:** dazu nativ die Seiten **Geräte** (Drive-Post, WebRTC mit der Website, Ordner,
-  Fortsetzen), **Umwandeln, Lautstärke, Bilder, Mischen, Tonart, Video, Untertitel
-  (Whisper, `sondra-speech`), Ton bearbeiten, Mikrofon, Zerschneiden, Spuren trennen**
-  und **Handy spiegeln** (`sondra-mirror`: ADB, scrcpy-Protokoll, Schlüssel, Steuernachrichten
-  und Tastaturberichte Byte für Byte gegen die Bibliotheken der Website; Bild und Ton über FFmpeg;
-  USB über `nusb`), außerdem „Liste empfangen“, „Was ist neu“, schwebende Karten,
-  Einzel-Instanz, Gong und Wachhalten beim Laden. **Stand 20.11.2026:** dazu nativ Systemmeldungen und Tray-Symbol (`sondra-tray`, ein Klick auf die
-  Meldung öffnet die Serie), **Bild im Bild** (kleines Fenster, das oben bleibt und die Uhr des Players hält) und
-  **Immer im Vordergrund**, die **Sitzung** (Dateien der Kopfzeile, Reihenfolge, Umbenennen, an Werkzeuge weiterreichen, auf Wunsch
-  behalten und beim Start angeboten; `.sondra`-Projekte im Format der Website lesen und schreiben, `sondra-media::project`),
-  Pads übereinander, **MIDI-Controller** (`sondra-midi`, winmm), „Akkorde/Arpeggio zeichnen“, „Lokale KI“ (Rauschprofil
-  von selbst), das Thema bleibt und folgt dem System, Download anhalten, auf anderem Gerät abspielen, `sondra #umwandeln`.
-  **Neu:** ein eigenes `.onnx`-Modell für „Spuren trennen“ (`sondra-onnx`, ONNX Runtime über `ort` 2.0.0-rc.15, ins Programm gelinkt; die Laufzeit wird beim Bauen von pyke.io geholt). **Noch nicht:** das Store-Paket (MSIX) und Arm64 werden in der CI gebaut (Jobs „store“ und „arm64“, nur zur Auskunft).
-  Das Handy steht auf Wunsch in einem eigenen Fenster (22.11.2026, `phone_window.rs`). **Setup**
-  (`native/installer/sondra.nsi`, NSIS, für alle Benutzer, FFmpeg daneben, Apps & Features, `.sondra-liste`, Öffnen mit)
-  installiert, startet mit einem Film und deinstalliert sich in der CI (Lauf 76 grün, 19.11.2026), mit Symbol in der .exe.
-  **Player nativ:** Entzerrer (fünf Bänder, Voreinstellungen), Karaoke, Qualität, Visualizer (Balken, Welle, Ring) und
-  alle Einstellungen der Website samt Bild im Bild; **Ordner:** Nach Serie, Ungesehen, Neu, ▶ auf der Kachel, Als ZIP.
-  **Zerschneiden:** Schnitte auf der Welle ziehen. **Umwandeln:** eigene Vorlagen (Format der Website), Alle als ZIP
-  (`sondra-media::zip` schreibt dieselben Bytes wie `zip.ts`). **Aktualisierung** (`updater.rs`): `latest-nativ.yml`
-  lesen, Setup laden und gegen SHA-512 prüfen, Karte „Sondra x ist bereit“, stilles Setup mit `/relaunch`; der Workflow
-  „Native“ schreibt die Datei neben das Setup (Artefakt), ins Release kommt sie erst auf Ihr Wort.
-  Kein Fenster hat ein echter Mensch gesehen; die Bildschirmfotos der CI sind die einzige Sicht.
-  **Stand 19.11.2026 nachmittags:** dazu nativ **Neue Folgen melden** (`new_episodes.rs`: Prüfrunde, Karte im
-  Fenster, „Neu auf AniWorld“ auf der Serienseite), Verlauf und Würfeln in der Merkliste, **Klicks entfernen**,
-  Rückwärts drehen und Bittiefe im Ton-Editor, **eigener STUN/TURN-Server** (Passwort verdeckt: `TextField::secret`).
-  **yt-dlp** (19.11.2026, `sondra-download::ytdlp`): Adressen ohne eigene Quelle laufen über yt-dlp, wenn es da ist
-  (eigene Kopie, **die mit dem Setup neben `sondra.exe` gelegte** — seit dem 21.11.2026 gehört yt-dlp zum Programm wie
-  FFmpeg: in jedem Setup (x64, Arm64), der portablen Fassung und jedem Store-Paket (`installer/get-ytdlp.ps1` holt
-  yt-dlps eigene Windows-Fassung und prüft sie gegen die veröffentlichte SHA-256; passt sie nicht, bricht der Bau ab) —, WinGet, PATH); fehlt es trotzdem, steht auf der Herunterladen-Seite „yt-dlp laden“ — geholt wird es
-  nur auf den Klick, ebenso geprüft (passt die Summe nicht, bleibt nichts liegen); nie `--no-check-certificates`. Geprüft gegen ein Stand-in (`fake-ytdlp`), nie gegen das echte yt-dlp.
-  **Nichts davon ist an einem echten Handy oder mit echter Tonkarte gelaufen** — das Handy
-  wird gegen ein nachgebautes Handy geprüft (`sondra_mirror::fake`).
-  Die Testdateien schreibt der Serializer der Website
-  (`npm run native:fixture`), der Workflow „Native“ prüft sie auf Windows und
-  Linux und bricht ab, wenn das Format sich ändert. **Regeln:** der Kern
-  liest die Merkliste nur, nie zurückschreiben; nie eine ungesehene Folge
-  löschen; nichts ist vorgewählt (keine Serie, kein Wachhalten, kein
-  Löschen). **Das Aussehen nativ ist eine eigene Welt** (20.11.2026, „Vorführkabine“: dunkler Raum, die
-  Seite auf einer beleuchteten Platte, links das Rack mit jedem Ort, Dunkel als Vorgabe, Barlow) — die
-  Entscheidungen stehen in [`native/DESIGN.md`](native/DESIGN.md), der Vertrag in
-  `.impeccable/surfaces/native-sondra-app-src-shell-rs.md`; die Website behält ihre Welt in `DESIGN.md`.
-  Für jeden Edit: GPUI misst Text unter `max_w` in einer schrumpfenden Flex-Spalte falsch und `line_clamp`
-  schneidet mitten im Wort — Text, der umbrechen soll, bekommt eine bekannte Breite (auch eine umbrechende
-  Pillenzeile in einer gestreckten Spalte), Kachelhinweise brechen frei um. Werkzeugseiten bauen auf
-  `ui.tool_body`/`ui.setting` bzw. `ui.stage_body`, nie mit eigener Spaltenmechanik. Benennen Rack und Seite denselben Knopf („Umwandeln“), findet `Snapshot::find` den auf der
-  Seite; `find_in_navigation` den im Rack. **Bedienungshilfen** (`sondra-a11y`, 18.11.2026, Entscheidung des Nutzers: „GPUI selbst um Bedienungshilfen erweitern“): GPUI 0.2.2 hat keine; die Schicht hüllt Elemente in `accessible(id, rolle, …)`, `a11y_root` sammelt je Bild den Baum, AccessKit gibt ihn an Windows UI Automation. **Jede Steuerung der nativen Oberfläche muss sich selbst einhüllen** — ohne Namen und Rolle ist sie nicht fertig. GPUI nimmt von außen keinen Mausklick an, also braucht eine aktivierbare Steuerung `on_activate`. Nicht `AnyView::cached` für Ansichten mit solchen Elementen. Nie mit einem echten Screenreader gelaufen. Plan in Wellen: `native/PLAN.md`; Funktionsliste (woran „kein Funktionsverlust“ gemessen wird): `native/PARITY.md`;
-  was nativ gegenüber der Electron-App wirklich fehlt, Knopf für Knopf am Code nachgesehen (21.11.2026):
-  `native/VERGLEICH-ELECTRON.md` — ist etwas davon gebaut, dort streichen; Aufbau: `native/README.md`. Die Electron-App und die
-  Website bleiben, bis das Neue sie ablöst; ein Eintrag hier gehört
-  gestrichen, sobald etwas davon wegfällt. Auf Windows nur in der CI gelaufen
-  (windows-latest), nie auf dem Rechner eines Menschen. Der Dienst-Kern schreibt die Liste nicht; das Fenster
-  schreibt sie (`sondra-app/src/store.rs`) im selben Format wie die Website.
 - `npm run dev` · `npm run build` · `npm run typecheck`
 - Offline: `public/coi-serviceworker.js` hält nach einem Besuch alle Dateien
   aus `offline.json` (ein Vite-Plugin schreibt die Liste beim Build) und
@@ -1055,25 +987,6 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   klein im Fenster, mit „Erneut“ daneben. Die Liste gehört allein
   `lib/merkliste.ts`; das Herunterladen hält keine eigene Kopie im Projekt.
   `npm run verify:anytype` spielt das gegen eine nachgebaute Anytype-API durch.
-  **Nativ** (19.11.2026, `native/sondra-anytype`, `anytype_window.rs`): dieselben Dialekte, Fehlercodes und dieselbe
-  Seite (die Gegenprobe `tests/golden/page.json` kommt aus `merklisteToMarkdown` der Website), Schlüssel wie Drives
-  Token (DPAPI), „Mehr → Anytype …“; Abgleich nach jeder Änderung (nach einem Takt Ruhe) und alle drei Minuten, ein
-  fehlgeschlagener erst eine Minute später wieder; was während einer Runde hier geändert wird, wird zusammengeführt,
-  nicht ersetzt. Nie gegen ein echtes Anytype gelaufen.
-  **Datenübernahme nativ** (`sondra-electron`, `old_app.rs`): die Startseite bietet einmal an, was die Windows-App in
-  Chromiums `localStorage` (LevelDB) hinterlassen hat zu übernehmen; die Merkliste wird zusammengeführt (zurücknehmbar),
-  Einstellungen kommen nur dazu, wo hier nichts steht; nie gegen die echte Datenbank der Windows-App geprüft.
-  **Geräte: der Weg über Drive nativ** (`sondra-devices::engine`, „Über Drive senden“ erst nach „Kein direkter Weg“, nie
-  von selbst).
-  **Streamen aus Drive nativ** (`sondra-drive::stream`, `sondra_playback::register_source`): der Film wird in Bereichen
-  gelesen, nicht erst ganz geholt (Dienst auf 127.0.0.1 mit Geheimnis in der Adresse; das Token bleibt im Programm).
-  **„Merkliste über Drive“ nativ** (`merk_drive.rs`): dieselbe Runde wie `syncMerklisteWithDrive` (lesen, `merge_shared`,
-  zurückschreiben nur wenn die Datei nicht schon genau das hält), Schalter unter „Mehr“ aus bis zur Wahl.
-  **AniList nativ** (20.11.2026, `anilist_window.rs`, `anilist.rs`): wie `anilist.ts` — ein Personal Access Token
-  (verschlüsselt wie Drives Token, nie wieder gezeigt), dann geht jeder abgehakte Fortschritt an das Konto, und die
-  Anime-Liste lässt sich einlesen (zurücknehmbar). Ohne Verbindung wird AniList nie gefragt; das MAL-Token der Website
-  hat dort keine Funktion und fehlt hier. Nur gegen ein Stand-in geprüft. Ein geöffnetes `.sondra`-Projekt reicht seine
-  `toolStates` unverändert ins nächste weiter.
 - **Google Drive** (22.10.2026, `lib/googleDrive.ts`, `lib/driveClient.ts`,
   `GoogleDrive.tsx`): auf Wunsch alles geordnet in einen Ordner „Sondra“ im
   eigenen Drive — `Projekte`, `Dateien/{Ton,Video,Bilder,Andere}`,
