@@ -195,9 +195,10 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ Tonart, Camelot, Tempo, Akkorde, Melodie, MIDI
 
 ### Mikrofon
-- ✗ **Wiedergabegerät wählen** (Kopfhörer)
-- ✗ **Probe in die Sitzung** / „Verbesserte Probe in die Sitzung“ (Rust: als WAV speichern)
-- ✗ **„Ein-Klick-Sprachverbesserung“** als eigener Knopf auf einer Aufnahme (Rust hat „Auf eine Aufnahme anwenden“)
+- ✓ **Wiedergabegerät wählen** (Kopfhörer) mit „Ausgang testen“ (Testton 440 Hz) — `sondra_audio::set_output_device`, gilt für alles, was Sondra danach abspielt
+- ✓ **Probe** (bis 15 s) mit **„Ein-Klick-Sprachverbesserung (KI)“** (an), verbessert/Original anhören, **„(Verbesserte) Probe in die Sitzung“**; „In die Sitzung“ auch nach dem Einstellen
+- ✓ **„Aufnahme mit 1 Klick verbessern“** auf einer Aufnahme der Sitzung oder einer gewählten (`sondra_media::speech_enhance`, Zahl für Zahl wie `enhanceSpeechAudioData`); dazu im Ton-Editor unter „Säubern“
+- ✗ „Mithören“ (sich selbst live über den Ausgang hören)
 
 ### Bildschirm aufnehmen
 - ✗ **Fenster unter Linux/macOS wählen** (Rust nur unter Windows, der Text sagt es)

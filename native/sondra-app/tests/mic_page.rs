@@ -16,6 +16,17 @@ use sondra_ui::{bind_keys, fonts};
 
 type Seen = Rc<RefCell<Vec<Rc<Snapshot>>>>;
 
+/// One downloads folder for every test of this file: the tests run side by side, and the variable is the process's.
+fn downloads() -> &'static std::path::Path {
+    static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("SONDRA_DOWNLOADS", dir.path());
+        dir
+    })
+    .path()
+}
+
 struct Window<'a> {
     cx: &'a mut VisualTestContext,
     shell: Entity<Shell>,
@@ -115,8 +126,7 @@ impl Window<'_> {
 
 #[gpui::test]
 fn the_room_and_then_the_voice_are_recorded_and_the_chain_is_set_and_said(cx: &mut TestAppContext) {
-    let tmp = tempfile::tempdir().unwrap();
-    std::env::set_var("SONDRA_DOWNLOADS", tmp.path());
+    let tmp = downloads();
     let mut w = open(cx, false);
     assert!(w.tree().find(Role::Heading, "Mikrofon testen und einstellen").is_some());
     assert!(w.tree().find(Role::ProgressIndicator, "Pegel").is_none(), "off until switched on");
@@ -161,7 +171,7 @@ fn the_room_and_then_the_voice_are_recorded_and_the_chain_is_set_and_said(cx: &m
     }
     let made = w.shell.read_with(w.cx, |s, _| s.mic_made().to_vec());
     assert_eq!(made.len(), 2);
-    assert!(made.iter().all(|p| p.exists() && p.starts_with(tmp.path())));
+    assert!(made.iter().all(|p| p.exists() && p.starts_with(tmp)));
 
     // Another purpose asks again; the old result goes.
     w.press(Role::Button, "Zweck Gesang");
@@ -215,4 +225,57 @@ fn without_a_microphone_the_page_says_why(cx: &mut TestAppContext) {
     w.press(Role::Button, "Mikrofon einschalten");
     assert!(w.said("kein Mikrofon"));
     assert!(w.tree().find(Role::Button, "Mikrofon einschalten").is_some(), "it can be tried again");
+}
+
+#[gpui::test]
+fn the_output_is_chosen_a_sample_is_enhanced_and_goes_into_the_session(cx: &mut TestAppContext) {
+    let tmp = downloads();
+    let mut w = open(cx, false);
+    w.shell.update(w.cx, |shell, _| shell.mic_with_outputs(Arc::new(|| vec!["Lautsprecher".to_string(), "Kopfhörer (USB)".to_string()])));
+    w.draw();
+    // Where Sondra plays is a setting before the microphone is on, with a tone to check it.
+    assert!(w.tree().find(Role::Button, "Wiedergabe über Standardgerät").is_some(), "{:?}", w.labels());
+    w.press(Role::Button, "Wiedergabe über Kopfhörer (USB)");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.mic_output()), Some("Kopfhörer (USB)".to_string()));
+    assert_eq!(sondra_audio::chosen_output_device(), Some("Kopfhörer (USB)".to_string()));
+    w.press(Role::Button, "Ausgang testen");
+    assert!(w.said("Testton 440 Hz über Kopfhörer (USB)"));
+    w.press(Role::Button, "Wiedergabe über Standardgerät");
+    assert_eq!(sondra_audio::chosen_output_device(), None);
+    // „Aufnahme mit 1 Klick verbessern“ is there without a microphone.
+    assert!(w.tree().find(Role::Button, "Andere Aufnahme …").is_some());
+
+    // A sample: recorded, stopped, listened to, into the session — enhanced, because the switch starts on.
+    w.press(Role::Button, "Mikrofon einschalten");
+    w.press(Role::Button, "Probe aufnehmen");
+    for _ in 0..3 {
+        w.tick();
+    }
+    assert!(w.tree().find(Role::ProgressIndicator, "Nimmt auf").is_some());
+    w.press(Role::Button, "Probe beenden");
+    let frames = w.shell.read_with(w.cx, |s, _| s.mic_probe_audio().map(|a| a.frames()));
+    assert!(frames.unwrap_or(0) >= RATE as usize, "{frames:?}");
+    w.press(Role::Button, "Probe verbessert anhören");
+    assert!(w.tree().find(Role::Button, "Probe verbessert anhören").is_some());
+    assert!(w.shell.read_with(w.cx, |s, _| s.mic_listening()).is_some());
+    w.press(Role::Button, "Probe verbessert anhören");
+    assert!(w.shell.read_with(w.cx, |s, _| s.mic_listening()).is_none(), "the same button stops it");
+    w.press(Role::Button, "Verbesserte Probe in die Sitzung");
+    let files = w.shell.read_with(w.cx, |s, _| s.session_files());
+    assert_eq!(files.len(), 1);
+    assert!(files[0].starts_with(tmp) && files[0].to_string_lossy().contains("mikrofon-probe-verbessert"));
+    assert!(w.said("ist in der Sitzung"));
+    // Switched off, the sample goes in as it was.
+    w.press(Role::Button, "Ein-Klick-Sprachverbesserung");
+    assert!(w.tree().find(Role::Button, "Probe in die Sitzung").is_some());
+    // The recording of the session is offered for the one click.
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).ends_with("mit 1 Klick verbessern") && AsRef::<str>::as_ref(l).contains("mikrofon-probe-verbessert"))), "{:?}", w.labels());
+    // A sample stops by itself at 15 seconds.
+    w.press(Role::Button, "Neue Probe aufnehmen");
+    for _ in 0..32 {
+        w.tick();
+    }
+    assert!(w.tree().find(Role::ProgressIndicator, "Nimmt auf").is_none());
+    let frames = w.shell.read_with(w.cx, |s, _| s.mic_probe_audio().map(|a| a.frames())).unwrap();
+    assert!(frames >= RATE as usize * 15 && frames < RATE as usize * 16, "{frames}");
 }

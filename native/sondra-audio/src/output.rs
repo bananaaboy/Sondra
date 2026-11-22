@@ -13,7 +13,34 @@ pub enum AudioError {
     Open(String),
 }
 
-/// A stream to the default output device. Dropping it stops the sound.
+/// The output the person chose (headphones, say); `None` is the system's default. Every output opened after
+/// it is set goes there — the Mikrofon page sets it, and the before-and-after then plays where the person
+/// listens.
+static CHOSEN: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub fn set_output_device(name: Option<String>) {
+    *CHOSEN.lock().unwrap_or_else(|e| e.into_inner()) = name;
+}
+
+pub fn chosen_output_device() -> Option<String> {
+    CHOSEN.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// The names of the output devices, the system's default first.
+pub fn output_devices() -> Vec<String> {
+    let host = cpal::default_host();
+    let default = host.default_output_device().and_then(|d| d.description().ok()).map(|d| d.name().to_owned());
+    let mut names: Vec<String> = host.output_devices().map(|list| list.filter_map(|d| d.description().ok().map(|d| d.name().to_owned())).collect()).unwrap_or_default();
+    names.dedup();
+    if let Some(default) = default {
+        if let Some(at) = names.iter().position(|n| *n == default) {
+            names.swap(0, at);
+        }
+    }
+    names
+}
+
+/// A stream to the chosen (else the default) output device. Dropping it stops the sound.
 pub struct AudioOut {
     shared: Shared,
     _stream: cpal::Stream,
@@ -24,7 +51,9 @@ impl AudioOut {
     /// nothing is resampled twice), with room for about `seconds` of sound in the queue.
     pub fn open(seconds: f32) -> Result<AudioOut, AudioError> {
         let host = cpal::default_host();
-        let device = host.default_output_device().ok_or(AudioError::NoDevice)?;
+        // A chosen device that is gone (unplugged headphones) falls back to the default.
+        let chosen = chosen_output_device().and_then(|wanted| host.output_devices().ok().and_then(|mut list| list.find(|d| d.description().ok().is_some_and(|d| d.name() == wanted))));
+        let device = chosen.or_else(|| host.default_output_device()).ok_or(AudioError::NoDevice)?;
         let config = device.default_output_config().map_err(|e| AudioError::Open(e.to_string()))?;
         let shared = Shared::new(config.sample_rate(), config.channels() as usize, seconds);
         let mut mixer = Mixer::new(shared.clone());

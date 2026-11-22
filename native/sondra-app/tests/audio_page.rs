@@ -238,6 +238,20 @@ fn clicks_are_taken_out_over_the_whole_file_and_a_clean_file_says_there_was_noth
 }
 
 #[gpui::test]
+fn speech_is_enhanced_in_one_click(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open_with(cx, tmp.path().join("Sprache.wav"), tone(2.0));
+    w.press(Role::Button, "Werkzeug Säubern");
+    w.press(Role::Button, "Sprache verbessern (Rauschen & Hall entfernen)");
+    w.settle();
+    assert!(w.said("Sprache verbessert (Rauschen und Hall entfernt) · ganze Datei"), "{:?}", w.labels());
+    let after = w.shell.read_with(w.cx, |s, _| s.audio_take().unwrap().channels[0].clone());
+    assert_eq!(after.len(), 16000);
+    let peak = after.iter().fold(0f32, |m, v| m.max(v.abs()));
+    assert!(peak > 0.5 && peak < 0.99, "brought up to just under −1 dBFS: {peak}");
+}
+
+#[gpui::test]
 fn the_file_turns_backwards_and_a_wav_is_written_at_the_chosen_depth(cx: &mut TestAppContext) {
     let tmp = tempfile::tempdir().unwrap();
     let mut w = open(cx, tmp.path().join("Probe.wav"));

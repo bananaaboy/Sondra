@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui::{div, prelude::*, px, AnyElement, Context, PathPromptOptions};
-use sondra_audio::{input_devices, open_input, Capture};
+use sondra_audio::{input_devices, open_input, output_devices, Capture};
 use sondra_media::audio::{decode_file, write_wav_f32, AudioData};
 use sondra_media::mic::{calibrate, profile_for, Calibration, Purpose, Tone, PURPOSES};
 use sondra_media::Ffmpeg;
@@ -27,6 +27,8 @@ pub enum Phase {
     Noise,
     Speech,
     Working,
+    /// A sample to listen to (up to 15 s).
+    Probe,
 }
 
 pub struct MicState {
@@ -49,6 +51,17 @@ pub struct MicState {
     pub made: Vec<PathBuf>,
     pub applying: bool,
     ticking: bool,
+    /// The output devices, and the one chosen (`None`: the system's default).
+    pub outputs: ListMics,
+    pub output: Option<String>,
+    pub tone_said: Option<String>,
+    pub probe: Option<AudioData>,
+    /// „Ein-Klick-Sprachverbesserung (KI)“ for the sample; on, as on the website.
+    pub enhance_probe: bool,
+    pub listening: Option<(crate::clip_player::ClipPlayer, crate::mic_more::Listening)>,
+    pub one_click: bool,
+    /// What the last move into the session said.
+    pub said: Option<String>,
 }
 
 impl MicState {
@@ -72,6 +85,14 @@ impl MicState {
             made: Vec::new(),
             applying: false,
             ticking: false,
+            outputs: Arc::new(output_devices),
+            output: sondra_audio::chosen_output_device(),
+            tone_said: None,
+            probe: None,
+            enhance_probe: true,
+            listening: None,
+            one_click: false,
+            said: None,
         }
     }
 }
@@ -119,6 +140,7 @@ impl Shell {
     /// „Mikrofon ausschalten“: the device is let go of, here as in the web app.
     pub fn mic_disable(&mut self, cx: &mut Context<Self>) {
         self.mic.capture = None;
+        self.mic.listening = None;
         self.mic.phase = Phase::Idle;
         self.mic.take.clear();
         self.mic.level = 0.0;
@@ -169,6 +191,12 @@ impl Shell {
                         m.phase = Phase::Working;
                         self.mic_calibrate(take, cx);
                     }
+                }
+            }
+            Phase::Probe => {
+                m.take.extend(data);
+                if m.take.len() as f64 / rate >= crate::mic_more::PROBE_SECONDS {
+                    self.mic_probe_done(cx);
                 }
             }
             _ => {}
@@ -344,8 +372,13 @@ impl Shell {
                 let me = me.clone();
                 ui.button("mikrofon-einschalten", "Mikrofon einschalten").primary().on_click(move |_, app| me.update(app, |shell, cx| shell.mic_enable(None, cx)))
             };
-            let work = div().flex().flex_col().gap(px(20.)).child(ui.empty("mikrofon-leer", "Mikrofon einschalten", "Es wird erst auf diesen Knopf geöffnet und beim Verlassen des Werkzeugs wieder freigegeben. Zwei kurze Aufnahmen genügen.", vec![button.into_any_element()]));
-            return page.child(ui.tool_body(vec![purpose], work)).into_any_element();
+            let mut work = div().flex().flex_col().gap(px(20.)).child(ui.empty("mikrofon-leer", "Mikrofon einschalten", "Es wird erst auf diesen Knopf geöffnet und beim Verlassen des Werkzeugs wieder freigegeben. Zwei kurze Aufnahmen genügen.", vec![button.into_any_element()]));
+            if let Some(said) = &m.said {
+                work = work.child(ui.notice(NoticeKind::Info, said.clone()));
+            }
+            work = work.child(self.mic_one_click_block(&ui, cx));
+            let output = self.mic_output_block(&ui, cx);
+            return page.child(ui.tool_body(vec![purpose, output], work)).into_any_element();
         }
 
         // The device and its level.
@@ -372,8 +405,12 @@ impl Shell {
             let me = me.clone();
             device = device.child(div().flex().child(ui.button("mikrofon-ausschalten", "Mikrofon ausschalten").small().on_click(move |_, app| me.update(app, |shell, cx| shell.mic_disable(cx)))));
         }
-        let settings = vec![device.into_any_element(), purpose];
+        let output = self.mic_output_block(&ui, cx);
+        let settings = vec![device.into_any_element(), output, purpose];
         let mut work = div().flex().flex_col().gap(px(20.));
+        if let Some(said) = &m.said {
+            work = work.child(ui.notice(NoticeKind::Info, said.clone()));
+        }
 
 
         // The takes.
@@ -418,12 +455,17 @@ impl Shell {
                 );
             }
             Phase::Working => work = work.child(ui.prose("Rechnet …")),
+            Phase::Probe => {}
+        }
+        if matches!(m.phase, Phase::Idle | Phase::Probe) {
+            work = work.child(self.mic_probe_block(&ui, cx));
         }
 
         if let Some(done) = &m.result {
             let written: Vec<AnyElement> = m.made.iter().map(|path| self.written_row(&ui, path, cx)).collect();
             work = work.child(result_block(ui, &me, m, done, written));
         }
+        work = work.child(self.mic_one_click_block(&ui, cx));
         page.child(ui.tool_body(settings, work)).into_any_element()
     }
 }
@@ -465,6 +507,10 @@ fn result_block(ui: Ui, me: &gpui::Entity<Shell>, m: &MicState, done: &Calibrati
     {
         let me = me.clone();
         buttons = buttons.child(ui.button("probe-speichern", "Als WAV speichern").on_click(move |_, app| me.update(app, |shell, cx| shell.mic_save(cx))));
+    }
+    {
+        let me = me.clone();
+        buttons = buttons.child(ui.button("einstellung-in-sitzung", "In die Sitzung").accessible_name("Verbesserte Aufnahme in die Sitzung").on_click(move |_, app| me.update(app, |shell, cx| shell.mic_processed_to_session(cx))));
     }
     {
         let me = me.clone();

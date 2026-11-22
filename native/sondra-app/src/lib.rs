@@ -32,6 +32,7 @@ pub mod merk_drive;
 pub mod merk_edit;
 pub mod merkliste;
 pub mod mic_page;
+pub mod mic_more;
 pub mod nav;
 pub mod new_episodes;
 pub mod phone_page;

@@ -49,6 +49,7 @@ pub mod project;
 pub mod presets;
 pub mod run;
 pub mod separation;
+pub mod speech_enhance;
 pub mod tempo;
 pub mod crop_drag;
 pub mod declick;

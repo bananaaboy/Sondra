@@ -50,6 +50,8 @@ pub enum Op {
     RemoveClicks(crate::declick::ClickStrength),
     /// Only the selection stays („Ausschnitt behalten“).
     Keep,
+    /// „Ein-Klick-Sprachverbesserung“: rumble, fan noise, clicks and room tail out, speech clearer (`speech_enhance`).
+    EnhanceSpeech,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -259,6 +261,10 @@ impl Editor {
             Op::ToStereo => ("Zu Stereo verdoppelt".into(), effects::set_channels(&self.audio, 2)),
             Op::Swap => ("Links und rechts getauscht".into(), edit::channel_trick(&self.audio, Trick::Swap)),
             Op::Resample(rate) => (format!("Abtastrate {rate} Hz"), edit::resample_audio(&self.audio, rate)),
+            Op::EnhanceSpeech => (
+                format!("Sprache verbessert (Rauschen und Hall entfernt) · {place}"),
+                effects::process_range(&self.audio, from, to, |p| crate::speech_enhance::enhance_speech(&p, crate::speech_enhance::SpeechEnhance::default())),
+            ),
             Op::Keep => {
                 if whole {
                     return Err("Wählen Sie zuerst den Ausschnitt, der bleiben soll.".into());

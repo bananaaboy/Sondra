@@ -712,6 +712,8 @@ impl Shell {
                 let me2 = me.clone();
                 let learn = ui.button("rauschen-lernen", if editor.has_noise_profile() { "Rauschen neu lernen" } else { "Rauschen lernen" }).small().disabled(busy || a.selection.is_none()).on_click(move |_, app| me2.update(app, |shell, cx| shell.audio_learn_noise(cx)));
                 panel = panel
+                    .child(ui.prose("Ein-Klick-Sprachverbesserung (KI): entfernt Lüfterrauschen, Tastaturklicken, Rumpeln und Raumhall in einem Schritt und hebt die Sprachverständlichkeit an — in der Auswahl oder überall, auf diesem Gerät gerechnet."))
+                    .child(group("Ein-Klick-Sprachverbesserung", vec![op("sprache-verbessern".into(), "Sprache verbessern (Rauschen & Hall entfernen)".into(), Op::EnhanceSpeech).into_any_element()]))
                     .child(ui.prose("Wählen Sie eine Stelle, an der nur das Rauschen zu hören ist (mindestens eine Fünftelsekunde), und lassen Sie es lernen — oder lassen Sie Sondra die ruhigste Stelle selbst suchen („Lokale KI“, rechnet auf diesem Gerät). Danach lässt es sich abziehen — in der Auswahl oder überall."))
                     .child(group("Rauschen", vec![learn.into_any_element(), {
                         let me3 = me.clone();
