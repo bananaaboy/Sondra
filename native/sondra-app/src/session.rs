@@ -28,6 +28,8 @@ pub struct Session {
     pub offer: Option<Vec<PathBuf>>,
     /// What the last save or open of a project said.
     pub said: Option<Result<String, String>>,
+    /// „Alle als ZIP speichern“ is being written.
+    pub zipping: bool,
     /// The file whose name is being changed (its place in the list), and what was wrong with the last name typed.
     pub renaming: Option<usize>,
     pub rename_problem: Option<String>,
@@ -327,6 +329,20 @@ impl Shell {
         }
         let (keep, clear) = (me.clone(), me.clone());
         let keeping = self.session.keep;
+        let total: u64 = self.session.files.iter().filter_map(|p| std::fs::metadata(p).ok()).map(|m| m.len()).sum();
+        let n = self.session.files.len();
+        let more = {
+            let (add, zip) = (me.clone(), me.clone());
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(10.))
+                .child(ui.button("sitzung-weitere", "Weitere Datei öffnen").small().on_click(move |_, app| add.update(app, |shell, cx| shell.session_choose_more(cx))))
+                .child(div().w(px(220.)).child(self.session_zip.clone()))
+                .child(ui.button("sitzung-zip", format!("Alle {n} als ZIP speichern")).small().disabled(self.session.zipping).on_click(move |_, app| zip.update(app, |shell, cx| shell.session_zip(cx))))
+                .child(ui.hint(format!("{} {} · {} auf diesem Gerät, nichts davon gesendet", n, if n == 1 { "Datei" } else { "Dateien" }, sondra_merk::format::format_bytes(total as f64, 1))))
+        };
         let foot = div()
             .flex()
             .flex_wrap()
@@ -341,12 +357,13 @@ impl Shell {
                 let me = me.clone();
                 move |_, app| me.update(app, |shell, cx| shell.session_save_project(cx))
             }))
-            .child(ui.button("sitzung-leeren", "Alle entfernen").small().ghost().on_click(move |_, app| clear.update(app, |shell, cx| {
+            .child(ui.button("sitzung-leeren", "Alles verwerfen").small().ghost().accessible_name("Alles verwerfen: die Sitzung leeren").on_click(move |_, app| clear.update(app, |shell, cx| {
                 shell.session.clear();
+                shell.session.said = None;
                 cx.notify();
             })))
             .child(ui.hint(if keeping { "Beim nächsten Start wird die Liste angeboten, nie von selbst geladen. Die Dateien bleiben, wo sie sind." } else { "Die Dateien bleiben, wo sie sind; nichts wird kopiert." }));
-        let mut panel = div().flex().flex_col().gap(px(8.)).child(ui.subheading("Dateien der Sitzung")).child(list).child(foot);
+        let mut panel = div().flex().flex_col().gap(px(8.)).child(ui.subheading("Dateien der Sitzung")).child(list).child(more).child(foot);
         panel = panel.children(self.session_said_line(&ui));
         Some(panel.into_any_element())
     }
@@ -506,4 +523,53 @@ fn unique_dir(parent: &Path, stem: &str) -> PathBuf {
         return first;
     }
     (2..).map(|n| parent.join(format!("{stem} ({n})"))).find(|p| !p.exists()).expect("a free name")
+}
+
+impl Shell {
+    /// For tests: the field with the ZIP's name.
+    pub fn session_zip_field(&self) -> gpui::Entity<sondra_ui::TextField> {
+        self.session_zip.clone()
+    }
+
+    /// „Weitere Datei öffnen“: more files into the session, chosen in the system's dialog.
+    pub(crate) fn session_choose_more(&mut self, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(gpui::PathPromptOptions { files: true, directories: false, multiple: true, prompt: None });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = answer.await {
+                this.update(cx, |shell, cx| shell.session_add(paths, cx)).ok();
+            }
+        })
+        .detach();
+    }
+
+    /// „Alle n als ZIP speichern“: the files of the session in one ZIP where downloads go, under the name typed (else
+    /// „Sondra-Sitzung“); two files of the same name both go in.
+    pub fn session_zip(&mut self, cx: &mut Context<Self>) {
+        if self.session.files.is_empty() || self.session.zipping {
+            return;
+        }
+        let typed = self.session_zip.read(cx).text().trim().to_string();
+        let suggestion = if typed.is_empty() { "Sondra-Sitzung".to_string() } else { crate::drive_hub::safe_name(&typed) };
+        let mut used: std::collections::BTreeSet<String> = Default::default();
+        let files: Vec<(String, PathBuf)> = self
+            .session
+            .files
+            .iter()
+            .map(|path| {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Datei".into());
+                let inside = sondra_devices::transfer::free_name(&name, &|candidate| used.contains(candidate));
+                used.insert(inside.clone());
+                (inside, path.clone())
+            })
+            .collect();
+        self.session.zipping = true;
+        cx.notify();
+        let dir = crate::store::downloads_dir();
+        let _ = std::fs::create_dir_all(&dir);
+        Self::pack_in_background(cx, files, dir, suggestion, |shell, result, cx| {
+            shell.session.zipping = false;
+            shell.session.said = Some(result.map(|(path, bytes)| format!("ZIP gespeichert: {} · {}", path.display(), sondra_merk::format::format_bytes(bytes as f64, 1))));
+            cx.notify();
+        });
+    }
 }

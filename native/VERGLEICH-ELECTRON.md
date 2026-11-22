@@ -234,7 +234,7 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✗ **Bilder**: die Leertaste gedrückt halten zeigt das Original.
 - ✗ **Visualizer**: ein Klick wechselt zwischen Balken, Welle und Kreis.
 - ✗ **„Protokoll“**: was Sondra gerade tut, zum Nachlesen.
-- ✗ **Sitzungsmenü**: „Weitere Datei öffnen“, „Alle n als ZIP speichern“ mit eigenem Namen, „Alles verwerfen“ und die Zeile „2,9 MB auf diesem Gerät gespeichert, nichts davon gesendet“.
+- ✓ **Sitzungsmenü**: „Weitere Datei öffnen“, „Alle n als ZIP speichern“ mit eigenem Namen, „Alles verwerfen“ und die Zeile „2,9 MB auf diesem Gerät, nichts davon gesendet“ (nativ seit 22.11.2026; die Dateien bleiben, wo sie liegen).
 
 **Merkliste**
 - ✓ **Kopfzeile mit Zahlen**: „2 am Schauen · 1 später“.

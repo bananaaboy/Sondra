@@ -247,3 +247,34 @@ fn a_file_of_the_session_is_renamed_on_the_disk_where_it_lies(cx: &mut TestAppCo
     assert_eq!(names(w.shell.read_with(w.cx, |s, _| s.session_files())), ["Neues Lied.wav"]);
     assert!(w.tree().find(Role::Button, "Neues Lied.wav umbenennen").is_some(), "the field is closed again");
 }
+
+#[gpui::test]
+fn the_session_is_packed_into_a_zip_of_its_own_name_says_how_much_lies_here_and_can_be_thrown_away(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let downloads = dir.path().join("Downloads");
+    std::env::set_var("SONDRA_DOWNLOADS", &downloads);
+    let (a, b) = (dir.path().join("a.wav"), dir.path().join("x").join("a.wav"));
+    song(&a);
+    std::fs::create_dir_all(b.parent().unwrap()).unwrap();
+    song(&b);
+    let mut w = open(cx, dir.path().join("Sitzung.json"));
+    w.shell.update(w.cx, |s, cx| s.session_add(vec![a.clone(), b.clone()], cx));
+    w.draw();
+    w.press(Role::Button, "Dateien der Sitzung, 2");
+    assert!(w.labels().iter().any(|l| l.starts_with("2 Dateien · ") && l.ends_with("auf diesem Gerät, nichts davon gesendet")), "{:?}", w.labels());
+    assert!(w.tree().find(Role::Button, "Weitere Datei öffnen").is_some());
+    // A name of its own; two files of the same name both go in.
+    let field = w.shell.read_with(w.cx, |s, _| s.session_zip_field());
+    w.cx.update(|_, app| field.update(app, |f, cx| f.set_text("Meine Proben", cx)));
+    w.press(Role::Button, "Alle 2 als ZIP speichern");
+    let said = wait_said(&mut w, "the ZIP").expect("written");
+    assert!(said.starts_with("ZIP gespeichert:"), "{said}");
+    let zip = std::fs::read_dir(&downloads).unwrap().map(|e| e.unwrap().path()).find(|p| p.extension().is_some_and(|e| e == "zip")).expect("a zip");
+    assert!(zip.file_name().unwrap().to_string_lossy().starts_with("Meine Proben"), "{zip:?}");
+    let bytes = std::fs::read(&zip).unwrap();
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("a.wav") && text.contains("a (2).wav"), "both files are inside");
+    // „Alles verwerfen“.
+    w.press(Role::Button, "Alles verwerfen: die Sitzung leeren");
+    assert!(w.shell.read_with(w.cx, |s, _| s.session_files()).is_empty());
+}

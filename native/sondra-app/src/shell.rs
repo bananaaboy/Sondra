@@ -49,6 +49,8 @@ pub struct Shell {
     pub(crate) session: crate::session::Session,
     /// The field for a new name of a file of the session.
     pub(crate) session_rename: Entity<TextField>,
+    /// The name of „Alle als ZIP speichern“.
+    pub(crate) session_zip: Entity<TextField>,
     pub(crate) focus: FocusHandle,
     /// One handle per place in the rack, in the order of `PANELS`: Up and Down walk them.
     rack_focus: Vec<FocusHandle>,
@@ -174,6 +176,13 @@ impl Shell {
             }
         })
         .detach();
+        let session_zip = cx.new(|cx| TextField::new(cx, colors, "Name des ZIP").placeholder("Sondra-Sitzung").max_chars(120));
+        cx.subscribe(&session_zip, |shell, _, event: &FieldEvent, cx| {
+            if *event == FieldEvent::Submitted {
+                shell.session_zip(cx);
+            }
+        })
+        .detach();
         let convert = ConvertState::new(cx, colors);
         let palette = crate::palette::Palette::new(cx, colors);
         crate::palette::subscribe(&palette.field, cx);
@@ -215,6 +224,7 @@ impl Shell {
             unfolded: HashSet::new(),
             session: Default::default(),
             session_rename,
+            session_zip,
             focus: cx.focus_handle(),
             rack_focus: (0..crate::nav::PANELS.len())
                 .map(|_| cx.focus_handle().tab_stop(true))
@@ -493,6 +503,7 @@ impl Shell {
             self.convert.trim.to.clone(),
             self.devices.rename.clone(),
             self.session_rename.clone(),
+            self.session_zip.clone(),
             self.devices.text.clone(),
             self.devices.servers.stun.clone(),
             self.devices.servers.turn.clone(),
