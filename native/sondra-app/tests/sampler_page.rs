@@ -498,6 +498,16 @@ fn pads_are_written_as_heard_into_the_session_and_cut_at_the_pointer(cx: &mut Te
     assert_eq!(after.len(), count + 1);
     assert!(after.iter().any(|p| (p.start - at).abs() < 0.002), "a pad begins at the pointer");
     assert!(w.said("Schnitt bei"));
+    // A double click on the waveform sets a cut right there.
+    let before = pads(&w).len();
+    let spot = gpui::point(b.origin.x + b.size.width * 0.3, b.origin.y + px(20.));
+    w.cx.run_until_parked();
+    w.cx.simulate_event(gpui::MouseDownEvent { button: MouseButton::Left, position: spot, modifiers: Modifiers::default(), click_count: 2, first_mouse: false });
+    w.cx.simulate_event(gpui::MouseUpEvent { button: MouseButton::Left, position: spot, modifiers: Modifiers::default(), click_count: 2 });
+    w.draw();
+    let cut = pads(&w);
+    assert_eq!(cut.len(), before + 1, "one more pad");
+    assert!(cut.iter().any(|p| (p.start - 0.6).abs() < 0.03), "{:?}", cut.iter().map(|p| p.start).collect::<Vec<_>>());
     // The whole file as one pad.
     w.press(Role::Button, "Ganze Datei als Pad 1");
     let one = pads(&w);

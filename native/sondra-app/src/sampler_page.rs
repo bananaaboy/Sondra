@@ -627,6 +627,13 @@ impl Shell {
         cx.notify();
     }
 
+    /// A double click on the wave: a cut where it was (as „Am Zeiger teilen“ at that place).
+    fn sampler_cut_at(&mut self, x: Pixels, cx: &mut Context<Self>) {
+        let Some((at, _)) = self.sampler_time_at(x) else { return };
+        self.sampler.cursor = Some(at);
+        self.sampler_split_at_cursor(cx);
+    }
+
     /// The pointer moves with a cut held: the pads on both sides follow.
     fn sampler_drag(&mut self, x: Pixels, cx: &mut Context<Self>) {
         let (Some(grab), Some((at, _))) = (self.sampler.cut, self.sampler_time_at(x)) else { return };
@@ -743,7 +750,15 @@ impl Shell {
             .cursor_pointer()
             .on_mouse_down(MouseButton::Left, move |event, _, app| {
                 let x = event.position.x;
-                press.update(app, |shell, cx| shell.sampler_down(x, cx))
+                let twice = event.click_count >= 2;
+                press.update(app, |shell, cx| {
+                    // A double click sets a cut right there (not on a cut that is there already).
+                    if twice && shell.sampler.cut.is_none() {
+                        shell.sampler_cut_at(x, cx);
+                    } else {
+                        shell.sampler_down(x, cx);
+                    }
+                })
             })
             .on_mouse_move(move |event, _, app| {
                 if event.pressed_button == Some(MouseButton::Left) {

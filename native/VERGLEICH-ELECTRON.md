@@ -158,7 +158,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ **„Einstellungen des gewählten Pads auf alle übertragen“**
 - ✓ **Doppeltes / halbes Tempo** (Raster: Tempo-Pillen halb/erkannt/doppelt), **„Das ganze Raster früher oder später“** (−40 … +40 ms)
 - ✓ **„Länge beim Transponieren halten“** (Phasenvocoder beim Export, `pattern::export_pad`)
-- ✓ **Pad löschen (Entf)**, **„Ganze Datei als Pad 1“**, **„Am Zeiger teilen“** (Zeiger = letzter Klick in die Welle, beim Abspielen eines Pads die Stelle); Doppelklick fehlt
+- ✓ **Pad löschen (Entf)**, **„Ganze Datei als Pad 1“**, **„Am Zeiger teilen“** (Zeiger = letzter Klick in die Welle, beim Abspielen eines Pads die Stelle); ein Doppelklick in die Welle setzt dort einen Schnitt (seit 22.11.2026)
 - ✓ **Auf −0,3 dBFS normalisieren** beim Export, **„Blende an den Schnittkanten“** (0–60 ms), **„So hören, wie es exportiert wird“**
 - ✓ **Pattern/Song „In die Sitzung“**, Pad und alle Pads „In die Sitzung“
 - ✓ sechs Verfahren, Pads, Klavierrolle, Akkorde und Arpeggio zeichnen, MIDI-Controller, Choke, Gate, Swing, Beat als WAV und MIDI, CUE und Audacity-Marken

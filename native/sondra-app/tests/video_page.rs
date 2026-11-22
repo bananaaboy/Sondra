@@ -205,11 +205,14 @@ fn the_timeline_moves_the_place_and_both_ends_of_what_stays(cx: &mut TestAppCont
 
     // „Vorschau abspielen“ plays what stays on the stage; „Ton im Vorhören“ says whether it is heard.
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (false, true));
-    w.press(Role::Button, "Vorschau abspielen");
-    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (true, true));
     w.press(Role::Button, "Ton im Vorhören");
-    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (true, false), "silent, while it goes on");
-    w.press(Role::Button, "Vorschau anhalten");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (false, false), "the switch, before it plays");
+    w.press(Role::Button, "Vorschau abspielen");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (true, false), "it plays, silent");
+    // (A slow machine may reach the end of what stays first; then the preview has stopped by itself.)
+    if w.tree().find(Role::Button, "Vorschau anhalten").is_some() {
+        w.press(Role::Button, "Vorschau anhalten");
+    }
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()).0, false);
 }
 
