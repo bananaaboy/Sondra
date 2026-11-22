@@ -101,6 +101,9 @@ pub struct Shell {
     tray: Option<sondra_tray::Tray>,
     /// The little window of „Bild im Bild“, while it is open.
     pub(crate) pip: Option<gpui::WindowHandle<crate::pip::PipView>>,
+    /// „Handy spiegeln“ in a window of its own, and whether it is being opened.
+    pub(crate) phone_window: Option<gpui::WindowHandle<crate::phone_window::PhoneWindowView>>,
+    pub(crate) phone_window_opening: bool,
     pub(crate) pip_opening: bool,
     tray_asks: std::sync::Arc<TrayAsks>,
     pub update: crate::updater_ui::Updates,
@@ -268,6 +271,8 @@ impl Shell {
             attention_seen: 0,
             tray: None,
             pip: None,
+            phone_window: None,
+            phone_window_opening: false,
             pip_opening: false,
             tray_asks: Default::default(),
             update: crate::updater_ui::Updates::default(),
@@ -1185,6 +1190,10 @@ impl Render for Shell {
         }
         for old in std::mem::take(&mut self.player.retired) {
             let _ = window.drop_image(old);
+        }
+        // The phone's own window goes when the mirror ends.
+        if self.phone_window.is_some() && self.phone_session_size().is_none() {
+            self.phone_window_close(cx);
         }
         self.player_merkliste_tick();
         self.player_intro_tick(cx);

@@ -396,11 +396,130 @@ impl Shell {
     }
 
     pub fn phone_stop(&mut self, cx: &mut Context<Self>) {
+        self.phone_window_close(cx);
         if self.phone.session.is_some() {
             self.phone_release();
             self.phone.phase = Phase::Ended("Beendet.".into());
         }
         cx.notify();
+    }
+
+    /// The size of the phone's screen while it is mirrored.
+    pub(crate) fn phone_session_size(&self) -> Option<(u32, u32)> {
+        self.phone.session.as_ref().filter(|_| matches!(self.phone.phase, Phase::Running)).map(|s| s.size())
+    }
+
+    /// The phone's screen, to use with the mouse and the keyboard: on the page, or in a window of its own. `bounds` is
+    /// where it was drawn last (clicks are placed by it), `focus` takes the keys.
+    pub(crate) fn phone_screen(&self, me: gpui::Entity<Shell>, shown_w: f32, shown_h: f32, bounds: &Rc<Cell<Bounds<Pixels>>>, focus: &FocusHandle) -> AnyElement {
+        let p = &self.phone;
+        let session = p.session.clone();
+        let (w, h) = session.as_ref().map_or((9, 16), |s| s.size());
+        let name = session.as_ref().map_or(String::new(), |s| s.device_name.clone());
+        let measure = bounds.clone();
+        let (down, drag, up, wheel) = (me.clone(), me.clone(), me.clone(), me.clone());
+        let (bd, bm, bu, bw) = (bounds.clone(), bounds.clone(), bounds.clone(), bounds.clone());
+        let key_down = me.clone();
+        let key_up = me.clone();
+        let mods_changed = me.clone();
+        let mut screen = div()
+            .id("handy-bild")
+            .track_focus(focus)
+            .relative()
+            .w(px(shown_w))
+            .h(px(shown_h))
+            .bg(gpui::black())
+            .cursor_pointer()
+            .on_mouse_down(MouseButton::Left, move |e, window, app| {
+                let (x, y) = share_at(bd.get(), e.position.x, e.position.y);
+                let _ = window;
+                down.update(app, |sh, cx| {
+                    sh.phone.captured = true;
+                    if !sh.phone.touching {
+                        sh.phone.touching = true;
+                        if let Some(s) = &sh.phone.session {
+                            let _ = s.touch(TouchAction::Down, x, y);
+                        }
+                    }
+                    cx.notify();
+                });
+            })
+            .on_mouse_move(move |e, _, app| {
+                if e.pressed_button == Some(MouseButton::Left) {
+                    let (x, y) = share_at(bm.get(), e.position.x, e.position.y);
+                    drag.update(app, |sh, _| {
+                        if let (true, Some(s)) = (sh.phone.touching, &sh.phone.session) {
+                            let _ = s.touch(TouchAction::Move, x, y);
+                        }
+                    });
+                }
+            })
+            .on_mouse_up(MouseButton::Left, move |e, _, app| {
+                let (x, y) = share_at(bu.get(), e.position.x, e.position.y);
+                up.update(app, |sh, _| {
+                    if std::mem::take(&mut sh.phone.touching) {
+                        if let Some(s) = &sh.phone.session {
+                            let _ = s.touch(TouchAction::Up, x, y);
+                        }
+                    }
+                });
+            })
+            .on_mouse_down(MouseButton::Right, {
+                let back = me.clone();
+                move |_, _, app| back.update(app, |sh, _| sh.phone_key(PhoneKey::Back))
+            })
+            .on_mouse_down(MouseButton::Middle, {
+                let home = me.clone();
+                move |_, _, app| home.update(app, |sh, _| sh.phone_key(PhoneKey::Home))
+            })
+            .on_scroll_wheel(move |e, window, app| {
+                let (x, y) = share_at(bw.get(), e.position.x, e.position.y);
+                let lines: f32 = match e.delta {
+                    ScrollDelta::Lines(l) => l.y,
+                    ScrollDelta::Pixels(px_) => f32::from(px_.y) / 40.0,
+                };
+                let _ = window;
+                // A turn of the wheel upwards scrolls the page down (the content moves up the finger).
+                wheel.update(app, |sh, _| {
+                    if let Some(s) = &sh.phone.session {
+                        let _ = s.scroll(x, y, 0.0, -f64::from(lines));
+                    }
+                });
+            })
+            .on_key_down(move |e, _, app| {
+                let k = &e.keystroke;
+                // Ctrl+Alt+Esc gives the keyboard back to this computer.
+                if k.key == "escape" && k.modifiers.control && k.modifiers.alt {
+                    key_down.update(app, |sh, cx| {
+                        if let Some(s) = &sh.phone.session {
+                            let _ = s.release_keys();
+                        }
+                        sh.phone.captured = false;
+                        cx.notify();
+                    });
+                    return;
+                }
+                let (key, typed, mods) = (k.key.clone(), k.key_char.clone(), k.modifiers);
+                key_down.update(app, |sh, _| {
+                    if sh.phone.captured {
+                        sh.phone_send_key(&key, typed.as_deref(), true, &mods);
+                    }
+                });
+                app.stop_propagation();
+            })
+            .on_key_up(move |e, _, app| {
+                let (key, mods) = (e.keystroke.key.clone(), e.keystroke.modifiers);
+                key_up.update(app, |sh, _| sh.phone_send_key(&key, None, false, &mods));
+            })
+            .on_modifiers_changed(move |e, _, app| {
+                let mods = e.modifiers;
+                mods_changed.update(app, |sh, _| sh.phone_modifiers(mods));
+            })
+            .child(canvas(move |b, _, _| measure.set(b), |_, _, _, _| {}).absolute().size_full());
+        if let Some(image) = &p.image {
+            screen = screen.child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Fill).size_full());
+        }
+        accessible("handy-bild-zugang", Role::Group, screen).label(format!("Bildschirm von {name}")).description(format!("{w} mal {h} Bildpunkte. Mit der Maus bedienen: Linksklick tippt, Rechtsklick geht zurück, Mittelklick zum Startbildschirm.")).focus(focus).into_any_element()
     }
 
     fn phone_screenshot(&mut self, cx: &mut Context<Self>) {
@@ -502,115 +621,35 @@ impl Shell {
                         cx.notify();
                     })));
                 }
+                {
+                    let me = me.clone();
+                    let own = self.phone_window.is_some();
+                    tools = tools.child(ui.button("handy-fenster", if own { "Zurück in die Seite" } else { "In einem eigenen Fenster öffnen" }).small().on_click(move |_, app| me.update(app, |sh, cx| sh.phone_window_switch(cx))));
+                }
                 tools = tools.child(ui.button("handy-foto", "Bildschirmfoto").small().on_click(move |_, app| shot.update(app, |sh, cx| sh.phone_screenshot(cx)))).child(ui.button("handy-beenden", "Beenden").small().on_click(move |_, app| stop.update(app, |sh, cx| sh.phone_stop(cx))));
                 top = top.child(tools);
                 block = block.child(top);
 
-                // The picture, with the mouse on it.
-                let measure = p.bounds.clone();
-                let (down, drag, up, wheel) = (me.clone(), me.clone(), me.clone(), me.clone());
-                let (bd, bm, bu, bw) = (p.bounds.clone(), p.bounds.clone(), p.bounds.clone(), p.bounds.clone());
-                let key_down = me.clone();
-                let key_up = me.clone();
-                let mods_changed = me.clone();
-                let mut screen = div()
-                    .id("handy-bild")
-                    .track_focus(&p.focus)
-                    .relative()
-                    .w(px(shown_w))
-                    .h(px(shown_h))
-                    .bg(gpui::black())
-                    .cursor_pointer()
-                    .on_mouse_down(MouseButton::Left, move |e, window, app| {
-                        let (x, y) = share_at(bd.get(), e.position.x, e.position.y);
-                        let _ = window;
-                        down.update(app, |sh, cx| {
-                            sh.phone.captured = true;
-                            if !sh.phone.touching {
-                                sh.phone.touching = true;
-                                if let Some(s) = &sh.phone.session {
-                                    let _ = s.touch(TouchAction::Down, x, y);
-                                }
-                            }
-                            cx.notify();
-                        });
-                    })
-                    .on_mouse_move(move |e, _, app| {
-                        if e.pressed_button == Some(MouseButton::Left) {
-                            let (x, y) = share_at(bm.get(), e.position.x, e.position.y);
-                            drag.update(app, |sh, _| {
-                                if let (true, Some(s)) = (sh.phone.touching, &sh.phone.session) {
-                                    let _ = s.touch(TouchAction::Move, x, y);
-                                }
-                            });
-                        }
-                    })
-                    .on_mouse_up(MouseButton::Left, move |e, _, app| {
-                        let (x, y) = share_at(bu.get(), e.position.x, e.position.y);
-                        up.update(app, |sh, _| {
-                            if std::mem::take(&mut sh.phone.touching) {
-                                if let Some(s) = &sh.phone.session {
-                                    let _ = s.touch(TouchAction::Up, x, y);
-                                }
-                            }
-                        });
-                    })
-                    .on_mouse_down(MouseButton::Right, {
-                        let back = me.clone();
-                        move |_, _, app| back.update(app, |sh, _| sh.phone_key(PhoneKey::Back))
-                    })
-                    .on_mouse_down(MouseButton::Middle, {
-                        let home = me.clone();
-                        move |_, _, app| home.update(app, |sh, _| sh.phone_key(PhoneKey::Home))
-                    })
-                    .on_scroll_wheel(move |e, window, app| {
-                        let (x, y) = share_at(bw.get(), e.position.x, e.position.y);
-                        let lines: f32 = match e.delta {
-                            ScrollDelta::Lines(l) => l.y,
-                            ScrollDelta::Pixels(px_) => f32::from(px_.y) / 40.0,
-                        };
-                        let _ = window;
-                        // A turn of the wheel upwards scrolls the page down (the content moves up the finger).
-                        wheel.update(app, |sh, _| {
-                            if let Some(s) = &sh.phone.session {
-                                let _ = s.scroll(x, y, 0.0, -f64::from(lines));
-                            }
-                        });
-                    })
-                    .on_key_down(move |e, _, app| {
-                        let k = &e.keystroke;
-                        // Ctrl+Alt+Esc gives the keyboard back to this computer.
-                        if k.key == "escape" && k.modifiers.control && k.modifiers.alt {
-                            key_down.update(app, |sh, cx| {
-                                if let Some(s) = &sh.phone.session {
-                                    let _ = s.release_keys();
-                                }
-                                sh.phone.captured = false;
-                                cx.notify();
-                            });
-                            return;
-                        }
-                        let (key, typed, mods) = (k.key.clone(), k.key_char.clone(), k.modifiers);
-                        key_down.update(app, |sh, _| {
-                            if sh.phone.captured {
-                                sh.phone_send_key(&key, typed.as_deref(), true, &mods);
-                            }
-                        });
-                        app.stop_propagation();
-                    })
-                    .on_key_up(move |e, _, app| {
-                        let (key, mods) = (e.keystroke.key.clone(), e.keystroke.modifiers);
-                        key_up.update(app, |sh, _| sh.phone_send_key(&key, None, false, &mods));
-                    })
-                    .on_modifiers_changed(move |e, _, app| {
-                        let mods = e.modifiers;
-                        mods_changed.update(app, |sh, _| sh.phone_modifiers(mods));
-                    })
-                    .child(canvas(move |b, _, _| measure.set(b), |_, _, _, _| {}).absolute().size_full());
-                if let Some(image) = &p.image {
-                    screen = screen.child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Fill).size_full());
+                if self.phone_window.is_some() {
+                    // The screen stands in its own window; the page says so and offers the way back.
+                    let back = me.clone();
+                    block = block.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .justify_center()
+                            .gap(px(12.))
+                            .w(px(shown_w))
+                            .h(px(shown_h.min(320.0)))
+                            .rounded(px(radius::CARD))
+                            .bg(c.panel_mid)
+                            .child(ui.prose("Das Handy steht in einem eigenen Fenster."))
+                            .child(ui.button("handy-zurueck-in-seite", "Zurück in die Seite").small().on_click(move |_, app| back.update(app, |sh, cx| sh.phone_window_switch(cx)))),
+                    );
+                } else {
+                    block = block.child(self.phone_screen(me.clone(), shown_w, shown_h, &p.bounds, &p.focus));
                 }
-                block = block.child(accessible("handy-bild-zugang", Role::Group, screen).label(format!("Bildschirm von {name}")).description(format!("{w} mal {h} Bildpunkte. Mit der Maus bedienen: Linksklick tippt, Rechtsklick geht zurück, Mittelklick zum Startbildschirm.")).focus(&p.focus));
 
                 // The phone's own keys.
                 let mut keys = div().flex().flex_wrap().gap(px(8.));

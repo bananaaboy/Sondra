@@ -168,8 +168,23 @@ fn a_phone_is_connected_shown_and_worked_with_mouse_and_keys_and_let_go(cx: &mut
     wait_control(&phone, "the key", |c| c.len() >= mark + key_a.len());
     assert_eq!(&phone.control()[mark..mark + key_a.len()], &key_a[..]);
 
+    // A window of its own: the page says where the phone is and how it comes back; „Beenden“ closes it too.
+    w.press(Role::Button, "In einem eigenen Fenster öffnen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(w.shell.read_with(w.cx, |s, _| s.phone_window_open()), "the window opened");
+    assert!(w.said("Das Handy steht in einem eigenen Fenster."));
+    w.press(Role::Button, "Zurück in die Seite");
+    w.cx.run_until_parked();
+    assert!(!w.shell.read_with(w.cx, |s, _| s.phone_window_open()));
+    assert!(w.said("Bildschirm von Fake Phone"), "back in the page");
+    w.press(Role::Button, "In einem eigenen Fenster öffnen");
+    w.cx.run_until_parked();
+    w.draw();
+
     // The end: by the person, and the phone is let go.
     w.press(Role::Button, "Beenden");
+    assert!(!w.shell.read_with(w.cx, |s, _| s.phone_window_open()), "the window goes with it");
     assert!(matches!(w.shell.read_with(w.cx, |s, _| s.phone_phase()), Phase::Ended(_)));
     assert!(w.tree().find(Role::Button, "Handy verbinden").is_some(), "and again");
     let gone = control::uhid_destroy(HID_KEYBOARD_ID);

@@ -210,7 +210,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | --- | --- | --- |
 | ✓ | **„Fortsetzen“** einer abgerissenen Übertragung in der Oberfläche | Nativ seit 22.11.2026: die Engine hält die Dateien, der Empfänger den angefangenen Teil (`.sondra-teil`), dasselbe Angebot mit `resume` wird ohne zweite Frage angenommen, nur der Rest geht; Fähigkeit `resume` im Eintrag |
 | ✓ | **Mehrere Geräte auf einmal** aus einer Auswahl im Ordner | Nativ seit 22.11.2026 |
-| ✗ | **Handy in einem eigenen Fenster** (Picture-in-Picture bzw. Fenster des Systems, frei auf dem Bildschirm) | Das Handy steht nur in der Seite |
+| ✓ | **Handy in einem eigenen Fenster** (Picture-in-Picture bzw. Fenster des Systems, frei auf dem Bildschirm) | Nativ seit 22.11.2026: „In einem eigenen Fenster öffnen“ — ein Fenster des Systems, das Bild füllt es in seiner Form, Maus, Rad und Tasten wie in der Seite; dort steht „Das Handy steht in einem eigenen Fenster“ mit „Zurück in die Seite“, Schliessen bringt es zurück, „Beenden“ schliesst es |
 | ✓ | **„Wenn es nicht klappt“** und **„Technische Einzelheiten“** auf der Seite „Handy spiegeln“ (Liste der üblichen Fehler: Handy nicht in der Liste, Zulassen kommt nicht, schwarzes Bild, kein Ton, y/z vertauscht, „Ein anderes Programm benutzt das Handy“) | Nativ seit 22.11.2026; nach einem Fehler von selbst aufgeklappt |
 | ✓ | **Strg+Alt+Esc** gibt die Tastatur zurück | Ist da |
 

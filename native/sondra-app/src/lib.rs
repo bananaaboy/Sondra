@@ -47,6 +47,7 @@ pub mod share_pictures;
 pub mod nav;
 pub mod new_episodes;
 pub mod phone_page;
+pub mod phone_window;
 pub mod ops_history;
 pub mod palette;
 pub mod planner;
