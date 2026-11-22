@@ -1277,6 +1277,26 @@ impl Render for Shell {
                             return;
                         }
                     }
+                    // Video and Bilder: Strg+Z and Strg+Umschalt+Z (or Strg+Y) walk the settings back and forth.
+                    if m.control && !(m.alt || m.platform) && matches!(me.read(app).panel, Panel::Video | Panel::Images) && !window.context_stack().iter().any(|c| c.contains("SondraTextField")) {
+                        let key = event.keystroke.key.clone();
+                        let shift = m.shift;
+                        let taken = me.update(app, |shell, cx| {
+                            let video = shell.panel == Panel::Video;
+                            match (shift, key.as_str(), video) {
+                                (false, "z", true) => shell.video_undo(cx),
+                                (true, "z", true) | (false, "y", true) => shell.video_redo(cx),
+                                (false, "z", false) => shell.images_undo(cx),
+                                (true, "z", false) | (false, "y", false) => shell.images_redo(cx),
+                                _ => return false,
+                            }
+                            true
+                        });
+                        if taken {
+                            app.stop_propagation();
+                            return;
+                        }
+                    }
                     // „Zerschneiden“: sixteen keys play sixteen pads, 1 2 3 4 / Q W E R / A S D F / Y X C V.
                     if !(m.control || m.alt || m.platform || m.shift) && me.read(app).panel == Panel::Sampler {
                         let key = event.keystroke.key.clone();

@@ -64,6 +64,10 @@ pub struct ImagesState {
     pub stage_bounds: Rc<Cell<Bounds<Pixels>>>,
     pub crop_bounds: Rc<Cell<Bounds<Pixels>>>,
     pub crop_drag: Option<sondra_media::crop_drag::Drag>,
+    /// „Rückgängig“ and „Wiederholen“ over the settings.
+    pub history: crate::ops_history::OpsHistory<ImageOps>,
+    /// „Vergleichen“: the stage shows the original.
+    pub compare: bool,
 }
 
 impl ImagesState {
@@ -85,6 +89,8 @@ impl ImagesState {
             stage_bounds: Rc::new(Cell::new(Bounds::default())),
             crop_bounds: Rc::new(Cell::new(Bounds::default())),
             crop_drag: None,
+            history: Default::default(),
+            compare: false,
         }
     }
 
@@ -163,7 +169,7 @@ impl Shell {
         let generation = i.generation;
         i.previewing = true;
         // While the crop is drawn the picture is shown whole, with the crop on it.
-        let mut ops = i.ops.clone();
+        let mut ops = if i.compare { ImageOps { format: i.ops.format, quality: i.ops.quality, ..ImageOps::default() } } else { i.ops.clone() };
         if i.tool == Tool::Crop {
             ops.crop = None;
         }
@@ -227,7 +233,7 @@ impl Shell {
         self.images.ops.crop
     }
 
-    fn images_patch(&mut self, change: impl FnOnce(&mut ImagesState), cx: &mut Context<Self>) {
+    pub(crate) fn images_patch(&mut self, change: impl FnOnce(&mut ImagesState), cx: &mut Context<Self>) {
         change(&mut self.images);
         self.images.made.clear();
         self.images_preview(cx);
@@ -282,6 +288,25 @@ impl Shell {
     }
 
     /// For tests: the operations as they are.
+    /// One step back in the settings.
+    pub fn images_undo(&mut self, cx: &mut Context<Self>) {
+        let now = self.images.ops.clone();
+        if let Some(back) = self.images.history.undo(&now) {
+            self.images.ops = back;
+            self.images.made.clear();
+            self.images_preview(cx);
+        }
+    }
+
+    pub fn images_redo(&mut self, cx: &mut Context<Self>) {
+        let now = self.images.ops.clone();
+        if let Some(next) = self.images.history.redo(&now) {
+            self.images.ops = next;
+            self.images.made.clear();
+            self.images_preview(cx);
+        }
+    }
+
     pub fn images_ops(&self) -> &ImageOps {
         &self.images.ops
     }
@@ -303,7 +328,28 @@ impl Shell {
             let me = me.clone();
             ui.button("bilder-waehlen", if i.files.is_empty() { "Bilder wählen" } else { "Andere Bilder wählen" }).primary().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_images(cx)))
         };
-        page = page.child(div().flex().flex_wrap().items_center().gap(px(12.)).child(choose));
+        if let Some(path) = i.current() {
+            i.history.observe(&path.to_string_lossy(), &i.ops, i.crop_drag.is_none());
+        }
+        let (undo, redo, compare, uncrop) = (me.clone(), me.clone(), me.clone(), me.clone());
+        let mut tools = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(12.))
+            .child(choose);
+        if !i.files.is_empty() {
+            let on = i.compare;
+            tools = tools
+                .child(ui.button("bild-rueckgaengig", "Rückgängig").small().accessible_name("Rückgängig (Strg+Z)").disabled(!i.history.can_undo()).on_click(move |_, app| undo.update(app, |shell, cx| shell.images_undo(cx))))
+                .child(ui.button("bild-wiederholen", "Wiederholen").small().accessible_name("Wiederholen (Strg+Umschalt+Z)").disabled(!i.history.can_redo()).on_click(move |_, app| redo.update(app, |shell, cx| shell.images_redo(cx))))
+                .child(ui.chip("bild-vergleichen", "Vergleichen", on).accessible_name("Mit dem Original vergleichen").on_click(move |_, app| compare.update(app, |shell, cx| {
+                    shell.images.compare = !on;
+                    shell.images_preview(cx);
+                })))
+                .child(ui.button("ausschnitt-aufheben", "Ausschnitt aufheben").small().ghost().disabled(i.ops.crop.is_none()).on_click(move |_, app| uncrop.update(app, |shell, cx| shell.images_patch(|s| s.ops.crop = None, cx))));
+        }
+        page = page.child(tools);
         let (Some(path), Some((w, h))) = (i.current(), i.dims) else {
             if i.files.is_empty() {
                 page = page.child(ui.empty("bilder-leer", "Noch kein Bild gewählt", "Danach steht es hier auf der Bühne, die Werkzeuge rechts daneben. Mehrere Bilder bekommen dieselben Schritte.", vec![]));

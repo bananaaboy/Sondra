@@ -180,3 +180,50 @@ fn the_crop_is_drawn_on_the_picture_kept_to_a_ratio_and_shown_cropped_when_the_t
     let (pw, ph) = w.preview().unwrap();
     assert!((f64::from(pw) - square.width * 640.0).abs() < 3.0 && (f64::from(ph) - square.height * 360.0).abs() < 3.0, "{pw} × {ph}");
 }
+
+#[gpui::test]
+fn settings_are_walked_back_and_forth_and_the_original_can_be_compared(cx: &mut TestAppContext) {
+    let Some(ff) = Ffmpeg::locate() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let a = picture(&ff, tmp.path(), "eins.png", "640x360");
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let (shell, vcx) = cx.add_window_view(|window, cx| Shell::new(window, cx));
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    vcx.simulate_resize(size(px(WIDTH), px(900.)));
+    let mut w = Window { cx: vcx, shell, seen };
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Images, cx));
+    w.shell.update(w.cx, |shell, cx| shell.images_take(vec![a], cx));
+    w.settle();
+    w.press(Role::Button, "Werkzeug Drehen");
+    w.press(Role::Button, "Nach rechts drehen");
+    w.settle();
+    assert_eq!(w.preview(), Some((360, 640)));
+    // „Vergleichen“ shows the original, and back.
+    w.press(Role::Button, "Mit dem Original vergleichen");
+    w.settle();
+    assert_eq!(w.preview(), Some((640, 360)));
+    w.press(Role::Button, "Mit dem Original vergleichen");
+    w.settle();
+    // Strg+Z takes the turn back, Strg+Umschalt+Z does it again.
+    // The keys reach the window from a control that does not use them.
+    let undo = w.tree().find(Role::Button, "Werkzeug Drehen").unwrap().id;
+    w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: undo, data: None }, window, cx));
+    w.cx.simulate_keystrokes("ctrl-z");
+    w.settle();
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.images_ops().rotate), 0);
+    let undo = w.tree().find(Role::Button, "Werkzeug Drehen").unwrap().id;
+    w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: undo, data: None }, window, cx));
+    w.cx.simulate_keystrokes("ctrl-shift-z");
+    w.settle();
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.images_ops().rotate), 90);
+    // The buttons say the same.
+    w.press(Role::Button, "Rückgängig (Strg+Z)");
+    w.settle();
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.images_ops().rotate), 0);
+}

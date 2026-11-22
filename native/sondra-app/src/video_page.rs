@@ -78,6 +78,8 @@ pub struct VideoState {
     pub stage_bounds: Rc<Cell<Bounds<Pixels>>>,
     pub crop_bounds: Rc<Cell<Bounds<Pixels>>>,
     pub crop_drag: Option<sondra_media::crop_drag::Drag>,
+    /// „Rückgängig“ and „Wiederholen“ over the settings.
+    pub history: crate::ops_history::OpsHistory<VideoOps>,
 }
 
 /// What a press on the timeline grabbed: the place, or one end of what stays.
@@ -90,7 +92,7 @@ pub enum TimelineDrag {
 
 impl VideoState {
     pub fn new() -> VideoState {
-        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None, stage_bounds: Rc::new(Cell::new(Bounds::default())), crop_bounds: Rc::new(Cell::new(Bounds::default())), crop_drag: None }
+        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None, stage_bounds: Rc::new(Cell::new(Bounds::default())), crop_bounds: Rc::new(Cell::new(Bounds::default())), crop_drag: None, history: Default::default() }
     }
 }
 
@@ -331,6 +333,25 @@ impl Shell {
     }
 
     /// For tests: the settings as they are.
+    /// One step back in the settings.
+    pub fn video_undo(&mut self, cx: &mut Context<Self>) {
+        let now = self.video.ops.clone();
+        if let Some(back) = self.video.history.undo(&now) {
+            self.video.ops = back;
+            self.video.made.clear();
+            self.video_still(cx);
+        }
+    }
+
+    pub fn video_redo(&mut self, cx: &mut Context<Self>) {
+        let now = self.video.ops.clone();
+        if let Some(next) = self.video.history.redo(&now) {
+            self.video.ops = next;
+            self.video.made.clear();
+            self.video_still(cx);
+        }
+    }
+
     pub fn video_ops(&self) -> &VideoOps {
         &self.video.ops
     }
@@ -469,7 +490,21 @@ impl Shell {
             let me = me.clone();
             ui.button("video-waehlen", if v.file.is_some() { "Anderes Video wählen" } else { "Video wählen" }).primary().disabled(v.run.is_some()).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_video(cx)))
         };
-        page = page.child(div().flex().flex_wrap().items_center().gap(px(12.)).child(choose));
+        // Every settled change of the settings is a step back (a drag is one).
+        if let Some(file) = &v.file {
+            v.history.observe(&file.to_string_lossy(), &v.ops, v.drag.is_none() && v.crop_drag.is_none());
+        }
+        let (undo, redo) = (me.clone(), me.clone());
+        page = page.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(12.))
+                .child(choose)
+                .child(ui.button("video-rueckgaengig", "Rückgängig").small().accessible_name("Rückgängig (Strg+Z)").disabled(!v.history.can_undo() || v.run.is_some()).on_click(move |_, app| undo.update(app, |shell, cx| shell.video_undo(cx))))
+                .child(ui.button("video-wiederholen", "Wiederholen").small().accessible_name("Wiederholen (Strg+Umschalt+Z)").disabled(!v.history.can_redo() || v.run.is_some()).on_click(move |_, app| redo.update(app, |shell, cx| shell.video_redo(cx)))),
+        );
         let (Some(file), Some((w, h))) = (&v.file, v.source) else {
             if v.file.is_none() {
                 page = page.child(ui.empty("video-leer", "Noch kein Video gewählt", "Danach steht es hier auf der Bühne mit seiner Zeitleiste, die Werkzeuge rechts daneben. Auch grosse Filme.", vec![]));

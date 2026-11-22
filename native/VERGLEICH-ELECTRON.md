@@ -136,7 +136,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 ### Video
 - ✗ **Wellenform** auf der Zeitleiste
-- ✗ **Rückgängig / Wiederholen** (Strg+Z)
+- ✓ **Rückgängig / Wiederholen** (Strg+Z) (nativ seit 22.11.2026)
 - ✗ Vorschau des Bildes beim Ziehen von Anfang und Ende
 - ✓ Schnitt, Drehen, Spiegeln, Ausschnitt, Größe, Farbe, Looks, Schärfen, Entrauschen, Stabilisieren, Blenden, Tempo, Rückwärts, Ton unterlegen, Ton herausziehen, GIF, WebP, Standbild
 
@@ -164,7 +164,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ sechs Verfahren, Pads, Klavierrolle, Akkorde und Arpeggio zeichnen, MIDI-Controller, Choke, Gate, Swing, Beat als WAV und MIDI, CUE und Audacity-Marken
 
 ### Bilder
-- ✗ **Rückgängig / Wiederholen**
+- ✓ **Rückgängig / Wiederholen** (nativ seit 22.11.2026)
 - ✗ **„Gedrückt halten für das Original“** (vorher/nachher auf der Bühne)
 - ✗ **Pixelgenaue Skalierung** (Nearest Neighbour)
 - ◐ Viele Bilder auf einmal geht, **als ZIP** nicht
@@ -260,15 +260,15 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✓ **Kanäle**: Wie Quelle, Mono, Stereo.
 
 **Video (mit Datei)**
-- ✗ **Rückgängig/Wiederholen** und **„Fertigstellen“**.
+- ◐ **Rückgängig/Wiederholen** (nativ seit 22.11.2026) und **„Fertigstellen“** (nativ heisst es „Video speichern“).
 - ✗ **„Ton im Vorhören“** an/aus.
 - ✗ **Tempo „Feiner“** als Regler, mit „Länge danach“.
 
 **Bilder (mit Datei)**
-- ✗ **Rückgängig/Wiederholen**.
+- ✓ **Rückgängig/Wiederholen** (nativ seit 22.11.2026).
 - ✗ **Zoom**: „Passend“ / „Grösser“.
-- ✗ **„Vergleichen“**.
-- ✗ **„Ausschnitt aufheben“**.
+- ✓ **„Vergleichen“**.
+- ✓ **„Ausschnitt aufheben“**.
 
 **Ton (mit Datei)**
 - ✓ **Stopp**, **Schleife**, **Zoom hinein/heraus**.
