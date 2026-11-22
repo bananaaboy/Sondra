@@ -756,3 +756,67 @@ fn the_film_can_go_in_a_small_window_of_its_own_that_keeps_the_clock_and_comes_b
     assert!(!w.cx.read_entity(&w.shell, |s, _| s.pip_open()));
     assert_eq!(w.cx.update(|_, cx| cx.windows().len()), 1);
 }
+
+#[gpui::test]
+fn the_keys_of_the_website_and_the_settings_of_wiedergabe(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let one = film(tmp.path(), "eins.mp4", 30);
+    let two = film(tmp.path(), "zwei.mp4", 30);
+    let mut w = open(cx);
+    let store = sondra_app::store::FileStore::open(tmp.path().join("Einstellungen.json"));
+    w.shell.update(w.cx, |shell, cx| shell.open_player_memory(store, cx));
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![one, two], cx));
+    w.watch(0.5);
+    let focus = |w: &mut Window| {
+        let id = w.tree().find(Role::Button, "Stumm").unwrap().id;
+        w.cx.update(|window, cx| {
+            run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: id, data: None }, window, cx)
+        });
+    };
+    // 5 → half of the film; L ten seconds on; J ten back.
+    focus(&mut w);
+    w.cx.simulate_keystrokes("5");
+    w.watch(0.4);
+    assert!((14.0..17.0).contains(&w.position()), "5 goes to the middle: {}", w.position());
+    focus(&mut w);
+    w.cx.simulate_keystrokes("l");
+    w.watch(0.4);
+    assert!(w.position() >= 24.0, "L ten on: {}", w.position());
+    focus(&mut w);
+    w.cx.simulate_keystrokes("j");
+    w.watch(0.4);
+    assert!(w.position() < 20.0, "J ten back: {}", w.position());
+    // „>“ is faster, N the next file, P back.
+    focus(&mut w);
+    w.cx.simulate_keystrokes("shift-.");
+    w.draw();
+    let kept = |w: &Window| -> serde_json::Value { serde_json::from_str(&w.shell.read_with(w.cx, |s, _| s.player_setting("sondra:abspielen")).unwrap_or_default()).unwrap_or_default() };
+    assert_eq!(kept(&w)["rate"], serde_json::json!(1.25), "{}", kept(&w));
+    focus(&mut w);
+    w.cx.simulate_keystrokes("n");
+    w.watch(0.3);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_playing_name()), Some("zwei.mp4".to_string()));
+    focus(&mut w);
+    w.cx.simulate_keystrokes("p");
+    w.watch(0.3);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_playing_name()), Some("eins.mp4".to_string()));
+
+    // „Wiedergabe“ in „Bild und Ton“: the end, the jump, the opening, ticking off — kept for the next start.
+    w.press(Role::Button, "Bild und Ton");
+    w.press(Role::Button, "Liste wiederholen");
+    w.press(Role::Button, "Sprungweite 30 Sekunden");
+    w.press(Role::Button, "Feste Länge des Vorspanns 2:00");
+    w.press(Role::Button, "In der Merkliste abhaken");
+    w.press(Role::Button, "Automatisch weiter");
+    let k = kept(&w);
+    assert_eq!(k["repeat"], serde_json::json!("liste"));
+    assert_eq!(k["skip"], serde_json::json!(30.0));
+    assert_eq!(k["opening"], serde_json::json!(120.0));
+    assert_eq!(k["merkliste"], serde_json::json!(false));
+    // A–B: the first press sets A, the second B, the third ends it.
+    w.press(Role::Button, "Schleife A–B: hier beginnen");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with("A bei "))));
+}

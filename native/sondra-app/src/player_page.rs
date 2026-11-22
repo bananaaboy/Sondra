@@ -56,6 +56,9 @@ pub struct PlayerState {
     pub tracks_open: bool,
     /// The window with the picture and the sound.
     pub look_open: bool,
+    /// „Schleife A–B“: where it starts and, once set, where it goes back.
+    pub loop_a: Option<f64>,
+    pub loop_b: Option<f64>,
     /// How big the picture is: beside the list, wide, over the whole window, or over the whole screen.
     pub size: PlayerSize,
     /// „Beim Minimieren pausieren“: off until the person turns it on (kept on this device).
@@ -157,6 +160,8 @@ impl PlayerState {
             sleep_open: false,
             tracks_open: false,
             look_open: false,
+            loop_a: None,
+            loop_b: None,
             size: PlayerSize::Normal,
             pause_on_minimize: false,
             screen: None,
@@ -226,6 +231,8 @@ impl PlayerState {
         self.subtitle_error = None;
         self.tracks_open = false;
         self.look_open = false;
+        self.loop_a = None;
+        self.loop_b = None;
         self.track = 0;
         self.quality = None;
         self.marks_open = false;
@@ -295,6 +302,55 @@ impl PlayerState {
         self.keep_settings();
     }
 
+    /// „C“: subtitles off, or back on (the file beside the film first).
+    pub fn toggle_captions(&mut self) {
+        if self.subtitle == Subtitle::Off {
+            if !self.external_cues.is_empty() {
+                self.choose_subtitle(Subtitle::File);
+            }
+        } else {
+            self.choose_subtitle(Subtitle::Off);
+        }
+    }
+
+    /// One frame back or on, while paused (a 25th of a second).
+    pub fn frame_step(&mut self, forward: bool) {
+        if let Some(p) = self.playback.as_mut() {
+            if p.state() == State::Playing {
+                return;
+            }
+            let to = (p.position() + if forward { 0.04 } else { -0.04 }).max(0.0);
+            let _ = p.seek(to);
+        }
+    }
+
+    /// The next speed up or down (`RATES`).
+    pub fn rate_step(&mut self, up: bool) {
+        let now = self.settings.rate;
+        let next = if up { RATES.iter().copied().find(|r| *r > now + 1e-9) } else { RATES.iter().rev().copied().find(|r| *r < now - 1e-9) };
+        if let Some(rate) = next {
+            self.settings.rate = rate;
+            if let Some(p) = self.playback.as_mut() {
+                let _ = p.set_rate(rate);
+            }
+            self.keep_settings();
+        }
+    }
+
+    /// „Schleife A–B“: the first press sets A, the second B (and the film runs between them), the third ends it.
+    pub fn loop_mark(&mut self) {
+        let Some(at) = self.playback.as_ref().map(|p| p.position()) else { return };
+        match (self.loop_a, self.loop_b) {
+            (None, _) => self.loop_a = Some(at),
+            (Some(a), None) if at > a + 0.5 => self.loop_b = Some(at),
+            (Some(_), None) => self.loop_a = Some(at),
+            (Some(_), Some(_)) => {
+                self.loop_a = None;
+                self.loop_b = None;
+            }
+        }
+    }
+
     /// A key of the player (Space, the arrows, M); `true` when it was one and has been taken.
     pub fn key(&mut self, key: &str) -> bool {
         if self.playback.is_none() {
@@ -309,6 +365,25 @@ impl PlayerState {
             "down" => self.volume_by(-0.05),
             "m" => self.toggle_mute(),
             "b" => self.add_mark(),
+            // As on the website: J and L ten seconds, N and P the next and previous file, S the opening, C the
+            // subtitles, 0–9 to a tenth of the film, „,“ and „.“ a frame when paused, „<“ and „>“ the speed.
+            "j" => self.skip_by(-10.0),
+            "l" => self.skip_by(10.0),
+            "n" if self.index + 1 < self.queue.len() => self.start(self.index + 1),
+            "p" if self.index > 0 => self.start(self.index - 1),
+            "s" => self.skip_by(self.settings.opening),
+            "c" => self.toggle_captions(),
+            "," => self.frame_step(false),
+            "." => self.frame_step(true),
+            "<" => self.rate_step(false),
+            ">" => self.rate_step(true),
+            digit if digit.len() == 1 && digit.as_bytes()[0].is_ascii_digit() => {
+                let tenth = f64::from(digit.as_bytes()[0] - b'0') / 10.0;
+                if let Some(p) = self.playback.as_mut() {
+                    let to = p.duration().unwrap_or(0.0) * tenth;
+                    let _ = p.seek(to);
+                }
+            }
             "t" => self.size = if self.size == PlayerSize::Kino { PlayerSize::Normal } else { PlayerSize::Kino },
             "w" => self.size = if self.size == PlayerSize::Fill { PlayerSize::Normal } else { PlayerSize::Fill },
             "f" => self.size = if self.size == PlayerSize::Full { PlayerSize::Normal } else { PlayerSize::Full },
@@ -491,6 +566,12 @@ impl PlayerState {
             }
         }
         let state = playback.state();
+        // „Schleife A–B“: past B, back to A.
+        if let (Some(a), Some(b)) = (self.loop_a, self.loop_b) {
+            if state == State::Playing && playback.position() >= b {
+                let _ = playback.seek(a);
+            }
+        }
         // The sleep timer: the volume goes down over the last ten seconds, then it stops and the volume comes back.
         if let Some(Sleep::At { until, .. }) = self.sleep {
             let left = until.saturating_duration_since(std::time::Instant::now());
@@ -1290,17 +1371,79 @@ impl Shell {
                 body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Entzerrer")).child(div().flex().flex_wrap().gap(px(6.)).child(toggle)).child(presets).child(sliders));
             }
             {
-                let me = me.clone();
+                // „Wiedergabe“ as in the gear menu of the website: what happens at the end, how far the arrows
+                // jump, the opening, ticking off on the Merkliste, a loop, and pausing when minimized.
+                let toggle = |id: &'static str, label: &'static str, on: bool, change: fn(&mut PlayerState)| {
+                    let me = me.clone();
+                    ui.chip(id, label, on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        change(p);
+                        p.keep_settings();
+                    }))
+                };
+                let mut ends = div().flex().flex_wrap().gap(px(6.));
+                ends = ends.child(toggle("automatisch-weiter", "Automatisch weiter", st.auto_next, |p| p.settings.auto_next = !p.settings.auto_next));
+                for (repeat, id, label) in [(Repeat::Aus, "wiederholen-aus", "Anhalten am Ende"), (Repeat::Titel, "wiederholen-titel", "Titel wiederholen"), (Repeat::Liste, "wiederholen-liste", "Liste wiederholen")] {
+                    let me = me.clone();
+                    ends = ends.child(ui.chip(id, label, st.repeat == repeat).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        p.settings.repeat = repeat;
+                        p.keep_settings();
+                    })));
+                }
+                let mut skips = div().flex().flex_wrap().gap(px(6.));
+                for s in sondra_player::SKIPS {
+                    let me = me.clone();
+                    skips = skips.child(ui.chip(format!("sprung-{s}"), format!("{} s", s as i64), (st.skip - s).abs() < 1e-9).accessible_name(format!("Sprungweite {} Sekunden", s as i64)).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        p.settings.skip = s;
+                        p.keep_settings();
+                    })));
+                }
+                let mut openings = div().flex().flex_wrap().gap(px(6.));
+                for o in [60.0f64, 90.0, 120.0, 150.0] {
+                    let me = me.clone();
+                    let label = format!("{}:{:02}", o as i64 / 60, o as i64 % 60);
+                    openings = openings.child(ui.chip(format!("vorspann-{o}"), label.clone(), (st.opening - o).abs() < 1e-9).accessible_name(format!("Feste Länge des Vorspanns {label}")).on_click(move |_, app| Self::player_do(&me, app, move |p| {
+                        p.settings.opening = o;
+                        p.keep_settings();
+                    })));
+                }
+                let mut ab = div().flex().flex_wrap().items_center().gap(px(6.));
+                let ab_text = match (p.loop_a, p.loop_b) {
+                    (None, _) => "Schleife A–B: hier beginnen".to_string(),
+                    (Some(a), None) => format!("A bei {} — hier enden", sondra_player::clock(a)),
+                    (Some(a), Some(b)) => format!("Schleife {}–{} beenden", sondra_player::clock(a), sondra_player::clock(b)),
+                };
+                {
+                    let me = me.clone();
+                    ab = ab.child(ui.button("schleife-ab", ab_text).small().disabled(p.playback.is_none()).on_click(move |_, app| Self::player_do(&me, app, |p| p.loop_mark())));
+                }
                 let on = p.pause_on_minimize;
-                body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.title("Wiedergabe")).child(
+                let minimize = {
+                    let me = me.clone();
                     ui.chip("minimieren-pausieren", "Beim Minimieren pausieren", on).on_click(move |_, app| Self::player_do(&me, app, move |p| {
                         use sondra_merk::folder_memory::Store;
                         p.pause_on_minimize = !on;
                         if let Some(store) = p.memory.as_mut() {
                             store.set_item(MINIMIZE_KEY, if on { "false".to_string() } else { "true".to_string() });
                         }
-                    })),
-                ));
+                    }))
+                };
+                body = body.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.))
+                        .child(ui.title("Wiedergabe"))
+                        .child(ui.hint("Nach dem Ende"))
+                        .child(ends)
+                        .child(ui.hint("Sprung mit ← → und den Pfeilknöpfen"))
+                        .child(skips)
+                        .child(ui.hint("Vorspann"))
+                        .child(div().flex().flex_wrap().gap(px(6.)).child(toggle("vorspann-anbieten", "Vorspann überspringen anbieten", st.skip_opening, |p| p.settings.skip_opening = !p.settings.skip_opening)))
+                        .child(ui.hint("Feste Länge des Vorspanns (wenn die Serie keine eigene hat)"))
+                        .child(openings)
+                        .child(div().flex().flex_wrap().gap(px(6.)).child(toggle("merkliste-abhaken", "In der Merkliste abhaken", st.merkliste, |p| p.settings.merkliste = !p.settings.merkliste)).child(minimize))
+                        .child(ab),
+                );
             }
             let (close, reset) = (me.clone(), me.clone());
             return Some(

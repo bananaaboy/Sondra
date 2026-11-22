@@ -25,11 +25,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 ### Liste
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **Filter nach Tags** (Pillen je Tag) | Die Logik ist da (`sondra-merk::view`), einen Knopf gibt es nicht |
-| ✗ | **„Nur offene Folgen“**: nur Serien zeigen, bei denen noch etwas zu schauen ist | ⚙ nur Logik |
-| ✗ | **Ordner-Pille über der Liste** („„Anime“ · 3 Serien darin“ / „Ordner mit Folgen wählen“) und „Google Drive einbeziehen“ | Die Merkliste weiss vom Ordner nur, was die Seite „Ordner“ zuletzt gelesen hat |
+| ✓ | **Filter nach Tags** (Pillen je Tag) | Die Logik ist da (`sondra-merk::view`), einen Knopf gibt es nicht |
+| ✓ | **„Nur offene Folgen“**: nur Serien zeigen, bei denen noch etwas zu schauen ist | ⚙ nur Logik |
+| ◐ | **Ordner-Pille über der Liste** („„Anime“ · 3 Serien darin“ / „Ordner mit Folgen wählen“) und „Google Drive einbeziehen“ | Die Merkliste weiss vom Ordner nur, was die Seite „Ordner“ zuletzt gelesen hat |
 | ✗ | **▶ auf der Kachel** (die nächste Folge direkt aus dem Ordner) | — |
-| ✗ | **Status des Abgleichs unter der Liste**: „Nur auf diesem Gerät gespeichert“ / „Über Google Drive abgeglichen“ / „Gleicht mit Anytype ab …“ | Die Fenster für Drive und Anytype sagen es, die Liste selbst nicht |
+| ✓ | **Status des Abgleichs unter der Liste**: „Nur auf diesem Gerät gespeichert“ / „Über Google Drive abgeglichen“ / „Gleicht mit Anytype ab …“ | Die Fenster für Drive und Anytype sagen es, die Liste selbst nicht |
 
 ### Serie hinzufügen und bearbeiten
 | | Funktion in Electron | Rust |
@@ -56,11 +56,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 ### Planer „Bis wohin?“
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **Ziel als Staffel + Folge** (nicht nur „Ende Staffel n“ / „Ganze Serie“) | — |
-| ✗ | **„Als Ziel merken“** mit Anzeige an der Serie („Ziel: … noch 6 Folgen, 2 am Tag reichen · 1 vor dem Plan“) und auf dem Poster („Ziel · noch 6“) | ⚙ die Rechnung ist da |
-| ✗ | **„Bis zum [Datum] → wie viel am Tag“** | — |
-| ✗ | **„pro Woche“** statt „am Tag“ | — |
-| ✗ | **„Genauer rechnen“**: von vorn, Tempo der Wiedergabe 1–2× | Nur „Ohne Vorspann“ ist wählbar |
+| ✓ | **Ziel als Staffel + Folge** (nicht nur „Ende Staffel n“ / „Ganze Serie“) | — |
+| ✓ | **„Als Ziel merken“** mit Anzeige an der Serie („Ziel: … noch 6 Folgen, 2 am Tag reichen · 1 vor dem Plan“) und auf dem Poster („Ziel · noch 6“) | ⚙ die Rechnung ist da |
+| ✓ | **„Bis zum [Datum] → wie viel am Tag“** | — |
+| ✓ | **„pro Woche“** statt „am Tag“ | — |
+| ✓ | **„Genauer rechnen“**: von vorn, Tempo der Wiedergabe 1–2× | Nur „Ohne Vorspann“ ist wählbar |
 
 ### Statistik, Teilen, Austausch
 | | Funktion in Electron | Rust |
@@ -91,11 +91,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **Einstellungen zur Wiedergabe in der Oberfläche**: „Automatisch weiter“, **Titel wiederholen / Liste wiederholen / Anhalten am Ende**, **Sprungweite** für ←/→, „Vorspann überspringen anbieten“ an/aus, **„In der Merkliste abhaken“ an/aus** | ⚙ Die Werte (`Repeat`, `auto_next`, `skip`, `skip_opening`) wirken im Player und werden gespeichert, **aber kein Knopf stellt sie um**. Bleibt nur, was voreingestellt ist |
+| ✓ | **Einstellungen zur Wiedergabe in der Oberfläche**: „Automatisch weiter“, **Titel wiederholen / Liste wiederholen / Anhalten am Ende**, **Sprungweite** für ←/→, „Vorspann überspringen anbieten“ an/aus, **„In der Merkliste abhaken“ an/aus** | ⚙ Die Werte (`Repeat`, `auto_next`, `skip`, `skip_opening`) wirken im Player und werden gespeichert, **aber kein Knopf stellt sie um**. Bleibt nur, was voreingestellt ist |
 | ✗ | **Vorspann am Ton erkennen** (zwei Folgen vergleichen, Fingerabdruck, je Datei merken; „Neuen Vorspann erkennen“, „Erkannten Vorspann vergessen“, „In dieser Folge nicht gefunden“) | ⚙ `sondra-media::intro` rechnet das, der Player nutzt immer die feste Länge |
 | ✗ | **Feste Länge des Vorspanns** einstellen (Zahnrad → Vorspann), **„Für diese Folge ausblenden“** | — |
-| ✗ | **Tasten** S (Vorspann), N (Nächste Folge), P (Vorherige), C (Untertitel an/aus), **Umschalt + ←/→ zu den Lesezeichen** | ◐ Umschalt + ←/→ gibt es. S, N, P, C fehlen |
-| ✗ | **A-B-Schleife** | — |
+| ✓ | **Tasten** S (Vorspann), N (Nächste Folge), P (Vorherige), C (Untertitel an/aus), **Umschalt + ←/→ zu den Lesezeichen** | ◐ Umschalt + ←/→ gibt es. S, N, P, C fehlen |
+| ✓ | **A-B-Schleife** | Nativ seit 22.11.2026 unter „Bild und Ton“ → Wiedergabe |
 | ✗ | **Standbild als Merkliste-Cover** („Als Cover festlegen“) | — |
 | ✗ | **„Im Ton-Editor öffnen“ / „Im Video-Editor öffnen“** aus dem Player | — |
 | ✗ | **Warteschlange bearbeiten**: „Als Nächstes“, „Aus der Liste nehmen“, „Vorheriges“ | Die Liste ersetzt sich beim nächsten Abspielen |
@@ -229,21 +229,21 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 
 **Rahmen**
 - ✗ **Tastenkürzel-Übersicht** wie in Electron: 45 Einträge in Gruppen (Allgemein, Ton & Schnitt, Sampler, Player, Video & Bild, Maus & Gesten) mit einem Suchfeld. Nativ ist die Übersicht kürzer und hat keine Suche.
-- ✗ **Player-Tasten**: J/L (10 s zurück/vor), `,`/`.` (Bild für Bild), `<`/`>` (Tempo), 0–9 (zu 0–90 % springen), A/B (Schleife).
+- ✓ **Player-Tasten** (nativ seit 22.11.2026, A/B als Knopf unter „Bild und Ton“): J/L (10 s zurück/vor), `,`/`.` (Bild für Bild), `<`/`>` (Tempo), 0–9 (zu 0–90 % springen), A/B (Schleife).
 - ✗ **Bilder**: die Leertaste gedrückt halten zeigt das Original.
 - ✗ **Visualizer**: ein Klick wechselt zwischen Balken, Welle und Kreis.
 - ✗ **„Protokoll“**: was Sondra gerade tut, zum Nachlesen.
 - ✗ **Sitzungsmenü**: „Weitere Datei öffnen“, „Alle n als ZIP speichern“ mit eigenem Namen, „Alles verwerfen“ und die Zeile „2,9 MB auf diesem Gerät gespeichert, nichts davon gesendet“.
 
 **Merkliste**
-- ✗ **Kopfzeile mit Zahlen**: „2 am Schauen · 1 später“.
-- ✗ **„Alle Tags“** als Filter.
-- ✗ **„Nur offene Folgen“**.
-- ✗ **Ordner-Pille** („Ordner mit Folgen wählen“).
-- ✗ **Wo die Liste liegt**: „Nur auf diesem Gerät gespeichert. Über Google Drive teilen es alle Ihre Geräte.“
+- ✓ **Kopfzeile mit Zahlen**: „2 am Schauen · 1 später“.
+- ✓ **„Alle Tags“** als Filter.
+- ✓ **„Nur offene Folgen“**.
+- ✓ **Ordner-Pille** („Ordner mit Folgen wählen“).
+- ✓ **Wo die Liste liegt**: „Nur auf diesem Gerät gespeichert. Über Google Drive teilen es alle Ihre Geräte.“
 - ◐ **„Mehr“ einer Serie**: „Folge n laden“, „Nächste Folgen laden …“, „Online nach Neuem suchen“, „Empfehlen“. **Nativ seit 21.11.2026:** „Folge n laden“, „Online nach Neuem suchen“, „Empfehlen“, „Von der Merkliste entfernen“; „Nächste Folgen laden …“ fehlt noch.
 - ◐ **Staffelkarten** mit Cover und „10 von 39, weiter mit Folge 11“. Ein Klick klappt die Folgen auf, jede mit ihrer Dauer („Folge 1, gesehen (47 Min.)“). Dazu ein Zähler „Anzahl Folgen“, „Noch 29 Folgen (11,6 Std.) · fertig bei 1/Tag: So., 20. Dez.“ und „Folge 11 laden“ je Staffel. Für die Filme gibt es „Filme bearbeiten: Anzahl, Name, Cover“. **Nativ seit 21.11.2026:** je Staffel „Staffel bearbeiten“ mit Fenster: Cover, „n Folgen gesehen“, „Weiter mit Folge n“, „Hier weiterschauen“, Abhaken (mit Umschalt bis dort), „Alle gesehen“, „Zurücksetzen“, Anzahl, Name, Cover, „In Teile teilen“, Staffel entfernen und Ausnahmen der Dauer. Noch fehlt: die Karte selbst mit Cover und Dauer je Folge.
-- ✗ **Planer**: das Ziel als Staffel (Auswahl) und Folge (−/+), „am Tag“ oder „pro Woche“, ein Datumsfeld „Bis zum“ und „Als Ziel merken“. Danach steht oben „Ziel: Staffel 4, Folge 39 — noch 29 Folgen“ und beim Planer „Steht auf der Merkliste bei dieser Serie.“
+- ✓ **Planer**: das Ziel als Staffel (Auswahl) und Folge (−/+), „am Tag“ oder „pro Woche“, ein Datumsfeld „Bis zum“ und „Als Ziel merken“. Danach steht oben „Ziel: Staffel 4, Folge 39 — noch 29 Folgen“ und beim Planer „Steht auf der Merkliste bei dieser Serie.“
 
 **Herunterladen**
 - ✗ **Zwischenablage**: „In der Zwischenablage: aniworld.to/… — Einfügen und nachsehen / Nicht jetzt“.

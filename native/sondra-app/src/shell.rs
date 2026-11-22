@@ -1271,8 +1271,15 @@ impl Render for Shell {
                             return;
                         }
                     }
-                    if !(m.control || m.alt || m.platform || m.shift) && me.read(app).panel == Panel::Player {
-                        let key = event.keystroke.key.clone();
+                    // With Shift only the speed: „>“ (Shift and „.“ or, on a German keyboard, Shift and „<“), „<“.
+                    let shifted = match (m.shift, event.keystroke.key.as_str()) {
+                        (true, "." | "<") => Some(">".to_string()),
+                        (true, ",") => Some("<".to_string()),
+                        (true, ">") => Some(">".to_string()),
+                        _ => None,
+                    };
+                    if !(m.control || m.alt || m.platform) && (!m.shift || shifted.is_some()) && me.read(app).panel == Panel::Player {
+                        let key = shifted.unwrap_or_else(|| event.keystroke.key.clone());
                         if me.update(app, |shell, cx| {
                             let taken = shell.player.key(&key);
                             if taken {

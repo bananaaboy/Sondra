@@ -34,6 +34,13 @@ pub fn shortcuts() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
             vec![
                 ("Leertaste", "Pause und Weiter"),
                 ("← →", "Zurück und vor um die eingestellte Sprungweite"),
+                ("J L", "10 Sekunden zurück und vor"),
+                ("0 … 9", "An den Anfang, zu 10 % … 90 % springen"),
+                (", .", "Bei angehaltenem Video ein Bild zurück und vor"),
+                ("< >", "Langsamer und schneller"),
+                ("N P", "Nächste und vorige Datei der Liste"),
+                ("S", "Vorspann überspringen"),
+                ("C", "Untertitel an und aus"),
                 ("↑ ↓", "Lauter und leiser"),
                 ("M", "Ton aus und an"),
                 ("B", "Lesezeichen setzen"),
