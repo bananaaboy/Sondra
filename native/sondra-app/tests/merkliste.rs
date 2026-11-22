@@ -1038,6 +1038,12 @@ fn a_season_is_split_into_parts_that_are_named_counted_and_dissolved(cx: &mut Te
     assert_eq!(parts[1].episodes, Some(16));
     assert_eq!(parts[1].cover.as_deref(), Some("https://example.org/cour2.jpg"));
     assert_eq!(season.episodes, Some(22), "the season is as long as its parts");
+    // A part's cover has its own frame.
+    w.press(Role::Button, "Mehr zoomen von Teil 2");
+    w.press(Role::Button, "Übernehmen");
+    let parts = back(&w).seasons.unwrap()[0].parts.clone().unwrap();
+    assert!(parts[1].cover_frame.is_some_and(|f| (f.zoom - 1.1).abs() < 1e-9), "{:?}", parts[1].cover_frame);
+    assert!(parts[0].cover_frame.is_none(), "a part without a cover has no frame");
 
     // Only the last part may stay open.
     w.shell.update(w.cx, |shell, cx| {

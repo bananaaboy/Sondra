@@ -75,6 +75,8 @@ pub struct MerkState {
     pub add_searching: bool,
     /// „Mehr Angaben“ when adding, while it is open.
     pub add_more: Option<crate::merk_add_more::AddMore>,
+    /// A drag on the frame of a cover in one of the forms.
+    pub frame_drag: Option<crate::merk_edit::FrameDrag>,
     /// The list as it was before a file was read in, to take it back.
     pub before_import: Option<(Vec<Item>, Removed)>,
     /// Progress made since the account on AniList was last told (the shell sends it, when the person asked for that).
@@ -172,6 +174,7 @@ impl MerkState {
             edit: None,
             season_window: None,
             add_more: None,
+            frame_drag: None,
             series_more: false,
             checking: None,
             checked_said: None,

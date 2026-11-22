@@ -32,10 +32,12 @@ pub struct EditFields {
     /// A picture chosen on this computer, already made small (a data address).
     pub picked: Option<String>,
     pub problem: Option<String>,
-    /// The part of the cover the tile shows (`FrameEditor`), and where a drag on it began.
+    /// The part of the cover the tile shows (`FrameEditor`).
     pub frame: Option<sondra_merk::CoverFrame>,
-    pub frame_drag: Option<(gpui::Point<gpui::Pixels>, sondra_merk::CoverFrame)>,
 }
+
+/// Where a drag on a cover's frame began: whose frame, the pointer, the frame then.
+pub type FrameDrag = (CoverFor, gpui::Point<gpui::Pixels>, sondra_merk::CoverFrame);
 
 /// The frame in the middle, not zoomed.
 pub const CENTRE: sondra_merk::CoverFrame = sondra_merk::CoverFrame { x: 50.0, y: 50.0, zoom: 1.0 };
@@ -66,6 +68,7 @@ pub struct SeasonFields {
     pub problem: Option<String>,
     /// One block per part when the season is split (none when it is one piece).
     pub parts: Vec<PartFields>,
+    pub frame: Option<sondra_merk::CoverFrame>,
 }
 
 /// The fields of one part of a season: how many episodes, its name, its cover.
@@ -74,6 +77,7 @@ pub struct PartFields {
     pub name: Entity<TextField>,
     pub cover: Entity<TextField>,
     pub picked: Option<String>,
+    pub frame: Option<sondra_merk::CoverFrame>,
 }
 
 /// Where a picture chosen on this computer goes.
@@ -268,15 +272,13 @@ impl MerkState {
     }
 
     /// Name and cover of a season (an empty name is the usual „Staffel n“; no cover is the series').
-    pub fn set_season_details(&mut self, id: &str, number: i64, title: Option<String>, cover: Option<String>) {
+    pub fn set_season_details(&mut self, id: &str, number: i64, title: Option<String>, cover: Option<String>, frame: Option<sondra_merk::CoverFrame>) {
         let Some(item) = self.items.iter().find(|i| i.id == id) else { return };
         let mut seasons = seasons_of(item);
         let Some(season) = seasons.iter_mut().find(|s| s.number == number) else { return };
         season.title = title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
-        if season.cover != cover {
-            season.cover_frame = None;
-        }
         season.cover = cover.filter(|c| !c.trim().is_empty());
+        season.cover_frame = season.cover.as_ref().and(frame).filter(|f| *f != CENTRE);
         self.change(id, move |item| item.seasons = Some(seasons));
     }
 
@@ -302,8 +304,11 @@ impl MerkState {
             .map(|(i, mut p)| {
                 p.title = p.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
                 p.cover = p.cover.map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
-                // A frame belongs to the picture it was set on.
-                p.cover_frame = before.get(i).filter(|b| b.cover == p.cover).and_then(|b| b.cover_frame);
+                // A frame belongs to the picture it was set on; one given with the part counts, else the one before.
+                p.cover_frame = match p.cover_frame {
+                    Some(f) => p.cover.as_ref().and(Some(f)).filter(|f| *f != CENTRE),
+                    None => before.get(i).filter(|b| b.cover == p.cover).and_then(|b| b.cover_frame),
+                };
                 p
             })
             .collect();
@@ -448,37 +453,55 @@ impl Shell {
             picked: item.cover.clone().filter(|c| c.starts_with("data:")),
             problem: None,
             frame: item.cover_frame,
-            frame_drag: None,
         };
         self.merk.edit = Some(fields);
         cx.notify();
     }
 
-    /// Changes the frame of the cover in the form.
-    pub fn edit_frame(&mut self, change: impl FnOnce(sondra_merk::CoverFrame) -> sondra_merk::CoverFrame, cx: &mut Context<Self>) {
-        if let Some(f) = self.merk.edit.as_mut() {
-            f.frame = Some(change(f.frame.unwrap_or(CENTRE)));
+    /// The frame a form holds for a cover: the series', the season's or a part's.
+    fn frame_slot(&mut self, target: CoverFor) -> Option<&mut Option<sondra_merk::CoverFrame>> {
+        match target {
+            CoverFor::Series => self.merk.edit.as_mut().map(|f| &mut f.frame),
+            CoverFor::Season => self.merk.season_window.as_mut().map(|s| &mut s.frame),
+            CoverFor::Part(i) => self.merk.season_window.as_mut().and_then(|s| s.parts.get_mut(i)).map(|p| &mut p.frame),
+            CoverFor::Add => None,
+        }
+    }
+
+    /// Changes the frame of a cover in its form.
+    pub fn set_frame(&mut self, target: CoverFor, change: impl FnOnce(sondra_merk::CoverFrame) -> sondra_merk::CoverFrame, cx: &mut Context<Self>) {
+        if let Some(slot) = self.frame_slot(target) {
+            *slot = Some(change(slot.unwrap_or(CENTRE)));
         }
         cx.notify();
     }
 
-    /// For tests: the frame the form holds.
+    /// For tests: the frame a form holds.
+    pub fn frame_now(&mut self, target: CoverFor) -> Option<sondra_merk::CoverFrame> {
+        self.frame_slot(target).and_then(|f| *f)
+    }
+
+    /// For tests: the frame the series' form holds.
     pub fn edit_frame_now(&self) -> Option<sondra_merk::CoverFrame> {
         self.merk.edit.as_ref().and_then(|f| f.frame)
     }
 
     /// The cover as the tile shows it, to drag into place, with buttons for the same (arrows, zoom, middle).
-    fn frame_editor(&self, ui: &Ui, f: &EditFields, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let typed = f.cover.read(cx).text().trim().to_string();
-        let src = if typed.is_empty() { f.picked.clone() } else { Some(typed) };
+    /// `prefix` keeps the ids of several on one window apart; `whose` goes into the names („… von Teil 2“).
+    fn frame_editor(&self, ui: &Ui, target: CoverFor, src: Option<String>, frame: Option<sondra_merk::CoverFrame>, manga: bool, whose: &str, cx: &mut Context<Self>) -> Option<AnyElement> {
         src.as_ref()?;
-        let (w, h) = (120.0f32, if f.manga { 168.0 } else { 180.0 });
-        let frame = f.frame.unwrap_or(CENTRE);
+        let prefix = match target {
+            CoverFor::Part(i) => format!("teil-{}-", i + 1),
+            CoverFor::Season => "staffel-".to_string(),
+            _ => String::new(),
+        };
+        let (w, h) = (120.0f32, if manga { 168.0 } else { 180.0 });
+        let frame = frame.unwrap_or(CENTRE);
         let picture = self.cover_element(cx, &src, Some(frame), w, h).unwrap_or_else(|| div().size_full().bg(ui.c.panel_mid).into_any_element());
         let me = cx.entity();
         let (down, moving, up, out) = (me.clone(), me.clone(), me.clone(), me.clone());
         let tile = div()
-            .id("cover-ausschnitt")
+            .id(gpui::SharedString::from(format!("{prefix}cover-ausschnitt")))
             .w(px(w))
             .h(px(h))
             .flex_none()
@@ -487,35 +510,30 @@ impl Shell {
             .cursor_grab()
             .child(picture)
             .on_mouse_down(gpui::MouseButton::Left, move |e, _, app| down.update(app, |shell, _| {
-                if let Some(f) = shell.merk.edit.as_mut() {
-                    f.frame_drag = Some((e.position, f.frame.unwrap_or(CENTRE)));
-                }
+                let now = shell.frame_slot(target).and_then(|f| *f).unwrap_or(CENTRE);
+                shell.merk.frame_drag = Some((target, e.position, now));
             }))
             .on_mouse_move(move |e, _, app| moving.update(app, |shell, cx| {
-                let Some(f) = shell.merk.edit.as_mut() else { return };
-                let Some((from, start)) = f.frame_drag else { return };
+                let Some((whose, from, start)) = shell.merk.frame_drag else { return };
+                if whose != target {
+                    return;
+                }
                 let dx = f64::from(f32::from(e.position.x - from.x)) / f64::from(w);
                 let dy = f64::from(f32::from(e.position.y - from.y)) / f64::from(h);
                 let next = frame_moved(start, dx, dy);
-                if f.frame != Some(next) {
-                    f.frame = Some(next);
-                    cx.notify();
+                if let Some(slot) = shell.frame_slot(target) {
+                    if *slot != Some(next) {
+                        *slot = Some(next);
+                        cx.notify();
+                    }
                 }
             }))
-            .on_mouse_up(gpui::MouseButton::Left, move |_, _, app| up.update(app, |shell, _| {
-                if let Some(f) = shell.merk.edit.as_mut() {
-                    f.frame_drag = None;
-                }
-            }))
-            .on_mouse_up_out(gpui::MouseButton::Left, move |_, _, app| out.update(app, |shell, _| {
-                if let Some(f) = shell.merk.edit.as_mut() {
-                    f.frame_drag = None;
-                }
-            }));
+            .on_mouse_up(gpui::MouseButton::Left, move |_, _, app| up.update(app, |shell, _| shell.merk.frame_drag = None))
+            .on_mouse_up_out(gpui::MouseButton::Left, move |_, _, app| out.update(app, |shell, _| shell.merk.frame_drag = None));
         let step = 0.1;
         let button = |id: &str, label: &str, name: &str, change: fn(sondra_merk::CoverFrame, f64) -> sondra_merk::CoverFrame| {
             let me = me.clone();
-            ui.button(id.to_string(), label.to_string()).small().ghost().accessible_name(name.to_string()).on_click(move |_, app| me.update(app, |shell, cx| shell.edit_frame(|f| change(f, step), cx)))
+            ui.button(format!("{prefix}{id}"), label.to_string()).small().ghost().accessible_name(format!("{name}{whose}")).on_click(move |_, app| me.update(app, |shell, cx| shell.set_frame(target, |f| change(f, step), cx)))
         };
         let controls = div()
             .flex()
@@ -544,6 +562,12 @@ impl Shell {
                     .child(button("ausschnitt-mitte", "Mitte", "Ausschnitt zurücksetzen", |_, _| CENTRE)),
             );
         Some(div().flex().flex_wrap().gap(px(16.)).child(tile).child(controls).into_any_element())
+    }
+
+    /// The cover a form shows: the address typed, else the picture chosen.
+    fn form_cover(field: &Entity<TextField>, picked: &Option<String>, cx: &Context<Self>) -> Option<String> {
+        let typed = field.read(cx).text().trim().to_string();
+        if typed.is_empty() { picked.clone() } else { Some(typed) }
     }
 
     /// Reads the form; a mistake stays in the form and says what is wrong.
@@ -654,6 +678,7 @@ impl Shell {
             picked: season.cover.clone().filter(|c| c.starts_with("data:")),
             problem: None,
             parts: Vec::new(),
+            frame: season.cover_frame,
         };
         let split = season.parts.as_ref().is_some_and(|p| p.len() >= 2);
         let parts = if split {
@@ -667,6 +692,7 @@ impl Shell {
                         name: self.field(cx, &format!("Name von Teil {n}"), part.part.title.clone().unwrap_or_default(), &format!("{} · Teil {n}", season_name(&season))),
                         cover: self.field(cx, &format!("Adresse des Covers von Teil {n}"), part.part.cover.clone().filter(|c| !c.starts_with("data:")).unwrap_or_default(), "Sonst das der Staffel"),
                         picked: part.part.cover.clone().filter(|c| c.starts_with("data:")),
+                        frame: part.part.cover_frame,
                     }
                 })
                 .collect()
@@ -697,6 +723,7 @@ impl Shell {
         let cover_text = text(&s.cover);
         let cover = if cover_text.trim().is_empty() { s.picked.clone() } else { Some(cover_text.trim().to_string()) };
         let name = text(&s.name);
+        let frame = s.frame;
         // A split season counts its parts; each says how long it is.
         let mut parts = Vec::new();
         let last = s.parts.len().saturating_sub(1);
@@ -718,7 +745,7 @@ impl Shell {
             };
             let cover_text = text(&part.cover);
             let cover = if cover_text.trim().is_empty() { part.picked.clone() } else { Some(cover_text.trim().to_string()) };
-            parts.push(Part { episodes, title: Some(text(&part.name)), cover, cover_frame: None });
+            parts.push(Part { episodes, title: Some(text(&part.name)), cover, cover_frame: Some(part.frame.unwrap_or(CENTRE)) });
         }
         if parts.is_empty() {
             let before = self.merk.items.iter().find(|i| i.id == id).and_then(|i| seasons_of(i).into_iter().find(|x| x.number == number)).and_then(|x| x.episodes);
@@ -728,7 +755,7 @@ impl Shell {
         } else {
             self.merk.set_parts(&id, number, parts);
         }
-        self.merk.set_season_details(&id, number, Some(name), cover);
+        self.merk.set_season_details(&id, number, Some(name), cover, frame);
         if let Some(s) = &mut self.merk.season_window {
             s.problem = None;
         }
@@ -741,6 +768,7 @@ impl Shell {
             return None;
         }
         let me = cx.entity();
+        let manga = self.merk.items.iter().find(|i| i.id == id).is_some_and(|i| i.tile_format.as_deref() == Some("manga"));
         let mut list = div().flex().flex_col().gap(px(14.)).child(ui.subheading("Teile")).child(ui.hint("Die Folgen zählen durch; die Staffel ist so lang wie ihre Teile zusammen. Nur der letzte Teil darf noch offen sein."));
         for (i, part) in s.parts.iter().enumerate() {
             let n = i + 1;
@@ -766,6 +794,7 @@ impl Shell {
                     .gap(px(8.))
                     .child(div().flex().flex_wrap().gap(px(12.)).child(div().w(px(180.)).child(part.count.clone())).child(div().flex_1().min_w(px(200.)).child(part.name.clone())))
                     .child(cover_row)
+                    .children(self.frame_editor(ui, CoverFor::Part(i), Self::form_cover(&part.cover, &part.picked, cx), part.frame, manga, &format!(" von Teil {n}"), cx))
                     .child(div().flex().child(ui.button(format!("teil-{n}-aufloesen"), "Diesen Teil auflösen").small().ghost().accessible_name(format!("Teil {n} auflösen")).on_click(move |_, app| {
                         let id = id.clone();
                         me.update(app, |shell, cx| {
@@ -855,7 +884,7 @@ impl Shell {
                 cx.notify();
             })));
         }
-        let framer = self.frame_editor(&ui, f, cx);
+        let framer = self.frame_editor(&ui, CoverFor::Series, Self::form_cover(&f.cover, &f.picked, cx), f.frame, f.manga, "", cx);
         let shapes = {
             let (a, b) = (me.clone(), me.clone());
             div()
@@ -1032,6 +1061,7 @@ impl Shell {
                 row.child(div().flex_1().min_w(px(200.)).child(s.name.clone()))
             })
             .child(cover_row)
+            .children(self.frame_editor(&ui, CoverFor::Season, Self::form_cover(&s.cover, &s.picked, cx), s.frame, item.tile_format.as_deref() == Some("manga"), " der Staffel", cx))
             .children(self.parts_section(&ui, s, &id, number, cx))
             .child({
                 let (save, split, remove) = (me.clone(), me.clone(), me.clone());
