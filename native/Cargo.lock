@@ -6547,6 +6547,7 @@ dependencies = [
  "image",
  "qrcode",
  "raw-window-handle",
+ "resvg",
  "serde",
  "serde_json",
  "sha2 0.10.9",

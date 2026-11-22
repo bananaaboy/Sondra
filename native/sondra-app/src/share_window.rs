@@ -30,11 +30,19 @@ pub struct ShareState {
     pub said: Option<String>,
     /// „Empfehlen“ on a series' page: only this one (by id) goes, whatever its stand.
     pub only: Option<String>,
+    /// Series of the chosen stands that were unticked.
+    pub left_out: BTreeSet<String>,
+    /// The size of the pictures in the link; none without pictures.
+    pub tier: Option<crate::share_pictures::Tier>,
+    /// The pictures made for a size, by id, and for which size and entries they were made.
+    pub thumbs: HashMap<String, Vec<u8>>,
+    pub thumbs_for: Option<(crate::share_pictures::Tier, Vec<String>)>,
+    pub making: bool,
 }
 
 impl Default for ShareState {
     fn default() -> Self {
-        ShareState { open: false, stands: BTreeSet::from([0]), progress: true, qr: false, part: 0, said: None, only: None }
+        ShareState { open: false, stands: BTreeSet::from([0]), progress: true, qr: false, part: 0, said: None, only: None, left_out: BTreeSet::new(), tier: None, thumbs: HashMap::new(), thumbs_for: None, making: false }
     }
 }
 
@@ -47,6 +55,11 @@ fn chosen<'a>(items: &'a [Item], state: &ShareState) -> Vec<Item> {
     if let Some(id) = &state.only {
         return items.iter().filter(|i| &i.id == id).cloned().collect();
     }
+    by_stand(items, state).into_iter().filter(|i| !state.left_out.contains(&i.id)).collect()
+}
+
+/// The entries of the chosen stands, ticked or not.
+fn by_stand(items: &[Item], state: &ShareState) -> Vec<Item> {
     items.iter().filter(|i| state.stands.contains(&stand_index(i.status))).cloned().collect()
 }
 
@@ -62,7 +75,8 @@ impl Shell {
     /// Everything a person can take out for the choices made.
     pub fn share_outputs(&self) -> (Vec<String>, String) {
         let s = &self.merk.share;
-        let list = shareable_list(&chosen(&self.merk.items, s), "", s.progress, &HashMap::new());
+        let thumbs = if s.tier.is_some() { s.thumbs.clone() } else { HashMap::new() };
+        let list = shareable_list(&chosen(&self.merk.items, s), "", s.progress, &thumbs);
         let links = share_links(&list, ORIGIN, LINK_MAX);
         let text = share_text(&list, &links);
         (links, text)
@@ -103,13 +117,89 @@ impl Shell {
         };
         let (links, text) = self.share_outputs();
         let n = chosen(&self.merk.items, s).len();
+        // Each series of the chosen stands, ticked to go along.
+        let mut ticks = div().flex().flex_wrap().gap(px(6.));
+        let in_stands = by_stand(&self.merk.items, s);
+        if s.only.is_none() && !in_stands.is_empty() {
+            for item in in_stands.iter().take(80) {
+                let (me, id) = (me.clone(), item.id.clone());
+                let on = !s.left_out.contains(&item.id);
+                ticks = ticks.child(ui.chip(format!("teilen-serie-{}", item.id), item.title.clone(), on).accessible_name(format!("{} mitnehmen", item.title)).on_click(move |_, app| {
+                    let id = id.clone();
+                    me.update(app, |shell, cx| {
+                        let st = &mut shell.merk.share;
+                        if !st.left_out.remove(&id) {
+                            st.left_out.insert(id);
+                        }
+                        st.part = 0;
+                        shell.share_make_pictures(cx);
+                        cx.notify();
+                    })
+                }));
+            }
+            let (all, none) = (me.clone(), me.clone());
+            let ids: Vec<String> = in_stands.iter().map(|i| i.id.clone()).collect();
+            ticks = ticks
+                .child(ui.button("teilen-alle", "Alle").small().ghost().accessible_name("Alle Serien mitnehmen").on_click(move |_, app| all.update(app, |shell, cx| {
+                    shell.merk.share.left_out.clear();
+                    shell.share_make_pictures(cx);
+                    cx.notify();
+                })))
+                .child(ui.button("teilen-keine", "Keine").small().ghost().accessible_name("Keine Serie mitnehmen").on_click(move |_, app| {
+                    let ids = ids.clone();
+                    none.update(app, |shell, cx| {
+                        shell.merk.share.left_out = ids.into_iter().collect();
+                        cx.notify();
+                    })
+                }));
+        }
+        // The pictures: none, or one of three sizes; what they cost in the link.
+        let mut sizes = div().flex().flex_wrap().gap(px(6.));
+        {
+            let me = me.clone();
+            sizes = sizes.child(ui.chip("bilder-ohne", "Ohne Bilder", s.tier.is_none()).on_click(move |_, app| me.update(app, |shell, cx| {
+                shell.merk.share.tier = None;
+                cx.notify();
+            })));
+        }
+        for (tier, label, note) in crate::share_pictures::TIERS {
+            let me = me.clone();
+            sizes = sizes.child(ui.chip(format!("bilder-{label}"), format!("{label} ({note})"), s.tier == Some(tier)).accessible_name(format!("Bilder {label}")).on_click(move |_, app| me.update(app, |shell, cx| {
+                shell.merk.share.tier = Some(tier);
+                shell.merk.share.part = 0;
+                shell.share_make_pictures(cx);
+                cx.notify();
+            })));
+        }
+        let pictures_line = if s.tier.is_none() {
+            None
+        } else if s.making {
+            Some("Die Bilder werden gemacht …".to_string())
+        } else {
+            let without = {
+                let list = shareable_list(&chosen(&self.merk.items, s), "", s.progress, &HashMap::new());
+                share_links(&list, ORIGIN, LINK_MAX)
+            };
+            let had = chosen(&self.merk.items, s).iter().filter(|i| s.thumbs.contains_key(&i.id)).count();
+            let missing = n.saturating_sub(had);
+            let chars = |l: &[String]| l.iter().map(String::len).sum::<usize>();
+            Some(format!(
+                "Ohne Bilder: {} {}, {} Zeichen; mit: {} Zeichen.{}",
+                without.len(),
+                if without.len() == 1 { "Link" } else { "Links" },
+                chars(&without),
+                chars(&links),
+                if missing > 0 { format!(" {missing} Serien haben kein Bild, das sich mitgeben lässt.") } else { String::new() }
+            ))
+        };
         let mut body = div().flex().flex_col().gap(px(14.));
         body = body.child(ui.prose("Die Liste steht im Link selbst: es wird nichts hochgeladen, und wer den Link hat, sieht sie. Adressen der Folgen und Notizen gehen nie mit."));
         if s.only.is_some() {
             body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.subheading("Diese Serie")).child(div().flex().child(progress)));
         } else {
-            body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.subheading("Was soll mit?")).child(pills).child(div().flex().child(progress)));
+            body = body.child(div().flex().flex_col().gap(px(8.)).child(ui.subheading("Was soll mit?")).child(pills).child(ticks).child(div().flex().child(progress)));
         }
+        body = body.child(div().flex().flex_col().gap(px(6.)).child(ui.hint("Bilder im Link")).child(sizes).children(pictures_line.map(|l| ui.hint(l))));
         if n == 0 {
             body = body.child(ui.hint("Wählen Sie mindestens einen Stand."));
         } else if links.is_empty() {
@@ -207,7 +297,8 @@ impl Shell {
     /// Writes the list as a file that opens in Sondra (`.sondra-liste`) into the downloads folder.
     pub fn share_save_file(&mut self) {
         let s = &self.merk.share;
-        let list = shareable_list(&chosen(&self.merk.items, s), "", s.progress, &HashMap::new());
+        let thumbs = if s.tier.is_some() { s.thumbs.clone() } else { HashMap::new() };
+        let list = shareable_list(&chosen(&self.merk.items, s), "", s.progress, &thumbs);
         let day = chrono::Local::now().format("%Y-%m-%d").to_string();
         let folder = crate::store::downloads_dir();
         let name = format!("Sondra-Merkliste-{day}");
@@ -220,5 +311,37 @@ impl Shell {
             Ok(p) => format!("Die Datei liegt in {}.", p.display()),
             Err(e) => format!("Die Datei liess sich nicht schreiben: {e}"),
         });
+    }
+}
+
+impl Shell {
+    /// Makes the pictures for the size and the series chosen, away from the window, unless they are there.
+    pub(crate) fn share_make_pictures(&mut self, cx: &mut Context<Self>) {
+        let s = &self.merk.share;
+        let Some(tier) = s.tier else { return };
+        let items = chosen(&self.merk.items, s);
+        let key = (tier, items.iter().map(|i| i.id.clone()).collect::<Vec<_>>());
+        if s.thumbs_for.as_ref() == Some(&key) || s.making {
+            return;
+        }
+        self.merk.share.making = true;
+        Self::in_background(
+            cx,
+            move || crate::share_pictures::thumbs_for(&items, tier),
+            move |shell, thumbs, cx| {
+                let st = &mut shell.merk.share;
+                st.making = false;
+                st.thumbs = thumbs;
+                st.thumbs_for = Some(key);
+                // The choice may have moved on meanwhile.
+                shell.share_make_pictures(cx);
+                cx.notify();
+            },
+        );
+    }
+
+    /// For tests: the pictures made, by id.
+    pub fn share_thumb_ids(&self) -> Vec<String> {
+        self.merk.share.thumbs.keys().cloned().collect()
     }
 }

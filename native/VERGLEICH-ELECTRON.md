@@ -28,7 +28,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ✓ | **Filter nach Tags** (Pillen je Tag) | Die Logik ist da (`sondra-merk::view`), einen Knopf gibt es nicht |
 | ✓ | **„Nur offene Folgen“**: nur Serien zeigen, bei denen noch etwas zu schauen ist | ⚙ nur Logik |
 | ◐ | **Ordner-Pille über der Liste** („„Anime“ · 3 Serien darin“ / „Ordner mit Folgen wählen“) und „Google Drive einbeziehen“ | Die Merkliste weiss vom Ordner nur, was die Seite „Ordner“ zuletzt gelesen hat |
-| ✗ | **▶ auf der Kachel** (die nächste Folge direkt aus dem Ordner) | — |
+| ✓ | **▶ auf der Kachel** (die nächste Folge direkt aus dem Ordner) | Nativ seit 22.11.2026 |
 | ✓ | **Status des Abgleichs unter der Liste**: „Nur auf diesem Gerät gespeichert“ / „Über Google Drive abgeglichen“ / „Gleicht mit Anytype ab …“ | Die Fenster für Drive und Anytype sagen es, die Liste selbst nicht |
 
 ### Serie hinzufügen und bearbeiten
@@ -50,8 +50,8 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ✗ | **Als Stream abspielen** ohne Download („Folge sofort ohne vorherigen Download im Player abspielen“) | „Folge n abspielen“ gibt es nur, wenn die Datei im gelesenen Ordner liegt |
 | ✗ | **Einstellungen je Serie zum Laden**: „Laden als“ (Video mit Ton / Nur Ton), Sprache (Deutsch synchronisiert, OmU, englische Untertitel, beste Fassung), Qualität (bis 4K, 320/192/128 kbps), „Untertitel dazu erstellen“ | — |
 | ✓ | **„Online nach Neuem suchen“** als Knopf auf der Serie | Nativ seit 21.11.2026 unter „Mehr“ |
-| ✗ | **„Im Ordner: Staffel 1: 1–3“** und im Staffelfenster der Strich unter jeder Folge, die im Ordner liegt | — |
-| ✗ | **„Als ungesehen markieren“** als eigener Befehl | Ein zweiter Klick auf ein Häkchen nimmt es zurück |
+| ✓ | **„Im Ordner: Staffel 1: 1–3“** und im Staffelfenster der Strich unter jeder Folge, die im Ordner liegt | Nativ seit 22.11.2026 (ist die Zahl der Folgen unbekannt, reicht das Fenster so weit wie der Ordner) |
+| ✓ | **„Als ungesehen markieren“** als eigener Befehl | „Rückgängig“ je Eintrag im Verlauf (wie auf der Website), dazu der zweite Klick auf ein Häkchen |
 
 ### Planer „Bis wohin?“
 | | Funktion in Electron | Rust |
@@ -65,11 +65,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 ### Statistik, Teilen, Austausch
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **Statistik als PNG speichern** | — |
-| ✗ | **„Zusammenfassung als Text kopieren“** (Statistik) | — |
-| ✗ | **Häkchen je Serie** im Fenster „Teilen“ (Rust wählt nur nach Stand oder genau eine Serie über „Empfehlen“) | ◐ |
-| ✗ | **Bilder im Link** (Winzig 6 × 9 / Klein / Gross, aus dem Cover-Ausschnitt) und die Angabe, was sie kosten | Empfangene Bildchen werden angezeigt, eigene werden nicht hergestellt |
-| ✗ | Hinweis „Erstellt mit Sondra“ in Text und Bild | — |
+| ✓ | **Statistik als PNG speichern** | Nativ seit 22.11.2026 (900 × 500 wie auf der Website, mit Barlow gezeichnet) |
+| ✓ | **„Zusammenfassung als Text kopieren“** (Statistik) | Nativ seit 22.11.2026 |
+| ✓ | **Häkchen je Serie** im Fenster „Teilen“ (Rust wählt nur nach Stand oder genau eine Serie über „Empfehlen“) | Nativ seit 22.11.2026, mit „Alle“ und „Keine“ |
+| ✓ | **Bilder im Link** (Winzig 6 × 9 / Klein / Gross, aus dem Cover-Ausschnitt) und die Angabe, was sie kosten | Nativ seit 22.11.2026 (Klein/Gross als JPEG unter derselben Grenze), mit „Ohne Bilder: … Zeichen; mit: …“ |
+| ✓ | Hinweis „Erstellt mit Sondra“ in Text und Bild | Nativ seit 22.11.2026 |
 
 ## 3. Ordner
 

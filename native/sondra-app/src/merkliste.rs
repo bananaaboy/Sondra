@@ -57,6 +57,8 @@ pub struct MerkState {
     pub planner: Option<crate::planner::PlannerState>,
     /// The window with the numbers and the year looked back on.
     pub stats_open: bool,
+    /// What the statistics window said last (a picture saved, the text copied).
+    pub stats_said: Option<String>,
     /// The windows „Verlauf“ and „Was soll ich schauen?“, and the series the dice showed last.
     pub history_open: bool,
     pub dice_open: bool,
@@ -152,6 +154,7 @@ impl MerkState {
             covers: SharedCovers::default(),
             planner: None,
             stats_open: false,
+            stats_said: None,
             history_open: false,
             dice_open: false,
             dice_id: None,
@@ -1024,6 +1027,14 @@ impl Shell {
             }
         }
         let mut line = div().flex().items_center().justify_between().gap(px(6.)).child(div().flex_1().min_w(px(0.)).text_size(px(size::SMALL)).text_color(c.prose).truncate().child(stand.clone()));
+        // ▶: the next episode straight from the folder, when it lies there.
+        if self.continue_here().iter().any(|s| s.item == item.id) {
+            let (me, id) = (me.clone(), item.id.clone());
+            line = line.child(ui.button(format!("kachel-abspielen-{}", item.id), "▶").small().accessible_name(format!("Nächste Folge von {} aus dem Ordner abspielen", item.title)).on_click(move |_, app| {
+                let id = id.clone();
+                me.update(app, |shell, cx| shell.continue_play(&id, cx))
+            }));
+        }
         if !caught_up(&seasons_of(item)) && item.episode.is_some_and(|e| e != 0) {
             let (me, id) = (me.clone(), item.id.clone());
             line = line.child(
@@ -1099,6 +1110,7 @@ impl Shell {
             );
         }
 
+        let in_folder = self.merk_in_folder(&item.id);
         let mut actions = div().flex().flex_wrap().items_center().gap(px(8.));
         // The best way forward there is: from the folder the Ordner page has read, when the next episode lies in it.
         let from_folder = self.continue_here().into_iter().find(|s| s.item == item.id);
@@ -1170,6 +1182,9 @@ impl Shell {
             .child(self.merk_series_head(ui, item, facts.join(" · "), cx))
             .child(stands)
             .child(actions);
+        if let Some((folder, summary)) = in_folder {
+            page = page.child(ui.hint(format!("Im Ordner „{folder}“: {summary}")));
+        }
         if let Some(news) = news {
             page = page.child(news);
         }

@@ -88,12 +88,25 @@ impl Shell {
         } else {
             body = body.child(ui.hint("Für einen Rückblick fehlen noch Daten: jede abgehakte Folge bekommt von nun an ihr Datum."));
         }
+        if let Some(said) = &self.merk.stats_said {
+            body = body.child(ui.hint(said.clone()));
+        }
         let close = me.clone();
         let away = me.clone();
+        let (picture, text) = (me.clone(), me.clone());
         Some(
             ui.dialog("statistik-fenster", "Statistik und Rückblick")
                 .width(640.)
                 .child(body)
+                .action(ui.button("statistik-bild", "Als Bild speichern").accessible_name("Statistik als PNG speichern").on_click(move |_, app| picture.update(app, |shell, cx| shell.stats_save_picture(cx))))
+                .action(ui.button("statistik-text", "Als Text kopieren").accessible_name("Zusammenfassung als Text kopieren").on_click(move |_, app| {
+                    let summary = text.read(app).merk.items.clone();
+                    app.write_to_clipboard(gpui::ClipboardItem::new_string(crate::stats_export::summary_text(&summary)));
+                    text.update(app, |shell, cx| {
+                        shell.merk.stats_said = Some("Die Zusammenfassung ist in der Zwischenablage.".into());
+                        cx.notify();
+                    })
+                }))
                 .action(ui.button("statistik-schliessen", "Schliessen").primary().on_click(move |_, app| close.update(app, |shell, cx| {
                     shell.merk.stats_open = false;
                     cx.notify();
@@ -104,5 +117,33 @@ impl Shell {
                 }))
                 .into_any_element(),
         )
+    }
+}
+
+impl Shell {
+    /// „Als Bild speichern“: the picture where downloads go, named like the website names it.
+    pub fn stats_save_picture(&mut self, cx: &mut Context<Self>) {
+        let items = self.merk.items.clone();
+        let today = Local::now();
+        let label = format!("{}. {} {}", today.format("%-d"), ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"][today.format("%m").to_string().parse::<usize>().unwrap_or(1) - 1], today.format("%Y"));
+        let dir = crate::store::downloads_dir();
+        let stem = format!("Sondra-Merkliste-Statistik-{}", today.format("%Y-%m-%d"));
+        Self::in_background(
+            cx,
+            move || -> Result<std::path::PathBuf, String> {
+                let png = crate::stats_export::summary_png(&items, &label)?;
+                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                let path = sondra_media::run::unique_path(&dir, &stem, "png");
+                std::fs::write(&path, png).map_err(|e| e.to_string())?;
+                Ok(path)
+            },
+            |shell, answer, cx| {
+                shell.merk.stats_said = Some(match answer {
+                    Ok(path) => format!("Gespeichert: {}", path.display()),
+                    Err(e) => e,
+                });
+                cx.notify();
+            },
+        );
     }
 }

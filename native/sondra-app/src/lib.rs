@@ -36,6 +36,8 @@ pub mod merkliste;
 pub mod mic_page;
 pub mod mic_more;
 pub mod protocol;
+pub mod stats_export;
+pub mod share_pictures;
 pub mod nav;
 pub mod new_episodes;
 pub mod phone_page;

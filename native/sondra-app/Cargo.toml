@@ -42,6 +42,8 @@ smallvec = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# The statistics as a picture: an SVG drawn to PNG (the same resvg GPUI draws its icons with).
+resvg = { version = "0.45", default-features = false, features = ["text"] }
 
 [dev-dependencies]
 sondra-extract = { path = "../sondra-extract", features = ["testing"] }

@@ -112,3 +112,56 @@ impl Shell {
         Some(section.into_any_element())
     }
 }
+
+/// „Staffel 1: 1–3, 5 · Filme: 1“: which episodes of a series lie in the folder, in runs (`folderSummary`).
+pub fn folder_summary(episodes: &[(i64, i64)]) -> String {
+    let mut seasons: Vec<(i64, Vec<i64>)> = Vec::new();
+    for (season, episode) in episodes {
+        match seasons.iter_mut().find(|(s, _)| s == season) {
+            Some((_, list)) => list.push(*episode),
+            None => seasons.push((*season, vec![*episode])),
+        }
+    }
+    seasons
+        .into_iter()
+        .map(|(season, mut numbers)| {
+            numbers.sort_unstable();
+            numbers.dedup();
+            let mut runs: Vec<String> = Vec::new();
+            let mut start = numbers[0];
+            for i in 1..=numbers.len() {
+                if i < numbers.len() && numbers[i] == numbers[i - 1] + 1 {
+                    continue;
+                }
+                let end = numbers[i - 1];
+                runs.push(if end == start { start.to_string() } else { format!("{start}–{end}") });
+                if i < numbers.len() {
+                    start = numbers[i];
+                }
+            }
+            format!("{}: {}", if season == 0 { "Filme".to_string() } else { format!("Staffel {season}") }, runs.join(", "))
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+impl Shell {
+    /// The folder the Ordner page read and the episodes of this series in it, in words.
+    pub(crate) fn merk_in_folder(&self, item_id: &str) -> Option<(String, String)> {
+        let scan = self.folder.scan.as_ref()?;
+        let (_, episodes) = sondra_merk::folder::folder_episodes(&scan.files, &self.merk.items).into_iter().find(|(id, _)| id == item_id)?;
+        if episodes.is_empty() {
+            return None;
+        }
+        let pairs: Vec<(i64, i64)> = episodes.iter().map(|e| (e.season, e.episode)).collect();
+        Some((if scan.drive { "Google Drive".to_string() } else { scan.name.clone() }, folder_summary(&pairs)))
+    }
+}
+
+#[cfg(test)]
+mod summary_tests {
+    #[test]
+    fn episodes_are_said_in_runs_per_season() {
+        assert_eq!(super::folder_summary(&[(1, 1), (1, 2), (1, 3), (1, 5), (2, 1), (0, 1)]), "Staffel 1: 1–3, 5 · Staffel 2: 1 · Filme: 1");
+    }
+}

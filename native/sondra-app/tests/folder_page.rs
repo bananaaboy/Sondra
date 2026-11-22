@@ -480,9 +480,22 @@ fn the_series_on_the_list_continue_from_where_they_stand_and_play_the_unseen_one
     w.press(Role::Button, "Ansehen");
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Merkliste);
     assert!(w.tree().find(Role::Button, "Folge 1 gesehen").is_some());
+    // What lies in the folder, in runs.
+    assert!(said(&w, "Im Ordner „Serien“: Staffel 1: 1–3"), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    // In the season window, the episodes that lie there are marked.
+    w.press(Role::Button, "Staffel 1 bearbeiten: Anzahl, Name, Cover, Teile");
+    assert!(w.tree().find(Role::Button, "Folge 2, liegt im Ordner").is_some(), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).filter(|l| l.contains("Folge")).collect::<Vec<_>>());
+    assert!(w.tree().find(Role::Button, "Folge 3, liegt im Ordner").is_some(), "the count is unknown: the window reaches as far as the folder");
+    w.press(Role::Button, "Schliessen");
     w.press(Role::Button, "Folge 1 abspielen");
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
     assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_queue_names()), ["Frieren S01E01.mkv", "Frieren S01E02.mkv", "Frieren S01E03.mkv"]);
+    // On the list, the tile has ▶ for the same.
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Merkliste, cx));
+    w.draw();
+    w.press(Role::Button, "Zurück zur Merkliste");
+    w.press(Role::Button, "Nächste Folge von Frieren aus dem Ordner abspielen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Player);
 }
 
 #[gpui::test]

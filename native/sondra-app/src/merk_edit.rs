@@ -633,18 +633,32 @@ impl Shell {
         // The episodes to tick.
         let mut grid = div().flex().flex_wrap().gap(px(6.));
         let here = (item.season == number).then_some(item.episode).flatten();
-        for episode in 1..=season.episodes.unwrap_or_else(|| season.watched.iter().copied().max().unwrap_or(0) + 1) {
+        // The episodes that lie in the folder the Ordner page read: a line under each.
+        let in_folder: Vec<i64> = self
+            .folder
+            .scan
+            .as_ref()
+            .and_then(|scan| sondra_merk::folder::folder_episodes(&scan.files, &self.merk.items).into_iter().find(|(sid, _)| *sid == item.id))
+            .map(|(_, eps)| eps.iter().filter(|e| e.season == number).map(|e| e.episode).collect())
+            .unwrap_or_default();
+        // With the count unknown: as far as what was seen, and as far as the folder has episodes.
+        let last = season.episodes.unwrap_or_else(|| (season.watched.iter().copied().max().unwrap_or(0) + 1).max(in_folder.iter().copied().max().unwrap_or(0)));
+        for episode in 1..=last {
             let seen = season.watched.contains(&episode);
+            let there = in_folder.contains(&episode);
             let (me, id) = (me.clone(), id.clone());
-            grid = grid.child(
-                ui.chip(format!("fenster-folge-{episode}"), episode.to_string(), seen)
-                    .accessible_name(format!("{unit} {episode}{}", if here == Some(episode) { ", hier sind Sie" } else { "" }))
-                    .on_click(move |window, app| {
-                        let id = id.clone();
-                        let up_to = window.modifiers().shift;
-                        Shell::merk_do(&me, app, move |m| m.tick(&id, number, episode, up_to))
-                    }),
-            );
+            let chip = ui
+                .chip(format!("fenster-folge-{episode}"), episode.to_string(), seen)
+                .accessible_name(format!("{unit} {episode}{}{}", if here == Some(episode) { ", hier sind Sie" } else { "" }, if there { ", liegt im Ordner" } else { "" }))
+                .on_click(move |window, app| {
+                    let id = id.clone();
+                    let up_to = window.modifiers().shift;
+                    Shell::merk_do(&me, app, move |m| m.tick(&id, number, episode, up_to))
+                });
+            grid = grid.child(div().flex().flex_col().items_center().gap(px(2.)).child(chip).child(div().w(px(14.)).h(px(2.)).rounded(px(1.)).when(there, |d| d.bg(c.ink))));
+        }
+        if !in_folder.is_empty() {
+            grid = grid.child(div().w_full().child(ui.hint("Ein Strich unter einer Folge: sie liegt im Ordner.")));
         }
         let all_row = {
             let (a, b) = (me.clone(), me.clone());

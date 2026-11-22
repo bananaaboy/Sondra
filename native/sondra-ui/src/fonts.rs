@@ -14,6 +14,11 @@ const FILES: [&[u8]; 7] = [
     include_bytes!("../fonts/CormorantGaramond-Light.ttf"),
 ];
 
+/// The bytes of the faces, for what draws text outside a window (a picture written to a file).
+pub fn files() -> &'static [&'static [u8]] {
+    &FILES
+}
+
 /// Makes Barlow, Courier Prime and Cormorant Garamond known to the text system. Call once, before
 /// the first window.
 pub fn load(cx: &App) {

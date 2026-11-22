@@ -438,6 +438,7 @@ fn the_list_says_how_much_is_going_on_and_filters_by_tag_and_open_episodes(cx: &
 
 #[gpui::test]
 fn the_statistics_window_gives_the_numbers_and_a_year_looked_back_on(cx: &mut TestAppContext) {
+    let _guard = DOWNLOADS.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let mut ids = Ids::system();
     use chrono::TimeZone as _;
@@ -457,6 +458,22 @@ fn the_statistics_window_gives_the_numbers_and_a_year_looked_back_on(cx: &mut Te
     assert!(tree.find(Role::Heading, "Rückblick 2025").is_some());
     assert!(tree.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("4 Folgen"))), "four episodes that year");
     assert!(tree.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Stärkster Monat: März mit 3"))));
+    // To take along: the summary as text, the picture as a file.
+    w.press(Role::Button, "Zusammenfassung als Text kopieren");
+    let copied = w.cx.read_from_clipboard().and_then(|c| c.text()).unwrap_or_default();
+    assert!(copied.contains("4 Folgen gesehen") && copied.ends_with("Erstellt mit Sondra (https://sondra.lizge.ch)"), "{copied}");
+    std::env::set_var("SONDRA_DOWNLOADS", dir.path().join("Downloads"));
+    w.press(Role::Button, "Statistik als PNG speichern");
+    for _ in 0..200 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Gespeichert:"))) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let png = std::fs::read_dir(dir.path().join("Downloads")).unwrap().next().unwrap().unwrap().path();
+    assert!(png.file_name().unwrap().to_string_lossy().starts_with("Sondra-Merkliste-Statistik-"));
     w.press(Role::Button, "Schliessen");
     assert!(w.tree().find(Role::Dialog, "Statistik und Rückblick").is_none());
 }
@@ -614,6 +631,24 @@ fn the_list_is_shared_as_a_link_that_opens_again_as_text_as_a_qr_code_and_as_a_f
     w.press(Role::Button, "Später mitnehmen, 1 Serien");
     let (links, _) = w.cx.read_entity(&w.shell, |s, _| s.share_outputs());
     assert_eq!(sondra_merk::share::decode_share(sondra_merk::share::shared_from_hash(&links[0][links[0].find('#').unwrap()..]).unwrap()).unwrap().items.len(), 2);
+    // Each series can be left out by itself, and taken again.
+    let other = back_titles(&links).into_iter().find(|t| t != "Frieren").expect("a second series");
+    w.press(Role::Button, &format!("{other} mitnehmen"));
+    let (fewer, _) = w.cx.read_entity(&w.shell, |s, _| s.share_outputs());
+    assert_eq!(back_titles(&fewer), vec!["Frieren".to_string()]);
+    w.press(Role::Button, &format!("{other} mitnehmen"));
+    // Pictures in the link: a series without a cover goes without one, and the window says so.
+    w.press(Role::Button, "Bilder Winzig");
+    for _ in 0..100 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with("Ohne Bilder:"))) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).contains("kein Bild"))), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).collect::<Vec<_>>());
+    w.press(Role::Button, "Ohne Bilder");
     // The QR code stands for the link, with its three finder squares.
     w.press(Role::Button, "QR-Code zeigen");
     let rows = sondra_app::share_window::qr_modules(&links[0]).unwrap();
@@ -904,4 +939,9 @@ fn seasons_and_films_are_added_on_the_page_and_removing_is_behind_mehr(cx: &mut 
     w.press(Role::Button, "Mehr");
     assert!(w.tree().find(Role::MenuItem, "Empfehlen").is_some());
     assert!(w.tree().find(Role::MenuItem, "Von der Merkliste entfernen").is_some());
+}
+
+fn back_titles(links: &[String]) -> Vec<String> {
+    let link = &links[0];
+    sondra_merk::share::decode_share(sondra_merk::share::shared_from_hash(&link[link.find('#').unwrap()..]).unwrap()).unwrap().items.into_iter().map(|i| i.title).collect()
 }
