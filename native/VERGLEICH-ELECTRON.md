@@ -109,11 +109,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **„Was laden“**: Video mit Ton / Nur Ton / Ton aus dem Video | Geladen wird, was die Quelle liefert |
-| ✗ | **Qualität**: Video beste / mittel / „wenn es das Video nur grösser gibt“, Ton verlustfrei / hoch / Standard / tiefer, AAC 256k, PCM | — |
+| ✓ | **„Was laden“**: Video mit Ton / Nur Ton / Ton aus dem Video | Geladen wird, was die Quelle liefert |
+| ◐ | **Qualität**: Video beste / mittel / „wenn es das Video nur grösser gibt“, Ton verlustfrei / hoch / Standard / tiefer, AAC 256k, PCM | — |
 | ✗ | **„Direktdateien anpassen“** oder 1:1 übernehmen | — |
-| ✗ | **AniWorld-Sprache**: Ger-Dub, Ger-Sub (OmU), Eng-Sub, Auto | Rust nimmt die erste verfügbare Fassung |
-| ✗ | **Dateinamen**: wie eine Office-Datei / neutral (`media_…`) / nur Zeichen | — |
+| ✓ | **AniWorld-Sprache**: Ger-Dub, Ger-Sub (OmU), Eng-Sub, Auto | Rust nimmt die erste verfügbare Fassung |
+| ✓ | **Dateinamen**: wie eine Office-Datei / neutral (`media_…`) / nur Zeichen | — |
 | ✗ | **„Wie viele gleichzeitig laden“** | — |
 | ✗ | **Was danach geschieht**: in die Sitzung legen, „Sofort als Datei speichern & zusätzlich in die Sitzung“, **direkt in Google Drive (ohne Sitzung)**, **„Nach Download sofort im Player abspielen“**, **„Stream sofort abspielen“** (abspielen, während geladen wird) | Rust legt die Datei immer in den Download-Ordner, dazu „In Drive“ und „Im Ordner zeigen“ danach |
 | ✗ | **„Untertitel erstellen“ nach dem Laden** | — |
@@ -246,8 +246,8 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✓ **Planer**: das Ziel als Staffel (Auswahl) und Folge (−/+), „am Tag“ oder „pro Woche“, ein Datumsfeld „Bis zum“ und „Als Ziel merken“. Danach steht oben „Ziel: Staffel 4, Folge 39 — noch 29 Folgen“ und beim Planer „Steht auf der Merkliste bei dieser Serie.“
 
 **Herunterladen**
-- ✗ **Zwischenablage**: „In der Zwischenablage: aniworld.to/… — Einfügen und nachsehen / Nicht jetzt“.
-- ✗ **„Merken“**: die Adresse auf die Merkliste.
+- ✓ **Zwischenablage**: „In der Zwischenablage: aniworld.to/… — Einfügen und nachsehen / Nicht jetzt“.
+- ✓ **„Merken“**: die Adresse auf die Merkliste.
 - ✗ **„.txt / .m3u mit Links hier ablegbar“**.
 - ✗ **„alle zeigen“**: die Liste der Portale, die gehen.
 - ✗ **Einstellungen**: Fenster „Download-Einstellungen“ (siehe Abschnitt 5) und „Ton bei Fertigstellung abspielen“ samt Erklärung.

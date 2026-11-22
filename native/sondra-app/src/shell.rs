@@ -354,6 +354,9 @@ impl Shell {
         if panel != self.panel {
             self.from = self.panel;
             self.panel = panel;
+            if panel == Panel::Downloader {
+                self.offer_clipboard(cx);
+            }
         }
         cx.notify();
     }

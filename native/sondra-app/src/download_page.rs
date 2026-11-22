@@ -86,6 +86,13 @@ pub struct DownloadState {
     pub offer_tool: Option<String>,
     /// yt-dlp is being fetched.
     pub installing: bool,
+    /// What is loaded and what happens with it (`download_options`).
+    pub options: crate::download_options::DownloadOptions,
+    /// Whether a change of the options is written to `Herunterladen.json` (not in tests).
+    pub options_kept: bool,
+    /// An address found in the clipboard when the page was opened, and the one turned down („Nicht jetzt“).
+    pub clip_offer: Option<String>,
+    pub clip_declined: Option<String>,
 }
 
 /// The address's host, for a title when nothing else names it.
@@ -166,7 +173,7 @@ fn clean(name: &str) -> String {
 }
 
 /// Loads a portal's address with yt-dlp; a yt-dlp that is out of date is updated once and tried again.
-fn load_with_ytdlp(address: &str, tool_dir: &std::path::Path, system: bool, dir: &std::path::Path, cancel: &Cancel, progress: &Arc<Mutex<Progress>>) -> Result<(PathBuf, u64), String> {
+fn load_with_ytdlp(address: &str, tool_dir: &std::path::Path, system: bool, dir: &std::path::Path, want: sondra_download::ytdlp::Want, cancel: &Cancel, progress: &Arc<Mutex<Progress>>) -> Result<(PathBuf, u64), String> {
     use sondra_download::ytdlp;
     let Some(mut tool) = ytdlp::locate(tool_dir, system) else { return Err(ytdlp::YtdlpError::Missing.to_string()) };
     if ytdlp::is_stale(tool_dir) {
@@ -175,7 +182,9 @@ fn load_with_ytdlp(address: &str, tool_dir: &std::path::Path, system: bool, dir:
     let mut updated = false;
     loop {
         let heard = progress.clone();
-        match ytdlp::download(&tool, address, dir, None, cancel, &mut |p| *heard.lock().expect("lock") = p) {
+        // FFmpeg beside the program puts picture and sound together and takes the sound out.
+        let ffmpeg = sondra_media::ffmpeg::Ffmpeg::locate().map(|f| f.program().to_path_buf());
+        match ytdlp::download_with(&tool, address, dir, ffmpeg.as_deref(), &ytdlp::want_args(want), cancel, &mut |p| *heard.lock().expect("lock") = p) {
             Ok(file) => return Ok((file.path, file.size)),
             Err(ytdlp::YtdlpError::Cancelled) => return Err("Abgebrochen.".into()),
             Err(error) if error.outdated() && !updated => {
@@ -220,6 +229,10 @@ impl DownloadState {
             told: None,
             ytdlp_dir: crate::store::data_dir().unwrap_or_default(),
             ytdlp_releases: sondra_download::ytdlp::RELEASES.to_string(),
+            options: crate::download_options::DownloadOptions::load(),
+            options_kept: true,
+            clip_offer: None,
+            clip_declined: None,
             ytdlp_system: true,
             offer_tool: None,
             installing: false,
@@ -236,6 +249,9 @@ impl Shell {
         // A test never depends on what is installed on this machine.
         self.download.ytdlp_dir = self.download.folder.join(".ytdlp-test");
         self.download.ytdlp_system = false;
+        // Nor on what was chosen here before; and what a test chooses is not kept.
+        self.download.options = crate::download_options::DownloadOptions::default();
+        self.download.options_kept = false;
     }
 
     /// For tests: where yt-dlp is looked for and fetched from — Sondra's own folder only, and a server of
@@ -394,6 +410,8 @@ impl Shell {
         d.error = None;
         let allow_private = d.allow_private;
         let stem = title.clone();
+        let options = d.options.clone();
+        let (finish_title, want) = (title.clone(), options.want());
         let portal = match &found {
             Found::Portal { address, .. } => Some((address.clone(), d.ytdlp_dir.clone(), d.ytdlp_system)),
             _ => None,
@@ -401,8 +419,14 @@ impl Shell {
         Self::in_background(
             cx,
             move || -> Result<(PathBuf, u64), String> {
+                // After loading: the sound alone when only that was wanted, then the name (`download_options`).
+                let finished = |(path, size): (PathBuf, u64), by_ytdlp: bool| -> Result<(PathBuf, u64), String> {
+                    let path = crate::download_options::finish(&path, &finish_title, &options, by_ytdlp)?;
+                    let size = std::fs::metadata(&path).map_or(size, |m| m.len());
+                    Ok((path, size))
+                };
                 if let Some((address, tool_dir, system)) = portal {
-                    return load_with_ytdlp(&address, &tool_dir, system, &dir, &cancel, &progress);
+                    return load_with_ytdlp(&address, &tool_dir, system, &dir, want, &cancel, &progress).and_then(|done| finished(done, true));
                 }
                 let mut last = String::from("Keine Quelle ließ sich laden.");
                 for stream in &streams {
@@ -410,7 +434,7 @@ impl Shell {
                     downloader.allow_private = allow_private;
                     let progress = progress.clone();
                     match downloader.download(stream, &dir, &stem, &mut |p| *progress.lock().expect("lock") = p) {
-                        Ok(file) => return Ok((file.path, file.size)),
+                        Ok(file) => return finished((file.path, file.size), false),
                         Err(sondra_download::DownloadError::Cancelled) => return Err("Abgebrochen.".into()),
                         Err(error) => last = format!("{}: {error}", stream.hoster),
                     }
@@ -424,7 +448,12 @@ impl Shell {
                 match answer {
                     Ok((path, size)) => {
                         let line = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| title.clone());
-                        d.done.insert(0, Loaded { title, path, size });
+                        let play_now = d.options.play_after && !in_queue;
+                        d.done.insert(0, Loaded { title, path: path.clone(), size });
+                        if play_now {
+                            shell.go(crate::nav::Panel::Player, cx);
+                            shell.play_files(vec![path], cx);
+                        }
                         shell.note("Geladen", line, Some(crate::nav::Panel::Downloader));
                         let d = &mut shell.download;
                         d.found = None;
@@ -524,6 +553,33 @@ impl Shell {
             ui.button("suchen", if d.finding { "Sucht …" } else { "Suchen" }).primary().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.find_address(cx)))
         };
         let mut work = div().flex().flex_col().gap(px(20.)).child(div().flex().flex_wrap().items_center().gap(px(10.)).child(div().flex_1().min_w(px(260.)).max_w(px(560.)).child(d.input.clone())).child(find_button));
+        if let Some(address) = d.clip_offer.clone().filter(|_| !busy) {
+            let (take, away) = (me.clone(), me.clone());
+            let shown = address.trim_start_matches("https://").trim_start_matches("http://").to_string();
+            work = work.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(10.))
+                    .p(px(12.))
+                    .rounded(px(sondra_ui::radius::CARD))
+                    .bg(c.panel_soft)
+                    .child(ui.hint("In der Zwischenablage"))
+                    .child(div().max_w(px(420.)).truncate().child(ui.value(shown)))
+                    .child(ui.button("zwischenablage-einfuegen", "Einfügen und nachsehen").small().primary().on_click(move |_, app| take.update(app, |shell, cx| {
+                        if let Some(address) = shell.download.clip_offer.take() {
+                            shell.download_set_input(&address, cx);
+                            shell.find_address(cx);
+                        }
+                        cx.notify();
+                    })))
+                    .child(ui.button("zwischenablage-nicht", "Nicht jetzt").small().ghost().on_click(move |_, app| away.update(app, |shell, cx| {
+                        shell.download.clip_declined = shell.download.clip_offer.take();
+                        cx.notify();
+                    }))),
+            );
+        }
         // Where the files go and whether a sound says they are there: the settings column.
         let me2 = me.clone();
         let (me_chime, chime_on) = (me.clone(), d.chime);
@@ -533,7 +589,30 @@ impl Shell {
                 div().flex().flex_col().gap(px(8.)).child(ui.value(d.folder.display().to_string())).child(div().flex().child(ui.button("ordner-aendern", "Ändern").small().disabled(busy).on_click(move |_, app| me2.update(app, |shell, cx| shell.choose_download_folder(cx))))),
                 None,
             ),
-            ui.setting("Wenn es fertig ist", div().flex().child(ui.chip("gong", "Ton, wenn fertig", chime_on).on_click(move |_, app| me_chime.update(app, |shell, cx| shell.set_download_chime(!chime_on, cx)))), None),
+            self.download_what_setting(&ui, cx),
+            self.download_quality_setting(&ui, cx),
+            self.download_language_setting(&ui, cx),
+            self.download_naming_setting(&ui, cx),
+            ui.setting(
+                "Wenn es fertig ist",
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(6.))
+                    .child(ui.chip("gong", "Ton, wenn fertig", chime_on).on_click(move |_, app| me_chime.update(app, |shell, cx| shell.set_download_chime(!chime_on, cx))))
+                    .child({
+                        let me = me.clone();
+                        let on = d.options.play_after;
+                        ui.chip("sofort-abspielen", "Danach im Player abspielen", on).accessible_name("Nach Download sofort im Player abspielen").on_click(move |_, app| me.update(app, |shell, cx| {
+                            shell.download.options.play_after = !on;
+                            if shell.download.options_kept {
+                                shell.download.options.keep();
+                            }
+                            cx.notify();
+                        }))
+                    }),
+                None,
+            ),
         ];
 
         // A pasted list: what was found behind each address.
@@ -589,7 +668,22 @@ impl Shell {
                 Found::Direct(s) => (s.title.clone(), vec![if s.is_hls { "Stream (HLS)".to_string() } else { "Datei".to_string() }, s.hoster.clone()]),
                 Found::Portal { address, .. } => (found_title(found), vec!["Über yt-dlp".to_string(), host_of(address)]),
             };
-            let mut card = div().flex().flex_col().gap(px(10.)).p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.subheading(title)).child(ui.prose(facts.join(" · ")));
+            let mut card = div().flex().flex_col().gap(px(10.)).p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.subheading(title.clone())).child(ui.prose(facts.join(" · ")));
+            // „Merken“: onto the Merkliste with this address (an episode with its season and episode).
+            {
+                let me = me.clone();
+                let address = d.input.read(cx).text().trim().to_string();
+                let (name, season, episode) = match found {
+                    Found::Episode(ep) => (if ep.series_title.is_empty() { ep.title.clone() } else { ep.series_title.clone() }, i64::from(ep.season), Some(i64::from(ep.episode))),
+                    _ => (title.clone(), 1, None),
+                };
+                if !address.is_empty() {
+                    card = card.child(div().flex().child(ui.button("adresse-merken", "Merken").small().ghost().accessible_name("Auf die Merkliste setzen, mit Staffel und Folge").on_click(move |_, app| {
+                        let (address, name) = (address.clone(), name.clone());
+                        me.update(app, |shell, cx| shell.remember_address(&address, &name, season, episode, cx))
+                    })));
+                }
+            }
             if let Found::Episode(ep) = found {
                 if ep.available_languages.len() > 1 {
                     let mut languages = div().flex().flex_wrap().gap(px(6.));

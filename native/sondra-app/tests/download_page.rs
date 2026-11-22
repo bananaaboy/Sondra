@@ -292,3 +292,65 @@ fn a_download_can_be_held_and_goes_on_where_it_stopped(cx: &mut TestAppContext) 
     }
     assert_eq!(std::fs::metadata(tmp.path().join("lied.mp3")).unwrap().len(), 160_000);
 }
+
+#[gpui::test]
+fn what_is_loaded_how_it_is_named_and_merken_put_it_on_the_list(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = server(300_000);
+    let mut w = open(cx, tmp.path());
+    // The choices of the website stand in the settings column.
+    for label in ["Video mit Ton", "Nur Ton", "Beste", "720p", "Sprache automatisch", "Deutsch (Dub)", "Originaltitel", "Neutral (media_…)", "Wie eine Office-Datei"] {
+        assert!(w.tree().find(Role::Button, label).is_some(), "{label}");
+    }
+    w.press(Role::Button, "Nur Ton");
+    assert!(w.tree().find(Role::Button, "Mittel (192 kbps)").is_some(), "for the sound, its quality");
+    w.press(Role::Button, "Video mit Ton");
+    // A neutral name: the file is not called what it is.
+    w.press(Role::Button, "Neutral (media_…)");
+    w.type_address(&format!("{base}/lied.mp3"));
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    // „Merken“ puts the address on the Merkliste.
+    w.press(Role::Button, "Auf die Merkliste setzen, mit Staffel und Folge");
+    let items = w.shell.read_with(w.cx, |s, _| s.merk_items());
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].url, format!("{base}/lied.mp3"));
+    w.press(Role::Button, "Laden");
+    w.cx.run_until_parked();
+    w.draw();
+    let names: Vec<String> = std::fs::read_dir(tmp.path()).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| !n.starts_with('.')).collect();
+    assert_eq!(names.len(), 1, "{names:?}");
+    assert!(names[0].starts_with("media_") && names[0].ends_with(".mp3"), "{names:?}");
+}
+
+#[gpui::test]
+fn an_address_in_the_clipboard_is_offered_and_only_taken_on_a_click(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = server(1000);
+    let mut w = open(cx, tmp.path());
+    w.shell.update(w.cx, |shell, cx| shell.go(sondra_app::nav::Panel::Start, cx));
+    w.cx.write_to_clipboard(gpui::ClipboardItem::new_string(format!("schau mal: {base}/lied.mp3")));
+    w.shell.update(w.cx, |shell, cx| shell.go(sondra_app::nav::Panel::Downloader, cx));
+    w.draw();
+    assert!(w.said("In der Zwischenablage"));
+    assert!(w.tree().find(Role::Button, "Laden").is_none(), "nothing is looked up by itself");
+    w.press(Role::Button, "Einfügen und nachsehen");
+    w.cx.run_until_parked();
+    w.draw();
+    assert!(w.tree().find(Role::Button, "Laden").is_some());
+    // Turned down, the same address is not offered again.
+    w.shell.update(w.cx, |shell, cx| {
+        shell.download_set_input("", cx);
+        shell.go(sondra_app::nav::Panel::Start, cx);
+        shell.go(sondra_app::nav::Panel::Downloader, cx);
+    });
+    w.draw();
+    w.press(Role::Button, "Nicht jetzt");
+    w.shell.update(w.cx, |shell, cx| {
+        shell.go(sondra_app::nav::Panel::Start, cx);
+        shell.go(sondra_app::nav::Panel::Downloader, cx);
+    });
+    w.draw();
+    assert!(!w.said("In der Zwischenablage"));
+}

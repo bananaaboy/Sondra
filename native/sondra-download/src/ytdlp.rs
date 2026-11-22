@@ -299,9 +299,33 @@ pub fn download_args(dir: &Path, ffmpeg: Option<&Path>) -> Vec<String> {
 
 /// Loads `address` with yt-dlp into `dir`. `progress` hears how far it is; `cancel` kills the process.
 pub fn download(tool: &Tool, address: &str, dir: &Path, ffmpeg: Option<&Path>, cancel: &Cancel, progress: &mut dyn FnMut(Progress)) -> Result<FetchedFile, YtdlpError> {
+    download_with(tool, address, dir, ffmpeg, &[], cancel, progress)
+}
+
+/// What to fetch, as yt-dlp's own options: the whole video up to a height, or only the sound in a format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Want {
+    /// Video with sound; `None` is the best there is.
+    Video(Option<u32>),
+    /// Only the sound: `None` keeps it as it comes (lossless where the source is), else MP3 at this many kbit/s.
+    Audio(Option<u32>),
+}
+
+/// yt-dlp's options for what is wanted (`-f`, `-x`).
+pub fn want_args(want: Want) -> Vec<String> {
+    match want {
+        Want::Video(None) => vec!["-f".into(), "bv*+ba/b".into()],
+        Want::Video(Some(h)) => vec!["-f".into(), format!("bv*[height<={h}]+ba/b[height<={h}]/b")],
+        Want::Audio(None) => vec!["-f".into(), "ba/b".into(), "-x".into(), "--audio-format".into(), "best".into()],
+        Want::Audio(Some(kbps)) => vec!["-f".into(), "ba/b".into(), "-x".into(), "--audio-format".into(), "mp3".into(), "--audio-quality".into(), format!("{kbps}K")],
+    }
+}
+
+/// [`download`] with more of yt-dlp's options (before the address), such as [`want_args`].
+pub fn download_with(tool: &Tool, address: &str, dir: &Path, ffmpeg: Option<&Path>, extra: &[String], cancel: &Cancel, progress: &mut dyn FnMut(Progress)) -> Result<FetchedFile, YtdlpError> {
     fs::create_dir_all(dir).map_err(|e| YtdlpError::Io(e.to_string()))?;
     let mut command = Command::new(&tool.bin);
-    command.args(download_args(dir, ffmpeg)).arg("--").arg(address).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command.args(download_args(dir, ffmpeg)).args(extra).arg("--").arg(address).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     hide_window(&mut command);
     let mut child = command.spawn().map_err(|e| if e.kind() == std::io::ErrorKind::NotFound { YtdlpError::Missing } else { YtdlpError::Io(e.to_string()) })?;
 
@@ -471,6 +495,18 @@ pub fn update(data_dir: &Path) -> bool {
 fn locate_at(bin: &Path) -> Option<String> {
     let out = Command::new(bin).arg("--version").stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+#[cfg(test)]
+mod want_tests {
+    use super::*;
+
+    #[test]
+    fn what_is_wanted_becomes_the_options_of_yt_dlp() {
+        assert_eq!(want_args(Want::Video(Some(720))), vec!["-f", "bv*[height<=720]+ba/b[height<=720]/b"]);
+        assert_eq!(want_args(Want::Audio(Some(192))), vec!["-f", "ba/b", "-x", "--audio-format", "mp3", "--audio-quality", "192K"]);
+        assert_eq!(want_args(Want::Audio(None))[4], "best");
+    }
 }
 
 #[cfg(test)]
