@@ -183,7 +183,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ Ducking, Attack/Release, Vorlauf, Musik wiederholen, Einzelspuren, unter das Video legen
 
 ### Spuren trennen
-- ✗ **Feinjustierung**: Auflösung (FFT 2048/4096/8192), Länge der Filter, Maskenhärte, Mittenschärfe
+- ✓ **Feinjustierung**: Auflösung (FFT 2048/4096/8192), Länge der Filter, Maskenhärte, Mittenschärfe
 - — WebGPU (gibt es nativ nicht; Rust rechnet auf der CPU oder mit ONNX Runtime)
 
 ### Untertitel
@@ -284,7 +284,7 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✗ **Name des ZIP** für die Einzelspuren.
 
 **Spuren trennen (mit Datei)**
-- ✗ **Mittenschärfe** und **Maskenhärte** als Regler.
+- ✓ **Mittenschärfe** und **Maskenhärte** als Regler.
 - — WebGPU: nativ nicht nötig.
 
 **Lautstärke (mit Datei)**

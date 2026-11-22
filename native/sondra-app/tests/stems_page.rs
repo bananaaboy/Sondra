@@ -165,3 +165,20 @@ fn a_model_the_person_brings_is_checked_kept_and_used_instead_of_the_masks(cx: &
     assert!(w.shell.read_with(w.cx, |s, _| s.stems_model()).0.is_none());
     assert!(w.tree().find(Role::Button, "Modell wählen …").is_some());
 }
+
+#[gpui::test]
+fn the_fine_tuning_of_the_website_sets_the_values_by_hand(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Lied.wav"));
+    w.press(Role::Button, "Feinjustierung");
+    for label in ["Maskenhärte", "Mittenschärfe", "Auflösung (FFT)", "Filterfenster"] {
+        assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == label)), "{label}");
+    }
+    w.press(Role::Button, "8192 — Orchester / Solo");
+    assert_eq!(w.tree().find(Role::Button, "8192 — Orchester / Solo").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Worauf es ankommt: Ausgewogen").unwrap().toggled, Some(false), "by hand, no template is chosen");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Eigene Einstellung"))));
+    // A template again takes the hand-set values away.
+    w.press(Role::Button, "Worauf es ankommt: Gesang");
+    assert_eq!(w.tree().find(Role::Button, "4096 — Musik").unwrap().toggled, Some(true));
+}

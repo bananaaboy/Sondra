@@ -38,6 +38,9 @@ struct Work {
 
 pub struct StemsState {
     pub path: Option<PathBuf>,
+    /// „Feinjustierung“: the options changed by hand (then no template is chosen), and whether it is open.
+    pub custom: Option<SeparationOptions>,
+    pub fine: bool,
     pub preset: usize,
     pub original: Option<Arc<AudioData>>,
     work: Option<Arc<Mutex<Work>>>,
@@ -63,7 +66,7 @@ pub struct StemsState {
 
 impl StemsState {
     pub fn new() -> StemsState {
-        StemsState { path: None, preset: 0, original: None, work: None, stems: Vec::new(), playing: None, reading: false, error: None, made: Vec::new(), writing: false, zip: None, packing: false, ticking: false, model: None, model_info: None, model_checking: false, model_error: None, by_model: false }
+        StemsState { path: None, custom: None, fine: false, preset: 0, original: None, work: None, stems: Vec::new(), playing: None, reading: false, error: None, made: Vec::new(), writing: false, zip: None, packing: false, ticking: false, model: None, model_info: None, model_checking: false, model_error: None, by_model: false }
     }
 }
 
@@ -128,6 +131,7 @@ impl Shell {
     pub fn stems_preset(&mut self, index: usize, cx: &mut Context<Self>) {
         if self.stems.work.is_none() && index < PRESETS.len() {
             self.stems.preset = index;
+            self.stems.custom = None;
             cx.notify();
         }
     }
@@ -142,7 +146,7 @@ impl Shell {
         s.stems.clear();
         s.made.clear();
         s.error = None;
-        let options = PRESETS[s.preset].options;
+        let options = s.custom.unwrap_or(PRESETS[s.preset].options);
         let model = s.model.clone();
         s.by_model = model.is_some();
         let work = Arc::new(Mutex::new(Work { note: if model.is_some() { "Modell wird geöffnet" } else { "Analyse" }.into(), ..Default::default() }));
@@ -389,9 +393,39 @@ impl Shell {
         let mut presets = div().flex().flex_wrap().gap(px(6.));
         for (i, p) in PRESETS.iter().enumerate() {
             let me = me.clone();
-            presets = presets.child(ui.chip(format!("spuren-{}", p.label), p.label, s.preset == i).accessible_name(format!("Worauf es ankommt: {}", p.label)).on_click(move |_, app| me.update(app, |shell, cx| shell.stems_preset(i, cx))));
+            presets = presets.child(ui.chip(format!("spuren-{}", p.label), p.label, s.preset == i && s.custom.is_none()).accessible_name(format!("Worauf es ankommt: {}", p.label)).on_click(move |_, app| me.update(app, |shell, cx| shell.stems_preset(i, cx))));
         }
-        let mut settings = vec![ui.setting("Worauf es ankommt", presets, Some(PRESETS[s.preset].desc))];
+        let mut settings = vec![ui.setting("Worauf es ankommt", presets, Some(if s.custom.is_some() { "Eigene Einstellung — siehe Feinjustierung." } else { PRESETS[s.preset].desc }))];
+        // „Feinjustierung“: the four values the website lets one set by hand.
+        {
+            let now = s.custom.unwrap_or(PRESETS[s.preset].options);
+            let me2 = me.clone();
+            let fine = s.fine;
+            let mut box_ = div().flex().flex_col().gap(px(10.)).child(div().flex().child(ui.button("feinjustierung", if fine { "Feinjustierung schliessen" } else { "Feinjustierung" }).small().ghost().on_click(move |_, app| me2.update(app, |shell, cx| {
+                shell.stems.fine = !fine;
+                cx.notify();
+            }))));
+            if fine {
+                let set = |id: String, label: String, on: bool, change: Box<dyn Fn(&mut SeparationOptions)>| {
+                    let me = me.clone();
+                    ui.chip(id, label, on).on_click(move |_, app| me.update(app, |shell, cx| {
+                        if shell.stems.work.is_none() {
+                            let mut o = shell.stems.custom.unwrap_or(PRESETS[shell.stems.preset].options);
+                            change(&mut o);
+                            shell.stems.custom = Some(o);
+                        }
+                        cx.notify();
+                    }))
+                };
+                let row = |title: &str, chips: Vec<gpui::AnyElement>| div().flex().flex_col().gap(px(6.)).child(ui.hint(title.to_string())).child(div().flex().flex_wrap().gap(px(6.)).children(chips));
+                box_ = box_
+                    .child(row("Mittenschärfe", [0.5f64, 0.65, 0.75, 0.85, 0.95].iter().map(|v| { let v = *v; set(format!("mitte-{v}"), format!("{v:.2}").replace('.', ","), (now.vocal_focus - v).abs() < 1e-9, Box::new(move |o| o.vocal_focus = v)).into_any_element() }).collect()))
+                    .child(row("Maskenhärte", [1.5f64, 2.0, 2.8, 3.5, 4.5].iter().map(|v| { let v = *v; set(format!("maske-{v}"), format!("{v:.1}").replace('.', ","), (now.mask_exponent - v).abs() < 1e-9, Box::new(move |o| o.mask_exponent = v)).into_any_element() }).collect()))
+                    .child(row("Auflösung (FFT)", [(2048usize, "2048 — Beat / Drums"), (4096, "4096 — Musik"), (8192, "8192 — Orchester / Solo")].iter().map(|(n, l)| { let n = *n; set(format!("fft-{n}"), l.to_string(), now.fft_size == n, Box::new(move |o| { o.fft_size = n; o.hop_size = n / 4; })).into_any_element() }).collect()))
+                    .child(row("Filterfenster", [(9usize, "9 — schnell & knackig"), (17, "17 — Standard"), (31, "31 — gründlich")].iter().map(|(n, l)| { let n = *n; set(format!("filter-{n}"), l.to_string(), now.time_kernel == n, Box::new(move |o| { o.time_kernel = n; o.freq_kernel = n; })).into_any_element() }).collect()));
+            }
+            settings.push(ui.setting("Feinjustierung", box_, Some("Grösser trennt Töne feiner, kleiner schont Anschläge.")));
+        }
 
         // A model of the person's own.
         {
