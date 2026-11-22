@@ -354,3 +354,40 @@ fn an_address_in_the_clipboard_is_offered_and_only_taken_on_a_click(cx: &mut Tes
     w.draw();
     assert!(!w.said("In der Zwischenablage"));
 }
+
+#[gpui::test]
+fn a_loaded_file_goes_into_the_session_is_kept_under_zuletzt_and_links_come_from_a_file(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = server(50_000);
+    let mut w = open(cx, tmp.path());
+    // What is said under the field: the portals behind „alle zeigen“, and what is allowed.
+    assert!(w.said("Bitte nur laden, was erlaubt ist"));
+    assert!(!w.said("Bandcamp"));
+    w.press(Role::Button, "Alle Portale zeigen");
+    assert!(w.said("Bandcamp"));
+    // „In die Sitzung legen“ after the load.
+    w.press(Role::Button, "In die Sitzung legen");
+    w.type_address(&format!("{base}/lied.mp3"));
+    w.press(Role::Button, "Suchen");
+    w.cx.run_until_parked();
+    w.draw();
+    w.press(Role::Button, "Laden");
+    w.cx.run_until_parked();
+    w.draw();
+    let file = tmp.path().join("lied.mp3");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.session_files()), vec![file.clone()]);
+    // „Zuletzt geladen“ keeps it, with the way to load it again.
+    let recent = w.shell.read_with(w.cx, |s, _| s.download_recent().to_vec());
+    assert_eq!(recent.len(), 1);
+    assert_eq!(recent[0].path, file);
+    assert_eq!(recent[0].address.as_deref(), Some(format!("{base}/lied.mp3").as_str()));
+    assert!(w.tree().find(Role::Heading, "Zuletzt geladen").is_some());
+    assert!(w.tree().find(Role::Button, "lied wieder laden").is_some() || w.said("Wieder laden"));
+    // A text file with links: its addresses go into the field.
+    let links = tmp.path().join("links.m3u");
+    std::fs::write(&links, format!("#EXTM3U\n{base}/a.mp3\n{base}/b.mp3\n")).unwrap();
+    w.shell.update(w.cx, |s, cx| s.dropped(vec![links], cx));
+    w.draw();
+    let field = w.tree().find(Role::TextInput, "Adresse").and_then(|n| n.value.as_ref().map(|v| v.to_string())).unwrap_or_default();
+    assert!(field.contains("/a.mp3") && field.contains("/b.mp3"), "{field}");
+}

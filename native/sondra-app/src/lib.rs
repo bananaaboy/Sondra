@@ -8,6 +8,7 @@ pub mod clip_player;
 pub mod convert_more;
 pub mod convert_page;
 pub mod download_options;
+pub mod download_more;
 pub mod download_page;
 pub mod drive_hub;
 pub mod covers;

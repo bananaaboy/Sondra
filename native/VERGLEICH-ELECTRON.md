@@ -110,19 +110,19 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
 | ✓ | **„Was laden“**: Video mit Ton / Nur Ton / Ton aus dem Video | Geladen wird, was die Quelle liefert |
-| ◐ | **Qualität**: Video beste / mittel / „wenn es das Video nur grösser gibt“, Ton verlustfrei / hoch / Standard / tiefer, AAC 256k, PCM | — |
+| ✓ | **Qualität**: Video beste / mittel / „wenn es das Video nur grösser gibt“, Ton verlustfrei / hoch / Standard / tiefer, AAC 256k, PCM | Nativ: Video Beste/4K/1080p/720p/480p/360p (gibt es nur grösser, kommt das Nächstkleinere), Ton 320/192/128 kbps oder verlustfrei |
 | ✗ | **„Direktdateien anpassen“** oder 1:1 übernehmen | — |
 | ✓ | **AniWorld-Sprache**: Ger-Dub, Ger-Sub (OmU), Eng-Sub, Auto | Rust nimmt die erste verfügbare Fassung |
 | ✓ | **Dateinamen**: wie eine Office-Datei / neutral (`media_…`) / nur Zeichen | — |
 | ✗ | **„Wie viele gleichzeitig laden“** | — |
-| ✗ | **Was danach geschieht**: in die Sitzung legen, „Sofort als Datei speichern & zusätzlich in die Sitzung“, **direkt in Google Drive (ohne Sitzung)**, **„Nach Download sofort im Player abspielen“**, **„Stream sofort abspielen“** (abspielen, während geladen wird) | Rust legt die Datei immer in den Download-Ordner, dazu „In Drive“ und „Im Ordner zeigen“ danach |
-| ✗ | **„Untertitel erstellen“ nach dem Laden** | — |
+| ◐ | **Was danach geschieht**: in die Sitzung legen, „Sofort als Datei speichern & zusätzlich in die Sitzung“, **direkt in Google Drive (ohne Sitzung)**, **„Nach Download sofort im Player abspielen“**, **„Stream sofort abspielen“** (abspielen, während geladen wird) | Nativ seit 22.11.2026: „In die Sitzung legen“, „Sofort abspielen“, „Untertitel erstellen“, „Direkt in Google Drive“ (die Datei liegt immer auch im Download-Ordner). „Stream sofort abspielen“ fehlt noch |
+| ✓ | **„Untertitel erstellen“ nach dem Laden** | Nativ seit 22.11.2026 (über das Werkzeug „Untertitel“) |
 | ✗ | **„Auf die Merkliste setzen“** mit Staffel, Folge und Einstellungen | — |
 | ✗ | **Folgenwähler**: „Staffel und Folge wählen“, „Stelle in der Liste wählen“, „Die ganze Staffel laden“, „Alle Filme laden“, „Ganz gesehen“ | ◐ Es gibt „Alle laden“ und die Quellen einzeln |
-| ✗ | **„Zuletzt geladen“** (Verlauf) | — |
+| ✓ | **„Zuletzt geladen“** (Verlauf) | Nativ seit 22.11.2026: die letzten 30, mit Abspielen, Im Ordner zeigen, Wieder laden, Liste leeren |
 | ✗ | **Netzwerkadapter wählen** („Netzwerk: Automatisch (Windows-Standard)“) | — |
-| ✗ | **Eine Datei mit Links ablegen** („Loslassen, um die Links aus der Datei zu übernehmen“) | Mehrere eingefügte Adressen gehen |
-| ✗ | **Hinweis auf erlaubtes Laden** („Bitte nur laden, was erlaubt ist“) | — |
+| ✓ | **Eine Datei mit Links ablegen** („Loslassen, um die Links aus der Datei zu übernehmen“) | Nativ seit 22.11.2026: .txt/.m3u/.csv ablegen oder „auswählen“ |
+| ✓ | **Hinweis auf erlaubtes Laden** („Bitte nur laden, was erlaubt ist“) | Nativ seit 22.11.2026 |
 | — | Brücke im Terminal, cobalt-Dienst, „Weitere Wege“, YouTube-Sperre im Browser | Unnötig: yt-dlp liegt jetzt dem Setup bei |
 
 ## 6. Werkzeuge
@@ -249,8 +249,8 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 **Herunterladen**
 - ✓ **Zwischenablage**: „In der Zwischenablage: aniworld.to/… — Einfügen und nachsehen / Nicht jetzt“.
 - ✓ **„Merken“**: die Adresse auf die Merkliste.
-- ✗ **„.txt / .m3u mit Links hier ablegbar“**.
-- ✗ **„alle zeigen“**: die Liste der Portale, die gehen.
+- ✓ **„.txt / .m3u mit Links hier ablegbar“** (nativ seit 22.11.2026).
+- ✓ **„alle zeigen“**: die Liste der Portale, die gehen (nativ seit 22.11.2026).
 - ✗ **Einstellungen**: Fenster „Download-Einstellungen“ (siehe Abschnitt 5) und „Ton bei Fertigstellung abspielen“ samt Erklärung.
 
 **Umwandeln (mit Datei)**

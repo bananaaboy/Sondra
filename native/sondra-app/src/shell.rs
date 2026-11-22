@@ -334,6 +334,11 @@ impl Shell {
         match self.panel {
             Panel::Start => self.take_files(paths, cx),
             Panel::Player => self.play_files(paths, cx),
+            Panel::Downloader if paths.iter().all(|p| crate::download_more::is_link_file(p)) => {
+                for path in &paths {
+                    self.download_take_link_file(path, cx);
+                }
+            }
             panel if !crate::session::accepts(panel).is_empty() && paths.iter().any(|p| crate::session::accepts(panel).contains(&crate::session::kind_of(p))) => {
                 self.session_add(paths, cx);
                 self.session_hand_over(panel, None, cx);

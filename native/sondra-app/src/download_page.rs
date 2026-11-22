@@ -90,6 +90,10 @@ pub struct DownloadState {
     pub options: crate::download_options::DownloadOptions,
     /// Whether a change of the options is written to `Herunterladen.json` (not in tests).
     pub options_kept: bool,
+    /// „Zuletzt geladen“.
+    pub recent: Vec<crate::download_more::Recent>,
+    /// „alle zeigen“: the portals are listed.
+    pub services_open: bool,
     /// An address found in the clipboard when the page was opened, and the one turned down („Nicht jetzt“).
     pub clip_offer: Option<String>,
     pub clip_declined: Option<String>,
@@ -231,6 +235,8 @@ impl DownloadState {
             ytdlp_releases: sondra_download::ytdlp::RELEASES.to_string(),
             options: crate::download_options::DownloadOptions::load(),
             options_kept: true,
+            recent: crate::download_more::load_recent(),
+            services_open: false,
             clip_offer: None,
             clip_declined: None,
             ytdlp_system: true,
@@ -416,6 +422,11 @@ impl Shell {
             Found::Portal { address, .. } => Some((address.clone(), d.ytdlp_dir.clone(), d.ytdlp_system)),
             _ => None,
         };
+        let again = match &found {
+            Found::Portal { address, .. } => Some(address.clone()),
+            Found::Direct(stream) => Some(stream.url.clone()),
+            Found::Episode(_) => None,
+        };
         Self::in_background(
             cx,
             move || -> Result<(PathBuf, u64), String> {
@@ -449,12 +460,13 @@ impl Shell {
                     Ok((path, size)) => {
                         let line = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| title.clone());
                         let play_now = d.options.play_after && !in_queue;
-                        d.done.insert(0, Loaded { title, path: path.clone(), size });
+                        d.done.insert(0, Loaded { title: title.clone(), path: path.clone(), size });
                         if play_now {
                             shell.go(crate::nav::Panel::Player, cx);
-                            shell.play_files(vec![path], cx);
+                            shell.play_files(vec![path.clone()], cx);
                         }
                         crate::protocol::note("herunterladen", format!("Geladen: {line}"));
+                        shell.download_after(&title, &path, again.clone(), cx);
                         shell.note("Geladen", line, Some(crate::nav::Panel::Downloader));
                         let d = &mut shell.download;
                         d.found = None;
@@ -554,7 +566,7 @@ impl Shell {
             let me = me.clone();
             ui.button("suchen", if d.finding { "Sucht …" } else { "Suchen" }).primary().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.find_address(cx)))
         };
-        let mut work = div().flex().flex_col().gap(px(20.)).child(div().flex().flex_wrap().items_center().gap(px(10.)).child(div().flex_1().min_w(px(260.)).max_w(px(560.)).child(d.input.clone())).child(find_button));
+        let mut work = div().flex().flex_col().gap(px(20.)).child(div().flex().flex_col().gap(px(8.)).child(div().flex().flex_wrap().items_center().gap(px(10.)).child(div().flex_1().min_w(px(260.)).max_w(px(560.)).child(d.input.clone())).child(find_button)).child(self.download_field_hint(&ui, cx)));
         if let Some(address) = d.clip_offer.clone().filter(|_| !busy) {
             let (take, away) = (me.clone(), me.clone());
             let shown = address.trim_start_matches("https://").trim_start_matches("http://").to_string();
@@ -595,6 +607,7 @@ impl Shell {
             self.download_quality_setting(&ui, cx),
             self.download_language_setting(&ui, cx),
             self.download_naming_setting(&ui, cx),
+            self.download_after_setting(&ui, cx),
             ui.setting(
                 "Wenn es fertig ist",
                 div()
@@ -783,6 +796,9 @@ impl Shell {
                 });
             }
             work = work.child(div().flex().flex_col().gap(px(10.)).child(div().pb(px(10.)).border_b_1().border_color(c.line).child(ui.subheading("Geladen"))).child(rows));
+        }
+        if let Some(recent) = self.download_recent_section(&ui, cx) {
+            work = work.child(recent);
         }
         page.child(ui.tool_body(settings, work)).into_any_element()
     }

@@ -40,11 +40,17 @@ pub struct DownloadOptions {
     pub naming: Naming,
     /// „Nach Download sofort im Player abspielen“.
     pub play_after: bool,
+    /// „In die Sitzung legen“.
+    pub after_session: bool,
+    /// „Direkt in Google Drive speichern“.
+    pub after_drive: bool,
+    /// „Untertitel erstellen“ after the file is here.
+    pub after_subtitles: bool,
 }
 
 impl Default for DownloadOptions {
     fn default() -> Self {
-        DownloadOptions { what: What::Video, height: None, audio_kbps: Some(320), naming: Naming::Original, play_after: false }
+        DownloadOptions { what: What::Video, height: None, audio_kbps: Some(320), naming: Naming::Original, play_after: false, after_session: false, after_drive: false, after_subtitles: false }
     }
 }
 
@@ -153,7 +159,7 @@ pub fn finish(path: &Path, title: &str, options: &DownloadOptions, ytdlp_did_aud
 }
 
 impl crate::shell::Shell {
-    fn set_download_options(&mut self, change: impl FnOnce(&mut DownloadOptions), cx: &mut gpui::Context<Self>) {
+    pub(crate) fn set_download_options(&mut self, change: impl FnOnce(&mut DownloadOptions), cx: &mut gpui::Context<Self>) {
         change(&mut self.download.options);
         if self.download.options_kept {
             self.download.options.keep();
