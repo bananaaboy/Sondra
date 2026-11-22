@@ -170,10 +170,10 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ◐ Viele Bilder auf einmal geht, **als ZIP** nicht
 
 ### Lautstärke
-- ✗ **Mehrere Dateien auf einmal**
-- ✗ **Obergrenze für Spitzen (True Peak)** einstellen und „Limiter statt zurücknehmen“
-- ✗ **„Nur messen“**
-- ✗ Anzeige von Kurzzeit- und Momentan-Lautheit max., Sample Peak, Hinweis „Limiter hat eingegriffen“
+- ✓ **Mehrere Dateien auf einmal**
+- ✓ **Obergrenze für Spitzen (True Peak)** einstellen und „Limiter statt zurücknehmen“
+- ✓ **„Nur messen“**
+- ✓ Anzeige von Kurzzeit- und Momentan-Lautheit max., Sample Peak, Hinweis „Limiter hat eingegriffen“
 - ◐ Die Ziele (Streaming −14, Podcast −16, Rundfunk −23, Club −9) sind da
 
 ### Mischen
@@ -288,12 +288,12 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - — WebGPU: nativ nicht nötig.
 
 **Lautstärke (mit Datei)**
-- ✗ **Messart**: Lautheit (LUFS) oder Spitzenpegel (dBFS).
-- ✗ **„Übersteuerung verhindern“**.
-- ✗ **„Limiter statt zurücknehmen“**.
-- ✗ **Obergrenze True Peak**.
-- ✗ **„Mehrere Dateien auf einmal“** (Ergebnis als ZIP).
-- ✗ **„Nur messen“**.
+- ✓ **Messart**: Lautheit (LUFS) oder Spitzenpegel (dBFS).
+- ✓ **„Übersteuerung verhindern“**.
+- ✓ **„Limiter statt zurücknehmen“**.
+- ✓ **Obergrenze True Peak**.
+- ✓ **„Mehrere Dateien auf einmal“** (Ergebnis als ZIP).
+- ✓ **„Nur messen“**.
 
 **Zerschneiden (mit Datei)**
 - ✗ **„Am Zeiger teilen“** und **„Als 1 Pad“**.

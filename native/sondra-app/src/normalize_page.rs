@@ -25,16 +25,48 @@ pub struct NormalizeState {
     pub working: bool,
     pub made: Option<(PathBuf, String)>,
     pub error: Option<String>,
+    /// Loudness (LUFS) or the peak (dBFS), as on the website.
+    pub mode: sondra_media::loudness::Mode,
+    /// The peak the result may reach, in dBTP (`None`: the target's own).
+    pub ceiling: Option<f64>,
+    pub prevent_clipping: bool,
+    pub use_limiter: bool,
+    /// The peak a „Spitzenpegel“ normalization aims at, in dBFS.
+    pub peak_target: f64,
+    /// „Mehrere Dateien auf einmal“: what was done with each.
+    pub batch: Vec<(String, Result<(PathBuf, String), String>)>,
 }
 
 impl NormalizeState {
     pub fn new() -> NormalizeState {
-        NormalizeState { file: None, report: None, measuring: false, preset: "streaming", format: "flac", working: false, made: None, error: None }
+        NormalizeState {
+            file: None,
+            report: None,
+            measuring: false,
+            preset: "streaming",
+            format: "flac",
+            working: false,
+            made: None,
+            error: None,
+            mode: sondra_media::loudness::Mode::Lufs,
+            ceiling: None,
+            prevent_clipping: true,
+            use_limiter: false,
+            peak_target: -1.0,
+            batch: Vec::new(),
+        }
     }
 
     fn settings(&self) -> NormalizationSettings {
         let (_, _, lufs, ceiling) = LOUDNESS_PRESETS.iter().copied().find(|(id, ..)| *id == self.preset).unwrap_or(LOUDNESS_PRESETS[0]);
-        NormalizationSettings { target_lufs: lufs, true_peak_ceiling_dbtp: ceiling, ..NormalizationSettings::default() }
+        NormalizationSettings {
+            mode: self.mode,
+            target_lufs: lufs,
+            target_peak_dbfs: self.peak_target,
+            true_peak_ceiling_dbtp: self.ceiling.unwrap_or(ceiling),
+            prevent_clipping: self.prevent_clipping,
+            use_limiter: self.use_limiter,
+        }
     }
 }
 
@@ -51,6 +83,31 @@ fn num(value: f64, digits: usize) -> String {
     }
     let text = format!("{value:.digits$}").replace('.', ",");
     text.replacen('-', "−", 1)
+}
+
+/// Brings one file to the target and writes it beside itself, as `format_id`; says by how much (and why
+/// less, or that the limiter worked). Measures first when no report is given.
+pub fn normalize_one(file: &std::path::Path, report: Option<LoudnessReport>, settings: &NormalizationSettings, format_id: &str) -> Result<(PathBuf, String), String> {
+    let ffmpeg = Ffmpeg::locate().ok_or("FFmpeg ist nicht da.".to_string())?;
+    let audio = decode_file(&ffmpeg, file, None).map_err(|e| e.to_string())?;
+    let report = report.unwrap_or_else(|| measure_loudness(&audio, &mut |_| {}));
+    let (out, plan) = apply_normalization(&audio, &report, settings);
+    let dir = file.parent().map(PathBuf::from).unwrap_or_default();
+    let stem = format!("{} (angeglichen)", file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Ton".into()));
+    // Written as floats, then encoded in the format chosen: nothing is lost on the way.
+    let temp = dir.join(format!(".sondra-lautstaerke-{}-{}.wav", std::process::id(), stem.len()));
+    write_wav_f32(&temp, &out).map_err(|e| e.to_string())?;
+    let convert = Settings { format_id: format_id.to_string(), ..Settings::default() };
+    let result = sondra_media::run::convert_file(&ffmpeg, &temp, &dir, &stem, &convert, &Cancel::new(), &mut |_| {});
+    let _ = std::fs::remove_file(&temp);
+    let made = result.map_err(|e| e.message)?;
+    let said = format!(
+        "{} dB{}{}",
+        if plan.applied_db >= 0.0 { format!("+{}", num(plan.applied_db, 1)) } else { num(plan.applied_db, 1) },
+        if plan.reduced_by_ceiling { format!(" (weniger als verlangt: die Spitze darf {} dBTP nicht überschreiten)", num(settings.true_peak_ceiling_dbtp, 1)) } else { String::new() },
+        if plan.limiter_engaged { ", Limiter hat eingegriffen" } else { "" }
+    );
+    Ok((made.path, said))
 }
 
 impl Shell {
@@ -112,27 +169,7 @@ impl Shell {
         let (settings, format_id) = (n.settings(), n.format);
         Self::in_background(
             cx,
-            move || -> Result<(PathBuf, String), String> {
-                let ffmpeg = Ffmpeg::locate().ok_or("FFmpeg ist nicht da.".to_string())?;
-                let audio = decode_file(&ffmpeg, &file, None).map_err(|e| e.to_string())?;
-                let (out, plan) = apply_normalization(&audio, &report, &settings);
-                let dir = file.parent().map(PathBuf::from).unwrap_or_default();
-                let stem = format!("{} (angeglichen)", file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Ton".into()));
-                // Written as floats, then encoded in the format chosen: nothing is lost on the way.
-                let temp = dir.join(format!(".sondra-lautstaerke-{}.wav", std::process::id()));
-                write_wav_f32(&temp, &out).map_err(|e| e.to_string())?;
-                let convert = Settings { format_id: format_id.to_string(), ..Settings::default() };
-                let result = sondra_media::run::convert_file(&ffmpeg, &temp, &dir, &stem, &convert, &Cancel::new(), &mut |_| {});
-                let _ = std::fs::remove_file(&temp);
-                let made = result.map_err(|e| e.message)?;
-                let said = format!(
-                    "{} dB{}{}",
-                    if plan.applied_db >= 0.0 { format!("+{}", num(plan.applied_db, 1)) } else { num(plan.applied_db, 1) },
-                    if plan.reduced_by_ceiling { format!(" (weniger als verlangt: die Spitze darf {} dBTP nicht überschreiten)", num(settings.true_peak_ceiling_dbtp, 1)) } else { String::new() },
-                    if plan.limiter_engaged { ", Begrenzer war aktiv" } else { "" }
-                );
-                Ok((made.path, said))
-            },
+            move || normalize_one(&file, Some(report), &settings, format_id),
             |shell, answer, cx| {
                 let n = &mut shell.normalize;
                 n.working = false;
@@ -183,9 +220,80 @@ impl Shell {
                 })
             }));
         }
+        // How it is measured and held: loudness or peak, the ceiling, pulling back or limiting.
+        use sondra_media::loudness::Mode;
+        let mut modes = div().flex().flex_wrap().gap(px(6.));
+        for (mode, id, label) in [(Mode::Lufs, "messart-lufs", "Lautheit (LUFS)"), (Mode::Peak, "messart-spitze", "Spitzenpegel (dBFS)")] {
+            let me = me.clone();
+            modes = modes.child(ui.chip(id, label, n.mode == mode).on_click(move |_, app| me.update(app, |shell, cx| {
+                shell.normalize.mode = mode;
+                shell.normalize.made = None;
+                cx.notify();
+            })));
+        }
+        let mut peaks = div().flex().flex_wrap().gap(px(6.));
+        for v in [-0.1f64, -0.3, -1.0, -3.0] {
+            let me = me.clone();
+            peaks = peaks.child(ui.chip(format!("spitze-{v}"), format!("{} dBFS", num(v, 1)), (n.peak_target - v).abs() < 1e-9).on_click(move |_, app| me.update(app, |shell, cx| {
+                shell.normalize.peak_target = v;
+                cx.notify();
+            })));
+        }
+        let own_ceiling = LOUDNESS_PRESETS.iter().find(|(id, ..)| *id == n.preset).map_or(-1.0, |p| p.3);
+        let mut ceilings = div().flex().flex_wrap().gap(px(6.));
+        for v in [-0.1f64, -0.5, -1.0, -2.0] {
+            let me = me.clone();
+            let on = (n.ceiling.unwrap_or(own_ceiling) - v).abs() < 1e-9;
+            ceilings = ceilings.child(ui.chip(format!("obergrenze-{v}"), format!("{} dBTP", num(v, 1)), on).accessible_name(format!("Obergrenze für Spitzen (True Peak) {} dBTP", num(v, 1))).on_click(move |_, app| me.update(app, |shell, cx| {
+                shell.normalize.ceiling = Some(v);
+                cx.notify();
+            })));
+        }
+        let guard = {
+            let (a, b) = (me.clone(), me.clone());
+            let (clip, limit) = (n.prevent_clipping, n.use_limiter);
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(6.))
+                .child(ui.chip("uebersteuerung", "Übersteuerung verhindern", clip).on_click(move |_, app| a.update(app, |shell, cx| {
+                    shell.normalize.prevent_clipping = !clip;
+                    cx.notify();
+                })))
+                .child(ui.chip("limiter", "Limiter statt zurücknehmen", limit).on_click(move |_, app| b.update(app, |shell, cx| {
+                    shell.normalize.use_limiter = !limit;
+                    cx.notify();
+                })))
+        };
+        let batch = {
+            let me = me.clone();
+            div().flex().child(ui.button("mehrere-dateien", "Mehrere Dateien …").small().disabled(n.working || n.measuring).on_click(move |_, app| me.update(app, |shell, cx| shell.choose_normalize_batch(cx))))
+        };
         // The target and the format are settings: chosen before or after the measuring.
-        let settings_col = vec![ui.setting("Ziel", targets, None), ui.setting("Speichern als", formats, None)];
+        let mut settings_col = vec![ui.setting("Messart", modes, None)];
+        if n.mode == Mode::Lufs {
+            settings_col.push(ui.setting("Ziel", targets, None));
+        } else {
+            settings_col.push(ui.setting("Spitze auf", peaks, None));
+        }
+        settings_col.push(ui.setting("Obergrenze für Spitzen (True Peak)", ceilings, None));
+        settings_col.push(ui.setting("Wenn es zu laut wird", guard, Some(if n.use_limiter { "Hält den Zielwert genau und begrenzt nur die höchsten Spitzen." } else { "Nimmt die Verstärkung zurück, falls Spitzen sonst über die Obergrenze gingen." })));
+        settings_col.push(ui.setting("Speichern als", formats, None));
+        settings_col.push(ui.setting("Mehrere Dateien auf einmal", batch, Some("Jede gewählte Datei auf denselben Zielwert, jede neben ihr Original.")));
         let mut work = div().flex().flex_col().gap(px(20.)).child(head);
+        if !n.batch.is_empty() {
+            let mut list = div().flex().flex_col().gap(px(4.)).child(ui.subheading("Mehrere Dateien"));
+            for (name, result) in &n.batch {
+                list = list.child(ui.prose(match result {
+                    Ok((path, said)) => format!("{name} → {} · {said}", path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default()),
+                    Err(e) => format!("{name}: nicht angeglichen — {e}"),
+                }));
+            }
+            work = work.child(list);
+        }
+        if n.working && n.file.is_none() {
+            work = work.child(ui.prose("Rechnet …"));
+        }
         if n.measuring {
             return page.child(ui.tool_body(settings_col, work.child(ui.prose("Misst …")))).into_any_element();
         }
@@ -196,19 +304,32 @@ impl Shell {
             return page.child(ui.tool_body(settings_col, work)).into_any_element();
         };
 
-        let facts = format!(
-            "Jetzt: {} LUFS · Spitze {} dBTP · Dynamik {} LU · {} Minuten",
-            num(report.integrated_lufs, 1),
-            num(report.true_peak_dbtp, 1),
-            num(report.loudness_range_lu, 1),
-            num(report.duration_seconds / 60.0, 1)
-        );
-        work = work.child(div().p(px(16.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.value(facts)));
+        // Every number the measurement gives, as on the website.
+        let mut stats = div().flex().flex_wrap().gap(px(10.));
+        for (label, value) in [
+            ("Lautheit", format!("{} LUFS", num(report.integrated_lufs, 1))),
+            ("True Peak", format!("{} dBTP", num(report.true_peak_dbtp, 1))),
+            ("Sample Peak", format!("{} dBFS", num(report.sample_peak_dbfs, 1))),
+            ("Loudness Range", format!("{} LU", num(report.loudness_range_lu, 1))),
+            ("Kurzzeit max.", format!("{} LUFS", num(report.short_term_max_lufs, 1))),
+            ("Momentan max.", format!("{} LUFS", num(report.momentary_max_lufs, 1))),
+            ("Dauer", format!("{} Min.", num(report.duration_seconds / 60.0, 1))),
+        ] {
+            stats = stats.child(div().w(px(150.)).flex().flex_col().gap(px(2.)).p(px(12.)).rounded(px(sondra_ui::radius::CARD)).bg(c.panel_soft).child(ui.hint(label)).child(ui.value(value)));
+        }
+        work = work.child(stats);
 
         let settings = n.settings();
         let go = {
             let me = me.clone();
-            ui.button("angleichen", if n.working { "Rechnet …".to_string() } else { format!("Auf {} LUFS bringen", num(settings.target_lufs, 0)) }).primary().disabled(n.working).on_click(move |_, app| me.update(app, |shell, cx| shell.start_normalize(cx)))
+            let label = if n.working {
+                "Rechnet …".to_string()
+            } else if settings.mode == Mode::Peak {
+                format!("Spitze auf {} dBFS bringen", num(settings.target_peak_dbfs, 1))
+            } else {
+                format!("Auf {} LUFS bringen", num(settings.target_lufs, 0))
+            };
+            ui.button("angleichen", label).primary().disabled(n.working).on_click(move |_, app| me.update(app, |shell, cx| shell.start_normalize(cx)))
         };
         work = work.child(div().flex().child(go));
 
@@ -248,5 +369,49 @@ impl Shell {
             );
         }
         page.child(ui.tool_body(settings_col, work)).into_any_element()
+    }
+
+    /// „Mehrere Dateien auf einmal“: each chosen file to the same target, one after the other.
+    pub(crate) fn choose_normalize_batch(&mut self, cx: &mut Context<Self>) {
+        let answer = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: true, prompt: None });
+        cx.spawn(async move |this, cx| {
+            if let Ok(Ok(Some(paths))) = answer.await {
+                this.update(cx, |shell, cx| shell.normalize_batch(paths, cx)).ok();
+            }
+        })
+        .detach();
+    }
+
+    pub fn normalize_batch(&mut self, files: Vec<PathBuf>, cx: &mut Context<Self>) {
+        let n = &mut self.normalize;
+        if n.working || files.is_empty() {
+            return;
+        }
+        n.working = true;
+        n.error = None;
+        n.batch.clear();
+        let (settings, format_id) = (n.settings(), n.format);
+        Self::in_background(
+            cx,
+            move || {
+                files
+                    .iter()
+                    .map(|f| (f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), normalize_one(f, None, &settings, format_id)))
+                    .collect::<Vec<_>>()
+            },
+            |shell, done, cx| {
+                shell.normalize.working = false;
+                let ok = done.iter().filter(|(_, r)| r.is_ok()).count();
+                shell.normalize.batch = done;
+                shell.note("Angeglichen", format!("{ok} {} angeglichen.", if ok == 1 { "Datei" } else { "Dateien" }), Some(Panel::Normalize));
+                cx.notify();
+            },
+        );
+        cx.notify();
+    }
+
+    /// For tests: what the batch made.
+    pub fn normalize_batch_result(&self) -> Vec<(String, Result<(PathBuf, String), String>)> {
+        self.normalize.batch.clone()
     }
 }

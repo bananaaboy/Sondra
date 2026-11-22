@@ -82,13 +82,20 @@ fn a_quiet_sound_is_measured_and_brought_to_the_target_without_touching_the_orig
     for _ in 0..200 {
         w.cx.run_until_parked();
         w.draw();
-        if w.tree().find(Role::Button, "Ziel Streaming (Spotify, Apple), −14 LUFS").is_some() {
+        if w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "Loudness Range")) {
             break;
         }
         std::thread::sleep(Duration::from_millis(25));
     }
     assert!(w.tree().find(Role::Button, "Ziel Streaming (Spotify, Apple), −14 LUFS").is_some());
-    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with("Jetzt: −"))), "it says how loud the sound is now");
+    // Every number of the measurement, as on the website.
+    for label in ["Lautheit", "True Peak", "Sample Peak", "Loudness Range", "Kurzzeit max.", "Momentan max."] {
+        assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == label)), "{label}");
+    }
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with('−') && l.ends_with(" LUFS"))), "it says how loud the sound is now");
+    for label in ["Spitzenpegel (dBFS)", "Übersteuerung verhindern", "Limiter statt zurücknehmen", "Obergrenze für Spitzen (True Peak) −1,0 dBTP", "Mehrere Dateien …"] {
+        assert!(w.tree().find(Role::Button, label).is_some(), "{label}");
+    }
     w.press(Role::Button, "Ziel Podcast, −16 LUFS");
     w.press(Role::Button, "Auf −16 LUFS bringen");
     w.wait_for(Role::Heading, "Fertig");
@@ -100,4 +107,47 @@ fn a_quiet_sound_is_measured_and_brought_to_the_target_without_touching_the_orig
     assert!((report.integrated_lufs + 16.0).abs() < 0.6, "about −16 LUFS: {}", report.integrated_lufs);
     assert!(report.true_peak_dbtp <= -0.9, "and not over the ceiling: {}", report.true_peak_dbtp);
     assert!(w.tree().find(Role::Button, "leise (angeglichen).flac abspielen").is_some());
+}
+
+#[gpui::test]
+fn several_files_go_to_the_same_target_each_beside_its_original(cx: &mut TestAppContext) {
+    let Some(ff) = Ffmpeg::locate() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let mut files = Vec::new();
+    for (name, vol) in [("eins.wav", "0.1"), ("zwei.wav", "0.4")] {
+        let path = tmp.path().join(name);
+        let out = Command::new(ff.program()).args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=330:sample_rate=48000", "-af"]).arg(format!("volume={vol}")).args(["-ac", "2", "-t", "4"]).arg(&path).output().unwrap();
+        assert!(out.status.success());
+        files.push(path);
+    }
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let (shell, vcx) = cx.add_window_view(|window, cx| Shell::new(window, cx));
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    vcx.simulate_resize(size(px(WIDTH), px(900.)));
+    let mut w = Window { cx: vcx, shell, seen };
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Normalize, cx));
+    w.draw();
+    w.press(Role::Button, "Ziel Podcast, −16 LUFS");
+    w.shell.update(w.cx, |shell, cx| shell.normalize_batch(files.clone(), cx));
+    for _ in 0..400 {
+        w.cx.run_until_parked();
+        w.draw();
+        if !w.shell.read_with(w.cx, |s, _| s.normalize_batch_result()).is_empty() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    let done = w.shell.read_with(w.cx, |s, _| s.normalize_batch_result());
+    assert_eq!(done.len(), 2);
+    for (_, result) in &done {
+        let (path, _) = result.as_ref().expect("made");
+        let report = measure_loudness(&decode_file(&ff, path, None).unwrap(), &mut |_| {});
+        assert!((report.integrated_lufs + 16.0).abs() < 0.6, "{}", report.integrated_lufs);
+    }
 }
