@@ -1188,7 +1188,7 @@ impl Render for Shell {
         self.update_discord();
         self.flash_for_news(window, cx);
         // A download in progress is drawn again and again: the bar moves.
-        if self.download.job.is_some() || self.convert.run.is_some() || self.video.run.is_some() {
+        if self.video_preview_tick(window) || self.download.job.is_some() || self.convert.run.is_some() || self.video.run.is_some() {
             let me = cx.entity_id();
             window.on_next_frame(move |_, cx| cx.notify(me));
         }

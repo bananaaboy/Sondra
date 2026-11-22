@@ -202,6 +202,15 @@ fn the_timeline_moves_the_place_and_both_ends_of_what_stays(cx: &mut TestAppCont
     let ops = w.cx.read_entity(&w.shell, |s, _| s.video_ops().clone());
     assert!(ops.end > ops.start, "{} {}", ops.start, ops.end);
     w.settle(10);
+
+    // „Vorschau abspielen“ plays what stays on the stage; „Ton im Vorhören“ says whether it is heard.
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (false, true));
+    w.press(Role::Button, "Vorschau abspielen");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (true, true));
+    w.press(Role::Button, "Ton im Vorhören");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (true, false), "silent, while it goes on");
+    w.press(Role::Button, "Vorschau anhalten");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()).0, false);
 }
 
 #[gpui::test]

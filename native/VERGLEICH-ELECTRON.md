@@ -17,7 +17,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ✗ | Drive-Fenster mit der Ordnerübersicht (`Projekte`, `Dateien/Ton·Video·Bilder·Andere`, `Heruntergeladen`, `Merkliste`), **Warteschlange** der Uploads und **„Dateien der Sitzung nach Art“ hochladen** | Es gibt nur Anmelden/Trennen in der Seitenleiste und „In Drive“ einzeln bei jedem Ergebnis |
 | ✗ | **Projekt in Drive speichern** („Google Drive verbinden, um das Projekt dort zu speichern“) | Ein Projekt lässt sich nur lokal speichern |
 | ✓ | **„An Gerät“ neben jedem „In Drive“** (`DeviceSendButton`): ein Ergebnis direkt an ein anderes Gerät schicken | Nativ seit 22.11.2026: „An „Name““ je offenes Gerät (bis drei) neben „In Drive“ |
-| ◐ | Hinweis „Neu in x.y.z“ nach einem Update, als Zeile unter der Kopfzeile | Ist da. Neu ist das Mitteilungsfach, die Zeile gibt es zusätzlich |
+| ✓ | Hinweis „Neu in x.y.z“ nach einem Update, als Zeile unter der Kopfzeile | Ist da. Neu ist das Mitteilungsfach, die Zeile gibt es zusätzlich |
 | — | „App herunterladen“ (Fenster mit den Reitern Windows/Android), FFmpeg-Anzeige „WASM/Nativ“, „Unter der Haube“ | Unnötig in einem Programm, das schon installiert ist |
 
 ## 2. Merkliste
@@ -80,7 +80,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ✓ | **„In Drive“** für die Auswahl (hochladen aus dem Ordner) | Nativ seit 22.11.2026, eine Datei nach der anderen, Fortschritt in der Zeile |
 | ✓ | **„An Geräte senden“** für die Auswahl (mehrere Geräte auf einmal) | Nativ seit 22.11.2026: Menü mit jedem Gerät und „An alle n Geräte“ |
 | ✓ | **„Untertitel erzeugen“** für die Auswahl (Whisper hört die Filme ab und schreibt `Name.srt` daneben) | Nativ seit 22.11.2026, mit Modell und Sprache des Werkzeugs „Untertitel“; ohne Modell der Weg dorthin. Nie gegen ein echtes Modell gelaufen |
-| ◐ | Eine `.srt`/`.vtt` mit dem Namen des Films geht beim Abspielen aus dem Ordner von selbst mit | ⚙ die Zuordnung ist geprüft. Der Player findet die Datei neben dem Film selbst |
+| ✓ | Eine `.srt`/`.vtt` mit dem Namen des Films geht beim Abspielen aus dem Ordner von selbst mit | Der Player findet die Datei neben dem Film selbst (`player_page.rs`, auch `Name.de.srt`) |
 | ✗ | **„In Staffel einordnen“**: das Fenster für Drive-Dateien (Serie wählen oder neu, Staffel, Nummer je Datei, Vorschau des Zielordners, „Der Reihe nach nummerieren“) | Nur „Einordnen“ mit einem Klick für Dateien, die schon erkannt sind |
 | ✓ | **Tastatur in der Dateiliste**: Pfeile, Leertaste, Strg+A, Escape | Nativ seit 22.11.2026, dazu Enter (abspielen) und Umschalt+Pfeil; in Kacheln gehen ↑/↓ wie ←/→ eine Datei weiter |
 | ✓ | **„Neu einlesen“** | Ist da |
@@ -174,7 +174,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ **Obergrenze für Spitzen (True Peak)** einstellen und „Limiter statt zurücknehmen“
 - ✓ **„Nur messen“**
 - ✓ Anzeige von Kurzzeit- und Momentan-Lautheit max., Sample Peak, Hinweis „Limiter hat eingegriffen“
-- ◐ Die Ziele (Streaming −14, Podcast −16, Rundfunk −23, Club −9) sind da
+- ✓ Die Ziele (Streaming −14, Podcast −16, Rundfunk −23, Club −9) sind da
 
 ### Mischen
 - ✓ **Voreinstellungen** (Podcast/Talk, Radio/Moderation, Voiceover/Stark, Hintergrund/Dezent, Ohne Absenken)
@@ -188,7 +188,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 ### Untertitel
 - ✓ **Jede Zeile vor dem Speichern korrigieren** (Rust speichert, was erkannt wurde)
-- ◐ „Noch einmal erkennen“ gibt es als „Neu erzeugen“
+- ✓ „Noch einmal erkennen“ gibt es als „Neu erzeugen“
 
 ### Tonart
 - ✓ **„Passt zu“** (Tonarten, die sich mischen lassen)
@@ -261,8 +261,8 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✓ **Kanäle**: Wie Quelle, Mono, Stereo.
 
 **Video (mit Datei)**
-- ◐ **Rückgängig/Wiederholen** (nativ seit 22.11.2026) und **„Fertigstellen“** (nativ heisst es „Video speichern“).
-- ✗ **„Ton im Vorhören“** an/aus.
+- ✓ **Rückgängig/Wiederholen** (nativ seit 22.11.2026) und **„Fertigstellen“** (nativ heisst es „Video speichern“).
+- ✓ **„Ton im Vorhören“** an/aus. Nativ seit 22.11.2026 mit „Vorschau abspielen“: was bleibt, läuft auf der Bühne im eingestellten Tempo und hält am Ende; der Schalter wirkt auch während es läuft.
 - ✓ **Tempo „Feiner“** als Regler, mit „Länge danach“ (nativ seit 22.11.2026).
 
 **Bilder (mit Datei)**

@@ -84,6 +84,9 @@ pub struct VideoState {
     pub wave: Vec<f32>,
     /// When the last still was asked for while an end is dragged (they are asked for at most every 150 ms).
     pub last_drag_still: Option<std::time::Instant>,
+    /// „Vorschau abspielen“: what stays, playing on the stage; „Ton im Vorhören“.
+    pub preview: Option<sondra_playback::Playback>,
+    pub preview_sound: bool,
 }
 
 /// What a press on the timeline grabbed: the place, or one end of what stays.
@@ -96,7 +99,7 @@ pub enum TimelineDrag {
 
 impl VideoState {
     pub fn new() -> VideoState {
-        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None, stage_bounds: Rc::new(Cell::new(Bounds::default())), crop_bounds: Rc::new(Cell::new(Bounds::default())), crop_drag: None, history: Default::default(), wave: Vec::new(), last_drag_still: None }
+        VideoState { file: None, duration: 0.0, source: None, has_audio: false, ops: VideoOps::default(), aspect: "free", tool: VTool::Cut, position: 0.0, frame: None, trash: Vec::new(), generation: 0, run: None, made: Vec::new(), error: None, bounds: Rc::new(Cell::new(Bounds::default())), drag: None, stage_bounds: Rc::new(Cell::new(Bounds::default())), crop_bounds: Rc::new(Cell::new(Bounds::default())), crop_drag: None, history: Default::default(), wave: Vec::new(), last_drag_still: None, preview: None, preview_sound: true }
     }
 }
 
@@ -553,7 +556,13 @@ impl Shell {
                 .gap(px(12.))
                 .child(choose)
                 .child(ui.button("video-rueckgaengig", "Rückgängig").small().accessible_name("Rückgängig (Strg+Z)").disabled(!v.history.can_undo() || v.run.is_some()).on_click(move |_, app| undo.update(app, |shell, cx| shell.video_undo(cx))))
-                .child(ui.button("video-wiederholen", "Wiederholen").small().accessible_name("Wiederholen (Strg+Umschalt+Z)").disabled(!v.history.can_redo() || v.run.is_some()).on_click(move |_, app| redo.update(app, |shell, cx| shell.video_redo(cx)))),
+                .child(ui.button("video-wiederholen", "Wiederholen").small().accessible_name("Wiederholen (Strg+Umschalt+Z)").disabled(!v.history.can_redo() || v.run.is_some()).on_click(move |_, app| redo.update(app, |shell, cx| shell.video_redo(cx))))
+                .when(v.file.is_some(), |row| {
+                    let (play, sound) = (me.clone(), me.clone());
+                    let (playing, on) = (v.preview.is_some(), v.preview_sound);
+                    row.child(ui.button("video-vorschau", if playing { "Vorschau anhalten" } else { "Vorschau abspielen" }).small().disabled(v.run.is_some()).on_click(move |_, app| play.update(app, |shell, cx| shell.video_preview_toggle(cx))))
+                        .child(ui.chip("ton-im-vorhoeren", "Ton im Vorhören", on).on_click(move |_, app| sound.update(app, |shell, cx| shell.video_preview_sound(!on, cx))))
+                }),
         );
         let (Some(file), Some((w, h))) = (&v.file, v.source) else {
             if v.file.is_none() {
