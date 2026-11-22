@@ -424,3 +424,32 @@ fn a_pads_piano_roll_sets_lengthens_moves_and_takes_away_notes_with_the_pointer(
     assert_eq!(arp.len(), steps / 2);
 
 }
+
+#[gpui::test]
+fn a_pad_is_halved_joined_nudged_copied_and_deleted(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Beat.wav"));
+    let pads = |w: &Window| w.shell.read_with(w.cx, |s, _| s.sampler_pads().to_vec());
+    let before = pads(&w);
+    assert!(before.len() >= 2);
+    // In two at the middle.
+    w.press(Role::Button, "Halbieren");
+    let after = pads(&w);
+    assert_eq!(after.len(), before.len() + 1);
+    assert!((after[0].end - (before[0].start + before[0].end) / 2.0).abs() < 1e-9);
+    assert_eq!(after[1].start, after[0].end);
+    // Joined again.
+    w.press(Role::Button, "Mit nächstem verbinden");
+    assert_eq!(pads(&w).len(), before.len());
+    assert!((pads(&w)[0].end - before[0].end).abs() < 1e-9);
+    // The start 10 ms later.
+    w.press(Role::Button, "Anfang 10 ms später");
+    assert!((pads(&w)[0].start - (before[0].start + 0.01)).abs() < 1e-9);
+    // Its settings to all.
+    w.press(Role::Button, "Rückwärts");
+    w.press(Role::Button, "Einstellungen des gewählten Pads auf alle übertragen");
+    assert!(pads(&w).iter().all(|p| p.reverse));
+    // Gone.
+    w.press(Role::Button, "Pad löschen");
+    assert_eq!(pads(&w).len(), before.len() - 1);
+}

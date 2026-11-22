@@ -155,10 +155,10 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 ### Zerschneiden (Pads und Pattern)
 - ✗ **Pattern-Plätze** („Aktuelles Pattern in den nächsten Slot kopieren“) und „Noten zurück in Step-Schritte“
-- ✗ **„Einstellungen des gewählten Pads auf alle übertragen“**
+- ✓ **„Einstellungen des gewählten Pads auf alle übertragen“**
 - ✗ **Doppeltes / halbes Tempo**, „Das ganze Raster früher oder später“
 - ✗ **„Länge beim Transponieren halten“** (Phasenvocoder beim Export)
-- ✗ **Pad löschen (Entf)**, „Ganze Datei als Pad 1“, „Am Zeiger teilen“, Doppelklick setzt einen Schnitt
+- ◐ **Pad löschen (Entf)** (nativ seit 22.11.2026); „Ganze Datei als Pad 1“, „Am Zeiger teilen“, Doppelklick fehlen noch
 - ✗ **Auf −0,3 dBFS normalisieren** beim Export, „Blende an den Schnittkanten“
 - ✗ **Pattern „In die Sitzung“**
 - ✓ sechs Verfahren, Pads, Klavierrolle, Akkorde und Arpeggio zeichnen, MIDI-Controller, Choke, Gate, Swing, Beat als WAV und MIDI, CUE und Audacity-Marken
@@ -300,9 +300,9 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✗ **Zoom**.
 - ✗ **Pads ↔ Piano-Roll** umschalten.
 - ✗ **1 oder 2 Takte**.
-- ✗ **„Grundbeat vorschlagen“** und **„Pads jetzt anlegen“**.
+- ✓ **„Grundbeat vorschlagen“** (nativ „Start-Beat legen“); Pads entstehen nativ gleich beim Schneiden.
 - ✗ **Export**: „Einzelnes Pattern“ oder „Song-Kette“, dazu „In die Sitzung“.
-- ✗ **Je Pad**: stumm, Löschen, „Auf alle übertragen“, Anfang −10/+10 ms, „Halbieren“, „Mit nächstem verbinden“, „So hören, wie es exportiert wird“.
+- ◐ **Je Pad**: Löschen, „Auf alle übertragen“, Anfang −10/+10 ms, „Halbieren“, „Mit nächstem verbinden“ nativ seit 22.11.2026; „So hören, wie es exportiert wird“ fehlt noch.
 
 **Tonart (mit Datei)**
 - ✓ **„Einfach“ / „Detail“** als Ansicht.

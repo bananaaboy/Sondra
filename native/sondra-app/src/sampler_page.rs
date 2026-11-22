@@ -262,6 +262,76 @@ impl Shell {
         cx.notify();
     }
 
+    /// A new pad id no pad has yet.
+    fn sampler_new_id(&self) -> String {
+        let n = self.sampler.pads.iter().filter_map(|p| p.id.trim_start_matches('p').parse::<usize>().ok()).max().unwrap_or(0) + 1;
+        format!("p{n}")
+    }
+
+    /// „Pad löschen“ (Entf): the chosen pad goes, with its steps and notes.
+    pub fn sampler_delete_pad(&mut self, cx: &mut Context<Self>) {
+        let s = &mut self.sampler;
+        if s.pads.len() <= 1 || s.selected >= s.pads.len() {
+            return;
+        }
+        let gone = s.pads.remove(s.selected);
+        s.pattern.cells.remove(&gone.id);
+        s.pattern.notes.remove(&gone.id);
+        s.pattern.muted.remove(&gone.id);
+        s.selected = s.selected.min(s.pads.len() - 1);
+        cx.notify();
+    }
+
+    /// „Halbieren“: the chosen pad in two at its middle; the second half keeps its settings.
+    pub fn sampler_halve_pad(&mut self, cx: &mut Context<Self>) {
+        let id = self.sampler_new_id();
+        let s = &mut self.sampler;
+        let Some(pad) = s.pads.get(s.selected).cloned() else { return };
+        if pad.end - pad.start < 0.04 {
+            return;
+        }
+        let middle = (pad.start + pad.end) / 2.0;
+        s.pads[s.selected].end = middle;
+        s.pads.insert(s.selected + 1, Slice { id, start: middle, ..pad });
+        cx.notify();
+    }
+
+    /// „Mit nächstem verbinden“: the chosen pad reaches to the end of the next, which goes.
+    pub fn sampler_join_next(&mut self, cx: &mut Context<Self>) {
+        let s = &mut self.sampler;
+        let i = s.selected;
+        if i + 1 >= s.pads.len() {
+            return;
+        }
+        let next = s.pads.remove(i + 1);
+        s.pads[i].end = next.end;
+        s.pattern.cells.remove(&next.id);
+        s.pattern.notes.remove(&next.id);
+        s.pattern.muted.remove(&next.id);
+        cx.notify();
+    }
+
+    /// The start of the chosen pad earlier or later by `ms` — never into the pad before, never past its end.
+    pub fn sampler_nudge_start(&mut self, ms: f64, cx: &mut Context<Self>) {
+        let s = &mut self.sampler;
+        let i = s.selected;
+        let floor = if i > 0 { s.pads[i - 1].end } else { 0.0 };
+        if let Some(pad) = s.pads.get_mut(i) {
+            pad.start = (pad.start + ms / 1000.0).clamp(floor, pad.end - 0.01);
+        }
+        cx.notify();
+    }
+
+    /// „Auf alle übertragen“: the chosen pad's settings (not its stretch) to every other pad.
+    pub fn sampler_settings_to_all(&mut self, cx: &mut Context<Self>) {
+        let s = &mut self.sampler;
+        let Some(from) = s.pads.get(s.selected).cloned() else { return };
+        for pad in s.pads.iter_mut() {
+            *pad = Slice { id: pad.id.clone(), start: pad.start, end: pad.end, ..from.clone() };
+        }
+        cx.notify();
+    }
+
     pub fn sampler_select(&mut self, index: usize, cx: &mut Context<Self>) {
         if index < self.sampler.pads.len() {
             self.sampler.selected = index;
@@ -353,6 +423,10 @@ impl Shell {
     /// A key of the keyboard: the pad that sits on it plays (and is chosen). Returns whether the key was one of them.
     pub fn sampler_key(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
         const PAD_KEYS: [&str; 16] = ["1", "2", "3", "4", "q", "w", "e", "r", "a", "s", "d", "f", "y", "x", "c", "v"];
+        if key == "delete" && self.sampler.audio.is_some() {
+            self.sampler_delete_pad(cx);
+            return true;
+        }
         let Some(index) = PAD_KEYS.iter().position(|k| *k == key.to_lowercase()) else { return false };
         if self.sampler.audio.is_none() || index >= self.sampler.pads.len() {
             return false;
@@ -754,6 +828,24 @@ impl Shell {
                     .child(pad_chips("Lage", "lage", [(-1.0, "Links"), (-0.5, "Halb links"), (0.0, "Mitte"), (0.5, "Halb rechts"), (1.0, "Rechts")].iter().map(|(v, l)| (*v, l.to_string())).collect(), pad.pan, |p, v| p.pan = v))
                     .child(pad_chips("Anschwellen", "an", [0.0, 5.0, 20.0, 60.0].iter().map(|v| (*v, format!("{v} ms"))).collect(), pad.attack_ms, |p, v| p.attack_ms = v))
                     .child(pad_chips("Ausklingen", "aus", [0.0, 20.0, 80.0, 250.0].iter().map(|v| (*v, format!("{v} ms"))).collect(), pad.release_ms, |p, v| p.release_ms = v))
+                    .child({
+                        // The pad's own stretch: start earlier or later, in two, joined to the next, gone.
+                        let (earlier, later, halve, join, all, delete) = (me.clone(), me.clone(), me.clone(), me.clone(), me.clone(), me.clone());
+                        let last = s.selected + 1 >= s.pads.len();
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(ui.hint("Schnitt dieses Pads"))
+                            .child(ui.button("anfang-frueher", "−10").small().accessible_name("Anfang 10 ms früher").on_click(move |_, app| earlier.update(app, |shell, cx| shell.sampler_nudge_start(-10.0, cx))))
+                            .child(ui.value(format!("Anfang {} s · Länge {} ms", format!("{:.3}", pad.start).replace('.', ","), ((pad.end - pad.start) * 1000.0).round() as i64)))
+                            .child(ui.button("anfang-spaeter", "+10").small().accessible_name("Anfang 10 ms später").on_click(move |_, app| later.update(app, |shell, cx| shell.sampler_nudge_start(10.0, cx))))
+                            .child(ui.button("pad-halbieren", "Halbieren").small().on_click(move |_, app| halve.update(app, |shell, cx| shell.sampler_halve_pad(cx))))
+                            .child(ui.button("pad-verbinden", "Mit nächstem verbinden").small().disabled(last).on_click(move |_, app| join.update(app, |shell, cx| shell.sampler_join_next(cx))))
+                            .child(ui.button("pad-auf-alle", "Auf alle übertragen").small().accessible_name("Einstellungen des gewählten Pads auf alle übertragen").on_click(move |_, app| all.update(app, |shell, cx| shell.sampler_settings_to_all(cx))))
+                            .child(ui.button("pad-loeschen", "Pad löschen").small().ghost().disabled(s.pads.len() <= 1).on_click(move |_, app| delete.update(app, |shell, cx| shell.sampler_delete_pad(cx))))
+                    })
                     .child(div().flex().flex_wrap().gap(px(8.)).child(rev).child({
                         let (me, rolled) = (me.clone(), s.roll.as_ref().is_some_and(|r| r.id == pad.id));
                         let index = s.selected;
