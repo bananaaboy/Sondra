@@ -9,8 +9,8 @@ use std::path::Path;
 use gpui::{div, prelude::*, px, AnyElement, Context, Entity};
 use serde_json::Value;
 use sondra_merk::normalize::Context as Ids;
-use sondra_merk::progress::{mark_range, season_name, season_progress, seasons_of, settle, split_season};
-use sondra_merk::{Item, Season, Status};
+use sondra_merk::progress::{mark_range, parts_of, season_name, season_progress, seasons_of, settle, split_season, stored_parts, with_parts};
+use sondra_merk::{Item, Part, Season, Status};
 use sondra_ui::{radius, size, NoticeKind, TextField, Ui};
 
 use crate::merkliste::MerkState;
@@ -45,6 +45,24 @@ pub struct SeasonFields {
     pub exc_minutes: Entity<TextField>,
     pub picked: Option<String>,
     pub problem: Option<String>,
+    /// One block per part when the season is split (none when it is one piece).
+    pub parts: Vec<PartFields>,
+}
+
+/// The fields of one part of a season: how many episodes, its name, its cover.
+pub struct PartFields {
+    pub count: Entity<TextField>,
+    pub name: Entity<TextField>,
+    pub cover: Entity<TextField>,
+    pub picked: Option<String>,
+}
+
+/// Where a picture chosen on this computer goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoverFor {
+    Series,
+    Season,
+    Part(usize),
 }
 
 /// A change to a series from the form, already read and checked.
@@ -249,6 +267,71 @@ impl MerkState {
         self.change(id, move |item| item.seasons = Some(seasons));
     }
 
+    /// The parts of a season as given (count, name, cover each), through `withParts`: the season's length becomes
+    /// their sum, an open part before the last gets one episode.
+    pub fn set_parts(&mut self, id: &str, number: i64, parts: Vec<Part>) {
+        let Some(item) = self.items.iter().find(|i| i.id == id) else { return };
+        let mut seasons = seasons_of(item);
+        let Some(season) = seasons.iter_mut().find(|s| s.number == number) else { return };
+        let before = stored_parts(season);
+        let parts: Vec<Part> = parts
+            .into_iter()
+            .enumerate()
+            .map(|(i, mut p)| {
+                p.title = p.title.map(|t| t.trim().to_string()).filter(|t| !t.is_empty());
+                p.cover = p.cover.map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
+                // A frame belongs to the picture it was set on.
+                p.cover_frame = before.get(i).filter(|b| b.cover == p.cover).and_then(|b| b.cover_frame);
+                p
+            })
+            .collect();
+        let changed = with_parts(season, &parts);
+        let settled = settle(item, &seasons.iter().map(|s| if s.number == number { changed.clone() } else { s.clone() }).collect::<Vec<_>>(), item.season);
+        self.change(id, move |item| {
+            item.seasons = Some(settled.seasons);
+            item.season = settled.season;
+            item.episode = settled.episode;
+            item.status = settled.status;
+        });
+    }
+
+    /// „Teil hinzufügen“: a part of open length at the end; the part that was open gets a length first.
+    pub fn add_part(&mut self, id: &str, number: i64) {
+        let Some(season) = self.items.iter().find(|i| i.id == id).and_then(|i| seasons_of(i).into_iter().find(|s| s.number == number)) else { return };
+        let mut stored = stored_parts(&season);
+        let last = parts_of(&season).pop();
+        if let (Some(end), Some(last)) = (stored.last_mut(), last) {
+            if end.episodes.is_none() {
+                let reached = season.watched.iter().filter(|n| **n >= last.from).max().map_or(0, |m| m - last.from + 1);
+                end.episodes = Some(reached.max(12));
+            }
+        }
+        stored.push(Part::default());
+        self.set_parts(id, number, stored);
+    }
+
+    /// „Diesen Teil auflösen“: its episodes go to the part before it (to the next one for the first). An open part
+    /// with nothing seen in it is simply taken away.
+    pub fn remove_part(&mut self, id: &str, number: i64, index: usize) {
+        let Some(season) = self.items.iter().find(|i| i.id == id).and_then(|i| seasons_of(i).into_iter().find(|s| s.number == number)) else { return };
+        let mut stored = stored_parts(&season);
+        let parts = parts_of(&season);
+        if stored.len() < 2 || index >= stored.len() {
+            return;
+        }
+        let part = &parts[index];
+        let seen_here = season.watched.iter().any(|n| *n >= part.from && part.to.is_none_or(|t| *n <= t));
+        let into = if index > 0 { index - 1 } else { 1 };
+        let (a, b) = (stored[into].episodes, stored[index].episodes);
+        stored[into].episodes = match (a, b) {
+            (a, None) if !seen_here => a,
+            (Some(a), Some(b)) => Some(a + b),
+            _ => None,
+        };
+        stored.remove(index);
+        self.set_parts(id, number, stored);
+    }
+
     /// Takes a season away with what was seen in it; the place moves to what is left.
     pub fn remove_season(&mut self, id: &str, number: i64) {
         let Some(item) = self.items.iter().find(|i| i.id == id) else { return };
@@ -378,7 +461,7 @@ impl Shell {
         cx.notify();
     }
 
-    fn pick_cover(&mut self, for_season: bool, cx: &mut Context<Self>) {
+    fn pick_cover(&mut self, target: CoverFor, cx: &mut Context<Self>) {
         let answer = cx.prompt_for_paths(gpui::PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(paths))) = answer.await {
@@ -389,28 +472,45 @@ impl Shell {
                             Ok(data) => (Some(data), None),
                             Err(e) => (None, Some(e)),
                         };
-                        if for_season {
-                            if let Some(s) = &mut shell.merk.season_window {
-                                if picked.is_some() {
-                                    s.picked = picked;
-                                    s.cover.update(cx, |f, cx| f.set_text(String::new(), cx));
-                                }
-                                s.problem = problem;
-                            }
-                        } else if let Some(f) = &mut shell.merk.edit {
-                            if picked.is_some() {
-                                f.picked = picked;
-                                f.cover.update(cx, |f, cx| f.set_text(String::new(), cx));
-                            }
-                            f.problem = problem;
-                        }
-                        cx.notify();
+                        shell.cover_picked(target, picked, problem, cx);
                     })
                     .ok();
                 }
             }
         })
         .detach();
+    }
+
+    /// A picture made small for a cover arrives: in the series' form, the season's window or one of its parts.
+    pub fn cover_picked(&mut self, target: CoverFor, picked: Option<String>, problem: Option<String>, cx: &mut Context<Self>) {
+        match target {
+            CoverFor::Season | CoverFor::Part(_) => {
+                if let Some(s) = &mut self.merk.season_window {
+                    if picked.is_some() {
+                        let (slot, field) = match target {
+                            CoverFor::Part(i) => match s.parts.get_mut(i) {
+                                Some(p) => (&mut p.picked, p.cover.clone()),
+                                None => return,
+                            },
+                            _ => (&mut s.picked, s.cover.clone()),
+                        };
+                        *slot = picked;
+                        field.update(cx, |f, cx| f.set_text(String::new(), cx));
+                    }
+                    s.problem = problem;
+                }
+            }
+            CoverFor::Series => {
+                if let Some(f) = &mut self.merk.edit {
+                    if picked.is_some() {
+                        f.picked = picked;
+                        f.cover.update(cx, |f, cx| f.set_text(String::new(), cx));
+                    }
+                    f.problem = problem;
+                }
+            }
+        }
+        cx.notify();
     }
 
     /// Opens the window of one season.
@@ -427,7 +527,28 @@ impl Shell {
             exc_minutes: self.field(cx, "Ihre Länge in Minuten", String::new(), "Min."),
             picked: season.cover.clone().filter(|c| c.starts_with("data:")),
             problem: None,
+            parts: Vec::new(),
         };
+        let split = season.parts.as_ref().is_some_and(|p| p.len() >= 2);
+        let parts = if split {
+            parts_of(&season)
+                .into_iter()
+                .map(|part| {
+                    let n = part.index + 1;
+                    let unit = if number == 0 { "Filme" } else { "Folgen" };
+                    PartFields {
+                        count: self.field(cx, &format!("{unit} in Teil {n}"), part.part.episodes.map(|e| e.to_string()).unwrap_or_default(), "Noch unbekannt"),
+                        name: self.field(cx, &format!("Name von Teil {n}"), part.part.title.clone().unwrap_or_default(), &format!("{} · Teil {n}", season_name(&season))),
+                        cover: self.field(cx, &format!("Adresse des Covers von Teil {n}"), part.part.cover.clone().filter(|c| !c.starts_with("data:")).unwrap_or_default(), "Sonst das der Staffel"),
+                        picked: part.part.cover.clone().filter(|c| c.starts_with("data:")),
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let mut fields = fields;
+        fields.parts = parts;
         self.merk.season_window = Some(fields);
         cx.notify();
     }
@@ -450,15 +571,93 @@ impl Shell {
         let cover_text = text(&s.cover);
         let cover = if cover_text.trim().is_empty() { s.picked.clone() } else { Some(cover_text.trim().to_string()) };
         let name = text(&s.name);
-        let before = self.merk.items.iter().find(|i| i.id == id).and_then(|i| seasons_of(i).into_iter().find(|x| x.number == number)).and_then(|x| x.episodes);
-        if count != before {
-            self.merk.set_episodes(&id, number, count);
+        // A split season counts its parts; each says how long it is.
+        let mut parts = Vec::new();
+        let last = s.parts.len().saturating_sub(1);
+        for (i, part) in s.parts.iter().enumerate() {
+            let what = if number == 0 { "Wie viele Filme" } else { "Wie viele Folgen" };
+            let episodes = match read_number(&text(&part.count), 1, 5000, what) {
+                Ok(None) if i < last => Err(format!("Teil {} braucht eine Anzahl — nur der letzte darf noch offen sein.", i + 1)),
+                other => other,
+            };
+            let episodes = match episodes {
+                Ok(e) => e,
+                Err(problem) => {
+                    if let Some(s) = &mut self.merk.season_window {
+                        s.problem = Some(problem);
+                    }
+                    cx.notify();
+                    return;
+                }
+            };
+            let cover_text = text(&part.cover);
+            let cover = if cover_text.trim().is_empty() { part.picked.clone() } else { Some(cover_text.trim().to_string()) };
+            parts.push(Part { episodes, title: Some(text(&part.name)), cover, cover_frame: None });
+        }
+        if parts.is_empty() {
+            let before = self.merk.items.iter().find(|i| i.id == id).and_then(|i| seasons_of(i).into_iter().find(|x| x.number == number)).and_then(|x| x.episodes);
+            if count != before {
+                self.merk.set_episodes(&id, number, count);
+            }
+        } else {
+            self.merk.set_parts(&id, number, parts);
         }
         self.merk.set_season_details(&id, number, Some(name), cover);
         if let Some(s) = &mut self.merk.season_window {
             s.problem = None;
         }
         cx.notify();
+    }
+
+    /// „Teile“: per part its count, name and cover, „Diesen Teil auflösen“, and „Teil hinzufügen“ under them.
+    fn parts_section(&self, ui: &Ui, s: &SeasonFields, id: &str, number: i64, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if s.parts.is_empty() {
+            return None;
+        }
+        let me = cx.entity();
+        let mut list = div().flex().flex_col().gap(px(14.)).child(ui.subheading("Teile")).child(ui.hint("Die Folgen zählen durch; die Staffel ist so lang wie ihre Teile zusammen. Nur der letzte Teil darf noch offen sein."));
+        for (i, part) in s.parts.iter().enumerate() {
+            let n = i + 1;
+            let mut cover_row = div().flex().flex_wrap().items_center().gap(px(8.)).child(div().w(px(280.)).child(part.cover.clone()));
+            {
+                let me = me.clone();
+                cover_row = cover_row.child(ui.button(format!("teil-{n}-cover-geraet"), "Bild vom Gerät").small().accessible_name(format!("Bild vom Gerät für Teil {n}")).on_click(move |_, app| me.update(app, |shell, cx| shell.pick_cover(CoverFor::Part(i), cx))));
+            }
+            if part.picked.is_some() {
+                let me = me.clone();
+                cover_row = cover_row.child(ui.button(format!("teil-{n}-cover-entfernen"), "Entfernen").small().ghost().accessible_name(format!("Cover von Teil {n} entfernen")).on_click(move |_, app| me.update(app, |shell, cx| {
+                    if let Some(p) = shell.merk.season_window.as_mut().and_then(|s| s.parts.get_mut(i)) {
+                        p.picked = None;
+                    }
+                    cx.notify();
+                })));
+            }
+            let (me, id) = (me.clone(), id.to_string());
+            list = list.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .child(div().flex().flex_wrap().gap(px(12.)).child(div().w(px(180.)).child(part.count.clone())).child(div().flex_1().min_w(px(200.)).child(part.name.clone())))
+                    .child(cover_row)
+                    .child(div().flex().child(ui.button(format!("teil-{n}-aufloesen"), "Diesen Teil auflösen").small().ghost().accessible_name(format!("Teil {n} auflösen")).on_click(move |_, app| {
+                        let id = id.clone();
+                        me.update(app, |shell, cx| {
+                            shell.merk.remove_part(&id, number, i);
+                            shell.season_open(&id, number, cx);
+                        })
+                    }))),
+            );
+        }
+        let id = id.to_string();
+        list = list.child(div().flex().child(ui.button("teil-hinzufuegen", "+ Teil hinzufügen").small().on_click(move |_, app| {
+            let id = id.clone();
+            me.update(app, |shell, cx| {
+                shell.merk.add_part(&id, number);
+                shell.season_open(&id, number, cx);
+            })
+        })));
+        Some(list.into_any_element())
     }
 
     fn season_add_exception(&mut self, cx: &mut Context<Self>) {
@@ -519,7 +718,7 @@ impl Shell {
         let mut cover_row = div().flex().flex_wrap().items_center().gap(px(8.)).child(div().w(px(280.)).child(f.cover.clone()));
         {
             let me = me.clone();
-            cover_row = cover_row.child(ui.button("cover-vom-geraet", "Bild vom Gerät").small().on_click(move |_, app| me.update(app, |shell, cx| shell.pick_cover(false, cx))));
+            cover_row = cover_row.child(ui.button("cover-vom-geraet", "Bild vom Gerät").small().on_click(move |_, app| me.update(app, |shell, cx| shell.pick_cover(CoverFor::Series, cx))));
         }
         if f.picked.is_some() {
             let me = me.clone();
@@ -683,7 +882,7 @@ impl Shell {
         let mut cover_row = div().flex().flex_wrap().items_center().gap(px(8.)).child(div().w(px(280.)).child(s.cover.clone()));
         {
             let me = me.clone();
-            cover_row = cover_row.child(ui.button("staffel-cover-geraet", "Bild vom Gerät").small().on_click(move |_, app| me.update(app, |shell, cx| shell.pick_cover(true, cx))));
+            cover_row = cover_row.child(ui.button("staffel-cover-geraet", "Bild vom Gerät").small().on_click(move |_, app| me.update(app, |shell, cx| shell.pick_cover(CoverFor::Season, cx))));
         }
         if s.picked.is_some() {
             let me = me.clone();
@@ -698,9 +897,15 @@ impl Shell {
             .flex()
             .flex_col()
             .gap(px(10.))
-            .child(ui.title("Staffel bearbeiten: Anzahl, Name, Cover, Teile"))
-            .child(div().flex().flex_wrap().gap(px(12.)).child(div().w(px(180.)).child(s.count.clone())).child(div().flex_1().min_w(px(200.)).child(s.name.clone())))
+            .child(ui.title(if number == 0 { "Filme bearbeiten: Anzahl, Name, Cover" } else { "Staffel bearbeiten: Anzahl, Name, Cover, Teile" }))
+            .child({
+                let row = div().flex().flex_wrap().gap(px(12.));
+                // A split season's length is the sum of its parts.
+                let row = if s.parts.is_empty() { row.child(div().w(px(180.)).child(s.count.clone())) } else { row };
+                row.child(div().flex_1().min_w(px(200.)).child(s.name.clone()))
+            })
             .child(cover_row)
+            .children(self.parts_section(&ui, s, &id, number, cx))
             .child({
                 let (save, split, remove) = (me.clone(), me.clone(), me.clone());
                 let (ids, idr) = (id.clone(), id.clone());
@@ -709,7 +914,10 @@ impl Shell {
                 if can_split {
                     row = row.child(ui.button("staffel-teilen", "In Teile teilen").small().on_click(move |_, app| {
                         let id = ids.clone();
-                        Shell::merk_do(&split, app, move |m| m.split(&id, number))
+                        split.update(app, |shell, cx| {
+                            shell.merk.split(&id, number);
+                            shell.season_open(&id, number, cx);
+                        })
                     }));
                 }
                 row.child(ui.button("staffel-entfernen", format!("{name} entfernen")).small().ghost().on_click(move |_, app| {
@@ -1004,7 +1212,18 @@ impl Shell {
             "cover" => s.cover.clone(),
             "exc_episode" => s.exc_episode.clone(),
             "exc_minutes" => s.exc_minutes.clone(),
-            _ => return None,
+            // „teil-2-name“, „teil-1-count“, „teil-1-cover“: the fields of a part.
+            other => {
+                let rest = other.strip_prefix("teil-")?;
+                let (n, which) = rest.split_once('-')?;
+                let part = s.parts.get(n.parse::<usize>().ok()?.checked_sub(1)?)?;
+                match which {
+                    "name" => part.name.clone(),
+                    "count" => part.count.clone(),
+                    "cover" => part.cover.clone(),
+                    _ => return None,
+                }
+            }
         })
     }
 }

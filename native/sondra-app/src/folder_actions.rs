@@ -36,11 +36,6 @@ pub struct Work {
 }
 
 impl Shell {
-    pub(crate) fn folder_load_recent(&mut self) {
-        let list: Vec<String> = self.folder.memory.as_ref().and_then(|m| m.get_item(RECENT_KEY)).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
-        self.folder.recent = list.into_iter().map(PathBuf::from).filter(|p| p.is_dir()).collect();
-    }
-
     pub(crate) fn folder_note_recent(&mut self, opened: &std::path::Path) {
         let next = merge_recent(&self.folder.recent, opened);
         if let Some(store) = self.folder.memory.as_mut() {

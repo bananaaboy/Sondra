@@ -39,8 +39,8 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ◐ | **Cover wählen**: aus einer Datei, über eine Adresse, „Cover & Staffeln abrufen“ (AniList) | Nativ seit 21.11.2026: Adresse oder „Bild vom Gerät“ (verkleinert auf 720 px). „Cover & Staffeln abrufen“ fehlt noch |
 | ✗ | **Ausschnitt des Covers** (`FrameEditor`: ziehen, Pfeiltasten, Zoom mit Plus/Minus) | Gezeichnet wird der Ausschnitt, ändern kann man ihn nicht |
 | ✓ | **Kachelformat je Serie**: Filmposter 2:3 oder Manga 5:7 | Nativ seit 21.11.2026 im Fenster „Serie bearbeiten“ |
-| ◐ | **Teile einer Staffel** anlegen, benennen, mit eigenem Cover | „In Teile teilen“ nativ seit 21.11.2026; Teile benennen und eigene Cover fehlen noch |
-| ◐ | **Cover je Staffel und je Teil** | Je Staffel nativ seit 21.11.2026 (Staffelfenster); je Teil noch nicht |
+| ✓ | **Teile einer Staffel** anlegen, benennen, mit eigenem Cover | Nativ seit 22.11.2026: im Staffelfenster je Teil Anzahl, Name, Cover (Adresse oder Bild vom Gerät), „Diesen Teil auflösen“ und „+ Teil hinzufügen“; nur der letzte Teil darf offen sein |
+| ✓ | **Cover je Staffel und je Teil** | Je Staffel seit 21.11.2026, je Teil seit 22.11.2026 (Staffelfenster) |
 
 ### Serienseite
 | | Funktion in Electron | Rust |

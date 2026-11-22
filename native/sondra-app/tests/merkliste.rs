@@ -920,6 +920,58 @@ fn the_window_of_a_season_ticks_all_resets_names_and_keeps_other_lengths(cx: &mu
 }
 
 #[gpui::test]
+fn a_season_is_split_into_parts_that_are_named_counted_and_dissolved(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut w = open(cx, Some(&list(3)), dir.path());
+    w.press(Role::ListItem, "Frieren");
+    w.press(Role::Button, "Staffel 1 bearbeiten: Anzahl, Name, Cover, Teile");
+    w.press(Role::Button, "In Teile teilen");
+    let back = |_: &Window| read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap().items.into_iter().find(|i| i.id == "fr").unwrap();
+    let parts = back(&w).seasons.unwrap()[0].parts.clone().unwrap();
+    assert_eq!(parts.iter().map(|p| p.episodes).collect::<Vec<_>>(), vec![Some(6), Some(6)], "twelve episodes in two halves");
+    assert!(w.tree().find(Role::Button, "In Teile teilen").is_none(), "a split season is not split again");
+    assert!(w.tree().find(Role::Button, "Teil 2 auflösen").is_some());
+
+    // Each part is named, counted and gets its own cover.
+    w.shell.update(w.cx, |shell, cx| {
+        let f = |n: &str| shell.season_field(n).unwrap();
+        let (n1, n2, c2, cover2) = (f("teil-1-name"), f("teil-2-name"), f("teil-2-count"), f("teil-2-cover"));
+        n1.update(cx, |t, cx| t.set_text("Cour 1", cx));
+        n2.update(cx, |t, cx| t.set_text("Cour 2", cx));
+        c2.update(cx, |t, cx| t.set_text("16", cx));
+        cover2.update(cx, |t, cx| t.set_text("https://example.org/cour2.jpg", cx));
+    });
+    w.draw();
+    w.press(Role::Button, "Übernehmen");
+    let season = back(&w).seasons.unwrap()[0].clone();
+    let parts = season.parts.clone().unwrap();
+    assert_eq!(parts[0].title.as_deref(), Some("Cour 1"));
+    assert_eq!(parts[1].title.as_deref(), Some("Cour 2"));
+    assert_eq!(parts[1].episodes, Some(16));
+    assert_eq!(parts[1].cover.as_deref(), Some("https://example.org/cour2.jpg"));
+    assert_eq!(season.episodes, Some(22), "the season is as long as its parts");
+
+    // Only the last part may stay open.
+    w.shell.update(w.cx, |shell, cx| {
+        let f = shell.season_field("teil-1-count").unwrap();
+        f.update(cx, |t, cx| t.set_text("", cx));
+    });
+    w.draw();
+    w.press(Role::Button, "Übernehmen");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Teil 1 braucht eine Anzahl"))));
+
+    // „Teil hinzufügen“ and „auflösen“: the episodes go to the part before.
+    w.press(Role::Button, "+ Teil hinzufügen");
+    assert_eq!(back(&w).seasons.unwrap()[0].parts.as_ref().map(Vec::len), Some(3));
+    w.press(Role::Button, "Teil 3 auflösen");
+    w.press(Role::Button, "Teil 2 auflösen");
+    let season = back(&w).seasons.unwrap()[0].clone();
+    assert!(season.parts.is_none(), "one part left is no split");
+    assert_eq!(season.episodes, Some(22));
+    assert!(w.tree().find(Role::Button, "In Teile teilen").is_some());
+}
+
+#[gpui::test]
 fn seasons_and_films_are_added_on_the_page_and_removing_is_behind_mehr(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let mut w = open(cx, Some(&list(3)), dir.path());

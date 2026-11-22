@@ -84,19 +84,15 @@ pub fn thumb_of(src: &str, frame: Option<CoverFrame>, manga: bool, tier: Tier) -
     let (width, limit) = if tier == Tier::Klein { (40u32, 1100usize) } else { (96, 4500) };
     let height = (width as f64 * sondra_merk::cover::aspect(manga)).round() as u32;
     let rgb = drawn(&picture, frame, width, height).to_rgb8();
-    let mut best: Option<Vec<u8>> = None;
     let mut quality = if tier == Tier::Klein { 35u8 } else { 55 };
-    loop {
+    let body = loop {
         let mut out = Vec::new();
         image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode_image(&rgb).ok()?;
-        let fits = out.len() <= limit;
-        best = Some(out);
-        if fits || quality <= 14 {
-            break;
+        if out.len() <= limit || quality <= 14 {
+            break out;
         }
         quality -= 10;
-    }
-    let body = best?;
+    };
     (body.len() < THUMB_MAX).then(|| [vec![KIND_JPEG], body].concat())
 }
 
