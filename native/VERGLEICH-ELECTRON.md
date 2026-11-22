@@ -13,10 +13,10 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
 | ✗ | **Tastenkürzel in den Werkzeugen**: Strg+Z / Strg+Umschalt+Z (Ton-Editor, Video, Bilder), Strg+X/C/V und die Leertaste im Ton-Editor, die Leertaste im Zerschneiden-Pattern, Entf für „Pad löschen“ | Nur der Player (Leertaste, ←→↑↓, M, B, T, W, F, Esc) und die Pads (16 Tasten) hören auf Tasten. Die anderen Werkzeuge haben ihr „Rückgängig“ nur als Knopf |
-| ✗ | **Rückmeldung beim Ablegen**: „Loslassen zum Öffnen“ erscheint, solange eine Datei über dem Fenster gezogen wird | Abgelegte Dateien kommen an, aber vorher zeigt nichts, dass das Ablegen möglich ist |
+| ✓ | **Rückmeldung beim Ablegen**: „Loslassen zum Öffnen“ erscheint, solange eine Datei über dem Fenster gezogen wird | Nativ seit 22.11.2026, mit dem Satz, wohin die Dateien gehen; abgelegt wird jetzt im ganzen Fenster (vorher nur im Einstieg der Startseite): an das offene Werkzeug, in den Player, sonst wie „Öffnen mit“ |
 | ✗ | Drive-Fenster mit der Ordnerübersicht (`Projekte`, `Dateien/Ton·Video·Bilder·Andere`, `Heruntergeladen`, `Merkliste`), **Warteschlange** der Uploads und **„Dateien der Sitzung nach Art“ hochladen** | Es gibt nur Anmelden/Trennen in der Seitenleiste und „In Drive“ einzeln bei jedem Ergebnis |
 | ✗ | **Projekt in Drive speichern** („Google Drive verbinden, um das Projekt dort zu speichern“) | Ein Projekt lässt sich nur lokal speichern |
-| ✗ | **„An Gerät“ neben jedem „In Drive“** (`DeviceSendButton`): ein Ergebnis direkt an ein anderes Gerät schicken | Nur über die Seite „Geräte“ |
+| ✓ | **„An Gerät“ neben jedem „In Drive“** (`DeviceSendButton`): ein Ergebnis direkt an ein anderes Gerät schicken | Nativ seit 22.11.2026: „An „Name““ je offenes Gerät (bis drei) neben „In Drive“ |
 | ◐ | Hinweis „Neu in x.y.z“ nach einem Update, als Zeile unter der Kopfzeile | Ist da. Neu ist das Mitteilungsfach, die Zeile gibt es zusätzlich |
 | — | „App herunterladen“ (Fenster mit den Reitern Windows/Android), FFmpeg-Anzeige „WASM/Nativ“, „Unter der Haube“ | Unnötig in einem Programm, das schon installiert ist |
 

@@ -308,6 +308,60 @@ impl Shell {
         }
     }
 
+    /// Files let go of anywhere in the window (where no page took them itself): the open tool gets them when it takes
+    /// such files, the player plays them, a folder opens on „Ordner“; elsewhere as if opened with Sondra.
+    pub fn dropped(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        if paths.is_empty() {
+            return;
+        }
+        match self.panel {
+            Panel::Start => self.take_files(paths, cx),
+            Panel::Player => self.play_files(paths, cx),
+            panel if !crate::session::accepts(panel).is_empty() && paths.iter().any(|p| crate::session::accepts(panel).contains(&crate::session::kind_of(p))) => {
+                self.session_add(paths, cx);
+                self.session_hand_over(panel, None, cx);
+            }
+            _ => self.open_paths(paths, cx),
+        }
+    }
+
+    /// „Loslassen zum Öffnen“: over the whole window while files are dragged over it (the only drag there is); it takes
+    /// no clicks or drops, so a page's own place to drop stays where it was.
+    fn drop_hint(&self, ui: &Ui) -> AnyElement {
+        let c = ui.c;
+        let goes = match self.panel {
+            Panel::Start => "Die Dateien kommen in die Sitzung.".to_string(),
+            Panel::Player => "Abspielen nimmt sie in die Liste.".to_string(),
+            Panel::Folder => "Ein Ordner öffnet sich hier, Dateien werden geöffnet wie mit Sondra.".to_string(),
+            panel if !crate::session::accepts(panel).is_empty() => format!("Sie kommen in die Sitzung und gehen an „{}“.", panel.label()),
+            _ => "Sie werden geöffnet wie mit Sondra.".to_string(),
+        };
+        div()
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(gpui::Rgba { a: 0.82, ..c.room })
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(8.))
+                    .px(px(40.))
+                    .py(px(32.))
+                    .rounded(px(radius::CARD))
+                    .border_2()
+                    .border_dashed()
+                    .border_color(c.ink)
+                    .bg(c.raised)
+                    .child(ui.display("Loslassen zum Öffnen"))
+                    .child(div().w(px(420.)).flex().justify_center().child(ui.prose(goes))),
+            )
+            .into_any_element()
+    }
+
     /// Opens what a second start hands over, and brings the window forward.
     pub fn listen_for_instances(&mut self, paths: std::sync::mpsc::Receiver<Vec<PathBuf>>, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| loop {
@@ -1068,6 +1122,7 @@ impl Render for Shell {
         let inner = (column - 2.0 * gutter).max(280.0);
         let cols = columns_for(inner);
         let me = cx.entity();
+        let drop_to = cx.entity();
         if let Some(handle) = self.pending_focus.take() {
             window.defer(cx, move |window, _| window.focus(&handle));
         }
@@ -1349,6 +1404,13 @@ impl Render for Shell {
                 })
                 .size_full()
                 .relative()
+                .on_drop({
+                    let me = drop_to.clone();
+                    move |paths: &ExternalPaths, _, app| {
+                        let paths = paths.paths().to_vec();
+                        me.update(app, |shell, cx| shell.dropped(paths, cx));
+                    }
+                })
                 .bg(if immersive { Mode::Dark.colors().stage } else { c.room })
                 .text_color(c.prose)
                 .font_family(family::SANS)
@@ -1395,6 +1457,7 @@ impl Render for Shell {
                                 ),
                         ).into_any_element() })
                 .children(overlay)
+                .children(cx.has_active_drag().then(|| self.drop_hint(&ui)))
                 .children(mini)
                 .children(floating)
                 .children(drawer),

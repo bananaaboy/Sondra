@@ -192,7 +192,29 @@ impl crate::shell::Shell {
 
 impl crate::shell::Shell {
     /// The „In Drive“ button of a result, with its state in its words; `None` where no Google client is built in.
-    pub(crate) fn drive_button(&self, ui: &sondra_ui::Ui, id: String, path: &Path, name: &str, cx: &mut gpui::Context<Self>) -> Option<sondra_ui::Button> {
+    /// „In Drive“ and, beside it, „An „Gerät““ for every device that is open now (`DeviceSendButton` on the website):
+    /// the ways a result leaves this computer, each only where it can.
+    pub(crate) fn drive_button(&self, ui: &sondra_ui::Ui, id: String, path: &Path, name: &str, cx: &mut gpui::Context<Self>) -> Vec<gpui::AnyElement> {
+        use gpui::IntoElement;
+        let mut out: Vec<gpui::AnyElement> = self.drive_only_button(ui, id.clone(), path, name, cx).map(|b| b.into_any_element()).into_iter().collect();
+        for (device, device_name) in self.folder_devices().into_iter().take(3) {
+            let (me, target, to) = (cx.entity(), path.to_path_buf(), device.clone());
+            out.push(
+                ui.button(format!("{id}-geraet-{device}"), format!("An „{device_name}“"))
+                    .small()
+                    .ghost()
+                    .accessible_name(format!("{name} an {device_name} senden"))
+                    .on_click(move |_, app| {
+                        let (p, to) = (target.clone(), to.clone());
+                        me.update(app, |shell, cx| shell.devices_send_paths(&to, vec![p], false, cx))
+                    })
+                    .into_any_element(),
+            );
+        }
+        out
+    }
+
+    fn drive_only_button(&self, ui: &sondra_ui::Ui, id: String, path: &Path, name: &str, cx: &mut gpui::Context<Self>) -> Option<sondra_ui::Button> {
         if !self.drive.as_ref().is_some_and(|d| d.configured) {
             return None;
         }
@@ -279,9 +301,7 @@ impl crate::shell::Shell {
         use gpui::{div, prelude::*, px};
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let mut row = div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.value(path.display().to_string()));
-        if let Some(button) = self.drive_button(ui, format!("drive-{}", path.display()), path, &name, cx) {
-            row = row.child(button);
-        }
+        row = row.children(self.drive_button(ui, format!("drive-{}", path.display()), path, &name, cx));
         if let Some(why) = self.drive_failure(path) {
             row = row.child(ui.hint(why));
         }
