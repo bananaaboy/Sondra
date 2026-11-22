@@ -365,6 +365,10 @@ impl Shell {
             let me = me.clone();
             out.push(ui.button("auswahl-drive", "In Drive").small().disabled(busy).accessible_name("Gewählte Dateien in Drive speichern").on_click(move |_, app| me.update(app, |shell, cx| shell.folder_to_drive(cx))).into_any_element());
         }
+        if f.scan.as_ref().is_some_and(|s| s.drive) {
+            let me = me.clone();
+            out.push(ui.button("auswahl-einordnen", "In Staffel einordnen …").small().disabled(busy).accessible_name("Gewählte Dateien in eine Staffel einordnen").on_click(move |_, app| me.update(app, |shell, cx| shell.filing_open(cx))).into_any_element());
+        }
         {
             let me = me.clone();
             out.push(ui.button("auswahl-untertitel", "Untertitel erzeugen").small().disabled(busy).accessible_name("Untertitel für die gewählten Filme erzeugen").on_click(move |_, app| me.update(app, |shell, cx| shell.folder_subtitles(cx))).into_any_element());

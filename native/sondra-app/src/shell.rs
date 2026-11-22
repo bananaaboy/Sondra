@@ -1268,7 +1268,7 @@ impl Render for Shell {
             .or_else(|| if self.licenses_open { self.licenses_overlay(ui, cx) } else { None })
             .or_else(|| if self.whats_new_open { self.whats_new_overlay(ui, cx) } else { None })
             .or_else(|| self.protocol_overlay(ui, cx))
-            .or_else(|| if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else { None })
+            .or_else(|| if self.panel == Panel::Folder { self.filing_overlay(ui, cx).or_else(|| self.folder_overlay(ui, cx)) } else { None })
             .or_else(|| if self.panel == Panel::Player { self.player_overlay(ui, cx) } else { None })
             .or_else(|| {
                 if self.panel != Panel::Merkliste {

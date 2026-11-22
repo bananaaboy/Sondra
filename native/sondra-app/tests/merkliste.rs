@@ -262,21 +262,25 @@ fn a_series_opens_to_its_page_where_episodes_are_ticked(cx: &mut TestAppContext)
     assert!(tree.find(Role::Button, "Zurück zur Merkliste").is_some());
     assert!(tree.find(Role::Heading, "Staffel 1").is_some());
     // Where one is is said on the episode, in words.
-    assert!(tree.find(Role::Button, "Folge 4, hier sind Sie").is_some());
-    assert_eq!(tree.find(Role::Button, "Folge 2").unwrap().toggled, Some(true), "seen episodes are pressed");
-    assert_eq!(tree.find(Role::Button, "Folge 5").unwrap().toggled, Some(false));
+    assert!(tree.find(Role::Button, "Folge 4, hier sind Sie (24 Min.)").is_some());
+    assert_eq!(tree.find(Role::Button, "Folge 2, gesehen (24 Min.)").unwrap().toggled, Some(true), "seen episodes are pressed");
+    assert_eq!(tree.find(Role::Button, "Folge 5 (24 Min.)").unwrap().toggled, Some(false));
     assert_eq!(tree.find(Role::Button, "Stand: Am Schauen").unwrap().toggled, Some(true));
+    // The card says where the season stands and what is left.
+    let said = |t: &Snapshot, s: &str| t.nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| AsRef::<str>::as_ref(l).starts_with(s)));
+    assert!(said(&tree, "3 von 12, weiter mit Folge 4"));
+    assert!(said(&tree, "Noch 9 Folgen (3,6 Std.) · fertig bei 1/Tag:"));
 
     // Ticking a later episode leaves the place at the first one not seen.
-    w.press(Role::Button, "Folge 5");
-    assert_eq!(w.tree().find(Role::Button, "Folge 5").unwrap().toggled, Some(true));
-    assert!(w.tree().find(Role::Button, "Folge 4, hier sind Sie").is_some());
+    w.press(Role::Button, "Folge 5 (24 Min.)");
+    assert_eq!(w.tree().find(Role::Button, "Folge 5, gesehen (24 Min.)").unwrap().toggled, Some(true));
+    assert!(w.tree().find(Role::Button, "Folge 4, hier sind Sie (24 Min.)").is_some());
     // The big button steps forward: 4 is seen, the place moves to 6 (5 is seen already).
     w.press(Role::Button, "Folge 4 gesehen");
-    assert!(w.tree().find(Role::Button, "Folge 6, hier sind Sie").is_some());
+    assert!(w.tree().find(Role::Button, "Folge 6, hier sind Sie (24 Min.)").is_some());
     // The length of a season can be changed.
     w.press(Role::Button, "Eine Folge mehr in Staffel 1");
-    assert!(w.tree().find(Role::Button, "Folge 13").is_some());
+    assert!(w.tree().find(Role::Button, "Folge 13 (24 Min.)").is_some());
     // And the stand.
     w.press(Role::Button, "Stand: Pausiert");
     assert_eq!(w.tree().find(Role::Button, "Stand: Pausiert").unwrap().toggled, Some(true));

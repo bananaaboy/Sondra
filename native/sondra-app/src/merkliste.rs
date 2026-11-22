@@ -1303,7 +1303,7 @@ impl Shell {
             let me = me.clone();
             let id = item.id.clone();
             let at_here = here == Some(episode);
-            let name = format!("{unit} {episode}{}", if at_here { ", hier sind Sie" } else { "" });
+            let name = crate::merk_season_card::episode_name(item, season, episode, at_here);
             grid = grid.child(
                 ui.chip(format!("folge-{number}-{episode}"), episode.to_string(), seen).accessible_name(name).on_click(move |window, app| {
                     let id = id.clone();
@@ -1311,6 +1311,30 @@ impl Shell {
                     Self::merk_do(&me, app, move |m| m.tick(&id, number, episode, up_to))
                 }),
             );
+        }
+
+        // The card's cover (the season's, else the series'), where it stands and what is left, and its episode to load.
+        let cover = season.cover.clone().or_else(|| item.cover.clone());
+        let thumb = self.cover_element(cx, &cover, season.cover_frame.or(item.cover_frame), 40.0, 60.0);
+        let today = chrono::Local::now().date_naive();
+        let mut said = div().flex().flex_col().gap(px(2.)).child(ui.prose(crate::merk_season_card::where_line(season)));
+        if let Some(left) = crate::merk_season_card::left_line(item, season, today) {
+            said = said.child(ui.hint(left));
+        }
+        let mut lines = div().flex().flex_wrap().items_center().gap(px(12.)).children(thumb.map(|t| div().w(px(40.)).h(px(60.)).flex_none().rounded(px(sondra_ui::radius::NAV)).overflow_hidden().child(t))).child(said);
+        if !item.url.trim().is_empty() && !progress.complete {
+            let next = progress.next.max(1);
+            let (me, url, id) = (me.clone(), item.url.clone(), item.id.clone());
+            lines = lines.child(div().flex_1()).child(ui.button(format!("staffel-laden-{number}"), format!("{unit} {next} laden")).small().ghost().accessible_name(format!("{name}: {unit} {next} laden")).on_click(move |_, app| {
+                let address = crate::merk_edit::episode_address(&url, number, next);
+                let id = id.clone();
+                me.update(app, |shell, cx| {
+                    shell.take_series_prefs(&id);
+                    shell.go(crate::nav::Panel::Downloader, cx);
+                    shell.download_set_input(&address, cx);
+                    shell.find_address(cx);
+                })
+            }));
         }
 
         div()
@@ -1340,6 +1364,7 @@ impl Shell {
                             })
                     }),
             )
+            .child(lines)
             .child(stepper)
             .child(grid)
             .into_any_element()

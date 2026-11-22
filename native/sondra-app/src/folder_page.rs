@@ -116,6 +116,8 @@ pub struct FolderState {
     pub confirm: Option<Vec<FolderFile>>,
     /// Something is being moved or deleted.
     pub busy: bool,
+    /// „In Staffel einordnen“, while its window is open.
+    pub filing: Option<crate::season_filing::Filing>,
     /// What the last „In den Papierkorb“ moved, for „Rückgängig“.
     pub undo: Option<Vec<Binned>>,
     /// A line of what happened, under the head.
@@ -180,6 +182,7 @@ impl FolderState {
             session: Session::default(),
             remembered: None,
             read_for_list: false,
+            filing: None,
             last_visit: None,
             only_new: false,
             cancel: Arc::new(AtomicBool::new(false)),

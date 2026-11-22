@@ -729,6 +729,76 @@ fn loose_episodes_in_drive_are_filed_into_their_season_with_one_click(cx: &mut T
 }
 
 #[gpui::test]
+fn chosen_files_in_drive_are_filed_into_a_season_through_its_window(cx: &mut TestAppContext) {
+    use sondra_merk::normalize::{normalize, Context as Ids};
+    use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};
+    let tmp = tempfile::tempdir().unwrap();
+    std::env::set_var("SONDRA_DATA", tmp.path().join("daten"));
+    let fake = sondra_drive::fake::FakeDrive::start();
+    let client = fake.client();
+    let loose = client.ensure_path(&["Sondra", "Heruntergeladen"]).unwrap();
+    client.create(&loose, "Bonus.mkv", b"b", "video/x-matroska", &Default::default()).unwrap();
+    client.create(&loose, "Frieren S02E01.mkv", b"eins", "video/x-matroska", &Default::default()).unwrap();
+    let mut ids = Ids::system();
+    let frieren = normalize(&serde_json::json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 1, "seasons": [{ "number": 1, "episodes": 28, "watched": [] }] }), &mut ids);
+    let list = tmp.path().join("Merkliste.sqlite");
+    fs::write(&list, write_sqlite(&Stored { items: vec![frieren], ..Default::default() }).unwrap()).unwrap();
+    let mut w = open(cx, tmp.path());
+    w.shell.update(w.cx, |shell, cx| {
+        shell.open_merkliste(sondra_app::store::MerkStore::at(list.clone()), cx);
+        shell.set_drive_for_test(sondra_app::drive_hub::Drive {
+            api: fake.api(),
+            tokens: std::sync::Arc::new(sondra_drive::fake::Always),
+            configured: true,
+            connected: std::sync::Arc::new(|| true),
+            sign_in: std::sync::Arc::new(|| Ok(())),
+        });
+    });
+    w.draw();
+    w.press(Role::Button, "Aus Google Drive");
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().find(Role::ListItem, "Heruntergeladen").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    w.press(Role::Button, "Mit Unterordnern");
+    w.press(Role::ListItem, "Bonus.mkv");
+    let item = w.tree().find(Role::ListItem, "Bonus.mkv").unwrap().id;
+    w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: item, data: None }, window, cx));
+    w.cx.simulate_keystrokes("ctrl-a");
+    w.draw();
+    w.press(Role::Button, "Gewählte Dateien in eine Staffel einordnen");
+    assert!(w.tree().find(Role::Dialog, "In Staffel einordnen").is_some());
+    assert_eq!(w.tree().find(Role::Button, "Serie Frieren").unwrap().toggled, Some(true), "the series the names tell of is suggested");
+    assert_eq!(w.tree().find(Role::Button, "Staffel 2").unwrap().toggled, Some(true), "and the season, new on the list");
+    assert!(w.tree().find(Role::Button, "Staffel 1").is_some());
+    let rows = w.shell.read_with(w.cx, |s, _| s.filing_rows());
+    let by_name = |name: &str| rows.iter().find(|r| r.0 == name).cloned().unwrap();
+    assert_eq!(by_name("Frieren S02E01.mkv").2, "Nummer aus dem Namen");
+    assert_eq!(by_name("Bonus.mkv").2, "weitergezählt — bitte prüfen", "a bonus clip is not silently episode 1");
+    // The bonus clip is left out.
+    w.press(Role::Button, "Bonus.mkv mitnehmen");
+    w.press(Role::Button, "In Staffel einordnen");
+    for _ in 0..300 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().find(Role::Dialog, "In Staffel einordnen").is_none() && !w.shell.read_with(w.cx, |s, _| s.folder_busy()) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let tree = fake.client().tree(100, &std::sync::atomic::AtomicBool::new(false), |_| {}).unwrap();
+    let mut paths: Vec<String> = tree.files.iter().map(|f| f.path.clone()).collect();
+    paths.sort();
+    assert_eq!(paths, ["Heruntergeladen/Bonus.mkv", "Serien/Frieren/Staffel 2/Frieren S02E01.mkv"]);
+    let filed = tree.files.iter().find(|f| f.path.ends_with("S02E01.mkv")).unwrap();
+    assert_eq!((filed.notes["sondraSerie"].as_str(), filed.notes["sondraStaffel"].as_str(), filed.notes["sondraFolge"].as_str()), ("fr", "2", "1"));
+}
+
+#[gpui::test]
 fn what_the_list_has_seen_can_be_left_out_of_the_view(cx: &mut TestAppContext) {
     use sondra_merk::normalize::{normalize, Context as Ids};
     use sondra_merk::sqlite::{write_sqlite, Snapshot as Stored};
