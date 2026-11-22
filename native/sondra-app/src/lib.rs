@@ -56,6 +56,7 @@ pub mod old_app;
 pub mod pip;
 pub mod player_page;
 pub mod player_more;
+pub mod player_intro;
 pub mod sampler_page;
 pub mod sampler_more;
 pub mod session;

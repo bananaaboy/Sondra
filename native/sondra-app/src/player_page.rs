@@ -83,6 +83,14 @@ pub struct PlayerState {
     pub show_remaining: bool,
     /// What „Als Cover festlegen“ said.
     pub cover_said: Option<String>,
+    /// The opening found by its sound in the file that plays, and for which file that was asked.
+    pub intro_here: crate::player_intro::IntroHere,
+    pub intro_file: Option<PathBuf>,
+    /// „Vorspann erkennen“ at work, and what it said last.
+    pub intro_step: Option<String>,
+    pub intro_note: Option<String>,
+    /// „Für diese Folge ausblenden“: the file whose opening button is hidden.
+    pub intro_dismissed: Option<PathBuf>,
     pub subtitle: Subtitle,
     pub subtitle_error: Option<String>,
     /// The film ended on „Ende des Titels“: it stays ended, the next one does not begin.
@@ -181,6 +189,11 @@ impl PlayerState {
             subtitle_name: None,
             show_remaining: false,
             cover_said: None,
+            intro_here: crate::player_intro::IntroHere::Unknown,
+            intro_file: None,
+            intro_step: None,
+            intro_note: None,
+            intro_dismissed: None,
             subtitle: Subtitle::Off,
             subtitle_error: None,
             stay_ended: false,
@@ -943,7 +956,18 @@ impl Shell {
             .and_then(|(found, _)| self.merk.items.iter().find(|i| i.id == found.item).and_then(|i| i.opening))
             .map_or(p.settings.opening, |o| o as f64);
         let video = playback.picture_size().is_some();
-        let skip_opening = p.settings.skip_opening && video && sondra_player::opening_offered(position, duration, opening_len);
+        // An opening found by its sound wins over the fixed length: offered while it plays, a jump to its end.
+        let found = match p.intro_here {
+            crate::player_intro::IntroHere::Found { start, end } => Some((start, end)),
+            _ => None,
+        };
+        let finding = p.intro_here == crate::player_intro::IntroHere::Finding;
+        let dismissed = p.intro_dismissed.is_some() && p.intro_dismissed.as_ref() == p.current_path();
+        let skip_opening = p.settings.skip_opening && video && !dismissed && !finding && match found {
+            Some((start, end)) => position >= start && position < end - 0.5,
+            None => sondra_player::opening_offered(position, duration, opening_len),
+        };
+        let skip_to = found.map(|(_, end)| end);
         let has_next = p.index + 1 < p.queue.len();
         let offer_next = p.settings.skip_opening && video && has_next && sondra_player::next_offered(position, duration);
         let immersive = p.size.immersive();
@@ -995,9 +1019,26 @@ impl Shell {
             let mut offers = div().absolute().right(px(16.)).top(px(16.)).flex().flex_col().items_end().gap(px(8.));
             if skip_opening {
                 let me = me.clone();
-                offers = offers.child(ui.button("vorspann-ueberspringen", "Vorspann überspringen").small().on_click(move |_, app| {
-                    Self::player_do(&me, app, move |p| p.skip_by(opening_len))
-                }));
+                let left = skip_to.map_or(opening_len, |end| (end - position).max(0.0));
+                let hide = me.clone();
+                offers = offers.child(
+                    div()
+                        .flex()
+                        .gap(px(4.))
+                        .child(ui.button("vorspann-ueberspringen", format!("Vorspann überspringen · {}", sondra_player::clock(left))).small().accessible_name("Vorspann überspringen").on_click(move |_, app| {
+                            Self::player_do(&me, app, move |p| match skip_to {
+                                Some(end) => {
+                                    if let Some(pb) = p.playback.as_mut() {
+                                        let _ = pb.seek(end);
+                                    }
+                                }
+                                None => p.skip_by(opening_len),
+                            })
+                        }))
+                        .child(ui.button("vorspann-ausblenden", "×").small().ghost().accessible_name("Vorspann-Button für diese Folge ausblenden").on_click(move |_, app| {
+                            Self::player_do(&hide, app, |p| p.intro_dismissed = p.current_path().cloned())
+                        })),
+                );
             }
             if offer_next {
                 let me = me.clone();
@@ -1469,7 +1510,32 @@ impl Shell {
                         .child(skips)
                         .child(ui.hint("Vorspann"))
                         .child(div().flex().flex_wrap().gap(px(6.)).child(toggle("vorspann-anbieten", "Vorspann überspringen anbieten", st.skip_opening, |p| p.settings.skip_opening = !p.settings.skip_opening)))
-                        .child(ui.hint("Feste Länge des Vorspanns (wenn die Serie keine eigene hat)"))
+                        .child(ui.hint("Am Ton erkennen"))
+                        .child(div().w(px(520.)).child(ui.prose(self.intro_status())))
+                        .children(p.intro_note.clone().map(|note| div().w(px(520.)).child(ui.hint(note))))
+                        .child({
+                            let mut row = div().flex().flex_wrap().gap(px(6.));
+                            if self.intro_series().is_some() && p.intro_step.is_none() {
+                                match self.intro_partner() {
+                                    Some(partner) => {
+                                        let me = me.clone();
+                                        let label = if self.intro_learned() > 0 { "Neuen Vorspann erkennen" } else { "Vorspann erkennen" };
+                                        let with = partner.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                                        row = row.child(ui.button("vorspann-erkennen", label).small().accessible_name(format!("{label} — vergleicht mit „{with}“")).on_click(move |_, app| me.update(app, |shell, cx| shell.player_learn_intro(cx))));
+                                    }
+                                    None => {
+                                        row = row.child(ui.hint(format!("{} eine zweite Folge der Serie in die Liste nehmen.", if self.intro_learned() > 0 { "Für einen neuen Vorspann" } else { "Dafür" })));
+                                    }
+                                }
+                                let learned = self.intro_learned();
+                                if learned > 0 {
+                                    let me = me.clone();
+                                    row = row.child(ui.button("vorspann-vergessen", if learned == 1 { "Erkannten Vorspann vergessen".to_string() } else { format!("{learned} erkannte Vorspänne vergessen") }).small().ghost().on_click(move |_, app| me.update(app, |shell, cx| shell.player_forget_intros(cx))));
+                                }
+                            }
+                            row
+                        })
+                        .child(ui.hint("Feste Länge des Vorspanns (wenn nichts erkannt ist und die Serie keine eigene hat)"))
                         .child(openings)
                         .child(div().flex().flex_wrap().gap(px(6.)).child(toggle("merkliste-abhaken", "In der Merkliste abhaken", st.merkliste, |p| p.settings.merkliste = !p.settings.merkliste)).child(minimize))
                         .child(ab),

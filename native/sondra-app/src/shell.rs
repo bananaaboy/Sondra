@@ -1171,6 +1171,7 @@ impl Render for Shell {
             let _ = window.drop_image(old);
         }
         self.player_merkliste_tick();
+        self.player_intro_tick(cx);
         self.update_discord();
         self.flash_for_news(window, cx);
         // A download in progress is drawn again and again: the bar moves.

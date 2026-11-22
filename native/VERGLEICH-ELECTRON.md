@@ -92,8 +92,8 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
 | ✓ | **Einstellungen zur Wiedergabe in der Oberfläche**: „Automatisch weiter“, **Titel wiederholen / Liste wiederholen / Anhalten am Ende**, **Sprungweite** für ←/→, „Vorspann überspringen anbieten“ an/aus, **„In der Merkliste abhaken“ an/aus** | ⚙ Die Werte (`Repeat`, `auto_next`, `skip`, `skip_opening`) wirken im Player und werden gespeichert, **aber kein Knopf stellt sie um**. Bleibt nur, was voreingestellt ist |
-| ✗ | **Vorspann am Ton erkennen** (zwei Folgen vergleichen, Fingerabdruck, je Datei merken; „Neuen Vorspann erkennen“, „Erkannten Vorspann vergessen“, „In dieser Folge nicht gefunden“) | ⚙ `sondra-media::intro` rechnet das, der Player nutzt immer die feste Länge |
-| ✗ | **Feste Länge des Vorspanns** einstellen (Zahnrad → Vorspann), **„Für diese Folge ausblenden“** | — |
+| ✓ | **Vorspann am Ton erkennen** (zwei Folgen vergleichen, Fingerabdruck, je Datei merken; „Neuen Vorspann erkennen“, „Erkannten Vorspann vergessen“, „In dieser Folge nicht gefunden“) | Nativ seit 22.11.2026: „Bild und Ton“ → Wiedergabe → Am Ton erkennen; bis vier Abdrücke an der Serie, je Datei gemerkt (`sondra:abspielen:vorspann`), der Knopf springt ans Ende des gefundenen Vorspanns |
+| ✓ | **Feste Länge des Vorspanns** einstellen (Zahnrad → Vorspann), **„Für diese Folge ausblenden“** | Nativ (feste Länge unter „Bild und Ton“, × neben „Vorspann überspringen“) |
 | ✓ | **Tasten** S (Vorspann), N (Nächste Folge), P (Vorherige), C (Untertitel an/aus), **Umschalt + ←/→ zu den Lesezeichen** | ◐ Umschalt + ←/→ gibt es. S, N, P, C fehlen |
 | ✓ | **A-B-Schleife** | Nativ seit 22.11.2026 unter „Bild und Ton“ → Wiedergabe |
 | ✓ | **Standbild als Merkliste-Cover** („Als Cover festlegen“) | Nativ seit 22.11.2026 (bei einer Folge einer Serie der Merkliste, 720 px, JPEG) |

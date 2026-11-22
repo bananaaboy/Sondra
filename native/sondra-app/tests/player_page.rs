@@ -860,3 +860,87 @@ fn the_keys_of_the_website_and_the_settings_of_wiedergabe(cx: &mut TestAppContex
     w.press(Role::Button, "Schleife A–B: hier beginnen");
     assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with("A bei "))));
 }
+
+/// An episode: its own beginning (noise of `seed`), then the opening the series shares (a gliding tone, 30 s), then
+/// its own rest.
+fn episode(dir: &Path, name: &str, cold_open: u32, seed: u32) -> PathBuf {
+    let ff = Ffmpeg::locate().unwrap();
+    let path = dir.join(name);
+    let total = cold_open + 30 + 20;
+    let out = Command::new(ff.program())
+        .args(["-v", "error", "-y"])
+        .args(["-f", "lavfi", "-i", &format!("anoisesrc=d={cold_open}:c=pink:seed={seed}:a=0.3:r=48000")])
+        .args(["-f", "lavfi", "-i", "aevalsrc=0.3*sin(2*PI*(400+300*sin(2*PI*0.37*t)+150*sin(2*PI*1.3*t))*t):d=30:s=48000"])
+        .args(["-f", "lavfi", "-i", &format!("anoisesrc=d=20:c=brown:seed={}:a=0.3:r=48000", seed + 100)])
+        .args(["-f", "lavfi", "-i", &format!("testsrc2=size=160x90:rate=10:d={total}")])
+        .args(["-filter_complex", "[0:a][1:a][2:a]concat=n=3:v=0:a=1[a]", "-map", "3:v", "-map", "[a]"])
+        .args(["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    path
+}
+
+#[gpui::test]
+fn the_opening_is_learned_from_two_episodes_found_in_each_and_skipped_to_its_end(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    use serde_json::json;
+    use sondra_app::player_intro::IntroHere;
+    use sondra_merk::normalize::{normalize, Context as Ids};
+    use sondra_merk::sqlite::{write_sqlite, Snapshot};
+    let tmp = tempfile::tempdir().unwrap();
+    let list = tmp.path().join("Merkliste.sqlite");
+    let mut ids = Ids::system();
+    let series = normalize(&json!({ "id": "ts", "title": "Testserie", "status": "watching", "season": 1, "episode": 1, "seasons": [{ "number": 1, "episodes": 12, "watched": [] }] }), &mut ids);
+    std::fs::write(&list, write_sqlite(&Snapshot { items: vec![series], ..Default::default() }).unwrap()).unwrap();
+    let one = episode(tmp.path(), "Testserie S01E01.mp4", 5, 1);
+    let two = episode(tmp.path(), "Testserie S01E02.mp4", 12, 7);
+    cx.update(|cx| {
+        fonts::load(cx);
+        bind_keys(cx);
+    });
+    let listfile = list.clone();
+    let memory = tmp.path().join("Abspielen.json");
+    let (shell, vcx) = cx.add_window_view(move |window, cx| {
+        let mut shell = Shell::new(window, cx);
+        shell.open_merkliste(MerkStore::at(listfile), cx);
+        shell.open_player_memory(sondra_app::store::FileStore::open(memory), cx);
+        shell
+    });
+    let seen: Seen = Rc::default();
+    let sink = seen.clone();
+    vcx.update(|window, cx| attach_sink(window, cx, move |snap| sink.borrow_mut().push(Rc::new(snap.clone()))));
+    vcx.simulate_resize(size(px(WIDTH), px(900.)));
+    let mut w = Window { cx: vcx, shell, seen };
+    w.draw();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Player, cx));
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![one, two], cx));
+    w.watch(0.3);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.player_intro_here()), IntroHere::Unknown, "nothing learned yet, nothing looked for");
+    w.press(Role::Button, "Bild und Ton");
+    w.press(Role::Button, "Vorspann erkennen — vergleicht mit „Testserie S01E02.mp4“");
+    let wait = |w: &mut Window, ok: &dyn Fn(&Window) -> bool| {
+        let limit = std::time::Instant::now() + Duration::from_secs(60);
+        while std::time::Instant::now() < limit && !ok(w) {
+            w.cx.run_until_parked();
+            w.watch(0.05);
+        }
+    };
+    wait(&mut w, &|w| w.shell.read_with(w.cx, |s, _| s.merk_items()[0].intros.as_ref().is_some_and(|l| !l.is_empty())));
+    let learned = w.shell.read_with(w.cx, |s, _| s.merk_items()[0].intros.clone()).expect("an opening is kept on the series");
+    assert!((learned[0].seconds - 30.0).abs() < 3.0, "about the 30 s both share: {}", learned[0].seconds);
+    // The episode that plays is looked at with it: the opening lies 5 s in.
+    wait(&mut w, &|w| matches!(w.shell.read_with(w.cx, |s, _| s.player_intro_here()), IntroHere::Found { .. }));
+    let IntroHere::Found { start, end } = w.shell.read_with(w.cx, |s, _| s.player_intro_here()) else { panic!("found") };
+    assert!((start - 5.0).abs() < 1.5 && (end - 35.0).abs() < 2.0, "{start}–{end}");
+    // While it plays, the button jumps to its end.
+    w.press(Role::Button, "Schliessen");
+    w.shell.update(w.cx, |s, _| s.player_seek(10.0));
+    w.watch(0.3);
+    w.press(Role::Button, "Vorspann überspringen");
+    w.watch(0.3);
+    assert!(w.position() >= end - 1.0, "jumped to the end of the opening: {}", w.position());
+}
