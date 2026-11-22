@@ -275,8 +275,15 @@ impl crate::shell::Shell {
         };
         let name = if connected { "Google Drive ist verbunden".to_string() } else { self.drive_error.clone().map_or("Bei Google Drive anmelden".to_string(), |e| format!("Bei Google Drive anmelden. {e}")) };
         let item = ui.rack_item("drive-kopf", label, false).icon(Some(sondra_ui::ui_icon("drive"))).compact(compact).accessible_name(name);
-        // Connected, or the browser already asked: nothing to press, the line only says so.
-        let item = item.disabled(self.drive_signing || connected).on_click(move |_, app| me.update(app, |shell, cx| shell.drive_sign_in(cx)));
+        // Signed in, it opens the window with the folder, the queue and the session's ways into Drive.
+        let item = item.disabled(self.drive_signing).on_click(move |_, app| me.update(app, |shell, cx| {
+            if connected {
+                shell.drive_open = true;
+                cx.notify();
+            } else {
+                shell.drive_sign_in(cx);
+            }
+        }));
         Some(gpui::IntoElement::into_any_element(item))
     }
 

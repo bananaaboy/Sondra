@@ -34,7 +34,7 @@ pub struct Session {
     pub renaming: Option<usize>,
     pub rename_problem: Option<String>,
     /// The tool states of the website project that was opened last, carried into the next project written.
-    tool_states: Option<serde_json::Value>,
+    pub(crate) tool_states: Option<serde_json::Value>,
     store: Option<FileStore>,
 }
 

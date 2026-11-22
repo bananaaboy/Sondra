@@ -95,7 +95,41 @@ fn the_header_offers_drive_and_the_click_signs_in_and_it_is_quiet_afterwards(cx:
     w.press(Role::Button, "Bei Google Drive anmelden");
     settle(&mut w, |w| w.tree().find(Role::Button, "Google Drive ist verbunden").is_some());
     assert!(signed.load(Ordering::SeqCst));
-    assert!(w.tree().find(Role::Button, "Google Drive ist verbunden").unwrap().disabled, "nothing to press once connected");
+    // Connected, it opens the window with Sondra's folder and the queue.
+    w.press(Role::Button, "Google Drive ist verbunden");
+    assert!(w.tree().find(Role::Dialog, "Google Drive").is_some());
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("verlässt dieses Gerät"))));
+    w.press(Role::Button, "Schliessen");
+    assert!(w.tree().find(Role::Dialog, "Google Drive").is_none());
+}
+
+#[gpui::test]
+fn the_window_sends_the_session_by_kind_one_after_another_and_the_project_into_projekte(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let fake = sondra_drive::fake::FakeDrive::start();
+    let drive = sondra_app::drive_hub::Drive {
+        api: fake.api(),
+        tokens: Arc::new(sondra_drive::fake::Always),
+        configured: true,
+        connected: Arc::new(|| true),
+        sign_in: Arc::new(|| Ok(())),
+    };
+    let song = tmp.path().join("lied.mp3");
+    let picture = tmp.path().join("bild.png");
+    std::fs::write(&song, b"ton").unwrap();
+    std::fs::write(&picture, b"bild").unwrap();
+    let mut w = open(cx, Some(drive));
+    w.shell.update(w.cx, |shell, cx| shell.session_add(vec![song.clone(), picture.clone()], cx));
+    w.draw();
+    w.press(Role::Button, "Google Drive ist verbunden");
+    w.press(Role::Button, "Dateien der Sitzung nach Art hochladen (2)");
+    settle(&mut w, |w| w.shell.read_with(w.cx, |s, _| s.drive_queue_now()).iter().filter(|(_, l)| l == "in Drive gespeichert").count() == 2);
+    w.press(Role::Button, "Projekt in Drive speichern");
+    settle(&mut w, |w| w.shell.read_with(w.cx, |s, _| s.drive_queue_now()).iter().any(|(n, l)| n.ends_with(".sondra") && l == "in Drive gespeichert"));
+    let tree = fake.client().tree(100, &AtomicBool::new(false), |_| {}).unwrap();
+    let mut paths: Vec<String> = tree.files.iter().map(|f| f.path.clone()).collect();
+    paths.sort();
+    assert_eq!(paths, ["Dateien/Bilder/bild.png", "Dateien/Ton/lied.mp3", "Projekte/lied.sondra"]);
 }
 
 #[gpui::test]

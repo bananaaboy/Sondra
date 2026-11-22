@@ -110,6 +110,8 @@ pub struct Shell {
     pub drive_saves: crate::drive_hub::Saves,
     /// The sign-in to Drive is being waited for (the browser is open), or why it did not work.
     pub drive_signing: bool,
+    /// The window „Google Drive“ is open.
+    pub drive_open: bool,
     pub drive_error: Option<String>,
     /// Which file the conversion is at, for the page that shows it.
     pub(crate) convert_watch: Option<std::sync::Arc<std::sync::Mutex<(usize, String)>>>,
@@ -273,6 +275,7 @@ impl Shell {
             drive: crate::drive_hub::Drive::production(),
             drive_saves: crate::drive_hub::Saves::default(),
             drive_signing: false,
+            drive_open: false,
             drive_error: None,
             convert_watch: None,
             pending_focus: None,
@@ -1268,6 +1271,7 @@ impl Render for Shell {
             .or_else(|| if self.licenses_open { self.licenses_overlay(ui, cx) } else { None })
             .or_else(|| if self.whats_new_open { self.whats_new_overlay(ui, cx) } else { None })
             .or_else(|| self.protocol_overlay(ui, cx))
+            .or_else(|| self.drive_window_overlay(ui, cx))
             .or_else(|| if self.panel == Panel::Folder { self.filing_overlay(ui, cx).or_else(|| self.folder_overlay(ui, cx)) } else { None })
             .or_else(|| if self.panel == Panel::Player { self.player_overlay(ui, cx) } else { None })
             .or_else(|| {
