@@ -91,6 +91,8 @@ pub struct PlayerState {
     pub intro_note: Option<String>,
     /// „Für diese Folge ausblenden“: the file whose opening button is hidden.
     pub intro_dismissed: Option<PathBuf>,
+    /// The chapters the file carries.
+    pub chapters: Vec<sondra_media::ffmpeg::Chapter>,
     pub subtitle: Subtitle,
     pub subtitle_error: Option<String>,
     /// The film ended on „Ende des Titels“: it stays ended, the next one does not begin.
@@ -194,6 +196,7 @@ impl PlayerState {
             intro_step: None,
             intro_note: None,
             intro_dismissed: None,
+            chapters: Vec::new(),
             subtitle: Subtitle::Off,
             subtitle_error: None,
             stay_ended: false,
@@ -251,6 +254,7 @@ impl PlayerState {
         self.external_cues.clear();
         self.subtitle_name = None;
         self.cover_said = None;
+        self.chapters.clear();
         self.subtitle = Subtitle::Off;
         self.subtitle_error = None;
         self.tracks_open = false;
@@ -285,6 +289,7 @@ impl PlayerState {
                 self.playback = Some(playback);
                 self.load_subtitles(&path);
                 self.load_marks();
+                self.chapters = Ffmpeg::locate().map(|ff| ff.chapters(&path)).unwrap_or_default();
             }
             Err(e) => self.error = Some(e.to_string()),
         }
@@ -1139,6 +1144,17 @@ impl Shell {
                     })
                 })
         };
+        // The chapters of the file: a tick on the bar where each begins, the one that plays named beside the clock.
+        let seek = if p.chapters.len() > 1 && duration > 0.0 {
+            let mut over = div().relative().flex_1().child(seek);
+            for chapter in p.chapters.iter().skip(1) {
+                over = over.child(div().absolute().top(px(2.)).bottom(px(2.)).w(px(2.)).left(gpui::relative((chapter.start / duration).clamp(0.0, 1.0) as f32)).bg(c.stage_accent));
+            }
+            over.into_any_element()
+        } else {
+            seek.into_any_element()
+        };
+        let chapter_now = p.chapters.iter().rev().find(|ch| position >= ch.start).filter(|_| p.chapters.len() > 1).map(|ch| ch.title.clone());
         let marks_button = {
             let me = me.clone();
             let n = p.marks.len();
@@ -1201,6 +1217,9 @@ impl Shell {
             }
             if let Some(said) = &p.cover_said {
                 bottom = bottom.child(ui.hint(said.clone()));
+            }
+            if let Some(title) = &chapter_now {
+                bottom = bottom.child(ui.value(format!("Kapitel: {title}")));
             }
         }
         if immersive {
@@ -1677,6 +1696,33 @@ impl Shell {
                     })
                 }),
             });
+        }
+        // The chapters the file brings, below its own bookmarks: a click goes there.
+        if p.chapters.len() > 1 {
+            list = list.child(div().pt(px(12.)).child(ui.subheading("Kapitel der Datei")));
+            for (n, chapter) in p.chapters.iter().enumerate() {
+                let (go, at) = (me.clone(), chapter.start);
+                let says = format!("{} · {}", clock(chapter.start), chapter.title);
+                list = list.child(Line {
+                    colors: c,
+                    id: format!("kapitel-{n}").into(),
+                    name: chapter.title.clone().into(),
+                    says: says.clone().into(),
+                    first: false,
+                    tile: None,
+                    selected: false,
+                    body: vec![div().flex_1().min_w(px(0.)).child(ui.value(says)).into_any_element()],
+                    keys_pass: false,
+                    on_open: std::rc::Rc::new(move |_, app| {
+                        Self::player_do(&go, app, move |p| {
+                            if let Some(pb) = p.playback.as_mut() {
+                                let _ = pb.seek(at);
+                            }
+                            p.marks_open = false;
+                        })
+                    }),
+                });
+            }
         }
         let marks = p.marks.clone();
         let copy_me = me.clone();

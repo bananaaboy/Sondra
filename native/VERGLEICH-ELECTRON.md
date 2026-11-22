@@ -101,8 +101,8 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | ✓ | **Warteschlange bearbeiten**: „Als Nächstes“, „Aus der Liste nehmen“, „Vorheriges“ | Nativ seit 22.11.2026 („Zurück“ war schon da) |
 | ✓ | **Untertitel-Datei von Hand laden** (.srt/.vtt über einen Dateidialog) | Nativ seit 22.11.2026 („Ton und Untertitel“ → „Datei laden …“) |
 | ✓ | **Laufzeit/Restzeit umschalten** (Klick auf die Zeit) | Nativ seit 22.11.2026 |
-| ✗ | **Kapitel auf der Zeitleiste** (aus der Datei) beim Darüberfahren | — |
-| ◐ | Entzerrer: Electron hat eine eigene Schublade mit Fader-Ansicht und Listenansicht und einen Schalter zum Umgehen (Bypass) | Fünf Bänder und fünf Voreinstellungen sind im Fenster „Bild und Ton“, die Schublade und Bypass fehlen |
+| ✓ | **Kapitel auf der Zeitleiste** (aus der Datei) beim Darüberfahren | Nativ seit 22.11.2026: Striche auf der Zeitleiste, „Kapitel: …“ neben der Steuerung, die Liste unter „Lesezeichen“ zum Hinspringen |
+| ✓ | Entzerrer: Electron hat eine eigene Schublade mit Fader-Ansicht und Listenansicht und einen Schalter zum Umgehen (Bypass) | Fünf Bänder als Regler, fünf Voreinstellungen und der Schalter An/Aus (der Bypass) im Fenster „Bild und Ton“ — keine eigene Schublade |
 | ✓ | Kino, Fenster füllen, Vollbild, Bild im Bild, Immer im Vordergrund, Qualität, Tonspur, Untertitel (Grösse, Grund), Bild (Einpassen/Füllen/Strecken, Helligkeit, Kontrast, Sättigung, Spiegeln), Verstärkung bis 300 %, Nachtmodus, Karaoke, Visualizer, Schlaf-Timer, Lesezeichen, Kapitel kopieren, Weiter bei, Abhaken ab 90 % | nativ da |
 
 ## 5. Herunterladen

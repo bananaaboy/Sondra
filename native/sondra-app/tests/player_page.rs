@@ -944,3 +944,29 @@ fn the_opening_is_learned_from_two_episodes_found_in_each_and_skipped_to_its_end
     w.watch(0.3);
     assert!(w.position() >= end - 1.0, "jumped to the end of the opening: {}", w.position());
 }
+
+#[gpui::test]
+fn the_chapters_of_a_file_are_on_the_bar_named_beside_it_and_listed_to_jump_to(cx: &mut TestAppContext) {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let plain = film(tmp.path(), "roh.mp4", 6);
+    let meta = tmp.path().join("kapitel.txt");
+    std::fs::write(&meta, ";FFMETADATA1\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=2000\ntitle=Anfang\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=2000\nEND=4000\ntitle=Mitte\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=4000\nEND=6000\ntitle=Schluss\n").unwrap();
+    let with = tmp.path().join("Hörbuch.mkv");
+    let ff = Ffmpeg::locate().unwrap();
+    let out = Command::new(ff.program()).args(["-v", "error", "-y", "-i"]).arg(&plain).arg("-i").arg(&meta).args(["-map_metadata", "1", "-map_chapters", "1", "-c", "copy"]).arg(&with).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| shell.play_files(vec![with], cx));
+    w.watch(0.3);
+    let said = |w: &Window, needle: &str| w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains(needle)));
+    assert!(said(&w, "Kapitel: Anfang"), "the chapter that plays is named");
+    w.press(Role::Button, "Lesezeichen");
+    assert!(said(&w, "Kapitel der Datei"));
+    w.press(Role::ListItem, "Schluss");
+    w.watch(0.3);
+    assert!(w.position() >= 3.9, "jumped to the chapter: {}", w.position());
+    assert!(said(&w, "Kapitel: Schluss"));
+}

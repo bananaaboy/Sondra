@@ -80,6 +80,14 @@ pub struct Stream {
     pub attached_picture: bool,
 }
 
+/// A chapter of a film or an audiobook.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Chapter {
+    pub start: f64,
+    pub end: f64,
+    pub title: String,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Probe {
     pub duration: Option<f64>,
@@ -176,6 +184,31 @@ impl Ffmpeg {
     }
 
     /// What is in a file.
+    /// The chapters a file carries (Matroska, MP4): start, end in seconds and the title, in order. None is no error.
+    pub fn chapters(&self, path: &Path) -> Vec<Chapter> {
+        let Ok(out) = Command::new(&self.probe).args(["-v", "error", "-print_format", "json", "-show_chapters"]).arg(path).output() else { return vec![] };
+        if !out.status.success() {
+            return vec![];
+        }
+        let json: Value = serde_json::from_slice(&out.stdout).unwrap_or(Value::Null);
+        let number = |v: &Value| v.as_str().and_then(|s| s.parse::<f64>().ok()).or_else(|| v.as_f64());
+        let mut list: Vec<Chapter> = json["chapters"]
+            .as_array()
+            .map(|all| {
+                all.iter()
+                    .enumerate()
+                    .filter_map(|(n, c)| {
+                        let (start, end) = (number(&c["start_time"])?, number(&c["end_time"])?);
+                        let title = c["tags"]["title"].as_str().map(str::to_owned).filter(|t| !t.trim().is_empty()).unwrap_or_else(|| format!("Kapitel {}", n + 1));
+                        (end > start).then_some(Chapter { start, end, title })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        list.sort_by(|a, b| a.start.total_cmp(&b.start));
+        list
+    }
+
     pub fn probe(&self, path: &Path) -> Result<Probe, MediaError> {
         let out = Command::new(&self.probe)
             .args([
