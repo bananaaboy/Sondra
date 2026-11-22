@@ -218,8 +218,8 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ◐ | **Microsoft Store**: Electron ist seit dem 1.10.2026 live im Store | Rust wird in der CI als MSIX gebaut, aber nie eingereicht |
-| ◐ | **Updates**: `latest.yml` liegt in jedem Release | Rust liest `latest-nativ.yml`, die erst auf Ihr Wort ins Release kommt |
+| — | **Microsoft Store**: Electron ist seit dem 1.10.2026 live im Store | Nur von Hand (Entscheid vom 22.11.2026): das native MSIX wird in jeder CI gebaut, installiert und gestartet; eingereicht wird es im Partner Center des Nutzers |
+| ◐ | **Updates**: `latest.yml` liegt in jedem Release | Rust liest `latest-nativ.yml` (laden, gegen SHA-512 prüfen, still installieren); ins Release kommt sie erst auf das Wort des Nutzers — am 22.11.2026 gefragt: „noch nicht“ |
 | — | Android-App, Website, Offline-Service-Worker | Gehören nicht zur Windows-App |
 
 ---
