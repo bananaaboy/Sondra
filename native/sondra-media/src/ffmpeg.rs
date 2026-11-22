@@ -210,6 +210,11 @@ impl Ffmpeg {
     }
 
     pub fn probe(&self, path: &Path) -> Result<Probe, MediaError> {
+        self.probe_with(path, &[])
+    }
+
+    /// `probe` with options that go before the input — `-headers` for an address that wants a referer.
+    pub fn probe_with(&self, path: &Path, before: &[String]) -> Result<Probe, MediaError> {
         let out = Command::new(&self.probe)
             .args([
                 "-v",
@@ -219,6 +224,7 @@ impl Ffmpeg {
                 "-show_format",
                 "-show_streams",
             ])
+            .args(before)
             .arg(path)
             .output()
             .map_err(not_found_or)?;

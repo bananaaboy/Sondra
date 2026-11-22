@@ -77,6 +77,9 @@ pub struct MerkState {
     pub add_more: Option<crate::merk_add_more::AddMore>,
     /// A drag on the frame of a cover in one of the forms.
     pub frame_drag: Option<crate::merk_edit::FrameDrag>,
+    /// „Folge n abspielen“ as a stream: the series being looked up, and what it said.
+    pub streaming: Option<String>,
+    pub stream_said: Option<String>,
     /// The list as it was before a file was read in, to take it back.
     pub before_import: Option<(Vec<Item>, Removed)>,
     /// Progress made since the account on AniList was last told (the shell sends it, when the person asked for that).
@@ -175,6 +178,8 @@ impl MerkState {
             season_window: None,
             add_more: None,
             frame_drag: None,
+            streaming: None,
+            stream_said: None,
             series_more: false,
             checking: None,
             checked_said: None,
@@ -1129,13 +1134,34 @@ impl Shell {
                 me.update(app, |shell, cx| shell.continue_play(&id, cx))
             }));
         }
+        // Not in a folder, but the series has an address: the episode plays as a stream, nothing is saved.
+        let streams = from_folder.is_none() && !done && !item.url.trim().is_empty();
+        if streams {
+            let unit = if item.season == 0 { "Film" } else { "Folge" };
+            let at = item.episode.unwrap_or(1).max(1);
+            let busy = self.merk.streaming.as_deref() == Some(item.id.as_str());
+            let (me, id) = (me.clone(), item.id.clone());
+            actions = actions.child(
+                ui.button("als-stream-abspielen", if busy { "Sucht den Stream …".to_string() } else { format!("{unit} {at} abspielen") })
+                    .primary()
+                    .accessible_name(format!("{unit} {at} als Stream abspielen"))
+                    .disabled(busy)
+                    .on_click(move |_, app| {
+                        let id = id.clone();
+                        me.update(app, |shell, cx| shell.merk_stream_here(&id, cx))
+                    }),
+            );
+        }
+        if let Some(said) = self.merk.stream_said.clone().filter(|_| streams) {
+            actions = actions.child(ui.hint(said));
+        }
         if !done && item.episode.is_some_and(|e| e != 0) {
             let unit = if item.season == 0 { "Film" } else { "Folge" };
             let at = item.episode.unwrap_or(0);
             let me = me.clone();
             let id = item.id.clone();
             let button = ui.button("naechste-gesehen", format!("{unit} {at} gesehen"));
-            actions = actions.child((if from_folder.is_some() { button } else { button.primary() }).on_click(move |_, app| {
+            actions = actions.child((if from_folder.is_some() || streams { button } else { button.primary() }).on_click(move |_, app| {
                 let id = id.clone();
                 Self::merk_do(&me, app, move |m| m.advance(&id))
             }));

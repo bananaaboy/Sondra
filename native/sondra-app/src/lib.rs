@@ -33,6 +33,7 @@ pub mod merk_dialogs;
 pub mod merk_drive;
 pub mod merk_add_more;
 pub mod merk_edit;
+pub mod merk_stream;
 pub mod merkliste;
 pub mod mic_page;
 pub mod mic_more;

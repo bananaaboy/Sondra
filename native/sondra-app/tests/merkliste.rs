@@ -1066,6 +1066,37 @@ fn a_season_is_split_into_parts_that_are_named_counted_and_dissolved(cx: &mut Te
 }
 
 #[gpui::test]
+fn an_episode_in_no_folder_plays_as_a_stream_from_its_address(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ids = Ids::system();
+    let stored = Stored {
+        items: vec![normalize(&json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 5, "url": "http://127.0.0.1:9/frieren/folge.mp4",
+            "seasons": [{ "number": 1, "episodes": 28, "watched": [1, 2, 3, 4] }] }), &mut ids)],
+        ..Default::default()
+    };
+    let mut w = open(cx, Some(&stored), dir.path());
+    w.press(Role::ListItem, "Frieren");
+    assert!(w.tree().find(Role::Button, "Folge 5 als Stream abspielen").is_some(), "no folder holds it, the address does");
+    w.press(Role::Button, "Folge 5 als Stream abspielen");
+    for _ in 0..80 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.cx.read_entity(&w.shell, |s, _| s.panel()) == Panel::Player {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.panel()), Panel::Player, "the player takes it at once");
+    let shown = w.cx.read_entity(&w.shell, |s, _| s.player_queue_now());
+    assert_eq!(shown.len(), 1);
+    assert!(shown[0].ends_with("Frieren S01E05.mp4"), "{:?}", shown[0]);
+    let (source, before) = sondra_playback::source_of(&shown[0]);
+    assert_eq!(source, std::path::PathBuf::from("http://127.0.0.1:9/frieren/folge.mp4"), "FFmpeg reads the address, nothing was saved");
+    assert!(before.is_empty(), "a direct file wants no referer");
+    assert!(!shown[0].exists());
+}
+
+#[gpui::test]
 fn seasons_and_films_are_added_on_the_page_and_removing_is_behind_mehr(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let mut w = open(cx, Some(&list(3)), dir.path());

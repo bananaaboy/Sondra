@@ -47,7 +47,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | --- | --- | --- |
 | ✓ | **Grosses Cover** im Kopf der Serie | Nativ seit 21.11.2026, dazu Quelle, „zuletzt …“, Stand, Sterne, Tags und Notiz |
 | ◐ | **„Folge n laden“ / „Nächste Folgen laden …“** (übergibt Adresse, Staffel, Folge und Einstellungen an „Herunterladen“) | „Folge n laden“ nativ seit 21.11.2026 (unter „Mehr“, öffnet „Herunterladen“ mit der Adresse der Folge); „Nächste Folgen laden …“ fehlt noch |
-| ✗ | **Als Stream abspielen** ohne Download („Folge sofort ohne vorherigen Download im Player abspielen“) | „Folge n abspielen“ gibt es nur, wenn die Datei im gelesenen Ordner liegt |
+| ✓ | **Als Stream abspielen** ohne Download („Folge sofort ohne vorherigen Download im Player abspielen“) | Nativ seit 22.11.2026: liegt die Folge in keinem Ordner, spielt „Folge n abspielen“ sie von ihrer Adresse (die beste Quelle, mit Referer des Hosters); nichts wird gespeichert, ab 90 % wird abgehakt |
 | ✗ | **Einstellungen je Serie zum Laden**: „Laden als“ (Video mit Ton / Nur Ton), Sprache (Deutsch synchronisiert, OmU, englische Untertitel, beste Fassung), Qualität (bis 4K, 320/192/128 kbps), „Untertitel dazu erstellen“ | — |
 | ✓ | **„Online nach Neuem suchen“** als Knopf auf der Serie | Nativ seit 21.11.2026 unter „Mehr“ |
 | ✓ | **„Im Ordner: Staffel 1: 1–3“** und im Staffelfenster der Strich unter jeder Folge, die im Ordner liegt | Nativ seit 22.11.2026 (ist die Zahl der Folgen unbekannt, reicht das Fenster so weit wie der Ordner) |

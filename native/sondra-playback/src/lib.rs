@@ -245,6 +245,8 @@ pub const NIGHT_FILTER: &str = "acompressor=threshold=0.0251:ratio=5:attack=10:r
 pub struct Playback {
     ffmpeg: Ffmpeg,
     path: PathBuf,
+    /// Options before the input (a referer for a stream), from `register_stream`.
+    before: Vec<String>,
     probe: Probe,
     video: Option<Stream>,
     audio: Vec<Stream>,
@@ -293,26 +295,37 @@ impl Timer {
 /// Where a film is really read from when its name in the list is not a file: a path that stands for something the
 /// program serves itself (a film in Drive, through its own small server). The list keeps the name — labels, the
 /// kind of file, the place to resume — and only FFmpeg is given the address.
-fn sources() -> &'static std::sync::Mutex<std::collections::HashMap<PathBuf, PathBuf>> {
-    static SOURCES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<PathBuf, PathBuf>>> = std::sync::OnceLock::new();
+fn sources() -> &'static std::sync::Mutex<std::collections::HashMap<PathBuf, (PathBuf, Vec<String>)>> {
+    static SOURCES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<PathBuf, (PathBuf, Vec<String>)>>> = std::sync::OnceLock::new();
     SOURCES.get_or_init(Default::default)
 }
 
 /// Says that `shown` is read from `source` (an address FFmpeg can open) instead of from disk.
 pub fn register_source(shown: &Path, source: &str) {
-    sources().lock().unwrap().insert(shown.to_path_buf(), PathBuf::from(source));
+    sources().lock().unwrap().insert(shown.to_path_buf(), (PathBuf::from(source), Vec::new()));
 }
 
-fn resolved(path: &Path) -> PathBuf {
-    sources().lock().unwrap().get(path).cloned().unwrap_or_else(|| path.to_path_buf())
+/// Says that `shown` is a stream at `address`, asked for with this referer (hosters want to see their page).
+pub fn register_stream(shown: &Path, address: &str, referer: &str) {
+    let before = if referer.trim().is_empty() { Vec::new() } else { vec!["-headers".to_string(), format!("Referer: {}\r\n", referer.trim())] };
+    sources().lock().unwrap().insert(shown.to_path_buf(), (PathBuf::from(address), before));
+}
+
+/// Where `shown` is read from, and what goes before it on FFmpeg's line.
+pub fn source_of(path: &Path) -> (PathBuf, Vec<String>) {
+    sources().lock().unwrap().get(path).cloned().unwrap_or_else(|| (path.to_path_buf(), Vec::new()))
+}
+
+fn resolved(path: &Path) -> (PathBuf, Vec<String>) {
+    source_of(path)
 }
 
 impl Playback {
     /// Opens a file and starts playing it from the beginning (or at `from`).
     pub fn open(ffmpeg: Ffmpeg, path: &Path, from: f64) -> Result<Playback, PlaybackError> {
-        let path = resolved(path);
+        let (path, before) = resolved(path);
         let path = path.as_path();
-        let probe = ffmpeg.probe(path)?;
+        let probe = ffmpeg.probe_with(path, &before)?;
         let video = probe.streams.iter().find(|s| s.kind == "video" && !s.attached_picture && s.width.is_some()).cloned();
         let audio: Vec<Stream> = probe.streams.iter().filter(|s| s.kind == "audio").cloned().collect();
         if video.is_none() && audio.is_empty() {
@@ -324,6 +337,7 @@ impl Playback {
         let mut playback = Playback {
             ffmpeg,
             path: path.to_path_buf(),
+            before,
             probe,
             video,
             audio,
@@ -394,7 +408,9 @@ impl Playback {
             chain.extend(picture_filters(&self.settings.picture));
             let vf = chain.join(",");
             let mut child = Command::new(self.ffmpeg.program())
-                .args(["-v", "error", "-nostdin", "-ss", &seconds_arg(at), "-i"])
+                .args(["-v", "error", "-nostdin", "-ss", &seconds_arg(at)])
+                .args(&self.before)
+                .arg("-i")
                 .arg(&self.path)
                 .args(["-map", &format!("0:{}", video.index), "-an", "-sn", "-vf", &vf, "-pix_fmt", "bgra", "-f", "rawvideo", "-"])
                 .stdout(Stdio::piped())
@@ -432,7 +448,7 @@ impl Playback {
                 filters.push(NIGHT_FILTER.to_string());
             }
             let mut command = Command::new(self.ffmpeg.program());
-            command.args(["-v", "error", "-nostdin", "-ss", &seconds_arg(at), "-i"]).arg(&self.path).args(["-map", &format!("0:{}", track.index), "-vn", "-sn"]);
+            command.args(["-v", "error", "-nostdin", "-ss", &seconds_arg(at)]).args(&self.before).arg("-i").arg(&self.path).args(["-map", &format!("0:{}", track.index), "-vn", "-sn"]);
             if !filters.is_empty() {
                 command.args(["-af", &filters.join(",")]);
             }
