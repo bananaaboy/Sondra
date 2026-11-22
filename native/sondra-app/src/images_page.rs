@@ -68,6 +68,10 @@ pub struct ImagesState {
     pub history: crate::ops_history::OpsHistory<ImageOps>,
     /// „Vergleichen“: the stage shows the original.
     pub compare: bool,
+    /// The original shown while held down (mouse or Space).
+    pub holding: bool,
+    /// What „Alle als ZIP“ said.
+    pub zip_said: Option<String>,
 }
 
 impl ImagesState {
@@ -90,7 +94,7 @@ impl ImagesState {
             crop_bounds: Rc::new(Cell::new(Bounds::default())),
             crop_drag: None,
             history: Default::default(),
-            compare: false,
+            compare: false, holding: false, zip_said: None,
         }
     }
 
@@ -169,7 +173,7 @@ impl Shell {
         let generation = i.generation;
         i.previewing = true;
         // While the crop is drawn the picture is shown whole, with the crop on it.
-        let mut ops = if i.compare { ImageOps { format: i.ops.format, quality: i.ops.quality, ..ImageOps::default() } } else { i.ops.clone() };
+        let mut ops = if i.compare || i.holding { ImageOps { format: i.ops.format, quality: i.ops.quality, ..ImageOps::default() } } else { i.ops.clone() };
         if i.tool == Tool::Crop {
             ops.crop = None;
         }
@@ -391,7 +395,24 @@ impl Shell {
                 };
                 stage.child(div().relative().w(px(dw)).h(px(dh)).child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Fill).size_full()).child(crate::crop_ui::overlay(c, rect, i.crop_bounds.clone(), handlers)))
             }
-            Some(image) => stage.child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Contain).size_full()),
+            Some(image) => {
+                // Held down (mouse or Space), the stage shows the original.
+                let (down, up, out) = (me.clone(), me.clone(), me.clone());
+                stage
+                    .child(img(ImageSource::Render(image.clone())).object_fit(ObjectFit::Contain).size_full())
+                    .child(
+                        div()
+                            .id("bild-gedrueckt")
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .size_full()
+                            .on_mouse_down(gpui::MouseButton::Left, move |_, _, app| down.update(app, |shell, cx| shell.images_hold(true, cx)))
+                            .on_mouse_up(gpui::MouseButton::Left, move |_, _, app| up.update(app, |shell, cx| shell.images_hold(false, cx)))
+                            .on_mouse_up_out(gpui::MouseButton::Left, move |_, _, app| out.update(app, |shell, cx| shell.images_hold(false, cx))),
+                    )
+                    .child(div().absolute().bottom(px(10.)).left(px(12.)).child(ui.hint(if i.holding { "Original" } else { "Gedrückt halten (oder Leertaste) für das Original" })))
+            }
             None => stage.child(div().text_color(c.prose).child("Das Bild kommt …")),
         };
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -480,6 +501,11 @@ impl Shell {
             Tool::Size => {
                 let presets = vec![(0.0, "Original".to_string()), (3840.0, "4K".into()), (1920.0, "1920".into()), (1280.0, "1280".into()), (800.0, "800".into()), (400.0, "400".into())];
                 panel = panel.child(steps("Breite", "breite", presets, f64::from(ops.width), |o, v| o.width = v as u32));
+                {
+                    let me = me.clone();
+                    let on = ops.pixelated;
+                    panel = panel.child(div().flex().flex_col().gap(px(4.)).child(div().flex().child(ui.chip("pixelgenau", "Pixelgenau (Nearest Neighbour)", on).on_click(move |_, app| me.update(app, |shell, cx| shell.images_patch(|s| s.ops.pixelated = !on, cx))))).child(ui.hint("Für Pixelgrafik und Bildschirmfotos: jedes Pixel bleibt ein scharfes Quadrat, nichts wird geglättet.")));
+                }
                 let mut note = format!("{ow} × {oh} px");
                 if ow > sondra_media::image_ops::rotated_size(w, h, ops.rotate).0 {
                     note.push_str(" — grösser als die Quelle, das erfindet keine Details dazu.");
@@ -560,6 +586,10 @@ impl Shell {
                 ),
             );
         }
+        if i.made.len() > 1 {
+            let me = me.clone();
+            done = done.child(div().flex().flex_wrap().items_center().gap(px(10.)).child(ui.button("bilder-zip", format!("Alle {} als ZIP", i.made.len())).small().disabled(i.working).on_click(move |_, app| me.update(app, |shell, cx| shell.images_zip(cx)))).children(i.zip_said.clone().map(|s| ui.hint(s))));
+        }
         let controls = div().flex().flex_col().gap(px(16.)).child(rail).child(panel).child(reset).child(done);
         page.child(caption).child(ui.stage_body(stage, controls)).into_any_element()
     }
@@ -584,3 +614,29 @@ fn flip(s: &mut ImagesState, axis: char) {
     }
 }
 
+impl Shell {
+    /// Held down on the stage (or Space held): the original; let go: the result again.
+    pub fn images_hold(&mut self, on: bool, cx: &mut Context<Self>) {
+        if self.images.holding == on || self.images.files.is_empty() {
+            return;
+        }
+        self.images.holding = on;
+        self.images_preview(cx);
+    }
+
+    /// „Alle als ZIP“: the pictures written, in one ZIP beside them.
+    pub fn images_zip(&mut self, cx: &mut Context<Self>) {
+        let files: Vec<(String, PathBuf)> = self.images.made.iter().map(|m| (m.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), m.path.clone())).collect();
+        let Some(dir) = self.images.made.first().and_then(|m| m.path.parent()).map(PathBuf::from) else { return };
+        self.images.working = true;
+        cx.notify();
+        Self::pack_in_background(cx, files, dir, "Bilder".into(), |shell, result, cx| {
+            shell.images.working = false;
+            shell.images.zip_said = Some(match result {
+                Ok((path, bytes)) => format!("ZIP gespeichert: {} · {}", path.display(), sondra_merk::format::format_bytes(bytes as f64, 1)),
+                Err(e) => e,
+            });
+            cx.notify();
+        });
+    }
+}

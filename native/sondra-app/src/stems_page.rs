@@ -336,7 +336,8 @@ impl Shell {
     pub fn stems_pack(&mut self, cx: &mut Context<Self>) {
         let files: Vec<(String, PathBuf)> = self.stems.made.iter().map(|p| (p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), p.clone())).collect();
         let Some(dir) = self.stems.made.first().and_then(|p| p.parent().map(PathBuf::from)) else { return };
-        let suggestion = self.stems.path.as_ref().and_then(|p| p.file_stem()).map(|s| format!("{} (Spuren)", s.to_string_lossy())).unwrap_or_else(|| "Spuren".into());
+        let typed = self.stems_zip_name.read(cx).text().trim().to_string();
+        let suggestion = if !typed.is_empty() { crate::drive_hub::safe_name(&typed) } else { self.stems.path.as_ref().and_then(|p| p.file_stem()).map(|s| format!("{} (Spuren)", s.to_string_lossy())).unwrap_or_else(|| "Spuren".into()) };
         self.stems.packing = true;
         self.stems.zip = None;
         cx.notify();
@@ -345,6 +346,11 @@ impl Shell {
             shell.stems.zip = Some(result);
             cx.notify();
         });
+    }
+
+    /// For tests: the field with the ZIP's name.
+    pub fn stems_zip_field(&self) -> gpui::Entity<sondra_ui::TextField> {
+        self.stems_zip_name.clone()
     }
 
     /// For tests: where the ZIP lies, once it is written.
@@ -492,7 +498,21 @@ impl Shell {
             }
             if !s.made.is_empty() {
                 let me4 = me.clone();
-                out = out.child(div().flex().child(ui.button("spuren-zip", "Als ZIP speichern").small().disabled(s.packing).on_click(move |_, app| me4.update(app, |shell, cx| shell.stems_pack(cx)))));
+                let me5 = me.clone();
+                let made = s.made.clone();
+                out = out.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(div().w(px(240.)).child(self.stems_zip_name.clone()))
+                        .child(ui.button("spuren-zip", "Als ZIP speichern").small().disabled(s.packing).on_click(move |_, app| me4.update(app, |shell, cx| shell.stems_pack(cx))))
+                        .child(ui.button("spuren-sitzung", "In die Sitzung übernehmen").small().accessible_name("Die Spuren in die Sitzung übernehmen").on_click(move |_, app| {
+                            let made = made.clone();
+                            me5.update(app, |shell, cx| shell.session_add(made, cx))
+                        })),
+                );
                 match &s.zip {
                     Some(Ok((path, bytes))) => out = out.child(ui.prose(format!("ZIP gespeichert: {} · {}", path.display(), sondra_merk::format::format_bytes(*bytes as f64, 1)))),
                     Some(Err(e)) => out = out.child(ui.notice(NoticeKind::Warning, e.clone())),

@@ -621,6 +621,9 @@ fn a_song_has_its_visualizer_and_the_window_chooses_its_look(cx: &mut TestAppCon
     w.press(Role::Button, "Visualizer Ring");
     assert_eq!(w.tree().find(Role::Button, "Visualizer Ring").unwrap().toggled, Some(true));
     assert_eq!(w.tree().find(Role::Button, "Visualizer Balken").unwrap().toggled, Some(false));
+    // A click on the visualizer itself goes on to the next look: from the ring back to the bars.
+    w.press(Role::Button, "Visualizer: nächste Darstellung");
+    assert_eq!(w.tree().find(Role::Button, "Visualizer Balken").unwrap().toggled, Some(true));
     w.press(Role::Button, "Visualizer zeigen");
     assert_eq!(w.tree().find(Role::Button, "Visualizer zeigen").unwrap().toggled, Some(false));
     w.watch(0.3);

@@ -124,6 +124,13 @@ fn a_song_is_split_heard_stem_by_stem_and_written(cx: &mut TestAppContext) {
         let wanted = format!("lied – {name}.wav");
         assert!(data.windows(wanted.len()).any(|w| w == wanted.as_bytes()), "{wanted} is not in the ZIP");
     }
+    // A name of its own for the ZIP, and the tracks into the session.
+    let field = w.shell.read_with(w.cx, |s, _| s.stems_zip_field());
+    w.cx.update(|_, app| field.update(app, |f, cx| f.set_text("Meine Spuren", cx)));
+    w.press(Role::Button, "Als ZIP speichern");
+    w.settle(|s| s.stems_zip().is_some_and(|z| z.is_ok_and(|(p, _)| p.file_name().unwrap().to_string_lossy().starts_with("Meine Spuren"))));
+    w.press(Role::Button, "Die Spuren in die Sitzung übernehmen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.session_files().len()), 5);
 }
 
 #[gpui::test]

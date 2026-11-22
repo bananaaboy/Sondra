@@ -51,6 +51,8 @@ pub struct Shell {
     pub(crate) session_rename: Entity<TextField>,
     /// The name of „Alle als ZIP speichern“.
     pub(crate) session_zip: Entity<TextField>,
+    /// The name of the ZIP of the separated tracks.
+    pub(crate) stems_zip_name: Entity<TextField>,
     pub(crate) focus: FocusHandle,
     /// One handle per place in the rack, in the order of `PANELS`: Up and Down walk them.
     rack_focus: Vec<FocusHandle>,
@@ -185,6 +187,7 @@ impl Shell {
             }
         })
         .detach();
+        let stems_zip_name = cx.new(|cx| TextField::new(cx, colors, "Name des ZIP").placeholder("… (Spuren)").max_chars(120));
         let convert = ConvertState::new(cx, colors);
         let palette = crate::palette::Palette::new(cx, colors);
         crate::palette::subscribe(&palette.field, cx);
@@ -227,6 +230,7 @@ impl Shell {
             session: Default::default(),
             session_rename,
             session_zip,
+            stems_zip_name,
             focus: cx.focus_handle(),
             rack_focus: (0..crate::nav::PANELS.len())
                 .map(|_| cx.focus_handle().tab_stop(true))
@@ -516,6 +520,7 @@ impl Shell {
             self.devices.rename.clone(),
             self.session_rename.clone(),
             self.session_zip.clone(),
+            self.stems_zip_name.clone(),
             self.devices.text.clone(),
             self.devices.servers.stun.clone(),
             self.devices.servers.turn.clone(),
@@ -1319,6 +1324,14 @@ impl Render for Shell {
                 .id("fenster")
                 .key_context("SondraShell")
                 .track_focus(&self.focus)
+                .on_key_up({
+                    let me = me.clone();
+                    move |event: &gpui::KeyUpEvent, _, app| {
+                        if event.keystroke.key == "space" && me.read(app).panel == Panel::Images {
+                            me.update(app, |shell, cx| shell.images_hold(false, cx));
+                        }
+                    }
+                })
                 .on_key_down(move |event: &KeyDownEvent, window, app| {
                     let step = match event.keystroke.key.as_str() {
                         "up" => -1,
@@ -1368,6 +1381,12 @@ impl Render for Shell {
                             app.stop_propagation();
                             return;
                         }
+                    }
+                    // Bilder: Space held shows the original.
+                    if event.keystroke.key == "space" && !(m.control || m.alt || m.platform) && me.read(app).panel == Panel::Images && !window.context_stack().iter().any(|c| c.contains("SondraTextField")) {
+                        me.update(app, |shell, cx| shell.images_hold(true, cx));
+                        app.stop_propagation();
+                        return;
                     }
                     // Ordner: the arrows, Space, Strg+A, Escape and Enter go through the list (not in a field).
                     if !(m.alt || m.platform) && me.read(app).panel == Panel::Folder && !window.context_stack().iter().any(|c| c.contains("SondraTextField")) {

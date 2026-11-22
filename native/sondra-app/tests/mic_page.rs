@@ -247,6 +247,12 @@ fn the_output_is_chosen_a_sample_is_enhanced_and_goes_into_the_session(cx: &mut 
 
     // A sample: recorded, stopped, listened to, into the session — enhanced, because the switch starts on.
     w.press(Role::Button, "Mikrofon einschalten");
+    // „Mithören“: on and off (on a machine without sound the output plays to nobody, at the right speed).
+    w.press(Role::Button, "Mithören: sich selbst über den Ausgang hören");
+    assert!(w.shell.read_with(w.cx, |s, _| s.mic_monitoring()));
+    w.tick();
+    w.press(Role::Button, "Mithören: sich selbst über den Ausgang hören");
+    assert!(!w.shell.read_with(w.cx, |s, _| s.mic_monitoring()));
     w.press(Role::Button, "Probe aufnehmen");
     for _ in 0..3 {
         w.tick();

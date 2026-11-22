@@ -62,6 +62,8 @@ pub struct MicState {
     pub one_click: bool,
     /// What the last move into the session said.
     pub said: Option<String>,
+    /// „Mithören“.
+    pub monitor: Option<crate::mic_more::Monitor>,
 }
 
 impl MicState {
@@ -93,6 +95,7 @@ impl MicState {
             listening: None,
             one_click: false,
             said: None,
+            monitor: None,
         }
     }
 }
@@ -141,6 +144,7 @@ impl Shell {
     pub fn mic_disable(&mut self, cx: &mut Context<Self>) {
         self.mic.capture = None;
         self.mic.listening = None;
+        self.mic.monitor = None;
         self.mic.phase = Phase::Idle;
         self.mic.take.clear();
         self.mic.level = 0.0;
@@ -177,6 +181,9 @@ impl Shell {
         m.level = level;
         m.peak = if level >= m.peak { level } else { (m.peak - 0.03).max(level) };
         let data = capture.take();
+        if let Some(monitor) = &m.monitor {
+            monitor.feed(&data);
+        }
         let rate = f64::from(m.rate);
         match m.phase {
             Phase::Noise | Phase::Speech => {
@@ -398,6 +405,11 @@ impl Shell {
             device = device.child(chips);
         }
         device = device.child(ui.bar("pegel", Some(m.level), "Pegel"));
+        {
+            let me = me.clone();
+            let on = m.monitor.is_some();
+            device = device.child(div().flex().flex_col().gap(px(4.)).child(div().flex().child(ui.chip("mithoeren", "Mithören", on).accessible_name("Mithören: sich selbst über den Ausgang hören").on_click(move |_, app| me.update(app, |shell, cx| shell.mic_set_monitor(!on, cx))))).child(ui.hint("Sich selbst über den Ausgang hören. Nur mit Kopfhörern — über Lautsprecher pfeift es.")));
+        }
         if m.peak >= 0.98 {
             device = device.child(ui.notice(NoticeKind::Warning, "Übersteuert: Der Pegel ist am Anschlag. Den Eingangspegel am Mikrofon oder in Windows etwas senken."));
         }

@@ -165,9 +165,9 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 ### Bilder
 - ✓ **Rückgängig / Wiederholen** (nativ seit 22.11.2026)
-- ✗ **„Gedrückt halten für das Original“** (vorher/nachher auf der Bühne)
-- ✗ **Pixelgenaue Skalierung** (Nearest Neighbour)
-- ◐ Viele Bilder auf einmal geht, **als ZIP** nicht
+- ✓ **„Gedrückt halten für das Original“** (vorher/nachher auf der Bühne) — Maus oder Leertaste, nativ seit 22.11.2026
+- ✓ **Pixelgenaue Skalierung** (Nearest Neighbour), nativ seit 22.11.2026
+- ✓ Viele Bilder auf einmal, dazu **„Alle als ZIP“** (nativ seit 22.11.2026)
 
 ### Lautstärke
 - ✓ **Mehrere Dateien auf einmal**
@@ -198,7 +198,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ **Wiedergabegerät wählen** (Kopfhörer) mit „Ausgang testen“ (Testton 440 Hz) — `sondra_audio::set_output_device`, gilt für alles, was Sondra danach abspielt
 - ✓ **Probe** (bis 15 s) mit **„Ein-Klick-Sprachverbesserung (KI)“** (an), verbessert/Original anhören, **„(Verbesserte) Probe in die Sitzung“**; „In die Sitzung“ auch nach dem Einstellen
 - ✓ **„Aufnahme mit 1 Klick verbessern“** auf einer Aufnahme der Sitzung oder einer gewählten (`sondra_media::speech_enhance`, Zahl für Zahl wie `enhanceSpeechAudioData`); dazu im Ton-Editor unter „Säubern“
-- ✗ „Mithören“ (sich selbst live über den Ausgang hören)
+- ✓ „Mithören“ (sich selbst live über den Ausgang hören), nativ seit 22.11.2026
 
 ### Bildschirm aufnehmen
 - ✗ **Fenster unter Linux/macOS wählen** (Rust nur unter Windows, der Text sagt es)
@@ -231,8 +231,8 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 **Rahmen**
 - ✓ **Tastenkürzel-Übersicht** wie in Electron: Einträge in Gruppen (Allgemein, Ton & Schnitt, Sampler & Beat, Player & Bühne, Video & Bild, Ordner, Maus & Gesten) mit Gruppenpillen und einem Suchfeld (nativ seit 22.11.2026).
 - ✓ **Player-Tasten** (nativ seit 22.11.2026, A/B als Knopf unter „Bild und Ton“): J/L (10 s zurück/vor), `,`/`.` (Bild für Bild), `<`/`>` (Tempo), 0–9 (zu 0–90 % springen), A/B (Schleife).
-- ✗ **Bilder**: die Leertaste gedrückt halten zeigt das Original.
-- ✗ **Visualizer**: ein Klick wechselt zwischen Balken, Welle und Kreis.
+- ✓ **Bilder**: die Leertaste gedrückt halten zeigt das Original (nativ seit 22.11.2026).
+- ✓ **Visualizer**: ein Klick wechselt zwischen Balken, Welle und Kreis (nativ seit 22.11.2026).
 - ✓ **„Protokoll“**: was Sondra gerade tut, zum Nachlesen (nativ seit 22.11.2026: Marke „Protokoll“ unten im Rack, die letzten 250 Zeilen dieses Laufs, nur im Speicher, „Leeren“; geschrieben von Sitzung, Ablegen, Öffnen, Drive, Geräten, Ordner, Umwandeln, Video, Bildern, Ton, Mischen, Zerschneiden, Mikrofon und Herunterladen).
 - ✓ **Sitzungsmenü**: „Weitere Datei öffnen“, „Alle n als ZIP speichern“ mit eigenem Namen, „Alles verwerfen“ und die Zeile „2,9 MB auf diesem Gerät, nichts davon gesendet“ (nativ seit 22.11.2026; die Dateien bleiben, wo sie liegen).
 
@@ -274,15 +274,15 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 **Ton (mit Datei)**
 - ✓ **Stopp**, **Schleife**, **Zoom hinein/heraus**.
 - ✓ **„Datei zum Anhängen“**.
-- ✗ **Tonhöhe ±12 Halbtöne** mit „Tonhöhe übernehmen“ / „Tempo übernehmen“.
+- ✓ **Tonhöhe ±12 Halbtöne** mit „Tonhöhe übernehmen“ / „Tempo übernehmen“ (nativ: „Tonhöhe und Tempo“ im Ton-Editor).
 - ✓ **„Tempo klopfen“** (Tippen oder T).
-- ✗ **Verlauf als Liste**, jeder Schritt mit Strg+Z zurückzunehmen.
+- ✓ **Verlauf als Liste**, jeder Schritt mit Strg+Z zurückzunehmen (nativ: Werkzeug „Verlauf“).
 
 **Mischen (mit Datei)**
 - ✓ **Vorlagen**: Podcast / Talk, Radio / Moderation, Hintergrund / Dezent, Voiceover / Stark.
 - ✓ **Vergleich** „Gemischt“ ↔ „Ohne Absenken“.
-- ✗ **„In die Sitzung übernehmen“**.
-- ✗ **Name des ZIP** für die Einzelspuren.
+- ✓ **„In die Sitzung übernehmen“** (nativ seit 22.11.2026).
+- ✓ **Name des ZIP** für die Einzelspuren (nativ seit 22.11.2026).
 
 **Spuren trennen (mit Datei)**
 - ✓ **Mittenschärfe** und **Maskenhärte** als Regler.

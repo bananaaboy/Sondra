@@ -112,11 +112,13 @@ pub struct ImageOps {
     pub format: Format,
     /// 0 to 1, ignored by PNG.
     pub quality: f64,
+    /// „Pixelgenau“: scaled by the nearest pixel (pixel art, screenshots), not smoothed.
+    pub pixelated: bool,
 }
 
 impl Default for ImageOps {
     fn default() -> Self {
-        ImageOps { width: 0, crop: None, rotate: 0, flip_h: false, flip_v: false, brightness: 1.0, contrast: 1.0, saturation: 1.0, blur: 0.0, sharpen: 0.0, format: Format::Webp, quality: 0.85 }
+        ImageOps { width: 0, crop: None, rotate: 0, flip_h: false, flip_v: false, brightness: 1.0, contrast: 1.0, saturation: 1.0, blur: 0.0, sharpen: 0.0, format: Format::Webp, quality: 0.85, pixelated: false }
     }
 }
 
@@ -175,7 +177,7 @@ pub fn chain(width: u32, height: u32, ops: &ImageOps, scale: f64, end_format: &s
     let (ow, oh) = output_size(width, height, ops);
     let (sw, sh) = (((f64::from(ow) * scale).round().max(1.0)) as u32, ((f64::from(oh) * scale).round().max(1.0)) as u32);
     if (sw, sh) != (output_size(width, height, &ImageOps { width: 0, ..ops.clone() })) {
-        f.push(format!("scale={sw}:{sh}:flags=lanczos"));
+        f.push(format!("scale={sw}:{sh}:flags={}", if ops.pixelated { "neighbor" } else { "lanczos" }));
     }
     // Colour: brightness multiplies, contrast turns around mid grey, saturation multiplies.
     f.push("format=rgba".into());

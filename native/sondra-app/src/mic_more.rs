@@ -351,3 +351,58 @@ mod tests {
         assert!((peak - 0.2).abs() < 0.01);
     }
 }
+
+/// „Mithören“: what the microphone takes, played back at once through the output — for headphones (over
+/// speakers it whistles). A thread of its own owns the output and is handed the sound; what lags more than a
+/// quarter of a second is dropped, so it stays live.
+pub struct Monitor {
+    tx: std::sync::mpsc::Sender<Vec<f32>>,
+}
+
+impl Monitor {
+    pub fn start(rate: u32) -> Monitor {
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
+        std::thread::spawn(move || {
+            let out = sondra_audio::Output::open(0.5);
+            let shared = out.shared();
+            let (to, channels) = (shared.rate(), shared.channels().max(1));
+            let stop = std::sync::atomic::AtomicBool::new(false);
+            while let Ok(chunk) = rx.recv() {
+                if shared.buffered() > 0.25 {
+                    shared.clear();
+                }
+                let n = ((chunk.len() as f64) * f64::from(to) / f64::from(rate.max(1))).round() as usize;
+                let mut interleaved = Vec::with_capacity(n * channels);
+                for i in 0..n {
+                    let at = i as f64 * f64::from(rate) / f64::from(to.max(1));
+                    let (k, f) = (at.floor() as usize, (at - at.floor()) as f32);
+                    let a = chunk.get(k).copied().unwrap_or(0.0);
+                    let b = chunk.get(k + 1).copied().unwrap_or(a);
+                    let v = a + (b - a) * f;
+                    for _ in 0..channels {
+                        interleaved.push(v);
+                    }
+                }
+                shared.push(&interleaved, &stop);
+            }
+            drop(out);
+        });
+        Monitor { tx }
+    }
+
+    pub fn feed(&self, samples: &[f32]) {
+        let _ = self.tx.send(samples.to_vec());
+    }
+}
+
+impl Shell {
+    /// „Mithören“ on and off.
+    pub fn mic_set_monitor(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.mic.monitor = on.then(|| Monitor::start(self.mic.rate));
+        cx.notify();
+    }
+
+    pub fn mic_monitoring(&self) -> bool {
+        self.mic.monitor.is_some()
+    }
+}

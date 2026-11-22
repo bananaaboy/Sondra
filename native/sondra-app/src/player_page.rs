@@ -999,7 +999,31 @@ impl Shell {
                 // A song: the visualizer behind its name, when it is switched on.
                 let mut stage = stage;
                 if p.settings.visualizer {
-                    stage = stage.child(crate::visualizer::visualizer(p.settings.visualizer_mode, playback.spectrum(), playing, c.stage_accent, c.stage_line));
+                    // A click on it goes on to the next look: bars, wave, ring.
+                    let me = me.clone();
+                    let next = match p.settings.visualizer_mode {
+                        sondra_player::VisualizerMode::Bars => sondra_player::VisualizerMode::Wave,
+                        sondra_player::VisualizerMode::Wave => sondra_player::VisualizerMode::Radial,
+                        sondra_player::VisualizerMode::Radial => sondra_player::VisualizerMode::Bars,
+                    };
+                    stage = stage.child(crate::visualizer::visualizer(p.settings.visualizer_mode, playback.spectrum(), playing, c.stage_accent, c.stage_line)).child(
+                        sondra_a11y::accessible(
+                            "visualizer-wechseln",
+                            sondra_a11y::Role::Button,
+                            div().id("visualizer-wechseln").absolute().top_0().left_0().size_full().cursor_pointer().on_click({
+                                let me = me.clone();
+                                move |_, _, app| Self::player_do(&me, app, move |p| {
+                                    p.settings.visualizer_mode = next;
+                                    p.keep_settings();
+                                })
+                            }),
+                        )
+                        .label("Visualizer: nächste Darstellung")
+                        .on_activate(move |_, app| Self::player_do(&me, app, move |p| {
+                            p.settings.visualizer_mode = next;
+                            p.keep_settings();
+                        })),
+                    );
                 }
                 stage.child(div().flex().flex_col().items_center().gap(px(6.)).child(div().text_color(c.stage_ink).text_size(px(size::SUBHEADING)).child(name.clone())).child(div().text_color(c.stage_muted).child("Ton")))
             }

@@ -130,6 +130,29 @@ fn a_picture_is_cropped_turned_scaled_and_saved_and_many_go_through_together(cx:
     assert_eq!(made.len(), 2);
     assert_eq!((made[0].width, made[0].height), (400, 225));
     assert_eq!((made[1].width, made[1].height), (400, 300));
+    // Both in one ZIP beside them.
+    w.press(Role::Button, "Alle 2 als ZIP");
+    w.settle();
+    for _ in 0..100 {
+        w.cx.run_until_parked();
+        w.draw();
+        if w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.starts_with("ZIP gespeichert"))) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let zip = made[0].path.parent().unwrap().read_dir().unwrap().map(|e| e.unwrap().path()).find(|p| p.extension().is_some_and(|e| e == "zip")).expect("a ZIP");
+    assert!(zip.file_name().unwrap().to_string_lossy().starts_with("Bilder"));
+    // Pixel by pixel when asked: the filter says so.
+    w.press(Role::Button, "Werkzeug Größe");
+    w.press(Role::Button, "Pixelgenau (Nearest Neighbour)");
+    assert!(w.cx.read_entity(&w.shell, |s, _| s.images_ops().pixelated));
+    // Held down, the stage shows the original.
+    w.shell.update(w.cx, |s, cx| s.images_hold(true, cx));
+    w.settle();
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.as_ref() == "Original")));
+    w.shell.update(w.cx, |s, cx| s.images_hold(false, cx));
+    w.settle();
 }
 
 #[gpui::test]
