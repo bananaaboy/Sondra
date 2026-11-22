@@ -435,6 +435,8 @@ impl Shell {
             self.folder.search.clone(),
             self.download.input.clone(),
             self.convert.name.clone(),
+            self.convert.trim.from.clone(),
+            self.convert.trim.to.clone(),
             self.devices.rename.clone(),
             self.session_rename.clone(),
             self.devices.text.clone(),

@@ -218,3 +218,47 @@ fn what_cannot_be_converted_is_said_in_a_sentence_and_the_others_still_are(cx: &
     assert!(tree.find(Role::ListItem, "gut.flac").is_some(), "and the good one was made");
     assert!(tmp.path().join("raus/gut.flac").exists());
 }
+
+#[gpui::test]
+fn a_cut_the_sample_rate_the_channels_and_the_depth_are_chosen_as_on_the_website(cx: &mut TestAppContext) {
+    if Ffmpeg::locate().is_none() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let a = tone(tmp.path(), "ton.wav");
+    let out = tmp.path().join("raus");
+    let mut w = open(cx);
+    w.shell.update(w.cx, |shell, cx| {
+        shell.convert_take(vec![a], cx);
+        shell.convert_into(out.clone());
+        shell.convert_choose_format("wav", cx);
+    });
+    w.draw();
+    w.press(Role::Button, "16 Bit PCM");
+    w.press(Role::Button, "22,05 kHz");
+    w.press(Role::Button, "Mono");
+    w.press(Role::Button, "Nur einen Ausschnitt umwandeln");
+    w.shell.update(w.cx, |shell, cx| shell.convert_trim_fields().1.update(cx, |f, cx| f.set_text("1", cx)));
+    w.draw();
+    // The command says what it will do.
+    w.press(Role::Button, "Welcher Befehl dabei läuft");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("-ar 22050") && l.contains("-ac 1"))), "{:?}", w.tree().nodes.iter().filter_map(|n| n.label.clone()).filter(|l| l.contains("ffmpeg")).collect::<Vec<_>>());
+    w.press(Role::Button, "Umwandeln");
+    w.until_done();
+    let made = out.join("ton.wav");
+    let bytes = std::fs::metadata(&made).unwrap().len();
+    // One second of 16-bit mono at 22,05 kHz, and a header.
+    assert!((44_100..46_000).contains(&bytes), "{bytes}");
+
+    // For a video the picture's settings stand there.
+    w.shell.update(w.cx, |shell, cx| shell.convert_choose_format("mp4", cx));
+    w.draw();
+    for label in ["Hochformat 9:16 (Reels, Stories)", "720p", "30 fps", "medium", "CRF kleiner (besser, grösser)"] {
+        assert!(w.tree().find(Role::Button, label).is_some(), "{label}");
+    }
+    // A wrong time is said, not guessed.
+    w.shell.update(w.cx, |shell, cx| shell.convert_trim_fields().0.update(cx, |f, cx| f.set_text("zwei", cx)));
+    w.draw();
+    w.press(Role::Button, "Umwandeln");
+    assert!(w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains("Die Startzeit ist keine Zeit"))));
+}

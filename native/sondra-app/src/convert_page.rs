@@ -20,6 +20,8 @@ use crate::shell::Shell;
 pub struct Made {
     pub from: String,
     pub result: Result<(PathBuf, u64), String>,
+    /// What FFmpeg said when it failed, for „Was FFmpeg gemeldet hat“.
+    pub detail: Option<String>,
 }
 
 pub struct Run {
@@ -47,6 +49,8 @@ pub struct ConvertState {
     pub zip: Option<Result<(PathBuf, u64), String>>,
     pub packing: bool,
     pub error: Option<String>,
+    /// The cut and the command (`convert_more`).
+    pub trim: crate::convert_more::Trim,
 }
 
 impl ConvertState {
@@ -54,7 +58,8 @@ impl ConvertState {
         let store = crate::store::FileStore::at_default("Umwandeln.json");
         let own = store.as_ref().and_then(|s| s.get_item("vorlagen")).map(|j| parse_own(&j)).unwrap_or_default();
         let name = cx.new(|cx| TextField::new(cx, colors, "Name der Vorlage").placeholder("Name für diese Einstellungen").max_chars(40));
-        ConvertState { files: Vec::new(), settings: Settings::default(), preset: None, own, name, store, folder: None, run: None, made: Vec::new(), zip: None, packing: false, error: None }
+        let trim = crate::convert_more::Trim::new(cx, colors);
+        ConvertState { files: Vec::new(), settings: Settings::default(), preset: None, own, name, store, folder: None, run: None, made: Vec::new(), zip: None, packing: false, error: None, trim }
     }
 
     /// Reads the own templates again (after a take-over wrote some).
@@ -149,6 +154,12 @@ impl Shell {
             cx.notify();
             return;
         };
+        if let Err(why) = self.convert_read_trim(cx) {
+            self.convert.error = Some(why);
+            cx.notify();
+            return;
+        }
+        let c = &mut self.convert;
         c.made.clear();
         c.error = None;
         let (files, settings, folder) = (c.files.clone(), c.settings.clone(), c.folder.clone());
@@ -165,11 +176,19 @@ impl Shell {
                 *progress.lock().expect("lock") = Progress::default();
                 let dir = folder.clone().or_else(|| file.parent().map(PathBuf::from)).unwrap_or_default();
                 let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Datei".into());
+                let mut detail = None;
                 let result = sondra_media::run::convert_file(&ffmpeg, file, &dir, &stem, &settings, &cancel, &mut |p| *progress.lock().expect("lock") = p)
                     .map(|o| (o.path, o.size))
-                    .map_err(|e| if e.cancelled { "Abgebrochen.".to_string() } else { e.message });
+                    .map_err(|e| {
+                        if e.cancelled {
+                            "Abgebrochen.".to_string()
+                        } else {
+                            detail = Some(e.detail.clone()).filter(|d| !d.trim().is_empty());
+                            e.message
+                        }
+                    });
                 let stop = cancel.is_cancelled();
-                made.push(Made { from: name, result });
+                made.push(Made { from: name, result, detail });
                 if stop {
                     break;
                 }
@@ -315,7 +334,7 @@ impl Shell {
 
         // Audio bitrate for the lossy sound formats.
         if let Some(format) = find_format(&s.settings.format_id) {
-            if format.kind == Kind::Audio && !format.lossless {
+            if format.kind == Kind::Audio && !format.lossless && !matches!(format.id, "mp3" | "vorbis") {
                 let mut rates = div().flex().flex_wrap().items_center().gap(px(6.));
                 for kbps in [128u32, 192, 256, 320] {
                     let me = me.clone();
@@ -328,6 +347,7 @@ impl Shell {
                 settings.push(ui.setting("Qualität", rates, None));
             }
         }
+        settings.extend(self.convert_more_settings(&ui, cx));
 
         let go = {
             let me = me.clone();
@@ -335,6 +355,9 @@ impl Shell {
         };
         if !s.files.is_empty() {
             work = work.child(div().flex().child(go));
+            if let Some(command) = self.convert_command(&ui, cx) {
+                work = work.child(command);
+            }
         }
 
         // The way there.
@@ -365,7 +388,14 @@ impl Shell {
                         };
                         (path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default(), format!("{} · {}{drive_note}", path.display(), size_text(*bytes)), Some(path.clone()))
                     }
-                    Err(message) => (made.from.clone(), format!("Nicht umgewandelt: {message}"), None),
+                    Err(message) => (
+                        made.from.clone(),
+                        match &made.detail {
+                            Some(d) => format!("Nicht umgewandelt: {message} — FFmpeg meldete: {}", d.lines().filter(|l| !l.trim().is_empty()).rev().take(3).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join(" · ")),
+                            None => format!("Nicht umgewandelt: {message}"),
+                        },
+                        None,
+                    ),
                 };
                 let mut actions = div().flex().gap(px(8.));
                 if let Some(path) = path {
