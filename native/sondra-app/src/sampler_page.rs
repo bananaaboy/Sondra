@@ -51,6 +51,8 @@ pub struct SamplerState {
     ticking: bool,
     /// The piano roll of a pad, when one is open.
     pub roll: Option<crate::roll_ui::RollView>,
+    /// The stretch the wave shows, zoomed in; `None` for all of it.
+    pub view: Option<(f64, f64)>,
     /// The four pattern places A–D: the one being edited is `pattern`, its place here is stale until it is left.
     pub slots: Vec<Pattern>,
     pub slot: usize,
@@ -91,6 +93,7 @@ impl SamplerState {
             cut: None,
             ticking: false,
             roll: None,
+            view: None,
             slots: vec![Pattern::new(16, 120.0); 4],
             slot: 0,
             chain: vec![0],
@@ -170,6 +173,7 @@ impl Shell {
         let s = &mut self.sampler;
         let audio = Arc::new(audio);
         s.peaks = peaks_of(&audio, 480);
+        s.view = None;
         s.flux = Flux::of(&audio).map(Arc::new);
         let tempo = estimate_tempo(&audio);
         s.tempo = Some((tempo.bpm, tempo.confidence, tempo.offset_seconds));
@@ -603,8 +607,9 @@ impl Shell {
             return None;
         }
         let (left, x): (f32, f32) = (b.origin.x.into(), x.into());
-        let total = audio.seconds();
-        Some((((x - left) / width).clamp(0.0, 1.0) as f64 * total, 6.0 / f64::from(width) * total))
+        let (v0, v1) = self.sampler.view.unwrap_or((0.0, audio.seconds()));
+        let span = v1 - v0;
+        Some((v0 + ((x - left) / width).clamp(0.0, 1.0) as f64 * span, 6.0 / f64::from(width) * span))
     }
 
     /// A press on the waveform: near a cut it takes hold of it, elsewhere it chooses the pad under it.
@@ -705,8 +710,10 @@ impl Shell {
         }
         page = page.child(bar);
 
-        // The waveform with its cuts; a press chooses the pad under it.
-        let total = audio.seconds();
+        // The waveform with its cuts; a press chooses the pad under it. Zoomed in, it shows the stretch in view.
+        let (v0, v1) = s.view.unwrap_or((0.0, audio.seconds()));
+        let span = (v1 - v0).max(1e-6);
+        let rel = |t: f64| ((t - v0) / span) as f32;
         let mut columns = div().relative().flex().items_center().h(px(140.)).w_full().rounded(px(sondra_ui::radius::CARD)).overflow_hidden().bg(c.stage);
         for (lo, hi) in &s.peaks {
             let up = (hi * 52.0).max(1.0);
@@ -716,14 +723,19 @@ impl Shell {
         let measure = s.bounds.clone();
         columns = columns.child(canvas(move |b, _, _| measure.set(b), |_, _, _, _| {}).absolute().size_full());
         for (i, pad) in s.pads.iter().enumerate() {
-            let mut cell = div().absolute().top_0().bottom_0().left(gpui::relative((pad.start / total) as f32)).w(gpui::relative(((pad.end - pad.start) / total) as f32)).border_l_1().border_color(c.stage_accent);
+            if pad.end < v0 || pad.start > v1 {
+                continue;
+            }
+            let mut cell = div().absolute().top_0().bottom_0().left(gpui::relative(rel(pad.start))).w(gpui::relative(((pad.end - pad.start) / span) as f32)).border_l_1().border_color(c.stage_accent);
             if i == s.selected {
                 cell = cell.bg(c.stage_accent).opacity(0.35);
             }
             columns = columns.child(cell);
         }
         if let Some(at) = self.sampler_cursor() {
-            columns = columns.child(div().absolute().top_0().bottom_0().w(px(1.)).left(gpui::relative((at / total).clamp(0.0, 1.0) as f32)).bg(c.stage_ink));
+            if at >= v0 && at <= v1 {
+                columns = columns.child(div().absolute().top_0().bottom_0().w(px(1.)).left(gpui::relative(rel(at))).bg(c.stage_ink));
+            }
         }
         let (press, drag, release) = (me.clone(), me.clone(), me.clone());
         let stage = div()
@@ -752,6 +764,24 @@ impl Shell {
             cuts = cuts
                 .child(ui.button("am-zeiger-teilen", "Am Zeiger teilen").small().disabled(busy).accessible_name("Am Zeiger teilen (ohne Zeiger in der Mitte)").on_click(move |_, app| split.update(app, |shell, cx| shell.sampler_split_at_cursor(cx))))
                 .child(ui.button("ganze-datei-pad", "Ganze Datei als Pad 1").small().ghost().disabled(busy).on_click(move |_, app| whole.update(app, |shell, cx| shell.sampler_whole_file_pad(cx))))
+                .child({
+                    let me = me.clone();
+                    ui.button("welle-zoom-rein", "+").small().ghost().accessible_name("Hineinzoomen").on_click(move |_, app| me.update(app, |shell, cx| shell.sampler_zoom(0.5, cx)))
+                })
+                .child({
+                    let me = me.clone();
+                    ui.button("welle-zoom-raus", "−").small().ghost().accessible_name("Herauszoomen").disabled(s.view.is_none()).on_click(move |_, app| me.update(app, |shell, cx| shell.sampler_zoom(2.0, cx)))
+                })
+                .children(s.view.map(|(a, b)| {
+                    let (left, right) = (me.clone(), me.clone());
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(ui.button("welle-links", "‹").small().ghost().accessible_name("Früher").on_click(move |_, app| left.update(app, |shell, cx| shell.sampler_pan(-0.5, cx))))
+                        .child(ui.value(format!("{} – {} s", seconds(a), seconds(b))))
+                        .child(ui.button("welle-rechts", "›").small().ghost().accessible_name("Später").on_click(move |_, app| right.update(app, |shell, cx| shell.sampler_pan(0.5, cx))))
+                }))
                 .child(ui.hint("Ein Klick in die Welle setzt den Zeiger und wählt das Pad darunter; einen Schnitt ziehen Sie an seiner Kante."));
             if let Some(said) = &s.said {
                 cuts = cuts.child(ui.value(said.clone()));
@@ -1014,4 +1044,40 @@ fn peaks_of(audio: &AudioData, columns: usize) -> Vec<(f32, f32)> {
             (lo, hi)
         })
         .collect()
+}
+
+impl Shell {
+    /// Zooms the wave by `factor` (0,5 is in, 2 is out) around the middle of what is in view, or the chosen pad when
+    /// it is in view; all of it again at the full length.
+    pub fn sampler_zoom(&mut self, factor: f64, cx: &mut Context<Self>) {
+        let Some(audio) = self.sampler.audio.clone() else { return };
+        let total = audio.seconds();
+        let (v0, v1) = self.sampler.view.unwrap_or((0.0, total));
+        let around = self.sampler.pads.get(self.sampler.selected).map(|p| (p.start + p.end) / 2.0).filter(|m| *m >= v0 && *m <= v1).unwrap_or((v0 + v1) / 2.0);
+        let span = ((v1 - v0) * factor).clamp(0.05_f64.min(total), total);
+        if span >= total - 1e-9 {
+            self.sampler.view = None;
+            self.sampler.peaks = peaks_of(&audio, 480);
+        } else {
+            let from = (around - span / 2.0).clamp(0.0, total - span);
+            self.sampler.view = Some((from, from + span));
+            self.sampler.peaks = peaks_of(&sondra_media::effects::copy_range(&audio, from, from + span), 480);
+        }
+        cx.notify();
+    }
+
+    /// Moves what is in view by a share of its width (negative: earlier).
+    pub fn sampler_pan(&mut self, share: f64, cx: &mut Context<Self>) {
+        let (Some(audio), Some((v0, v1))) = (self.sampler.audio.clone(), self.sampler.view) else { return };
+        let total = audio.seconds();
+        let span = v1 - v0;
+        let from = (v0 + span * share).clamp(0.0, total - span);
+        self.sampler.view = Some((from, from + span));
+        self.sampler.peaks = peaks_of(&sondra_media::effects::copy_range(&audio, from, from + span), 480);
+        cx.notify();
+    }
+
+    pub fn sampler_view(&self) -> Option<(f64, f64)> {
+        self.sampler.view
+    }
 }

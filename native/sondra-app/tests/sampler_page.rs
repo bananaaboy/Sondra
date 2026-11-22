@@ -545,3 +545,30 @@ fn four_pattern_places_a_song_chain_and_the_song_into_the_session(cx: &mut TestA
     assert_eq!(session.len(), 2);
     assert!(session[1].file_name().unwrap().to_string_lossy().starts_with("Break-pattern-B-"), "{session:?}");
 }
+
+#[gpui::test]
+fn the_wave_zooms_in_on_the_chosen_pad_moves_and_zooms_out_again(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Break.wav"));
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_view()).is_none());
+    w.press(Role::Button, "Pad 3 wählen");
+    w.press(Role::Button, "Hineinzoomen");
+    let (a, b) = w.shell.read_with(w.cx, |s, _| s.sampler_view()).expect("zoomed in");
+    assert!((b - a - 1.0).abs() < 1e-6, "half of two seconds: {a}–{b}");
+    let pad = w.shell.read_with(w.cx, |s, _| s.sampler_pads()[2].clone());
+    let middle = (pad.start + pad.end) / 2.0;
+    assert!(a <= middle && middle <= b, "the chosen pad stays in view");
+    // A press on the zoomed wave stands for a time in what is in view.
+    let bounds = w.shell.read_with(w.cx, |s, _| s.sampler_bounds());
+    let x = bounds.origin.x + bounds.size.width * 0.5;
+    w.cx.simulate_mouse_down(gpui::point(x, bounds.origin.y + px(20.)), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_up(gpui::point(x, bounds.origin.y + px(20.)), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let at = w.shell.read_with(w.cx, |s, _| s.sampler_cursor()).unwrap();
+    assert!((at - (a + b) / 2.0).abs() < 0.02, "{at}");
+    w.press(Role::Button, "Später");
+    let (c, _) = w.shell.read_with(w.cx, |s, _| s.sampler_view()).unwrap();
+    assert!(c > a);
+    w.press(Role::Button, "Herauszoomen");
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_view()).is_none(), "the whole again");
+}

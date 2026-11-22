@@ -298,9 +298,9 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 
 **Zerschneiden (mit Datei)**
 - ✓ **„Am Zeiger teilen“** und **„Als 1 Pad“** (nativ seit 22.11.2026).
-- ✗ **Zoom**.
-- ✗ **Pads ↔ Piano-Roll** umschalten.
-- ✗ **1 oder 2 Takte**.
+- ✓ **Zoom** (+/−, früher/später; nativ seit 22.11.2026).
+- ✓ **Pads ↔ Piano-Roll** umschalten („Klavierrolle“ je Pad, „Zurück zu Schritten“).
+- ✓ **1 oder 2 Takte** (16 oder 32 Schritte).
 - ✓ **„Grundbeat vorschlagen“** (nativ „Start-Beat legen“); Pads entstehen nativ gleich beim Schneiden.
 - ✓ **Export**: „Einzelnes Pattern“ oder „Song-Kette“, dazu „In die Sitzung“ (nativ seit 22.11.2026).
 - ✓ **Je Pad**: Löschen, „Auf alle übertragen“, Anfang −10/+10 ms, „Halbieren“, „Mit nächstem verbinden“, „So hören, wie es exportiert wird“ nativ seit 22.11.2026.
