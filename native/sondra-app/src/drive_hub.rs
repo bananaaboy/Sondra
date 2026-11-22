@@ -169,6 +169,12 @@ impl crate::shell::Shell {
                 save(&drive, &path, &cancel, |sent, total| work.set(&shown, Line::Busy((total > 0).then_some(sent as f32 / total as f32))))
             },
             move |_, outcome, cx| {
+                let shown = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                match &outcome {
+                    Ok(Saved::Done) => crate::protocol::note("drive", format!("{shown} in Drive gespeichert")),
+                    Ok(Saved::Already) => crate::protocol::note("drive", format!("{shown} war schon in Drive")),
+                    Err(why) => crate::protocol::warn("drive", format!("{shown}: {why}")),
+                }
                 result.set(
                     &target,
                     match outcome {

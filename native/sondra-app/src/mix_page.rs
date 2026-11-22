@@ -277,7 +277,10 @@ impl Shell {
                 let m = &mut shell.mix;
                 m.writing = false;
                 match answer {
-                    Ok(paths) => m.made = paths,
+                    Ok(paths) => {
+                        crate::protocol::note("mischen", format!("Geschrieben: {}", paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")));
+                        m.made = paths
+                    }
                     Err(e) => m.error = Some(e),
                 }
                 cx.notify();

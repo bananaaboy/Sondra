@@ -100,6 +100,17 @@ fn the_keys_are_on_a_sheet_behind_the_question_mark_and_ctrl_k_opens_the_palette
     assert!(w.tree().find(Role::Dialog, "Tastenkürzel").is_some());
     let said = |w: &Window<'_>, needle: &str| w.tree().nodes.iter().any(|n| n.label.as_ref().is_some_and(|l| l.contains(needle)));
     assert!(said(&w, "Befehlspalette öffnen") && said(&w, "Lesezeichen setzen") && said(&w, "Das Pad auf dieser Taste spielen"));
+    // A group alone, then a search across all.
+    w.press(Role::Button, "Kürzel: Ton & Schnitt");
+    assert!(said(&w, "Tempo klopfen") && !said(&w, "Lesezeichen setzen"));
+    w.press(Role::Button, "Alle Kürzel");
+    let field = w.shell.read_with(w.cx, |s, _| s.palette_help_field());
+    w.cx.update(|_, app| field.update(app, |f, cx| f.set_text("zoom", cx)));
+    w.draw();
+    assert!(said(&w, "Hinein- und herauszoomen") && !said(&w, "Lesezeichen setzen"));
+    w.cx.update(|_, app| field.update(app, |f, cx| f.set_text("gibtesnicht", cx)));
+    w.draw();
+    assert!(said(&w, "Kein Kürzel passt zu „gibtesnicht“."));
     w.press(Role::Button, "Schliessen");
     assert!(w.tree().find(Role::Dialog, "Tastenkürzel").is_none());
     // The real keys, on the window.

@@ -263,7 +263,10 @@ impl Shell {
             files_to_send(&paths)
         };
         match files {
-            Ok(files) if !files.is_empty() => engine.send(to, files),
+            Ok(files) if !files.is_empty() => {
+                crate::protocol::note("geräte", format!("{} angeboten", if files.len() == 1 { "1 Datei".to_string() } else { format!("{} Dateien", files.len()) }));
+                engine.send(to, files)
+            }
             Ok(_) => self.devices.problem = Some("Da waren keine Dateien.".into()),
             Err(e) => self.devices.problem = Some(format!("Das liess sich nicht lesen: {e}")),
         }

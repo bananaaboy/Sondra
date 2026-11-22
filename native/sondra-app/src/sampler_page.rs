@@ -448,6 +448,11 @@ impl Shell {
             self.sampler_delete_pad(cx);
             return true;
         }
+        // The space plays the beat (and stops it), as on the website.
+        if key == "space" && self.sampler.audio.is_some() && !self.sampler.pads.is_empty() {
+            self.sampler_hear_pattern(cx);
+            return true;
+        }
         let Some(index) = PAD_KEYS.iter().position(|k| *k == key.to_lowercase()) else { return false };
         if self.sampler.audio.is_none() || index >= self.sampler.pads.len() {
             return false;
@@ -521,8 +526,14 @@ impl Shell {
         Self::in_background(cx, work, |shell, answer, cx| {
             shell.sampler.busy = None;
             match answer {
-                Ok(paths) => shell.sampler.made = paths,
-                Err(e) => shell.sampler.error = Some(e),
+                Ok(paths) => {
+                    crate::protocol::note("zerschneiden", format!("Geschrieben: {}", paths.iter().map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).collect::<Vec<_>>().join(", ")));
+                    shell.sampler.made = paths
+                }
+                Err(e) => {
+                    crate::protocol::warn("zerschneiden", e.clone());
+                    shell.sampler.error = Some(e)
+                }
             }
             cx.notify();
         });

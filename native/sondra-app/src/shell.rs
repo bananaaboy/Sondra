@@ -115,6 +115,8 @@ pub struct Shell {
     pub(crate) pending_focus: Option<FocusHandle>,
     /// „Was ist neu“ is open.
     pub(crate) whats_new_open: bool,
+    /// „Protokoll“ is open.
+    pub(crate) protocol_open: bool,
     pub(crate) licenses_open: bool,
     /// The version a line under the header says is new, until it is read or closed.
     pub(crate) news: Option<String>,
@@ -272,6 +274,7 @@ impl Shell {
             pending_focus: None,
             theme_store: None,
             whats_new_open: false,
+            protocol_open: false,
             licenses_open: false,
             news: None,
         }
@@ -280,6 +283,9 @@ impl Shell {
     /// Opens what was handed to the program (files dropped on it, „Öffnen mit Sondra“, the command line): a
     /// shared list goes to the Merkliste's window for receiving, a folder goes to the Ordner page, films and songs are played, anything else waits on the start page.
     pub fn open_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        if let Some(first) = paths.first() {
+            crate::protocol::note("öffnen", format!("Geöffnet: {}{}", first.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| first.display().to_string()), if paths.len() > 1 { format!(" und {} weitere", paths.len() - 1) } else { String::new() }));
+        }
         // An address like the website's: `sondra #umwandeln` opens that tool (a file called that is
         // never taken for one — a real path wins).
         // A project (`.sondra`) is opened as one: its files come into the session and its tool opens.
@@ -324,6 +330,7 @@ impl Shell {
         if paths.is_empty() {
             return;
         }
+        crate::protocol::note("ablage", format!("{} abgelegt auf „{}“", if paths.len() == 1 { "1 Datei".to_string() } else { format!("{} Dateien", paths.len()) }, self.panel.label()));
         match self.panel {
             Panel::Start => self.take_files(paths, cx),
             Panel::Player => self.play_files(paths, cx),
@@ -510,6 +517,7 @@ impl Shell {
             self.devices.servers.user.clone(),
             self.devices.servers.password.clone(),
             self.palette.field.clone(),
+            self.palette.help_field.clone(),
             self.merk.receive.field.clone(),
             self.anytype.code.clone(),
             self.anytype.name.clone(),
@@ -649,7 +657,7 @@ impl Shell {
         if let Some(drive) = self.drive_header_button(&ui, compact, cx) {
             foot = foot.child(drive);
         }
-        let (news, bell) = (me.clone(), me.clone());
+        let (news, bell, record) = (me.clone(), me.clone(), me.clone());
         let waiting = self.inbox_count();
         // The small things at the foot as a row of marks (each with its name for the screen reader and as a
         // tooltip) — four full lines left the rack too short for its places on a laptop.
@@ -677,6 +685,16 @@ impl Shell {
                             cx.notify();
                         })
                     }),
+            )
+            .child(
+                ui.rack_item("protokoll", "Protokoll", self.protocol_open)
+                    .icon(Some(sondra_ui::ui_icon("protokoll")))
+                    .compact(true)
+                    .accessible_name("Protokoll: was Sondra getan hat")
+                    .on_click(move |_, app| record.update(app, |shell, cx| {
+                        shell.protocol_open = true;
+                        cx.notify();
+                    })),
             )
             .child(
                 ui.rack_item("thema", theme_label, false)
@@ -1235,6 +1253,7 @@ impl Render for Shell {
             .or_else(|| if self.panel == Panel::Start && self.old_app.open { self.old_app_overlay(ui, cx) } else { None })
             .or_else(|| if self.licenses_open { self.licenses_overlay(ui, cx) } else { None })
             .or_else(|| if self.whats_new_open { self.whats_new_overlay(ui, cx) } else { None })
+            .or_else(|| self.protocol_overlay(ui, cx))
             .or_else(|| if self.panel == Panel::Folder { self.folder_overlay(ui, cx) } else { None })
             .or_else(|| if self.panel == Panel::Player { self.player_overlay(ui, cx) } else { None })
             .or_else(|| {

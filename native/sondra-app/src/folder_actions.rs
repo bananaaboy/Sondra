@@ -99,6 +99,7 @@ impl Shell {
     }
 
     fn folder_say(&mut self, line: String, cx: &mut Context<Self>) {
+        crate::protocol::note("ordner", line.clone());
         self.folder.notice = Some(line);
         self.folder.undo = None;
         cx.notify();

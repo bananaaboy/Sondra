@@ -150,6 +150,7 @@ impl Shell {
 
     pub fn session_add(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
         if !paths.is_empty() {
+            crate::protocol::note("sitzung", format!("{} in die Sitzung übernommen", paths.iter().map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).collect::<Vec<_>>().join(", ")));
             self.session.add(paths);
             cx.notify();
         }
@@ -568,6 +569,10 @@ impl Shell {
         let _ = std::fs::create_dir_all(&dir);
         Self::pack_in_background(cx, files, dir, suggestion, |shell, result, cx| {
             shell.session.zipping = false;
+            match &result {
+                Ok((path, _)) => crate::protocol::note("sitzung", format!("Als ZIP gespeichert: {}", path.display())),
+                Err(e) => crate::protocol::warn("sitzung", e.clone()),
+            }
             shell.session.said = Some(result.map(|(path, bytes)| format!("ZIP gespeichert: {} · {}", path.display(), sondra_merk::format::format_bytes(bytes as f64, 1))));
             cx.notify();
         });

@@ -171,6 +171,7 @@ impl Shell {
             Ok(path) => {
                 let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 self.session_add(vec![path], cx);
+                crate::protocol::note("mikrofon", format!("{file} in die Sitzung übernommen"));
                 self.mic.said = Some(format!("„{file}“ ist in der Sitzung."));
             }
             Err(e) => self.mic.error = Some(e),

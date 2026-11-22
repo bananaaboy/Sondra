@@ -454,6 +454,7 @@ impl Shell {
                             shell.go(crate::nav::Panel::Player, cx);
                             shell.play_files(vec![path], cx);
                         }
+                        crate::protocol::note("herunterladen", format!("Geladen: {line}"));
                         shell.note("Geladen", line, Some(crate::nav::Panel::Downloader));
                         let d = &mut shell.download;
                         d.found = None;
@@ -462,6 +463,7 @@ impl Shell {
                         }
                     }
                     Err(error) if in_queue && error != "Abgebrochen." => {
+                        crate::protocol::warn("herunterladen", format!("{title}: {error}"));
                         d.failed.push(format!("{title}: {error}"));
                         d.found = None;
                     }

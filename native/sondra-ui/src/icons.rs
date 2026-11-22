@@ -59,7 +59,7 @@ impl AssetSource for Assets {
 }
 
 /// The marks of the window's own chrome, drawn here on the same 16 × 16 grid and stroke as the tools'.
-const UI_MARKS: [(&str, &str); 7] = [
+const UI_MARKS: [(&str, &str); 8] = [
     // A crescent: the lights go down.
     ("dunkel", "<path d=\"M13 9.6A5.5 5.5 0 1 1 6.4 3a4.3 4.3 0 0 0 6.6 6.6z\"/>"),
     // A disc with rays: the lights go up.
@@ -74,9 +74,11 @@ const UI_MARKS: [(&str, &str); 7] = [
     ("glocke", "<path d=\"M4 11.5V7.5a4 4 0 0 1 8 0v4l1 1.2H3z\"/><path d=\"M6.6 14a1.5 1.5 0 0 0 2.8 0\"/>"),
     // A small spark: what is new in this version.
     ("neu", "<path d=\"M8 2v3.2M8 10.8V14M2 8h3.2M10.8 8H14M4 4l2 2M10 10l2 2M4 12l2-2M10 6l2-2\"/>"),
+    // Lines on a sheet: the record of what was done.
+    ("protokoll", "<path d=\"M4 2.5h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z\"/><path d=\"M5.5 6h5M5.5 8.5h5M5.5 11h3\"/>"),
 ];
 
-/// A mark of the window's chrome: `dunkel`, `hell`, `dateien`, `drive`, `neu`, `schliessen`, `glocke`.
+/// A mark of the window's chrome: `dunkel`, `hell`, `dateien`, `drive`, `neu`, `schliessen`, `glocke`, `protokoll`.
 pub fn ui_icon(id: &str) -> SharedString {
     format!("icons/ui/{id}.svg").into()
 }

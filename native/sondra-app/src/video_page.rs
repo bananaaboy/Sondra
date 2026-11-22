@@ -273,7 +273,10 @@ impl Shell {
                 let v = &mut shell.video;
                 v.run = None;
                 match answer {
-                    Ok(path) => v.made = vec![path],
+                    Ok(path) => {
+                        crate::protocol::note("video", format!("Geschrieben: {}", path.display()));
+                        v.made = vec![path]
+                    }
                     Err(e) => v.error = Some(e),
                 }
                 cx.notify();

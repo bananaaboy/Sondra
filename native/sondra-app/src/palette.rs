@@ -16,23 +16,66 @@ pub struct Palette {
     pub open: bool,
     pub field: Entity<TextField>,
     pub help: bool,
+    /// The overview of keys: the group shown (`None`: all) and the search in it.
+    pub help_group: Option<&'static str>,
+    pub help_field: Entity<TextField>,
 }
 
 impl Palette {
     pub fn new(cx: &mut Context<Shell>, colors: sondra_ui::Colors) -> Palette {
         let field = cx.new(|cx| TextField::new(cx, colors, "Befehl suchen").placeholder("Was möchten Sie tun? z. B. „mp3 aus video“").max_chars(80));
-        Palette { open: false, field, help: false }
+        let help_field = cx.new(|cx| TextField::new(cx, colors, "Kürzel suchen").placeholder("z. B. „zoom“ oder „Strg“").max_chars(40));
+        cx.subscribe(&help_field, |_, _, event: &sondra_ui::FieldEvent, cx| {
+            if *event == sondra_ui::FieldEvent::Changed {
+                cx.notify();
+            }
+        })
+        .detach();
+        Palette { open: false, field, help: false, help_group: None, help_field }
     }
 }
 
 /// The keys of this program, by where they work: (category, [(keys, what)]).
 pub fn shortcuts() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
     vec![
-        ("Allgemein", vec![("Strg K", "Befehlspalette öffnen"), ("?", "Diese Übersicht ein- und ausblenden"), ("← →", "Zwischen den Reitern gehen"), ("Esc", "Menü oder Fenster schliessen")]),
         (
-            "Player",
+            "Allgemein",
             vec![
-                ("Leertaste", "Pause und Weiter"),
+                ("Strg K", "Befehlspalette öffnen"),
+                ("?", "Diese Übersicht ein- und ausblenden"),
+                ("↑ ↓", "Im Rack von Ort zu Ort gehen"),
+                ("Tab · Umschalt Tab", "Zum nächsten und vorigen Bedienelement"),
+                ("Esc", "Menü oder Fenster schliessen"),
+                ("Ziehen und Loslassen", "Dateien öffnen — überall im Fenster"),
+            ],
+        ),
+        (
+            "Ton & Schnitt",
+            vec![
+                ("Leertaste", "Abspielen und Anhalten"),
+                ("Strg Z", "Rückgängig"),
+                ("Strg Umschalt Z · Strg Y", "Wiederholen"),
+                ("Strg X · Entf", "Auswahl ausschneiden"),
+                ("Strg C", "Auswahl kopieren"),
+                ("Strg V", "Einfügen"),
+                ("T", "Tempo klopfen"),
+                ("+ −", "Hinein- und herauszoomen"),
+                ("Mausrad", "Zoomen"),
+            ],
+        ),
+        (
+            "Sampler & Beat",
+            vec![
+                ("1 2 3 4 · Q W E R · A S D F · Y X C V", "Das Pad auf dieser Taste spielen"),
+                ("Leertaste", "Den Beat abspielen und anhalten"),
+                ("Entf", "Gewähltes Pad löschen"),
+                ("USB-MIDI", "Ein Controller spielt die Pads"),
+            ],
+        ),
+        (
+            "Player & Bühne",
+            vec![
+                ("Leertaste · K", "Pause und Weiter"),
                 ("← →", "Zurück und vor um die eingestellte Sprungweite"),
                 ("J L", "10 Sekunden zurück und vor"),
                 ("0 … 9", "An den Anfang, zu 10 % … 90 % springen"),
@@ -51,10 +94,50 @@ pub fn shortcuts() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
                 ("Esc", "Vollbild und Kino verlassen"),
             ],
         ),
-        ("Zerschneiden", vec![("1 2 3 4 · Q W E R · A S D F · Y X C V", "Das Pad auf dieser Taste spielen")]),
-        ("Ordner", vec![("Klick", "Eine Datei wählen"), ("Strg + Klick", "Eine Datei dazunehmen oder abwählen"), ("Umschalt + Klick", "Von der zuletzt gewählten bis hierher wählen")]),
-        ("Maus", vec![("Ziehen auf der Zeitleiste", "Anfang und Ende des Schnitts setzen"), ("Ziehen auf dem Bild", "Einen Ausschnitt aufziehen, verschieben oder an den Griffen ändern"), ("Ziehen auf der Welle", "Einen Schnitt zwischen zwei Pads verschieben")]),
+        (
+            "Video & Bild",
+            vec![
+                ("Strg Z", "Einstellung zurücknehmen (Video, Bilder)"),
+                ("Strg Umschalt Z · Strg Y", "Wieder anwenden"),
+                ("Ziehen auf der Zeitleiste", "Anfang und Ende des Schnitts setzen"),
+                ("Ziehen auf dem Bild", "Einen Ausschnitt aufziehen, verschieben oder an den Griffen ändern"),
+            ],
+        ),
+        (
+            "Ordner",
+            vec![
+                ("Klick", "Eine Datei wählen"),
+                ("Strg + Klick", "Eine Datei dazunehmen oder abwählen"),
+                ("Umschalt + Klick", "Von der zuletzt gewählten bis hierher wählen"),
+                ("← → ↑ ↓", "Durch die Liste gehen (mit Umschalt als Bereich)"),
+                ("Leertaste", "Datei dazunehmen oder abwählen"),
+                ("Strg A", "Alles in der Ansicht wählen"),
+                ("Esc", "Nichts mehr wählen"),
+                ("Enter", "Die Auswahl abspielen"),
+            ],
+        ),
+        (
+            "Maus & Gesten",
+            vec![
+                ("Ziehen auf der Welle", "Einen Bereich wählen; im Zerschneiden einen Schnitt verschieben"),
+                ("Umschalt + Mausrad", "Seitlich scrollen"),
+                ("Linksklick aufs Handy", "Tippen; Rechtsklick Zurück, Mittelklick Start"),
+                ("Strg Alt Esc", "Die Tastatur vom Handy an Sondra zurückgeben"),
+            ],
+        ),
     ]
+}
+
+/// The lines of the overview that fit the group chosen (`None`: all) and the words typed (in the keys or the text,
+/// case ignored).
+pub fn shortcut_hits(group: Option<&str>, query: &str) -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+    let q = query.trim().to_lowercase();
+    shortcuts()
+        .into_iter()
+        .filter(|(g, _)| group.is_none_or(|want| want == *g))
+        .map(|(g, items)| (g, items.into_iter().filter(|(k, t)| q.is_empty() || k.to_lowercase().contains(&q) || t.to_lowercase().contains(&q)).collect::<Vec<_>>()))
+        .filter(|(_, items)| !items.is_empty())
+        .collect()
 }
 
 impl Shell {
@@ -71,6 +154,11 @@ impl Shell {
         self.palette.help = false;
         self.pending_focus = Some(self.focus.clone());
         cx.notify();
+    }
+
+    /// For tests: the search field of the overview of keys.
+    pub fn palette_help_field(&self) -> Entity<TextField> {
+        self.palette.help_field.clone()
     }
 
     pub fn toggle_help(&mut self, cx: &mut Context<Self>) {
@@ -104,7 +192,28 @@ impl Shell {
             let away = me.clone();
             let close = me.clone();
             let mut body = div().flex().flex_col().gap(px(14.));
-            for (category, items) in shortcuts() {
+            let mut groups = div().flex().flex_wrap().gap(px(6.));
+            {
+                let me = me.clone();
+                groups = groups.child(ui.chip("kuerzel-alle", "Alle", self.palette.help_group.is_none()).accessible_name("Alle Kürzel").on_click(move |_, app| me.update(app, |shell, cx| {
+                    shell.palette.help_group = None;
+                    cx.notify();
+                })));
+            }
+            for (group, _) in shortcuts() {
+                let me = me.clone();
+                groups = groups.child(ui.chip(format!("kuerzel-{group}"), group, self.palette.help_group == Some(group)).accessible_name(format!("Kürzel: {group}")).on_click(move |_, app| me.update(app, |shell, cx| {
+                    shell.palette.help_group = Some(group);
+                    cx.notify();
+                })));
+            }
+            body = body.child(groups).child(div().w(px(320.)).child(self.palette.help_field.clone()));
+            let query = self.palette.help_field.read(cx).text().to_string();
+            let hits = shortcut_hits(self.palette.help_group, &query);
+            if hits.is_empty() {
+                body = body.child(ui.hint(format!("Kein Kürzel passt zu „{}“.", query.trim())));
+            }
+            for (category, items) in hits {
                 let mut block = div().flex().flex_col().child(div().pb(px(6.)).border_b_1().border_color(c.line).child(ui.subheading(category)));
                 for (keys, what) in items {
                     block = block.child(div().flex().flex_wrap().items_baseline().justify_between().gap(px(12.)).py(px(5.)).border_b_1().border_color(c.line).child(ui.prose(what)).child(div().font_family(family::VALUE).text_size(px(size::SMALL)).text_color(c.ink).child(keys)));

@@ -203,6 +203,12 @@ impl Shell {
                 shell.convert.run = None;
                 shell.convert_watch = None;
                 let (ok, failed) = (made.iter().filter(|m| m.result.is_ok()).count(), made.iter().filter(|m| m.result.is_err()).count());
+                for m in &made {
+                    match &m.result {
+                        Ok((path, _)) => crate::protocol::note("umwandeln", format!("{} → {}", m.from, path.display())),
+                        Err(e) => crate::protocol::warn("umwandeln", format!("{}: {e}", m.from)),
+                    }
+                }
                 shell.convert.made = made;
                 shell.convert.zip = None;
                 if ok + failed > 0 {

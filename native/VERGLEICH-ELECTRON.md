@@ -12,7 +12,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **Tastenkürzel in den Werkzeugen**: Strg+Z / Strg+Umschalt+Z (Ton-Editor, Video, Bilder), Strg+X/C/V und die Leertaste im Ton-Editor, die Leertaste im Zerschneiden-Pattern, Entf für „Pad löschen“ | Nur der Player (Leertaste, ←→↑↓, M, B, T, W, F, Esc) und die Pads (16 Tasten) hören auf Tasten. Die anderen Werkzeuge haben ihr „Rückgängig“ nur als Knopf |
+| ✓ | **Tastenkürzel in den Werkzeugen**: Strg+Z / Strg+Umschalt+Z (Ton-Editor, Video, Bilder), Strg+X/C/V und die Leertaste im Ton-Editor, die Leertaste im Zerschneiden-Pattern, Entf für „Pad löschen“ | Nativ seit 22.11.2026, dazu T (Tempo klopfen) und +/− (Zoom) im Ton-Editor und die Tasten der Ordnerliste |
 | ✓ | **Rückmeldung beim Ablegen**: „Loslassen zum Öffnen“ erscheint, solange eine Datei über dem Fenster gezogen wird | Nativ seit 22.11.2026, mit dem Satz, wohin die Dateien gehen; abgelegt wird jetzt im ganzen Fenster (vorher nur im Einstieg der Startseite): an das offene Werkzeug, in den Player, sonst wie „Öffnen mit“ |
 | ✗ | Drive-Fenster mit der Ordnerübersicht (`Projekte`, `Dateien/Ton·Video·Bilder·Andere`, `Heruntergeladen`, `Merkliste`), **Warteschlange** der Uploads und **„Dateien der Sitzung nach Art“ hochladen** | Es gibt nur Anmelden/Trennen in der Seitenleiste und „In Drive“ einzeln bei jedem Ergebnis |
 | ✗ | **Projekt in Drive speichern** („Google Drive verbinden, um das Projekt dort zu speichern“) | Ein Projekt lässt sich nur lokal speichern |
@@ -229,11 +229,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingebauten Chromium Seite für Seite durchgeklickt. Es lief einmal mit einer Beispiel-Merkliste und einmal mit einer Testdatei (Film, Ton, Bild) in jedem Werkzeug. Jedes Menü und jedes Fenster, das sich ohne Folgen öffnen liess, wurde aufgemacht. Jeder Text und jeder Knopfname wurde mit dem Rust-Code abgeglichen. Was dabei **zusätzlich** zur Liste oben fehlt:
 
 **Rahmen**
-- ✗ **Tastenkürzel-Übersicht** wie in Electron: 45 Einträge in Gruppen (Allgemein, Ton & Schnitt, Sampler, Player, Video & Bild, Maus & Gesten) mit einem Suchfeld. Nativ ist die Übersicht kürzer und hat keine Suche.
+- ✓ **Tastenkürzel-Übersicht** wie in Electron: Einträge in Gruppen (Allgemein, Ton & Schnitt, Sampler & Beat, Player & Bühne, Video & Bild, Ordner, Maus & Gesten) mit Gruppenpillen und einem Suchfeld (nativ seit 22.11.2026).
 - ✓ **Player-Tasten** (nativ seit 22.11.2026, A/B als Knopf unter „Bild und Ton“): J/L (10 s zurück/vor), `,`/`.` (Bild für Bild), `<`/`>` (Tempo), 0–9 (zu 0–90 % springen), A/B (Schleife).
 - ✗ **Bilder**: die Leertaste gedrückt halten zeigt das Original.
 - ✗ **Visualizer**: ein Klick wechselt zwischen Balken, Welle und Kreis.
-- ✗ **„Protokoll“**: was Sondra gerade tut, zum Nachlesen.
+- ✓ **„Protokoll“**: was Sondra gerade tut, zum Nachlesen (nativ seit 22.11.2026: Marke „Protokoll“ unten im Rack, die letzten 250 Zeilen dieses Laufs, nur im Speicher, „Leeren“; geschrieben von Sitzung, Ablegen, Öffnen, Drive, Geräten, Ordner, Umwandeln, Video, Bildern, Ton, Mischen, Zerschneiden, Mikrofon und Herunterladen).
 - ✓ **Sitzungsmenü**: „Weitere Datei öffnen“, „Alle n als ZIP speichern“ mit eigenem Namen, „Alles verwerfen“ und die Zeile „2,9 MB auf diesem Gerät, nichts davon gesendet“ (nativ seit 22.11.2026; die Dateien bleiben, wo sie liegen).
 
 **Merkliste**

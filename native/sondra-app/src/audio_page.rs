@@ -462,7 +462,10 @@ impl Shell {
                 let a = &mut shell.audio;
                 a.busy = None;
                 match answer {
-                    Ok(path) => a.made.push(path),
+                    Ok(path) => {
+                        crate::protocol::note("ton", format!("Geschrieben: {}", path.display()));
+                        a.made.push(path)
+                    }
                     Err(e) => a.error = Some(e),
                 }
                 cx.notify();

@@ -270,7 +270,10 @@ impl Shell {
                 let i = &mut shell.images;
                 i.working = false;
                 match answer {
-                    Ok(made) => i.made = made,
+                    Ok(made) => {
+                        crate::protocol::note("bilder", format!("{} Bild(er) geschrieben", made.len()));
+                        i.made = made
+                    }
                     Err(e) => i.error = Some(e),
                 }
                 cx.notify();
