@@ -511,3 +511,97 @@ pub fn bounce_pattern(slices: &[Slice], pattern: &Pattern, material: &Material, 
     };
     AudioData { channels: vec![fold(&bed.left), fold(&bed.right)], sample_rate: rate }
 }
+
+/* -- One pad as a file ------------------------------------------------------------------------ */
+
+/// How a pad is written (the website's „Export“ side of Zerschneiden).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PadExport {
+    /// „Blende an den Schnittkanten“, milliseconds at both ends (0–60; 4 on the website).
+    pub edge_fade_ms: f64,
+    /// „Auf −0,3 dBFS normalisieren“ — before the pad's own level, as on the website.
+    pub normalize: bool,
+    /// „Länge beim Transponieren halten“: a phase vocoder moves the pitch and keeps the length.
+    pub keep_length: bool,
+}
+
+impl Default for PadExport {
+    fn default() -> Self {
+        PadExport { edge_fade_ms: 4.0, normalize: false, keep_length: true }
+    }
+}
+
+/// One pad as it is written: its stretch (reversed, transposed), the edge fades, the normalisation, then its
+/// level, its own attack and release, its place in the stereo field. Stereo always.
+pub fn export_pad(audio: &AudioData, pad: &Slice, options: PadExport) -> AudioData {
+    use crate::effects::{copy_range, fade_range, Fade};
+    let rate = audio.sample_rate;
+    let sampled = matches!(pad.sound, SoundKind::Sample | SoundKind::Warm);
+    // The pitch moved first when the length is to be kept; the voice then plays the piece untransposed.
+    let (material, voice) = if sampled && options.keep_length && pad.semitones.abs() > 1e-6 {
+        let piece = crate::timestretch::pitch_shift(&copy_range(audio, pad.start, pad.end), pad.semitones, true, 2048);
+        let length = piece.seconds();
+        (piece, Slice { start: 0.0, end: length, semitones: 0.0, ..pad.clone() })
+    } else {
+        (audio.clone(), pad.clone())
+    };
+    let bare = Slice { gain_db: 0.0, attack_ms: 0.0, release_ms: 0.0, mode: PlayMode::OneShot, ..voice };
+    let natural = ((bare.end - bare.start) / 2f64.powf(bare.semitones / 12.0)).max(0.005);
+    let frames = (natural * f64::from(rate)).round().max(1.0) as usize;
+    let mut bed = Bed::new(rate, frames);
+    render_voice(&mut bed, &Material { audio: &material }, &bare, 0.0, None, 1.0, None);
+    let mut out = AudioData { channels: vec![bed.left, bed.right], sample_rate: rate };
+    let length = out.seconds();
+    let fade = (options.edge_fade_ms / 1000.0).min(length / 2.0);
+    if fade > 0.0 {
+        out = fade_range(&out, 0.0, fade, Fade::In);
+        out = fade_range(&out, length - fade, length, Fade::Out);
+    }
+    if options.normalize {
+        out = crate::edit::normalize_peak(&out, -0.3);
+    }
+    if pad.gain_db.abs() > 1e-9 {
+        let gain = db_to_gain(pad.gain_db) as f32;
+        for ch in out.channels.iter_mut() {
+            for s in ch.iter_mut() {
+                *s = (*s * gain).clamp(-1.0, 1.0);
+            }
+        }
+    }
+    let (attack, release) = ((pad.attack_ms / 1000.0).min(length), (pad.release_ms / 1000.0).min(length));
+    if attack > 0.0 {
+        out = fade_range(&out, 0.0, attack, Fade::In);
+    }
+    if release > 0.0 {
+        out = fade_range(&out, length - release, length, Fade::Out);
+    }
+    out
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+
+    fn tone(seconds: f64, rate: u32) -> AudioData {
+        let n = (seconds * f64::from(rate)) as usize;
+        AudioData { channels: vec![(0..n).map(|i| 0.4 * (i as f32 * 0.05).sin()).collect()], sample_rate: rate }
+    }
+
+    #[test]
+    fn a_pad_keeps_its_length_when_transposed_and_is_brought_to_minus_point_three() {
+        let audio = tone(2.0, 8000);
+        let mut pad = Slice::new("p1", 0.5, 1.5);
+        pad.semitones = 12.0;
+        let kept = export_pad(&audio, &pad, PadExport { normalize: true, ..PadExport::default() });
+        assert_eq!(kept.channels.len(), 2);
+        assert!((kept.seconds() - 1.0).abs() < 0.01, "length kept: {}", kept.seconds());
+        let peak = kept.channels.iter().flatten().fold(0f32, |m, s| m.max(s.abs()));
+        assert!((20.0 * f64::from(peak).log10() + 0.3).abs() < 0.05, "peak {peak}");
+        // Without keeping the length, an octave up is half as long.
+        let short = export_pad(&audio, &pad, PadExport { keep_length: false, ..PadExport::default() });
+        assert!((short.seconds() - 0.5).abs() < 0.01, "{}", short.seconds());
+        // The edge fade starts and ends in silence.
+        assert!(short.channels[0][0].abs() < 1e-4);
+        assert!(short.channels[0].last().unwrap().abs() < 0.02);
+    }
+}

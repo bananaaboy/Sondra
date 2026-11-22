@@ -154,13 +154,13 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ **Tastenkürzel** (Leertaste, Strg+X/C/V/Z)
 
 ### Zerschneiden (Pads und Pattern)
-- ✗ **Pattern-Plätze** („Aktuelles Pattern in den nächsten Slot kopieren“) und „Noten zurück in Step-Schritte“
+- ✓ **Pattern-Plätze A–D** mit „Aktuelles Pattern in den nächsten Platz kopieren“, **Song-Kette** (+A … +D, Block entfernen), Ausgabe 1×/2×/3×/4×/8×; „Noten zurück in Schritte“ (in der Klavierrolle)
 - ✓ **„Einstellungen des gewählten Pads auf alle übertragen“**
-- ✗ **Doppeltes / halbes Tempo**, „Das ganze Raster früher oder später“
-- ✗ **„Länge beim Transponieren halten“** (Phasenvocoder beim Export)
-- ◐ **Pad löschen (Entf)** (nativ seit 22.11.2026); „Ganze Datei als Pad 1“, „Am Zeiger teilen“, Doppelklick fehlen noch
-- ✗ **Auf −0,3 dBFS normalisieren** beim Export, „Blende an den Schnittkanten“
-- ✗ **Pattern „In die Sitzung“**
+- ✓ **Doppeltes / halbes Tempo** (Raster: Tempo-Pillen halb/erkannt/doppelt), **„Das ganze Raster früher oder später“** (−40 … +40 ms)
+- ✓ **„Länge beim Transponieren halten“** (Phasenvocoder beim Export, `pattern::export_pad`)
+- ✓ **Pad löschen (Entf)**, **„Ganze Datei als Pad 1“**, **„Am Zeiger teilen“** (Zeiger = letzter Klick in die Welle, beim Abspielen eines Pads die Stelle); Doppelklick fehlt
+- ✓ **Auf −0,3 dBFS normalisieren** beim Export, **„Blende an den Schnittkanten“** (0–60 ms), **„So hören, wie es exportiert wird“**
+- ✓ **Pattern/Song „In die Sitzung“**, Pad und alle Pads „In die Sitzung“
 - ✓ sechs Verfahren, Pads, Klavierrolle, Akkorde und Arpeggio zeichnen, MIDI-Controller, Choke, Gate, Swing, Beat als WAV und MIDI, CUE und Audacity-Marken
 
 ### Bilder

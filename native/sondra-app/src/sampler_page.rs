@@ -14,7 +14,7 @@ use sondra_a11y::{accessible, Role};
 use sondra_media::audio::{decode_file, write_wav_f32, AudioData};
 use sondra_media::chop::{plan_chop, ChopMethod, ChopSettings, Flux, PlanContext};
 use sondra_media::cue::{create_audacity_labels, create_cue_sheet, ExportSlice};
-use sondra_media::pattern::{bounce_pattern, pattern_to_midi, render_voice, starter_pattern, Bed, Material, Pattern, PlayMode, Slice, SoundKind};
+use sondra_media::pattern::{pattern_to_midi, render_voice, starter_pattern, Bed, Material, Pattern, PlayMode, Slice, SoundKind};
 use sondra_media::tempo::estimate_tempo;
 use sondra_media::Ffmpeg;
 use sondra_ui::{radius, NoticeKind, Ui};
@@ -51,6 +51,18 @@ pub struct SamplerState {
     ticking: bool,
     /// The piano roll of a pad, when one is open.
     pub roll: Option<crate::roll_ui::RollView>,
+    /// The four pattern places A–D: the one being edited is `pattern`, its place here is stale until it is left.
+    pub slots: Vec<Pattern>,
+    pub slot: usize,
+    /// The song chain (places in order) and whether it is what plays and is written.
+    pub chain: Vec<usize>,
+    pub song: bool,
+    /// How often the single pattern is written.
+    pub loops: usize,
+    pub export: sondra_media::pattern::PadExport,
+    pub heard_export: Option<Arc<AudioData>>,
+    /// The last place pressed on the waveform.
+    pub cursor: Option<f64>,
 }
 
 impl SamplerState {
@@ -79,6 +91,14 @@ impl SamplerState {
             cut: None,
             ticking: false,
             roll: None,
+            slots: vec![Pattern::new(16, 120.0); 4],
+            slot: 0,
+            chain: vec![0],
+            song: false,
+            loops: 1,
+            export: sondra_media::pattern::PadExport::default(),
+            heard_export: None,
+            cursor: None,
         }
     }
 }
@@ -263,7 +283,7 @@ impl Shell {
     }
 
     /// A new pad id no pad has yet.
-    fn sampler_new_id(&self) -> String {
+    pub(crate) fn sampler_new_id(&self) -> String {
         let n = self.sampler.pads.iter().filter_map(|p| p.id.trim_start_matches('p').parse::<usize>().ok()).max().unwrap_or(0) + 1;
         format!("p{n}")
     }
@@ -374,7 +394,8 @@ impl Shell {
         cx.notify();
     }
 
-    fn sampler_stop(&mut self) -> bool {
+    pub(crate) fn sampler_stop(&mut self) -> bool {
+        self.sampler.heard_export = None;
         let voices = !self.sampler.voices.is_empty();
         self.sampler.voices.clear();
         self.sampler.player.take().is_some() || voices
@@ -443,10 +464,12 @@ impl Shell {
         }
         let Some(audio) = self.sampler.audio.clone() else { return };
         let (pads, pattern, choke) = (self.sampler.pads.clone(), self.sampler.pattern.clone(), self.sampler.choke);
+        let (patterns, chain, song) = (self.sampler_patterns(), self.sampler.chain.clone(), self.sampler.song);
         self.sampler.busy = Some("Rechnet den Beat …");
         Self::in_background(
             cx,
-            move || bounce_pattern(&pads, &pattern, &Material { audio: &audio }, 2, choke),
+            // The chain once through when the song is on; the pattern twice otherwise.
+            move || crate::sampler_more::bounce_output(&pads, &patterns, &chain, song, &pattern, 2, &audio, choke),
             |shell, heard, cx| {
                 shell.sampler.busy = None;
                 shell.sampler.player = Some(ClipPlayer::start(&heard, 0.0, heard.seconds()));
@@ -457,7 +480,7 @@ impl Shell {
         cx.notify();
     }
 
-    fn sampler_ticker(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn sampler_ticker(&mut self, cx: &mut Context<Self>) {
         if self.sampler.ticking {
             return;
         }
@@ -483,11 +506,11 @@ impl Shell {
         .detach();
     }
 
-    fn sampler_stem(&self) -> String {
+    pub(crate) fn sampler_stem(&self) -> String {
         self.sampler.path.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Zerschnitten".into())
     }
 
-    fn sampler_folder(&self) -> PathBuf {
+    pub(crate) fn sampler_folder(&self) -> PathBuf {
         self.sampler.path.as_ref().and_then(|p| p.parent()).map(PathBuf::from).unwrap_or_else(crate::store::downloads_dir)
     }
 
@@ -509,16 +532,12 @@ impl Shell {
     /// Every pad as its own WAV, with its pitch, level, pan and fades, in a folder beside the file.
     pub fn sampler_export_pads(&mut self, cx: &mut Context<Self>) {
         let Some(audio) = self.sampler.audio.clone() else { return };
-        let (pads, dir) = (self.sampler.pads.clone(), self.sampler_folder().join(format!("{} (Pads)", self.sampler_stem())));
+        let (pads, dir, options) = (self.sampler.pads.clone(), self.sampler_folder().join(format!("{} (Pads)", self.sampler_stem())), self.sampler.export);
         self.sampler_write(cx, move || {
             std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
             let mut made = Vec::new();
             for (i, pad) in pads.iter().enumerate() {
-                let rate = audio.sample_rate;
-                let length = ((pad.end - pad.start) / 2f64.powf(pad.semitones / 12.0)).max(0.05) + 0.05;
-                let mut bed = Bed::new(rate, (length * f64::from(rate)).ceil() as usize);
-                render_voice(&mut bed, &Material { audio: &audio }, &Slice { mode: PlayMode::OneShot, ..pad.clone() }, 0.0, None, 1.0, None);
-                let out = AudioData { channels: vec![bed.left, bed.right], sample_rate: rate };
+                let out = sondra_media::pattern::export_pad(&audio, pad, options);
                 let path = dir.join(format!("Pad {:02}.wav", i + 1));
                 write_wav_f32(&path, &out).map_err(|e| e.to_string())?;
                 made.push(path);
@@ -528,16 +547,16 @@ impl Shell {
     }
 
     pub fn sampler_export_beat(&mut self, midi: bool, cx: &mut Context<Self>) {
-        let Some(audio) = self.sampler.audio.clone() else { return };
-        let (pads, pattern, choke) = (self.sampler.pads.clone(), self.sampler.pattern.clone(), self.sampler.choke);
+        let Some(render) = self.sampler_output_audio() else { return };
+        let (pads, pattern, loops) = (self.sampler.pads.clone(), self.sampler.pattern.clone(), self.sampler.loops);
         let (dir, stem) = (self.sampler_folder(), self.sampler_stem());
         self.sampler_write(cx, move || {
             if midi {
                 let path = sondra_media::run::unique_path(&dir, &format!("{stem} (Beat)"), "mid");
-                std::fs::write(&path, pattern_to_midi(&pads, &pattern, 1)).map_err(|e| e.to_string())?;
+                std::fs::write(&path, pattern_to_midi(&pads, &pattern, loops)).map_err(|e| e.to_string())?;
                 Ok(vec![path])
             } else {
-                let bounced = bounce_pattern(&pads, &pattern, &Material { audio: &audio }, 1, choke);
+                let bounced = render();
                 let path = sondra_media::run::unique_path(&dir, &format!("{stem} (Beat)"), "wav");
                 write_wav_f32(&path, &bounced).map_err(|e| e.to_string())?;
                 Ok(vec![path])
@@ -585,9 +604,11 @@ impl Shell {
             self.sampler.cut = Some(grab);
             return;
         }
+        self.sampler.cursor = Some(at);
         if let Some(i) = self.sampler.pads.iter().position(|p| at >= p.start && at < p.end) {
             self.sampler_select(i, cx);
         }
+        cx.notify();
     }
 
     /// The pointer moves with a cut held: the pads on both sides follow.
@@ -690,6 +711,9 @@ impl Shell {
             }
             columns = columns.child(cell);
         }
+        if let Some(at) = self.sampler_cursor() {
+            columns = columns.child(div().absolute().top_0().bottom_0().w(px(1.)).left(gpui::relative((at / total).clamp(0.0, 1.0) as f32)).bg(c.stage_ink));
+        }
         let (press, drag, release) = (me.clone(), me.clone(), me.clone());
         let stage = div()
             .id("zerschneiden-welle")
@@ -711,6 +735,18 @@ impl Shell {
             .on_mouse_up_out(MouseButton::Left, move |_, _, app| release.update(app, |shell, cx| shell.sampler_release(cx)))
             .child(columns);
         page = page.child(accessible("zerschneiden-welle", Role::Group, stage).label("Wellenform mit Schnitten").value(format!("{} Pads", s.pads.len())));
+        {
+            let (split, whole) = (me.clone(), me.clone());
+            let mut cuts = div().flex().flex_wrap().items_center().gap(px(8.));
+            cuts = cuts
+                .child(ui.button("am-zeiger-teilen", "Am Zeiger teilen").small().disabled(busy).accessible_name("Am Zeiger teilen (ohne Zeiger in der Mitte)").on_click(move |_, app| split.update(app, |shell, cx| shell.sampler_split_at_cursor(cx))))
+                .child(ui.button("ganze-datei-pad", "Ganze Datei als Pad 1").small().ghost().disabled(busy).on_click(move |_, app| whole.update(app, |shell, cx| shell.sampler_whole_file_pad(cx))))
+                .child(ui.hint("Ein Klick in die Welle setzt den Zeiger und wählt das Pad darunter; einen Schnitt ziehen Sie an seiner Kante."));
+            if let Some(said) = &s.said {
+                cuts = cuts.child(ui.value(said.clone()));
+            }
+            page = page.child(cuts);
+        }
 
         // How to cut.
         let mut methods = div().flex().flex_wrap().gap(px(6.));
@@ -742,6 +778,7 @@ impl Shell {
                 tempos.dedup();
                 plan = plan
                     .child(chips("Tempo", "tempo", tempos.iter().map(|v| (v.round(), format!("{} BPM", v.round()))).collect(), st.bpm.round(), |c, v| c.bpm = v))
+                    .child(chips("Raster verschieben (das ganze Raster früher oder später)", "verschieben", [-40.0, -20.0, -10.0, 0.0, 10.0, 20.0, 40.0].iter().map(|v| (*v, if *v > 0.0 { format!("+{v} ms") } else { format!("{} ms", db(*v).replace(",0", "")) })).collect(), st.grid_offset_ms, |c, v| c.grid_offset_ms = v))
                     .child(chips("Länge eines Stücks in Schlägen", "schlaege", [(0.25, "¼"), (0.5, "½"), (1.0, "1"), (2.0, "2"), (4.0, "4")].iter().map(|(v, l)| (*v, l.to_string())).collect(), st.beats_per_slice, |c, v| c.beats_per_slice = v));
             }
             ChopMethod::Even => {
@@ -854,6 +891,8 @@ impl Shell {
             );
         }
 
+        page = page.child(self.sampler_export_block(&ui, cx));
+
         // The step grid.
         let pattern = &s.pattern;
         let mut grid = div().flex().flex_col().gap(px(6.));
@@ -922,7 +961,8 @@ impl Shell {
             let me = me.clone();
             play_row = play_row.child(ui.button("beat-leeren", "Raster leeren").disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.sampler_pattern(|p| p.cells.clear(), cx))));
         }
-        page = page.child(div().flex().flex_col().gap(px(12.)).child(ui.subheading("Beat")).child(bpm_chips).child(options).child(grid).child(play_row));
+        let arrangement = self.sampler_arrangement(&ui, cx);
+        page = page.child(div().flex().flex_col().gap(px(12.)).child(ui.subheading("Beat")).child(bpm_chips).child(options).child(grid).child(play_row).child(arrangement));
         if let Some(roll) = self.roll_editor(ui, cx) {
             page = page.child(roll);
         }

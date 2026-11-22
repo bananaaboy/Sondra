@@ -84,7 +84,7 @@ impl Window<'_> {
         for _ in 0..300 {
             self.cx.run_until_parked();
             self.draw();
-            if !self.said("Schreibt") && !self.said("Rechnet") {
+            if !self.said("Schreibt") && !self.said("Rechnet") && !self.said("Rendert") {
                 return;
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
@@ -452,4 +452,96 @@ fn a_pad_is_halved_joined_nudged_copied_and_deleted(cx: &mut TestAppContext) {
     // Gone.
     w.press(Role::Button, "Pad löschen");
     assert_eq!(pads(&w).len(), before.len() - 1);
+}
+
+#[gpui::test]
+fn pads_are_written_as_heard_into_the_session_and_cut_at_the_pointer(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Break.wav"));
+    let pads = |w: &Window| w.shell.read_with(w.cx, |s, _| s.sampler_pads().to_vec());
+    // How pads are written: the blend, the normalisation, the length kept when transposed.
+    w.press(Role::Button, "Blende an den Schnittkanten 20 ms");
+    w.press(Role::Button, "Auf −0,3 dBFS normalisieren");
+    let options = w.shell.read_with(w.cx, |s, _| s.sampler_export_options());
+    assert!(options.normalize && options.keep_length && (options.edge_fade_ms - 20.0).abs() < 1e-9);
+    w.press(Role::Button, "Tonhöhe +12");
+    w.press(Role::Button, "So hören, wie es exportiert wird");
+    w.settle();
+    let heard = w.shell.read_with(w.cx, |s, _| s.sampler_heard_export()).expect("rendered");
+    let pad = pads(&w)[0].clone();
+    assert!((heard.seconds() - (pad.end - pad.start)).abs() < 0.01, "an octave up keeps its length: {} against {}", heard.seconds(), pad.end - pad.start);
+    let peak = heard.channels.iter().flatten().fold(0f32, |m, v| m.max(v.abs()));
+    assert!((20.0 * f64::from(peak).log10() + 0.3).abs() < 0.1, "{peak}");
+    w.press(Role::Button, "Anhalten");
+
+    // Into the session: the chosen pad, then all.
+    w.press(Role::Button, "Pad 1 in die Sitzung");
+    w.settle();
+    let session = w.shell.read_with(w.cx, |s, _| s.session_files());
+    assert_eq!(session.len(), 1);
+    assert!(session[0].ends_with("Break (Pads)/Pad 01.wav"), "{session:?}");
+    let count = pads(&w).len();
+    w.press(Role::Button, &format!("Alle {count} Pads in die Sitzung"));
+    w.settle();
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.session_files().len()), 1 + count);
+
+    // The pointer: pressed on the waveform, the pad under it is cut there.
+    let b = w.shell.read_with(w.cx, |s, _| s.sampler_bounds());
+    let x = b.origin.x + b.size.width * 0.06;
+    w.cx.simulate_mouse_down(gpui::point(x, b.origin.y + px(20.)), MouseButton::Left, Modifiers::default());
+    w.cx.simulate_mouse_up(gpui::point(x, b.origin.y + px(20.)), MouseButton::Left, Modifiers::default());
+    w.draw();
+    let at = w.shell.read_with(w.cx, |s, _| s.sampler_cursor()).expect("a pointer");
+    assert!((at - 0.12).abs() < 0.02, "{at}");
+    w.press(Role::Button, "Am Zeiger teilen (ohne Zeiger in der Mitte)");
+    let after = pads(&w);
+    assert_eq!(after.len(), count + 1);
+    assert!(after.iter().any(|p| (p.start - at).abs() < 0.002), "a pad begins at the pointer");
+    assert!(w.said("Schnitt bei"));
+    // The whole file as one pad.
+    w.press(Role::Button, "Ganze Datei als Pad 1");
+    let one = pads(&w);
+    assert_eq!(one.len(), 1);
+    assert!(one[0].start == 0.0 && (one[0].end - 2.0).abs() < 1e-6);
+    assert!(w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().cells.keys().all(|k| *k == one[0].id)));
+}
+
+#[gpui::test]
+fn four_pattern_places_a_song_chain_and_the_song_into_the_session(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Break.wav"));
+    w.press(Role::Button, "Start-Beat legen");
+    let a = w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().clone());
+    // Copied into B and gone there; B changed, A stays.
+    w.press(Role::Button, "Aktuelles Pattern in den nächsten Platz kopieren");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_slot()), 1);
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().clone()), a);
+    w.press(Role::Button, "Raster leeren");
+    w.press(Role::Button, "Pad 1 Schritt 1");
+    w.press(Role::Button, "Pattern A");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().clone()), a);
+    w.press(Role::Button, "Pattern B");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_pattern_ref().cells.values().filter(|c| c.iter().any(|v| *v)).count()), 1);
+    // The chain: A, B, A; a block taken out again.
+    w.press(Role::Button, "Pattern B an die Song-Kette anhängen");
+    w.press(Role::Button, "Pattern A an die Song-Kette anhängen");
+    w.press(Role::Button, "Pattern A an die Song-Kette anhängen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_chain().to_vec()), vec![0, 1, 0, 0]);
+    w.press(Role::Button, "Block 4: Pattern A entfernen");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.sampler_chain().to_vec()), vec![0, 1, 0]);
+    assert!(w.said("Kette: A → B → A"));
+    // The song into the session: three bars long.
+    w.press(Role::Button, "Song in die Sitzung");
+    w.settle();
+    let session = w.shell.read_with(w.cx, |s, _| s.session_files());
+    assert_eq!(session.len(), 1, "{:?}", w.labels());
+    assert!(session[0].file_name().unwrap().to_string_lossy().starts_with("Break-song-"), "{session:?}");
+    // A single pattern, twice through.
+    w.press(Role::Button, "Einzelnes Pattern (B)");
+    w.press(Role::Button, "2× durchspielen");
+    w.press(Role::Button, "Pattern in die Sitzung");
+    w.settle();
+    let session = w.shell.read_with(w.cx, |s, _| s.session_files());
+    assert_eq!(session.len(), 2);
+    assert!(session[1].file_name().unwrap().to_string_lossy().starts_with("Break-pattern-B-"), "{session:?}");
 }
