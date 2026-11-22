@@ -104,8 +104,6 @@ pub struct FolderState {
     pub session: Session,
     /// The folder of the last time, offered and never read on its own.
     pub remembered: Option<PathBuf>,
-    /// The Merkliste read the remembered folder once by itself (names, sizes, dates — nothing more).
-    pub read_for_list: bool,
     /// When this folder was last looked at before now, for „Neu“ later.
     pub last_visit: Option<f64>,
     /// Only what came since the visit before this one.
@@ -181,7 +179,6 @@ impl FolderState {
             memory: None,
             session: Session::default(),
             remembered: None,
-            read_for_list: false,
             filing: None,
             last_visit: None,
             only_new: false,
@@ -260,19 +257,6 @@ impl Shell {
     }
 
     /// Asks for a folder.
-    /// Opening the Merkliste reads the folder of the last time once, so „Folge n abspielen“ and the pill know what
-    /// lies there — as the website does while the browser still holds the permission.
-    pub(crate) fn folder_read_for_list(&mut self, cx: &mut Context<Self>) {
-        let f = &mut self.folder;
-        if f.read_for_list || f.scan.is_some() || f.reading {
-            return;
-        }
-        f.read_for_list = true;
-        if let Some(path) = f.remembered.clone() {
-            self.open_folder(path, cx);
-        }
-    }
-
     pub(crate) fn choose_folder(&mut self, cx: &mut Context<Self>) {
         let answer = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: None });
         cx.spawn(async move |this, cx| {

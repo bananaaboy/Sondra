@@ -511,7 +511,7 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   Pads übereinander, **MIDI-Controller** (`sondra-midi`, winmm), „Akkorde/Arpeggio zeichnen“, „Lokale KI“ (Rauschprofil
   von selbst), das Thema bleibt und folgt dem System, Download anhalten, auf anderem Gerät abspielen, `sondra #umwandeln`.
   **Neu:** ein eigenes `.onnx`-Modell für „Spuren trennen“ (`sondra-onnx`, ONNX Runtime über `ort` 2.0.0-rc.15, ins Programm gelinkt; die Laufzeit wird beim Bauen von pyke.io geholt). **Noch nicht:** das Store-Paket (MSIX) und Arm64 werden in der CI gebaut (Jobs „store“ und „arm64“, nur zur Auskunft).
-  Auch noch nicht: ein eigenes Fenster für das Handy. **Setup**
+  Das Handy steht auf Wunsch in einem eigenen Fenster (22.11.2026, `phone_window.rs`). **Setup**
   (`native/installer/sondra.nsi`, NSIS, für alle Benutzer, FFmpeg daneben, Apps & Features, `.sondra-liste`, Öffnen mit)
   installiert, startet mit einem Film und deinstalliert sich in der CI (Lauf 76 grün, 19.11.2026), mit Symbol in der .exe.
   **Player nativ:** Entzerrer (fünf Bänder, Voreinstellungen), Karaoke, Qualität, Visualizer (Balken, Welle, Ring) und

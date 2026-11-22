@@ -203,7 +203,10 @@ fn the_timeline_moves_the_place_and_both_ends_of_what_stays(cx: &mut TestAppCont
     assert!(ops.end > ops.start, "{} {}", ops.start, ops.end);
     w.settle(10);
 
-    // „Vorschau abspielen“ plays what stays on the stage; „Ton im Vorhören“ says whether it is heard.
+    // „Vorschau abspielen“ plays what stays on the stage; „Ton im Vorhören“ says whether it is heard. (The film is
+    // taken again: what stays above is next to nothing, and a preview of it is over at once.)
+    w.shell.update(w.cx, |shell, cx| shell.video_take(film.clone(), cx));
+    w.settle(20);
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (false, true));
     w.press(Role::Button, "Ton im Vorhören");
     assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.video_preview_now()), (false, false), "the switch, before it plays");
