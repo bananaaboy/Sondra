@@ -1398,12 +1398,22 @@ impl Shell {
         });
         {
             let me = me.clone();
+            let reading = self.folder.reading && self.folder.scan.is_none();
             let label = match &in_folder {
                 Some((name, n)) if *n > 0 => format!("{name} · {n} {} darin", if *n == 1 { "Serie" } else { "Serien" }),
                 Some((name, _)) => format!("{name} · keine Serie darin"),
+                None if reading => format!("„{}“ wird gelesen …", self.folder.root.as_ref().and_then(|p| p.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()),
                 None => "Ordner mit Folgen wählen".to_string(),
             };
-            row = row.child(ui.chip("merk-ordner", label, in_folder.as_ref().is_some_and(|(_, n)| *n > 0)).on_click(move |_, app| me.update(app, |shell, cx| shell.go(crate::nav::Panel::Folder, cx))));
+            // With a folder the pill goes to it; without one it asks for one right here.
+            let has = in_folder.is_some();
+            row = row.child(ui.chip("merk-ordner", label, in_folder.as_ref().is_some_and(|(_, n)| *n > 0)).on_click(move |_, app| me.update(app, |shell, cx| {
+                if has {
+                    shell.go(crate::nav::Panel::Folder, cx)
+                } else if !shell.folder.reading {
+                    shell.choose_folder(cx)
+                }
+            })));
         }
         if self.drive.as_ref().is_some_and(|d| d.configured) && !in_folder.as_ref().is_some_and(|(n, _)| n == "Google Drive") {
             let me = me.clone();

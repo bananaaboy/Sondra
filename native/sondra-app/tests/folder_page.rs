@@ -213,6 +213,15 @@ fn what_was_set_on_a_folder_is_kept_and_the_folder_is_offered_the_next_time(cx: 
     assert_eq!(w.tree().find(Role::Button, "Mit Unterordnern").unwrap().toggled, Some(true));
     assert_eq!(w.tree().find(Role::Button, "Ordnung: Grösse, aufsteigend").unwrap().toggled, Some(true));
     assert_eq!(w.files(), ["Frieren S01E10.mkv", "Frieren S01E02.mkv", "Frieren S01E01.mkv", "film.mp4"]);
+    // The Merkliste reads the folder of the last time once by itself (names and sizes), so it knows what lies there.
+    let mut w = open(cx, tmp.path());
+    assert!(w.files().is_empty());
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Merkliste, cx));
+    w.cx.run_until_parked();
+    w.shell.update(w.cx, |shell, cx| shell.go(Panel::Folder, cx));
+    w.cx.run_until_parked();
+    w.draw();
+    assert_eq!(w.files().len(), 4, "the list's visit read it");
 }
 
 fn focused(tree: &Snapshot) -> String {

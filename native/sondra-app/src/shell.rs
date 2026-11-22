@@ -437,6 +437,9 @@ impl Shell {
             if panel == Panel::Downloader {
                 self.offer_clipboard(cx);
             }
+            if panel == Panel::Merkliste {
+                self.folder_read_for_list(cx);
+            }
         }
         cx.notify();
     }

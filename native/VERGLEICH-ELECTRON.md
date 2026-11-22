@@ -27,7 +27,7 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | --- | --- | --- |
 | ✓ | **Filter nach Tags** (Pillen je Tag) | Die Logik ist da (`sondra-merk::view`), einen Knopf gibt es nicht |
 | ✓ | **„Nur offene Folgen“**: nur Serien zeigen, bei denen noch etwas zu schauen ist | ⚙ nur Logik |
-| ◐ | **Ordner-Pille über der Liste** („„Anime“ · 3 Serien darin“ / „Ordner mit Folgen wählen“) und „Google Drive einbeziehen“ | Die Merkliste weiss vom Ordner nur, was die Seite „Ordner“ zuletzt gelesen hat |
+| ✓ | **Ordner-Pille über der Liste** („„Anime“ · 3 Serien darin“ / „Ordner mit Folgen wählen“) und „Google Drive einbeziehen“ | Nativ seit 22.11.2026: die Merkliste liest den gemerkten Ordner beim ersten Öffnen einmal selbst (nur Namen, Grössen, Daten), die Pille sagt „… wird gelesen“, und ohne Ordner wählt sie gleich einen |
 | ✓ | **▶ auf der Kachel** (die nächste Folge direkt aus dem Ordner) | Nativ seit 22.11.2026 |
 | ✓ | **Status des Abgleichs unter der Liste**: „Nur auf diesem Gerät gespeichert“ / „Über Google Drive abgeglichen“ / „Gleicht mit Anytype ab …“ | Die Fenster für Drive und Anytype sagen es, die Liste selbst nicht |
 
