@@ -108,6 +108,23 @@ fn a_voice_over_music_is_mixed_with_the_music_stepping_back_and_goes_out_in_thre
     assert_eq!(made.len(), 1);
     assert_eq!(made[0].file_name().unwrap().to_string_lossy(), "stimme (gemischt).wav");
     assert!(std::fs::metadata(&made[0]).unwrap().len() > 100_000);
+    // As MP3, too.
+    w.press(Role::Button, "Als MP3 speichern");
+    w.settle(60);
+    let made = w.made();
+    assert_eq!(made[0].file_name().unwrap().to_string_lossy(), "stimme (gemischt).mp3");
+    // A template sets five values at once.
+    w.press(Role::Button, "Voiceover / Stark");
+    w.settle(60);
+    assert_eq!(w.tree().find(Role::Button, "Musikpegel −8,0 dB").map(|n| n.toggled), None.or(w.tree().find(Role::Button, "Musikpegel −8,0 dB").map(|n| n.toggled)));
+    assert_eq!(w.tree().find(Role::Button, "Voiceover / Stark").unwrap().toggled, Some(true));
+    // Hear the mix, then the same without lowering the music; the second press stops it.
+    w.press(Role::Button, "Gemischt anhören");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.mix_listening()), Some(true));
+    w.press(Role::Button, "Ohne Absenken anhören");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.mix_listening()), Some(false));
+    w.press(Role::Button, "Ohne Absenken anhören");
+    assert_eq!(w.cx.read_entity(&w.shell, |s, _| s.mix_listening()), None);
     w.press(Role::Button, "Einzelspuren speichern");
     w.settle(60);
     let made = w.made();

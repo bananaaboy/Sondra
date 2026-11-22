@@ -44,11 +44,13 @@ pub struct MixState {
     generation: u64,
     /// Whether the voice file is a video (then the mix can go under its picture).
     pub video: bool,
+    /// What plays: the mix (`true`) or the same without lowering the music, to compare.
+    pub listening: Option<(crate::clip_player::ClipPlayer, bool)>,
 }
 
 impl MixState {
     pub fn new() -> MixState {
-        MixState { voice: None, music: None, settings: DuckSettings::default(), decoded: None, mixed: None, reading: false, mixing: false, writing: false, made: Vec::new(), error: None, generation: 0, video: false }
+        MixState { voice: None, music: None, settings: DuckSettings::default(), decoded: None, mixed: None, reading: false, mixing: false, writing: false, made: Vec::new(), error: None, generation: 0, video: false, listening: None }
     }
 }
 
@@ -163,7 +165,32 @@ impl Shell {
         cx.notify();
     }
 
+    /// Plays the mix, or (`mixed` false) the same without lowering the music — or stops what plays.
+    pub fn mix_listen(&mut self, mixed: bool, cx: &mut Context<Self>) {
+        let was = self.mix.listening.take().map(|(_, m)| m);
+        if was == Some(mixed) {
+            cx.notify();
+            return;
+        }
+        let audio = if mixed {
+            self.mix.mixed.as_ref().map(|m| m.audio.clone())
+        } else {
+            self.mix.decoded.as_ref().map(|d| mix_with_ducking(&d.voice, &d.music, &DuckSettings { duck_db: 0.0, ..self.mix.settings }).audio)
+        };
+        if let Some(audio) = audio {
+            let to = audio.seconds();
+            self.mix.listening = Some((crate::clip_player::ClipPlayer::start(&audio, 0.0, to), mixed));
+        }
+        cx.notify();
+    }
+
+    /// For tests: what plays — `Some(true)` the mix, `Some(false)` the comparison.
+    pub fn mix_listening(&self) -> Option<bool> {
+        self.mix.listening.as_ref().map(|(_, m)| *m)
+    }
+
     fn mix_patch(&mut self, change: impl FnOnce(&mut DuckSettings), cx: &mut Context<Self>) {
+        self.mix.listening = None;
         change(&mut self.mix.settings);
         self.mix.made.clear();
         self.mix_run(cx);
@@ -202,6 +229,14 @@ impl Shell {
                     Write::Wav => {
                         let audio = mixed_audio.ok_or("Es ist noch nichts gemischt.".to_string())?;
                         Ok(vec![wav(&audio, &dir, &format!("{stem} (gemischt)"))?])
+                    }
+                    Write::Mp3 => {
+                        let audio = mixed_audio.ok_or("Es ist noch nichts gemischt.".to_string())?;
+                        let temp = dir.join(format!(".sondra-mischen-mp3-{}.wav", std::process::id()));
+                        write_wav_f32(&temp, &audio).map_err(|e| e.to_string())?;
+                        let result = sondra_media::run::convert_file(&ff, &temp, &dir, &format!("{stem} (gemischt)"), &ConvertSettings { format_id: "mp3".into(), use_variable_bitrate: false, audio_bitrate_kbps: 320, ..ConvertSettings::default() }, &Cancel::new(), &mut |_| {});
+                        let _ = std::fs::remove_file(&temp);
+                        Ok(vec![result.map(|o| o.path).map_err(|e| e.message)?])
                     }
                     Write::Stems => {
                         let audio = mixed_audio.ok_or("Es ist noch nichts gemischt.".to_string())?;
@@ -302,10 +337,29 @@ impl Shell {
             let on = s.loop_music;
             ui.chip("musik-wiederholen", "Musik wiederholen", on).on_click(move |_, app| me.update(app, |shell, cx| shell.mix_patch(move |d| d.loop_music = !on, cx)))
         };
+        // The website's templates: four ways of lowering the music under a voice.
+        let mut presets = div().flex().flex_wrap().gap(px(6.));
+        for (label, music, duck, sens, attack, release) in [
+            ("Podcast / Talk", -14.0, 16.0, 0.5, 120.0, 600.0),
+            ("Radio / Moderation", -10.0, 14.0, 0.6, 80.0, 400.0),
+            ("Hintergrund / Dezent", -18.0, 8.0, 0.4, 200.0, 800.0),
+            ("Voiceover / Stark", -8.0, 22.0, 0.7, 60.0, 350.0),
+        ] {
+            let me = me.clone();
+            let on = (s.music_db - music).abs() < 1e-9 && (s.duck_db - duck).abs() < 1e-9 && (s.sensitivity - sens).abs() < 1e-9 && (s.attack_ms - attack).abs() < 1e-9 && (s.release_ms - release).abs() < 1e-9;
+            presets = presets.child(ui.chip(format!("mix-vorlage-{label}"), label, on).on_click(move |_, app| me.update(app, |shell, cx| shell.mix_patch(move |d| {
+                d.music_db = music;
+                d.duck_db = duck;
+                d.sensitivity = sens;
+                d.attack_ms = attack;
+                d.release_ms = release;
+            }, cx))));
+        }
         let settings_col = div()
             .flex()
             .flex_col()
             .gap(px(14.))
+            .child(div().flex().flex_col().gap(px(8.)).child(ui.title("Vorlage")).child(presets))
             .child(steps("Musikpegel", "musikpegel", dbs(&[-24.0, -18.0, -14.0, -10.0, -6.0, 0.0]), s.music_db, |d, v| d.music_db = v))
             .child(steps("Beim Sprechen leiser um", "absenkung", [6.0, 9.0, 12.0, 15.0, 18.0, 24.0].iter().map(|v| (*v, db(*v).replace('−', ""))).collect(), s.duck_db, |d, v| d.duck_db = v))
             .child(steps("Sprach-Empfindlichkeit", "empfindlichkeit", [0.25f64, 0.5, 0.75, 1.0].iter().map(|v| (*v, format!("{} %", (v * 100.0).round() as i64))).collect(), s.sensitivity, |d, v| d.sensitivity = v))
@@ -334,10 +388,27 @@ impl Shell {
                 .child(row("Übergänge", format!("leiser in {} ms, zurück in {} ms", s.attack_ms, s.release_ms)))
                 .child(row("Spitze", if r.trim_db > 0.0 { format!("−1,0 dBFS · um {} zurückgenommen", db(r.trim_db)) } else { format!("{}FS", db(r.peak_db)) }));
             let busy = m.writing || m.mixing;
+            // Hear it, and hear the difference: „Gemischt“ against „Ohne Absenken“.
+            let now = m.listening.as_ref().map(|(_, x)| *x);
+            let (hear, flat) = (me.clone(), me.clone());
+            result = result.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(ui.hint("Anhören:"))
+                    .child(ui.chip("anhoeren-gemischt", if now == Some(true) { "Gemischt · Anhalten" } else { "Gemischt" }, now == Some(true)).accessible_name("Gemischt anhören").on_click(move |_, app| hear.update(app, |shell, cx| shell.mix_listen(true, cx))))
+                    .child(ui.chip("anhoeren-flach", if now == Some(false) { "Ohne Absenken · Anhalten" } else { "Ohne Absenken" }, now == Some(false)).accessible_name("Ohne Absenken anhören").on_click(move |_, app| flat.update(app, |shell, cx| shell.mix_listen(false, cx)))),
+            );
             let mut buttons = div().flex().flex_wrap().gap(px(8.));
             {
                 let me = me.clone();
                 buttons = buttons.child(ui.button("mischung-speichern", if m.writing { "Schreibt …" } else { "Als WAV speichern" }).primary().disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.mix_save(cx))));
+            }
+            {
+                let me = me.clone();
+                buttons = buttons.child(ui.button("mischung-mp3", "Als MP3 speichern").disabled(busy).on_click(move |_, app| me.update(app, |shell, cx| shell.mix_write(Write::Mp3, cx))));
             }
             if m.video {
                 let me = me.clone();
@@ -390,6 +461,7 @@ impl Shell {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Write {
     Wav,
+    Mp3,
     Stems,
     UnderVideo,
 }

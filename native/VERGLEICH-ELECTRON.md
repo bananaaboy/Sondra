@@ -177,9 +177,9 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ◐ Die Ziele (Streaming −14, Podcast −16, Rundfunk −23, Club −9) sind da
 
 ### Mischen
-- ✗ **Voreinstellungen** (Podcast/Talk, Radio/Moderation, Voiceover/Stark, Hintergrund/Dezent, Ohne Absenken)
-- ✗ **Weiche Blenden** am Anfang und Ende
-- ✗ **Als MP3** speichern (Rust: WAV und Video)
+- ✓ **Voreinstellungen** (Podcast/Talk, Radio/Moderation, Voiceover/Stark, Hintergrund/Dezent, Ohne Absenken)
+- ✓ **Weiche Blenden** (Einschwing- und Rückkehrzeit, nativ „Wird leiser in“/„Kommt zurück in“)
+- ✓ **Als MP3** speichern (Rust: WAV und Video)
 - ✓ Ducking, Attack/Release, Vorlauf, Musik wiederholen, Einzelspuren, unter das Video legen
 
 ### Spuren trennen
@@ -278,8 +278,8 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✗ **Verlauf als Liste**, jeder Schritt mit Strg+Z zurückzunehmen.
 
 **Mischen (mit Datei)**
-- ✗ **Vorlagen**: Podcast / Talk, Radio / Moderation, Hintergrund / Dezent, Voiceover / Stark.
-- ✗ **Vergleich** „Gemischt“ ↔ „Ohne Absenken“.
+- ✓ **Vorlagen**: Podcast / Talk, Radio / Moderation, Hintergrund / Dezent, Voiceover / Stark.
+- ✓ **Vergleich** „Gemischt“ ↔ „Ohne Absenken“.
 - ✗ **„In die Sitzung übernehmen“**.
 - ✗ **Name des ZIP** für die Einzelspuren.
 
