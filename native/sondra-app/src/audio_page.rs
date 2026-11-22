@@ -58,11 +58,18 @@ pub struct AudioState {
     pub looping: bool,
     /// „Tempo klopfen“: the last taps.
     pub taps: Vec<std::time::Instant>,
+    /// The settings of „Klang“: three bands in dB, the two cut-offs in Hz, the compressor.
+    pub eq: (f64, f64, f64),
+    pub highpass: f64,
+    pub lowpass: f64,
+    pub comp: (f64, f64),
+    /// Where the playback began, in seconds of the take (the playhead is this plus the player's time).
+    pub play_from: f64,
 }
 
 impl AudioState {
     pub fn new() -> AudioState {
-        AudioState { path: None, editor: None, selection: None, tool: Tool::Cut, busy: None, error: None, said: None, player: None, made: Vec::new(), bounds: Rc::new(Cell::new(Bounds::default())), anchor: None, ticking: false, bits: sondra_media::audio::WavBits::Pcm16, view: None, looping: false, taps: Vec::new() }
+        AudioState { path: None, editor: None, selection: None, tool: Tool::Cut, busy: None, error: None, said: None, player: None, made: Vec::new(), bounds: Rc::new(Cell::new(Bounds::default())), anchor: None, ticking: false, bits: sondra_media::audio::WavBits::Pcm16, view: None, looping: false, taps: Vec::new(), eq: (0.0, 0.0, 0.0), highpass: 100.0, lowpass: 8000.0, comp: (-24.0, 3.0), play_from: 0.0 }
     }
 }
 
@@ -394,6 +401,7 @@ impl Shell {
         }
         let Some(editor) = &self.audio.editor else { return };
         let (from, to) = self.audio.selection.unwrap_or((0.0, editor.audio().seconds()));
+        self.audio.play_from = from;
         self.audio.player = Some(ClipPlayer::start(editor.audio(), from, to));
         self.audio_start_ticker(cx);
         cx.notify();
@@ -483,6 +491,11 @@ impl Shell {
     pub fn audio_take(&self) -> Option<&sondra_media::audio::AudioData> {
         self.audio.editor.as_ref().map(Editor::audio)
     }
+    /// For tests: the three bands of „Klang“, as the sliders would set them.
+    pub fn audio_set_eq(&mut self, bass: f64, mid: f64, treble: f64) {
+        self.audio.eq = (bass, mid, treble);
+    }
+
     pub fn audio_selection(&self) -> Option<(f64, f64)> {
         self.audio.selection
     }
@@ -669,7 +682,20 @@ impl Shell {
                     .child(group("Auswahl", vec![
                         op("ausschneiden".into(), "Ausschneiden".into(), Op::Cut).into_any_element(),
                         copy.into_any_element(),
-                        op("einfuegen".into(), "Einfügen".into(), Op::Paste).disabled(busy || !editor.has_clipboard()).into_any_element(),
+                        {
+                            // As on the website: a selection is replaced, else the clipboard goes where it plays, else at the end.
+                            let playhead = a.player.as_ref().map(|p| a.play_from + p.position());
+                            let (label, how) = match (a.selection, playhead) {
+                                (Some(_), _) => ("Auswahl ersetzen".to_string(), Op::PasteReplace),
+                                (None, Some(at)) => ("An der Abspielstelle einfügen".to_string(), Op::PasteAt(at)),
+                                (None, None) => ("Am Ende einfügen".to_string(), Op::Paste),
+                            };
+                            let label = match editor.clipboard_seconds() {
+                                Some(len) => format!("{label} ({} s)", format!("{len:.1}").replace('.', ",")),
+                                None => label,
+                            };
+                            op("einfuegen".into(), label, how).disabled(busy || !editor.has_clipboard()).into_any_element()
+                        },
                         op("verdoppeln".into(), "Verdoppeln".into(), Op::Duplicate).into_any_element(),
                         op("stumm".into(), "Stumm schalten".into(), Op::Mute).into_any_element(),
                     ]))
@@ -698,6 +724,57 @@ impl Shell {
                     .child(group("Blenden", vec![op("einblenden".into(), "Einblenden".into(), Op::FadeIn).into_any_element(), op("ausblenden".into(), "Ausblenden".into(), Op::FadeOut).into_any_element()]));
             }
             Tool::Tone => {
+                // Sliders as on the website, each block with its own „Anwenden“.
+                let slide = |id: &'static str, label: &str, value: f64, min: f64, max: f64, step: f64, says: String, set: fn(&mut AudioState, f64)| {
+                    let me = me.clone();
+                    ui.slider(id, label.to_string(), ((value - min) / (max - min)) as f32)
+                        .width(220.)
+                        .step((step / (max - min)) as f32)
+                        .says(says)
+                        .on_change(move |v, _, app| {
+                            let x = (min + f64::from(v) * (max - min)) / step;
+                            let x = x.round() * step;
+                            me.update(app, |shell, cx| {
+                                set(&mut shell.audio, x);
+                                cx.notify();
+                            })
+                        })
+                };
+                let signed = |v: f64| format!("{}{} dB", if v > 0.0 { "+" } else { "" }, db(v).replace("−0", "0"));
+                let (bass, mid, treble) = a.eq;
+                panel = panel
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .child(ui.title("Entzerrer (drei Bänder)"))
+                            .child(slide("eq-bass", "Bässe (120 Hz)", bass, -12.0, 12.0, 1.0, signed(bass), |a, v| a.eq.0 = v))
+                            .child(slide("eq-mitten", "Mitten (1 kHz)", mid, -12.0, 12.0, 1.0, signed(mid), |a, v| a.eq.1 = v))
+                            .child(slide("eq-hoehen", "Höhen (6 kHz)", treble, -12.0, 12.0, 1.0, signed(treble), |a, v| a.eq.2 = v))
+                            .child(div().flex().child(op("eq-anwenden".into(), "Entzerrer anwenden".into(), Op::Eq3 { bass_db: bass, mid_db: mid, treble_db: treble }).disabled(busy || a.eq == (0.0, 0.0, 0.0)))),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .child(ui.title("Tiefen und Höhen entfernen"))
+                            .child(slide("hochpass-regler", "Tiefen entfernen unter", a.highpass, 20.0, 400.0, 5.0, format!("{:.0} Hz", a.highpass), |a, v| a.highpass = v))
+                            .child(div().flex().child(op("hochpass-anwenden".into(), format!("Unter {:.0} Hz entfernen", a.highpass), Op::Highpass(a.highpass))))
+                            .child(slide("tiefpass-regler", "Höhen entfernen über", a.lowpass, 1000.0, 20000.0, 250.0, format!("{} kHz", format!("{:.2}", a.lowpass / 1000.0).trim_end_matches('0').trim_end_matches('.').replace('.', ",")), |a, v| a.lowpass = v))
+                            .child(div().flex().child(op("tiefpass-anwenden".into(), format!("Über {} kHz entfernen", format!("{:.2}", a.lowpass / 1000.0).trim_end_matches('0').trim_end_matches('.').replace('.', ",")), Op::Lowpass(a.lowpass)))),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .child(ui.title("Kompressor"))
+                            .child(slide("kompressor-ab", "Ab", a.comp.0, -50.0, -3.0, 1.0, format!("{} dBFS", db(a.comp.0)), |a, v| a.comp.0 = v))
+                            .child(slide("kompressor-verhaeltnis", "Verhältnis", a.comp.1, 1.5, 10.0, 0.5, format!("{}:1", format!("{}", a.comp.1).replace('.', ",")), |a, v| a.comp.1 = v))
+                            .child(div().flex().child(op("kompressor-anwenden".into(), "Kompressor anwenden".into(), Op::Compress { threshold_db: a.comp.0, ratio: a.comp.1 }))),
+                    );
                 panel = panel
                     .child(group("Tiefen entfernen (Hochpass)", [80.0, 120.0, 200.0].iter().map(|hz| op(format!("hochpass-{hz}"), format!("unter {hz:.0} Hz"), Op::Highpass(*hz)).into_any_element()).collect()))
                     .child(group("Höhen entfernen (Tiefpass)", [4000.0, 8000.0, 12000.0].iter().map(|hz| op(format!("tiefpass-{hz}"), format!("über {:.0} kHz", hz / 1000.0), Op::Lowpass(*hz)).into_any_element()).collect()))

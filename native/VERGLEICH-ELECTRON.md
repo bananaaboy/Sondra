@@ -144,11 +144,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 - ✓ **Datei hinten anfügen** (mit Überblendung)
 - ✓ **Zoomen** (Mausrad, Umschalt + Mausrad schiebt)
 - ✓ **„Ausschnitt behalten“** (alles andere weg) und **„Neu aus Auswahl“**
-- ✗ **Einfügen „Am Ende“ / „An der Abspielstelle“ / „Auswahl ersetzen“** (Rust fügt nur auf eine Art ein)
+- ✓ **Einfügen „Am Ende“ / „An der Abspielstelle“ / „Auswahl ersetzen“** (nativ seit 22.11.2026, der Knopf sagt, was er tut, und wie lang die Zwischenablage ist)
 - ✓ **In Schleife spielen**
 - ✓ **Tempo klopfen** (T)
-- ✗ **3-Band-Entzerrer**. Rust hat feste Klangfarben (Wärmer, Heller, Dünner) und Hoch-/Tiefpass
-- ✗ **„Aus der Auswahl lernen“** (Rauschprofil von einer gewählten Stelle; Rust lernt es von selbst)
+- ✓ **3-Band-Entzerrer** (Bässe 120 Hz, Mitten 1 kHz, Höhen 6 kHz als Regler), dazu Hoch-/Tiefpass und Kompressor als Regler wie auf der Website (nativ seit 22.11.2026)
+- ✓ **„Aus der Auswahl lernen“** (Rauschprofil von einer gewählten Stelle: „Rauschen lernen“ mit Auswahl; „Lokale KI“ findet die Stelle selbst)
 - ✓ **Stille entfernen mit Schwelle** (−25 / −45 / −60 dB)
 - ✓ **„Zurück zum Original“**
 - ✓ **Tastenkürzel** (Leertaste, Strg+X/C/V/Z)

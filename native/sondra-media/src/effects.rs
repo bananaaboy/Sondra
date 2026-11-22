@@ -121,6 +121,24 @@ pub fn lowpass_filter(audio: &AudioData, hz: f64) -> AudioData {
     each_channel(audio, |c| run(&run(c, lowpass(rate, top, 0.5412)), lowpass(rate, top, 1.3066)))
 }
 
+/// A bell around `hz`: up or down by `gain_db`, as wide as `q` says (the RBJ cookbook's peaking EQ).
+fn peak(rate: f64, hz: f64, q: f64, gain_db: f64) -> Biquad {
+    let a = 10f64.powf(gain_db / 40.0);
+    let w = (2.0 * std::f64::consts::PI * hz) / rate;
+    let (cos, alpha) = (w.cos(), w.sin() / (2.0 * q));
+    normalise(1.0 + alpha * a, -2.0 * cos, 1.0 - alpha * a, 1.0 + alpha / a, -2.0 * cos, 1.0 - alpha / a)
+}
+
+/// Three bands: bass (shelf at 120 Hz), mids (bell at 1 kHz), treble (shelf at 6 kHz).
+pub fn eq3(audio: &AudioData, bass_db: f64, mid_db: f64, treble_db: f64) -> AudioData {
+    let rate = f64::from(audio.sample_rate);
+    let shelved = shelf_eq(audio, bass_db, treble_db);
+    if mid_db == 0.0 {
+        return shelved;
+    }
+    each_channel(&shelved, |c| run(c, peak(rate, 1000f64.min(rate / 2.0 - 500.0), 0.9, mid_db)))
+}
+
 /// Two shelves: bass around 120 Hz, treble around 6 kHz.
 pub fn shelf_eq(audio: &AudioData, bass_db: f64, treble_db: f64) -> AudioData {
     let rate = f64::from(audio.sample_rate);

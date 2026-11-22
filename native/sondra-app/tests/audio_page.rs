@@ -319,3 +319,35 @@ fn zoom_keep_keys_and_the_way_back_to_the_original(cx: &mut TestAppContext) {
     w.press(Role::Button, "Werkzeug Tonhöhe und Tempo");
     assert!(w.said(" BPM"), "{:?}", w.labels().into_iter().filter(|l| l.contains("BPM") || l.contains("tippen")).collect::<Vec<_>>());
 }
+
+#[gpui::test]
+fn the_clipboard_goes_at_the_end_or_in_place_of_a_selection_and_the_tone_is_set_with_sliders(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut w = open(cx, tmp.path().join("Probe.wav"));
+    assert_eq!(w.frames(), 32000);
+    // Copied: half a second.
+    w.shell.update(w.cx, |s, cx| s.audio_select(Some((1.0, 1.5)), cx));
+    w.draw();
+    w.press(Role::Button, "Kopieren");
+    // With a selection the clipboard replaces it: the length stays.
+    w.shell.update(w.cx, |s, cx| s.audio_select(Some((2.0, 2.5)), cx));
+    w.draw();
+    w.press(Role::Button, "Auswahl ersetzen (0,5 s)");
+    w.settle();
+    assert!((w.frames() as f64 - 32000.0).abs() < 100.0, "{}", w.frames());
+    // Without one and without playback, at the end.
+    w.shell.update(w.cx, |s, cx| s.audio_select(None, cx));
+    w.draw();
+    w.press(Role::Button, "Am Ende einfügen (0,5 s)");
+    w.settle();
+    assert!((w.frames() as f64 - 36000.0).abs() < 100.0, "{}", w.frames());
+    // „Klang“: the three bands are set with sliders and applied together.
+    w.press(Role::Button, "Werkzeug Klang");
+    assert!(w.tree().find(Role::Button, "Entzerrer anwenden").is_some());
+    assert!(w.said("Mitten (1 kHz)"));
+    w.shell.update(w.cx, |s, _| s.audio_set_eq(3.0, -2.0, 1.0));
+    w.draw();
+    w.press(Role::Button, "Entzerrer anwenden");
+    w.settle();
+    assert!(w.said("Bässe 3,0 dB, Mitten −2,0 dB, Höhen 1,0 dB"), "{:?}", w.labels());
+}

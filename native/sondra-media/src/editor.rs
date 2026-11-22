@@ -52,6 +52,12 @@ pub enum Op {
     Keep,
     /// „Ein-Klick-Sprachverbesserung“: rumble, fan noise, clicks and room tail out, speech clearer (`speech_enhance`).
     EnhanceSpeech,
+    /// Three bands in dB: bass, mids, treble.
+    Eq3 { bass_db: f64, mid_db: f64, treble_db: f64 },
+    /// The clipboard in at this place, in seconds („An der Abspielstelle einfügen“).
+    PasteAt(f64),
+    /// The selection is taken out and the clipboard put in its place („Auswahl ersetzen“).
+    PasteReplace,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,6 +103,11 @@ impl Editor {
 
     pub fn has_clipboard(&self) -> bool {
         self.clipboard.is_some()
+    }
+
+    /// How long what was copied or cut is.
+    pub fn clipboard_seconds(&self) -> Option<f64> {
+        self.clipboard.as_ref().map(|c| c.seconds())
     }
 
     pub fn has_noise_profile(&self) -> bool {
@@ -261,6 +272,19 @@ impl Editor {
             Op::ToStereo => ("Zu Stereo verdoppelt".into(), effects::set_channels(&self.audio, 2)),
             Op::Swap => ("Links und rechts getauscht".into(), edit::channel_trick(&self.audio, Trick::Swap)),
             Op::Resample(rate) => (format!("Abtastrate {rate} Hz"), edit::resample_audio(&self.audio, rate)),
+            Op::Eq3 { bass_db, mid_db, treble_db } => (format!("Bässe {} dB, Mitten {} dB, Höhen {} dB · {place}", db(bass_db), db(mid_db), db(treble_db)), effects::process_range(&self.audio, from, to, |p| effects::eq3(&p, bass_db, mid_db, treble_db))),
+            Op::PasteAt(at) => {
+                let clip = self.clipboard.clone().ok_or("Die Zwischenablage ist leer: erst kopieren oder ausschneiden.")?;
+                let at = at.clamp(0.0, total);
+                (format!("Eingefügt bei {} s", seconds(at)), effects::insert_at(&self.audio, at, &clip))
+            }
+            Op::PasteReplace => {
+                if whole {
+                    return Err("Wählen Sie zuerst die Stelle, die ersetzt werden soll.".into());
+                }
+                let clip = self.clipboard.clone().ok_or("Die Zwischenablage ist leer: erst kopieren oder ausschneiden.")?;
+                (format!("Auswahl ersetzt ({} bis {} s)", seconds(from), seconds(to)), effects::insert_at(&edit::cut_range(&self.audio, from, to), from, &clip))
+            }
             Op::EnhanceSpeech => (
                 format!("Sprache verbessert (Rauschen und Hall entfernt) · {place}"),
                 effects::process_range(&self.audio, from, to, |p| crate::speech_enhance::enhance_speech(&p, crate::speech_enhance::SpeechEnhance::default())),
@@ -357,6 +381,29 @@ impl Editor {
                 (lo, hi)
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod insert_tests {
+    use super::*;
+
+    #[test]
+    fn the_clipboard_goes_at_a_place_or_in_place_of_the_selection_and_three_bands_change_the_sound() {
+        let rate = 8000u32;
+        let audio = AudioData { channels: vec![(0..rate as usize * 4).map(|i| (i as f32 * 0.01).sin() * 0.3).collect()], sample_rate: rate };
+        let mut e = Editor::new(audio);
+        e.apply(Op::Cut, Some((1.0, 1.5))).unwrap();
+        assert!((e.audio().seconds() - 3.5).abs() < 1e-3);
+        e.apply(Op::PasteAt(0.25), None).unwrap();
+        assert!((e.audio().seconds() - 4.0).abs() < 1e-3);
+        // Replacing: half a second goes, half a second comes, the length stays.
+        e.apply(Op::PasteReplace, Some((2.0, 2.5))).unwrap();
+        assert!((e.audio().seconds() - 4.0).abs() < 1e-3);
+        assert!(e.apply(Op::PasteReplace, None).is_err(), "replacing needs a selection");
+        let before = e.audio().channels[0].clone();
+        e.apply(Op::Eq3 { bass_db: 0.0, mid_db: 6.0, treble_db: 0.0 }, None).unwrap();
+        assert_ne!(e.audio().channels[0], before);
     }
 }
 
