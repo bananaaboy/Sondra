@@ -46,11 +46,15 @@ pub struct DownloadOptions {
     pub after_drive: bool,
     /// „Untertitel erstellen“ after the file is here.
     pub after_subtitles: bool,
+    /// „Direkte Datei-Links“: `false` takes them 1:1 (the website's „untouched“), `true` applies the quality above.
+    pub direct_adjust: bool,
+    /// How many addresses of a list are looked up at once (1–5).
+    pub at_once: u8,
 }
 
 impl Default for DownloadOptions {
     fn default() -> Self {
-        DownloadOptions { what: What::Video, height: None, audio_kbps: Some(320), naming: Naming::Original, play_after: false, after_session: false, after_drive: false, after_subtitles: false }
+        DownloadOptions { what: What::Video, height: None, audio_kbps: Some(320), naming: Naming::Original, play_after: false, after_session: false, after_drive: false, after_subtitles: false, direct_adjust: false, at_once: 3 }
     }
 }
 
@@ -119,8 +123,14 @@ pub fn stealth_name(title: &str, id: &str, ext: &str, naming: Naming, today: &st
 
 /// After loading: the sound alone when only the sound was wanted (for sources that are not yt-dlp's, which
 /// does it itself), then the name. Returns where the file is now.
-pub fn finish(path: &Path, title: &str, options: &DownloadOptions, ytdlp_did_audio: bool) -> Result<PathBuf, String> {
+pub fn finish(path: &Path, title: &str, options: &DownloadOptions, ytdlp_did_audio: bool, direct: bool) -> Result<PathBuf, String> {
     let mut path = path.to_path_buf();
+    // A direct file is taken 1:1 unless the quality above is to count for it too.
+    if direct && options.direct_adjust && options.what == What::Video {
+        if let Some(limit) = options.height {
+            path = scaled_down(&path, limit)?;
+        }
+    }
     let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     let is_audio = matches!(ext.as_str(), "mp3" | "m4a" | "opus" | "ogg" | "flac" | "wav" | "aac");
     if options.what == What::Audio && !is_audio && !ytdlp_did_audio {
@@ -158,7 +168,55 @@ pub fn finish(path: &Path, title: &str, options: &DownloadOptions, ytdlp_did_aud
     Ok(path)
 }
 
+/// A video taller than `limit` made `limit` high (H.264, the sound copied); anything else stays as it is.
+fn scaled_down(path: &Path, limit: u32) -> Result<PathBuf, String> {
+    let Some(ffmpeg) = sondra_media::ffmpeg::Ffmpeg::locate() else { return Ok(path.to_path_buf()) };
+    let Ok(probe) = ffmpeg.probe(path) else { return Ok(path.to_path_buf()) };
+    let tall = probe.streams.iter().filter(|s| s.kind == "video").filter_map(|s| s.height).max().unwrap_or(0);
+    if tall <= limit {
+        return Ok(path.to_path_buf());
+    }
+    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Video".into());
+    let target = sondra_media::run::unique_path(path.parent().unwrap_or(Path::new(".")), &format!("{stem} {limit}p"), "mp4");
+    let status = std::process::Command::new(ffmpeg.program())
+        .args(["-v", "error", "-nostdin", "-y", "-i"])
+        .arg(path)
+        .args(["-vf", &format!("scale=-2:{limit}"), "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-c:a", "aac", "-b:a", "192k"])
+        .arg(&target)
+        .stdin(std::process::Stdio::null())
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !status.success() {
+        let _ = std::fs::remove_file(&target);
+        return Err(format!("Das Video liess sich nicht auf {limit}p verkleinern."));
+    }
+    let _ = std::fs::remove_file(path);
+    Ok(target)
+}
+
 impl crate::shell::Shell {
+    /// „Direkte Datei-Links“ and „gleichzeitig“: how direct files are taken and how many addresses are looked up at once.
+    pub(crate) fn download_direct_setting(&self, ui: &sondra_ui::Ui, cx: &mut gpui::Context<Self>) -> gpui::AnyElement {
+        use gpui::{div, prelude::*, px};
+        let o = &self.download.options;
+        let mut ways = div().flex().flex_wrap().gap(px(6.));
+        for (adjust, label) in [(false, "1:1 übernehmen"), (true, "Anpassen")] {
+            let me = cx.entity();
+            ways = ways.child(ui.chip(format!("direkt-{adjust}"), label, o.direct_adjust == adjust).accessible_name(format!("Direkte Datei-Links: {label}")).on_click(move |_, app| me.update(app, |shell, cx| shell.set_download_options(|o| o.direct_adjust = adjust, cx))));
+        }
+        let mut many = div().flex().flex_wrap().gap(px(6.));
+        for n in 1..=5u8 {
+            let me = cx.entity();
+            many = many.child(ui.chip(format!("gleichzeitig-{n}"), format!("{n} gleichzeitig"), o.at_once.clamp(1, 5) == n).on_click(move |_, app| me.update(app, |shell, cx| shell.set_download_options(|o| o.at_once = n, cx))));
+        }
+        let said = if o.direct_adjust { "Auch direkte Datei-Links bekommen die Qualität von oben (ein höheres Video wird verkleinert)." } else { "Direkte Links auf .mp4, .mp3 und andere Dateien kommen ohne jede Anpassung." };
+        ui.setting(
+            "Direkte Datei-Links",
+            div().flex().flex_col().gap(px(8.)).child(ways).child(ui.hint(said)).child(ui.hint("Eine Liste von Adressen wird so viele auf einmal nachgeschlagen:")).child(many),
+            None,
+        )
+    }
+
     pub(crate) fn set_download_options(&mut self, change: impl FnOnce(&mut DownloadOptions), cx: &mut gpui::Context<Self>) {
         change(&mut self.download.options);
         if self.download.options_kept {

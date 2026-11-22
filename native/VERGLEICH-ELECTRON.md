@@ -111,10 +111,10 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 | --- | --- | --- |
 | ✓ | **„Was laden“**: Video mit Ton / Nur Ton / Ton aus dem Video | Geladen wird, was die Quelle liefert |
 | ✓ | **Qualität**: Video beste / mittel / „wenn es das Video nur grösser gibt“, Ton verlustfrei / hoch / Standard / tiefer, AAC 256k, PCM | Nativ: Video Beste/4K/1080p/720p/480p/360p (gibt es nur grösser, kommt das Nächstkleinere), Ton 320/192/128 kbps oder verlustfrei |
-| ✗ | **„Direktdateien anpassen“** oder 1:1 übernehmen | — |
+| ✓ | **„Direktdateien anpassen“** oder 1:1 übernehmen | Nativ seit 22.11.2026: „Direkte Datei-Links“ 1:1 (Vorgabe) oder „Anpassen“ (die Qualität von oben, ein höheres Video wird verkleinert; „Nur Ton“ gilt immer) |
 | ✓ | **AniWorld-Sprache**: Ger-Dub, Ger-Sub (OmU), Eng-Sub, Auto | Rust nimmt die erste verfügbare Fassung |
 | ✓ | **Dateinamen**: wie eine Office-Datei / neutral (`media_…`) / nur Zeichen | — |
-| ✗ | **„Wie viele gleichzeitig laden“** | — |
+| ✓ | **„Wie viele gleichzeitig laden“** | Nativ seit 22.11.2026: 1–5 gleichzeitig (Vorgabe 3) beim Nachschlagen einer Liste von Adressen, wie `resolveAll` auf der Website; die Antworten bleiben in der Reihenfolge der Liste |
 | ✓ | **Was danach geschieht**: in die Sitzung legen, „Sofort als Datei speichern & zusätzlich in die Sitzung“, **direkt in Google Drive (ohne Sitzung)**, **„Nach Download sofort im Player abspielen“**, **„Stream sofort abspielen“** (abspielen, während geladen wird) | Nativ seit 22.11.2026: „In die Sitzung legen“, „Sofort abspielen“, „Untertitel erstellen“, „Direkt in Google Drive“ (die Datei liegt immer auch im Download-Ordner), und seit 22.11.2026 „Stream sofort abspielen“ neben „Laden“ (der Player liest die Quelle, nichts wird gespeichert) |
 | ✓ | **„Untertitel erstellen“ nach dem Laden** | Nativ seit 22.11.2026 (über das Werkzeug „Untertitel“) |
 | ✗ | **„Auf die Merkliste setzen“** mit Staffel, Folge und Einstellungen | — |
@@ -251,7 +251,7 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✓ **„Merken“**: die Adresse auf die Merkliste.
 - ✓ **„.txt / .m3u mit Links hier ablegbar“** (nativ seit 22.11.2026).
 - ✓ **„alle zeigen“**: die Liste der Portale, die gehen (nativ seit 22.11.2026).
-- ✗ **Einstellungen**: Fenster „Download-Einstellungen“ (siehe Abschnitt 5) und „Ton bei Fertigstellung abspielen“ samt Erklärung.
+- ✓ **Einstellungen**: Fenster „Download-Einstellungen“ (siehe Abschnitt 5) und „Ton bei Fertigstellung abspielen“ samt Erklärung. Nativ als Spalte der Seite (Ordner, Was laden, Qualität, Sprache, Dateiname, Direkte Datei-Links, Danach, „Ton, wenn fertig“), kein eigenes Fenster.
 
 **Umwandeln (mit Datei)**
 - ✓ **„Zielformat“**: nativ als Pillen nach Art (dieselbe Wahl, ein Klick weniger).

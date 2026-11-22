@@ -132,6 +132,24 @@ fn find_or_portal(fetch: &dyn Fetch, address: &str, language: &str, ytdlp_dir: &
     }
 }
 
+/// Looks up a list of addresses, `at_once` at a time, the answers in the list's order (`resolveAll` on the website).
+pub fn look_up_all<T: Send>(addresses: Vec<String>, at_once: usize, look: impl Fn(&str) -> T + Sync) -> Vec<(String, T)> {
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let answers: Mutex<Vec<Option<T>>> = Mutex::new((0..addresses.len()).map(|_| None).collect());
+    std::thread::scope(|scope| {
+        for _ in 0..at_once.clamp(1, addresses.len().max(1)) {
+            scope.spawn(|| loop {
+                let n = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let Some(address) = addresses.get(n) else { break };
+                let answer = look(address);
+                answers.lock().unwrap()[n] = Some(answer);
+            });
+        }
+    });
+    let answers = answers.into_inner().unwrap();
+    addresses.into_iter().zip(answers).filter_map(|(a, t)| t.map(|t| (a, t))).collect()
+}
+
 /// An address that is a file or a stream itself rather than a page.
 fn direct_stream(address: &str) -> Option<StreamInfo> {
     let url = url::Url::parse(address).ok().filter(|u| matches!(u.scheme(), "http" | "https"))?;
@@ -292,9 +310,10 @@ impl Shell {
         d.queue.clear();
         d.failed.clear();
         if addresses.len() > 1 {
+            let at_once = usize::from(d.options.at_once.clamp(1, 5));
             Self::in_background(
                 cx,
-                move || addresses.into_iter().map(|a| (a.clone(), find_or_portal(factory().as_ref(), &a, &language, &ytdlp_dir, system).map_err(|(e, _)| e))).collect::<Vec<_>>(),
+                move || look_up_all(addresses, at_once, |a| find_or_portal(factory().as_ref(), a, &language, &ytdlp_dir, system).map_err(|(e, _)| e)),
                 |shell, answers, cx| {
                     let d = &mut shell.download;
                     d.finding = false;
@@ -425,6 +444,7 @@ impl Shell {
             Found::Portal { address, .. } => Some((address.clone(), d.ytdlp_dir.clone(), d.ytdlp_system)),
             _ => None,
         };
+        let direct = matches!(found, Found::Direct(_));
         let again = match &found {
             Found::Portal { address, .. } => Some(address.clone()),
             Found::Direct(stream) => Some(stream.url.clone()),
@@ -435,7 +455,7 @@ impl Shell {
             move || -> Result<(PathBuf, u64), String> {
                 // After loading: the sound alone when only that was wanted, then the name (`download_options`).
                 let finished = |(path, size): (PathBuf, u64), by_ytdlp: bool| -> Result<(PathBuf, u64), String> {
-                    let path = crate::download_options::finish(&path, &finish_title, &options, by_ytdlp)?;
+                    let path = crate::download_options::finish(&path, &finish_title, &options, by_ytdlp, direct)?;
                     let size = std::fs::metadata(&path).map_or(size, |m| m.len());
                     Ok((path, size))
                 };
@@ -610,6 +630,7 @@ impl Shell {
             self.download_quality_setting(&ui, cx),
             self.download_language_setting(&ui, cx),
             self.download_naming_setting(&ui, cx),
+            self.download_direct_setting(&ui, cx),
             self.download_after_setting(&ui, cx),
             ui.setting(
                 "Wenn es fertig ist",
@@ -812,5 +833,30 @@ impl Shell {
             work = work.child(recent);
         }
         page.child(ui.tool_body(settings, work)).into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::look_up_all;
+
+    #[test]
+    fn a_list_is_looked_up_several_at_once_and_answered_in_its_order() {
+        let at_once = std::sync::atomic::AtomicUsize::new(0);
+        let most = std::sync::atomic::AtomicUsize::new(0);
+        let addresses: Vec<String> = (0..9).map(|n| format!("a{n}")).collect();
+        let answers = look_up_all(addresses.clone(), 3, |a| {
+            let now = at_once.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            most.fetch_max(now, std::sync::atomic::Ordering::SeqCst);
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            at_once.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            a.to_uppercase()
+        });
+        assert_eq!(answers.iter().map(|(a, _)| a.clone()).collect::<Vec<_>>(), addresses);
+        assert_eq!(answers[4].1, "A4");
+        let most = most.load(std::sync::atomic::Ordering::SeqCst);
+        assert!((2..=3).contains(&most), "{most}");
+        let one = look_up_all(addresses, 1, |a| a.len());
+        assert_eq!(one.len(), 9);
     }
 }

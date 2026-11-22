@@ -179,6 +179,11 @@ fn a_pasted_list_is_found_address_by_address_and_loaded_in_turn(cx: &mut TestApp
     let tmp = tempfile::tempdir().unwrap();
     let base = server(50_000);
     let mut w = open(cx, tmp.path());
+    // The list is looked up as many at once as chosen (here one: the order stays the list's either way).
+    assert_eq!(w.tree().find(Role::Button, "3 gleichzeitig").unwrap().toggled, Some(true), "three at once at the start, as on the website");
+    w.press(Role::Button, "1 gleichzeitig");
+    assert_eq!(w.tree().find(Role::Button, "1 gleichzeitig").unwrap().toggled, Some(true));
+    assert_eq!(w.tree().find(Role::Button, "Direkte Datei-Links: 1:1 übernehmen").unwrap().toggled, Some(true), "direct files come as they are");
     // Two files, one page with nothing behind it, and the first again: it counts once.
     w.shell.update(w.cx, |shell, cx| {
         shell.download_set_input(&format!("{base}/lied.mp3, {base}/lied.mp3?zweite=1; {base}/seite {base}/lied.mp3"), cx)
