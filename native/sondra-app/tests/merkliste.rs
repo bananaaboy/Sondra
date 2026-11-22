@@ -1097,6 +1097,32 @@ fn an_episode_in_no_folder_plays_as_a_stream_from_its_address(cx: &mut TestAppCo
 }
 
 #[gpui::test]
+fn a_series_keeps_how_it_is_loaded_and_folge_laden_takes_it_along(cx: &mut TestAppContext) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ids = Ids::system();
+    let stored = Stored {
+        items: vec![normalize(&json!({ "id": "fr", "title": "Frieren", "status": "watching", "season": 1, "episode": 4, "url": "https://aniworld.to/anime/stream/frieren",
+            "seasons": [{ "number": 1, "episodes": 28, "watched": [1, 2, 3] }] }), &mut ids)],
+        ..Default::default()
+    };
+    let mut w = open(cx, Some(&stored), dir.path());
+    w.press(Role::ListItem, "Frieren");
+    w.press(Role::Button, "Bearbeiten");
+    w.press(Role::Button, "Laden als: Nur Ton");
+    w.press(Role::Button, "Qualität: Mittel (192 kbps)");
+    w.press(Role::Button, "Sprachfassung: Deutsch untertitelt");
+    w.press(Role::Button, "Untertitel dazu erstellen");
+    let back = read_shared(&std::fs::read(dir.path().join("Merkliste.sqlite")).unwrap(), &mut Ids::system()).unwrap();
+    let fr = &back.items[0];
+    assert_eq!((fr.mode.as_str(), fr.audio_pref.as_str(), fr.language.as_str(), fr.auto_transcribe), ("audio", "medium", "ger_sub", true), "each choice counts at once and travels with the list");
+    w.press(Role::Button, "Abbrechen");
+    w.press(Role::Button, "Mehr");
+    w.press(Role::MenuItem, "Folge 4 laden");
+    let (audio, _, kbps, subtitles, language) = w.cx.read_entity(&w.shell, |s, _| s.download_settings_now());
+    assert_eq!((audio, kbps, subtitles, language.as_str()), (true, Some(192), true, "3"), "„Herunterladen“ loads it the series' way");
+}
+
+#[gpui::test]
 fn seasons_and_films_are_added_on_the_page_and_removing_is_behind_mehr(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let mut w = open(cx, Some(&list(3)), dir.path());

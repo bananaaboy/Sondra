@@ -292,7 +292,11 @@ impl crate::shell::Shell {
             self.download.error = Some(format!("„{title}“ steht schon auf der Merkliste."));
         } else {
             let mut ids = sondra_merk::normalize::Context::system();
-            let raw = serde_json::json!({ "title": title, "url": address, "status": "watching", "season": season.max(0), "episode": episode.unwrap_or(1), "updatedAt": ids.now });
+            let mut raw = serde_json::json!({ "title": title, "url": address, "status": "watching", "season": season.max(0), "episode": episode.unwrap_or(1), "updatedAt": ids.now });
+            // The settings it is loaded with now go with it, for „Folge n laden“ later.
+            if let (Some(raw), serde_json::Value::Object(prefs)) = (raw.as_object_mut(), crate::merk_load_prefs::prefs_of(&self.download.options, &self.download.language)) {
+                raw.extend(prefs);
+            }
             let item = sondra_merk::normalize::normalize(&raw, &mut ids);
             self.merk.items.insert(0, item);
             self.merk.save();

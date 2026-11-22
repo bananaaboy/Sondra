@@ -922,7 +922,8 @@ impl Shell {
                     .child(ui.hint("Leer heisst: die übliche Länge (24 Min. je Folge, 1:30 Vorspann). Folgen anderer Länge stehen im Fenster ihrer Staffel."))
                     .into_any_element(),
             ))
-            .child(group("Cover und Format", div().flex().flex_col().gap(px(10.)).child(cover_row).child(shapes).children(framer).into_any_element()));
+            .child(group("Cover und Format", div().flex().flex_col().gap(px(10.)).child(cover_row).child(shapes).children(framer).into_any_element()))
+            .children(self.load_prefs_section(&ui, &f.series, cx).map(|b| group("Herunterladen", b)));
         if let Some(p) = &f.problem {
             body = body.child(ui.notice(NoticeKind::Warning, p.clone()));
         }
@@ -1217,11 +1218,13 @@ impl Shell {
         let at = item.episode.unwrap_or(1).max(1);
         let unit = if item.season == 0 { "Film" } else { "Folge" };
         if !item.url.trim().is_empty() && !sondra_merk::progress::caught_up(&seasons_of(item)) {
-            let (me, url, season) = (me.clone(), item.url.clone(), item.season);
+            let (me, url, season, id) = (me.clone(), item.url.clone(), item.season, item.id.clone());
             items.push(ui.menu_item("folge-laden", format!("{unit} {at} laden"), false).on_click(move |_, app| {
                 let address = episode_address(&url, season, at);
                 me.update(app, |shell, cx| {
                     shell.merk.series_more = false;
+                    // The series' own settings go with it.
+                    shell.take_series_prefs(&id);
                     shell.go(crate::nav::Panel::Downloader, cx);
                     shell.download_set_input(&address, cx);
                     shell.find_address(cx);
