@@ -75,16 +75,16 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **„Zuletzt geöffnete Ordner“** (Menü „Zuletzt“, fünf, auf der leeren Seite eine Taste je Ordner) | Angeboten wird nur der zuletzt geöffnete („„Anime“ wieder öffnen“) |
-| ✗ | **„In die Sitzung“** für die Auswahl | — |
-| ✗ | **„In Drive“** für die Auswahl (hochladen aus dem Ordner) | — |
-| ✗ | **„An Geräte senden“** für die Auswahl (mehrere Geräte auf einmal) | Nur über die Seite „Geräte“ |
-| ✗ | **„Untertitel erzeugen“** für die Auswahl (Whisper hört die Filme ab und schreibt `Name.srt` daneben) | Untertitel macht nur das Werkzeug „Untertitel“, eine Datei nach der anderen |
+| ✓ | **„Zuletzt geöffnete Ordner“** (Menü „Zuletzt“, fünf, auf der leeren Seite eine Taste je Ordner) | Nativ seit 22.11.2026 |
+| ✓ | **„In die Sitzung“** für die Auswahl | Nativ seit 22.11.2026 (Dateien in Drive nicht, die Zeile sagt es) |
+| ✓ | **„In Drive“** für die Auswahl (hochladen aus dem Ordner) | Nativ seit 22.11.2026, eine Datei nach der anderen, Fortschritt in der Zeile |
+| ✓ | **„An Geräte senden“** für die Auswahl (mehrere Geräte auf einmal) | Nativ seit 22.11.2026: Menü mit jedem Gerät und „An alle n Geräte“ |
+| ✓ | **„Untertitel erzeugen“** für die Auswahl (Whisper hört die Filme ab und schreibt `Name.srt` daneben) | Nativ seit 22.11.2026, mit Modell und Sprache des Werkzeugs „Untertitel“; ohne Modell der Weg dorthin. Nie gegen ein echtes Modell gelaufen |
 | ◐ | Eine `.srt`/`.vtt` mit dem Namen des Films geht beim Abspielen aus dem Ordner von selbst mit | ⚙ die Zuordnung ist geprüft. Der Player findet die Datei neben dem Film selbst |
 | ✗ | **„In Staffel einordnen“**: das Fenster für Drive-Dateien (Serie wählen oder neu, Staffel, Nummer je Datei, Vorschau des Zielordners, „Der Reihe nach nummerieren“) | Nur „Einordnen“ mit einem Klick für Dateien, die schon erkannt sind |
-| ✗ | **Tastatur in der Dateiliste**: Pfeile, Leertaste, Strg+A, Escape | Ausgewählt wird nur mit der Maus (Klick, Strg, Umschalt) |
-| ✗ | **„Neu einlesen“** | Man muss den Ordner neu wählen |
-| ✗ | **Seiten automatisch nachladen** (`IntersectionObserver`: „Weitere … zeigen“ drückt sich 900 px vor dem Rand selbst) | „Weitere n zeigen“ muss man anklicken |
+| ✓ | **Tastatur in der Dateiliste**: Pfeile, Leertaste, Strg+A, Escape | Nativ seit 22.11.2026, dazu Enter (abspielen) und Umschalt+Pfeil; in Kacheln gehen ↑/↓ wie ←/→ eine Datei weiter |
+| ✓ | **„Neu einlesen“** | Ist da |
+| ✓ | **Seiten automatisch nachladen** (`IntersectionObserver`: „Weitere … zeigen“ drückt sich 900 px vor dem Rand selbst) | Nativ seit 22.11.2026 (eine Marke vor dem Knopf, 900 px) |
 | — | Bedienung mit dem Finger (Tippen, langes Drücken, Blatt von unten) | Gibt es auf einem Windows-Rechner nicht (`PARITY.md` O10) |
 
 ## 4. Abspielen
@@ -208,11 +208,11 @@ Legende: **✗ fehlt** · **◐ teilweise** · **⚙ nur Logik, keine Oberfläch
 
 | | Funktion in Electron | Rust |
 | --- | --- | --- |
-| ✗ | **„Fortsetzen“** einer abgerissenen Übertragung in der Oberfläche | ⚙ `sondra-devices` kann es (`Piece`, `Kept`), die Seite bietet keinen Knopf |
-| ✗ | **Mehrere Geräte auf einmal** aus einer Auswahl im Ordner | — |
+| ✓ | **„Fortsetzen“** einer abgerissenen Übertragung in der Oberfläche | Nativ seit 22.11.2026: die Engine hält die Dateien, der Empfänger den angefangenen Teil (`.sondra-teil`), dasselbe Angebot mit `resume` wird ohne zweite Frage angenommen, nur der Rest geht; Fähigkeit `resume` im Eintrag |
+| ✓ | **Mehrere Geräte auf einmal** aus einer Auswahl im Ordner | Nativ seit 22.11.2026 |
 | ✗ | **Handy in einem eigenen Fenster** (Picture-in-Picture bzw. Fenster des Systems, frei auf dem Bildschirm) | Das Handy steht nur in der Seite |
-| ✗ | **„Wenn es nicht klappt“** und **„Technische Einzelheiten“** auf der Seite „Handy spiegeln“ (Liste der üblichen Fehler: Handy nicht in der Liste, Zulassen kommt nicht, schwarzes Bild, kein Ton, y/z vertauscht, „Ein anderes Programm benutzt das Handy“) | Es gibt die fünf Schritte und „So geht es“ |
-| ✗ | **Strg+Alt+Esc** gibt die Tastatur zurück | Rust: ins Bild klicken / heraus klicken |
+| ✓ | **„Wenn es nicht klappt“** und **„Technische Einzelheiten“** auf der Seite „Handy spiegeln“ (Liste der üblichen Fehler: Handy nicht in der Liste, Zulassen kommt nicht, schwarzes Bild, kein Ton, y/z vertauscht, „Ein anderes Programm benutzt das Handy“) | Nativ seit 22.11.2026; nach einem Fehler von selbst aufgeklappt |
+| ✓ | **Strg+Alt+Esc** gibt die Tastatur zurück | Ist da |
 
 ## 8. Betrieb und Verteilung
 
@@ -297,13 +297,13 @@ Ein Skript hat die Website (dieselbe Oberfläche wie die Electron-App) im eingeb
 - ✓ **„Nur messen“**.
 
 **Zerschneiden (mit Datei)**
-- ✗ **„Am Zeiger teilen“** und **„Als 1 Pad“**.
+- ✓ **„Am Zeiger teilen“** und **„Als 1 Pad“** (nativ seit 22.11.2026).
 - ✗ **Zoom**.
 - ✗ **Pads ↔ Piano-Roll** umschalten.
 - ✗ **1 oder 2 Takte**.
 - ✓ **„Grundbeat vorschlagen“** (nativ „Start-Beat legen“); Pads entstehen nativ gleich beim Schneiden.
-- ✗ **Export**: „Einzelnes Pattern“ oder „Song-Kette“, dazu „In die Sitzung“.
-- ◐ **Je Pad**: Löschen, „Auf alle übertragen“, Anfang −10/+10 ms, „Halbieren“, „Mit nächstem verbinden“ nativ seit 22.11.2026; „So hören, wie es exportiert wird“ fehlt noch.
+- ✓ **Export**: „Einzelnes Pattern“ oder „Song-Kette“, dazu „In die Sitzung“ (nativ seit 22.11.2026).
+- ✓ **Je Pad**: Löschen, „Auf alle übertragen“, Anfang −10/+10 ms, „Halbieren“, „Mit nächstem verbinden“, „So hören, wie es exportiert wird“ nativ seit 22.11.2026.
 
 **Tonart (mit Datei)**
 - ✓ **„Einfach“ / „Detail“** als Ansicht.

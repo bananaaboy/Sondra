@@ -269,3 +269,95 @@ fn the_way_through_drive_waits_for_the_yes_and_a_cancel_in_drive_ends_it() {
     a.cancel(&id);
     wait("cancelled on both sides", 30, || a.snapshot().transfers[0].state == State::Cancelled && b.snapshot().transfers[0].state == State::Cancelled);
 }
+
+/// A sink that keeps what it wrote when the line breaks, and counts every byte it was ever given.
+struct KeepSink {
+    name: String,
+    store: Store,
+    given: Arc<Mutex<u64>>,
+}
+
+impl Sink for KeepSink {
+    fn write(&mut self, chunk: &[u8]) -> io::Result<()> {
+        *self.given.lock().unwrap() += chunk.len() as u64;
+        self.store.lock().unwrap().get_mut(&self.name).unwrap().extend_from_slice(chunk);
+        Ok(())
+    }
+    fn close(&mut self) -> io::Result<String> {
+        Ok(format!("Downloads/{}", self.name))
+    }
+    fn abort(&mut self) {
+        self.store.lock().unwrap().remove(&self.name);
+    }
+    fn suspend(&mut self) -> Option<Piece> {
+        let bytes = self.store.lock().unwrap().get(&self.name)?.len() as u64;
+        Some(Piece { bytes, token: self.name.clone(), intact: None })
+    }
+}
+
+fn keeping_sinks(store: Store, given: Arc<Mutex<u64>>) -> SinkMaker {
+    Arc::new(move |file: &FileInfo, _i: usize, piece: Option<&Piece>| -> io::Result<Box<dyn Sink>> {
+        let name = file.name.clone();
+        let mut map = store.lock().unwrap();
+        match piece {
+            Some(p) => map.get_mut(&name).expect("the kept part").truncate(p.bytes as usize),
+            None => {
+                map.insert(name.clone(), Vec::new());
+            }
+        }
+        Ok(Box::new(KeepSink { name, store: store.clone(), given: given.clone() }))
+    })
+}
+
+fn resuming_device(drive: &FakeDrive, name: &str, created: f64) -> Engine {
+    Engine::start(
+        drive.client(),
+        DeviceKeys::generate(),
+        name,
+        created,
+        Hardware { kind: "windows".into(), platform: "Windows-App".into(), caps: vec!["folder".into(), "text".into(), "resume".into()] },
+        Config { servers: vec![], live: None, loopback: true, deaf: false },
+        Timing { poll: Duration::from_millis(100), busy: Duration::from_millis(100), list: Duration::from_millis(150), ..Timing::default() },
+        false,
+        None,
+    )
+}
+
+#[test]
+fn a_line_that_breaks_goes_on_from_what_arrived_when_the_sender_says_so() {
+    let drive = FakeDrive::start();
+    let now = sondra_devices::engine::now_ms();
+    let a = resuming_device(&drive, "Laptop", now - 5.0 * 86_400_000.0);
+    let b = resuming_device(&drive, "Handy", now - 86_400_000.0);
+    wait("A and B find each other with what they can", 20, || {
+        let can = |e: &Engine| e.snapshot().devices.first().is_some_and(|d| d["caps"].as_array().is_some_and(|c| c.iter().any(|v| v == "resume")));
+        can(&a) && can(&b)
+    });
+    let idb = b.snapshot().me.unwrap()["id"].as_str().unwrap().to_owned();
+    // A film read slowly, so that the line can be cut while it is on its way.
+    let film = bytes(12 * 1024 * 1024);
+    let source = film.clone();
+    let info = FileInfo { name: "Film.mp4".into(), size: film.len() as u64, mime: "video/mp4".into(), path: None };
+    a.send(&idb, vec![OutgoingFile { info, read: Box::new(move |x, y| {
+        std::thread::sleep(Duration::from_millis(4));
+        Ok(source[x as usize..y as usize].to_vec())
+    }) }]);
+    wait("B is asked", 20, || b.snapshot().transfers.iter().any(|t| t.state == State::Asking));
+    let id = b.snapshot().transfers[0].id.clone();
+    let (store, given): (Store, Arc<Mutex<u64>>) = (Arc::default(), Arc::default());
+    b.accept(&id, keeping_sinks(store.clone(), given.clone()));
+    wait("a part has arrived", 40, || b.snapshot().transfers[0].done > 2 * 1024 * 1024);
+    a.sever_for_test(&id);
+    wait("the sender sees the break and may go on", 30, || {
+        let t = a.snapshot().transfers[0].clone();
+        t.state == State::Failed && t.resumable
+    });
+    let before = *given.lock().unwrap();
+    assert!(before > 0 && before < film.len() as u64);
+    // „Fortsetzen“: no question on the other side, only the rest goes.
+    a.resume(&id);
+    wait("both done", 60, || a.snapshot().transfers[0].state == State::Done && b.snapshot().transfers[0].state == State::Done);
+    assert!(store.lock().unwrap()["Film.mp4"] == film, "the film is whole");
+    assert_eq!(*given.lock().unwrap(), film.len() as u64, "what had arrived was not sent twice");
+    assert!(!b.snapshot().transfers.iter().any(|t| t.state == State::Asking));
+}

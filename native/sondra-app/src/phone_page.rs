@@ -78,6 +78,11 @@ pub struct PhoneState {
     connecting: Option<Arc<Mutex<Connecting>>>,
     out: Option<SoundOut>,
     pub said: Option<String>,
+    /// What went wrong, in the library's own words, for „Technische Einzelheiten“.
+    pub detail: Option<String>,
+    pub detail_open: bool,
+    /// „Wenn es nicht klappt“ is unfolded (by itself after a failure, until it is folded).
+    pub help_open: Option<bool>,
     bounds: Rc<Cell<Bounds<Pixels>>>,
     focus: FocusHandle,
     /// Whether keys go to the phone (a click on the screen takes them, Ctrl+Alt+Esc gives them back).
@@ -117,6 +122,9 @@ impl PhoneState {
             connecting: None,
             out: None,
             said: None,
+            detail: None,
+            detail_open: false,
+            help_open: None,
             bounds: Rc::new(Cell::new(Bounds::default())),
             focus: cx.focus_handle().tab_stop(true),
             captured: false,
@@ -337,6 +345,8 @@ impl Shell {
                     return true;
                 }
                 Some(Err(error)) => {
+                    p.detail = Some(format!("{error:?}"));
+                    p.detail_open = false;
                     p.phase = Phase::Failed(error.to_string());
                     p.connecting = None;
                     return false;
@@ -631,6 +641,17 @@ impl Shell {
                 if let Phase::Failed(why) | Phase::Ended(why) = other {
                     block = block.child(ui.notice(if matches!(other, Phase::Failed(_)) { NoticeKind::Warning } else { NoticeKind::Info }, why.clone()));
                 }
+                if let (Phase::Failed(_), Some(detail)) = (other, &p.detail) {
+                    let me = me.clone();
+                    let open = p.detail_open;
+                    block = block.child(ui.button("handy-einzelheiten", if open { "Technische Einzelheiten ausblenden" } else { "Technische Einzelheiten" }).small().ghost().on_click(move |_, app| me.update(app, |sh, cx| {
+                        sh.phone.detail_open = !open;
+                        cx.notify();
+                    })));
+                    if open {
+                        block = block.child(div().w(px(420.)).child(ui.value(detail.clone())));
+                    }
+                }
                 if let Phase::Connecting(step) = other {
                     let text = match step {
                         Step::Connect => "Verbindung zum Handy wird aufgebaut",
@@ -694,6 +715,7 @@ impl Shell {
         let how = div().flex().flex_col().flex_none().w(px(420.)).gap(px(4.)).child(ui.subheading("So geht es")).child(steps);
         let row = div().flex().flex_wrap().items_start().gap(px(32.));
         page = page.child(if matches!(p.phase, Phase::Running) { row.child(block).child(how) } else { row.child(how).child(block) });
+        page = page.child(self.phone_help(&ui, cx));
         let _ = size::SMALL;
         let _ = point(px(0.), px(0.));
         page.into_any_element()
@@ -773,5 +795,36 @@ mod tests {
         assert!((total as i64 - 44_100).abs() <= 2, "{total}");
         let mut r = Resampler::new(48_000, 48_000);
         assert_eq!(r.run(&block).len(), block.len());
+    }
+}
+
+/// „Wenn es nicht klappt“: the usual troubles, each with what helps (the website's `Help`).
+const HELP: [(&str, &str); 7] = [
+    ("Das Handy steht nicht in der Liste.", "Anderes Kabel und anderen USB-Anschluss versuchen, USB-Debugging prüfen, das Handy entsperren."),
+    ("„Ein anderes Programm benutzt das Handy“.", "Es kann nur ein Programm zugleich auf das Handy zugreifen. Beenden Sie adb, Android Studio, scrcpy und Programme des Herstellers. Wer adb benutzt, gibt in der Konsole „adb kill-server“ ein."),
+    ("Windows gibt das Handy nicht frei.", "Hier hilft meist der USB-Treiber des Herstellers (oder der „Google USB Driver“). Das ist ein Erfahrungswert."),
+    ("Die Tasten schreiben falsche Buchstaben (y und z vertauscht).", "Das Handy behandelt Sondra als USB-Tastatur und wendet sein eigenes Tastaturlayout an. Einstellungen → System → Tastatur → Physische Tastatur → Layout „Deutsch“ wählen."),
+    ("Kein Ton.", "Den Ton gibt es ab Android 11. Das Handy selbst bleibt dabei stumm, solange es auf den Computer überträgt."),
+    ("Das Bild bleibt schwarz.", "Banking-Apps und andere geschützte Fenster erlauben keine Aufnahme; Android zeigt sie hier schwarz. Das ist keine Störung."),
+    ("Der Zulassen-Dialog kommt nicht.", "Ziehen Sie das Kabel ab, wählen Sie in den Entwickleroptionen „USB-Debugging-Autorisierungen widerrufen“ und verbinden Sie noch einmal."),
+];
+
+impl Shell {
+    fn phone_help(&self, ui: &Ui, cx: &mut Context<Self>) -> AnyElement {
+        let me = cx.entity();
+        let p = &self.phone;
+        let open = p.help_open.unwrap_or(matches!(p.phase, Phase::Failed(_)));
+        let mut block = div().flex().flex_col().gap(px(10.)).child(div().flex().child(
+            ui.button("handy-hilfe", if open { "Wenn es nicht klappt ▴" } else { "Wenn es nicht klappt ▾" }).ghost().accessible_name("Wenn es nicht klappt").on_click(move |_, app| me.update(app, |sh, cx| {
+                sh.phone.help_open = Some(!open);
+                cx.notify();
+            })),
+        ));
+        if open {
+            for (title, text) in HELP {
+                block = block.child(div().w(px(680.)).flex().flex_col().gap(px(2.)).child(ui.title(title)).child(ui.prose(text)));
+            }
+        }
+        block.into_any_element()
     }
 }

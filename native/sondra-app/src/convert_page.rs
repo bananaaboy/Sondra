@@ -446,6 +446,7 @@ impl Shell {
                     tile: None,
                     selected: false,
                     body: vec![div().flex_1().min_w(px(0.)).flex().flex_col().gap(px(2.)).child(ui.value(name)).child(div().text_size(px(size::SMALL)).text_color(c.prose).child(says)).into_any_element(), actions.into_any_element()],
+                    keys_pass: false,
                     on_open: std::rc::Rc::new(|_, _| {}),
                 });
             }

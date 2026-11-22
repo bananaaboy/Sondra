@@ -27,7 +27,7 @@ use crate::identity::{clean_name, random_id, DeviceKeys};
 use crate::registry::{Hardware, Incoming, Registry, BEAT_EVERY, LIST_EVERY};
 use crate::rtc::{Config, Initiator, Responder};
 use crate::transfer::{
-    receive_over, safe_file_name, send_over, split_path, ErrorCode, FileInfo, OutgoingFile, Options, Piece, Progress, Sink,
+    receive_over, safe_file_name, send_over, split_path, ErrorCode, FileInfo, Kept, OutgoingFile, Options, Piece, Progress, Sink, Wire,
 };
 
 /// More than this in one transfer is sent in parts.
@@ -97,6 +97,8 @@ pub struct Transfer {
     pub no_direct: bool,
     /// Offered to be played there, not kept: the receiver's button says „Abspielen“.
     pub play: bool,
+    /// The line broke and the other device keeps what came: „Fortsetzen“ offers the same files again (sender only).
+    pub resumable: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -152,6 +154,8 @@ enum Command {
     Send { to: String, files: Vec<OutgoingFile>, play: bool },
     PlayInDrive { to: String, items: Vec<PlayItem> },
     ViaDrive(String),
+    Resume(String),
+    Sever(String),
     DismissNote(String),
     Rename(String),
     Remove(String),
@@ -212,6 +216,45 @@ struct Control {
     answer: Option<Sender<Result<String, State>>>,
     /// The way through Drive took over: the direct attempt ends without saying anything.
     switched: Arc<AtomicBool>,
+    /// For tests: the line is cut here, as when a network goes away mid-transfer.
+    cut: Arc<AtomicBool>,
+}
+
+/// A line that can be cut from outside: from then on it is closed, both ways, as a dead network is.
+struct Severable<W: Wire> {
+    inner: W,
+    cut: Arc<AtomicBool>,
+}
+
+impl<W: Wire> Severable<W> {
+    fn gone(&mut self) -> bool {
+        if self.cut.load(Ordering::SeqCst) {
+            self.inner.close();
+            return true;
+        }
+        false
+    }
+}
+
+impl<W: Wire> Wire for Severable<W> {
+    fn send(&mut self, frame: crate::transfer::Frame) -> Result<(), crate::transfer::Closed> {
+        if self.gone() {
+            return Err(crate::transfer::Closed);
+        }
+        self.inner.send(frame)
+    }
+    fn buffered(&self) -> usize {
+        self.inner.buffered()
+    }
+    fn recv(&mut self, timeout: Duration) -> Result<Option<crate::transfer::Frame>, crate::transfer::Closed> {
+        if self.gone() {
+            return Err(crate::transfer::Closed);
+        }
+        self.inner.recv(timeout)
+    }
+    fn close(&mut self) {
+        self.inner.close();
+    }
 }
 
 /// Told when the name this device carries or the answer to „Das war dieses Gerät?“ changed: the app keeps it.
@@ -250,7 +293,7 @@ impl Engine {
         }));
         let (commands, inbox) = channel();
         let stop = Arc::new(AtomicBool::new(false));
-        let worker = Worker { registry, shared: shared.clone(), config, timing, controls: HashMap::new(), offers: HashMap::new(), pending: HashMap::new(), sinks: HashMap::new(), handed: HashMap::new(), stop: stop.clone(), on_own_change, told: (name.to_owned(), decided) };
+        let worker = Worker { registry, shared: shared.clone(), config, timing, controls: HashMap::new(), offers: HashMap::new(), pending: HashMap::new(), sinks: HashMap::new(), handed: HashMap::new(), kept: Arc::new(Mutex::new(HashMap::new())), held: HashMap::new(), stop: stop.clone(), on_own_change, told: (name.to_owned(), decided) };
         let thread = thread::Builder::new().name("sondra-devices".into()).spawn(move || worker.run(inbox)).ok();
         Engine { shared, commands, stop, thread }
     }
@@ -292,6 +335,16 @@ impl Engine {
         self.command(Command::Text { to: to.to_owned(), text: text.to_owned() });
     }
     /// When the line has not opened: the files go through Drive instead.
+    /// „Fortsetzen“: the same files to the same device after the line broke; it goes on from what it kept.
+    pub fn resume(&self, id: &str) {
+        self.command(Command::Resume(id.to_owned()));
+    }
+
+    /// For tests: cuts the line of a transfer on this side, as a network that goes away does.
+    pub fn sever_for_test(&self, id: &str) {
+        self.command(Command::Sever(id.to_owned()));
+    }
+
     pub fn send_via_drive(&self, id: &str) {
         self.command(Command::ViaDrive(id.to_owned()));
     }
@@ -344,6 +397,10 @@ struct Worker<T: TokenSource> {
     sinks: HashMap<String, SinkMaker>,
     /// A hand-over that came before the person said yes.
     handed: HashMap<String, Value>,
+    /// What a broken incoming transfer kept on this side, for when the sender goes on.
+    kept: Arc<Mutex<HashMap<String, Kept>>>,
+    /// A resumed offer that came before this side saw its line break: taken up once the break is registered.
+    held: HashMap<String, (String, Value)>,
     stop: Arc<AtomicBool>,
     on_own_change: Option<OnOwnChange>,
     told: (String, bool),
@@ -417,6 +474,7 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
             for message in incoming {
                 self.handle(message, events);
             }
+            self.release_held(events);
             Ok::<(), sondra_drive::DriveError>(())
         })();
         match result {
@@ -475,10 +533,6 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
             }
             "offer" => {
                 let (Some(sdp), Some(list)) = (m.body["sdp"].as_str(), m.body["files"].as_array()) else { return };
-                let exists = self.shared.lock().unwrap().transfers.iter().any(|t| t.id == m.transfer);
-                if exists {
-                    return;
-                }
                 let files: Vec<FileInfo> = list
                     .iter()
                     .take(FOLDER_FILES_MAX)
@@ -493,13 +547,38 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                         }
                     })
                     .collect();
+                let existing = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == m.transfer).map(|t| (t.outgoing, t.peer.clone(), t.files.clone(), t.state));
+                if let Some((outgoing, peer, known, state)) = existing {
+                    // The same transfer again after a break: a receiver that kept the first part goes on by itself,
+                    // since it said yes to exactly these files; one that kept nothing treats it as a new offer.
+                    let same = !outgoing && peer == m.from && known.len() == files.len() && known.iter().zip(&files).all(|(a, b)| a.name == b.name && a.size == b.size && a.path == b.path);
+                    let resume = m.body["resume"].as_bool() == Some(true);
+                    if same && resume && matches!(state, State::Connecting | State::Receiving) {
+                        // The sender gave up on the line before this side saw it break: held until it does.
+                        self.held.insert(m.transfer, (m.from, m.body));
+                        return;
+                    }
+                    if !same || !resume || state != State::Failed {
+                        return;
+                    }
+                    let kept = self.kept.lock().unwrap().remove(&m.transfer);
+                    if let (Some(kept), Some(sinks)) = (kept, self.sinks.get(&m.transfer).cloned()) {
+                        patch(&self.shared, &m.transfer, |t| {
+                            t.state = State::Connecting;
+                            t.error = None;
+                        });
+                        self.receive(m.transfer, m.from, sdp.to_owned(), sinks, Some(kept), events);
+                        return;
+                    }
+                    self.shared.lock().unwrap().transfers.retain(|t| t.id != m.transfer);
+                }
                 self.offers.insert(m.transfer.clone(), sdp.to_owned());
                 let total = files.iter().map(|f| f.size).sum();
                 // One film, not too large: offered to be played, not kept.
                 let play = m.body["play"].as_bool() == Some(true) && files.len() == 1 && total <= PLAY_TRANSFER_MAX;
                 self.shared.lock().unwrap().transfers.insert(
                     0,
-                    Transfer { id: m.transfer, outgoing: false, peer: m.from, peer_name, files, total, done: 0, state: State::Asking, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false, play },
+                    Transfer { id: m.transfer, outgoing: false, peer: m.from, peer_name, files, total, done: 0, state: State::Asking, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false, play, resumable: false },
                 );
             }
             "drive" => {
@@ -636,6 +715,12 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 }
             }
             Command::ViaDrive(id) => self.send_via_drive(id, events),
+            Command::Resume(id) => self.resume(id, events),
+            Command::Sever(id) => {
+                if let Some(control) = self.controls.get(&id) {
+                    control.cut.store(true, Ordering::SeqCst);
+                }
+            }
             Command::Send { to, files, play } => self.send(to, files, play, events),
             Command::PlayInDrive { to, items } => self.play_in_drive(&to, items, events),
             Command::Accept { id, sinks } => self.accept(id, sinks, events),
@@ -662,14 +747,36 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
         let peer_name = self.name_of(&to);
         self.shared.lock().unwrap().transfers.insert(
             0,
-            Transfer { id: id.clone(), outgoing: true, peer: to.clone(), peer_name, files: infos.clone(), total, done: 0, state: State::Offering, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false, play },
+            Transfer { id: id.clone(), outgoing: true, peer: to.clone(), peer_name, files: infos.clone(), total, done: 0, state: State::Offering, error: None, places: vec![], at: now_ms(), dismissed: false, route: Route::Direct, no_direct: false, play, resumable: false },
         );
+        let files = Arc::new(Mutex::new(files));
+        self.pending.insert(id.clone(), files.clone());
+        self.spawn_outgoing(id, to, files, infos, play, false, events);
+    }
+
+    /// „Fortsetzen“: an outgoing transfer whose line broke, offered again with the same id and files.
+    fn resume(&mut self, id: String, events: &Sender<Event>) {
+        let found = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == id && t.outgoing && t.resumable).map(|t| (t.peer.clone(), t.files.clone(), t.play));
+        let (Some((to, infos, play)), Some(files)) = (found, self.pending.get(&id).cloned()) else { return };
+        patch(&self.shared, &id, |t| {
+            t.state = State::Offering;
+            t.error = None;
+            t.resumable = false;
+            t.no_direct = false;
+        });
+        self.spawn_outgoing(id, to, files, infos, play, true, events);
+    }
+
+    /// Offers the files and, on the answer, sends them over the line; a broken line to a device that can go on leaves
+    /// the transfer resumable.
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_outgoing(&mut self, id: String, to: String, files: Arc<Mutex<Vec<OutgoingFile>>>, infos: Vec<FileInfo>, play: bool, resume: bool, events: &Sender<Event>) {
         let cancel = Arc::new(AtomicBool::new(false));
         let switched = Arc::new(AtomicBool::new(false));
         let (answer_tx, answer_rx) = channel::<Result<String, State>>();
-        self.controls.insert(id.clone(), Control { cancel: cancel.clone(), answer: Some(answer_tx), switched: switched.clone() });
-        let files = Arc::new(Mutex::new(files));
-        self.pending.insert(id.clone(), files.clone());
+        let cut = Arc::new(AtomicBool::new(false));
+        self.controls.insert(id.clone(), Control { cancel: cancel.clone(), answer: Some(answer_tx), switched: switched.clone(), cut: cut.clone() });
+        let can_resume = crate::identity::can(self.registry.devices.iter().find(|d| d["id"].as_str() == Some(to.as_str())), "resume");
         let (shared, config, events, no_direct_after) = (self.shared.clone(), self.config.clone(), events.clone(), self.timing.no_direct_sender);
         thread::spawn(move || {
             let fail = |state: State, error: Option<String>| {
@@ -688,7 +795,14 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 Ok(pair) => pair,
                 Err(e) => return fail(State::Failed, Some(e.to_string())),
             };
-            let _ = events.send(Event::Post { to: to.clone(), kind: "offer", transfer: id.clone(), body: if play { json!({ "sdp": offer, "files": infos, "play": true }) } else { json!({ "sdp": offer, "files": infos }) } });
+            let mut body = json!({ "sdp": offer, "files": infos });
+            if play {
+                body["play"] = json!(true);
+            }
+            if resume {
+                body["resume"] = json!(true);
+            }
+            let _ = events.send(Event::Post { to: to.clone(), kind: "offer", transfer: id.clone(), body });
             let answer = match answer_rx.recv_timeout(OFFER_TIMEOUT) {
                 Ok(Ok(sdp)) => sdp,
                 Ok(Err(state)) => return fail(state, None),
@@ -704,7 +818,7 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 return fail(State::Failed, Some("Keine Verbindung zustande gekommen.".into()));
             }
             let mut wire = match initiator.connect(&answer, CONNECT_WAIT) {
-                Ok(w) => w,
+                Ok(w) => Severable { inner: w, cut: cut.clone() },
                 Err(e) => return fail(State::Failed, Some(e.to_string())),
             };
             if cancel.load(Ordering::SeqCst) {
@@ -730,11 +844,16 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 }),
                 Err(e) => {
                     let state = if matches!(e.code, ErrorCode::Cancelled | ErrorCode::Refused) { State::Cancelled } else { State::Failed };
+                    let broke = e.code == ErrorCode::Closed && can_resume;
                     fail(state, Some(e.message));
+                    if broke && !switched.load(Ordering::SeqCst) {
+                        patch(&shared, &id, |t| t.resumable = true);
+                    }
                 }
             }
         });
     }
+
 
     /// Stops the direct attempt of a transfer without a word and gives it a fresh control for the way through Drive.
     fn switch_to_drive(&mut self, id: &str) -> (Arc<AtomicBool>, String) {
@@ -746,7 +865,7 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
             }
         }
         let cancel = Arc::new(AtomicBool::new(false));
-        self.controls.insert(id.to_owned(), Control { cancel: cancel.clone(), answer: None, switched: Arc::new(AtomicBool::new(false)) });
+        self.controls.insert(id.to_owned(), Control { cancel: cancel.clone(), answer: None, switched: Arc::new(AtomicBool::new(false)), cut: Arc::new(AtomicBool::new(false)) });
         patch(&self.shared, id, |t| {
             t.state = State::ViaDrive;
             t.route = Route::Drive;
@@ -855,6 +974,26 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
         });
     }
 
+    /// Resumed offers held while the old line still seemed open: taken up once it is registered as broken, dropped
+    /// when the transfer ended otherwise.
+    fn release_held(&mut self, events: &Sender<Event>) {
+        let ids: Vec<String> = self.held.keys().cloned().collect();
+        for id in ids {
+            let state = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == id).map(|t| t.state);
+            match state {
+                Some(State::Connecting | State::Receiving) => {}
+                Some(State::Failed) => {
+                    if let Some((from, body)) = self.held.remove(&id) {
+                        self.handle(Incoming { id: String::new(), from, kind: "offer".into(), transfer: id, body }, events);
+                    }
+                }
+                _ => {
+                    self.held.remove(&id);
+                }
+            }
+        }
+    }
+
     fn accept(&mut self, id: String, sinks: SinkMaker, events: &Sender<Event>) {
         let Some(sdp) = self.offers.remove(&id) else { return };
         let found = self.shared.lock().unwrap().transfers.iter().find(|t| t.id == id && t.state == State::Asking).map(|t| (t.peer.clone(), t.total));
@@ -866,10 +1005,18 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
             self.offers.remove(&id);
             return self.receive_via_drive(id, body, events);
         }
+        self.receive(id, peer, sdp, sinks, None, events);
+    }
+
+    /// The answer, the line and the files over it — for the first attempt and, with what was `kept`, after a break.
+    /// A line that breaks keeps what came (`Kept`), for the sender's „Fortsetzen“.
+    fn receive(&mut self, id: String, peer: String, sdp: String, sinks: SinkMaker, kept: Option<Kept>, events: &Sender<Event>) {
         let cancel = Arc::new(AtomicBool::new(false));
         let switched = Arc::new(AtomicBool::new(false));
-        self.controls.insert(id.clone(), Control { cancel: cancel.clone(), answer: None, switched: switched.clone() });
+        let cut = Arc::new(AtomicBool::new(false));
+        self.controls.insert(id.clone(), Control { cancel: cancel.clone(), answer: None, switched: switched.clone(), cut: cut.clone() });
         let (shared, config, events, no_direct_after) = (self.shared.clone(), self.config.clone(), events.clone(), self.timing.no_direct_receiver);
+        let keeper = self.kept.clone();
         thread::spawn(move || {
             let fail = |state: State, error: Option<String>| {
                 if switched.load(Ordering::SeqCst) {
@@ -893,7 +1040,7 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
                 return fail(State::Failed, Some("Keine Verbindung zustande gekommen.".into()));
             }
             let mut wire = match responder.connect(CONNECT_WAIT) {
-                Ok(w) => w,
+                Ok(w) => Severable { inner: w, cut: cut.clone() },
                 Err(e) => return fail(State::Failed, Some(e.to_string())),
             };
             if switched.load(Ordering::SeqCst) {
@@ -905,13 +1052,20 @@ impl<T: TokenSource + Send + Sync + 'static> Worker<T> {
             });
             let mut progress = |p: Progress| patch(&shared, &id, |t| t.done = p.done);
             let mut make = |file: &FileInfo, i: usize, piece: Option<&Piece>| sinks(file, i, piece);
-            let result = receive_over(&mut wire, &mut make, &mut |_| {}, None, None, Options { on_progress: Some(&mut progress), cancel: Some(cancel.clone()) });
+            let keep_id = id.clone();
+            let mut on_kept = |what: Kept| {
+                keeper.lock().unwrap().insert(keep_id.clone(), what);
+            };
+            let result = receive_over(&mut wire, &mut make, &mut |_| {}, kept, Some(&mut on_kept), Options { on_progress: Some(&mut progress), cancel: Some(cancel.clone()) });
             match result {
-                Ok(places) => patch(&shared, &id, |t| {
-                    t.state = State::Done;
-                    t.done = t.total;
-                    t.places = places;
-                }),
+                Ok(places) => {
+                    keeper.lock().unwrap().remove(&id);
+                    patch(&shared, &id, |t| {
+                        t.state = State::Done;
+                        t.done = t.total;
+                        t.places = places;
+                    })
+                }
                 Err(e) => {
                     let state = if matches!(e.code, ErrorCode::Cancelled | ErrorCode::Refused) { State::Cancelled } else { State::Failed };
                     fail(state, Some(e.message));

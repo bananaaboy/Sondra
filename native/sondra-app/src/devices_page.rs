@@ -146,6 +146,8 @@ pub(crate) fn say(t: &Transfer) -> String {
         (State::Declined, false) => format!("Abgelehnt: {}", files_phrase(&t.files)),
         (State::Cancelled, _) => format!("Abgebrochen: {}", files_phrase(&t.files)),
         (State::Expired, _) => format!("Keine Antwort von „{peer}“ — das Angebot ist verfallen."),
+        (State::Failed, true) if t.resumable => format!("Die Verbindung zu „{peer}“ ist abgerissen ({} von {} angekommen). „Fortsetzen“ schickt nur den Rest.", bytes(t.done), bytes(t.total)),
+        (State::Failed, false) if t.done > 0 => format!("Die Verbindung zu „{peer}“ ist abgerissen ({} von {} sind da und bleiben). Setzt „{peer}“ fort, geht es von dort weiter.", bytes(t.done), bytes(t.total)),
         (State::Failed, _) => format!("Nicht geklappt: {}{}", files_phrase(&t.files), t.error.as_ref().map(|e| format!(" — {e}")).unwrap_or_default()),
     }
 }
@@ -802,6 +804,17 @@ fn transfer_row(ui: Ui, me: &Entity<Shell>, t: &Transfer, dir: &std::path::Path)
             buttons = buttons.child(ui.button(format!("ankunft-abspielen-{}", t.id), "Abspielen").small().primary().accessible_name(format!("{} abspielen", files_phrase(&t.files))).on_click(move |_, app| {
                 let id = id.clone();
                 me.update(app, |shell, cx| shell.devices_play_arrived(&id, cx))
+            }));
+        } else if t.state == State::Failed && t.outgoing && t.resumable {
+            let (me, id) = (me.clone(), t.id.clone());
+            buttons = buttons.child(ui.button(format!("fortsetzen-{}", t.id), "Fortsetzen").small().primary().accessible_name(format!("Übertragung an {} fortsetzen", t.peer_name)).on_click(move |_, app| {
+                let id = id.clone();
+                me.update(app, |shell, cx| {
+                    if let Some(e) = &shell.devices.engine {
+                        e.resume(&id);
+                    }
+                    cx.notify();
+                })
             }));
         } else if t.state == State::Done && !t.outgoing {
             let folder = dir.to_path_buf();

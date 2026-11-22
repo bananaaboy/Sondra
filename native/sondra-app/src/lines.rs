@@ -24,6 +24,9 @@ pub struct Line {
     /// to be invoked in UI Automation, so the word goes in the description.
     pub selected: bool,
     pub body: Vec<AnyElement>,
+    /// Space and Enter go on to the page instead of opening the line (the files of the Ordner page: Space adds the
+    /// file to the choice, Enter plays it).
+    pub keys_pass: bool,
     pub on_open: Handler,
 }
 
@@ -36,6 +39,7 @@ impl RenderOnce for Line {
             .clone();
         let open = self.on_open.clone();
         let key = self.on_open.clone();
+        let passes = self.keys_pass;
         let mut line = div()
             .id(ElementId::Name(format!("{}-bild", self.id).into()))
             .track_focus(&focus)
@@ -52,7 +56,7 @@ impl RenderOnce for Line {
             })
             .on_click(move |_, window, cx| open(window, cx))
             .on_key_down(move |event, window, cx| {
-                if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                if !passes && matches!(event.keystroke.key.as_str(), "enter" | "space") {
                     key(window, cx);
                     cx.stop_propagation();
                 }

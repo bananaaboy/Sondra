@@ -82,7 +82,7 @@ pub fn production() -> Option<Setup> {
                 own.keys,
                 &own.name,
                 own.created,
-                Hardware { kind: "windows".into(), platform: "Windows-App".into(), caps: vec!["folder".into(), "text".into(), "play".into()] },
+                Hardware { kind: "windows".into(), platform: "Windows-App".into(), caps: vec!["folder".into(), "text".into(), "play".into(), "resume".into()] },
                 Config { servers: Vec::new(), live: Some({ let live = live.clone(); Arc::new(move || ice_servers_for(&live.lock().expect("lock"))) }), loopback: false, deaf: false },
                 Timing::default(),
                 own.decided,

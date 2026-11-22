@@ -23,7 +23,7 @@ use crate::shell::Shell;
 use crate::store::FileStore;
 
 /// Lines drawn at once; more on request — a folder of thousands stays quick.
-const PAGE: usize = 240;
+pub(crate) const PAGE: usize = 240;
 /// A tile and the picture on it.
 const TILE_W: f32 = 232.0;
 const TILE_H: f32 = 130.0;
@@ -133,6 +133,17 @@ pub struct FolderState {
     pub dupes: crate::folder_dupes::Dupes,
     /// „Eine Serie erkannt“.
     pub offer: crate::folder_series::Offer,
+    /// The folders opened last (five), and whether their menu is open.
+    pub recent: Vec<PathBuf>,
+    pub recent_open: bool,
+    /// The file the keyboard is on.
+    pub cursor: Option<String>,
+    /// A job for the selection (into Drive, subtitles) in the background.
+    pub work: Option<Arc<std::sync::Mutex<crate::folder_actions::Work>>>,
+    /// „An Geräte senden …“ is open.
+    pub send_open: bool,
+    /// „Untertitel erzeugen“ found no speech model: the page offers the way to it.
+    pub needs_model: bool,
 }
 
 /// The window onto Sondra's bin in this folder.
@@ -184,12 +195,20 @@ impl FolderState {
             thumbs: Default::default(),
             dupes: Default::default(),
             offer: Default::default(),
+            recent: Vec::new(),
+            recent_open: false,
+            cursor: None,
+            work: None,
+            send_open: false,
+            needs_model: false,
         }
     }
 
     /// Takes what the page remembered: the folder of the last time, to be offered.
     pub fn remember_from(&mut self, store: FileStore) {
         self.remembered = store.get_item(PATH_KEY).map(PathBuf::from).filter(|p| p.is_dir());
+        let list: Vec<String> = store.get_item("sondra:ordner:zuletzt").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+        self.recent = list.into_iter().map(PathBuf::from).filter(|p| p.is_dir()).collect();
         self.memory = Some(store);
     }
 
@@ -210,6 +229,7 @@ impl FolderState {
         let (next, anchor) = click_select(&self.selected, order, self.anchor.as_deref(), path, toggle, range);
         self.selected = next;
         self.anchor = Some(anchor);
+        self.cursor = Some(path.to_string());
     }
 }
 
@@ -226,7 +246,7 @@ fn extension_of(name: &str) -> String {
 }
 
 impl Shell {
-    fn folder_do(me: &Entity<Shell>, app: &mut App, change: impl FnOnce(&mut FolderState)) {
+    pub(crate) fn folder_do(me: &Entity<Shell>, app: &mut App, change: impl FnOnce(&mut FolderState)) {
         me.update(app, |shell, cx| {
             change(&mut shell.folder);
             cx.notify();
@@ -293,7 +313,12 @@ impl Shell {
                         store.set_item(PATH_KEY, root.to_string_lossy().into_owned());
                     }
                 }
+                f.cursor = None;
+                let local = (!scan.drive).then(|| f.root.clone()).flatten();
                 f.scan = Some(scan);
+                if let Some(root) = local {
+                    self.folder_note_recent(&root);
+                }
             }
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
                 f.root = None;
@@ -418,6 +443,9 @@ impl Shell {
                     if self.drive.as_ref().is_some_and(|d| d.configured) && !scan.drive {
                         let me = me.clone();
                         right = right.child(ui.button("ordner-aus-drive", "Aus Google Drive").small().ghost().on_click(move |_, app| me.update(app, |shell, cx| shell.open_drive_folder(cx))));
+                    }
+                    if let Some(recent) = self.folder_recent_button(&ui, cx) {
+                        right = right.child(recent);
                     }
                     let me = me.clone();
                     right.child(ui.button("anderer-ordner", if scan.drive { "Ordner auf diesem Gerät" } else { "Anderen Ordner wählen" }).small().on_click(move |_, app| me.update(app, |shell, cx| shell.choose_folder(cx))))
@@ -558,6 +586,7 @@ impl Shell {
                         let me = me.clone();
                         ui.button("auswahl-loeschen", "Löschen …").small().on_click(move |_, app| me.update(app, |shell, cx| shell.ask_delete(cx)))
                     })
+                    .children(self.folder_selection_buttons(&ui, cx))
                     .children(self.play_on_device_buttons(&ui, &me))
                     .child(ui.button("auswahl-aufheben", "Auswahl aufheben").small().on_click(move |_, app| {
                         Self::folder_do(&me, app, |f| {
@@ -566,6 +595,17 @@ impl Shell {
                         })
                     })),
             );
+        }
+
+        if let Some(menu) = self.folder_send_menu(&ui, cx) {
+            page = page.child(menu);
+        }
+        if f.needs_model {
+            let me = me.clone();
+            page = page.child(div().flex().child(ui.button("zum-sprachmodell", "Zum Werkzeug „Untertitel“").small().on_click(move |_, app| me.update(app, |shell, cx| {
+                shell.folder.needs_model = false;
+                shell.go(crate::nav::Panel::Subtitles, cx)
+            }))));
         }
 
         if view.dirs.is_empty() && view.files.is_empty() {
@@ -607,6 +647,7 @@ impl Shell {
                         div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(says.trim_start_matches("Ordner. ").to_string()).into_any_element(),
                     ]
                 },
+                keys_pass: false,
                 on_open: std::rc::Rc::new(move |_, app| {
                     let path = path.clone();
                     Self::folder_do(&me, app, move |f| {
@@ -669,6 +710,7 @@ impl Shell {
                         div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(facts).into_any_element(),
                     ]
                 },
+                keys_pass: true,
                 on_open: std::rc::Rc::new(move |window, app| {
                     let modifiers = window.modifiers();
                     let (toggle, range) = (modifiers.control || modifiers.platform, modifiers.shift);
@@ -689,13 +731,14 @@ impl Shell {
             }
         }
         if total > f.shown {
+            page = page.child(self.folder_more_on_sight(cx));
             let me = me.clone();
             let more = (total - f.shown).min(PAGE);
             page = page.child(div().flex().child(ui.button("weitere-zeigen", format!("Weitere {more} zeigen")).on_click(move |_, app| {
                 Self::folder_do(&me, app, |f| f.shown += PAGE)
             })));
         }
-        page = page.child(ui.hint("Klick wählt, Strg dazu, Umschalt einen Bereich; ▶ auf einer Kachel spielt sie ab, „Abspielen“ unten die Auswahl."));
+        page = page.child(ui.hint("Klick wählt, Strg dazu, Umschalt einen Bereich; die Pfeile gehen durch die Liste (mit Umschalt als Bereich), die Leertaste wählt dazu, Strg+A alles, Escape nichts, Enter spielt ab. ▶ auf einer Kachel spielt sie ab."));
         page.into_any_element()
     }
 
@@ -1121,6 +1164,7 @@ impl Shell {
                         div().flex_1().min_w(px(0.)).child(ui.value(item.name.clone())).into_any_element(),
                         div().flex_none().text_size(px(size::SMALL)).text_color(ui.c.prose).child(says).into_any_element(),
                     ],
+                    keys_pass: false,
                     on_open: std::rc::Rc::new(move |_, app| {
                         let name = name.clone();
                         Self::folder_do(&me, app, move |f| {
@@ -1185,7 +1229,10 @@ impl Shell {
             let me = me.clone();
             ways = ways.child(ui.button("ordner-aus-drive", "Aus Google Drive").on_click(move |_, app| me.update(app, |shell, cx| shell.open_drive_folder(cx))));
         }
-        if let Some(path) = &self.folder.remembered {
+        let recent = self.folder_recent_ways(&ui, &me);
+        let remembered_listed = self.folder.remembered.as_ref().is_some_and(|r| self.folder.recent.contains(r));
+        ways = ways.children(recent);
+        if let Some(path) = self.folder.remembered.as_ref().filter(|_| !remembered_listed) {
             let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
             let path = path.clone();
             ways = ways.child(ui.button("wieder-oeffnen", format!("„{name}“ wieder öffnen")).on_click(move |_, app| {

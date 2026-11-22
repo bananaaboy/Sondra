@@ -729,3 +729,103 @@ fn what_the_list_has_seen_can_be_left_out_of_the_view(cx: &mut TestAppContext) {
     w.press(Role::Button, "Nur Ungesehenes zeigen");
     assert_eq!(w.files().len(), 4);
 }
+
+fn labels(w: &Window) -> Vec<String> {
+    w.tree().nodes.iter().filter_map(|n| n.label.as_ref().map(|l| l.to_string())).collect()
+}
+
+fn chosen(w: &Window) -> Vec<String> {
+    w.tree().nodes.iter().filter(|n| n.role == Role::ListItem && n.description.as_ref().is_some_and(|d| d.starts_with("Ausgewählt."))).filter_map(|n| n.label.as_ref().map(|l| l.to_string())).collect()
+}
+
+fn focus(w: &mut Window, role: Role, label: &str) {
+    let id = w.tree().find(role, label).unwrap_or_else(|| panic!("{label}")).id;
+    w.cx.update(|window, cx| run_action(ActionRequest { action: Action::Focus, target_tree: TreeId::ROOT, target_node: id, data: None }, window, cx));
+    w.draw();
+}
+
+#[gpui::test]
+fn the_keyboard_goes_through_the_list_and_the_choice_goes_into_the_session(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = folder(tmp.path());
+    let mut w = open(cx, tmp.path());
+    w.read(&root);
+    let files: Vec<String> = w.files().into_iter().filter(|f| f.contains('.')).collect();
+    // The keyboard is in the list (as after a click into it).
+    focus(&mut w, Role::ListItem, &files[0].clone());
+    // Down chooses the first file, then the next; Shift+Down takes a run; Space adds one; Strg+A all; Escape none.
+    w.cx.simulate_keystrokes("down");
+    w.draw();
+    assert_eq!(chosen(&w), vec![files[0].clone()], "{:?}", labels(&w));
+    w.cx.simulate_keystrokes("down");
+    w.draw();
+    assert_eq!(chosen(&w), vec![files[1].clone()]);
+    w.cx.simulate_keystrokes("shift-down");
+    w.draw();
+    assert_eq!(chosen(&w), vec![files[1].clone(), files[2].clone()]);
+    // Space takes the file the keyboard is on away, and adds it again.
+    w.cx.simulate_keystrokes("space");
+    w.draw();
+    assert_eq!(chosen(&w), vec![files[1].clone()]);
+    w.cx.simulate_keystrokes("space");
+    w.draw();
+    assert_eq!(chosen(&w).len(), 2);
+    w.cx.simulate_keystrokes("ctrl-a");
+    w.draw();
+    assert_eq!(chosen(&w).len(), files.len());
+    w.cx.simulate_keystrokes("escape");
+    w.draw();
+    assert!(chosen(&w).is_empty());
+
+    // Into the session: the files of this computer, nothing copied.
+    w.press(Role::ListItem, "film.mp4");
+    w.press(Role::Button, "Gewählte Dateien in die Sitzung");
+    let session = w.shell.read_with(w.cx, |s, _| s.session_files());
+    assert_eq!(session, vec![root.join("film.mp4")]);
+    assert!(labels(&w).iter().any(|l| l == "1 Datei ist in der Sitzung."));
+    // Subtitles need the speech model: said, with the way to it.
+    w.press(Role::Button, "Untertitel für die gewählten Filme erzeugen");
+    assert!(labels(&w).iter().any(|l| l.starts_with("Dafür fehlt das Sprachmodell.")), "{:?}", labels(&w));
+    w.press(Role::Button, "Zum Werkzeug „Untertitel“");
+    assert_eq!(w.shell.read_with(w.cx, |s, _| s.panel()), Panel::Subtitles);
+}
+
+#[gpui::test]
+fn the_folders_opened_last_are_offered_and_a_long_folder_grows_as_one_scrolls(cx: &mut TestAppContext) {
+    let tmp = tempfile::tempdir().unwrap();
+    let anime = folder(tmp.path());
+    let musik = tmp.path().join("Musik");
+    for i in 0..600 {
+        put(&musik, &format!("Notiz {i:03}.txt"), 10);
+    }
+    {
+        let mut w = open(cx, tmp.path());
+        w.read(&anime);
+        w.read(&musik);
+        // The other folder is a menu in the head.
+        w.press(Role::Button, "Zuletzt geöffnete Ordner");
+        assert!(w.tree().find(Role::MenuItem, "„Anime“").is_some(), "{:?}", labels(&w));
+        w.press(Role::MenuItem, "„Anime“");
+        w.cx.run_until_parked();
+        w.draw();
+        assert!(w.files().iter().any(|f| f == "film.mp4"));
+        w.read(&musik);
+        // 600 files: the first page, and the next comes as the end of the list nears — scrolled down by the wheel.
+        assert_eq!(w.files().len(), 240);
+        for _ in 0..6 {
+            w.cx.simulate_event(gpui::ScrollWheelEvent { position: point(px(700.), px(500.)), delta: gpui::ScrollDelta::Pixels(point(px(0.), px(-20000.))), modifiers: Modifiers::default(), touch_phase: gpui::TouchPhase::Moved });
+            w.cx.run_until_parked();
+            w.draw();
+        }
+        let shown = w.files().len();
+        assert!(shown > 240, "the next page came by itself: {shown}");
+    }
+    let shown_recent = w_recent(cx, tmp.path());
+    assert_eq!(shown_recent, vec!["„Musik“ wieder öffnen".to_string(), "„Anime“ öffnen".to_string()]);
+}
+
+/// A new start: the empty page offers the folders of the last time, the last one first.
+fn w_recent(cx: &mut TestAppContext, data: &Path) -> Vec<String> {
+    let w = open(cx, data);
+    labels(&w).into_iter().filter(|l| l.ends_with("öffnen") && l.starts_with('„')).collect()
+}

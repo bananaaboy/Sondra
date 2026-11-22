@@ -45,6 +45,22 @@ impl Sink for FileSink {
         self.file.take();
         let _ = fs::remove_file(&self.part);
     }
+
+    /// The line broke: the part file stays where it is, flushed, and says how far it got — the same transfer taken up
+    /// again goes on from there (checked: the part file must still be exactly that long).
+    fn suspend(&mut self) -> Option<Piece> {
+        let mut file = self.file.take()?;
+        file.flush().ok()?;
+        let _ = file.sync_all();
+        let bytes = file.metadata().ok()?.len();
+        drop(file);
+        if bytes == 0 {
+            let _ = fs::remove_file(&self.part);
+            return None;
+        }
+        let part = self.part.clone();
+        Some(Piece { bytes, token: part.to_string_lossy().into_owned(), intact: Some(Arc::new(move || fs::metadata(&part).is_ok_and(|m| m.len() == bytes))) })
+    }
 }
 
 /// A folder is a place only if it stays inside the folder it was made for.
@@ -55,7 +71,7 @@ fn inside(root: &Path, dir: &Path) -> bool {
 /// Sinks that write into `root` (made when needed), keeping the folders a sent folder came in.
 pub fn folder_sinks(root: PathBuf) -> SinkMaker {
     let label = root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    Arc::new(move |file: &FileInfo, index: usize, _piece: Option<&Piece>| -> io::Result<Box<dyn Sink>> {
+    Arc::new(move |file: &FileInfo, index: usize, piece: Option<&Piece>| -> io::Result<Box<dyn Sink>> {
         let (dir, name) = split_path(file.path.as_deref(), &file.name);
         let target = if dir.is_empty() { root.clone() } else { root.join(dir.split('/').collect::<PathBuf>()) };
         if !inside(&root, &target) {
@@ -63,7 +79,18 @@ pub fn folder_sinks(root: PathBuf) -> SinkMaker {
         }
         fs::create_dir_all(&target)?;
         let part = target.join(format!("{name}.{index}{PART}"));
-        let handle = File::create(&part)?;
+        // Going on after a break: the part file of the piece, cut to exactly what was kept, written on at its end.
+        let resumed = piece.filter(|p| Path::new(&p.token) == part && fs::metadata(&part).is_ok_and(|m| m.len() >= p.bytes));
+        let handle = match resumed {
+            Some(piece) => {
+                let file = fs::OpenOptions::new().write(true).open(&part)?;
+                file.set_len(piece.bytes)?;
+                let mut file = file;
+                std::io::Seek::seek(&mut file, std::io::SeekFrom::End(0))?;
+                file
+            }
+            None => File::create(&part)?,
+        };
         let shown = if dir.is_empty() { format!("{label}/{name}") } else { format!("{label}/{dir}/{name}") };
         Ok(Box::new(FileSink { dir: target, name, part, file: Some(handle), shown }))
     })

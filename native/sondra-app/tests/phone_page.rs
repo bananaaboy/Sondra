@@ -201,4 +201,11 @@ fn a_cable_with_no_phone_says_what_to_do(cx: &mut TestAppContext) {
     w.wait("the answer", |w| matches!(w.shell.read_with(w.cx, |s, _| s.phone_phase()), Phase::Failed(_)));
     assert!(w.said("kein Handy angeschlossen"));
     assert!(w.tree().find(Role::Button, "Handy verbinden").is_some(), "the way is open to try again");
+    // After a failure the usual troubles are open, and the library's own words one click away.
+    assert!(w.said("Das Handy steht nicht in der Liste."));
+    assert!(w.said("Der Zulassen-Dialog kommt nicht."));
+    w.press(Role::Button, "Technische Einzelheiten");
+    assert!(w.said("Usb("), "the detail is shown");
+    w.press(Role::Button, "Wenn es nicht klappt");
+    assert!(!w.said("Das Handy steht nicht in der Liste."), "folded away on request");
 }

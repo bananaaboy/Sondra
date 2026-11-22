@@ -951,6 +951,7 @@ impl Shell {
             first,
             tile: None,
             body: vec![poster, name, bar, rest, step.into_any_element()],
+            keys_pass: false,
             on_open: Rc::new(move |_, app| {
                 let id = id.clone();
                 Self::merk_do(&me, app, move |m| m.open = Some(id))
@@ -1054,6 +1055,7 @@ impl Shell {
             tile: Some(width),
             selected: false,
             body: vec![poster, words],
+            keys_pass: false,
             on_open: Rc::new(move |_, app| {
                 let id = id.clone();
                 Self::merk_do(&me, app, move |m| m.open = Some(id))

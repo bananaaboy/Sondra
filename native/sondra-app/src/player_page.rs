@@ -1566,6 +1566,7 @@ impl Shell {
                         Self::player_do(&away, app, move |p| p.remove_mark(&id))
                     }).into_any_element(),
                 ],
+                keys_pass: false,
                 on_open: std::rc::Rc::new(move |_, app| {
                     Self::player_do(&go, app, move |p| {
                         if let Some(pb) = p.playback.as_mut() {
@@ -1627,6 +1628,7 @@ impl Shell {
                     div().flex_1().min_w(px(0.)).child(ui.value(label)).into_any_element(),
                     div().flex_none().text_size(px(size::SMALL)).text_color(c.prose).child(says).into_any_element(),
                 ],
+                keys_pass: false,
                 on_open: std::rc::Rc::new(move |_, app| Self::player_do(&me, app, move |p| p.start(n))),
             });
         }

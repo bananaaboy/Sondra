@@ -57,3 +57,28 @@ fn files_and_folders_to_send_carry_their_names_sizes_and_way() {
     assert_eq!(one.len(), 1, "what is not a file is left out");
     assert!(one[0].info.path.is_none());
 }
+
+#[test]
+fn a_half_file_is_kept_when_the_line_breaks_and_written_on_where_it_stopped() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("Downloads");
+    let make = folder_sinks(root.clone());
+    let info = sondra_devices::transfer::FileInfo { name: "Film.mp4".into(), size: 10, mime: "video/mp4".into(), path: None };
+    let mut first = make(&info, 0, None).unwrap();
+    first.write(b"01234").unwrap();
+    let piece = first.suspend().expect("kept");
+    assert_eq!(piece.bytes, 5);
+    assert!(piece.intact.as_ref().is_some_and(|check| check()));
+    assert!(!root.join("Film.mp4").exists(), "not there as a whole file yet");
+    // Going on: the same part file, written on at its end, then whole.
+    let mut again = make(&info, 0, Some(&piece)).unwrap();
+    again.write(b"56789").unwrap();
+    assert_eq!(again.close().unwrap(), "Downloads/Film.mp4");
+    assert_eq!(std::fs::read(root.join("Film.mp4")).unwrap(), b"0123456789");
+    // A part file that changed meanwhile is no longer intact.
+    let mut other = make(&info, 1, None).unwrap();
+    other.write(b"abc").unwrap();
+    let piece = other.suspend().unwrap();
+    std::fs::write(std::path::Path::new(&piece.token), b"abcdef").unwrap();
+    assert!(!piece.intact.as_ref().unwrap()());
+}

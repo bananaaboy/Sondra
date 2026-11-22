@@ -1027,6 +1027,7 @@ impl Shell {
                     div().flex().flex_col().gap(px(2.)).flex_1().min_w(px(0.)).child(div().text_color(c.ink).font_weight(gpui::FontWeight::SEMIBOLD).truncate().child(item.title.clone())).child(div().text_size(px(sondra_ui::size::SMALL)).text_color(c.prose).truncate().child(stand)).into_any_element(),
                     div().text_size(px(sondra_ui::size::SMALL)).font_weight(gpui::FontWeight::SEMIBOLD).text_color(c.ink).child("Weiter →").into_any_element(),
                 ],
+                keys_pass: false,
                 on_open: std::rc::Rc::new(move |_, app| {
                     let id = id.clone();
                     me.update(app, |shell, cx| {
@@ -1273,6 +1274,15 @@ impl Render for Shell {
                         let key = event.keystroke.key.clone();
                         let (control, shift) = (m.control, m.shift);
                         if me.update(app, |shell, cx| shell.audio_key(&key, control, shift, cx)) {
+                            app.stop_propagation();
+                            return;
+                        }
+                    }
+                    // Ordner: the arrows, Space, Strg+A, Escape and Enter go through the list (not in a field).
+                    if !(m.alt || m.platform) && me.read(app).panel == Panel::Folder && !window.context_stack().iter().any(|c| c.contains("SondraTextField")) {
+                        let key = event.keystroke.key.clone();
+                        let (control, shift) = (m.control, m.shift);
+                        if me.update(app, |shell, cx| shell.folder_key(&key, control, shift, cx)) {
                             app.stop_propagation();
                             return;
                         }

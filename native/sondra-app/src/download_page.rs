@@ -776,6 +776,7 @@ impl Shell {
                             }
                         })).into_any_element(),
                     ],
+                    keys_pass: false,
                     on_open: std::rc::Rc::new(|_, _| {}),
                 });
             }
