@@ -3,7 +3,8 @@
  * updater, files Windows opened with Sondra, the screens and windows there
  * are to record, the Merkliste's link to Anytype (one action at a time,
  * never the key) and the sign-in to Google Drive (an access token when asked,
- * never the refresh token). Nothing else of Electron or Node reaches the page.
+ * never the refresh token) and the WebDAV folder for downloads (configure, test,
+ * forget — never the password). Nothing else of Electron or Node reaches the page.
  */
 
 const { contextBridge, ipcRenderer } = require('electron')
@@ -17,6 +18,7 @@ contextBridge.exposeInMainWorld('sondraApp', {
   pickCaptureSource: (id, audio) => ipcRenderer.invoke('sondra:capture-pick', id, audio),
   anytype: (action, ...args) => ipcRenderer.invoke('sondra:anytype', action, ...args),
   drive: (action, ...args) => ipcRenderer.invoke('sondra:drive', action, ...args),
+  webdav: (action, ...args) => ipcRenderer.invoke('sondra:webdav', action, ...args),
   setDiscordPresence: (activity) => ipcRenderer.invoke('sondra:discord-presence', activity),
   setDiscordEnabled: (enabled) => ipcRenderer.invoke('sondra:discord-enabled', enabled),
   setAlwaysOnTop: (flag) => ipcRenderer.invoke('sondra:always-on-top', flag),
@@ -25,6 +27,7 @@ contextBridge.exposeInMainWorld('sondraApp', {
   notify: (title, body) => ipcRenderer.invoke('sondra:notify', title, body),
   getDownloadDir: () => ipcRenderer.invoke('sondra:get-download-dir'),
   pickDownloadDir: () => ipcRenderer.invoke('sondra:pick-download-dir'),
+  setDownloadDir: (dir) => ipcRenderer.invoke('sondra:set-download-dir', dir),
   setProgressBar: (progress) => ipcRenderer.invoke('sondra:set-progress-bar', progress),
   setPowerSaveBlocker: (active) => ipcRenderer.invoke('sondra:power-save-blocker', active),
   onOpenedFiles: (callback) => {

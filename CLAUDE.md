@@ -729,6 +729,56 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `desktop/downloader.mjs` bzw. `/api/direct-save` Datenströme via Node
   `fs.createWriteStream` direkt in den Serien-Zielordner der Festplatte,
   ohne Zwischenspeicherung im Browser-Heap (0 MB zusätzlicher RAM-Verbrauch).
+- **Speicherziele des Herunterladens** (25.11.2026, Wunsch: die Speicher-Optionen
+  von Sondra AD auch hier; `DownloadDeliveryMode` und `deliveryOf` in
+  `DownloaderPanel.tsx`, `DownloadTargets.tsx`, `lib/storageLayout.ts`,
+  `lib/webdav.ts`, `desktop/webdav.mjs`): neben Sitzung und Drive gibt es **Datei
+  in einen Ordner oder auf ein NAS** (in der App; ein eingetippter Pfad wie
+  `\\NAS\Medien\Anime` geht, `sondra:set-download-dir` prüft „absolut und
+  beschreibbar“), **Drive + Ordner/NAS**, **Nur WebDAV** und **Drive + WebDAV**.
+  Was sich nicht haben lässt, weicht dem, was bleibt (`deliveryOf`: Drive-Modus
+  ohne Drive wird Ordner bzw. Sitzung, WebDAV ohne App oder ohne Eintrag wird
+  Drive bzw. Sitzung); die Auswahl zeigt den gewählten Modus weiter und sagt,
+  dass er auf seine Einrichtung wartet. **Die Ordnerstruktur** ist für Ordner,
+  NAS und WebDAV dieselbe (`episodeFolder`): „Sondra“ (`Serie / Staffel 1`,
+  Filme in „Filme“) oder „Jellyfin & Plex“ (`Serie / Season 01`, „Specials“);
+  ohne Serie liegt die Datei im Zielordner selbst. Drive bleibt bei
+  „Sondra/Heruntergeladen“. **WebDAV gibt es nur in der Windows-App:** NAS- und
+  Nextcloud-Server senden kein CORS, und das Passwort gehört nicht in die Seite.
+  Adresse und Benutzer stehen in `webdav.json`, das Passwort mit `safeStorage`
+  in `webdav-passwort.bin` (ohne Schlüsselspeicher nur im Speicher, und die
+  Karte sagt es); die Seite konfiguriert, testet (PROPFIND, `Depth: 0`;
+  404 auf dem Zielpfad heisst „wird beim ersten Speichern angelegt“) und
+  entfernt über `sondraApp.webdav(…)`, **liest das Passwort nie zurück**.
+  Das Feld beginnt leer, nichts ist eingebaut („kein Anbieter fest verdrahtet“);
+  die Adresse darf kein Passwort tragen (`credentials-in-address`), und der
+  eine Satz „verlässt dieses Gerät“ steht auf `panel-cool`. **Gesendet wird nur,
+  was der Server der App selbst hat:** `/api/direct-save` lädt die Datei auf
+  die Platte (bei „Nur WebDAV“ in einen Zwischenordner, danach gelöscht) und
+  schickt genau diese Kopie, gestreamt (`Readable.toWeb`, `duplex: 'half'`,
+  nie ganz im Speicher); Bytes, die die Seite schon hält (HLS, FFmpeg
+  hat die Datei angefasst), gehen über `PUT /api/webdav-upload`. Nie ein Pfad aus
+  der Seite, und Pfadteile aus der Seite verlieren `..` und Windows-Zeichen
+  (`pathParts`). Weiterleitungen folgt der Dienst nicht — ein PUT, das ein
+  301 auf https verliert, verliert seinen Körper; die Meldung sagt, welche
+  Adresse einzutragen ist. Scheitert WebDAV, liegt die Datei in der Sitzung
+  (Rückfallweg) bzw. bleibt die lokale Kopie, und die Meldung nennt den Grund
+  (`webdavProblem`). **Beide Routen prüfen die Herkunft** (`isOwnRequest`,
+  `Sec-Fetch-Site` und `Origin`): ein POST mit `text/plain` braucht keine
+  Erlaubnis, jede Webseite im Browser hätte `127.0.0.1` zum Schreiben auf die
+  Platte und, jetzt, zum Senden an das NAS bewegen können. **Die Antwort von
+  `/api/direct-save` heisst `savedPath`/`bytesWritten`** — vorher `path`/`size`,
+  und die Seite las `savedPath`: der Zero-RAM-Weg griff in der App nie und
+  fiel stets auf den Speicher zurück. Drive nimmt in diesen Modi die Datei vom
+  Server der App (`offeredUrl`, `sendDirectToDrive`), nicht aus einem zweiten
+  Speicherabzug. **Grenzen:** auf Android und im Browser kein WebDAV; geht der
+  Download über den Speicher (nur Ton, Umwandeln, HLS), nimmt „Datei“ den
+  Standard-Downloadordner und nicht den eingetippten NAS-Pfad (`saveBytes`);
+  die Android-App kann Drive/WebDAV nicht nachschalten (`downloadDirect`
+  schreibt in einem Zug). **Nie gegen ein echtes NAS gelaufen** — nur
+  `npm run verify:webdav` (Nachbau mit MKCOL, PUT, PROPFIND, 401, 507, 301 und
+  den Server der App; Passwort nicht im Klartext auf der Platte, `..` klettert
+  nicht, fremde Herkunft 403).
 - **Herunterladen: Erkennen, Zusammensetzen, Laden** (16.10.2026). Adressen
   liest `extractAddresses` (`lib/download.ts`) aus jedem Text — Komma,
   Semikolon, Zeilen, Anführungszeichen, Punkt am Satzende; ins einzeilige

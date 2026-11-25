@@ -43,6 +43,9 @@ import {
 } from '../../lib/download'
 import { formatBytes, formatDuration } from '../../lib/format'
 import { offerDownloadToDrive, saveResultToDrive, useDrive } from '../../lib/googleDrive'
+import { episodeFolder, type FolderScheme } from '../../lib/storageLayout'
+import { putBytesToWebdav, refreshWebdav, useWebdav, WEBDAV_SUPPORTED, webdavAnswerProblem, webdavReady } from '../../lib/webdav'
+import { DownloadDirField, DownloadTargets } from './DownloadTargets'
 import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { decodeWithBrowser } from '../../lib/audio'
 import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
@@ -84,7 +87,14 @@ export type VideoFilePref = 'untouched' | 'best' | '1080p' | '720p' | '480p' | '
 export type VideoAdaptMode = 'stream_only' | 'reencode_lower'
 export type AudioFilePref = 'untouched' | 'high' | 'medium' | 'low' | 'lossless'
 export type DirectFilePref = 'untouched' | 'apply_media_prefs'
-export type DownloadDeliveryMode = 'session_only' | 'session_and_save' | 'save_only' | 'drive_only'
+export type DownloadDeliveryMode =
+  | 'session_only'
+  | 'session_and_save'
+  | 'save_only'
+  | 'drive_only'
+  | 'drive_and_save'
+  | 'webdav_only'
+  | 'drive_and_webdav'
 export type AniworldLanguagePref = 'auto' | 'ger_sub' | 'ger_dub' | 'eng_sub'
 
 export interface DownloadFilePreferences {
@@ -95,6 +105,8 @@ export interface DownloadFilePreferences {
   deliveryMode: DownloadDeliveryMode
   aniworldLanguage: AniworldLanguagePref
   directToDisk?: boolean
+  /** How series folders are named below the target (a folder, a NAS, WebDAV). */
+  folderScheme?: FolderScheme
 }
 
 const DEFAULT_DOWNLOAD_PREFS: DownloadFilePreferences = {
@@ -105,6 +117,7 @@ const DEFAULT_DOWNLOAD_PREFS: DownloadFilePreferences = {
   deliveryMode: 'session_only',
   aniworldLanguage: 'auto',
   directToDisk: true,
+  folderScheme: 'sondra',
 }
 
 const DOWNLOAD_PREFS_KEY = 'sondra:download_prefs'
@@ -120,9 +133,58 @@ function loadDownloadPrefs(): DownloadFilePreferences {
   }
 }
 
-/** „Direkt in Drive“ only where Drive is set up; elsewhere the session, as before. */
-function deliveryOf(mode: DownloadDeliveryMode, driveConfigured: boolean): DownloadDeliveryMode {
-  return mode === 'drive_only' && !driveConfigured ? 'session_only' : mode
+/**
+ * What a chosen delivery comes to here. The Drive modes need Drive set up, the
+ * WebDAV modes the Windows app and an address entered; a mode that cannot be
+ * had gives way to what is left of it — and to the session, as before, when
+ * nothing is.
+ */
+function deliveryOf(mode: DownloadDeliveryMode, drive: boolean, webdav: boolean): DownloadDeliveryMode {
+  switch (mode) {
+    case 'drive_only':
+      return drive ? mode : 'session_only'
+    case 'drive_and_save':
+      return drive ? mode : 'save_only'
+    case 'webdav_only':
+      return webdav ? mode : 'session_only'
+    case 'drive_and_webdav':
+      if (drive && webdav) return mode
+      return drive ? 'drive_only' : webdav ? 'webdav_only' : 'session_only'
+    default:
+      return mode
+  }
+}
+
+/** Where the file goes: Google Drive, a folder on this computer or a NAS, a WebDAV folder, the session. */
+const toDrive = (mode: DownloadDeliveryMode) => mode === 'drive_only' || mode === 'drive_and_save' || mode === 'drive_and_webdav'
+const toFolder = (mode: DownloadDeliveryMode) => mode === 'save_only' || mode === 'session_and_save' || mode === 'drive_and_save'
+const toWebdav = (mode: DownloadDeliveryMode) => mode === 'webdav_only' || mode === 'drive_and_webdav'
+const toSession = (mode: DownloadDeliveryMode) => mode === 'session_only' || mode === 'session_and_save'
+
+/** One line under the choice of delivery; says so when the chosen mode still waits for its set-up. */
+function deliveryHint(chosen: DownloadDeliveryMode, effective: DownloadDeliveryMode): string {
+  const waiting =
+    chosen !== effective && toWebdav(chosen)
+      ? ' Solange WebDAV nicht eingerichtet ist, landet der Download in der Sitzung.'
+      : ''
+  switch (chosen) {
+    case 'drive_only':
+      return 'Schickt die Datei nach Google Drive, in „Sondra/Heruntergeladen“, ohne sie in die Sitzung zu laden.'
+    case 'drive_and_save':
+      return 'Speichert die Datei im Zielordner — auch ein NAS-Pfad geht — und schickt sie nach Google Drive, ohne sie in die Sitzung zu laden.'
+    case 'webdav_only':
+      return `Sendet die Datei an Ihren WebDAV-Ordner (NAS, Nextcloud), ohne eine Kopie hier zu behalten und ohne sie in die Sitzung zu laden.${waiting}`
+    case 'drive_and_webdav':
+      return `Sendet die Datei an Ihren WebDAV-Ordner und nach Google Drive, ohne sie in die Sitzung zu laden.${waiting}`
+    case 'save_only':
+      return IN_DESKTOP_APP
+        ? 'Speichert die Datei sofort im Zielordner — auch ein NAS-Pfad wie \\\\NAS\\Medien geht —, ohne sie in die Sitzung zu laden.'
+        : 'Speichert die Datei sofort im Download-Ordner, ohne sie in die Sitzung zu laden.'
+    case 'session_and_save':
+      return 'Lädt die Datei gleichzeitig in Ihren Download-Ordner und in die aktuelle Sitzung.'
+    default:
+      return 'Legt die geladene Datei bereit für alle Werkzeuge in Sondra.'
+  }
 }
 
 function saveDownloadPrefs(prefs: DownloadFilePreferences): void {
@@ -990,7 +1052,16 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [filePrefs, setFilePrefs] = useState<DownloadFilePreferences>(loadDownloadPrefs)
   const filePrefsRef = useRef<DownloadFilePreferences>(filePrefs)
   filePrefsRef.current = filePrefs
-  const deliveryMode = deliveryOf(filePrefs.deliveryMode, driveConfigured)
+  const webdavConfigured = useWebdav((state) => Boolean(state.status?.configured))
+  useEffect(() => {
+    if (WEBDAV_SUPPORTED) void refreshWebdav()
+  }, [])
+  const deliveryMode = deliveryOf(filePrefs.deliveryMode, driveConfigured, WEBDAV_SUPPORTED && webdavConfigured)
+  /** What the select shows: the mode chosen, even while it still waits for its set-up. */
+  const chosenMode =
+    (toDrive(filePrefs.deliveryMode) && !driveConfigured) || (toWebdav(filePrefs.deliveryMode) && !WEBDAV_SUPPORTED)
+      ? deliveryMode
+      : filePrefs.deliveryMode
 
   const updateFilePrefs = useCallback((patch: Partial<DownloadFilePreferences>) => {
     setFilePrefs((prev) => {
@@ -1737,22 +1808,51 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
     if (picked) setDesktopDownloadDir(picked)
   }
 
+  /** The delivery in force right now, read from the refs so a long run sees a change. */
+  const currentDelivery = () => deliveryOf(filePrefsRef.current.deliveryMode, useDrive.getState().configured, webdavReady())
+
+  /**
+   * The folders below the target for one download: series, then season, named
+   * in the chosen scheme — the same for a folder, a NAS and WebDAV. Nothing
+   * for a download that belongs to no series.
+   */
+  const folderFor = (title: string | null | undefined, sourceUrl: string, fallbackSeason?: number) =>
+    episodeFolder(title, parseLinkEpisodeInfo(sourceUrl)?.season ?? fallbackSeason, filePrefsRef.current.folderScheme ?? 'sondra')
+
+  interface DirectSaved {
+    /** Where the copy on this computer (or NAS) lies; null when the file went to WebDAV only. */
+    savedPath: string | null
+    bytesWritten: number
+    name: string
+    ext: string
+    mime: string
+    /** The file as this app's server offers it to the page — for the step on to Drive. */
+    offeredUrl: string | null
+    webdavPath: string | null
+    delivery: DownloadDeliveryMode
+  }
+
   /**
    * Zero-RAM Direct-to-Disk download in the Desktop App: streams the remote file
    * directly to disk via Node `fs.createWriteStream` (`/api/direct-save`) without
-   * allocating a full `Uint8Array` in the browser heap.
+   * allocating a full `Uint8Array` in the browser heap. The same pass sends the
+   * file on to a WebDAV folder when that is the target; a Drive target takes the
+   * file from the server afterwards (`sendDirectToDrive`).
    */
   const tryDirectSaveToDisk = async (
     stream: StudioStream,
     res: StudioResult,
     signal: AbortSignal,
-    subFolder?: string,
-  ): Promise<{ savedPath: string; bytesWritten: number; name: string; ext: string; mime: string } | null> => {
+    folder?: string,
+  ): Promise<DirectSaved | null> => {
     const isAndroid = Boolean(ANDROID_BRIDGE?.downloadDirect)
     if (!IN_DESKTOP_APP && !isAndroid) return null
     if (filePrefsRef.current.directToDisk === false) return null
-    const delivery = deliveryOf(filePrefsRef.current.deliveryMode, useDrive.getState().configured)
-    if (delivery !== 'save_only') return null
+    const delivery = currentDelivery()
+    // The session needs the bytes, and Drive alone is sent from them.
+    if (!(delivery === 'save_only' || delivery === 'drive_and_save' || toWebdav(delivery))) return null
+    // The Android app writes the file itself; it can send it on to neither Drive nor WebDAV.
+    if (isAndroid && delivery !== 'save_only') return null
     if (filterAudioOnlyRef.current) return null
     if (filePrefsRef.current.videoPref !== 'untouched' && filePrefsRef.current.videoAdaptMode === 'reencode_lower') {
       return null
@@ -1768,7 +1868,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
           url: stream.directUrl,
           filename: targetName,
           mime: stream.mime,
-          subFolder,
+          subFolder: folder,
         })
         if (!result?.ok || !result.savedPath) return null
         return {
@@ -1777,6 +1877,9 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
           name: targetName,
           ext: stream.ext,
           mime: stream.mime,
+          offeredUrl: null,
+          webdavPath: null,
+          delivery,
         }
       } catch {
         return null
@@ -1791,25 +1894,99 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         directUrl: stream.directUrl,
         token: stream.token,
         targetDir: desktopDownloadDir || undefined,
-        subFolder,
+        subFolder: folder,
         filename: targetName,
+        webdav: toWebdav(delivery),
+        // A WebDAV-only target leaves no copy here; the file lies in a temporary folder just long enough to be sent on.
+        keepLocal: !toWebdav(delivery),
+        offer: toDrive(delivery),
       }),
       signal,
     })
-    if (!response.ok) return null
-    const payload = (await response.json()) as {
+    const payload = (await response.json().catch(() => null)) as {
       ok?: boolean
-      savedPath?: string
+      savedPath?: string | null
       bytesWritten?: number
+      offeredUrl?: string | null
+      webdavPath?: string | null
+      error?: string
+      code?: string
+      detail?: string
+    } | null
+    if (!response.ok) {
+      // WebDAV said no: the person gets the reason, not a second download into memory.
+      if (payload?.error === 'webdav' || payload?.error === 'webdav-not-configured') {
+        throw new Error(`${webdavAnswerProblem(payload)}${payload.savedPath ? ` Die Datei liegt in ${payload.savedPath}.` : ''}`)
+      }
+      return null
     }
-    if (!payload.ok || !payload.savedPath) return null
+    if (!payload?.ok || (!payload.savedPath && !payload.webdavPath)) return null
     return {
-      savedPath: payload.savedPath,
+      savedPath: payload.savedPath ?? null,
       bytesWritten: payload.bytesWritten ?? stream.bytes ?? 0,
       name: targetName,
       ext: stream.ext,
       mime: stream.mime,
+      offeredUrl: payload.offeredUrl ?? null,
+      webdavPath: payload.webdavPath ?? null,
+      delivery,
     }
+  }
+
+  /** Where a direct save went, as a few words for the log. */
+  const whereDirect = (saved: DirectSaved) =>
+    [saved.savedPath, saved.webdavPath ? `WebDAV ${saved.webdavPath}` : null, toDrive(saved.delivery) ? 'Google Drive' : null]
+      .filter(Boolean)
+      .join(' · ')
+
+  /** The step on to Drive for a file the app's server has just written: fetched from there, sent from the page. */
+  const sendDirectToDrive = async (saved: DirectSaved, signal: AbortSignal) => {
+    if (!toDrive(saved.delivery) || !saved.offeredUrl) return
+    try {
+      const blob = await (await fetch(saved.offeredUrl, { signal })).blob()
+      saveResultToDrive({ name: saved.name, bytes: blob, mime: saved.mime, folder: 'downloads' })
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
+      log('holen', `${saved.name}: Weg zu Google Drive nicht möglich (${cause instanceof Error ? cause.message : String(cause)})`, 'error')
+    }
+  }
+
+  /**
+   * A finished download in memory to where it was meant to go: Drive, the
+   * WebDAV folder, a file, the session. Returns the sentence for what did not
+   * work — the file is then in the session instead, so the work is not lost.
+   */
+  const deliverBytes = async (
+    done: { name: string; bytes: Uint8Array; mime: string; kind: ReturnType<typeof kindFromMime> },
+    delivery: DownloadDeliveryMode,
+    folder: string,
+    signal: AbortSignal,
+    durationSeconds: StudioResult['durationSeconds'],
+  ): Promise<string | null> => {
+    let problem: string | null = null
+    if (toDrive(delivery)) saveResultToDrive({ name: done.name, bytes: done.bytes, mime: done.mime, folder: 'downloads' })
+    if (toWebdav(delivery)) {
+      try {
+        await putBytesToWebdav({ name: done.name, bytes: done.bytes, mime: done.mime, folder, signal })
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
+        problem = cause instanceof Error ? cause.message : String(cause)
+      }
+    }
+    if (toFolder(delivery)) saveBytes(done.bytes, done.name, done.mime)
+    if (toSession(delivery) || problem) {
+      addAsset({
+        name: done.name,
+        bytes: done.bytes,
+        mime: done.mime,
+        sizeBytes: done.bytes.byteLength,
+        kind: done.kind,
+        audio: null,
+        durationSeconds,
+        origin: 'download',
+      })
+    }
+    return problem
   }
 
   /**
@@ -1849,14 +2026,11 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
     setProgress({ loaded: 0, total: stream.bytes })
     try {
       const matched = matchingSavedLink(url)
-      const directDisk = await tryDirectSaveToDisk(
-        stream,
-        result,
-        controller.signal,
-        matched?.title || undefined,
-      )
+      const folder = folderFor(matched?.title, url, linkSeason)
+      const directDisk = await tryDirectSaveToDisk(stream, result, controller.signal, folder)
       if (directDisk) {
-        log('holen', `${directDisk.name} direkt auf Festplatte gespeichert (0 MB RAM · ${formatBytes(directDisk.bytesWritten)})`)
+        log('holen', `${directDisk.name} direkt gespeichert (0 MB RAM · ${formatBytes(directDisk.bytesWritten)}): ${whereDirect(directDisk)}`)
+        await sendDirectToDrive(directDisk, controller.signal)
         recordDownload(url, result.title, result.author ?? '', directDisk.ext, directDisk.bytesWritten)
         playCompletionChime()
         sendAppNotification({
@@ -1874,27 +2048,15 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         onProgress: setProgress,
       })
       const done = await finishDownload(bytes, stream, result, controller.signal, (status) => setBusy(status))
-      const delivery = deliveryOf(filePrefsRef.current.deliveryMode, useDrive.getState().configured)
-
-      if (delivery === 'drive_only') {
-        saveResultToDrive({ name: done.name, bytes: done.bytes, mime: done.mime, folder: 'downloads' })
-      } else if (delivery !== 'save_only') {
-        addAsset({
-          name: done.name,
-          bytes: done.bytes,
-          mime: done.mime,
-          sizeBytes: done.bytes.byteLength,
-          kind: done.kind,
-          audio: null,
-          durationSeconds: result.durationSeconds,
-          origin: 'download',
-        })
-      }
-      if (delivery === 'session_and_save' || delivery === 'save_only') {
-        saveBytes(done.bytes, done.name, done.mime)
-      }
+      const delivery = currentDelivery()
+      if (toWebdav(delivery)) setBusy('Sendet an WebDAV …')
+      const problem = await deliverBytes(done, delivery, folder, controller.signal, result.durationSeconds)
       log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
-      if (delivery !== 'drive_only') offerDownloadToDrive(done)
+      if (problem) {
+        log('holen', problem, 'error')
+        setError({ code: 'webdav', message: `${problem} Die Datei liegt stattdessen in der Sitzung.` })
+      }
+      if (!toDrive(delivery)) offerDownloadToDrive(done)
       setTaken({ name: done.name, bytes: done.bytes, mime: done.mime })
       recordDownload(url, result.title, result.author ?? '', done.ext, done.bytes.byteLength)
       playCompletionChime()
@@ -1978,9 +2140,11 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
     try {
       const matched = matchingSavedLink(entry.url)
-      const directDisk = await tryDirectSaveToDisk(stream, res, signal, matched?.title || entry.groupTitle || undefined)
+      const folder = folderFor(matched?.title || entry.groupTitle, entry.url)
+      const directDisk = await tryDirectSaveToDisk(stream, res, signal, folder)
       if (directDisk) {
-        log('holen', `${directDisk.name} direkt auf Festplatte gespeichert (0 MB RAM · ${formatBytes(directDisk.bytesWritten)})`)
+        log('holen', `${directDisk.name} direkt gespeichert (0 MB RAM · ${formatBytes(directDisk.bytesWritten)}): ${whereDirect(directDisk)}`)
+        await sendDirectToDrive(directDisk, signal)
         patchEntry(id, { status: 'done', progress: null })
         recordDownload(entry.url, res.title, res.author ?? '', directDisk.ext, directDisk.bytesWritten)
         return
@@ -1994,31 +2158,24 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         patchEntry(id, { progress: { loaded: bytes.byteLength, total: bytes.byteLength } })
       }
       const done = await finishDownload(bytes, stream, res, signal)
-      const delivery = deliveryOf(filePrefsRef.current.deliveryMode, useDrive.getState().configured)
-
-      if (delivery === 'drive_only') {
-        saveResultToDrive({ name: done.name, bytes: done.bytes, mime: done.mime, folder: 'downloads' })
-      } else if (delivery !== 'save_only') {
-        addAsset({
-          name: done.name,
-          bytes: done.bytes,
-          mime: done.mime,
-          sizeBytes: done.bytes.byteLength,
-          kind: done.kind,
-          audio: null,
-          durationSeconds: res.durationSeconds,
-          origin: 'download',
-        })
-      }
-      if (delivery === 'session_and_save' || delivery === 'save_only') {
-        saveBytes(done.bytes, done.name, done.mime)
-      }
+      const delivery = currentDelivery()
+      const problem = await deliverBytes(done, delivery, folder, signal, res.durationSeconds)
       log('holen', `${done.name} geladen (${formatBytes(done.bytes.byteLength)})`)
-      if (delivery !== 'drive_only') offerDownloadToDrive(done)
+      if (!toDrive(delivery)) offerDownloadToDrive(done)
       if (autoTranscribeRef.current) {
         void triggerAutoTranscribe(done.name, done.bytes)
       }
-      patchEntry(id, { status: 'done', progress: null, taken: { name: done.name, bytes: done.bytes, mime: done.mime } })
+      if (problem) {
+        log('holen', problem, 'error')
+        patchEntry(id, {
+          status: 'error',
+          error: `${problem} Die Datei liegt stattdessen in der Sitzung.`,
+          progress: null,
+          taken: { name: done.name, bytes: done.bytes, mime: done.mime },
+        })
+      } else {
+        patchEntry(id, { status: 'done', progress: null, taken: { name: done.name, bytes: done.bytes, mime: done.mime } })
+      }
       recordDownload(entry.url, res.title, res.author ?? '', done.ext, done.bytes.byteLength)
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') {
@@ -2642,25 +2799,33 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 </label>
                 <Select
                   id="delivery-mode-select"
-                  value={deliveryMode}
+                  value={chosenMode}
                   onChange={(e) => updateFilePrefs({ deliveryMode: e.target.value as DownloadDeliveryMode })}
                 >
                   <option value="session_only">In die Sondra-Sitzung legen (zum Weiterbearbeiten oder Speichern)</option>
                   <option value="session_and_save">Sofort als Datei speichern & zusätzlich in die Sitzung legen</option>
-                  <option value="save_only">Einfach direkt als Datei herunterladen (ohne Sitzung)</option>
+                  <option value="save_only">
+                    {IN_DESKTOP_APP
+                      ? 'Direkt als Datei speichern — Ordner oder NAS (ohne Sitzung)'
+                      : 'Einfach direkt als Datei herunterladen (ohne Sitzung)'}
+                  </option>
                   {driveConfigured ? (
                     <option value="drive_only">Direkt in Google Drive speichern (ohne Sitzung)</option>
                   ) : null}
+                  {driveConfigured && IN_DESKTOP_APP ? (
+                    <option value="drive_and_save">Google Drive + Ordner / NAS (ohne Sitzung)</option>
+                  ) : null}
+                  {WEBDAV_SUPPORTED ? <option value="webdav_only">Nur WebDAV — NAS, Nextcloud (ohne Sitzung)</option> : null}
+                  {WEBDAV_SUPPORTED && driveConfigured ? (
+                    <option value="drive_and_webdav">Google Drive + WebDAV (ohne Sitzung)</option>
+                  ) : null}
                 </Select>
-                <span className="text-small leading-[1.45] text-muted">
-                  {deliveryMode === 'drive_only'
-                    ? 'Schickt die Datei nach Google Drive, in „Sondra/Heruntergeladen“, ohne sie in die Sitzung zu laden.'
-                    : deliveryMode === 'save_only'
-                    ? 'Speichert die Datei sofort im Download-Ordner, ohne sie in die Sitzung zu laden.'
-                    : deliveryMode === 'session_and_save'
-                      ? 'Lädt die Datei gleichzeitig in Ihren Download-Ordner und in die aktuelle Sitzung.'
-                      : 'Legt die geladene Datei bereit für alle Werkzeuge in Sondra.'}
-                </span>
+                <span className="text-small leading-[1.45] text-muted">{deliveryHint(chosenMode, deliveryMode)}</span>
+                <DownloadTargets
+                  mode={chosenMode}
+                  scheme={filePrefs.folderScheme ?? 'sondra'}
+                  onScheme={(folderScheme) => updateFilePrefs({ folderScheme })}
+                />
               </div>
 
               <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
@@ -2709,6 +2874,9 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                         Zielordner ändern …
                       </button>
                     </div>
+                  ) : null}
+                  {filePrefs.directToDisk !== false ? (
+                    <DownloadDirField value={desktopDownloadDir} onChange={setDesktopDownloadDir} />
                   ) : null}
                 </div>
               ) : null}
@@ -3018,21 +3186,25 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 <span className="value">{taken.name}</span>{' '}
                 {deliveryMode === 'drive_only'
                   ? 'geht nach Google Drive, in „Sondra/Heruntergeladen“.'
-                  : deliveryMode === 'save_only'
-                  ? 'wurde direkt als Datei heruntergeladen.'
-                  : deliveryMode === 'session_and_save'
-                    ? 'wurde gespeichert und ist in der Sitzung bereit.'
-                    : 'ist in der Sitzung — '}
+                  : deliveryMode === 'drive_and_save'
+                    ? 'wurde gespeichert und geht nach Google Drive.'
+                    : deliveryMode === 'webdav_only'
+                      ? 'wurde an Ihren WebDAV-Ordner gesendet.'
+                      : deliveryMode === 'drive_and_webdav'
+                        ? 'wurde an WebDAV gesendet und geht nach Google Drive.'
+                        : deliveryMode === 'save_only'
+                          ? 'wurde direkt als Datei heruntergeladen.'
+                          : deliveryMode === 'session_and_save'
+                            ? 'wurde gespeichert und ist in der Sitzung bereit.'
+                            : 'ist in der Sitzung — '}
                 {deliveryMode === 'session_only' ? (
                   <span className="text-muted">oben im Dateimenü, bereit für jedes Werkzeug.</span>
                 ) : null}
               </p>
               <Button size="sm" variant="quiet" onClick={() => saveBytes(taken.bytes, taken.name, taken.mime)}>
-                {deliveryMode === 'session_only' || deliveryMode === 'drive_only'
-                  ? 'Auch speichern'
-                  : 'Nochmals speichern'}
+                {toFolder(deliveryMode) ? 'Nochmals speichern' : 'Auch speichern'}
               </Button>
-              {deliveryMode !== 'drive_only' ? (
+              {!toDrive(deliveryMode) ? (
                 <DriveSaveButton name={taken.name} bytes={taken.bytes} mime={taken.mime} folder="downloads" />
               ) : null}
             </div>
@@ -3380,11 +3552,13 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                                     {entry.status === 'done' && entry.taken ? (
                                       <div className="flex flex-wrap items-center gap-[8px]">
                                         <span className="value text-small font-medium text-ink">
-                                          {deliveryMode === 'drive_only'
+                                          {toDrive(deliveryMode)
                                             ? 'Nach Google Drive'
-                                            : deliveryMode === 'save_only'
-                                              ? 'Gespeichert'
-                                              : 'In der Sitzung'}
+                                            : toWebdav(deliveryMode)
+                                              ? 'An WebDAV gesendet'
+                                              : deliveryMode === 'save_only'
+                                                ? 'Gespeichert'
+                                                : 'In der Sitzung'}
                                         </span>
                                         <Button
                                           size="sm"
@@ -3395,7 +3569,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                                         >
                                           Speichern
                                         </Button>
-                                        {deliveryMode !== 'drive_only' ? (
+                                        {!toDrive(deliveryMode) ? (
                                           <DriveSaveButton
                                             name={entry.taken.name}
                                             bytes={entry.taken.bytes}
