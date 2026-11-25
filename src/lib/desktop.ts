@@ -155,6 +155,10 @@ export interface AppBridge {
   /** Gets or picks the target folder for Zero-RAM Direct-to-Disk downloads. */
   getDownloadDir?: () => Promise<string>
   pickDownloadDir?: () => Promise<string | null>
+  /** A typed-in folder, e.g. a network path (\\NAS\Medien\Anime); must be absolute and writable. */
+  setDownloadDir?: (dir: string) => Promise<{ ok: boolean; dir?: string; reason?: 'not-absolute' | 'unwritable'; detail?: string }>
+  /** The WebDAV folder for downloads (desktop/webdav.mjs): configure, test, forget — never the password back. */
+  webdav?: (action: 'status' | 'configure' | 'test' | 'forget', ...args: unknown[]) => Promise<unknown>
   /** Sets progress bar in taskbar (0 to 1, or -1 to clear). */
   setProgressBar?: (progress: number) => Promise<boolean>
   /** Prevents OS sleep during long downloads. */

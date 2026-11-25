@@ -21,6 +21,8 @@ import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 
+import { cleanSegment, pathParts, WebdavError } from './webdav.mjs'
+
 const HOST = '127.0.0.1'
 const driveHttpsAgent = new https.Agent({ keepAlive: true, maxSockets: 16, timeout: 30_000 })
 
@@ -401,7 +403,7 @@ function serveDriveMedia(fileId, url, request, response, onError) {
   upReq.end()
 }
 
-export async function startServer({ root, port, dataDir, onError }) {
+export async function startServer({ root, port, dataDir, onError, webdav = null }) {
   if (!fs.existsSync(path.join(root, 'index.html'))) {
     throw new Error(`Die Oberfläche fehlt: ${path.join(root, 'index.html')} gibt es nicht.`)
   }
@@ -435,6 +437,22 @@ export async function startServer({ root, port, dataDir, onError }) {
   const { default: resolveFn } = await import('../api/resolve.js')
   const { default: streamFn } = await import('../api/stream.js')
 
+  /**
+   * True for a request that comes from this server's own page (or from a
+   * program that is no browser: curl, a test). The routes that write to disk
+   * or send to a WebDAV folder answer nobody else — a web page elsewhere can
+   * make a browser POST to 127.0.0.1, with a content type that needs no
+   * permission, and this server must not do its bidding.
+   */
+  const isOwnRequest = (request) => {
+    const site = request.headers['sec-fetch-site']
+    if (site && site !== 'same-origin' && site !== 'none') return false
+    const origin = request.headers.origin
+    if (!origin) return true
+    const own = server.address()
+    return Boolean(own && typeof own === 'object') && (origin === `http://${HOST}:${own.port}` || origin === `http://localhost:${own.port}`)
+  }
+
   const server = http.createServer(async (request, response) => {
     const safeUrl = (request.url ?? '/').replace(/^\/{2,}/, '/')
     const url = new URL(safeUrl, 'http://localhost')
@@ -442,6 +460,53 @@ export async function startServer({ root, port, dataDir, onError }) {
     // the multi-threaded FFmpeg core, depends on them.
     response.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
     response.setHeader('Cross-Origin-Embedder-Policy', 'credentialless')
+
+    if (url.pathname === '/api/webdav-upload') {
+      // Bytes the page already holds (a stream FFmpeg had to touch) to the
+      // WebDAV folder: streamed on, never read whole here, and only to the
+      // folder the user entered in the app.
+      adapt(request, response, url)
+      try {
+        if (!isOwnRequest(request)) {
+          response.status(403).json({ ok: false, error: 'origin' })
+        } else if (request.method !== 'PUT') {
+          response.status(405).json({ ok: false, error: 'method' })
+        } else if (!webdav?.isConfigured()) {
+          response.status(409).json({ ok: false, error: 'webdav-not-configured' })
+        } else {
+          const size = Number(request.headers['content-length'])
+          if (!Number.isInteger(size) || size < 0) {
+            response.status(411).json({ ok: false, error: 'length' })
+          } else {
+            const controller = new AbortController()
+            response.on('close', () => {
+              if (!response.writableFinished) controller.abort()
+            })
+            const sent = await webdav.put({
+              segments: pathParts(url.searchParams.get('sub')),
+              fileName: url.searchParams.get('name') ?? '',
+              source: request,
+              size,
+              mime: String(request.headers['content-type'] ?? '') || undefined,
+              signal: controller.signal,
+            })
+            response.status(200).json({ ok: true, webdavPath: sent.relPath, bytesWritten: sent.size })
+          }
+        }
+      } catch (failure) {
+        const known = failure instanceof WebdavError
+        onError?.(`WebDAV: ${known ? `${failure.code} ${failure.detail}` : (failure?.stack ?? failure)}`)
+        if (!response.headersSent) {
+          response.status(known ? 502 : 500).json({
+            ok: false,
+            error: 'webdav',
+            code: known ? failure.code : 'failed',
+            detail: known ? failure.detail : String(failure?.message ?? failure),
+          })
+        } else response.end()
+      }
+      return
+    }
 
     if (url.pathname.startsWith('/api/')) {
       adapt(request, response, url)
@@ -515,21 +580,40 @@ export async function startServer({ root, port, dataDir, onError }) {
             response.status(result.ok ? 200 : 422).json(result)
           }
         } else if (url.pathname === '/api/direct-save' && request.method === 'POST') {
+          if (!isOwnRequest(request)) {
+            response.status(403).json({ ok: false, error: 'origin' })
+            return
+          }
           const payload = request.body ? JSON.parse(request.body) : {}
-          const rawName = String(payload.filename || 'download.mp4').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim() || 'download.mp4'
+          const rawName = cleanSegment(payload.filename) || 'download.mp4'
           const baseDir =
             payload.targetDir ||
             readSettings().downloadDir ||
             path.join(os.homedir(), 'Downloads', 'Sondra')
-          const subFolder = payload.subFolder
-            ? String(payload.subFolder)
-                .split(/[\\/]/)
-                .map((s) => s.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim())
-                .filter(Boolean)
-                .join(path.sep)
-            : ''
-          const finalDir = subFolder ? path.join(baseDir, subFolder) : baseDir
-          fs.mkdirSync(finalDir, { recursive: true })
+          // Never `..`, never an absolute start: a folder name is a name.
+          const parts = pathParts(payload.subFolder)
+          // „webdav“: the file also goes to the WebDAV folder, from the copy this
+          // handler has just written — never from a path the page names. With
+          // `keepLocal: false` that copy is a temporary one.
+          const toWebdav = payload.webdav === true
+          const keepLocal = !toWebdav || payload.keepLocal !== false
+          const wantOffer = payload.offer === undefined ? keepLocal : payload.offer === true
+          if (toWebdav && !webdav?.isConfigured()) {
+            response.status(409).json({ ok: false, error: 'webdav-not-configured' })
+            return
+          }
+          const tempDir = keepLocal ? null : fs.mkdtempSync(path.join(os.tmpdir(), 'sondra-webdav-'))
+          const finalDir = tempDir ?? (parts.length ? path.join(baseDir, ...parts) : baseDir)
+          const dropTemp = () => {
+            if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true })
+          }
+          try {
+            fs.mkdirSync(finalDir, { recursive: true })
+          } catch (failure) {
+            dropTemp()
+            response.status(500).json({ ok: false, error: 'folder', message: String(failure?.message ?? failure) })
+            return
+          }
           const destPath = path.join(finalDir, rawName)
 
           const directUrl = payload.directUrl
@@ -538,10 +622,17 @@ export async function startServer({ root, port, dataDir, onError }) {
               ? `http://${HOST}:${server.address().port}/api/stream?t=${encodeURIComponent(String(payload.token))}`
               : null
           if (!directUrl) {
+            dropTemp()
             response.status(400).json({ ok: false, error: 'missing-source' })
           } else {
-            const upRes = await fetch(directUrl)
+            // The page cancelling closes this response; the transfer goes with it.
+            const controller = new AbortController()
+            response.on('close', () => {
+              if (!response.writableFinished) controller.abort()
+            })
+            const upRes = await fetch(directUrl, { signal: controller.signal })
             if (!upRes.ok || !upRes.body) {
+              dropTemp()
               response.status(502).json({ ok: false, error: `status-${upRes.status}` })
             } else {
               const fileOut = fs.createWriteStream(destPath)
@@ -554,19 +645,48 @@ export async function startServer({ root, port, dataDir, onError }) {
                   }
                 }
                 await new Promise((r, rej) => fileOut.end((err) => (err ? rej(err) : r())))
-                response.status(200).json({
-                  ok: true,
-                  path: destPath,
-                  size: written,
-                  offeredUrl: offerFile(destPath),
-                })
               } catch (err) {
                 fileOut.destroy()
                 try {
                   fs.rmSync(destPath, { force: true })
                 } catch {}
+                dropTemp()
                 throw err
               }
+              let sent = null
+              if (toWebdav) {
+                try {
+                  sent = await webdav.putFile({
+                    segments: parts,
+                    fileName: rawName,
+                    filePath: destPath,
+                    mime: MEDIA[path.extname(rawName).toLowerCase()],
+                    signal: controller.signal,
+                  })
+                } catch (failure) {
+                  dropTemp()
+                  const known = failure instanceof WebdavError
+                  onError?.(`WebDAV: ${known ? `${failure.code} ${failure.detail}` : (failure?.stack ?? failure)}`)
+                  response.status(502).json({
+                    ok: false,
+                    error: 'webdav',
+                    code: known ? failure.code : 'failed',
+                    detail: known ? failure.detail : String(failure?.message ?? failure),
+                    // The local copy, if there is one, is fine and the page can say so.
+                    savedPath: keepLocal ? destPath : null,
+                  })
+                  return
+                }
+              }
+              if (tempDir && !wantOffer) dropTemp()
+              else if (tempDir) setTimeout(dropTemp, OFFER_FOR_MS + 60_000).unref()
+              response.status(200).json({
+                ok: true,
+                savedPath: keepLocal ? destPath : null,
+                bytesWritten: written,
+                webdavPath: sent?.relPath ?? null,
+                offeredUrl: wantOffer ? offerFile(destPath) : null,
+              })
             }
           }
         }

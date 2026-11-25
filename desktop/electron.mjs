@@ -24,6 +24,7 @@ import path from 'node:path'
 import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerSaveBlocker, safeStorage, session, shell } from 'electron'
 
 import { createAnytype } from './anytype.mjs'
+import { createWebdav } from './webdav.mjs'
 import { createGoogleDrive } from './googleDrive.mjs'
 import { discordRpc } from './discord.mjs'
 import { startDownloader } from './downloader.mjs'
@@ -215,6 +216,24 @@ ipcMain.handle('sondra:anytype', (_event, action, ...args) => {
 })
 
 /**
+ * The WebDAV folder downloads can go to (desktop/webdav.mjs): the page
+ * configures, tests and forgets; the password stays here, encrypted, and the
+ * app's own server does the sending. Made when first needed by either.
+ */
+let webdav = null
+const webdavLink = () => {
+  webdav ??= createWebdav({
+    dataDir: app.getPath('userData'),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+    canEncrypt: () => safeStorage.isEncryptionAvailable(),
+    log,
+  })
+  return webdav
+}
+ipcMain.handle('sondra:webdav', (_event, action, ...args) => webdavLink().handle(String(action), args))
+
+/**
  * Google Drive (desktop/googleDrive.mjs): the sign-in runs in the system's
  * browser, the refresh token stays here, the page gets an access token when
  * it asks and sends the files itself. The client comes in with the build
@@ -334,6 +353,27 @@ ipcMain.handle('sondra:pick-download-dir', async () => {
     return chosen
   } catch {
     return null
+  }
+})
+
+/**
+ * A folder typed in rather than picked — a network path such as \\NAS\Medien\Anime
+ * the picker does not list. It must be absolute and writable (made if it is
+ * not there), or nothing is saved and the page is told why.
+ */
+ipcMain.handle('sondra:set-download-dir', (_event, wanted) => {
+  try {
+    const dir = String(wanted ?? '').trim()
+    if (!dir || !path.isAbsolute(dir)) return { ok: false, reason: 'not-absolute' }
+    fs.mkdirSync(dir, { recursive: true })
+    fs.accessSync(dir, fs.constants.W_OK)
+    const settingsFile = path.join(app.getPath('userData'), 'herunterladen.json')
+    const existing = fs.existsSync(settingsFile) ? JSON.parse(fs.readFileSync(settingsFile, 'utf8')) : {}
+    fs.mkdirSync(app.getPath('userData'), { recursive: true })
+    fs.writeFileSync(settingsFile, JSON.stringify({ ...existing, downloadDir: dir }, null, 2))
+    return { ok: true, dir }
+  } catch (failure) {
+    return { ok: false, reason: 'unwritable', detail: String(failure?.message ?? failure) }
   }
 })
 
@@ -604,7 +644,7 @@ async function open() {
 
   // Plain files next to the app archive (see scripts/build-desktop.mjs).
   const root = process.env.SONDRA_APP_DIR ?? path.join(process.resourcesPath, 'site')
-  const { url } = await startServer({ root, port: PORT, dataDir: app.getPath('userData'), onError: (message) => log(`Server: ${message}`) })
+  const { url } = await startServer({ root, port: PORT, dataDir: app.getPath('userData'), webdav: webdavLink(), onError: (message) => log(`Server: ${message}`) })
   const origin = url.replace(/\/$/, '')
   log(`Server auf ${url}`)
 
