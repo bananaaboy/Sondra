@@ -733,6 +733,11 @@ export async function startServer({ root, port, dataDir, onError, webdav = null 
     stream.pipe(response)
   })
 
+  // Node cuts a request that takes longer than five minutes to arrive. A
+  // download sent on to a NAS arrives as fast as the NAS takes it (a film over a
+  // slow line is longer than that), and the server answers this machine only.
+  server.requestTimeout = 0
+
   const listen = (candidate) =>
     new Promise((resolve, reject) => {
       const onListenError = (failure) => {

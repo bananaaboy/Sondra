@@ -13,13 +13,22 @@
  * only ever sends a file it wrote itself or bytes the page hands over —
  * never a path the page names.
  *
+ * The requests go through `node:http(s)` rather than `fetch`: a file is sent
+ * with its length stated up front (a Nextcloud behind nginx or many a NAS
+ * store an empty file for a chunked body), no redirect is ever followed, and
+ * the certificates trusted are Node's own and the system's (see
+ * `trustedAuthorities`) — a NAS with a certificate of its own, which Windows
+ * has been told to trust, works without switching the check off.
+ *
  * Kept free of Electron itself so `scripts/verify-webdav.mts` can run it
  * under Node against a stand-in for a WebDAV server.
  */
 
 import fs from 'node:fs'
+import http from 'node:http'
+import https from 'node:https'
 import path from 'node:path'
-import { Readable } from 'node:stream'
+import tls from 'node:tls'
 
 /** What a user types into the folder field when they have not chosen one. */
 export const DEFAULT_BASE_PATH = '/Sondra'
@@ -76,12 +85,66 @@ export function checkAddress(raw) {
   return url.toString().replace(/\/+$/, '')
 }
 
+/**
+ * The certificate authorities a request trusts: Node's own list and, where
+ * this Node can read it, the operating system's store (as `api/extractors.js`
+ * does). A NAS often serves a certificate of its own that the person has told
+ * Windows to trust; Node's bundled list alone would refuse it, and switching
+ * the check off would let anyone on the network pass off a server of their own.
+ * `undefined` keeps Node's default.
+ */
+let trustedCas
+function trustedAuthorities() {
+  if (trustedCas !== undefined) return trustedCas ?? undefined
+  try {
+    const system = typeof tls.getCACertificates === 'function' ? tls.getCACertificates('system') : []
+    trustedCas = system.length > 0 ? [...tls.rootCertificates, ...system] : null
+  } catch {
+    trustedCas = null
+  }
+  return trustedCas ?? undefined
+}
+
+/**
+ * One request, answered with its status and headers; the body of the answer is
+ * read and dropped. `body` is a string, a readable stream (its length in
+ * `Content-Length`, so the server sees what it is being sent) or nothing.
+ * Never follows a redirect. `idle` is how long the connection may stay silent.
+ */
+function send(method, url, { headers = {}, body, signal, idle = 20_000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const target = new URL(url)
+    const secure = target.protocol === 'https:'
+    const ca = secure ? trustedAuthorities() : undefined
+    const request = (secure ? https : http).request(target, { method, headers, ...(ca ? { ca } : {}) }, (response) => {
+      response.on('error', reject)
+      response.on('end', () => resolve({ status: response.statusCode ?? 0, headers: response.headers }))
+      response.resume()
+    })
+    // The error listener first: destroying a request that is already aborted emits at once.
+    request.on('error', reject)
+    const onAbort = () => request.destroy(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+    request.on('close', () => signal?.removeEventListener('abort', onAbort))
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (idle) request.setTimeout(idle, () => request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })))
+    if (body && typeof body.pipe === 'function') {
+      body.on('error', (failure) => request.destroy(failure))
+      body.pipe(request)
+    } else {
+      request.end(body)
+    }
+  })
+}
+
 /** A network failure's reason, in a few words a person can act on. */
 function reasonOf(failure) {
   // Node reports a refused connection as a plain error or, with several addresses tried, an AggregateError of them.
-  const code = failure?.cause?.code ?? failure?.cause?.errors?.[0]?.code ?? failure?.code ?? ''
-  const text = failure?.cause?.message ?? failure?.message ?? String(failure)
-  if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ERR_TLS/i.test(String(code)) || /certificate/i.test(text)) return 'certificate'
+  const code = String(failure?.code ?? failure?.errors?.[0]?.code ?? failure?.cause?.code ?? '')
+  if (/CERT|SELF_SIGNED|UNABLE_TO_(?:GET|VERIFY)|DEPTH_ZERO|ERR_TLS/i.test(code)) return 'certificate'
   if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'unknown-host'
   if (code === 'ECONNREFUSED') return 'refused'
   if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') return 'timeout'
@@ -146,35 +209,16 @@ export function createWebdav({ dataDir, encrypt, decrypt, canEncrypt, log = () =
       ? { Authorization: `Basic ${Buffer.from(`${config.username ?? ''}:${password}`, 'utf8').toString('base64')}` }
       : {}
 
-  /**
-   * One request. Redirects are never followed: a PUT that a server answers
-   * with 301 to https would go on without its body, and the answer is worth
-   * more than a retry — „use https:// in the address“.
-   */
-  async function call(method, url, { headers = {}, body, duplex, signal, timeout = 20_000 } = {}) {
-    const controller = new AbortController()
-    const timer = timeout ? setTimeout(() => controller.abort(), timeout) : null
-    const onAbort = () => controller.abort()
-    signal?.addEventListener('abort', onAbort, { once: true })
+  /** One request to the server, with the person's login; a failure becomes a `WebdavError` the page can name. */
+  async function call(method, url, { headers = {}, body, signal, idle } = {}) {
     try {
-      const response = await fetch(url, {
-        method,
-        headers: { ...authHeaders(), ...headers },
-        body,
-        duplex,
-        redirect: 'manual',
-        signal: controller.signal,
-      })
-      // Whatever the body holds is not needed; leaving it unread holds the socket.
-      await response.arrayBuffer().catch(() => undefined)
-      return response
+      return await send(method, url, { headers: { ...authHeaders(), ...headers }, body, signal, idle })
     } catch (failure) {
-      if (signal?.aborted) throw failure
-      if (failure?.name === 'AbortError') throw new WebdavError('timeout', `${method}: keine Antwort nach ${timeout / 1000} s`)
-      throw new WebdavError(reasonOf(failure), `${method}: ${failure?.cause?.message ?? failure?.message ?? failure}`)
-    } finally {
-      if (timer) clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
+      if (failure?.name === 'AbortError') throw failure
+      if (failure?.code === 'ETIMEDOUT' || failure?.message === 'timeout') {
+        throw new WebdavError('timeout', `${method}: keine Antwort`)
+      }
+      throw new WebdavError(reasonOf(failure), `${method}: ${failure?.code ?? ''} ${failure?.message ?? failure}`.trim())
     }
   }
 
@@ -237,12 +281,12 @@ export function createWebdav({ dataDir, encrypt, decrypt, canEncrypt, log = () =
     const folder = [...basePathParts(), ...segments.flatMap((s) => pathParts(s))]
     await ensureFolders(folder, signal)
     const target = joinUrl(config.url, [...folder, name])
+    // A long file is long on the wire; the server may also take a while to settle it on disk afterwards.
     const response = await call('PUT', target, {
       headers: { 'Content-Type': mime, 'Content-Length': String(size) },
-      body: Readable.toWeb(source),
-      duplex: 'half',
+      body: source,
       signal,
-      timeout: 0,
+      idle: 10 * 60_000,
     })
     if (response.status !== 200 && response.status !== 201 && response.status !== 204) throw failureFor(response, 'PUT')
     return { relPath: [...folder, name].join('/'), size }

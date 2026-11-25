@@ -1816,8 +1816,12 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
    * in the chosen scheme — the same for a folder, a NAS and WebDAV. Nothing
    * for a download that belongs to no series.
    */
-  const folderFor = (title: string | null | undefined, sourceUrl: string, fallbackSeason?: number) =>
-    episodeFolder(title, parseLinkEpisodeInfo(sourceUrl)?.season ?? fallbackSeason, filePrefsRef.current.folderScheme ?? 'sondra')
+  const folderFor = (title: string | null | undefined, sourceUrl: string, fallbackSeason?: number) => {
+    // `parseLinkEpisodeInfo` says „Staffel 1“ for any address; only one that names a season counts here —
+    // a playlist or a single video is not Staffel 1 of anything.
+    const info = parseLinkEpisodeInfo(sourceUrl)
+    return episodeFolder(title, info.isEpisodicUrl ? info.season : fallbackSeason, filePrefsRef.current.folderScheme ?? 'sondra')
+  }
 
   interface DirectSaved {
     /** Where the copy on this computer (or NAS) lies; null when the file went to WebDAV only. */

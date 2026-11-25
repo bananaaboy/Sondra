@@ -15,7 +15,9 @@
 
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import http from 'node:http'
+import https from 'node:https'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -43,6 +45,8 @@ interface Stand {
   folders: Set<string>
   files: Map<string, Buffer>
   requests: string[]
+  /** The length and transfer coding each PUT arrived with. */
+  puts: { length: string | undefined; coding: string | undefined; size: number }[]
   close: () => Promise<void>
 }
 
@@ -51,6 +55,7 @@ async function standIn(): Promise<Stand> {
   const folders = new Set<string>(['/dav'])
   const files = new Map<string, Buffer>()
   const requests: string[] = []
+  const puts: Stand['puts'] = []
   const server = http.createServer((request, response) => {
     const chunks: Buffer[] = []
     request.on('data', (chunk) => chunks.push(chunk))
@@ -84,6 +89,7 @@ async function standIn(): Promise<Stand> {
         else {
           const existed = files.has(pathname)
           files.set(pathname, Buffer.concat(chunks))
+          puts.push({ length: request.headers['content-length'], coding: request.headers['transfer-encoding'], size: Buffer.concat(chunks).length })
           response.writeHead(existed ? 204 : 201).end()
         }
       } else if (request.method === 'PROPFIND') {
@@ -101,6 +107,7 @@ async function standIn(): Promise<Stand> {
     folders,
     files,
     requests,
+    puts,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   }
 }
@@ -187,6 +194,17 @@ try {
   await noDav.handle('configure', [{ url: `${dav.url}/leer`, username: USER, password: PASSWORD, basePath: '/' }])
   check('Test: ein Server ohne WebDAV', (await noDav.handle('test')).code, 'no-webdav')
 
+  // A NAS with a certificate of its own, which nobody told this computer to trust, is refused with its reason.
+  const certDir = path.join(scratch, 'zertifikat')
+  fs.mkdirSync(certDir, { recursive: true })
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', path.join(certDir, 'k.pem'), '-out', path.join(certDir, 'c.pem'), '-days', '2', '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1'], { stdio: 'ignore' })
+  const secure = https.createServer({ key: fs.readFileSync(path.join(certDir, 'k.pem')), cert: fs.readFileSync(path.join(certDir, 'c.pem')) }, (_q, r) => r.writeHead(207).end())
+  await new Promise<void>((resolve) => secure.listen(0, '127.0.0.1', resolve))
+  const selfSigned = link(true, path.join(scratch, 'selbst'))
+  await selfSigned.handle('configure', [{ url: `https://127.0.0.1:${(secure.address() as AddressInfo).port}/dav`, username: USER, password: PASSWORD }])
+  check('Test: Zertifikat, dem niemand traut', (await selfSigned.handle('test')).code, 'certificate')
+  secure.close()
+
   /* -- Hochladen ------------------------------------------------------------- */
 
   const small = path.join(scratch, 'folge.mp4')
@@ -196,6 +214,7 @@ try {
   check('Upload: Ordner der Reihe nach angelegt', ['/dav/Sondra', '/dav/Sondra/Frieren', '/dav/Sondra/Frieren/Staffel 1'].every((f) => dav.folders.has(f)), true)
   const stored = dav.files.get('/dav/Sondra/Frieren/Staffel 1/Frieren S01E01.mp4')
   check('Upload: Byte für Byte angekommen', stored ? hash(stored) : null, hash(bigBytes))
+  check('Upload: mit Länge im Kopf, nicht in Stücken', [dav.puts[0]?.length, dav.puts[0]?.coding], [String(bigBytes.length), undefined])
   check('Test danach: Zielpfad ist da', (await dave.handle('test')).folder, 'there')
 
   const before = dav.requests.length
@@ -239,6 +258,7 @@ try {
   await appDav.handle('configure', [{ url: dav.url, username: USER, password: PASSWORD, basePath: '/Sondra' }])
   const logged: string[] = []
   const { server, url: site } = await startServer({ root, port: 0, dataDir: appData, webdav: appDav, onError: (m: string) => logged.push(m) })
+  check('Server: Anfragen werden nicht nach fünf Minuten abgebrochen', (server as http.Server).requestTimeout, 0)
   const post = (route: string, body: unknown, headers: Record<string, string> = {}) =>
     fetch(site + route.replace(/^\//, ''), { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) })
 

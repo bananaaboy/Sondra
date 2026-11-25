@@ -82,7 +82,7 @@ export function webdavProblem(code: string | undefined, detail?: string): string
     case 'redirect':
       return 'Der Server leitet weiter. Tragen Sie die Adresse genau so ein, wie der Browser sie am Ende zeigt — meistens mit https://.'
     case 'certificate':
-      return 'Dem Zertifikat des Servers vertraut dieser Computer nicht. Ein selbst ausgestelltes Zertifikat muss in Windows als vertrauenswürdig eingetragen sein.'
+      return 'Dem Zertifikat des Servers vertraut dieser Computer nicht. Sondra vertraut, was Windows vertraut: ein eigenes Zertifikat des NAS muss unter „Vertrauenswürdige Stammzertifizierungsstellen“ eingetragen sein — oder das NAS bekommt ein anerkanntes (etwa von Let’s Encrypt).'
     case 'unknown-host':
       return 'Diesen Servernamen findet der Computer nicht. Prüfen Sie die Schreibweise und ob Sie im selben Netz wie das NAS sind.'
     case 'refused':
