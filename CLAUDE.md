@@ -381,7 +381,8 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   („Achtung: Herunterladen läuft nicht lokal", Ring in Tinte), seit dem
   22.10. dazu den einen Satz im Fenster „Google Drive“ („Was Sie in Drive
   speichern, verlässt dieses Gerät …“), seit dem 28.10. den Satz zum Weg über
-  Drive unter „Geräte“ — dieselbe Aussage, sonst nichts. Den Lokal-Chip
+  Drive unter „Geräte“, seit dem 25.11. den zum WebDAV-Ordner im Herunterladen —
+  dieselbe Aussage, sonst nichts. Den Lokal-Chip
   in der Kopfzeile gibt es nicht mehr — dass Sondra lokal rechnet, ist die
   Prämisse; die Ausnahme steht dort, wo sie passiert. An seinem Platz sitzt
   „App herunterladen" mit dem Fenster „Sondra als App“ (bis 860 px; neu
@@ -755,8 +756,12 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   eine Satz „verlässt dieses Gerät“ steht auf `panel-cool`. **Gesendet wird nur,
   was der Server der App selbst hat:** `/api/direct-save` lädt die Datei auf
   die Platte (bei „Nur WebDAV“ in einen Zwischenordner, danach gelöscht) und
-  schickt genau diese Kopie, gestreamt (`Readable.toWeb`, `duplex: 'half'`,
-  nie ganz im Speicher); Bytes, die die Seite schon hält (HLS, FFmpeg
+  schickt genau diese Kopie, gestreamt (`node:http(s)` mit stehender `Content-Length` — Nextcloud hinter nginx
+  und manches NAS speichern einen gestückelten Körper leer —, nie ganz im Speicher;
+  die Zertifikate sind die von Node und die des Systems wie in `api/extractors.js`,
+  ein NAS mit eigenem, in Windows eingetragenem Zertifikat geht also; und
+  `server.requestTimeout = 0`, sonst bricht Node jede Anfrage nach fünf Minuten ab,
+  ein Film über eine langsame Leitung ist länger); Bytes, die die Seite schon hält (HLS, FFmpeg
   hat die Datei angefasst), gehen über `PUT /api/webdav-upload`. Nie ein Pfad aus
   der Seite, und Pfadteile aus der Seite verlieren `..` und Windows-Zeichen
   (`pathParts`). Weiterleitungen folgt der Dienst nicht — ein PUT, das ein

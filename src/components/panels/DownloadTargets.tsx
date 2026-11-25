@@ -162,7 +162,7 @@ function WebdavCard() {
         ) : null}
       </div>
       {answer ? (
-        <p role="status" className={`m-0 text-small leading-[1.5] ${answer.ok ? 'text-ink' : 'text-prose'}`}>
+        <p role="status" className={`m-0 text-small leading-[1.5] ${answer.ok ? 'text-prose' : 'font-medium text-ink'}`}>
           <span aria-hidden className={`mr-[8px] inline-block size-[8px] rounded-pill align-middle ${answer.ok ? 'bg-ink' : 'ring-2 ring-inset ring-ink'}`} />
           {answer.message}
         </p>
@@ -248,7 +248,7 @@ export function DownloadDirField({ value, onChange }: { value: string; onChange:
         </Button>
       </div>
       {problem ? (
-        <p role="status" className="m-0 text-small leading-[1.5] text-prose">
+        <p role="status" className="m-0 text-small font-medium leading-[1.5] text-ink">
           {problem}
         </p>
       ) : null}
