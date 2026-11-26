@@ -45,7 +45,7 @@ import { formatBytes, formatDuration } from '../../lib/format'
 import { offerDownloadToDrive, saveResultToDrive, useDrive } from '../../lib/googleDrive'
 import { episodeFolder, type FolderScheme } from '../../lib/storageLayout'
 import { putBytesToWebdav, refreshWebdav, useWebdav, WEBDAV_SUPPORTED, webdavAnswerProblem, webdavReady } from '../../lib/webdav'
-import { DownloadDirField, DownloadTargets } from './DownloadTargets'
+import { DownloadTargets, FolderSchemeField } from './DownloadTargets'
 import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { decodeWithBrowser } from '../../lib/audio'
 import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
@@ -161,6 +161,10 @@ const toFolder = (mode: DownloadDeliveryMode) => mode === 'save_only' || mode ==
 const toWebdav = (mode: DownloadDeliveryMode) => mode === 'webdav_only' || mode === 'drive_and_webdav'
 const toSession = (mode: DownloadDeliveryMode) => mode === 'session_only' || mode === 'session_and_save'
 
+/** Whether the folder scheme is shown (and the select shares its row with it). */
+const needsLayoutMode = (mode: DownloadDeliveryMode) =>
+  mode === 'save_only' || mode === 'drive_and_save' || mode === 'webdav_only' || mode === 'drive_and_webdav'
+
 /** One line under the choice of delivery; says so when the chosen mode still waits for its set-up. */
 function deliveryHint(chosen: DownloadDeliveryMode, effective: DownloadDeliveryMode): string {
   const waiting =
@@ -171,14 +175,14 @@ function deliveryHint(chosen: DownloadDeliveryMode, effective: DownloadDeliveryM
     case 'drive_only':
       return 'Schickt die Datei nach Google Drive, in „Sondra/Heruntergeladen“, ohne sie in die Sitzung zu laden.'
     case 'drive_and_save':
-      return 'Speichert die Datei im Zielordner — auch ein NAS-Pfad geht — und schickt sie nach Google Drive, ohne sie in die Sitzung zu laden.'
+      return 'Speichert die Datei im Zielordner und schickt sie nach Google Drive, ohne Sitzung.'
     case 'webdav_only':
-      return `Sendet die Datei an Ihren WebDAV-Ordner (NAS, Nextcloud), ohne eine Kopie hier zu behalten und ohne sie in die Sitzung zu laden.${waiting}`
+      return `Sendet die Datei an Ihren WebDAV-Ordner, ohne Kopie hier und ohne Sitzung.${waiting}`
     case 'drive_and_webdav':
-      return `Sendet die Datei an Ihren WebDAV-Ordner und nach Google Drive, ohne sie in die Sitzung zu laden.${waiting}`
+      return `Sendet die Datei an Ihren WebDAV-Ordner und nach Google Drive, ohne Sitzung.${waiting}`
     case 'save_only':
       return IN_DESKTOP_APP
-        ? 'Speichert die Datei sofort im Zielordner — auch ein NAS-Pfad wie \\\\NAS\\Medien geht —, ohne sie in die Sitzung zu laden.'
+        ? 'Speichert die Datei sofort im Zielordner, ohne sie in die Sitzung zu laden.'
         : 'Speichert die Datei sofort im Download-Ordner, ohne sie in die Sitzung zu laden.'
     case 'session_and_save':
       return 'Lädt die Datei gleichzeitig in Ihren Download-Ordner und in die aktuelle Sitzung.'
@@ -2798,41 +2802,6 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
               </div>
 
               <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
-                <label htmlFor="delivery-mode-select" className="text-small text-prose">
-                  Verhalten beim Herunterladen
-                </label>
-                <Select
-                  id="delivery-mode-select"
-                  value={chosenMode}
-                  onChange={(e) => updateFilePrefs({ deliveryMode: e.target.value as DownloadDeliveryMode })}
-                >
-                  <option value="session_only">In die Sondra-Sitzung legen (zum Weiterbearbeiten oder Speichern)</option>
-                  <option value="session_and_save">Sofort als Datei speichern & zusätzlich in die Sitzung legen</option>
-                  <option value="save_only">
-                    {IN_DESKTOP_APP
-                      ? 'Direkt als Datei speichern — Ordner oder NAS (ohne Sitzung)'
-                      : 'Einfach direkt als Datei herunterladen (ohne Sitzung)'}
-                  </option>
-                  {driveConfigured ? (
-                    <option value="drive_only">Direkt in Google Drive speichern (ohne Sitzung)</option>
-                  ) : null}
-                  {driveConfigured && IN_DESKTOP_APP ? (
-                    <option value="drive_and_save">Google Drive + Ordner / NAS (ohne Sitzung)</option>
-                  ) : null}
-                  {WEBDAV_SUPPORTED ? <option value="webdav_only">Nur WebDAV — NAS, Nextcloud (ohne Sitzung)</option> : null}
-                  {WEBDAV_SUPPORTED && driveConfigured ? (
-                    <option value="drive_and_webdav">Google Drive + WebDAV (ohne Sitzung)</option>
-                  ) : null}
-                </Select>
-                <span className="text-small leading-[1.45] text-muted">{deliveryHint(chosenMode, deliveryMode)}</span>
-                <DownloadTargets
-                  mode={chosenMode}
-                  scheme={filePrefs.folderScheme ?? 'sondra'}
-                  onScheme={(folderScheme) => updateFilePrefs({ folderScheme })}
-                />
-              </div>
-
-              <div className="flex flex-col gap-[8px] border-t border-line pt-[10px]">
                 <label htmlFor="stealth-mode-select" className="text-small text-prose">
                   Dateiname
                 </label>
@@ -2856,6 +2825,54 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                 ) : null}
               </div>
 
+              <div className="flex flex-col gap-[12px] border-t border-line pt-[10px] sm:col-span-2">
+                <div className={`grid grid-cols-[minmax(0,1fr)] gap-x-[32px] gap-y-[12px] ${needsLayoutMode(chosenMode) ? 'sm:grid-cols-2' : ''}`}>
+                  <div className="flex flex-col gap-[8px]">
+                    <label htmlFor="delivery-mode-select" className="text-small text-prose">
+                      Verhalten beim Herunterladen
+                    </label>
+                    <Select
+                      id="delivery-mode-select"
+                      value={chosenMode}
+                      onChange={(e) => updateFilePrefs({ deliveryMode: e.target.value as DownloadDeliveryMode })}
+                    >
+                      <option value="session_only">In die Sondra-Sitzung legen (zum Weiterbearbeiten oder Speichern)</option>
+                      <option value="session_and_save">Sofort als Datei speichern & zusätzlich in die Sitzung legen</option>
+                      <option value="save_only">
+                        {IN_DESKTOP_APP
+                          ? 'Direkt als Datei speichern — Ordner oder NAS (ohne Sitzung)'
+                          : 'Einfach direkt als Datei herunterladen (ohne Sitzung)'}
+                      </option>
+                      {driveConfigured ? (
+                        <option value="drive_only">Direkt in Google Drive speichern (ohne Sitzung)</option>
+                      ) : null}
+                      {driveConfigured && IN_DESKTOP_APP ? (
+                        <option value="drive_and_save">Google Drive + Ordner / NAS (ohne Sitzung)</option>
+                      ) : null}
+                      {WEBDAV_SUPPORTED ? <option value="webdav_only">Nur WebDAV — NAS, Nextcloud (ohne Sitzung)</option> : null}
+                      {WEBDAV_SUPPORTED && driveConfigured ? (
+                        <option value="drive_and_webdav">Google Drive + WebDAV (ohne Sitzung)</option>
+                      ) : null}
+                    </Select>
+                    <span className="text-small leading-[1.45] text-muted">{deliveryHint(chosenMode, deliveryMode)}</span>
+                    {!WEBDAV_SUPPORTED ? (
+                      <span className="text-small leading-[1.45] text-muted">WebDAV (NAS, Nextcloud) gibt es in der Windows-App.</span>
+                    ) : null}
+                  </div>
+                  <FolderSchemeField
+                    mode={chosenMode}
+                    scheme={filePrefs.folderScheme ?? 'sondra'}
+                    onScheme={(folderScheme) => updateFilePrefs({ folderScheme })}
+                  />
+                </div>
+                <DownloadTargets
+                  mode={chosenMode}
+                  folder={desktopDownloadDir}
+                  onFolder={setDesktopDownloadDir}
+                  onPickFolder={() => void pickDesktopDownloadDir()}
+                />
+              </div>
+
               {IN_DESKTOP_APP ? (
                 <div className="flex flex-col gap-[10px] border-t border-line pt-[10px] sm:col-span-2">
                   <Toggle
@@ -2864,24 +2881,6 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                     checked={filePrefs.directToDisk ?? true}
                     onChange={(next) => updateFilePrefs({ directToDisk: next })}
                   />
-                  {filePrefs.directToDisk !== false ? (
-                    <div className="flex flex-wrap items-center gap-[10px] text-small">
-                      <span className="text-muted">Zielordner:</span>
-                      <span className="value truncate max-w-[360px] rounded-nav bg-raised px-[8px] py-[3px] text-micro text-ink">
-                        {desktopDownloadDir || 'Standard-Download-Ordner'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void pickDesktopDownloadDir()}
-                        className="press rounded-nav text-small text-ink underline underline-offset-2"
-                      >
-                        Zielordner ändern …
-                      </button>
-                    </div>
-                  ) : null}
-                  {filePrefs.directToDisk !== false ? (
-                    <DownloadDirField value={desktopDownloadDir} onChange={setDesktopDownloadDir} />
-                  ) : null}
                 </div>
               ) : null}
 
