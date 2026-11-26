@@ -2,6 +2,17 @@
   "_": "Was in jeder Version dazukam — für Menschen, nicht für Entwickler. Die neueste zuerst. Neue Version: oben einen Eintrag mit der Version aus package.json anlegen; der Release-Workflow bricht ab, wenn er fehlt, und nimmt ihn als Notizen des GitHub-Release.",
   "versions": [
     {
+      "version": "1.2.4",
+      "date": "2026-11-26",
+      "items": [
+        "Herunterladen speichert jetzt, wohin Sie wollen: in einen Ordner oder auf ein NAS (auch ein eingetippter Pfad wie \\\\NAS\\Medien\\Anime), in Google Drive und in einen Ordner zugleich, an einen WebDAV-Server (NAS, Nextcloud) oder an WebDAV und Drive zugleich. WebDAV gibt es in der Windows-App; Adresse, Zielpfad und Benutzer tragen Sie selbst ein, nichts ist vorgegeben, und das Passwort bleibt verschlüsselt auf diesem Computer.",
+        "Neu: die Ordnerstruktur wählen. „Sondra“ legt Serie / Staffel 1 an, „Jellyfin & Plex“ Serie / Season 01 — für Ordner, NAS und WebDAV gleich, damit ein Medienserver den Ordner so lesen kann.",
+        "Behoben: In der Windows-App schrieb „Direkt als Datei speichern“ große Downloads bisher über den Arbeitsspeicher statt direkt auf die Festplatte. Jetzt geht es wie gedacht direkt.",
+        "Sicherer: Der lokale Server der App nimmt Schreib- und Sendeaufträge nur noch von Sondra selbst an, nicht von anderen Webseiten im Browser.",
+        "Die Einstellungen des Herunterladens sind aufgeräumt: Verhalten und Ordnerstruktur stehen nebeneinander, der Zielordner direkt bei der Wahl."
+      ]
+    },
+    {
       "version": "1.2.3",
       "date": "2026-11-18",
       "items": [
