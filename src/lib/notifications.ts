@@ -4,6 +4,7 @@
  */
 
 import { APP_BRIDGE, IN_DESKTOP_APP } from './desktop'
+import { sendPush, type PushKind } from './push'
 
 const STORAGE_KEY = 'sondra:notifications'
 
@@ -57,8 +58,11 @@ export function sendAppNotification(options: {
   title: string
   body: string
   kind?: 'batch' | 'episode' | 'general'
+  /** Also a notice on the phone, if one is set up and wanted — separate from Windows' own switch below. */
+  push?: PushKind
   onClick?: () => void
 }): void {
+  if (options.push) sendPush(options.push, options.title, options.body)
   const prefs = getNotificationPrefs()
   if (!prefs.enabled) return
   if (options.kind === 'batch' && !prefs.onBatchComplete) return

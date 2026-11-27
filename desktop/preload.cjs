@@ -5,7 +5,9 @@
  * never the key) and the sign-in to Google Drive (an access token when asked,
  * never the refresh token) and the WebDAV folder for downloads (configure, test,
  * forget — never the password) and what may follow a finished download (shut
- * down or hibernate Windows, named, never a command). Nothing else of Electron or Node reaches the page.
+ * down or hibernate Windows, named, never a command) and notices on the
+ * phone (ntfy, Telegram or Pushover: configure, test, send — never a secret
+ * back). Nothing else of Electron or Node reaches the page.
  */
 
 const { contextBridge, ipcRenderer } = require('electron')
@@ -21,6 +23,7 @@ contextBridge.exposeInMainWorld('sondraApp', {
   drive: (action, ...args) => ipcRenderer.invoke('sondra:drive', action, ...args),
   webdav: (action, ...args) => ipcRenderer.invoke('sondra:webdav', action, ...args),
   power: (action) => ipcRenderer.invoke('sondra:power', action),
+  push: (action, ...args) => ipcRenderer.invoke('sondra:push', action, ...args),
   setDiscordPresence: (activity) => ipcRenderer.invoke('sondra:discord-presence', activity),
   setDiscordEnabled: (enabled) => ipcRenderer.invoke('sondra:discord-enabled', enabled),
   setAlwaysOnTop: (flag) => ipcRenderer.invoke('sondra:always-on-top', flag),

@@ -47,6 +47,7 @@ import { episodeFolder, type FolderScheme } from '../../lib/storageLayout'
 import { putBytesToWebdav, refreshWebdav, useWebdav, WEBDAV_SUPPORTED, webdavAnswerProblem, webdavReady } from '../../lib/webdav'
 import { DownloadTargets, FolderSchemeField } from './DownloadTargets'
 import { PowerAfterSelect, PowerCountdown } from '../PowerAfter'
+import { PushSettingsLink } from '../PushSettings'
 import type { PowerAfter } from '../../lib/power'
 import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { decodeWithBrowser } from '../../lib/audio'
@@ -2054,6 +2055,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
           title: 'Download abgeschlossen',
           body: `${directDisk.name} (${formatBytes(directDisk.bytesWritten)}) wurde gespeichert.`,
           kind: 'general',
+          push: 'downloads',
           onClick: () => setPanel('player'),
         })
         if (autoPlayAfterDownload) setPanel('player')
@@ -2081,6 +2083,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         title: 'Download abgeschlossen',
         body: `${done.name} (${formatBytes(done.bytes.byteLength)}) wurde geladen.`,
         kind: 'general',
+        push: 'downloads',
         onClick: () => setPanel('player'),
       })
       if (autoPlayAfterDownload) setPanel('player')
@@ -2243,6 +2246,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
             title: 'Batch-Download abgeschlossen',
             body: `${doneCount} ${doneCount === 1 ? 'Folge wurde' : 'Folgen wurden'} erfolgreich heruntergeladen.`,
             kind: 'batch',
+            push: 'downloads',
             onClick: () => setPanel('downloader'),
           })
         }
@@ -2935,7 +2939,9 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   />
                 </div>
 
-                {IN_DESKTOP_APP ? (
+                <PushSettingsLink className="border-t border-line pt-[10px] sm:col-span-2" />
+
+              {IN_DESKTOP_APP ? (
                 <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">
                   <label htmlFor="adapter-select" className="text-small text-prose">
                     Netzwerk
