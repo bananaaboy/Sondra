@@ -50,6 +50,13 @@ export const PANELS: PanelMeta[] = [
     icon: <path d="M4.2 2.4h7.6v11.2L8 10.9l-3.8 2.7zM6.2 5.6h3.6" />,
   },
   {
+    id: 'calendar',
+    slug: 'kalender',
+    label: 'Kalender',
+    summary: 'Die Woche: wann Ihre Serien laufen und was Sie sich selbst eintragen',
+    icon: <path d="M2.4 3.8h11.2v9.4H2.4zM2.4 6.6h11.2M5.4 2.2v3M10.6 2.2v3M5.2 9h.01M8 9h.01M10.8 9h.01M5.2 11.2h.01M8 11.2h.01" />,
+  },
+  {
     id: 'folder',
     slug: 'ordner',
     label: 'Ordner',
@@ -196,6 +203,7 @@ const group = (id: string, label: string, ids: PanelId[]): TabEntry => ({
 export const TAB_ENTRIES: TabEntry[] = [
   single('start'),
   single('merkliste'),
+  single('calendar'),
   single('folder'),
   single('player'),
   single('downloader'),

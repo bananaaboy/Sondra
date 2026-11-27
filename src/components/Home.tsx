@@ -20,6 +20,7 @@ import { useShallow } from 'zustand/shallow'
 
 import { useFilePicker, useIngestFiles, useProjectPicker } from '../hooks/useIngest'
 import { GROUP_LABEL, START_FILTERS as FILTERS, actionsFor, searchActions, startGroups, type ToolAction, type ToolGroup } from '../lib/actions'
+import { itemsOn, todayYmd, useCalendar } from '../lib/calendar'
 import { formatBytes, formatDuration } from '../lib/format'
 import { requestOpenSeries, seasonsOf, useMerkliste } from '../lib/merkliste'
 import { stagger } from '../lib/motion'
@@ -293,6 +294,11 @@ function MediaTiles() {
     .filter((item) => (item.status ?? 'watching') === 'watching')
     .sort((a, b) => (b.lastOpenedAt ?? b.updatedAt) - (a.lastOpenedAt ?? a.updatedAt))
   const next = watching[0]
+  const events = useCalendar((state) => state.events)
+  const todays = itemsOn(todayYmd(), events, list)
+  const calendarLine = todays.length
+    ? `Heute: ${todays[0].time ? `${todays[0].time} ` : ''}${todays[0].title}${todays.length > 1 ? ` und ${todays.length - 1} weitere` : ''}`
+    : 'Wann Serien laufen, dazu eigene Termine'
   const tiles: { id: PanelId; label: string; line: string }[] = [
     {
       id: 'merkliste',
@@ -303,6 +309,7 @@ function MediaTiles() {
           ? `${list.length} ${list.length === 1 ? 'Eintrag' : 'Einträge'}`
           : 'Serien und Filme, mit Staffeln und Stand',
     },
+    { id: 'calendar', label: 'Kalender', line: calendarLine },
     { id: 'player', label: 'Abspielen', line: 'Filme und Musik, mit Untertiteln' },
     { id: 'folder', label: 'Ordner', line: 'Folgen auf dem Gerät oder in Drive' },
     { id: 'downloader', label: 'Herunterladen', line: 'Von einer Adresse holen' },
@@ -312,7 +319,7 @@ function MediaTiles() {
       <h2 id="start-filme" className="text-subheading text-ink">
         Filme und Serien
       </h2>
-      <div className="grid grid-cols-2 gap-[10px] lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-[10px] lg:grid-cols-5">
         {tiles.map((tile, index) => (
           <button
             key={tile.id}

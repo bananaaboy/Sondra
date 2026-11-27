@@ -58,6 +58,7 @@ export type PanelId =
   | 'folder'
   | 'downloader'
   | 'merkliste'
+  | 'calendar'
   | 'devices'
   | 'converter'
   | 'audio'
