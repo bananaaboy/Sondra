@@ -24,6 +24,7 @@ import path from 'node:path'
 import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerSaveBlocker, safeStorage, session, shell } from 'electron'
 
 import { createAnytype } from './anytype.mjs'
+import { createPower } from './power.mjs'
 import { createWebdav } from './webdav.mjs'
 import { createGoogleDrive } from './googleDrive.mjs'
 import { discordRpc } from './discord.mjs'
@@ -214,6 +215,13 @@ ipcMain.handle('sondra:anytype', (_event, action, ...args) => {
   })
   return anytype.handle(String(action), args)
 })
+
+/**
+ * „Danach herunterfahren“ (desktop/power.mjs): the page names `shutdown` or
+ * `hibernate`, never a command; the countdown is the page's.
+ */
+const power = createPower({ log })
+ipcMain.handle('sondra:power', (_event, action) => power.handle(String(action)))
 
 /**
  * The WebDAV folder downloads can go to (desktop/webdav.mjs): the page
