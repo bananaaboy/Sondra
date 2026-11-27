@@ -23,6 +23,7 @@ const TOOLS = {
   devices: () => import('./panels/DevicesPanel').then((m) => ({ default: m.DevicesPanel })),
   downloader: () => import('./panels/DownloaderPanel').then((m) => ({ default: m.DownloaderPanel })),
   merkliste: () => import('./panels/MerklistePanel').then((m) => ({ default: m.MerklistePanel })),
+  calendar: () => import('./panels/CalendarPanel').then((m) => ({ default: m.CalendarPanel })),
   converter: () => import('./panels/ConverterPanel').then((m) => ({ default: m.ConverterPanel })),
   audio: () => import('./panels/AudioEditorPanel').then((m) => ({ default: m.AudioEditorPanel })),
   video: () => import('./panels/VideoPanel').then((m) => ({ default: m.VideoPanel })),
@@ -43,6 +44,7 @@ const FolderPanel = lazy(TOOLS.folder)
 const DevicesPanel = lazy(TOOLS.devices)
 const DownloaderPanel = lazy(TOOLS.downloader)
 const MerklistePanel = lazy(TOOLS.merkliste)
+const CalendarPanel = lazy(TOOLS.calendar)
 const ConverterPanel = lazy(TOOLS.converter)
 const AudioEditorPanel = lazy(TOOLS.audio)
 const VideoPanel = lazy(TOOLS.video)
@@ -363,6 +365,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
     panel === 'devices' ||
     panel === 'downloader' ||
     panel === 'merkliste' ||
+    panel === 'calendar' ||
     panel === 'video' ||
     panel === 'images' ||
     panel === 'audio' ||
@@ -393,6 +396,7 @@ export function Dashboard({ theme }: { theme: ResolvedTheme }) {
                 {panel === 'folder' ? <FolderPanel /> : null}
 
                 {panel === 'merkliste' ? <MerklistePanel /> : null}
+                {panel === 'calendar' ? <CalendarPanel /> : null}
                 {panel === 'devices' ? <DevicesPanel /> : null}
                 {panel === 'converter' ? <ConverterPanel /> : null}
                 {panel === 'audio' ? <AudioEditorPanel /> : null}

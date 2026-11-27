@@ -50,6 +50,19 @@ export interface MerkGoal {
   count?: number
 }
 
+export function normalizeAiring(raw: unknown): Airing | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const { weekday, time, remind } = raw as Partial<Airing>
+  if (typeof weekday !== 'number' || !Number.isInteger(weekday) || weekday < 0 || weekday > 6) return undefined
+  const clock = typeof time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : undefined
+  return {
+    weekday,
+    ...(clock ? { time: clock } : {}),
+    // A reminder needs a time to be before.
+    ...(clock && typeof remind === 'number' && Number.isInteger(remind) && remind >= 0 && remind <= 7 * 1440 ? { remind } : {}),
+  }
+}
+
 function normalizeGoal(raw: unknown): MerkGoal | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const { season, episode, by, setAt, count } = raw as Partial<MerkGoal>
@@ -163,6 +176,15 @@ export interface SavedLinkItem {
   intros?: SeriesIntro[]
   /** „Bis wohin?“ kept: the point to reach, by a day if one was set. */
   goal?: MerkGoal
+  /** The day of the week the series is broadcast, for the Kalender; entered by the person, never guessed. */
+  airing?: Airing
+}
+
+/** A weekly broadcast slot: the weekday (0 = Monday … 6 = Sunday), the time if known, and a reminder (minutes before; 0 = at the time). */
+export interface Airing {
+  weekday: number
+  time?: string
+  remind?: number
 }
 
 export interface SeriesIntro {
@@ -282,6 +304,7 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(Array.isArray(raw.intros) && normalizeIntros(raw.intros).length > 0 ? { intros: normalizeIntros(raw.intros) } : {}),
     ...(raw.durations && typeof raw.durations === 'object' ? { durations: raw.durations } : {}),
     ...(normalizeGoal(raw.goal) ? { goal: normalizeGoal(raw.goal) } : {}),
+    ...(normalizeAiring(raw.airing) ? { airing: normalizeAiring(raw.airing) } : {}),
     ...(Array.isArray(raw.tags)
       ? {
           tags: Array.from(

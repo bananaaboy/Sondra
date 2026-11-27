@@ -4,6 +4,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { Dashboard } from './components/Dashboard'
 import { DeviceInbox } from './components/DeviceSend'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { ReminderLines } from './components/ReminderLines'
 import { ShortcutHelp } from './components/ShortcutHelp'
 import { Footer, Header } from './components/AppShell'
 import { useFfmpegPrefetch } from './hooks/useFfmpegPrefetch'
@@ -14,6 +15,7 @@ import { usePanelRoute } from './hooks/usePanelRoute'
 import { useTheme } from './hooks/useTheme'
 import { SharedListDialog } from './components/MerklisteShare'
 import { WhatsNewDialog, WhatsNewLine } from './components/WhatsNew'
+import { watchCalendarReminders } from './lib/calendarReminders'
 import { initDevices } from './lib/devices'
 import { initPauseOnMinimize } from './lib/pauseOnMinimize'
 
@@ -26,6 +28,7 @@ export default function App() {
   useNewEpisodes()
   useEffect(() => initDevices(), [])
   useEffect(() => initPauseOnMinimize(), [])
+  useEffect(() => watchCalendarReminders(), [])
 
   return (
     <ErrorBoundary>
@@ -41,6 +44,7 @@ export default function App() {
         <WhatsNewDialog />
         <SharedListDialog />
         <DeviceInbox />
+        <ReminderLines />
       </div>
     </ErrorBoundary>
   )
