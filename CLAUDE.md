@@ -256,8 +256,8 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   Titel der Liste trifft, bleibt liegen; das Fenster „In Staffel einordnen“
   bleibt in der Auswahlleiste für alles andere. Es gibt kein „Rückgängig“: die
   Dateien liegen danach in Drive im Staffel-Ordner. **Die Reiter folgen den
-  Aufgaben** (`PANELS` in `panelMeta.tsx`): Start, Merkliste, Ordner,
-  Abspielen, Herunterladen, Geräte, dann die Werkzeuge — bei knapper Breite
+  Aufgaben** (`PANELS` in `panelMeta.tsx`): Start, Merkliste, Kalender,
+  Ordner, Abspielen, Herunterladen, Geräte, dann die Werkzeuge — bei knapper Breite
   stehen die Werkzeuge hinter „Mehr“, nicht die Aufgaben. **Die Werkzeuge
   stehen in drei Gruppen** (18.11.2026, „zu viele Tabs … alle noch haben, aber
   anders umgesetzt“; `TAB_ENTRIES` in `panelMeta.tsx`): Bearbeiten (Umwandeln,
@@ -784,6 +784,82 @@ Vor einer Gestaltungsänderung: `DESIGN.md` lesen. Das Skill dazu liegt unter
   `npm run verify:webdav` (Nachbau mit MKCOL, PUT, PROPFIND, 401, 507, 301 und
   den Server der App; Passwort nicht im Klartext auf der Platte, `..` klettert
   nicht, fremde Herkunft 403).
+- **Kalender** (`#kalender`, `CalendarPanel.tsx`, `lib/calendar.ts`,
+  `lib/calendarReminders.ts`, 26.11.2026, Wunsch: ein Kalender-Tab, in den man
+  auch selbst Sachen mit Zeit eintragen kann): die Woche, Montag bis Sonntag —
+  sieben Spalten am Schreibtisch, am Handy die Tage untereinander. Zwei Arten
+  von Einträgen: **eigene** (Name, Datum, Uhrzeit, Ende, Wiederholung einmalig /
+  täglich / jede Woche, Notiz, Erinnerung) in `localStorage`
+  (`sondra:kalender`, höchstens 500), und **Serien mit Sendetag** — `airing`
+  (`{ weekday, time?, remind? }`) am Eintrag der Merkliste, von Hand
+  eingetragen, nie geraten, reist mit der Liste (`normalizeAiring`; ohne diese
+  Normalisierung würde `normalize()` das Feld beim nächsten Lesen verwerfen).
+  Eine Serie erscheint, solange sie „Am Schauen“ ist, mit „Nächste: Staffel 1,
+  Folge 5“; ein Klick öffnet den Eintrag, „Zur Serie“ geht in die Merkliste.
+  **Die eigenen Einträge werden nicht mit anderen Geräten abgeglichen** — die
+  Seite sagt es. **Rechnen auf Kalendertagen, nie auf Stunden**
+  (`addDays` über `Date.UTC`): eine Woche sind sieben Daten, auch die, in der
+  die Uhren umgestellt werden; 18:00 bleibt 18:00 (`startsAt`, die Woche hat
+  dann 167 oder 169 Stunden). `verify:calendar` läuft in `Europe/Berlin` über
+  29.3. und 25.10.2026. **Erinnerungen** nur, solange Sondra offen ist (es gibt
+  keinen Server, der ein geschlossenes Programm weckt; der Satz steht unter der
+  Woche): alle 30 s `dueReminders` — fällig ab „Zeit minus Vorlauf“ bis 30 Min.
+  nach der Zeit, je Vorkommen einmal (`sondra:kalender:erinnert`, eine Woche),
+  nichts Älteres wird beim Start nachgeholt. Sie kommen als Zeile unten links
+  (`ReminderLines`, immer sichtbar), als Meldung des Systems und, wo
+  eingerichtet, aufs Handy. Szenario „kalender“.
+- **Meldungen aufs Handy** (nur in der App, `desktop/push.mjs`, `desktop/net.mjs`,
+  `lib/push.ts`, `PushSettings.tsx`): ntfy, Telegram oder Pushover, wie bei
+  WebDAV — **der Dienst ist die eigene Wahl, nichts ist eingebaut** (das
+  ntfy-Serverfeld beginnt leer), die Schlüssel (Bot-Token, Pushover-Schlüssel,
+  ntfy-Token) liegen mit `safeStorage` in `push-geheimnisse.bin`, die Seite
+  konfiguriert, testet und sendet über `sondraApp.push(…)` und liest nie einen
+  zurück. **Keine Protokollzeile trägt eine Adresse** — Telegram führt den
+  Token im Pfad; `send` in `net.mjs` meldet nur einen Grund, nie die Adresse.
+  ntfy bekommt die JSON-Form (ein Umlaut im Titel passt in keinen Kopf). Wann:
+  Download fertig, neue Folge (auch eine bessere Sprachfassung),
+  Erinnerung aus dem Kalender — je ein Schalter. `sendAppNotification` kennt
+  `push:`; `announce()` in `newEpisodes.ts` ruft `sendPush` selbst auf. Der
+  eine Satz „verlässt dieses Gerät“ steht auf `panel-cool`. `net.mjs` hält den
+  HTTP-Helfer, den auch WebDAV benutzt. `npm run verify:push`.
+- **Danach herunterfahren** (nur Windows-App, `desktop/power.mjs`,
+  `PowerAfter.tsx`, `lib/power.ts`): ein Feld „Danach“ — Nichts / Herunterfahren
+  / Ruhezustand — beim Einzel-Download und im Stapel; **die Wahl wird nie
+  gemerkt** (ein Schalter von gestern schaltete sonst beim nächsten Download
+  ab, auf den keiner wartet). Die Seite nennt eine Aktion, nie einen Befehl;
+  `power.mjs` kennt genau zwei (`shutdown /s /t 0`, `shutdown /h`). Der
+  Energiesparmodus fehlt mit Absicht: `SetSuspendState` geht bei eingeschaltetem
+  Ruhezustand in den Ruhezustand. Der Countdown (60 s, „Abbrechen“, „Jetzt“,
+  Escape bricht ab) gehört der Seite; stirbt sie, geschieht nichts. Er beginnt,
+  wenn nichts mehr lädt oder wartet, **mindestens ein Download fertig wurde**
+  (`finishedRun`, gezählt in `recordDownload`) und kein Eintrag nach einem
+  Abbruch wieder wartet; er nennt, wie viele fehlschlugen. Ruhezustand aus in
+  Windows: der Satz sagt, wie er sich einschaltet. `npm run verify:power`.
+- **Sprach-Reihenfolge und bessere Fassungen** (`lib/languages.ts`,
+  `LanguageOrder.tsx`, `chooseAniworldLanguage` in `api/extractors.js`,
+  26.11.2026): AniWorld hat Deutsch, Deutsch untertitelt und Englisch
+  untertitelt; die **Reihenfolge** (`sondra:sprachen`, Voreinstellung wie
+  „Automatisch“ schon immer: untertitelt, Deutsch, Englisch — nicht die des
+  Beispiels, sonst änderte sich still, was jeder bekommt) wählt je Folge die
+  erste Fassung, die es gibt; eine ausdrücklich gewählte Fassung gilt zuerst,
+  fehlt sie, **entscheidet die Reihenfolge, nicht der Hoster**. Das passiert in
+  einem Aufruf (`languagePriority` an `/api/resolve`, nur die drei Codes). Der
+  Dateiname trägt `[Ger-Dub]` weiter nur bei ausdrücklicher Wahl. **Je Folge wird
+  gemerkt, in welcher Fassung sie kam** (`langs` am Eintrag, nach dem Laden einer
+  Folge einer Serie der Merkliste, aus `currentLangKey`). **Bessere Fassungen
+  werden angeboten, nie eingesetzt:** einmal am Tag, in der App im Takt der
+  neuen Folgen, fragt `checkLanguageUpgrades` für höchstens sechs Folgen in
+  schlechterer Fassung (`languagesOnly`: eine Seite, kein Hoster, zwei Sekunden
+  Pause) — eine Folge in der besten Fassung wird nie gefragt — und legt
+  `upgrades` an den Eintrag; die Serienseite sagt „Bessere Sprachfassung:
+  Folge 3 gibt es jetzt: Deutsch“ mit „Folge 3 laden“ und „Nicht mehr zeigen“
+  (`upgradesIgnored`), im Menü „Nach besserer Sprache suchen“ von Hand. **Eine
+  Prüfung ist keine Änderung:** sie setzt `updatedAt` nicht (wie
+  `onlineAvailable`), das Laden in besserer Fassung schon. **Die geladene Datei
+  bleibt, wo sie ist** — Sondra löscht nichts; die neue liegt daneben. Wer „Folge
+  3 laden“ nimmt, stellt dabei die gewählte Fassung des Downloaders um (so
+  arbeitet das Laden aus der Merkliste immer). `verify:language`, Fälle in
+  `verify:extractors`.
 - **Herunterladen: Erkennen, Zusammensetzen, Laden** (16.10.2026). Adressen
   liest `extractAddresses` (`lib/download.ts`) aus jedem Text — Komma,
   Semikolon, Zeilen, Anführungszeichen, Punkt am Satzende; ins einzeilige

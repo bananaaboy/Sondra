@@ -40,6 +40,7 @@ import {
   useDrive,
 } from '../../lib/googleDrive'
 import { DriveIcon, merkSyncProblemText } from '../GoogleDrive'
+import { getLanguageOrder, LANG_LABELS, upgradeWhere } from '../../lib/languages'
 import {
   advance,
   calculateBingePlan,
@@ -51,7 +52,9 @@ import {
   exportMerklisteSqlite,
   allHistory,
   allTags,
+  checkLanguageUpgrades,
   checkOnlineUpdates,
+  ignoreUpgrades,
   onlineNews,
   takeOnlineNews,
   type OnlineNews,
@@ -2614,6 +2617,23 @@ function SeriesPage({
     }
   }, [item.title, item.season, item.episode])
 
+  /** The better version of an episode, loaded from here: the series with that episode and that language, in the Downloader. */
+  const loadUpgrade = (offer: NonNullable<SavedLinkItem['upgrades']>[number]) => {
+    const targetUrl = buildUrlWithEpisode(item.url, offer.season, offer.episode)
+    requestLookup({ ...item, url: targetUrl, season: offer.season, episode: offer.episode, language: offer.to })
+    setPanel('downloader')
+  }
+
+  const handleCheckLanguages = async () => {
+    setCheckingUpdates(true)
+    setCheckNote(null)
+    const check = await checkLanguageUpgrades(item, getLanguageOrder(), true)
+    setCheckingUpdates(false)
+    if (check.asked === 0 && check.unreachable) setCheckNote('AniWorld war nicht zu erreichen. Später noch einmal.')
+    else if (check.asked === 0) setCheckNote('Noch keine geladene Folge, für die es eine bessere Fassung geben könnte.')
+    else if (check.found.length === 0) setCheckNote('Nichts Besseres: die geladenen Folgen haben die beste Fassung, die es gibt.')
+  }
+
   const handleCheckUpdates = async () => {
     setCheckingUpdates(true)
     setCheckNote(null)
@@ -2727,6 +2747,26 @@ function SeriesPage({
                 </div>
               ) : null}
 
+              {item.upgrades && item.upgrades.length > 0 ? (
+                <div className="mt-[2px] flex flex-wrap items-center justify-between gap-[10px] rounded-card border border-line bg-panel-soft/60 px-[12px] py-[8px]">
+                  <div className="flex items-center gap-[8px] text-small text-ink">
+                    <span className="size-[6px] shrink-0 rounded-full bg-accent-strong" />
+                    <span>
+                      Bessere Sprachfassung: <strong>{upgradeWhere(item.upgrades)}</strong>{' '}
+                      {new Set(item.upgrades.map((offer) => offer.to)).size === 1 ? `gibt es jetzt: ${LANG_LABELS[item.upgrades[0].to]}.` : 'gibt es jetzt in besserer Fassung.'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-[8px]">
+                    <Button type="button" size="sm" variant="quiet" onClick={() => loadUpgrade(item.upgrades![0])} title="Lädt die Folge in der besseren Fassung; die schon geladene Datei bleibt, wo sie ist">
+                      {item.upgrades[0].season === 0 ? `Film ${item.upgrades[0].episode}` : `Folge ${item.upgrades[0].episode}`} laden
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => ignoreUpgrades(item.id)}>
+                      Nicht mehr zeigen
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mt-[4px] flex flex-wrap items-center gap-[8px]">
                 {/* One way forward, the best one there is: from the folder, else streamed, else just ticked off. */}
                 {playable ? (
@@ -2758,6 +2798,9 @@ function SeriesPage({
                   {hasUrl && !next ? <MenuItem onClick={() => openHere(item)}>Nachsehen</MenuItem> : null}
                   {hasUrl && isAniworldUrl(item.url) ? (
                     <MenuItem onClick={() => void handleCheckUpdates()}>{checkingUpdates ? 'Prüft …' : 'Online nach Neuem suchen'}</MenuItem>
+                  ) : null}
+                  {hasUrl && isAniworldUrl(item.url) && item.langs ? (
+                    <MenuItem onClick={() => void handleCheckLanguages()}>{checkingUpdates ? 'Prüft …' : 'Nach besserer Sprache suchen'}</MenuItem>
                   ) : null}
                   <MenuItem onClick={() => setRecommending(true)}>Empfehlen</MenuItem>
                 </MoreMenu>

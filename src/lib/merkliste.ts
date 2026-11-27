@@ -14,7 +14,20 @@
 
 import { useSyncExternalStore } from 'react'
 
-import { deriveLinkTitle, isAniworldUrl, parseLinkEpisodeInfo } from './download'
+import { buildUrlWithEpisode, deriveLinkTitle, isAniworldUrl, parseLinkEpisodeInfo } from './download'
+import {
+  betterOf,
+  episodeKey,
+  isLangCode,
+  normalizeLangs,
+  normalizeUpgrades,
+  rankOf,
+  upgradeCandidates,
+  UPGRADE_CHECK_EVERY_MS,
+  type EpisodeLanguages,
+  type LangCode,
+  type LangUpgrade,
+} from './languages'
 import { syncProgressToTrackers } from './anilist'
 import { getProjectToolState, setProjectToolState } from './project'
 import {
@@ -178,6 +191,14 @@ export interface SavedLinkItem {
   goal?: MerkGoal
   /** The day of the week the series is broadcast, for the Kalender; entered by the person, never guessed. */
   airing?: Airing
+  /** The version each episode was loaded in, `season:episode` → code (see `lib/languages.ts`). */
+  langs?: EpisodeLanguages
+  /** Episodes for which a better version is out than the one loaded — offered, never swapped in. */
+  upgrades?: LangUpgrade[]
+  /** When a check for better versions last got answers; a check is not a change, so this does not move `updatedAt`. */
+  upgradeCheckedAt?: number
+  /** Offers the person waved away, `season:episode:code`, so they do not come back. */
+  upgradesIgnored?: string[]
 }
 
 /** A weekly broadcast slot: the weekday (0 = Monday … 6 = Sunday), the time if known, and a reminder (minutes before; 0 = at the time). */
@@ -305,6 +326,12 @@ function normalize(raw: Partial<SavedLinkItem>): SavedLinkItem {
     ...(raw.durations && typeof raw.durations === 'object' ? { durations: raw.durations } : {}),
     ...(normalizeGoal(raw.goal) ? { goal: normalizeGoal(raw.goal) } : {}),
     ...(normalizeAiring(raw.airing) ? { airing: normalizeAiring(raw.airing) } : {}),
+    ...(normalizeLangs(raw.langs) ? { langs: normalizeLangs(raw.langs) } : {}),
+    ...(normalizeUpgrades(raw.upgrades) ? { upgrades: normalizeUpgrades(raw.upgrades) } : {}),
+    ...(typeof raw.upgradeCheckedAt === 'number' ? { upgradeCheckedAt: raw.upgradeCheckedAt } : {}),
+    ...(Array.isArray(raw.upgradesIgnored) && raw.upgradesIgnored.some((key) => typeof key === 'string')
+      ? { upgradesIgnored: raw.upgradesIgnored.filter((key): key is string => typeof key === 'string' && /^\d+:\d+:[a-z_]+$/.test(key)).slice(-100) }
+      : {}),
     ...(Array.isArray(raw.tags)
       ? {
           tags: Array.from(
@@ -1309,6 +1336,88 @@ export async function checkOnlineUpdates(item: SavedLinkItem): Promise<OnlineAva
     // Offline or server not running
   }
   return null
+}
+
+/**
+ * Remembers which version an episode was loaded in, and drops an offer that
+ * this load fulfils. A person's doing, so the entry counts as changed.
+ */
+export function noteEpisodeLanguage(id: string, season: number, episode: number, code: LangCode, order: LangCode[]): void {
+  updateMerkItem(id, (item) => {
+    const upgrades = (item.upgrades ?? []).filter((offer) => !(offer.season === season && offer.episode === episode && rankOf(code, order) <= rankOf(offer.to, order)))
+    return { langs: { ...(item.langs ?? {}), [episodeKey(season, episode)]: code }, upgrades: upgrades.length > 0 ? upgrades : undefined }
+  })
+}
+
+/** Waves the offers away; the same ones do not come back. */
+export function ignoreUpgrades(id: string): void {
+  updateMerkItem(id, (item) => ({
+    upgrades: undefined,
+    upgradesIgnored: [...(item.upgradesIgnored ?? []), ...(item.upgrades ?? []).map((offer) => `${episodeKey(offer.season, offer.episode)}:${offer.to}`)].slice(-100),
+  }))
+}
+
+export interface UpgradeCheck {
+  /** Episodes AniWorld answered for. */
+  asked: number
+  found: LangUpgrade[]
+  /** At least one answer did not come. */
+  unreachable: boolean
+}
+
+/**
+ * Asks AniWorld, for a few episodes loaded in a version that is not the best of
+ * the order, which versions exist now — one page each, no hoster resolved, a
+ * pause between. Noted like `onlineAvailable`: a check is not something the
+ * person did, so `updatedAt` stays (a newer time here would let this device's
+ * older progress win at the next sync). Once a day unless `force`.
+ */
+export async function checkLanguageUpgrades(item: SavedLinkItem, order: LangCode[], force = false): Promise<UpgradeCheck> {
+  const none: UpgradeCheck = { asked: 0, found: [], unreachable: false }
+  if (!item.url || !isAniworldUrl(item.url)) return none
+  const started = Date.now()
+  if (!force && item.upgradeCheckedAt && started - item.upgradeCheckedAt < UPGRADE_CHECK_EVERY_MS) return none
+  const candidates = upgradeCandidates(item.langs, order)
+  if (candidates.length === 0) return none
+  const ignored = new Set(item.upgradesIgnored ?? [])
+  const found: LangUpgrade[] = []
+  let asked = 0
+  let unreachable = false
+  for (const [index, candidate] of candidates.entries()) {
+    if (index > 0) await new Promise((resolve) => setTimeout(resolve, 2_000))
+    try {
+      const response = await fetch('/api/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: buildUrlWithEpisode(item.url, candidate.season, candidate.episode), languagesOnly: true }),
+      })
+      const data = response.ok ? ((await response.json()) as { status?: string; availableLanguages?: { code?: string }[] }) : null
+      if (!data || data.status !== 'languages' || !Array.isArray(data.availableLanguages)) {
+        unreachable = true
+        continue
+      }
+      asked += 1
+      const to = betterOf(candidate.have, data.availableLanguages.map((entry) => entry.code).filter(isLangCode), order)
+      if (to && !ignored.has(`${episodeKey(candidate.season, candidate.episode)}:${to}`)) {
+        found.push({ season: candidate.season, episode: candidate.episode, to, foundAt: started })
+      }
+    } catch {
+      unreachable = true
+    }
+  }
+  if (asked > 0) {
+    const askedKeys = new Set(candidates.map((entry) => episodeKey(entry.season, entry.episode)))
+    setMerkItems((current) =>
+      current.map((entry) => {
+        if (entry.id !== item.id) return entry
+        // What was not asked this time keeps its offer.
+        const kept = (entry.upgrades ?? []).filter((offer) => !askedKeys.has(episodeKey(offer.season, offer.episode)))
+        const upgrades = [...kept, ...found]
+        return { ...entry, upgrades: upgrades.length > 0 ? upgrades : undefined, upgradeCheckedAt: started }
+      }),
+    )
+  }
+  return { asked, found, unreachable }
 }
 
 /** Episodes AniWorld has that the list does not: a season it lacks, or episodes past a known count. */

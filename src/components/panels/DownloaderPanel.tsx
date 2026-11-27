@@ -48,6 +48,8 @@ import { putBytesToWebdav, refreshWebdav, useWebdav, WEBDAV_SUPPORTED, webdavAns
 import { DownloadTargets, FolderSchemeField } from './DownloadTargets'
 import { PowerAfterSelect, PowerCountdown } from '../PowerAfter'
 import { PushSettingsLink } from '../PushSettings'
+import { LanguageOrder } from './LanguageOrder'
+import { getLanguageOrder, langOfKey } from '../../lib/languages'
 import type { PowerAfter } from '../../lib/power'
 import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { decodeWithBrowser } from '../../lib/audio'
@@ -75,6 +77,7 @@ import { ZipSave } from '../ZipSave'
 import { DriveSaveButton } from '../GoogleDrive'
 import {
   DOWNLOADER_LOOKUP_EVENT,
+  noteEpisodeLanguage,
   setMerkItems,
   takePendingBatchLookup,
   takePendingLookup,
@@ -745,6 +748,19 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
   const [waysOpen, setWaysOpen] = useState(false)
 
   const [history, setHistory] = useState<DownloadHistoryItem[]>(loadDownloadHistory)
+
+  /**
+   * Remembers which version of an episode of a series on the Merkliste just
+   * came — so a better one that appears later can be offered. Only for what is
+   * known for sure: a series of the list, an address that names one episode, a
+   * version AniWorld reported.
+   */
+  const noteLanguage = (sourceUrl: string, found: { currentLangKey?: number }) => {
+    const code = langOfKey(found.currentLangKey)
+    const info = parseLinkEpisodeInfo(sourceUrl)
+    const matched = matchingSavedLink(sourceUrl)
+    if (code && matched && info.isEpisodicUrl && info.episode !== null) noteEpisodeLanguage(matched.id, info.season, info.episode, code, getLanguageOrder())
+  }
 
   // „Danach“: what happens when the downloads are done. Never kept — set for this run.
   const [powerAfter, setPowerAfter] = useState<PowerAfter>('none')
@@ -1433,6 +1449,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         }
         const found = await resolveViaService(targets[0], controller.signal, {
           language: activeLang,
+          languagePriority: getLanguageOrder(),
         })
         if (found.isPlaylist) {
           log('holen', `Staffel / Playlist erkannt: ${found.title} (${found.items.length} Titel)`)
@@ -1641,6 +1658,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
       try {
         const res = await resolveViaService(entry.url, timeoutController.signal, {
           language: filePrefsRef.current.aniworldLanguage,
+          languagePriority: getLanguageOrder(),
         })
         if (res.isPlaylist) {
           const gId = entry.groupId || entry.url
@@ -2050,6 +2068,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         log('holen', `${directDisk.name} direkt gespeichert (0 MB RAM · ${formatBytes(directDisk.bytesWritten)}): ${whereDirect(directDisk)}`)
         await sendDirectToDrive(directDisk, controller.signal)
         recordDownload(url, result.title, result.author ?? '', directDisk.ext, directDisk.bytesWritten)
+        noteLanguage(url, result)
         playCompletionChime()
         sendAppNotification({
           title: 'Download abgeschlossen',
@@ -2078,6 +2097,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
       if (!toDrive(delivery)) offerDownloadToDrive(done)
       setTaken({ name: done.name, bytes: done.bytes, mime: done.mime })
       recordDownload(url, result.title, result.author ?? '', done.ext, done.bytes.byteLength)
+      noteLanguage(url, result)
       playCompletionChime()
       sendAppNotification({
         title: 'Download abgeschlossen',
@@ -2167,6 +2187,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         await sendDirectToDrive(directDisk, signal)
         patchEntry(id, { status: 'done', progress: null })
         recordDownload(entry.url, res.title, res.author ?? '', directDisk.ext, directDisk.bytesWritten)
+        noteLanguage(entry.url, res)
         return
       }
 
@@ -2197,6 +2218,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
         patchEntry(id, { status: 'done', progress: null, taken: { name: done.name, bytes: done.bytes, mime: done.mime } })
       }
       recordDownload(entry.url, res.title, res.author ?? '', done.ext, done.bytes.byteLength)
+      noteLanguage(entry.url, res)
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') {
         // Cancelled: back to where it was, ready to load again.
@@ -2939,7 +2961,9 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   />
                 </div>
 
-                <PushSettingsLink className="border-t border-line pt-[10px] sm:col-span-2" />
+                <LanguageOrder className="border-t border-line pt-[10px] sm:col-span-2" />
+
+              <PushSettingsLink className="border-t border-line pt-[10px] sm:col-span-2" />
 
               {IN_DESKTOP_APP ? (
                 <div className="flex flex-col gap-[8px] border-t border-line pt-[10px] sm:col-span-2">

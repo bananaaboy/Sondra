@@ -72,7 +72,7 @@ export { episodeKindOf, positionLabel } from '../../lib/merkRows'
 
 /** The language versions a multi-language source may offer. */
 export const LANGUAGE_OPTIONS: { value: AniworldLanguagePref; label: string; title: string }[] = [
-  { value: 'auto', label: 'Automatisch', title: 'Die beste vorhandene Fassung, Deutsch bevorzugt' },
+  { value: 'auto', label: 'Automatisch', title: 'Die erste vorhandene Fassung nach Ihrer Sprach-Reihenfolge' },
   { value: 'ger_sub', label: 'Deutsch untertitelt', title: 'Originalton mit deutschen Untertiteln (OmU)' },
   { value: 'ger_dub', label: 'Deutsch', title: 'Deutsche Synchronfassung' },
   { value: 'eng_sub', label: 'Englisch untertitelt', title: 'Originalton mit englischen Untertiteln' },

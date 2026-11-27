@@ -98,6 +98,8 @@ export interface StudioResult {
   isPlaylist?: false
   availableLanguages?: { key: number; code: string; label: string }[]
   currentLanguage?: string
+  /** AniWorld's key for the version that came: 1 German dub, 2 English sub, 3 German sub. */
+  currentLangKey?: number
 }
 
 export interface StudioPlaylistItem {
@@ -308,7 +310,7 @@ function storedServiceChoices(): Partial<ServiceSettings> {
 export async function resolveViaService(
   url: string,
   signal?: AbortSignal,
-  extra?: { language?: string },
+  extra?: { language?: string; languagePriority?: string[] },
 ): Promise<StudioResolveResult> {
   let connected = serviceConnection()
   if (
@@ -386,7 +388,11 @@ export async function resolveViaService(
     response = await fetch('/api/resolve', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url, ...(extra?.language ? { language: extra.language } : {}) }),
+      body: JSON.stringify({
+        url,
+        ...(extra?.language ? { language: extra.language } : {}),
+        ...(extra?.languagePriority?.length ? { languagePriority: extra.languagePriority } : {}),
+      }),
       signal,
     })
   } catch (cause) {
