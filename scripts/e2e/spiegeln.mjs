@@ -35,7 +35,7 @@ const hideUsb = () => Object.defineProperty(Navigator.prototype, 'usb', { get: (
   await page.waitForSelector('[data-tab]')
   await page.waitForTimeout(700)
   const labels = await page.locator('[data-tab]').allInnerTexts()
-  check('Reiter: neun Einträge, nichts hinter „Mehr“', labels.length === 9 && (await page.getByRole('button', { name: /^Mehr/ }).count()) === 0, labels.join(' | '))
+  check('Reiter: zehn Einträge, nichts hinter „Mehr“', labels.length === 10 && (await page.getByRole('button', { name: /^Mehr/ }).count()) === 0, labels.join(' | '))
   check('Reiter: Gruppen Bearbeiten, Ton, Aufnehmen', ['Bearbeiten', 'Ton', 'Aufnehmen'].every((name) => labels.some((label) => label.trim() === name)), labels.join(' | '))
 
   const group = page.locator('[data-group="ton"]')

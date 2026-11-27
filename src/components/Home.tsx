@@ -298,7 +298,7 @@ function MediaTiles() {
   const todays = itemsOn(todayYmd(), events, list)
   const calendarLine = todays.length
     ? `Heute: ${todays[0].time ? `${todays[0].time} ` : ''}${todays[0].title}${todays.length > 1 ? ` und ${todays.length - 1} weitere` : ''}`
-    : 'Wann Serien laufen, dazu eigene Termine'
+    : 'Sendetage und eigene Termine'
   const tiles: { id: PanelId; label: string; line: string }[] = [
     {
       id: 'merkliste',

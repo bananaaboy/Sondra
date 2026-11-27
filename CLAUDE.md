@@ -263,7 +263,7 @@ Das Wenige, was hier stehen muss, weil es jeden Edit betrifft:
   anders umgesetzt“; `TAB_ENTRIES` in `panelMeta.tsx`): Bearbeiten (Umwandeln,
   Video, Bilder, Untertitel), Ton (Ton, Mischen, Spuren trennen, Lautstärke,
   Zerschneiden, Tonart), Aufnehmen (Bildschirm, Handy spiegeln, Mikrofon) —
-  je ein Knopf mit Menü, neun Einträge in der Zeile statt neunzehn. Der Knopf
+  je ein Knopf mit Menü, zehn Einträge in der Zeile statt zwanzig (mit dem Kalender). Der Knopf
   einer Gruppe nennt das gewählte Werkzeug („Ton · Mischen“), der Strich
   gleitet darunter. Die Zeile ist ein `nav` mit Knöpfen und `aria-current`, kein
   `tablist` (ein Tab, der ein Menü öffnet, ist kein Tab); Pfeile bewegen den
