@@ -46,6 +46,8 @@ import { offerDownloadToDrive, saveResultToDrive, useDrive } from '../../lib/goo
 import { episodeFolder, type FolderScheme } from '../../lib/storageLayout'
 import { putBytesToWebdav, refreshWebdav, useWebdav, WEBDAV_SUPPORTED, webdavAnswerProblem, webdavReady } from '../../lib/webdav'
 import { DownloadTargets, FolderSchemeField } from './DownloadTargets'
+import { PowerAfterSelect, PowerCountdown } from '../PowerAfter'
+import type { PowerAfter } from '../../lib/power'
 import { getProjectToolState, setProjectToolState } from '../../lib/project'
 import { decodeWithBrowser } from '../../lib/audio'
 import { SPEECH_MODELS, toSpeechSamples, transcribe, toSrt } from '../../lib/transcribe'
@@ -743,8 +745,15 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
   const [history, setHistory] = useState<DownloadHistoryItem[]>(loadDownloadHistory)
 
+  // „Danach“: what happens when the downloads are done. Never kept — set for this run.
+  const [powerAfter, setPowerAfter] = useState<PowerAfter>('none')
+  const [powerCountdown, setPowerCountdown] = useState<{ action: Exclude<PowerAfter, 'none'>; done: number; failed: number } | null>(null)
+  /** Downloads finished since the choice was made, counted where each one is recorded. */
+  const finishedRun = useRef(0)
+
   const recordDownload = useCallback(
     (targetUrl: string, title: string, author: string, format: string, byteSize?: number) => {
+      finishedRun.current += 1
       setHistory((prev) => {
         const filtered = prev.filter((item) => item.url !== targetUrl)
         const newItem: DownloadHistoryItem = {
@@ -2244,6 +2253,26 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
     }
   }
 
+  // The run is over when nothing is loading or waiting: then the countdown starts —
+  // only with at least one download done, and never after a cancelled run (its
+  // entries go back to waiting).
+  useEffect(() => {
+    if (powerAfter === 'none' || powerCountdown || finishedRun.current === 0) return
+    const open = batchEntries?.some((e) => e.status === 'pending' || e.status === 'ready' || e.status === 'downloading' || e.status === 'resolving')
+    if (busy || batchBusy || open) return
+    setPowerCountdown({
+      action: powerAfter,
+      done: finishedRun.current,
+      failed: batchEntries?.filter((e) => e.status === 'error').length ?? 0,
+    })
+  }, [powerAfter, powerCountdown, busy, batchBusy, batchEntries])
+
+  const stopPower = () => {
+    setPowerCountdown(null)
+    setPowerAfter('none')
+    finishedRun.current = 0
+  }
+
   const videoPrefLabel =
     filePrefs.videoPref === 'untouched'
       ? 'Video unverändert'
@@ -2392,6 +2421,13 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
 
   return (
     <>
+      <PowerCountdown
+        action={powerCountdown?.action ?? null}
+        done={powerCountdown?.done ?? 0}
+        failed={powerCountdown?.failed ?? 0}
+        onCancel={stopPower}
+        onFinished={stopPower}
+      />
       {miniBar}
       <div className={hidden ? 'hidden' : 'flex flex-col gap-[16px]'}>
       <Card tone="cream">
@@ -3182,6 +3218,12 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
             })()}
           </div>
 
+          {result && !batchEntries ? (
+            <div className="mt-[12px] flex justify-end">
+              <PowerAfterSelect value={powerAfter} onChange={(next) => { setPowerAfter(next); finishedRun.current = 0 }} />
+            </div>
+          ) : null}
+
           {taken && !busy ? (
             <div className="rise mt-[16px] flex flex-wrap items-center gap-[12px] border-t border-line pt-[12px]" role="status">
               <span aria-hidden className="h-[8px] w-[8px] shrink-0 rounded-pill bg-ink" />
@@ -3273,6 +3315,7 @@ export function DownloaderPanel({ hidden = false }: { hidden?: boolean } = {}) {
                   </option>
                 ))}
               </Select>
+              <PowerAfterSelect value={powerAfter} onChange={(next) => { setPowerAfter(next); finishedRun.current = 0 }} />
               {batchBusy ? (
                 <Button
                   size="sm"

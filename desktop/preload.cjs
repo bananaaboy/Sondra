@@ -4,7 +4,8 @@
  * are to record, the Merkliste's link to Anytype (one action at a time,
  * never the key) and the sign-in to Google Drive (an access token when asked,
  * never the refresh token) and the WebDAV folder for downloads (configure, test,
- * forget — never the password). Nothing else of Electron or Node reaches the page.
+ * forget — never the password) and what may follow a finished download (shut
+ * down or hibernate Windows, named, never a command). Nothing else of Electron or Node reaches the page.
  */
 
 const { contextBridge, ipcRenderer } = require('electron')
@@ -19,6 +20,7 @@ contextBridge.exposeInMainWorld('sondraApp', {
   anytype: (action, ...args) => ipcRenderer.invoke('sondra:anytype', action, ...args),
   drive: (action, ...args) => ipcRenderer.invoke('sondra:drive', action, ...args),
   webdav: (action, ...args) => ipcRenderer.invoke('sondra:webdav', action, ...args),
+  power: (action) => ipcRenderer.invoke('sondra:power', action),
   setDiscordPresence: (activity) => ipcRenderer.invoke('sondra:discord-presence', activity),
   setDiscordEnabled: (enabled) => ipcRenderer.invoke('sondra:discord-enabled', enabled),
   setAlwaysOnTop: (flag) => ipcRenderer.invoke('sondra:always-on-top', flag),

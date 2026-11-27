@@ -159,6 +159,8 @@ export interface AppBridge {
   setDownloadDir?: (dir: string) => Promise<{ ok: boolean; dir?: string; reason?: 'not-absolute' | 'unwritable'; detail?: string }>
   /** The WebDAV folder for downloads (desktop/webdav.mjs): configure, test, forget — never the password back. */
   webdav?: (action: 'status' | 'configure' | 'test' | 'forget', ...args: unknown[]) => Promise<unknown>
+  /** Shut down or hibernate Windows (desktop/power.mjs); `status` says whether this is Windows. */
+  power?: (action: 'status' | 'shutdown' | 'hibernate') => Promise<{ available?: boolean; ok?: boolean; reason?: string }>
   /** Sets progress bar in taskbar (0 to 1, or -1 to clear). */
   setProgressBar?: (progress: number) => Promise<boolean>
   /** Prevents OS sleep during long downloads. */
