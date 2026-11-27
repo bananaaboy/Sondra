@@ -3,8 +3,12 @@
   "versions": [
     {
       "version": "1.2.4",
-      "date": "2026-11-26",
+      "date": "2026-11-27",
       "items": [
+        "Neu: der Reiter „Kalender“. Die Woche auf einen Blick: wann Ihre Serien laufen (den Sendetag tragen Sie im Kalender ein) und was Sie sich selbst eintragen — mit Datum, Uhrzeit, Ende, Wiederholung, Notiz und Erinnerung. Erinnerungen kommen, solange Sondra offen ist; Ihre Einträge liegen auf diesem Gerät und werden noch nicht mit anderen abgeglichen.",
+        "Neu in der Windows-App: Meldungen aufs Handy über ntfy, Telegram oder Pushover — wenn ein Download fertig ist, eine neue Folge erscheint oder ein Termin ansteht. Den Dienst wählen Sie selbst; Token und Schlüssel bleiben verschlüsselt auf diesem Computer.",
+        "Neu in der Windows-App: „Danach herunterfahren“ — Herunterfahren oder Ruhezustand, wenn die Downloads fertig sind. Eine Minute Zeit zum Abbrechen; die Wahl gilt nur für diesen Durchgang.",
+        "Neu: die Sprach-Reihenfolge. Sie legen fest, welche Fassung zuerst kommt (Deutsch, Deutsch untertitelt, Englisch untertitelt); fehlt eine Folge in der ersten, nimmt Sondra die nächste. Sondra merkt sich, in welcher Fassung jede Folge kam, und sagt es auf der Serienseite, wenn später eine bessere erscheint. Die schon geladene Datei bleibt, wo sie ist; die neue laden Sie mit einem Klick.",
         "Herunterladen speichert jetzt, wohin Sie wollen: in einen Ordner oder auf ein NAS (auch ein eingetippter Pfad wie \\\\NAS\\Medien\\Anime), in Google Drive und in einen Ordner zugleich, an einen WebDAV-Server (NAS, Nextcloud) oder an WebDAV und Drive zugleich. WebDAV gibt es in der Windows-App; Adresse, Zielpfad und Benutzer tragen Sie selbst ein, nichts ist vorgegeben, und das Passwort bleibt verschlüsselt auf diesem Computer.",
         "Neu: die Ordnerstruktur wählen. „Sondra“ legt Serie / Staffel 1 an, „Jellyfin & Plex“ Serie / Season 01 — für Ordner, NAS und WebDAV gleich, damit ein Medienserver den Ordner so lesen kann.",
         "Behoben: In der Windows-App schrieb „Direkt als Datei speichern“ große Downloads bisher über den Arbeitsspeicher statt direkt auf die Festplatte. Jetzt geht es wie gedacht direkt.",

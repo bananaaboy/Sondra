@@ -15,6 +15,7 @@ import {
   youtubeId,
 } from './_shared.js'
 import {
+  ANIWORLD_LANGUAGE_CODES,
   DEFAULT_USER_AGENT,
   checkAniworldOnlineUpdates,
   extractDirectMedia,
@@ -291,7 +292,16 @@ export default async function handler(request, response) {
       const media = await extractDirectMedia(targetStr, {
         localAddress: body.bindAddress || process.env.SONDRA_BIND_ADDRESS || undefined,
         language: body.language,
+        // The person's order of languages: only the three known codes, at most once each.
+        languagePriority: Array.isArray(body.languagePriority)
+          ? [...new Set(body.languagePriority.filter((code) => ANIWORLD_LANGUAGE_CODES.includes(code)))]
+          : undefined,
+        languagesOnly: body.languagesOnly === true,
       })
+      if (media && media.languagesOnly) {
+        response.status(200).json({ status: 'languages', availableLanguages: media.availableLanguages })
+        return
+      }
       if (media && media.isPlaylist) {
         response.status(200).json({
           status: 'playlist',
@@ -393,6 +403,8 @@ export default async function handler(request, response) {
           thumbnail: media.thumbnail || null,
           availableLanguages: media.availableLanguages,
           currentLanguage: media.language,
+          // AniWorld's own key (1 German dub, 2 English sub, 3 German sub), so the page can remember which version an episode came in.
+          currentLangKey: typeof media.langKey === 'number' ? media.langKey : undefined,
           streams,
         })
         return

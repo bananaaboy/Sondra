@@ -1245,6 +1245,38 @@ export function parseAniworldLanguage(pref) {
   return null
 }
 
+/** The three language versions AniWorld offers, by the codes the page and the Merkliste use. */
+export const ANIWORLD_LANGUAGE_CODES = ['ger_dub', 'ger_sub', 'eng_sub']
+
+/**
+ * The language key to prefer for one episode, out of the keys it has: the one
+ * asked for, if it is there; otherwise the first of the person's order that
+ * is there („Deutsch, sonst Deutsch untertitelt, sonst Englisch“); otherwise
+ * `null`, which leaves the built-in order (German sub, German dub, English).
+ * A language asked for that this episode lacks no longer ends in whatever
+ * hoster ranks highest — the order decides.
+ */
+export function chooseAniworldLanguage(availableKeys, options = {}) {
+  const have = new Set(availableKeys)
+  const asked = parseAniworldLanguage(options.language || options.preferredLanguage || options.langKey)
+  if (asked !== null && have.has(asked)) return asked
+  const order = Array.isArray(options.languagePriority) ? options.languagePriority : []
+  for (const code of order) {
+    const key = parseAniworldLanguage(code)
+    if (key !== null && have.has(key)) return key
+  }
+  return null
+}
+
+/** Language keys as the codes the page uses; unknown keys keep a `lang_<n>` code. */
+export function aniworldLanguageList(keys) {
+  return [...new Set(keys)].map((key) => ({
+    key,
+    code: key === 1 ? 'ger_dub' : key === 3 ? 'ger_sub' : key === 2 ? 'eng_sub' : `lang_${key}`,
+    label: LANGUAGE_LABELS[key] || `Sprache ${key}`,
+  }))
+}
+
 /**
  * Parses an AniWorld or SerienStream (s.to) episode or movie page, finds all
  * available hoster links, and resolves them to direct playable streams.
@@ -1339,9 +1371,18 @@ export async function extractAniworld(url, options = {}) {
       return null
     }
 
+    // Which versions the episode has, and nothing more: one page read, no hoster resolved.
+    // The Merkliste asks this when it looks for a better version of an episode already loaded.
+    if (options.languagesOnly) {
+      return { languagesOnly: true, availableLanguages: aniworldLanguageList(hosterEntries.map((e) => e.langKey)) }
+    }
+
     // 3. Provider priority order: VOE > Filemoon > Vidmoly > Streamtape > Vidoza > Doodstream
     const hosterPriority = ['voe', 'filemoon', 'vidmoly', 'streamtape', 'vidoza', 'doodstream', 'dood']
-    const preferredLangKey = parseAniworldLanguage(options.language || options.preferredLanguage || options.langKey)
+    const preferredLangKey = chooseAniworldLanguage(
+      hosterEntries.map((e) => e.langKey),
+      options,
+    )
 
     function scoreEntry(entry) {
       const hostIdx = hosterPriority.findIndex((h) => entry.hosterName.toLowerCase().includes(h))
@@ -1394,12 +1435,7 @@ export async function extractAniworld(url, options = {}) {
       ? `${compoundTitle} [${langTag}]`
       : compoundTitle
 
-    const availableLangKeys = [...new Set(hosterEntries.map((e) => e.langKey))]
-    const availableLanguages = availableLangKeys.map((key) => ({
-      key,
-      code: key === 1 ? 'ger_dub' : key === 3 ? 'ger_sub' : key === 2 ? 'eng_sub' : `lang_${key}`,
-      label: LANGUAGE_LABELS[key] || `Sprache ${key}`,
-    }))
+    const availableLanguages = aniworldLanguageList(hosterEntries.map((e) => e.langKey))
 
     return {
       title: finalCompoundTitle,

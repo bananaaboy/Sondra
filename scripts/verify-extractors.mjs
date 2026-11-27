@@ -18,6 +18,7 @@ import {
   extractStreamtape,
   extractVidoza,
   extractAniworld,
+  chooseAniworldLanguage,
   extractAniworldSeason,
   extractDirectHoster,
   checkAniworldOnlineUpdates,
@@ -358,6 +359,23 @@ check('AniWorld: isHls Flag', aniResult?.isHls, true)
 check('AniWorld: mindestens ein aufgelöster Stream', aniResult?.streams?.length >= 1, true)
 check('AniWorld: alle Hoster-Einträge erfasst', aniResult?.allEntries?.length, 2)
 check('AniWorld: mehrere Stream-Spiegel verfügbar', aniResult?.streams?.length, 2)
+
+// AniWorld: the order of languages. The stand-in episode has German sub (3, VOE) and German dub (1, Filemoon).
+check('Sprache: gewünschte Fassung, wenn vorhanden', chooseAniworldLanguage([1, 3], { language: 'ger_dub' }), 1)
+check('Sprache: Reihenfolge, wenn nichts verlangt ist', chooseAniworldLanguage([2, 3], { languagePriority: ['ger_dub', 'ger_sub', 'eng_sub'] }), 3)
+check('Sprache: die erste der Reihenfolge, die da ist', chooseAniworldLanguage([1, 2, 3], { languagePriority: ['eng_sub', 'ger_dub'] }), 2)
+check('Sprache: verlangt, aber nicht da — die Reihenfolge entscheidet', chooseAniworldLanguage([1, 3], { language: 'eng_sub', languagePriority: ['ger_dub', 'ger_sub'] }), 1)
+check('Sprache: „auto“ folgt der Reihenfolge', chooseAniworldLanguage([1, 3], { language: 'auto', languagePriority: ['ger_dub'] }), 1)
+check('Sprache: nichts passt — die eingebaute Reihenfolge bleibt', chooseAniworldLanguage([1, 3], { languagePriority: ['eng_sub'] }), null)
+check('Sprache: Unsinn in der Reihenfolge wird übergangen', chooseAniworldLanguage([1], { languagePriority: ['klingon', 7, null, 'ger_dub'] }), 1)
+const orderDub = await extractAniworld(`${serverBase}/anime/stream/one-piece/staffel-1/episode-1`, { languagePriority: ['ger_dub', 'ger_sub'] })
+check('AniWorld: Reihenfolge „erst synchronisiert“ nimmt Filemoon (Deutsch)', `${orderDub?.langKey} ${orderDub?.hoster}`, '1 Filemoon')
+const orderSub = await extractAniworld(`${serverBase}/anime/stream/one-piece/staffel-1/episode-1`, { languagePriority: ['eng_sub', 'ger_sub', 'ger_dub'] })
+check('AniWorld: fehlt Englisch, gilt Deutsch untertitelt', `${orderSub?.langKey} ${orderSub?.hoster}`, '3 VOE')
+const missing = await extractAniworld(`${serverBase}/anime/stream/one-piece/staffel-1/episode-1`, { language: 'eng_sub', languagePriority: ['ger_dub'] })
+check('AniWorld: verlangte Fassung fehlt — die Reihenfolge entscheidet, nicht der Hoster', missing?.langKey, 1)
+const only = await extractAniworld(`${serverBase}/anime/stream/one-piece/staffel-1/episode-1`, { languagesOnly: true })
+check('AniWorld: nur die Sprachen — ohne einen Hoster aufzulösen', `${only?.languagesOnly} ${only?.availableLanguages?.map((l) => l.code).join()} ${only?.streams}`, 'true ger_sub,ger_dub undefined')
 
 // AniWorld Season Extraction
 const seasonResult = await extractAniworldSeason(`${serverBase}/anime/stream/one-piece/staffel-1`)

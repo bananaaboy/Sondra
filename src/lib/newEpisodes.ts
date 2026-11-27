@@ -14,7 +14,8 @@
  */
 
 import { APP_BRIDGE } from './desktop'
-import { checkOnlineUpdates, merkItems, requestOpenSeries, type OnlineAvailableInfo, type SavedLinkItem } from './merkliste'
+import { checkLanguageUpgrades, checkOnlineUpdates, merkItems, requestOpenSeries, type OnlineAvailableInfo, type SavedLinkItem } from './merkliste'
+import { getLanguageOrder, LANG_LABELS, upgradeWhere } from './languages'
 import { isAniworldUrl } from './download'
 import { sendPush } from './push'
 
@@ -91,6 +92,30 @@ function announce(item: SavedLinkItem, info: OnlineAvailableInfo, open: (id: str
   }
 }
 
+/**
+ * Looks for better language versions of episodes already loaded and says so
+ * once per find. Never swaps anything: the person decides, from the series.
+ */
+async function announceUpgrades(item: SavedLinkItem, open: (id: string) => void): Promise<void> {
+  const check = await checkLanguageUpgrades(item, getLanguageOrder())
+  if (check.found.length === 0) return
+  const seen = told()
+  const key = `sprache:${check.found.map((offer) => `${offer.season}:${offer.episode}:${offer.to}`).join(',')}`
+  if (seen[item.id + ':sprache'] === key) return
+  remember(item.id + ':sprache', key)
+  const title = `Bessere Sprachfassung: ${item.title}`
+  const body = `${upgradeWhere(check.found)} gibt es jetzt: ${LANG_LABELS[check.found[0].to]}.`
+  sendPush('episodes', title, body)
+  if (typeof Notification === 'undefined' || Notification.permission === 'denied') return
+  const notice = new Notification(title, { body, tag: `sondra-sprache-${item.id}` })
+  notice.onclick = () => {
+    void APP_BRIDGE?.focusWindow?.()
+    window.focus()
+    open(item.id)
+    notice.close()
+  }
+}
+
 let running = false
 
 /** One round over the list; returns how many were announced. */
@@ -107,6 +132,8 @@ export async function checkNewEpisodes(open: (id: string) => void): Promise<numb
       const current = merkItems().find((entry) => entry.id === item.id)
       if (!current) continue
       const before = current.onlineAvailable
+      // Once a day, a few episodes: is a better version of one already loaded out now?
+      await announceUpgrades(current, open)
       const info = await checkOnlineUpdates(current)
       if (!info) continue
       const key = keyOf(info)
