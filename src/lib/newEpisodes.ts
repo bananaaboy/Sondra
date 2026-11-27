@@ -16,6 +16,7 @@
 import { APP_BRIDGE } from './desktop'
 import { checkOnlineUpdates, merkItems, requestOpenSeries, type OnlineAvailableInfo, type SavedLinkItem } from './merkliste'
 import { isAniworldUrl } from './download'
+import { sendPush } from './push'
 
 const ON_KEY = 'sondra:neue_folgen'
 const TOLD_KEY = 'sondra:neue_folgen_gemeldet'
@@ -74,8 +75,10 @@ export function watchedOnAniworld(items: SavedLinkItem[]): SavedLinkItem[] {
 }
 
 function announce(item: SavedLinkItem, info: OnlineAvailableInfo, open: (id: string) => void): void {
-  if (typeof Notification === 'undefined' || Notification.permission === 'denied') return
   const where = `Staffel ${info.maxSeason}, Folge ${info.maxEpisode}`
+  // The phone first: it does not depend on Windows' permission below.
+  sendPush('episodes', `Neue Folge: ${item.title}`, `${where} ist auf AniWorld erschienen.`)
+  if (typeof Notification === 'undefined' || Notification.permission === 'denied') return
   const notice = new Notification(`Neue Folge: ${item.title}`, {
     body: `${where} ist auf AniWorld erschienen.`,
     tag: `sondra-neu-${item.id}`,

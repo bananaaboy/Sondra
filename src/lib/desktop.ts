@@ -161,6 +161,8 @@ export interface AppBridge {
   webdav?: (action: 'status' | 'configure' | 'test' | 'forget', ...args: unknown[]) => Promise<unknown>
   /** Shut down or hibernate Windows (desktop/power.mjs); `status` says whether this is Windows. */
   power?: (action: 'status' | 'shutdown' | 'hibernate') => Promise<{ available?: boolean; ok?: boolean; reason?: string }>
+  /** Notices on the phone (desktop/push.mjs): ntfy, Telegram or Pushover; secrets stay in the app. */
+  push?: (action: 'status' | 'configure' | 'test' | 'send' | 'forget', ...args: unknown[]) => Promise<unknown>
   /** Sets progress bar in taskbar (0 to 1, or -1 to clear). */
   setProgressBar?: (progress: number) => Promise<boolean>
   /** Prevents OS sleep during long downloads. */

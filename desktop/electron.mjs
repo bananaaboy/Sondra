@@ -25,6 +25,7 @@ import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, M
 
 import { createAnytype } from './anytype.mjs'
 import { createPower } from './power.mjs'
+import { createPush } from './push.mjs'
 import { createWebdav } from './webdav.mjs'
 import { createGoogleDrive } from './googleDrive.mjs'
 import { discordRpc } from './discord.mjs'
@@ -222,6 +223,23 @@ ipcMain.handle('sondra:anytype', (_event, action, ...args) => {
  */
 const power = createPower({ log })
 ipcMain.handle('sondra:power', (_event, action) => power.handle(String(action)))
+
+/**
+ * Notices on the phone (desktop/push.mjs): ntfy, Telegram or Pushover as the
+ * person entered them. The secrets stay here, encrypted; the page configures,
+ * tests and sends, and never reads one back.
+ */
+let push = null
+ipcMain.handle('sondra:push', (_event, action, ...args) => {
+  push ??= createPush({
+    dataDir: app.getPath('userData'),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+    canEncrypt: () => safeStorage.isEncryptionAvailable(),
+    log,
+  })
+  return push.handle(String(action), args)
+})
 
 /**
  * The WebDAV folder downloads can go to (desktop/webdav.mjs): the page
